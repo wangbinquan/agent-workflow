@@ -1,40 +1,19 @@
 # RFC-294：后台最终层次架构与能力归一总纲
 
 - 目标架构状态：Approved（2026-08-30 review 记账：D1～D9 已由 RFC-328/331/332/333/334/339/341/342/343/344/345/346 的逐 RFC 用户批准实质确认，见 `review-2026-08-30.md` §A1；本总纲不因 Approved 而自动授权任何未立项 wave）
-- 迁移事实：Out-of-order in progress（RFC-287、RFC-297～343 已按各自范围形成多条 production/architecture
-  vertical slice；RFC-317/319/326～333 均已 Done。RFC-328 已完成 N2/P0-D durable execution authority，仍不领取 W2 credit；
-  RFC-329/330 分别提供 W4-A route/tool inventory 与 DE/ACL 纵切，但没有完成 W4；RFC-288/289 已关闭且未实现；
-  RFC-294 N1a/N1b 治理基线已落，RFC-331 / W2-A topology cut 与
-  [RFC-332](../RFC-332-task-engine-decomposition/proposal.md) / W2-B TaskEngine 均已发布并完成 hosted closeout；
-  [RFC-333](../RFC-333-human-gate-atomic-park-and-continuation/proposal.md) 已关闭 P0-C residual；
-  [RFC-334](../RFC-334-node-executor-registry/proposal.md) 已完成 T0～T12、hosted/scheduled closeout并关闭 W2-C；
-  [RFC-339](../RFC-339-wrapper-runtime-cutover/proposal.md) 已完成 T0～T11、canonical 与 hosted/scheduled closeout并关闭 W2-D；
-  [RFC-341](../RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md) 已完成完整 W3；
-  [RFC-342](../RFC-342-memory-scope-move-correctness/proposal.md) 与
-  [RFC-343](../RFC-343-intent-apply-recovery-correctness/proposal.md) 已分别关闭 P0-A/P0-B；
-  [RFC-344](../RFC-344-operation-catalog-transport-cutover/proposal.md) 已获批准并进入 W4-A implementation candidate，W4-B/C/E 及完整
-  W4-D 仍未授权）
-- 性质：目标架构总纲 + 迁移治理合同；已落 wave/slice 按 exact evidence 记账，未完成 wave 不因局部模块或账本存在而倒签 Done
-- `3bfd5be87ba98e329e49432d2e59bff918a878ec` 只保留为历史 measurement seed。current shape 统一由
-  `architecture/current-report.json` 与七份 canonical manifests 重放。RFC-331 前的历史 source pin 为
-  `158b67296b05a11f22a92ab64b2045643f895f9f`、digest 为
-  `sha256:4aa0818694f4fbf267e27dc0b62233bde60b110ca8d4b303ae066469ac0a3592`。W2-C 自身 production
-  payload/provenance 为 `1271ecb20ab1fdd1b58bc2903d4ddbc4c2d92e4e` →
-  `cfe1326b4e948c24772b06708f91e2526ba7022b`，digest 为
-  `sha256:4d0850a7315ac0064fc244ae9d040c92302d2d1d72f6ff5e5ed10eefae3c877e`。当前全仓最新 architecture
-  payload/provenance/final SHA 已随 RFC-341～343 closeout 刷新为
-  `f94290d715365ee6c46e927c211a00326834157b` → `d2a4cc742c6dbb318b237ede15155b354cd79584` →
-  `67a97480c5944c723d3ee08490631e4db768a5c6`，canonical source digest 为
-  `sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805`。四份 RFC-317 artifact 用
-  `originSha + currentSnapshotSha + contentDigest` 分开记录历史 seed 与 current canonical snapshot。RFC-334 最终功能验收
-  SHA `8e58eb05f987bcf08007db714119b3f46d519772` 的主 CI `33142147682` attempt 2 为 35/35 terminal
-  `success`；W2-C production-equivalent SHA `0a0df74c4476355cc5d5e5f0fe289f823759a2e1` 的七条 scheduled
-  workflow 共 19/19 jobs `success`。最新 implementation exact SHA `67a97480c5944c723d3ee08490631e4db768a5c6` 的 Main CI
-  `33268925250` 与 8 个定时 workflow 全部 terminal `success`。hosted verdict 继续只按 exact SHA 单独判定，不把 ancestor、父提交、queued 或
-  cancelled run 冒充证据。量化与下一步顺序以 `plan.md` §1/§3.2 为准
-- 当前全仓 shape 的 mutation/cross-context/exception/facade/public/owner 分母为
-  `1016/1504/1468/378/403/18780`，backend/repo value SCC 保持 `4/6`，task-execution-containing SCC=`0`。这些是 committed canonical
-  report/manifests 的当前证据；W2-C 自身 payload 仍按 `951/1329/1297/379/354/18139` 分栏记账。
+- 迁移状态：In Progress（2026-09-20 对账）。P0 全部收束；W2、W3 与 W4-A/C/E0/E2/E3/E4a/E7 已由独立 successor 关闭。
+  W4 其余部分、W5/W6/W7/W9 继续开放，W8 为可选后续能力线。
+- [RFC-359](../RFC-359-database-provider-unification/proposal.md) 已 Done：数据库事务、daemon 启动、task launch/routes、
+  nodeRun mint 均已有共用实现；这消除了 provider 分叉前置，但不等于 context 边界、唯一 AtomicApply lifecycle、NodeRun v2 identity
+  或 DaemonContainer 已完成。具体抵扣与余项见 [plan §1.2](./plan.md#12-rfc-359-完成后的对账2026-09-20)。
+- 当前审阅基线为 `9ba159a7f3b1688806e54f374ab30e2aca1a4bff`；Main CI `35419594466` 为 46/46 success。
+  架构 source digest 为 `sha256:57a28fe8441b0a45f3012f2ff8145260dba1381b8dc5a3634c9115ca251696ce`，
+  最新数值由 `architecture/current-report.json` 与 [generated status](./status.md) 提供。本次文档对账不改 canonical、不计迁移 credit。
+- 下一批独立草案：[RFC-360 Runtime Management](../RFC-360-runtime-management-context-cutover/proposal.md)、
+  [RFC-361 Execution Contract provider](../RFC-361-execution-contract-provider-cutover/proposal.md)、
+  [RFC-362 Task/SC 启动合同准备](../RFC-362-task-source-control-launch-contracts/proposal.md)。均为 Draft，尚未实施；优先批准/推进 RFC-360。
+- 性质：目标架构总纲 + 迁移治理合同；未完成 wave 不因局部模块、单一 provider 实现或账本存在而倒签 Done。
+  旧 measurement seed、历次 SHA 与 hosted 证据保留在 plan 历史章节；不得把历史数字当作当前新增债务额度。
 - 架构重采触发器：后续纯 test/e2e/fixture、文档、视觉原语与边角功能只更新质量/行为证据，不追着重算总体架构，也不给
   W0-R～W9 credit；只有 production context owner、public/required contract、schema/single-writer、composition root、cross-context
   edge 或 worker/lifecycle owner 变化时才刷新本基线
@@ -325,7 +304,7 @@ fence、journal 和 post-commit 原语，不能再造另一台名为 apply 的�
 - `RuntimeDriver`、`SpawnPlan`、`managedProcess` 和 RFC-280/282 的资源注入链；
 - `setTaskStatus` / `trySetTaskStatus`、node status/merge state 的唯一写点；
 - `nodeRunMint`、freshness 纯函数、retry index 原语；
-- `dbTxSync` 作为 SQLite 同步事务事实，不另造异步 UnitOfWork；
+- RFC-359 `DatabaseSession` 作为双库共用事务原语；存量 `dbTxSync` 仅作同步兼容，不接 async callback；
 - RFC-292 的 trigger namespace 作为“shared contract → admission → persistence → execution → UI”
   全纵切归一范例；
 - dependency-cruiser + `KNOWN_VIOLATIONS` 的账外新违规/stale 账双向棘轮。

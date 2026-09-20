@@ -1,27 +1,12 @@
 # RFC-294 技术设计：后台最终层次架构
 
-> 本文描述目标态合同，不是一次性目录搬迁清单。实施期允许旧路径 facade，但不允许旧行为内核与新行为
-> 内核长期并存。初稿接口锚为 `dde063510dd4b252d3f5f17680113d3cff0b5b3e`；RFC-287 与 RFC-297～343 的已发布批次已在其后
-> 改变 production shape，因此“当前已落事实、量化基线、前置偏差与下一步顺序”统一以 `plan.md` §1/§3.2 的
-> 2026-08-30 刷新为准。N1a/N1b、RFC-328 P0-D 与 RFC-331 W2-A topology cut 已落；
-> [RFC-332](../RFC-332-task-engine-decomposition/proposal.md) / W2-B TaskEngine 也已发布并完成 provenance/hosted closeout，
-> canonical value SCC 保持 `4/6`；最终 containing SHA `4dd30d034f1bcb0c6532301cec11bdd288702105` 的
-> CI `33052994260`（35/35）、git-protocols-e2e `33052994263`（1/1）与 integration-opencode
-> `33052994318`（2/2）均为 terminal `success`。[RFC-333](../RFC-333-human-gate-atomic-park-and-continuation/proposal.md)
-> 已关闭 P0-C residual；其最终 payload/provenance `dda58935e` → `57e45c292` 的主 CI `33123261690` 35/35、
-> 七条 scheduled workflow 共 19/19 jobs 全部 success。[RFC-334](../RFC-334-node-executor-registry/proposal.md)
-> 已完成 W2-C T0～T12：production payload/pin `1271ecb20` → `cfe1326b4`，最终功能 SHA `8e58eb05f`
-> 的主 CI `33142147682` attempt 2 为 35/35 success，七条 production-equivalent scheduled workflow 为 19/19 jobs
-> success。W2-C 已关闭；[RFC-339](../RFC-339-wrapper-runtime-cutover/proposal.md) 已于 2026-08-29 完成 T0～T11、
-> canonical replay 与 hosted/scheduled closeout并关闭 W2-D。
-> [RFC-341](../RFC-341-lifecycle-committed-events-collaboration-commands/proposal.md) 已完成完整 W3；
-> [RFC-342](../RFC-342-memory-scope-move-correctness/proposal.md) 与
-> [RFC-343](../RFC-343-intent-apply-recovery-correctness/proposal.md) 已分别关闭 P0-A/P0-B。current canonical
-> payload/provenance/final SHA 为 `f94290d715365ee6c46e927c211a00326834157b` →
-> `d2a4cc742c6dbb318b237ede15155b354cd79584` → `67a97480c5944c723d3ee08490631e4db768a5c6`，source digest
-> `sha256:3714450fee40135133fb94fb846d6f4f32369d00625d8f7249e6049a80c73805`；Main CI `33268925250` 与同一 SHA 的 8 个定时 workflow
-> 全部 terminal success。W4 以后 wave 仍未授权。
-> 本文件中的终局业务接口仍是 target contract，不得把治理账本、局部纵切或 durable authority 反推为所有 production consumer 已切换。
+> 本文描述目标态合同，不是一次性目录搬迁清单。当前事实以 [plan §1.2](./plan.md#12-rfc-359-完成后的对账2026-09-20)
+> 和 [generated status](./status.md) 为准；2026-09-20 基线 `9ba159a7f3b1688806e54f374ab30e2aca1a4bff`。
+> P0、W2/W3、W4-A/C/E0/E2/E3/E4a/E7 已由 successor 完成。
+> [RFC-359](../RFC-359-database-provider-unification/proposal.md) 已统一 provider 事务和多条生产算法；
+> 本文 §4.3 据此使用异步 `DatabaseSession`，不能再要求新合同只能由 `dbTxSync` 实现。
+> 旧 scope/receipt 的职责仍适用；本节后历史伪代码中的同步 DB participant 返回形状，实施时按 §4.3 升级为 Promise 并 await。
+> 同步纯函数不因此改为异步。RFC-360/361/362 仅为下一批 Draft，不代表后续 wave 已取得实施许可。
 
 ## 1. 设计原则
 
@@ -269,7 +254,7 @@ infrastructure；bootstrap 也不能 deep import module infrastructure。
 
 说明：
 
-- `modules/` 是业务 owner；模块内可以有自己的 SQLite adapter，但共享连接、migration 和 outbox plumbing
+- `modules/` 是业务 owner；模块内可以有自己的 provider-neutral persistence adapter，但共享连接、migration 和 outbox plumbing
   归 `platform/persistence`。
 - `resource-catalog/core` 只共享 ACL/ref/revision/catalog 合同；六类资源仍是独立 aggregate 子模块，禁止用
   `switch(resourceType)` 堆成一个 CRUD god module。
@@ -448,8 +433,7 @@ adapter 必须留在 infrastructure 并在 W4-E9 收口，不能进入 domain/ap
   各自实现并因而依赖 task public port，task-execution 不反向 import这些模块。Bootstrap 只实例化/注入实现。
 - collaboration 可以依赖 task-execution 公开的 tx-bound transition participant，但不能 import scheduler internal；
   它同事务写 durable `ContinuationIntent`，由 task worker 在提交后消费。
-- 必须跨 context 原子完成的 use case 归发起 context application 所有，通过 tx-bound port 调用；同一个 SQLite
-  `dbTxSync` 承载，不把业务顺序塞进 bootstrap bridge。
+- 必须跨 context 原子完成的 use case 归发起 context application 所有，通过 tx-bound port 调用；同一个 `DatabaseSession` live transaction 承载，不把业务顺序塞进 bootstrap bridge。
 - 若出现 DAG 外双向同步需要，必须新 RFC 证明是遗漏的共同 aggregate；默认改为 port/event，而不是互 import。
 - `development-automation` 只拥有 Mission/ActionRun/AgentAttempt、策略、事实快照、evidence/effect intent 与 MR-care 状态；
   Agent task、Git/workspace、code-host/pipeline、subject authority 分别由 task-execution/source-control/integration/
@@ -1214,13 +1198,13 @@ interface ReactionExecutionAdmissionReceiptV1 {
 // Owned by digital-employee/composition/required-ports and exposed only inside the live
 // DE claim transaction scope. The TE adapter writes its fence/admission journal in that same tx.
 interface ReactionExecutionAdmissionParticipantInTxV1 {
-  activateClaim(input: ReactionClaimActivationV1): ReactionClaimFenceReceiptV1
+  activateClaim(input: ReactionClaimActivationV1): Promise<ReactionClaimFenceReceiptV1>
   admitLaunch(input: {
     readonly fence: ReactionClaimFenceReceiptV1
     readonly operation: ReactionExecutionOperationRef
     readonly requestHash: ReactionRequestHash
-  }): ReactionExecutionAdmissionReceiptV1
-  closeClaim(input: ReactionClaimClosureV1): void
+  }): Promise<ReactionExecutionAdmissionReceiptV1>
+  closeClaim(input: ReactionClaimClosureV1): Promise<void>
 }
 
 interface ReactionExecutionAccessV1 {
@@ -1668,7 +1652,7 @@ interface RepositoryLaunchSnapshotInTx {
   resolveAuthorized(
     authority: CurrentAuthorityInTx,
     source: RepositoryLaunchSource,
-  ): FrozenRepositoryPreparationRef
+  ): Promise<FrozenRepositoryPreparationRef>
 }
 
 interface PublicRepositorySourceSealPort {
@@ -1815,7 +1799,7 @@ recursive field ledger；`direct-multipart` 或 call 类型无法传给 reposito
 
 Integration/knowledge-evolution 在**自己的事实事务**中同时写 webhook fire/fusion row 与对应 lane 的 durable launch intent，
 避免“task 已起、来源事实未落”，不顺序调用多个 transaction 去冻结资源。Intent claimant 在一个
-`RepositoryStepAdmissionTx.launchIntents.admitPendingWithFirstPreparationRun` 内闭包绑定同一 SQLite transaction 的 current
+`RepositoryStepAdmissionTx.launchIntents.admitPendingWithFirstPreparationRun` 内闭包绑定同一 provider-neutral transaction 的 current
 authority、intent、resource snapshot、task writer 与 purpose-specific workspace resolvers，并原子写 task + first run + plan；
 调用方不能把“admit task / mint run / freeze plan”拆成三个可遗漏调用。Repository-backed variant 才经
 `RepositoryLaunchSnapshotInTx` 解析 SC source；scratch/source-task 不伪装成 repository ref，也不迫使 SC 理解 task source。
@@ -2113,7 +2097,7 @@ interface RuntimeSelectionParticipantInTx {
   freeze(
     capability: NodeRunRuntimeSelectionCapabilityInTx,
     input: NodeRunRuntimeSelection,
-  ): FrozenRuntimeRef
+  ): Promise<FrozenRuntimeRef>
 }
 
 declare const codeHostExecutionCapabilityBrand: unique symbol
@@ -2356,12 +2340,16 @@ interface TransactionScope {
 type TransactionResult = JsonValue | DomainReceipt | readonly DomainReceipt[] | void
 
 interface TransactionPort<TScope extends TransactionScope> {
-  run<TResult extends TransactionResult>(fn: (scope: TScope) => TResult): TResult
+  run<TResult extends TransactionResult>(fn: (scope: TScope) => Promise<TResult>): Promise<TResult>
 }
 ```
 
-SQLite adapter 必须由现有 `dbTxSync` 一比一实现。禁止把同步事务回调改成 async；预 stage 的 FS/安装副作用通过
-AtomicApply journal 的 record-before-act 管理，而不是在事务中 `await`。
+新合同由 `platform/persistence/databaseTransaction.ts` 的 `DatabaseSession.transaction` / `serializable` /
+`snapshotRead` 适配：SQLite 使用写者 lease、显式 BEGIN IMMEDIATE 和 await 后 COMMIT/ROLLBACK，PostgreSQL 使用同一 application
+事务体与对应引擎能力。DB 操作必须 await；Git/FS/网络/安装 effect 仍在事务外，由 journal 管理 record-before-act。
+
+仍在使用的同步 `dbTxSync` 包装器不能接 async callback。确有同步兼容 consumer 时复用 `transactionProgram.ts` 的同一 program
+与 `driveSync/driveAsync`，不再各写一份 provider 业务算法。domain 只依赖值对象；平台数据库 handle 不穿 public 合同。
 
 `TransactionScope` 不是可以随手拿任意 repository 的 service locator。每个跨 aggregate 用例必须定义
 capability-scoped transaction port，例如：
@@ -2377,16 +2365,18 @@ interface CollaborationDecisionTx extends TransactionScope {
 }
 
 interface CollaborationDecisionTransactionPort {
-  run<TResult extends TransactionResult>(fn: (scope: CollaborationDecisionTx) => TResult): TResult
+  run<TResult extends TransactionResult>(
+    fn: (scope: CollaborationDecisionTx) => Promise<TResult>,
+  ): Promise<TResult>
 }
 ```
 
-所有 `...InTx` participant 在 scope 构造时已经绑定同一个 live SQLite transaction，方法不再接裸 transaction object；
+所有 `...InTx` participant 在 scope 构造时已经绑定同一个 live provider-neutral transaction，方法不再接裸 transaction object；
 adapter 在 callback 结束后把 scope 置为 closed，任何逃逸调用 fail-fast。`txScopeBrand` 与 participant private brand 防止
 结构错配；lint 禁止 callback 返回/闭包捕获 `TransactionScope`、`...InTx` 或 `CurrentAuthorityInTx`。`TransactionPort` 的结果
 只允许 JSON-safe DTO/domain receipt/void，不得返回 repository、iterator、lazy query 或 tx-bound对象。
 
-SQLite composition adapter 在同一个 `dbTxSync` 中装配这些 tx-bound capability；collaboration application 拥有
+composition adapter 在同一个 `DatabaseSession` transaction 中装配这些 tx-bound capability；collaboration application 拥有
 业务顺序。不得先调一个模块的 transaction，再调另一个模块的 transaction，也不得为原子性 import 对方 table。
 `ContinuationIntent` 是 task-execution 的执行事实；`TaskDecisionParticipantInTx` 在自己的 bound slice 内同时做
 gate-allowed task/node transition 与 continuation append，并只把 opaque `TaskContinuationRef` receipt 交回 collaboration
@@ -2934,7 +2924,7 @@ interface ResourceScopeVisibilityQuery {
 }
 ```
 
-ACL algorithm/authority semantics 保留，但 `ACL_TABLES` 只存在 SQLite adapter 内。六类 route 的 visible loader 和 Intent 的两份
+ACL algorithm/authority semantics 保留，但 `ACL_TABLES` 只存在 persistence adapter 内。六类 route 的 visible loader 和 Intent 的两份
 catalog 改用同一 query port。统一的是 envelope/policy/repository shape；六类 Create/Update/Delete 不变量仍分别实现。
 
 `ResourceCatalogQuery` 只服务跨资源 selector/Intent 等横向消费者，返回最小
@@ -2951,7 +2941,7 @@ actor-filtered `ResourceBlockerQuery` 或 opaque blocker count，避免枚举不
 typed QueryService 的 discriminated DTO/codec，不把六类内部 row 塞进宽松 `unknown` union。
 Memory visible list/detail 分别消费 RC 的 `ResourceScopeVisibilityQuery` 与 source-control 的同型
 `RepositoryScopeVisibilityQuery`；global 规则留 memory。两端返回 opaque visible scope set/predicate，memory query adapter 将
-scope filter 与 pagination 下推 SQLite，不先拉全 memory 再 JS 过滤；不可见 scope 的 id/name/count 均不通过分页总数形成
+scope filter 与 pagination 下推数据库，不先拉全 memory 再 JS 过滤；不可见 scope 的 id/name/count 均不通过分页总数形成
 侧信道。
 
 ### 7.2 ResourcePackage 与 MCP diagnostics 子模块
@@ -3063,7 +3053,10 @@ interface McpRuntimeTestResourceSnapshotInTx {
 }
 
 interface McpRuntimeTestRuntimeSelectionInTx {
-  freeze(authority: CurrentAuthorityInTx, requested: VersionedRuntimeProfileRef): FrozenRuntimeRef
+  freeze(
+    authority: CurrentAuthorityInTx,
+    requested: VersionedRuntimeProfileRef,
+  ): Promise<FrozenRuntimeRef>
 }
 ```
 
@@ -3446,7 +3439,7 @@ interface RepositoryScopeAuthorizationInTx {
 }
 ```
 
-通用 PATCH 永远不能改变 scope。MoveMemory 在同一 `dbTxSync` 事务内：读取 current row、验证 expected version、旧 scope
+通用 PATCH 永远不能改变 scope。MoveMemory 在同一 `DatabaseSession` live transaction 内：读取 current row、验证 expected version、旧 scope
 manage、新 scope manage、目标存在、状态允许、写 audit/event。candidate 是否可移动与 approved/archived 是否必须重新审批
 由独立安全 RFC 决定；不得在结构迁移中暗改。
 `MemoryMoveTx` 是唯一可见这些 participant 的 capability scope：resource-catalog 只验证 agent/workflow，source-control
@@ -3642,7 +3635,7 @@ task-execution + source-control。System-operations 不以 `RunMaintenance` 读�
 1. admin/recovery authority + operation id 审核，停止新 admission；
 2. durable `pending_restore` 标记目标 generation，fence background/outbox/apply workers，drain 或以明确 reason abort
    task ownership；
-3. 在 live generation **之外**创建并 fsync `pending_restore` marker 与 recovery manifest；checkpoint WAL，完整 stage
+3. 在 live generation **之外**创建并 fsync `pending_restore` marker 与 recovery manifest；按 provider checkpoint 合同完成检查（SQLite 为 WAL checkpoint），完整 stage
    DB/config/skills/worktree manifest，验证 checksum/schema/path/quick-check；
 4. 生成可恢复 safety backup；任何 pre-swap 失败保持 live generation 原样；
 5. 优先用单一 generation manifest/pointer 原子切换；若现平台只能 DB→config→skills 多步 swap，则明确记录每步并由

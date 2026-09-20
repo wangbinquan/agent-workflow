@@ -1,5 +1,22 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-294 后续推进：文档对账与三份独立草案
+
+进行中 RFC：RFC-294 继续 In Progress；新增 [RFC-360](design/RFC-360-runtime-management-context-cutover/proposal.md)、
+[RFC-361](design/RFC-361-execution-contract-provider-cutover/proposal.md)、
+[RFC-362](design/RFC-362-task-source-control-launch-contracts/proposal.md) 均为 **Draft，待具体方案批准，尚未实施**。
+
+- 已将 RFC-359 完成事实纳入 RFC-294 三件套：统一 async transaction、launch/routes、mint、boot/shutdown；修正 W4-E3/E4a、
+  RFC-345 与 W5/W7 旧账。架构 source digest/指标保持 generated 真值，本次不重采、不改 canonical、不领取生产迁移 credit。
+- RFC-360 是优先实施候选，覆盖 RM profile/admin/probe/model-list/selection 与本域 B/D；RFC-361 只先做 EC resource/fixture
+  provider 归位；RFC-362 先做 Task/SC 合同及行为 oracle，生产 launch cutover 需另号。各三件套已列 source、scope、依赖、
+  文件归属、失败矩阵、双库验收与后继余项。
+- 功能基线 `9ba159a7f3b1688806e54f374ab30e2aca1a4bff`：Main CI `35419594466` 46/46 success；已有八条同 SHA scheduled
+  workflows success。该证据属于既有功能基线，不是本次文档提交的 CI。
+- 本批仅文档；未修改 production/test/canonical。共享树原有 `packages/system-mocks/src/cli.ts` executable mode 变化保留，
+  不纳入本批发布。文档发布 SHA 与其托管 CI 以 Git / Actions 为准，不能把 Draft 三件套记成已实施。
+
+
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
 > ## ✅ RFC-359 **已完工**（2026-09-18 收口，12 / 12 条 AC 全部达成）
