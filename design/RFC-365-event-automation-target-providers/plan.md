@@ -22,6 +22,6 @@ T1 可与 RFC-363/364 独立准备；合同兼容未定时 T2 以后暂停，继
 - [ ] Integration WebhookTrigger 仍走自身链路；Reaction 和 W9 无范围外改动。
 - [ ] owned debt 出账、最终 exact-SHA Main CI success；RFC-294 仍 In Progress。
 
-## T1 候选（2026-09-20）
+## T1 完成（2026-09-20）
 
-[兼容性报告](./compatibility-report.md) 已逐字段覆盖 source/render/current admission/V1，新增生产 renderer 与真实 codec 的特征测试。发现 UTF-8/UTF-16、Task 257 inputs、form-field grammar 和 trim 差异；DE target 受 manifest≤20 约束，未误报为新增256限制。候选待托管 CI；推荐的兼容合同修订仍待批准，不启动 T2+。
+[兼容性报告](./compatibility-report.md) 已逐字段覆盖 source/render/current admission/V1，新增生产 renderer 与真实 codec 的特征测试。发现 UTF-8/UTF-16、Task 257 inputs、form-field grammar 和 trim 差异；DE target 受 manifest≤20 约束，未误报为新增256限制。T1 七个特征用例在 Ubuntu/macOS 通过；验收源码 `7befa335c23c36107f3298e654026d38380159dc` 的 [Main CI 35513285722](https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722) success。推荐的兼容合同修订仍待批准，不启动 T2+。

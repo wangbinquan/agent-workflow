@@ -40,4 +40,4 @@
 4. 将首次 source→render→admission 的 payload 和 revision 持久化，重放同一origin读取原receipt；旧receipt优先映射。默认scratch、allowClarify、省略字段按矩阵逐项保留。
 5. 若产品以后确需更严格预算，另立可见行为变更：先给出用户规则受影响清单和迁移办法，再批准限制；本次不截断、不静默拒绝、不改存量规则。
 
-RFC-365保持Draft，T1候选完成并待CI；T2合同修订/生产切换尚未批准。RFC-363/364已批准的实施继续，不受此定稿决策阻塞。
+RFC-365 保持 Draft；T1 七个特征用例已在上述验收源码的 Ubuntu/macOS 通过，完整 Main CI success。 [Main CI 35513285722](https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722)。T2 合同修订/生产切换尚未批准；推荐合同修订仍待独立决定，不能据 T1 完成增加限制。

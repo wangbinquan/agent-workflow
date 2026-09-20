@@ -1,6 +1,6 @@
 # RFC-363 实施计划
 
-状态：In Progress（2026-09-20 已获实现与发布批准）；按下列依赖推进，尚无完成信用。
+状态：Done（2026-09-20）；T1–T8 完成，逐 AC 证据见 [acceptance.md](./acceptance.md)。
 
 | 任务 | 交付物                                                                                   | 依赖 / 判据                                              |
 | ---- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------- |
@@ -19,16 +19,16 @@ T6 可在 T3 合同固定后独立开发。RFC-364 模块内工作无直接依�
 
 ## 完成检查
 
-- [ ] proposal AC-1～8 逐项有实现和 evidence，不仅代码存在。
-- [ ] repository/group/上传 journal 的 crash/replay 真双库；Git/FS 无 transaction 内运行。
-- [ ] 旧任务可恢复；新格式回滚下限和 cleanup 已验证。
-- [ ] `node_runs` INSERT 仍唯一；runtime per-NodeRun freeze 未改变。
-- [ ] 所有 claimed public/required seam 有真实调用，owned 旧 consumer 为零；残债带 owner/removeWave。
-- [ ] 最终 Main CI terminal success；若触及原生 Windows 行为，相关托管任务有同源码证据。
-- [ ] 文档、STATE、索引只按验收范围标记；RFC-294 整体、完整 W5 不记 Done。
+- [x] proposal AC-1～8 逐项有实现和 evidence，不仅代码存在。
+- [x] repository/group/上传 journal 的 crash/replay 真双库；Git/FS 无 transaction 内运行。
+- [x] 旧任务可恢复；新格式回滚下限和 cleanup 已验证。
+- [x] `node_runs` INSERT 仍唯一；runtime per-NodeRun freeze 未改变。
+- [x] 所有 claimed public/required seam 有真实调用，owned 旧 consumer 为零；残债带 owner/removeWave。
+- [x] 最终 Main CI terminal success；若触及原生 Windows 行为，相关托管任务有同源码证据。
+- [x] 文档、STATE、索引只按验收范围标记；RFC-294 整体、完整 W5 不记 Done。
 
 实施测试已随源码提交；不运行本地 Bun 测试或服务，行为验收由 GitHub Actions 取证。
 
 ## AC 证据与范围转交
 
-逐项映射见 [acceptance.md](./acceptance.md)。最终 Main CI 未终态前保留 In Progress；历史各批局部成功不能替代当前源码验收。
+逐项映射见 [acceptance.md](./acceptance.md)。验收源码 `7befa335c23c36107f3298e654026d38380159dc`；[Main CI 35513285722](https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722) success（46 个作业终态，失败/取消为 0）；[Windows 35512285261](https://github.com/wangbinquan/agent-workflow/actions/runs/35512285261) success（全部原生测试输入与验收源码相同，Git diff 为 0）。 历史局部成功不作为本次最终结论。

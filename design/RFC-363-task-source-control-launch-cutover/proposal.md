@@ -1,9 +1,9 @@
 # RFC-363：Task / Source Control 启动与工作区生产切换
 
-- 状态：In Progress（2026-09-20；用户已批准具体设计、实现与代码上库）。
+- 状态：Done（2026-09-20；最终托管验收通过，证据见 [acceptance.md](./acceptance.md)）。
 - 母项：RFC-294 W4-E1 启动纵切、关联 B/D；W5 最小生产接缝，不关闭完整 W5。
 - 前置：RFC-359 数据库共用实现、RFC-360 runtime selection、RFC-362 启动合同准备均 Done。
-- 当前源码：`cae3e4ea2579bc1d13ff34008fa011d4073d8b59`；文件指纹见 [source-baseline.json](./source-baseline.json)。
+- 设计基线：`cae3e4ea2579bc1d13ff34008fa011d4073d8b59`；文件指纹见 [source-baseline.json](./source-baseline.json)。
 
 ## 1. 要解决的问题
 
@@ -42,4 +42,4 @@ RFC-362 已声明 SC offered / Task required 合同，但生产入口仍调用�
 
 ## 5. 下一步
 
-批准本设计后从 T1 行为/字段锁和 T2 持久化开始，按 [plan.md](./plan.md) 分批发布；不能跳过 durable gap 直接迁 route。
+T1–T8 已验收。启动与工作区纵切结束；按 [剩余转交](./acceptance.md#剩余-e1w5-逐项转交) 继续处理完整 E1/W5，不据本项完成关闭母 RFC。

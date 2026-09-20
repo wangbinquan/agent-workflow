@@ -1,5 +1,11 @@
 # 当前执行状态
 
+## 2026-09-20 RFC-363/364 完成托管验收
+
+验收源码 `7befa335c23c36107f3298e654026d38380159dc`；[Main CI 35513285722](https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722) success（46 个作业终态，失败/取消为 0）；[Windows 35512285261](https://github.com/wangbinquan/agent-workflow/actions/runs/35512285261) success（全部原生测试输入与验收源码相同，Git diff 为 0）。 Task/SC source、snapshot、operation、上传 journal、两 launch lane、工作区 reader 与三个根完成本次纵切；MCP diagnostics 七操作、application/effects 和显式单实例完成 E6 及本域 B/D。逐 AC、目标 suite、15 个 Windows 恢复窗口和精确残债见两 RFC 的 acceptance.md。
+
+RFC294 整体、完整 E1/W5/W9 仍开放；16 条历史 Task→SC 边仍按原 owner/W5 转交，未新增豁免。RFC365 仅 T1 的七个兼容特征用例完成验收，T2+ 合同兼容尚待定稿，不实施输入收缩或生产切换。未运行本地 Bun 测试/服务，保留共享树外部 CLI mode WIP。
+
 ## 2026-09-20 RFC-363/364 最终验收收口中
 
 `f24b7b5ef` 的 Windows `35510835760` 已终态成功，包含 SC 七个和 Task/upload 八个真实进程恢复窗口。Main `35510835709` 发现旧 effect-boundary 锚、W7 fixture 缺必填装配、已迁真库的 fake-runtime 旧账和 multipart 类型边；本批分别对齐两个真实入口/补装配/销过期账/移除类型边，保留原功能断言与生产运行时。逐 AC 映射及 E1/W5/W9 残余转交见 RFC363/364 `acceptance.md`；最终 Main 尚待修复版本验收，两个 RFC 不记 Done，RFC365 仍仅 T1。

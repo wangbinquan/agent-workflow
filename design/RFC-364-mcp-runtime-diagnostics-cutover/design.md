@@ -1,5 +1,7 @@
 # RFC-364 技术设计
 
+状态：Done（2026-09-20）。实现与原设计的对应、兼容边界和最终测试见 [acceptance.md](./acceptance.md)。
+
 ## 1. 已有实现与目标分层
 
 `services/mcpRuntimeTest.ts` 已具备 bootRecover、queue、reconcile、durable intent、session/turn CAS 和 process cleanup。现 RC `mcpRuntimeTestPersistence/Transitions/Lease` 使用共用 provider 机制；迁移应保留这些算法，不重写状态机。

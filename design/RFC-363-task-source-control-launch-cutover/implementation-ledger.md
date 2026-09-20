@@ -2,7 +2,7 @@
 
 ## 当前验收入口
 
-实现已完成接线，正在核对最终托管证据。逐项 AC、已验证平台和母项残余转交以 [acceptance.md](./acceptance.md) 为准。下面按发布顺序保留每批的历史状态，不将早期的“待后续”误作当前缺口。
+Done；验收源码 `7befa335c23c36107f3298e654026d38380159dc`；[Main CI 35513285722](https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722) success（46 个作业终态，失败/取消为 0）；[Windows 35512285261](https://github.com/wangbinquan/agent-workflow/actions/runs/35512285261) success（全部原生测试输入与验收源码相同，Git diff 为 0）。逐项 AC、已验证平台和母项残余转交以 [acceptance.md](./acceptance.md) 为准。下面按发布顺序保留每批的历史状态，不将早期的“待后续”误作当前缺口。
 
 2026-09-20：用户已批准实现和代码上库。首批 T1/T2 候选，尚待托管 CI；T3–T8 未完成。
 

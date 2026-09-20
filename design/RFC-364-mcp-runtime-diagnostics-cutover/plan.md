@@ -1,6 +1,6 @@
 # RFC-364 实施计划
 
-状态：In Progress（2026-09-20 已获实现与发布批准）；按下列依赖推进。
+状态：Done（2026-09-20）；T1–T6 完成，逐 AC 证据见 [acceptance.md](./acceptance.md)。
 
 | 任务 | 交付物                                                                         | 依赖                                        |
 | ---- | ------------------------------------------------------------------------------ | ------------------------------------------- |
@@ -17,14 +17,14 @@ T2/T3 在 RC 模块内可与 RFC-363 开发独立推进；T4/T5 root 及共用�
 
 ## 完成检查
 
-- [ ] AC-1～7 逐项 evidence，七 HTTP 操作行为不变。
-- [ ] session/turn 单写、真实双库并发、capture 和 cleanup 完整。
-- [ ] RM profile participant 同事务；RM/config 无 legacy MCP service 依赖。
-- [ ] 三 root 共享一实例；未启动 dispose、provider pause/resume、shutdown 顺序均通过。
-- [ ] 本域旧 imports/facades/WeakMap 为零，reconcile timer 明确留 W9。
-- [ ] 最终 SHA Main CI success，原生进程测试按触及范围取证。
-- [ ] 只关闭 E6 与该域 B/D，RFC-294 其余波次保持开放。
+- [x] AC-1～7 逐项 evidence，七 HTTP 操作行为不变。
+- [x] session/turn 单写、真实双库并发、capture 和 cleanup 完整。
+- [x] RM profile participant 同事务；RM/config 无 legacy MCP service 依赖。
+- [x] 三 root 共享一实例；未启动 dispose、provider pause/resume、shutdown 顺序均通过。
+- [x] 本域旧 imports/facades/WeakMap 为零，reconcile timer 明确留 W9。
+- [x] 最终 SHA Main CI success，原生进程测试按触及范围取证。
+- [x] 只关闭 E6 与该域 B/D，RFC-294 其余波次保持开放。
 
 ## AC 证据与范围转交
 
-逐项映射见 [acceptance.md](./acceptance.md)。最终 Main CI 未终态前保留 In Progress；历史各批局部成功不能替代当前源码验收。
+逐项映射见 [acceptance.md](./acceptance.md)。验收源码 `7befa335c23c36107f3298e654026d38380159dc`；[Main CI 35513285722](https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722) success（46 个作业终态，失败/取消为 0）；[Windows 35512285261](https://github.com/wangbinquan/agent-workflow/actions/runs/35512285261) success（全部原生测试输入与验收源码相同，Git diff 为 0）。 历史局部成功不作为本次最终结论。

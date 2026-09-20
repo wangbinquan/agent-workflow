@@ -1,5 +1,7 @@
 # RFC-363 技术设计
 
+状态：Done（2026-09-20）。实现与原设计的对应、兼容边界和最终测试见 [acceptance.md](./acceptance.md)。
+
 ## 1. 当前链路和目标 owner
 
 以 [RFC-362 implementation-ledger](../RFC-362-task-source-control-launch-contracts/implementation-ledger.md) 为完整入口/字段基线。本次 [source-baseline.json](./source-baseline.json) 钉住已完成 RFC-360 后的源码，不能沿用 provider 合一前调用图。
@@ -32,9 +34,9 @@ Application 只依赖自身 ports 与跨域 exact public；Git、路径、配置
 
 Task 字段分四组锁定：① owner/initiator、`launch_origin`、source IDs/trigger；② launchRevision、effectRevision、termination snapshot/fence；③ workflow/agent/workgroup/resource/runtime policy 与首次 NodeRun 冻结；④ parent/frame、DE case/action provenance、catalog visibility、working branch/upload。完整 54 项继承 RFC-362 账本，逐项记录 writer、consumer、来源和原缺省值；不得折叠成任意 metadata JSON。SC receipt 经 Task adapter 投影到现 task repos/workspace 记录。
 
-## 3. 拟新增持久化与 revision 定义
+## 3. 持久化与 revision 定义
 
-以下是待实施的逻辑表，不预占 migration 编号。T2 在共享 schema 发布段分配下一可用编号，SQLite/PG 共用映射。
+以下四表已由 SQLite 0227 / PG 0003 的 additive migration 实施，两库共用映射；历史 schema prefix 与旧行 shape 保留。
 
 | 记录 / owner                         | 最小字段与唯一性                                                                                                                                     | 生存期                                                      |
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "f20110888fbd2988c11c5367f109597d7a5ba257",
+  "sameNativeInputsAs": "7befa335c23c36107f3298e654026d38380159dc",
+  "comparedPaths": [
+    "packages",
+    "scripts",
+    ".github/workflows/windows-platform.yml",
+    "package.json",
+    "bun.lock",
+    "tsconfig.json",
+    "bunfig.toml"
+  ],
+  "inputDiff": [],
+  "runId": 35512285261,
+  "jobId": 106082156592,
+  "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35512285261/job/106082156592",
+  "conclusion": "success",
+  "provider": "sqlite",
+  "platform": "native Windows",
+  "recoveryAssertions": [
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-preparation-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 real-process preparation recovery [sqlite] > same operation survives process death at before-worktree-add [7066.64ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-preparation-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 real-process preparation recovery [sqlite] > same operation survives process death at post-add-before-submodules [5296.50ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-preparation-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 real-process preparation recovery [sqlite] > same operation survives process death at working-branch-prepared-before-cas [6046.62ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-preparation-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 real-process preparation recovery [sqlite] > same operation survives process death at changed-prepared-branch [5150.42ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-preparation-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 real-process preparation recovery [sqlite] > same operation survives process death at stop-before-add [5650.81ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-preparation-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 real-process preparation recovery [sqlite] > same operation survives process death at stop-after-add [5081.57ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-preparation-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 real-process preparation recovery [sqlite] > same operation survives process death at cleanup-after-remove [7459.50ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-task-workspace-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 production Task pre-admission process recovery [sqlite] > repository survives SIGKILL at prepared-before-upload [5283.75ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-task-workspace-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 production Task pre-admission process recovery [sqlite] > repository survives SIGKILL at uploaded-before-admit [4511.66ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-task-workspace-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 production Task pre-admission process recovery [sqlite] > scratch survives SIGKILL at scratch-root-before-artifact [3763.30ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-task-workspace-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 production Task pre-admission process recovery [sqlite] > scratch survives SIGKILL at uploaded-before-admit [3362.91ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-task-workspace-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 production Task pre-admission process recovery [sqlite] > repository survives SIGKILL at upload-reserved-before-file [4611.52ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-task-workspace-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 production Task pre-admission process recovery [sqlite] > repository survives SIGKILL at uploaded-file-before-receipt [4374.84ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-task-workspace-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 production Task pre-admission process recovery [sqlite] > scratch survives SIGKILL at upload-reserved-before-file [3553.71ms]"
+    },
+    {
+      "suite": "##[group]packages\\backend\\tests\\rfc363-task-workspace-process-recovery.test.ts",
+      "result": "success",
+      "assertion": "(pass) RFC-363 production Task pre-admission process recovery [sqlite] > scratch survives SIGKILL at uploaded-file-before-receipt [3375.31ms]"
+    }
+  ]
+}

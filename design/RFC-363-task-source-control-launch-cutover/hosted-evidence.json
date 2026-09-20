@@ -1,0 +1,540 @@
+{
+  "schemaVersion": 1,
+  "sourceSha": "7befa335c23c36107f3298e654026d38380159dc",
+  "main": {
+    "runId": 35513285722,
+    "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722",
+    "conclusion": "success",
+    "jobs": [
+      {
+        "jobId": 106084852970,
+        "name": "Markdown link check (design/)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853079,
+        "name": "Backend tests (ubuntu-latest shard 2/12)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853084,
+        "name": "Lint + Typecheck + Format + Shared + system mock tests",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853098,
+        "name": "Backend tests (ubuntu-latest shard 11/12)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853104,
+        "name": "Perf microbenchmark gate",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853109,
+        "name": "Backend tests (ubuntu-latest shard 1/12)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853112,
+        "name": "Frontend tests (ubuntu-latest shard 2/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853122,
+        "name": "Build production binary + e2e artifact (smoke) (macos-latest)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853126,
+        "name": "Backend tests (ubuntu-latest shard 12/12)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853137,
+        "name": "Backend tests (ubuntu-latest shard 4/12)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853140,
+        "name": "Backend tests (macos-latest shard 3/6)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853145,
+        "name": "Backend tests (ubuntu-latest shard 8/12)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853146,
+        "name": "Backend tests (macos-latest shard 2/6)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853148,
+        "name": "Backend tests (macos-latest shard 5/6)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853149,
+        "name": "Backend tests (real PostgreSQL)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853154,
+        "name": "Backend tests (ubuntu-latest shard 7/12)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853161,
+        "name": "Static scans (audit + actionlint + shellcheck + gitleaks)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853172,
+        "name": "Backend tests (ubuntu-latest shard 10/12)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853175,
+        "name": "Frontend tests (ubuntu-latest shard 3/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853181,
+        "name": "Build production binary + e2e artifact (smoke) (ubuntu-latest)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853184,
+        "name": "Backend tests (macos-latest shard 1/6)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853191,
+        "name": "Build production binary + e2e artifact (smoke) (windows-latest)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853202,
+        "name": "Frontend tests (macos-latest shard 2/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853212,
+        "name": "Backend tests (ubuntu-latest shard 9/12)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853216,
+        "name": "Backend tests (macos-latest shard 4/6)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853227,
+        "name": "Backend tests (ubuntu-latest shard 6/12)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853244,
+        "name": "Frontend tests (macos-latest shard 1/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853249,
+        "name": "Frontend tests (windows-latest shard 3/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853251,
+        "name": "Backend tests (ubuntu-latest shard 3/12)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853255,
+        "name": "Frontend tests (ubuntu-latest shard 1/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853279,
+        "name": "Frontend tests (windows-latest shard 2/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853284,
+        "name": "Frontend tests (windows-latest shard 1/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853291,
+        "name": "Frontend tests (macos-latest shard 3/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853310,
+        "name": "Backend tests (macos-latest shard 6/6)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106084853311,
+        "name": "Backend tests (ubuntu-latest shard 5/12)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106085165639,
+        "name": "Playwright e2e (macos-latest shard 1/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106085165647,
+        "name": "Playwright e2e (macos-latest shard 3/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106085165677,
+        "name": "Playwright e2e (macos-latest shard 2/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106085624083,
+        "name": "Playwright e2e (ubuntu-latest shard 1/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106085624087,
+        "name": "Playwright e2e (ubuntu-latest shard 3/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106085624159,
+        "name": "Playwright e2e (ubuntu-latest shard 2/3)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106085694234,
+        "name": "Playwright e2e (windows-latest shard 1/4)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106085694240,
+        "name": "Playwright e2e (windows-latest shard 3/4)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106085694248,
+        "name": "Playwright e2e (windows-latest shard 2/4)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106085694256,
+        "name": "Playwright e2e (windows-latest shard 4/4)",
+        "conclusion": "success"
+      },
+      {
+        "jobId": 106087255691,
+        "name": "CI required",
+        "conclusion": "success"
+      }
+    ]
+  },
+  "targetEvidence": [
+    {
+      "jobId": 106084853079,
+      "name": "Backend tests (ubuntu-latest shard 2/12)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853079",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc287-t13-git-abort.test.ts": 6,
+        "rfc303-worktree-abort-cleanup.test.ts": 2,
+        "rfc363-task-workspace-process-recovery.test.ts": 16
+      }
+    },
+    {
+      "jobId": 106084853098,
+      "name": "Backend tests (ubuntu-latest shard 11/12)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853098",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "fusion-engine.test.ts": 33,
+        "rfc319-task27-de28-manual-retry-and-host-anchor.test.ts": 7,
+        "rfc349-postgresql-migration-history.test.ts": 7,
+        "rfc359-w5hn-launch-resources-delegated-authority.test.ts": 8,
+        "rfc363-preparation-process-recovery.test.ts": 14,
+        "worktree-files-acl.test.ts": 14
+      }
+    },
+    {
+      "jobId": 106084853109,
+      "name": "Backend tests (ubuntu-latest shard 1/12)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853109",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc287-t13-deferred-prep.test.ts": 58,
+        "rfc359-w5hn-scheduled-launch-provider-parity.test.ts": 6,
+        "rfc359-w8-t28-mcp-runtime-lost-update.test.ts": 10,
+        "rfc363-task-preparation-admission.test.ts": 30,
+        "worktree-files-service.test.ts": 20
+      }
+    },
+    {
+      "jobId": 106084853126,
+      "name": "Backend tests (ubuntu-latest shard 12/12)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853126",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "call-graph-worktree.test.ts": 2,
+        "rfc294-canonical-manifests.test.ts": 1,
+        "rfc359-w5hn-multipart-launch-provider-parity.test.ts": 4,
+        "rfc359-w8-t28-lost-update.test.ts": 12,
+        "rfc363-source-snapshot.test.ts": 8,
+        "worktree-files-proxy.test.ts": 26
+      }
+    },
+    {
+      "jobId": 106084853137,
+      "name": "Backend tests (ubuntu-latest shard 4/12)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853137",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc287-t14-empty-root-containment.test.ts": 5,
+        "rfc353-fusion-inbound.test.ts": 9,
+        "rfc359-w29-mcp-application-lifecycle.test.ts": 14,
+        "rfc359-w5hn-workgroup-launch-provider-parity.test.ts": 2,
+        "rfc363-workspace-content.test.ts": 4
+      }
+    },
+    {
+      "jobId": 106084853140,
+      "name": "Backend tests (macos-latest shard 3/6)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853140",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc287-t13-preset-task-id.test.ts": 3,
+        "rfc287-t14b-prep-window-blast-radius.test.ts": 7,
+        "rfc349-provider-handover-fence.test.ts": 3,
+        "rfc353-fusion-domain-verbatim.test.ts": 14,
+        "rfc359-t19h-postgresql-migration-sequence.test.ts": 15,
+        "rfc359-w5hn-workflow-route-launch-provider-parity.test.ts": 3,
+        "rfc360-runtime-profile-participants.test.ts": 5,
+        "rfc363-preparation-driver.test.ts": 7,
+        "rfc363-transferred-workspace-admission.test.ts": 4
+      }
+    },
+    {
+      "jobId": 106084853145,
+      "name": "Backend tests (ubuntu-latest shard 8/12)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853145",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc238-mcp-runtime-test-transitions.test.ts": 4,
+        "rfc287-t14-quota-and-config-wiring.test.ts": 7,
+        "rfc359-w5hn-agent-launch-provider-parity.test.ts": 4,
+        "rfc363-launch-application.test.ts": 5,
+        "rfc365-automation-compatibility.test.ts": 7
+      }
+    },
+    {
+      "jobId": 106084853146,
+      "name": "Backend tests (macos-latest shard 2/6)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853146",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc238-mcp-runtime-test-transitions.test.ts": 4,
+        "rfc287-t13-git-abort.test.ts": 6,
+        "rfc287-t14-quota-and-config-wiring.test.ts": 4,
+        "rfc303-worktree-abort-cleanup.test.ts": 2,
+        "rfc359-w5hn-agent-launch-provider-parity.test.ts": 2,
+        "rfc363-launch-application.test.ts": 5,
+        "rfc363-task-workspace-process-recovery.test.ts": 8,
+        "rfc365-automation-compatibility.test.ts": 7
+      }
+    },
+    {
+      "jobId": 106084853148,
+      "name": "Backend tests (macos-latest shard 5/6)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853148",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "fusion-engine.test.ts": 33,
+        "rfc238-mcp-runtime-test-http.test.ts": 2,
+        "rfc287-t14-fanout-merge-conflict-abandon.test.ts": 5,
+        "rfc319-task27-de28-manual-retry-and-host-anchor.test.ts": 6,
+        "rfc349-postgresql-migration-history.test.ts": 7,
+        "rfc349-repository-preparation-postgresql-adapter.test.ts": 1,
+        "rfc359-w29-provider-application-binding.test.ts": 1,
+        "rfc359-w5hn-launch-resources-delegated-authority.test.ts": 4,
+        "rfc362-launch-contracts.test.ts": 9,
+        "rfc363-preparation-process-recovery.test.ts": 7,
+        "rfc364-diagnostics-bindings.test.ts": 7,
+        "runtime-freeze.test.ts": 13,
+        "worktree-files-acl.test.ts": 7
+      }
+    },
+    {
+      "jobId": 106084853149,
+      "name": "Backend tests (real PostgreSQL)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853149",
+      "conclusion": "success",
+      "passedTestsBySuite": {}
+    },
+    {
+      "jobId": 106084853154,
+      "name": "Backend tests (ubuntu-latest shard 7/12)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853154",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc238-mcp-runtime-test-service.test.ts": 52,
+        "rfc287-t14-impl-gate-fixes.test.ts": 6,
+        "rfc363-frozen-materialization.test.ts": 4,
+        "rfc364-diagnostics-policy.test.ts": 3,
+        "upload-apply-to-worktree.test.ts": 24
+      }
+    },
+    {
+      "jobId": 106084853172,
+      "name": "Backend tests (ubuntu-latest shard 10/12)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853172",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc303-runtime-ownership.test.ts": 10,
+        "rfc349-mcp-runtime-test-daemon-identity.test.ts": 2,
+        "rfc349-task-route-launch-postgresql-adapter.test.ts": 11,
+        "rfc363-preparation-journal.test.ts": 14,
+        "routes-worktree-files.test.ts": 20
+      }
+    },
+    {
+      "jobId": 106084853184,
+      "name": "Backend tests (macos-latest shard 1/6)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853184",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc238-mcp-runtime-test-service.test.ts": 26,
+        "rfc287-t13-deferred-prep.test.ts": 58,
+        "rfc287-t14-impl-gate-fixes.test.ts": 6,
+        "rfc359-w5hn-scheduled-launch-provider-parity.test.ts": 3,
+        "rfc359-w8-t28-mcp-runtime-lost-update.test.ts": 5,
+        "rfc363-frozen-materialization.test.ts": 2,
+        "rfc363-task-preparation-admission.test.ts": 15,
+        "rfc364-diagnostics-policy.test.ts": 3,
+        "upload-apply-to-worktree.test.ts": 24,
+        "worktree-files-service.test.ts": 20
+      }
+    },
+    {
+      "jobId": 106084853212,
+      "name": "Backend tests (ubuntu-latest shard 9/12)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853212",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc287-t14b-prep-window-blast-radius.test.ts": 8,
+        "rfc359-t19h-postgresql-migration-sequence.test.ts": 15,
+        "rfc363-preparation-driver.test.ts": 14
+      }
+    },
+    {
+      "jobId": 106084853216,
+      "name": "Backend tests (macos-latest shard 4/6)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853216",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc287-t14-empty-root-containment.test.ts": 5,
+        "rfc303-runtime-ownership.test.ts": 7,
+        "rfc349-mcp-runtime-test-daemon-identity.test.ts": 1,
+        "rfc349-task-route-launch-postgresql-adapter.test.ts": 10,
+        "rfc353-fusion-inbound.test.ts": 9,
+        "rfc359-w29-mcp-application-lifecycle.test.ts": 14,
+        "rfc359-w5hn-workgroup-launch-provider-parity.test.ts": 1,
+        "rfc363-preparation-journal.test.ts": 7,
+        "rfc363-workspace-content.test.ts": 4,
+        "routes-worktree-files.test.ts": 10
+      }
+    },
+    {
+      "jobId": 106084853227,
+      "name": "Backend tests (ubuntu-latest shard 6/12)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853227",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc238-mcp-runtime-test-real-e2e.test.ts": 2,
+        "rfc287-t14-file-scheme-bypasses.test.ts": 10,
+        "rfc349-child-execution-launch-postgresql-adapter.test.ts": 2,
+        "rfc349-fusion-route-provider.test.ts": 2,
+        "rfc359-w29-unstarted-application-composition.test.ts": 10,
+        "rfc359-w8-child-launch-conformance.test.ts": 34,
+        "rfc363-additive-schema.test.ts": 1,
+        "rfc364-diagnostics-operations.test.ts": 4
+      }
+    },
+    {
+      "jobId": 106084853251,
+      "name": "Backend tests (ubuntu-latest shard 3/12)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853251",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc287-t13-preset-task-id.test.ts": 3,
+        "rfc349-provider-handover-fence.test.ts": 3,
+        "rfc353-fusion-domain-verbatim.test.ts": 14,
+        "rfc359-w5hn-workflow-route-launch-provider-parity.test.ts": 6,
+        "rfc360-runtime-profile-participants.test.ts": 10,
+        "rfc363-transferred-workspace-admission.test.ts": 8
+      }
+    },
+    {
+      "jobId": 106084853310,
+      "name": "Backend tests (macos-latest shard 6/6)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853310",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "call-graph-worktree.test.ts": 2,
+        "rfc238-mcp-runtime-test-real-e2e.test.ts": 1,
+        "rfc287-t14-file-scheme-bypasses.test.ts": 6,
+        "rfc294-canonical-manifests.test.ts": 1,
+        "rfc349-child-execution-launch-postgresql-adapter.test.ts": 1,
+        "rfc349-fusion-route-provider.test.ts": 2,
+        "rfc359-w29-unstarted-application-composition.test.ts": 10,
+        "rfc359-w5hn-multipart-launch-provider-parity.test.ts": 2,
+        "rfc359-w8-child-launch-conformance.test.ts": 17,
+        "rfc359-w8-t28-lost-update.test.ts": 6,
+        "rfc363-additive-schema.test.ts": 1,
+        "rfc363-source-snapshot.test.ts": 4,
+        "rfc364-diagnostics-operations.test.ts": 4,
+        "worktree-files-proxy.test.ts": 13
+      }
+    },
+    {
+      "jobId": 106084853311,
+      "name": "Backend tests (ubuntu-latest shard 5/12)",
+      "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722/job/106084853311",
+      "conclusion": "success",
+      "passedTestsBySuite": {
+        "rfc238-mcp-runtime-test-http.test.ts": 4,
+        "rfc287-t14-fanout-merge-conflict-abandon.test.ts": 5,
+        "rfc349-repository-preparation-postgresql-adapter.test.ts": 2,
+        "rfc359-w29-provider-application-binding.test.ts": 2,
+        "rfc362-launch-contracts.test.ts": 17,
+        "rfc364-diagnostics-bindings.test.ts": 7,
+        "runtime-freeze.test.ts": 26
+      }
+    }
+  ],
+  "native": {
+    "runId": 35512285261,
+    "url": "https://github.com/wangbinquan/agent-workflow/actions/runs/35512285261",
+    "sourceSha": "f20110888fbd2988c11c5367f109597d7a5ba257",
+    "conclusion": "success",
+    "sameNativeInputsAs": "7befa335c23c36107f3298e654026d38380159dc",
+    "comparedPaths": [
+      "packages",
+      "scripts",
+      ".github/workflows/windows-platform.yml",
+      "package.json",
+      "bun.lock",
+      "tsconfig.json",
+      "bunfig.toml"
+    ]
+  },
+  "scope": "RFC363 AC1-8 and RFC364 AC1-7. RFC365 only T1 component characterization; parent RFC294/E1/W5/W9 remain open.",
+  "countingNote": "Suite counts are passed test cases from hosted logs, not individual expect() calls."
+}
