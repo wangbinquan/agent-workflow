@@ -1,5 +1,12 @@
 # 当前执行状态
 
+## 进行中 RFC
+
+- [RFC-366 执行结束记忆提炼 + 任务来源准入门](design/RFC-366-execution-end-memory-distill/)
+  —— Draft，**等用户批准**（含 proposal §6 能力影响清单 C1–C7 的 breaking change 确认）。
+  新增 `agent-run` / `task-run` 两类蒸馏信号源；五类源统一走 `launch_origin` 白名单
+  （默认只 `manual`）+ 逐源开关 + 热读配置。未动任何生产代码。
+
 ## 2026-09-21 修复：记忆卡片列表横排溢出（CSS 选择器列表被拆散）
 
 用户报障 /memory「按维度」记忆卡片横向堆积超出屏幕。根因是 CSS 选择器列表被拆散：RFC-352 T8

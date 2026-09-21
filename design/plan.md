@@ -396,6 +396,7 @@ v1 后续的产品 / 技术变更以 RFC 形式落档在 `design/RFC-NNN-{slug}/
 | [RFC-363](./RFC-363-task-source-control-launch-cutover/proposal.md) | Task/SC 启动与工作区生产切换：durable source/group/revision、两条 launch lane、真实 reader 与该纵切 B/D；完整 E1/W5 逐项另验。 | Done |
 | [RFC-364](./RFC-364-mcp-runtime-diagnostics-cutover/proposal.md) | W4-E6：MCP diagnostics 编排、process effects、七 HTTP 操作与根实例归 RC；复用现 persistence/lease，timer 留 W9。 | Done |
 | [RFC-365](./RFC-365-event-automation-target-providers/proposal.md) | W4-E9 Event target providers：T1 兼容性报告与特征测试完成；预算定稿后再切 TE/DE 两 SPI、durable origin/claim/receipt；Reaction 与完整 E9 留后继。 | Draft |
+| [RFC-366](./RFC-366-execution-end-memory-distill/proposal.md) | 执行结束记忆提炼：新增 `agent-run`（每个 agent node_run 达 done/failed）与 `task-run`（任务达 done/failed）两类蒸馏信号源，并给五类源加一道 `launch_origin` 白名单准入门（默认只 `manual`）+ 逐源开关 + 热读配置。含能力影响清单 C1–C7（定时/webhook/事件/API/内部任务的既有 clarify·review·feedback 提炼默认关闭）。 | Draft |
 
 > RFC-310 OS 历史实施快照（2026-08-21，PR-19 阶段；**不再作为当前状态入口**）：
 > 目标产品已收敛为可程序化扩展的“数字员工操作系统”。proposal/design §0A 新增通用 `digital-employee`、`event-center`
