@@ -1,6 +1,6 @@
 # RFC-335 — OIDC 显示用户名与 Git name 分离
 
-- 状态：In Progress（D1–D7 已批准，实现完成，等待发布与 hosted CI）
+- 状态：Done（2026-08-28 实现落地并验绿；2026-09-21 收口记账）
 - 发起：用户，2026-08-28
 - source pin：`234cfb2307602ced40bfb3279843843d6818997a`
 - 前置：RFC-036（OIDC）、RFC-220（userinfo 映射与登录同步）、RFC-320（用户档案驱动 Git identity）、RFC-294（后台目标架构）

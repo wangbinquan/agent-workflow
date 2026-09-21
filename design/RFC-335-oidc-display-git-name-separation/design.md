@@ -1,6 +1,6 @@
 # RFC-335 设计 — OIDC 显示用户名与 Git name 分离
 
-配套 `proposal.md`。当前状态：In Progress；D1–D7 已批准，实现完成，等待发布与 hosted CI。
+配套 `proposal.md`。当前状态：Done（2026-08-28 实现落地并验绿；2026-09-21 收口记账）。
 
 ## 1. 不变量
 

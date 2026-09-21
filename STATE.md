@@ -1,5 +1,28 @@
 # 当前执行状态
 
+## 2026-09-21 RFC-365 实现候选：Event Automation target providers
+
+RFC-365 T2～T6 已按“保留全部现合法输入”完成实现候选：Event Center 现拥有唯一四臂 renderer、
+durable origin/work intent 与 claim-fenced rule/delivery settle；Task Execution / Digital Employee 各自提供
+只返回本域 receipt 的 exact provider，先采用迁移前 receipt，再靠既有唯一键处理并发与 crash replay。
+`event_automation_work_intents` 已有 SQLite `0229` 与 PostgreSQL immutable `0005` migration。
+
+server、SQLite CLI、PostgreSQL daemon 三 roots 显式装配两 providers、IA event-only delegated context 与
+intent store；observation-only composition 明示能力。Integration dispatcher 的 EC union target switch、
+work-start capability probe 与 root callback 已删除，code-host WebhookTrigger 独立链保留。合同不增加
+Task inputs 256 上限，不改变 UTF-16 限额、Agent 空字段省略/allowClarify 或 DE manifest/value/body/external-id
+判据。SQLite targeted suite、typecheck 已通过；canonical、补充 targeted gates 与 exact-SHA hosted CI 待收口。
+本项只抵扣 RFC-294 W4-E9 的 Event target slice，Reaction、W9 与完整 E9 继续开放。
+
+## 2026-09-21 RFC-335 收口记账（工作 2026-08-28 已落地，本轮补 T10）
+
+用户问「RFC-335 完结了吗」后核实：实现与 CI 证据 2026-08-28 已齐，卡在 T10 记账未做。本轮补齐：
+`design/plan.md` 索引置 Done 并附证据；RFC 三件套状态行置 Done；plan.md T9/T10 置 Done、验收清单
+12 项逐条勾掉并标注证据锚点；STATE.md 历史段 🛠️ 进行中标记转 ✅ 已完成块。证据口径：实现
+`2f66dce8f`（Codex trailer）已入 `origin/main`，containing SHA `8e58eb05f` 的 CI run `33142147682`
+35/35 success、visual run `33136500610` success；当前 main 46/46 绿含全部 rfc335 回归。纯文档收口，
+无生产代码改动。
+
 ## 2026-09-21 修复续：T19h logical-backup-restore 补显式宽预算（d7b10f57c 暴露的连带 flake）
 
 allowGrowth 那笔（`d7b10f57c`）推后 CI 终态又红一格：macOS shard 4/6 的
@@ -5230,12 +5253,15 @@ called before any query`。十九处判据统一补上 `errno`；守卫
 > `aa32b65ad` 均已进入 `origin/main` 并为 `8e58eb05f` 祖先；该 SHA 的 CI run `33142147682` 35/35 成功，
 > visual run `33139682210` 与 Windows run `33139296772` 均 1/1 成功。
 
-> 🛠️ **进行中 RFC（实现完成，等待发布/CI，2026-08-28）：[RFC-335 OIDC 显示用户名与 Git name 分离](design/RFC-335-oidc-display-git-name-separation/proposal.md)。**
+> ✅ **已完成 RFC（Done，2026-08-28 落地 / 2026-09-21 收口记账）：[RFC-335 OIDC 显示用户名与 Git name 分离](design/RFC-335-oidc-display-git-name-separation/proposal.md)。**
 > 用户已批准 D1–D7 并授权推送。实现新增 `gitNameClaim/users.git_name`，保留 `usernameClaim` wire 但只映射
 > 产品显示名；existing/create/bind/link 均在 session 前按本次 IdP 值对账 display/Git name。账户页拆成
 > 显示名、Git name、邮箱，新任务从 `git_name + email` 冻结提交身份，旧 task 与 push credential 不变。
-> migration/claim/identity-access/account/task 回归共 153 tests、三 workspace typecheck 已通过；等待 exact-path
-> commit、推送和 exact-SHA hosted CI。
+> migration/claim/identity-access/account/task 回归共 153 tests。主实现 `2f66dce8f`（含真实 Codex
+> co-author trailer）已进入 `origin/main`；其自身 run `33134790825` 红（visual baseline 未刷新等），
+> 当日上午补 `e8d8861d9`（`e2e/account-profile.spec.ts` 独立覆盖 gitName + macOS baseline）与
+> `e64352273`（Ubuntu baseline），最终 containing SHA `8e58eb05f` 的 CI run `33142147682` 35/35 成功、
+> visual run `33136500610` 成功。收口时复核：实现与全部 rfc335 回归在当前 main 46/46 绿中仍绿。
 
 > ✅ **已完成 RFC（Done，2026-08-29）：[RFC-339 WrapperRuntime 归位与 wrapper/replay mechanics cutover（RFC-294 W2-D）](design/RFC-339-wrapper-runtime-cutover/proposal.md)。**
 > 主实现 `0c9c48e68b23f15aee5e812193fd3c7c2e371345` 已把三种 wrapper、scope/progress、merge recovery 与 bootstrap
