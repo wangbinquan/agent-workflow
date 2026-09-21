@@ -1,5 +1,17 @@
 # 当前执行状态
 
+## 2026-09-21 修复：删除六条已过期的一次性 allowGrowth 许可（main CI 唯一剩余红因）
+
+`0b7f0057e` 的 CI（run 35570602824）只剩一处红：macOS 分片 2/6 与 ubuntu 分片 2/12 红在
+同一条——`rfc317-ledger-highwater` T17「allowGrowth 无过期条目」。根因：`5b98bd061`
+重采账本时给六份 rfc294 账本（review-off-dag-offered-edges / mutation-entrypoints /
+ambient-wiring / cross-context-observed-imports / architecture-exceptions /
+module-symbol-owners）挂了 RFC-366/367 批次的一次性 `allowGrowth`；其后两笔 CI 修复提交
+（`2c7186143` / `0b7f0057e`）基线未再涨，按棘轮规则许可即判过期必须删除，而 `2c7186143`
+的 CI 被后续 push 取消、红直到 `0b7f0057e` 才暴露。本笔删掉六条许可（基线数值保留），
+`contentDigest` 用仓内算法（`artifactContentDigest`）重算。rfc317-ledger-highwater /
+rfc294-canonical-manifests / rfc317-architecture-ledgers 本地全绿，prettier 干净。
+
 ## 2026-09-21 RFC-366 完成：执行结束记忆提炼 + 任务来源准入门
 
 起于用户「增加 agent 执行结束、任务执行结束的记忆提炼能力，但是要区分任务类型……默认只提炼
