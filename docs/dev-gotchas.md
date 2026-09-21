@@ -320,6 +320,19 @@
 
   结果为 `0` 的，要么**本 PR 就该接而漏了**，要么必须在 plan 里写明**由哪个 PR 接**；两者都强过让下一个人发现。反过来这也是 code review 的好问题：新加的 domain 模块，谁调用它？
 
+- **committed event 的消费者还有第三种漏法：定义、接线、测试都有，只是没登记进「投递名单」**（2026-09-21 RFC-366 实撞，把 main 的 nightly 推红）：
+  新增了 `task-terminal-distill-enqueue` 消费者——定义在 `taskLifecycleConsumers.ts`、daemon 里也注册了、单测 `rfc366-task-terminal-consumer` 全绿；但漏了把它加进
+  `TASK_LIFECYCLE_DURABLE_CONSUMER_MANIFEST`。**提交 `task.lifecycle-transitioned.v1` 时写进事件行的那份投递名单，正是这张 manifest 的过滤结果**
+  （`taskLifecycleCommittedEvents.ts` 的 `consumers: taskLifecycleDurableConsumers(eventType)`），dispatcher 只按名单投递——于是事件照常提交、dispatcher 照常跑、任务照常 done，
+  **队列里就是什么都不多，而且一行日志都不报**。
+  三条可复用的判据：
+  1. **它是「声明表」型的漏接，不是 import / 调用点型的**：grep 消费者 id 能在定义与装配里命中，只有「这张表里有没有它」这一问会露出。新增 durable consumer 时，除了定义 + 注册，
+     **必改该事件家族的 manifest**（`TASK_LIFECYCLE_DURABLE_CONSUMER_MANIFEST` / `COLLABORATION_DURABLE_CONSUMER_MANIFEST`）。
+  2. **同一批里 review 侧登记了、task 侧没登记**——又一次「同类只修一侧」。两处对账判据现在写成结构律：`committed-event-consumer-delivery-parity` 按 (id, eventTypes, deliveryClass)
+     两向对账「实际建出来的定义」与「名单条目」，漏登记 / 少 eventType / deliveryClass 不符 / 幽灵条目四种都红。
+  3. **只有 nightly 抓得到**：这类「链路接上了但没有效果」的断言天然带 `@nightly`（push 档看不见），而 push 档里同一批的 `agent-run` 那半走的是**调用点**接线、一直绿着——
+     于是「一半绿」掩盖了另一半。看到「某功能在 nightly 红、push 档全绿」时，先怀疑**这类双通道里只接通了一条**。
+
 - **`git stash push -- <paths>` 在「没东西可存」时也返回 0，于是 `&& STASHED=1` 会骗你去 pop 别人的 stash**（2026-08-15 真实事故）：共享 checkout 上推送前常写成「先把他人未提改动 stash 起来 → pull --rebase → push → stash pop 还回去」。坑在于 `git stash push -u -m msg -- <paths>` 当所列路径全都干净时只打印 `No local changes to save` 并 **exit 0**——`git stash push ... && STASHED=1` 因此把标志置上了，后面的 `git stash pop` 就去弹了栈顶那个**本来就存在的、别人的** stash。那个 stash 基于很旧的 commit，套到今天的 HEAD 上直接炸出 12 个 `UU` 冲突文件。**判据**：绝不用退出码推断「我建了 stash」，要么 pop 前后比对 `git stash list` 的**条数**，要么用 `REF=$(git stash create)` 拿到确切的 stash ref 再 `git stash apply "$REF"`（`create` 不进栈，天然不会误伤别人的）。**恢复姿势**（本次实测无损）：先把冲突文件与 `git stash show -p stash@{0}` 快照到 scratchpad，再 `git checkout HEAD -- <每个冲突文件>`——冲突文件在 pop 之前必定是干净的（git 遇到脏文件是**拒绝** pop 而不是产生冲突），所以回 HEAD 不会丢别人任何未提交改动；别人的 stash 因为 pop 失败而**原样保留**在栈上。
 
 - **仓内有一批测试「静息就贴着 5000ms」，分片并行下必然间歇翻红**（2026-08-15 实测三例）：bun 默认单测超时 5000ms，而下列测试**在空载机器上单跑**就已逼近它——`rfc131-review-reject-aging-prior-output` 2.6–3.1s、`rfc305-architecture-lock` 的 roles 那条 3.97s、`listWorktreeDir > truncates beyond WORKTREE_DIR_MAX_ENTRIES` ~5.7s（I/O 重）；2026-08-16 又添一例 `scheduler-audit-gap4-loop-exit-out-of-scope-port` 的 snapshot 那条——**空载 1.53s、四分片下 5232ms**（3.4× 竞争膨胀），说明「静息离 5s 还很远」也不安全，判据得看**负载下**的倍率而非空载绝对值；已按本条给它写死 15s。`gate:local` 跑 4 个并行分片，于是它们在**任何**有别的活儿的机器上都会随机超时。**判据**：看到 `(fail)` 先去日志里找 `^ this test timed out after 5000ms`——有这行就是超时不是断言，跟着单跑一次确认；**别**把它当成自己改动的回归去查。**根治**属各自 owner：给这些测试显式 timeout（`test(name, fn, 15_000)`）而不是靠机器够快。

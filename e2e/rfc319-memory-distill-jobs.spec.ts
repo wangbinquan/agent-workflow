@@ -1020,10 +1020,30 @@ test.describe('队列里有任务之后', () => {
       '重试没清掉上一轮的错误 ⇒ 表格上永远挂着一条已经过期的报错，真正的新故障被它盖住',
     ).toBeNull()
 
-    // ② 真的跑完了一轮：状态流转到 done。
+    // ② 真的跑完了一轮。RFC-367 之后这一轮**不再**是 done：e2e 的 stub runtime
+    //    （`packages/system-mocks/`）没有任何模式会发 `<port name="candidates">`
+    //    （见文件末尾的能力说明），而 RFC-367 把「envelope 里没有 candidates 端口」
+    //    从「warn 完照样 markDone」改成了协议失败。
+    //
+    //    状态机决定了这里**不能**钉死某个瞬时状态：非终态失败会写回 `pending` +
+    //    指数退避（`DISTILL_MAX_ATTEMPTS`=3，第 3 次才是终态 `failed`），所以
+    //    「pending / 到期被认领重跑」是它的正常形态。判据落在「一轮真的跑过、且
+    //    这一轮的失败原因被记账」上：exitCode 从上一轮的 9 变成 stub 的 0、
+    //    userPromptMd 被这一轮写上、lastError 换成这一轮的协议失败原因。
     await expect
-      .poll(async () => (await jobFromList(JOB_RETRY)).status, { timeout: 120_000 })
-      .toBe('done')
+      .poll(
+        async () => {
+          const job = (await jobDetail(JOB_RETRY)).job
+          const fresh = job.lastError?.includes('port-missing') === true ? 'new' : 'stale'
+          return `${job.exitCode ?? 'null'}:${job.userPromptMd === null ? 'no' : 'yes'}:${fresh}`
+        },
+        {
+          timeout: 120_000,
+          message:
+            'retry 之后没有任何一轮真的跑起来（exitCode 仍是 9 / userPromptMd 仍为空 / lastError 还是上一轮的）',
+        },
+      )
+      .toBe('0:yes:new')
 
     // ③ 模型进程真的被重新拉起来：这两列只有在 spawn 之后 / 新一轮开头才会被写。
     const after = (await jobDetail(JOB_RETRY)).job
@@ -1035,8 +1055,20 @@ test.describe('队列里有任务之后', () => {
       after.userPromptMd,
       'user_prompt_md 仍为空 ⇒ runDistill 从没进入新的一轮（它只在 attempts===0 的那一轮开头写这一列）',
     ).not.toBeNull()
+    expect(
+      after.attempts,
+      '新一轮跑完却没把 attempts 记上去 ⇒ 失败预算没有随真实的运行推进',
+    ).toBeGreaterThanOrEqual(1)
+    expect(
+      after.lastError,
+      'RFC-367：协议失败必须把原因写进 last_error —— 那是管理员唯一能读到的线索',
+    ).toContain('port-missing')
+    expect(
+      ['pending', 'failed'],
+      `RFC-367 之后这条的合法状态只有「退避重排（pending）」或「预算用尽（failed）」，实际是 ${after.status}`,
+    ).toContain(after.status)
 
-    // ④ WS 上的状态流转序列：入队 → 被 worker 认领 → 跑完。
+    // ④ WS 上的状态流转序列：入队 → 被 worker 认领 → 跑到底（RFC-367 之后以 failed 收场）。
     const mine = frames.filter((f) => f.includes(JOB_RETRY))
     expect(
       mine.some((f) => f.includes('distill.queued')),
@@ -1047,15 +1079,15 @@ test.describe('队列里有任务之后', () => {
       '没有 distill.started ⇒ worker 从没认领过这条（pending→running 这一跳没发生），说明它根本没被重新调度',
     ).toBe(true)
     expect(
-      mine.some((f) => f.includes('distill.done')),
-      '没有 distill.done ⇒ 这一轮没有跑到底',
+      mine.some((f) => f.includes('distill.failed')),
+      '没有 distill.failed ⇒ 这一轮没有跑到底（RFC-367 之后 stub 的输出是协议失败）',
     ).toBe(true)
 
-    // ⑤ 界面上也要收敛到 Done（WS 会把列表 invalidate 掉）。
+    // ⑤ 界面上也要收敛到同一个状态（WS 会把列表 invalidate 掉）。
     await expect(
       page.getByTestId(`distill-job-row-${JOB_RETRY}`).locator('td').nth(1),
-      '库里已经 done，表上还写着 Failed ⇒ 管理员会重复点 Retry，每点一次都真的花一次模型调用',
-    ).toHaveText('Done', { timeout: 30_000 })
+      `库里是 ${after.status}，表上还写着旧状态 ⇒ 管理员的下一步判断建立在过期信息上`,
+    ).toHaveText(after.status === 'failed' ? 'Failed' : 'Pending', { timeout: 30_000 })
   })
 })
 

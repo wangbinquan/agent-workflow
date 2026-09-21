@@ -1063,20 +1063,29 @@ test('RFC-319 TASK-26: 节点抽屉里的重试受「同时重跑下游」开关
     await clickRetry(),
     '开关拨到「不重跑下游」，发出去的请求却没带上 cascade=false ⇒ 这个复选框没有接到请求上',
   ).toBe('false')
-  await waitForStatus(matrixDaemon, taskId, 'done', '关掉级联的重试没有把任务重新收敛到 done')
 
+  // 主判据是**轮询到最终的行集合**，不是等一个「可能一直就是 done」的状态：重试是
+  // 异步的，而任务在重试之前就已经是 done，`waitForStatus('done')` 会在重试真正落地
+  // 之前就返回——CI 上 12 分片并行时实撞一次（run 35597310134 的 TASK-26：首次失败、
+  // retry 通过，收到的行集合里少了 `retry-node`）。行集合到齐之后再断言状态收敛。
+  //
   // 被点的节点：先落一条 `retry-node` 的作废行，再由引擎复活跑一次。
-  expect(
-    await causesOf('runtime_worker'),
-    '关掉级联之后被点的节点也没有被作废重铸 ⇒ 重试按钮根本没生效，下面的对比无意义',
-  ).toEqual(['initial', 'process-retry', 'retry-node', 'revival'])
+  await expect
+    .poll(() => causesOf('runtime_worker'), {
+      timeout: 60_000,
+      message: '关掉级联之后被点的节点没有被作废重铸 ⇒ 重试按钮根本没生效，下面的对比无意义',
+    })
+    .toEqual(['initial', 'process-retry', 'retry-node', 'revival'])
+  await waitForStatus(matrixDaemon, taskId, 'done', '关掉级联的重试没有把任务重新收敛到 done')
   // 下游：**没有**任何 `retry-node-cascade` 作废行。它之所以还是跑了一次，是因为
   // 上游产出比它新、引擎按「陈旧重派」自行重跑（scheduler.ts:2565 的 isNodeRunFresh），
   // 与级联开关无关——这正是开关两侧唯一真实的分野。
-  expect(
-    await causesOf('merge'),
-    '关掉了「同时重跑下游」，下游却还是被级联作废了 ⇒ 这个开关是装饰',
-  ).toEqual(['initial', 'stale-redispatch'])
+  await expect
+    .poll(() => causesOf('merge'), {
+      timeout: 60_000,
+      message: '关掉了「同时重跑下游」，下游却还是被级联作废了 ⇒ 这个开关是装饰',
+    })
+    .toEqual(['initial', 'stale-redispatch'])
 
   // ── 乙：开关**打开** ⇒ 同一个动作，下游必须被级联作废并重铸。
   await page.reload()
@@ -1086,11 +1095,13 @@ test('RFC-319 TASK-26: 节点抽屉里的重试受「同时重跑下游」开关
   expect(await clickRetry(), '开关停在「同时重跑下游」，发出去的请求却没带上 cascade=true').toBe(
     'true',
   )
+  await expect
+    .poll(() => causesOf('merge'), {
+      timeout: 60_000,
+      message: '开着「同时重跑下游」，下游却没有被级联作废重铸 ⇒ 开关两侧结果一样，勾不勾都白勾',
+    })
+    .toEqual(['initial', 'stale-redispatch', 'retry-node-cascade', 'revival'])
   await waitForStatus(matrixDaemon, taskId, 'done', '开着级联的重试没有把任务重新收敛到 done')
-  expect(
-    await causesOf('merge'),
-    '开着「同时重跑下游」，下游却没有被级联作废重铸 ⇒ 开关两侧结果一样，勾不勾都白勾',
-  ).toEqual(['initial', 'stale-redispatch', 'retry-node-cascade', 'revival'])
 })
 
 // ===========================================================================

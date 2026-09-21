@@ -1082,14 +1082,17 @@ test('RFC-319 MEM-X8: 反问答完与评审决定各自排进一条蒸馏任务�
     )
     expect(reviewJob?.status, '蒸馏 worker 已关闭，这条应当停在 pending').toBe('pending')
 
-    // ④ 两条来源各自成行，不会被去重键合并掉。
+    // ④ 各类来源各自成行，不会被去重键合并掉。RFC-366 又给同一个任务加了
+    // agent-run（agent node_run 结算）与 task-run（任务达 done/failed）两类执行
+    // 结束来源，所以这里应当是四条、四个 sourceKind——任何两条被并成一条，
+    // 都意味着有一份语料不会被蒸馏。
     const all = (await api<{ items: DistillJobRow[] }>(d, '/api/memory-distill-jobs')).items.filter(
       (j) => j.taskId === taskId,
     )
     expect(
       all.map((j) => j.sourceKind).sort(),
-      '同一个任务的两类来源被并成了一条 ⇒ 两份语料里只有一份会被蒸馏',
-    ).toEqual(['clarify', 'review'])
+      '同一个任务的多类来源被并成了一条 ⇒ 有几份语料只会被蒸馏其中一份',
+    ).toEqual(['agent-run', 'clarify', 'review', 'task-run'])
   } finally {
     await d.stop()
     for (const dir of [stubState, repoDir]) {

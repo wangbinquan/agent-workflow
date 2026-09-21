@@ -220,6 +220,17 @@ export const TASK_LIFECYCLE_DURABLE_CONSUMER_MANIFEST = [
     deliveryClass: 'rebuildable',
   },
   {
+    // RFC-366 —— 任务执行结束的记忆提炼信号源。与 collaboration 侧的
+    // `review-distill-enqueue` 同形：**必须登记在这张表里**，因为提交
+    // `task.lifecycle-transitioned.v1` 时写进事件行的投递名单正是
+    // `taskLifecycleDurableConsumers(eventType)`（`taskLifecycleCommittedEvents.ts`）。
+    // 只加消费者定义、不加这一条，事件照常提交、dispatcher 照常跑，但这条消费者
+    // 永远收不到投递——任务跑完了队列里却什么都不多，且没有任何报错。
+    id: 'task-terminal-distill-enqueue',
+    eventTypes: ['task.lifecycle-transitioned.v1'],
+    deliveryClass: 'rebuildable',
+  },
+  {
     id: 'task-node-reconcile',
     eventTypes: ['task.node-statuses-transitioned.v1'],
     deliveryClass: 'rebuildable',

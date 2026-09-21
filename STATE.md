@@ -1,5 +1,34 @@
 # 当前执行状态
 
+## 2026-09-21 修复：四条 nightly 红（一条真 bug + 一条真 UX 回归 + 三条按新语义收口）
+
+用户报「定时执行的 ci 挂了」。`e2e-full-nightly`（`7707a74a3`）与 `e2e-webkit-nightly`（`5582f20b3`）
+的全部失败逐条归因；每条都在本地用 e2e 二进制复现、修后复跑绿（`RFC-319 覆盖账本对账` 是「分片红就
+拒绝对账」的下游门，不是独立失败）：
+
+1. **真 bug —— RFC-366 的 task-run 消费者没登记进投递名单**：`task-terminal-distill-enqueue` 建了定义、
+   daemon 里也注册了、单测全绿，但没进 `TASK_LIFECYCLE_DURABLE_CONSUMER_MANIFEST`；而提交
+   `task.lifecycle-transitioned.v1` 时写进事件行的投递名单**正是这张 manifest**（`consumers:
+   taskLifecycleDurableConsumers(eventType)`）→ 事件照常提交、任务照常 done，队列里什么都不多且不报错。
+   `rfc366-execution-end-distill` 的 e2e（只在 nightly 跑）抓到；`rfc359-w16` 的精确投递名单断言随之更新。
+   新增结构律守卫 `committed-event-consumer-delivery-parity`：按 (id, eventTypes, deliveryClass) 对账
+   「建出来的定义」与「名单条目」（task / collaboration 两家族都跑，含判据自证）。
+2. **真 UX 回归 —— RFC-363 的准备路径丢了 ref 错误富化**：`repositoryPreparationEffects.resolveCommits`
+   把「引用解析不了」直接抛成 `worktree-base-invalid`，启动向导于是不再显示 `repo-ref-not-found` 的
+   「可用分支/引用」清单（e2e TASK-06）。按 `workspaceMaterializer` 的单仓 / 组两条同形补回。
+3. **MEM-X8（rfc319-memory-and-workgroup-ops）**：原期望 `['clarify','review']`；RFC-366 之后同一个手工
+   任务还该有 `agent-run` 与 `task-run` 两条执行结束来源 → 改成四条，并保留原意（多类来源各成一行、
+   不被去重键合并）。
+4. **MEM-26（rfc319-memory-distill-jobs）**：原期望 retry 后 `done`；RFC-367 把「envelope 里没有
+   candidates 端口」从「warn 完照样 markDone」改成协议失败，而 e2e 的 stub 不吐 candidates 端口 →
+   判据改成「新一轮真的跑过（exitCode 0 / userPromptMd 写上 / lastError 换成 `port-missing`）+
+   状态是退避重排（pending）或终态（failed）」，不再赌某个瞬时状态。
+5. **TASK-26（rfc319-task-detail-tabs）**：CI 首次红、retry 绿＝flake；根因是 `waitForStatus('done')`
+   在重试之前就已成立、于是行断言跑在重试落地之前 → 主判据改成轮询行集合到齐，状态断言退居其后。
+
+通用坑（「声明表」型漏接 + 两向对账守卫 + 「nightly 红而 push 档绿 ⇒ 先怀疑双通道只通了一条」）已进
+`docs/dev-gotchas.md` §「有实现、有测试、没有调用方」。
+
 ## 2026-09-21 RFC-367 完成收口（补 AC-7/AC-8/AC-10 点名锁，C1–C4 用户逐项确认）
 
 实现与 CI 验绿早在 `271b99aaa`（run 35575845295 46/46）已成立，本轮收掉三件残账：

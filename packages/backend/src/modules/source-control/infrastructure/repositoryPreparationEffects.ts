@@ -6,8 +6,10 @@ import {
 import type { GitCommitIdentity } from '@agent-workflow/shared'
 import { z } from 'zod'
 import type { SecretBox } from '@/auth/secretBox'
-import { DomainError, ConflictError } from '@/util/errors'
+import { DomainError, ConflictError, ValidationError } from '@/util/errors'
 import { runGit, type WorktreeLifecycleHookEvent } from '@/util/git'
+import { redactGitUrl } from '@agent-workflow/shared'
+import { listAvailableRefs } from '@/services/gitRepoCache'
 import type { RepositoryWorkspaceStore } from '../ports/repositoryWorkspaceStore'
 import type { RepositoryPreparationEffects } from '../application/ports/repositoryPreparationEffects'
 import {
@@ -152,13 +154,35 @@ export function createRepositoryPreparationEffects(input: {
             ['rev-parse', '--verify', `${base}^{commit}`, '--'],
             { signal: input.signal },
           )
-          if (resolved.exitCode !== 0)
+          if (resolved.exitCode !== 0) {
+            // RFC-363 把单仓 / 组的物化收进这条准备路径时，这里只抛了裸的
+            // `worktree-base-invalid`——用户于是只看到一句 git 原话，启动向导丢掉了
+            // 「可用分支/引用」那三层信息（e2e TASK-06 锁的正是：本地化标题 +
+            // 服务端原话里的 ref + 可选的 availableRefs）。与
+            // `workspaceMaterializer` 的单仓 / 组两条同形：引用解析失败就报
+            // `repo-ref-not-found` / `repo-group-ref-not-found`，详情带 redacted URL、
+            // 请求的 ref 与 availableRefs；路径源（无 URL 可 redact）保持原错误。
+            if (source.repoUrl !== null) {
+              const isGroupLayout = facts.kind === 'repository-group'
+              const available = await listAvailableRefs(source.repoPath, 10)
+              throw new ValidationError(
+                isGroupLayout ? 'repo-group-ref-not-found' : 'repo-ref-not-found',
+                `ref '${base}' not found in ${redactGitUrl(source.repoUrl)}`,
+                {
+                  url: redactGitUrl(source.repoUrl),
+                  ref: base === 'HEAD' ? null : base,
+                  availableRefs: available,
+                  ...(isGroupLayout ? { mountPath: planned.mountPath } : {}),
+                },
+              )
+            }
             throw new DomainError(
               'worktree-base-invalid',
               `cannot resolve base ref '${base}'`,
               422,
               { stderr: resolved.stderr.trim() },
             )
+          }
           sources.push({ ...source, resolvedCommit: resolved.stdout.trim() })
           await input.assertCurrent()
         }

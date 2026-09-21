@@ -351,6 +351,10 @@ describeEachProvider('RFC-359 lifecycle physical write sequence', (harness) => {
       { consumerId: 'event-center.task-lifecycle', state: 'pending' },
       { consumerId: 'task-child-budget', state: 'pending' },
       { consumerId: 'task-execution-watch', state: 'pending' },
+      // RFC-366：任务执行结束的记忆提炼消费者。它**必须**在这张投递名单上——
+      // 只建定义不登记 manifest 的话，事件照常提交、这条永远收不到（2026-09-21
+      // 的 nightly 抓到过，见 `committed-event-consumer-delivery-parity` 守卫）。
+      { consumerId: 'task-terminal-distill-enqueue', state: 'pending' },
       { consumerId: 'task-terminal-gate-close', state: 'pending' },
       { consumerId: 'task-workspace-prune-nudge', state: 'pending' },
     ])
