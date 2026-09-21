@@ -83,7 +83,10 @@
       "id": "rfc294-capability-compatibility-debt",
       "file": "packages/backend/tests/rfc294-architecture-preflight.test.ts",
       "symbol": "CAPABILITY_COMPATIBILITY_DEBT",
-      "baseline": 18,
+      "baseline": 19,
+      "allowGrowth": {
+        "why": "RFC-365 adds one module-layer file to the historical capability-name heuristic: the identity-access event-automation delegated-context adapter rewraps Actor exactly like the existing forSchedule / forWebhook arms, which live outside modules/**. The finding is a compatibility record, not a new capability forge; the exact owner-factory convergence is tracked by the same W4 slice."
+      },
       "why": "RFC-294/RFC-349 provider cutover 暴露的 capability sole-mint 与 public-type 兼容债；每条按 exact file/symbol 锁定，只许随 owner factory 收敛。 RFC-359 W4-D19a（2026-09-06）：任务房的两个参与者合一，反问参与者的 sqlite/postgresql 两条与任务参与者的一条并成两条，24→22。 RFC-359 W4-D24：租约那条能力兼容债随实现合一销账，22→21。 RFC-359：`sqliteNodeRunMintParticipant.ts#createSqliteNodeRunMintParticipantInTx` 随同步铸行链退役（`nodeRunMintProgram` 的同步解释器，src 侧唯一到达路径是零调用方的 `mintNodeRunTx`），20 → 19。"
     },
     {
@@ -921,7 +924,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "5f33e7ee33e32be90886e8228052441cd1cf0abc",
-    "contentDigest": "sha256:1aa201a48d874c799de19696c40e79e5cb7364ab0fac497850267c13c0132c06",
+    "contentDigest": "sha256:0292f7cd1bb15a75695c027c53e86ff9b88f716c1902555ae2423ab7f1f81404",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
