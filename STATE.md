@@ -16,6 +16,14 @@
 - **记账**：proposal Draft→Done、`design/plan.md` 索引 Done、plan.md 验收清单 7 项补勾（AC-13
   证据为 `rfc367-distill-followup-loop.test.ts:328`，T9b 为 `5b98bd061` 重采 + 当前守卫全绿，
   盯 CI 为 `271b99aaa` / `7707a74a3` 两轮 46/46）。rfc367-* 测试 58 → 61。
+- **`5f33e7ee3` 推红一处的修复**：新测试文件名命中 `GUARD_FILE_NAME_PATTERN`（含 `invariants`），
+  被 `guard-manifest.json` 两向钉死判成未登记守卫（`rfc317-architecture-ledgers` +
+  `rfc317-guard-negative-fixture` 红）。按 dev-gotchas §「新增守卫测试必须同时登记」append 一条
+  `rfc367-distill-evidence-invariants`（字段由仓内 `isCorpusScanner` / `assertsAbsence` /
+  `negativeFixtureAssertions` / `corpusFloor` 现算：false / false / true / null，lines 352），
+  `sourceDigest` 保持干净树值（本笔零 src 改动），`contentDigest` 用 `artifactContentDigest` 重钉。
+  本地 architecture 目录 712 条：仅 2 条既有脏树差异（并发 session 未提源码导致「提交版 vs 脏树
+  重算」，非本笔引入，干净 checkout 不复现），相关 4 守卫 98/98 绿。
 
   背景（原「进行中 RFC」条目存档）：起于 2026-09-21 生产取证——176 个 done 任务里 76 个零候选，
   有捕获的最近 10 次 10/10 输出没有 `<port>` 包裹被静默丢弃，最后一条落库候选停在 2026-07-17；

@@ -2152,6 +2152,18 @@
       "lines": 898
     },
     {
+      "id": "rfc367-distill-evidence-invariants",
+      "file": "packages/backend/tests/rfc367-distill-evidence-invariants.test.ts",
+      "runner": "bun",
+      "mechanism": "behaviour",
+      "corpusScanner": false,
+      "minCorpusFiles": null,
+      "assertsAbsence": false,
+      "negativeFixture": true,
+      "classified": true,
+      "lines": 352
+    },
+    {
       "id": "runtime-parameter-ratchet",
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "runner": "vitest",
@@ -2556,7 +2568,7 @@
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
     "currentSnapshotSha": "3246b8b4106622e7bdb44f25d410c313711e620e",
-    "contentDigest": "sha256:ba8cb926222b9b0179df1a1b22992ddb9b1e60b337cb777aea006a9a78ba99e5",
+    "contentDigest": "sha256:0bb821384f242f335b51f316c450aac0bad379a5295b63062e714b824015a4c0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
