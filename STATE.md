@@ -1,5 +1,17 @@
 # 当前执行状态
 
+## 2026-09-21 修复续：T19h logical-backup-restore 补显式宽预算（d7b10f57c 暴露的连带 flake）
+
+allowGrowth 那笔（`d7b10f57c`）推后 CI 终态又红一格：macOS shard 4/6 的
+`rfc359-t19h-logical-backup-restore.test.ts` 里 `verifies both whole contracts … with close`
+5342ms 撞 bun 的 5000ms 隐式默认。**与本笔改动无关的同类连带**：同一用例同 shard 在上一
+run（35570602824）2839ms 绿（1.9x 为 runner 负载签名），姊妹用例 `inspects original bytes`
+同跑 5058ms 已贴线；`0b7f0057e` 只给姊妹文件 `rfc359-t19h-postgresql-migration-sequence.test.ts`
+挂了 `setDefaultTimeout(60_000)`，漏了同形的这一份。本笔照先例给整份文件同样预算（断言
+零改动）。已排查其余 t19h 家族：`generation-upgrade`（24 条共 9.4s，均值 ~390ms）与
+`postgresql-upgrade`（全文件 503ms）余量充足，不放宽。本地：协议用例 4 pass（PG 环境门
+那条红为本机无库的既有行为，与 CI 无关）；prettier / eslint --max-warnings 0 干净。
+
 ## 2026-09-21 修复：删除六条已过期的一次性 allowGrowth 许可（main CI 唯一剩余红因）
 
 `0b7f0057e` 的 CI（run 35570602824）只剩一处红：macOS 分片 2/6 与 ubuntu 分片 2/12 红在

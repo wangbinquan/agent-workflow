@@ -3,7 +3,7 @@
 // explicitly control the target port. The selected PostgreSQL mechanism below
 // uses the real source, export, reserved target and provider restore composition.
 
-import { afterEach, beforeAll, describe, expect, test } from 'bun:test'
+import { afterEach, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { createHash } from 'node:crypto'
 import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
@@ -41,6 +41,18 @@ import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSou
 import { createPortableBackupArchive } from '@/services/portableBackupArchive'
 import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 import { freezeAt } from './migration-freeze'
+
+// 与 rfc359-t19h-postgresql-migration-sequence.test.ts 同形（0b7f0057e 的先例）：协议用例
+// 每条都要构建/校验整份 logical artifact（beforeAll 的 loadPostgresqlMigrationHistory() 一次
+// ~300ms，每条用例再各自重放校验），成本随已提交迁移历史长度增长；这里没有任何一条用例
+// 在等外部资源——慢只意味着 runner 忙。
+//
+// 2026-09-21 实撞：run 35573422375（d7b10f57c，本文件所属代码路径零改动）macOS shard 4/6
+// 上 `verifies both whole contracts ... with close` 5342ms 撞 bun 的 5000ms 隐式默认而红；
+// 上一 run 35570602824 同一用例同 shard 2839ms 绿（1.9x 是 runner 负载的签名）。姊妹用例
+// `inspects original bytes ...` 同跑 5058ms 已在悬崖边。按先例给整份文件一个显式宽预算：
+// 断言一条不动、全部照跑，下次追加迁移不会再换一条用例重新撞线。
+setDefaultTimeout(60_000)
 
 const roots: string[] = []
 const providers = resolveTestProviders(process.env)
