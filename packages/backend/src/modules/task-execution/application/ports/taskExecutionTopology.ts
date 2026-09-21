@@ -1,5 +1,6 @@
 import type { Language, TriggerContext } from '@agent-workflow/shared'
 import type { OwnershipToken } from '../../domain/ownership'
+import type { AgentRunSettledObserver } from './agentRunSettledObserver'
 
 /**
  * Cross-boundary identity view of RFC-328's exact execution context.
@@ -67,6 +68,17 @@ export interface TaskDriveRuntimeKnobs {
   readonly commitPushExcludePatterns?: readonly string[]
   readonly commitPushLang?: Language
   readonly defaultRuntime?: string
+  /**
+   * RFC-366 —— agent 运行结束的观察者。
+   *
+   * 它必须出现在**这张显式清单**上，而不只是 `RunTaskOptions` 里：这张表就是
+   * 「启动器转发给调度器的东西」的声明面，`TaskDriveRequest` 与
+   * `runtimeConfigOpts` 的返回类型都从它派生。只加在 `RunTaskOptions` 上时，
+   * 对象展开会让它在运行期照样流到引擎（`state.opts.agentRunSettled` 取得到），
+   * 但类型上 drive 请求里根本没有这一项——于是 bootstrap → 引擎这一段接线
+   * 没有任何编译期约束，改名只会在运行期坏掉，而且是「记忆少了」这种不报错的坏。
+   */
+  readonly agentRunSettled?: AgentRunSettledObserver
 }
 
 export interface TaskDriveRuntimeOptions extends TaskDriveRuntimeKnobs {

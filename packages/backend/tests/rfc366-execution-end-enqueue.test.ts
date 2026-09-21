@@ -13,6 +13,7 @@ import {
   DEFAULT_DISTILL_POLICY,
   type DistillPolicy,
   type DistillSourceKind,
+  type ResolvedDistillScope,
   type TaskLaunchOrigin,
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '../src/db/query'
@@ -375,11 +376,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     })
     expect(result).not.toBeNull()
     const rows = await rowsOf(orphanTaskId)
-    const scope = JSON.parse(rows[0]!.scopeResolvedJson) as {
-      agentIds: string[]
-      workflowId: string | null
-      includeGlobal: boolean
-    }
+    const scope = JSON.parse(rows[0]!.scopeResolvedJson) as ResolvedDistillScope
     expect(scope).toEqual({ agentIds: [], workflowId: null, repoId: null, includeGlobal: true })
   })
 })

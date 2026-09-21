@@ -13,6 +13,7 @@
 import { describe, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import type { TaskStatus } from '@agent-workflow/shared'
+import type { CommittedEventEnvelopeV1 } from '../src/platform/events/committed/types'
 import { createTaskLifecycleDurableConsumerDefinitions } from '../src/modules/task-execution/application/taskLifecycleConsumers'
 
 function transition(input: {
@@ -20,7 +21,7 @@ function transition(input: {
   previousStatus?: TaskStatus
   continuationHandoff?: boolean
   taskId?: string
-}): unknown {
+}): CommittedEventEnvelopeV1 {
   const taskId = input.taskId ?? ulid()
   const occurredAt = new Date().toISOString()
   return {
