@@ -7085,6 +7085,9 @@ export const enUS: Resources = {
     commitPushModel: 'Commit & push model',
     commitPushModelHint:
       'Model that writes commit messages / repairs rejected pushes for RFC-075 auto commit&push. Blank = opencode default (a cheap model is recommended).',
+    memoryDistillTimeoutMs: 'Memory distill timeout',
+    memoryDistillTimeoutMsHint:
+      'Longest a single memory-distill run may take (ms, default 3600000 = 1 hour). A timeout counts as a failure and backs off. Distillation is single-flight, so the whole distill queue waits while one run uses this budget.',
     commitPushRuntime: 'Commit & push runtime',
     commitPushRuntimeHint:
       'Runtime profile the built-in commit agent runs on; its model comes from the profile. Leave empty to inherit the global default runtime.',

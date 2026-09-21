@@ -27,6 +27,8 @@ export interface MemoryDistillWorkerOptions {
   readonly defaultRuntime?: string | null
   readonly model?: string | null
   readonly sourceContextBudget?: SourceContextBudget
+  /** config.memoryDistillTimeoutMs — per-run distiller timeout (ms). */
+  readonly timeoutMs?: number
 }
 
 export interface MemoryDistillWorker {

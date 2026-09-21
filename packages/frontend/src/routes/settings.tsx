@@ -2227,6 +2227,17 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               ]}
             />
           </Field>
+          <Field
+            label={t('settingsForm.memoryDistillTimeoutMs')}
+            hint={t('settingsForm.memoryDistillTimeoutMsHint')}
+          >
+            <SettingsNumberInput
+              setting="memoryDistillTimeoutMs"
+              data-testid="settings-memory-distill-timeout-input"
+              value={state.memoryDistillTimeoutMs}
+              onChange={(v) => setState({ ...state, memoryDistillTimeoutMs: v })}
+            />
+          </Field>
         </SettingsCard>
 
         <SettingsCard

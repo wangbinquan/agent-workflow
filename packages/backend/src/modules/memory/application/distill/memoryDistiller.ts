@@ -73,7 +73,12 @@ export {
 
 const log = createLogger('memory-distiller')
 
-const DEFAULT_TIMEOUT_MS = 120_000
+// 一次蒸馏 = 一个 runtime 子进程跑完整个 LLM 轮次，输入是一批合并的
+// clarify / review / feedback 事件。原先是 120_000（2 分钟），对这个体量明显偏短：
+// 超时按失败计，整批退避重试，已经烧掉的 token 白花。默认改为 1 小时（用户
+// 2026-09-21 指定），并可由 `config.memoryDistillTimeoutMs` 覆盖（设置页
+// 「系统代理 · 记忆蒸馏」，边界见 SETTINGS_NUMERIC_BOUNDS.memoryDistillTimeoutMs）。
+const DEFAULT_TIMEOUT_MS = 3_600_000
 
 // -----------------------------------------------------------------------------
 // Public types
@@ -97,7 +102,8 @@ export interface RunDistillOptions {
   siblings: MemoryDistillJob[]
   /** Inject a fake spawn for tests. Default = real Bun.spawn pipeline. */
   spawnFn?: DistillerSpawnFn
-  /** Default 120_000ms; tests override to keep cases fast. */
+  /** Default `DEFAULT_TIMEOUT_MS` (1 hour), overridable via
+   *  `config.memoryDistillTimeoutMs`; tests override to keep cases fast. */
   timeoutMs?: number
   /**
    * RFC-117 — resolved runtime for the distiller. `protocol` (which driver),

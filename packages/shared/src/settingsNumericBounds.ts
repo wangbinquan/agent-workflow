@@ -114,6 +114,17 @@ export const SETTINGS_NUMERIC_BOUNDS = {
     unit: 'ms',
   },
   intentBuilderMaxGenerateRounds: { min: 1, max: 500 },
+  // 记忆蒸馏的单次 LLM 轮次超时。默认 1 小时（见 memoryDistiller DEFAULT_TIMEOUT_MS）——
+  // 原先硬编码的 120s 对「一批 clarify/review/feedback 事件合并成一次蒸馏」这种体量明显
+  // 偏短，超时即整批失败并退避重试，白烧一次 token。上界 6 小时是用户 2026-09-21 定的：
+  // distill loop 有单飞重入保护，一个卡住的蒸馏会把整个蒸馏队列阻塞到超时为止，所以上界
+  // 同时也是「最坏队列阻塞时长」。下界 30s 与 intentBuilderTurnTimeoutMs 同源。
+  memoryDistillTimeoutMs: {
+    min: 30_000,
+    max: 21_600_000,
+    step: 1_000,
+    unit: 'ms',
+  },
 } as const satisfies Record<string, SettingsNumericBound>
 
 export type SettingsNumericPath = keyof typeof SETTINGS_NUMERIC_BOUNDS

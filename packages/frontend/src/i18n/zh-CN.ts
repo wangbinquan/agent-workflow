@@ -5641,6 +5641,8 @@ export interface Resources {
     pending: string
   }
   settingsForm: {
+    memoryDistillTimeoutMs: string
+    memoryDistillTimeoutMsHint: string
     commitPushModel: string
     commitPushModelHint: string
     commitPushRuntime: string
@@ -13368,6 +13370,9 @@ export const zhCN: Resources = {
     commitPushModel: '提交&推送模型',
     commitPushModelHint:
       'RFC-075 自动提交时生成 commit message / 修复被拒推送的模型；留空用 opencode 默认（建议填便宜模型）。',
+    memoryDistillTimeoutMs: '记忆蒸馏超时',
+    memoryDistillTimeoutMsHint:
+      '单次记忆蒸馏允许运行的最长时间（毫秒，默认 3600000 = 1 小时）。超时按失败计并退避重试。蒸馏是单飞的，一次蒸馏跑满这个时长期间整个蒸馏队列都在等它。',
     commitPushRuntime: '提交&推送运行时',
     commitPushRuntimeHint:
       '内置 commit agent 运行的运行时 profile，其 model 来自该 profile；留空则继承全局默认运行时。',

@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1069,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20894,
+    "recursiveFields": 20897,
     "symbols": 1016
   },
   "entries": [
@@ -72069,6 +72069,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:start.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:start.$return.$method:stop.$return",
           "type": "void"
         },
@@ -72213,6 +72218,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "sourceContextBudget.reviewBodyMaxBytes",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "timeoutMs",
+          "type": "number"
         }
       ],
       "file": "packages/backend/src/modules/memory/public/commands.ts",
@@ -72223,7 +72233,8 @@
         "intervalMs",
         "model",
         "runtimeName",
-        "sourceContextBudget"
+        "sourceContextBudget",
+        "timeoutMs"
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/memory/public/commands.ts#MemoryDistillWorkerOptions",
@@ -72234,7 +72245,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:7ada9e18c47cecf13500537fe634dafa8717f4fa35b76c75bfc726591d0aaef0",
+      "signatureDigest": "sha256:224c6e75d61da5cf8cb7ef5435ea66eaafaee63fadaa9d7f4f4a1039b648abae",
       "status": "target-context-current-surface",
       "symbol": "MemoryDistillWorkerOptions",
       "transaction": "own-tx",
@@ -72246,7 +72257,7 @@
       "budget": {
         "maxMethods": 28,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 222,
+        "maxTransitiveLeafFields": 223,
         "maxUnionVariants": 98
       },
       "consumerEdgeIds": [
@@ -73283,6 +73294,11 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "distillWorker.$method:start.$parameter:options.sourceContextBudget.reviewBodyMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "distillWorker.$method:start.$parameter:options.timeoutMs",
           "type": "number"
         },
         {
@@ -165381,7 +165397,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:55410f258afdae9edc5ccbc718dfa3c13720ad46b521926e2edcaa91d1cd302d",
+  "sourceDigest": "sha256:578930f44eaa797b76c40c0e516ed1aea92e7c58c5f17ecf2c6ea2c858cca4dd",
   "targetContexts": [
     "collaboration",
     "development-automation",

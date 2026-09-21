@@ -45,6 +45,7 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     'memoryDistillRuntime',
     'memoryDistillModel',
     'memoryDistillLang',
+    'memoryDistillTimeoutMs',
     'mergeAgentRuntime',
     'mergeAgentModel',
     // RFC-239 change narrative (AI 导读)

@@ -61,7 +61,7 @@ function patchFor(path: SettingsNumericPath, value: number): unknown {
 }
 
 describe('Settings numeric bounds parity', () => {
-  test('all 36 Config-backed numeric controls use the shared adapter exactly once', () => {
+  test('all 37 Config-backed numeric controls use the shared adapter exactly once', () => {
     expect(SETTINGS_SOURCE).not.toMatch(/<NumberInput\b/)
     // RFC-287 T10：25 → 28，补齐 maxConcurrentCodeHostCalls / maxActiveChildTasks /
     // maxInvocationDepth 三项配额（此前只能改配置文件）。
@@ -75,7 +75,9 @@ describe('Settings numeric bounds parity', () => {
     // 最坏 attempt 数（默认 8），是直接的成本旋钮，必须在界面上可调、可关。
     // RFC-350：35 → 36，任务不活跃超时阈值（开启后会**自动取消**没人管的任务，
     // 必须在界面上可见可调，不能只藏在 config.json）。
-    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(36)
+    // 2026-09-21：36 → 37，记忆蒸馏超时。默认从 120s 提到 1 小时的同时把它提到设置页
+    // ——这是直接决定「一批蒸馏能不能跑完」的成本/成败旋钮，不能只藏在 config.json。
+    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(37)
     for (const path of Object.keys(SETTINGS_NUMERIC_BOUNDS) as SettingsNumericPath[]) {
       const matches = SETTINGS_SOURCE.match(
         new RegExp(`setting="${path.replaceAll('.', '\\.')}"`, 'g'),

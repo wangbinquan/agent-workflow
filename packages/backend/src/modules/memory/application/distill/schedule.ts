@@ -249,6 +249,11 @@ export interface DistillTickOptions {
    * DEFAULT_SOURCE_CONTEXT_BUDGET when omitted.
    */
   sourceContextBudget?: SourceContextBudget
+  /**
+   * Per-run distiller timeout (ms), plumbed from `config.memoryDistillTimeoutMs`.
+   * Omitted → runDistill's DEFAULT_TIMEOUT_MS (1 hour).
+   */
+  timeoutMs?: number
   /** Default = Date.now; tests pump time forward via a mock. */
   now?: () => number
 }
@@ -310,6 +315,7 @@ export async function distillTick(options: DistillTickOptions): Promise<{
         model: rt.model,
         isSandbox: rt.isSandbox,
         sourceContextBudget: options.sourceContextBudget,
+        timeoutMs: options.timeoutMs,
       })
       await options.store.markDone(ids, (options.now ?? Date.now)())
       publish({
@@ -370,6 +376,8 @@ export interface StartLoopOptions {
   model?: string | null
   /** RFC-044: forwarded to distillTick → runDistill on every tick. */
   sourceContextBudget?: SourceContextBudget
+  /** Forwarded to distillTick → runDistill on every tick (config.memoryDistillTimeoutMs). */
+  timeoutMs?: number
 }
 
 export interface DistillLoopHandle {
@@ -417,6 +425,7 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
       defaultRuntime: options.defaultRuntime,
       model: options.model,
       sourceContextBudget: options.sourceContextBudget,
+      timeoutMs: options.timeoutMs,
     })
       .catch((err) => {
         log.warn('tick threw', { error: err instanceof Error ? err.message : String(err) })

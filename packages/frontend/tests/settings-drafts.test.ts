@@ -46,6 +46,8 @@ describe('RFC-201 Settings draft registry', () => {
       'memoryDistillRuntime',
       'memoryDistillModel',
       'memoryDistillLang',
+      // 2026-09-21：记忆蒸馏超时（默认 120s → 1 小时，并提到设置页可调）。
+      'memoryDistillTimeoutMs',
       'mergeAgentRuntime',
       'mergeAgentModel',
       // RFC-239 change narrative (AI 导读)

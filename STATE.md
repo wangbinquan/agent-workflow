@@ -1,11 +1,35 @@
 # 当前执行状态
 
+## 2026-09-21 记忆蒸馏超时：默认 120s → 1 小时，并提到设置页可调
+
+用户要求。此前 `DEFAULT_TIMEOUT_MS` 硬编码 120_000，且**没有任何调用方传 timeoutMs**——
+配置面上根本没有这个键；一批 clarify/review/feedback 合并成的蒸馏跑不完即整批失败退避，
+已烧的 token 白花。本次（不走 RFC，用户 2026-09-21 定为直接实现）：
+
+- 默认值 1 小时；新增 `config.memoryDistillTimeoutMs`，边界 30s–6h（上限用户定：distill loop
+  单飞重入，卡住的蒸馏会阻塞整个蒸馏队列到超时，上限即最坏阻塞时长）。
+- 接线：shared 双 schema + `SETTINGS_NUMERIC_BOUNDS` → `distillTick`/`startMemoryDistillLoop`
+  → 模块 public 合同 `MemoryDistillWorkerOptions` → `runDistill`；设置页「系统代理 · 记忆蒸馏」
+  卡片加 `SettingsNumberInput`，并登记 `SETTINGS_CONFIG_SCOPE_KEYS.systemAgents`。
+- **顺带拉齐一处 provider 分叉**：`start.ts` 的 SQLite 侧 distill 工厂原先读引导期快照
+  `distillBootConfig`（改了要重启 daemon），PostgreSQL 侧每 tick 重读。现统一为每 tick 重读，
+  `memoryDistillerEnabled / Runtime / Model / SourceContext / TimeoutMs` 五项在两种部署上
+  一致热生效（用户确认的行为变更）。
+- 测试：backend `memory-distill-timeout-config`（默认值 / 覆盖 / 调度器透传，已对 120s 旧值验红）
+  + `memory-distill-timeout-wiring`（两条部署路径的源码层守卫，已对旧 start.ts 验红）；
+  frontend `settings-memory-distill-timeout`（渲染 / 边界 / **保存后 PUT body 带这个键**，
+  已对「漏登记 scope 白名单」验红）。架构普查已重采并按 `424feffc3` 重钉 provenance。
+
 ## 进行中 RFC
 
 - [RFC-366 执行结束记忆提炼 + 任务来源准入门](design/RFC-366-execution-end-memory-distill/)
   —— Draft，**等用户批准**（含 proposal §6 能力影响清单 C1–C7 的 breaking change 确认）。
   新增 `agent-run` / `task-run` 两类蒸馏信号源；五类源统一走 `launch_origin` 白名单
   （默认只 `manual`）+ 逐源开关 + 热读配置。未动任何生产代码。
+- [RFC-367 记忆蒸馏输出协议归一（事件流取数 + 严格协议 + 同会话补问）](design/RFC-367-distiller-output-protocol/) —— Draft，待用户批准后实现
+  —— 2026-09-21 生产取证：最近 10 次蒸馏 10/10 输出无 `<port>` 包裹被静默丢弃（仅 log.warn
+  + markDone），最后一条落库候选停在 2026-07-17。提示词补字面语法 + 候选解析与会话页同源
+  于一条规范化事件流 + 协议失败同会话补问/用尽 markFailed。含能力影响清单 C1–C4。未动生产代码。
 
 ## 2026-09-21 修复：记忆卡片列表横排溢出（CSS 选择器列表被拆散）
 

@@ -728,6 +728,7 @@ async function composePostgresqlProviderSession(
         defaultRuntime: current.defaultRuntime ?? null,
         model: current.memoryDistillModel ?? null,
         sourceContextBudget: current.memoryDistillSourceContext,
+        timeoutMs: current.memoryDistillTimeoutMs,
       })
     },
     onError(error) {
@@ -3196,9 +3197,12 @@ async function composeSqliteProviderSession(
     }
   })
 
-  // 引导期快照。distill 的这几项此前就是启动时读一次（改了要重启），本次只是把它
-  // 从 batch-import 那条共用的 `loadConfig` 上摘下来，行为逐字不变。
-  const distillBootConfig = loadConfig(Paths.config)
+  // distill 的这几项**每 tick 重读**，与 PostgreSQL 路径（同文件 memory-distill
+  // factory）逐字一致：之前这里是引导期快照（`distillBootConfig`），于是同一个设置
+  // 在 PostgreSQL 上改完立刻生效、在 SQLite（零配置默认部署）上要重启 daemon 才生效
+  // ——同一个旋钮两种语义。用户 2026-09-21 定：拉齐成热生效，memoryDistillerEnabled /
+  // memoryDistillRuntime / memoryDistillModel / memoryDistillSourceContext /
+  // memoryDistillTimeoutMs 五项一起。`loadConfig` 每次读盘，PG 路径本来就是这么做的。
   // RFC-041 — the provider session owns the distill loop. Stopping prevents a
   // new claim and draining waits for the exact in-flight LLM turn before the
   // selected provider can close.
@@ -3209,12 +3213,14 @@ async function composeSqliteProviderSession(
       await memoryOperations.distillWorker.recoverRunning()
     },
     async run() {
-      if (distillBootConfig.memoryDistillerEnabled === false) return
+      const current = loadConfig(Paths.config)
+      if (current.memoryDistillerEnabled === false) return
       await memoryOperations.distillWorker.tick({
-        runtimeName: distillBootConfig.memoryDistillRuntime ?? null,
-        defaultRuntime: distillBootConfig.defaultRuntime ?? null,
-        model: distillBootConfig.memoryDistillModel ?? null,
-        sourceContextBudget: distillBootConfig.memoryDistillSourceContext,
+        runtimeName: current.memoryDistillRuntime ?? null,
+        defaultRuntime: current.defaultRuntime ?? null,
+        model: current.memoryDistillModel ?? null,
+        sourceContextBudget: current.memoryDistillSourceContext,
+        timeoutMs: current.memoryDistillTimeoutMs,
       })
     },
     onError(err) {

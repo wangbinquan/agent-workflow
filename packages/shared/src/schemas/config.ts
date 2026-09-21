@@ -465,6 +465,14 @@ export const ConfigSchema = z.object({
    * stays English and only a short trailing directive switches.
    */
   memoryDistillLang: LanguageSchema.optional(),
+  /**
+   * Per-distill-run timeout (ms) for the distiller subprocess. Unset →
+   * `DEFAULT_TIMEOUT_MS` (1 hour) in memoryDistiller.ts. Bounds mirror
+   * SETTINGS_NUMERIC_BOUNDS.memoryDistillTimeoutMs; the patch schema derives
+   * them from that single source, this full-config entry stays hand-written
+   * like its siblings (legacy configs are parsed leniently here).
+   */
+  memoryDistillTimeoutMs: z.number().int().min(30_000).max(21_600_000).optional(),
 
   // --- RFC-234 intent builder (design §5) ---
   /**
@@ -912,6 +920,7 @@ export const ConfigPatchSchema = ConfigSchema.partial()
     commitPushModel: z.string().min(1).nullable().optional(),
     mergeAgentModel: z.string().min(1).nullable().optional(),
     memoryDistillLang: LanguageSchema.nullable().optional(),
+    memoryDistillTimeoutMs: boundedSettingsInteger('memoryDistillTimeoutMs').nullable().optional(),
     commitPushLang: LanguageSchema.nullable().optional(),
     // RFC-234: the intent-builder settings card follows the same
     // "null-in-patch = delete = inherit/default" contract for its selector
