@@ -4207,6 +4207,10 @@ mediaType、`a.b` 形态的任何 ref）取文案时，在数据侧显式带一�
   - 定式：**装着用户输入的弹窗一律 `closeOnOverlayClick={false}`**（本仓既有先例：`AgentPortDialog` / `tasks.new`），ESC / 取消 / × 三条关闭路径保留。纯展示型弹窗不受此限。
   - 回归锁的写法：`fireEvent.mouseDown(document.querySelector('.dialog__overlay'))` 后断言三件事——弹窗仍在、输入值仍在、**没有 POST 发出**（只断言前两条会漏掉"关了但请求发出去了"的另一种坏）。守卫要配正向对照：同一个 Dialog 不传该 prop 时 mousedown **必须**触发 onClose，否则你锁的可能是别的原因。
   - 判据（下次遇到类似"点了没反应"）：先查**那一下到底点在谁身上**。遮罩是全屏的，任何"页面上仍可见的按钮"在弹窗开着时都点不到；症状是「弹窗消失 + 数据零变化 + 无网络请求」时，几乎一定是误触遮罩而不是提交失败。
+- **一个 `Field` 里放多于一个控件，必须给 `group`——否则点任何一个都会激活第一个**（2026-09-21 实撞，RFC-366）：`components/Form.tsx` 的 `Field` 默认返回 `<label className="form-field">{inner}</label>`（同文件末行），只有 `group === true || action !== undefined` 才改渲成 `<div role="group">`。HTML 的 label 激活行为是「转发给它内部**第一个**可标记控件」，于是在一个默认 `Field` 里排五个 `<Switch>`，点第三个 = 点第一个。实撞形态：RFC-366 设置页的任务来源白名单，点「定时任务」改的是「手工创建」。
+  - 为什么不会被"控件渲染出来了"这类断言咬住：五个开关都在、testid 都对、初始 checked 也都对，**只有点击的落点错了**。`getByTestId(...).checked` 逐个断言全绿；要红必须真的 `fireEvent.click` 一个**非第一个**的控件再看它自己的 checked。
+  - 定式：`Field` 里多于一个控件 → `group` + `labelId`（`labelId` 是 `role="group"` 的 `aria-labelledby` 来源，不给的话 role 也不会渲染）。单控件保持默认的 `<label>`，那正是它想要的点击扩大面。
+  - 判据：设置页/表单里「点 A 改了 B」「开关怎么点都只有第一个动」，先看那一组控件的外层 `Field` 有没有 `group`，再怀疑状态逻辑。
 - **CSS 改动别肉眼跳过**：最小 repro HTML + `python3 -m http.server`（chrome MCP 拒 `file://`）+ chrome 截图 light&dark 验像素再推。
 - **新 CSS 规则别插进既有规则的选择器列表中间——它会把前面的选择器一起吞走**（2026-09-21 用户实报，回归自 eb8b331db）：`styles.css` 是三万行的单文件，多选择器共享规则很常见。在
   ```
