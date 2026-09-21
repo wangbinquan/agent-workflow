@@ -355,37 +355,6 @@ export interface SessionCaptureContext {
   opencodeDbPath?: string
 }
 
-export interface DistillSessionCapturedEvent {
-  readonly distillJobId: string
-  readonly attemptIndex: number
-  readonly ts: number
-  readonly kind: string
-  readonly payload: string
-  readonly sessionId: string
-  readonly parentSessionId: string | null
-}
-
-/** Provider-neutral event sink supplied by the Memory infrastructure adapter. */
-export interface DistillSessionCaptureSink {
-  append(events: readonly DistillSessionCapturedEvent[]): Promise<void>
-  markFailed(input: {
-    readonly rootSessionId: string
-    readonly distillJobId: string
-    readonly attemptIndex: number
-    readonly reason: string
-  }): Promise<void>
-}
-
-/** Optional post-run transcript capture for memory-distiller jobs. */
-export interface DistillSessionCaptureContext {
-  readonly rootSessionId: string
-  readonly distillJobId: string
-  readonly attemptIndex: number
-  readonly sink: DistillSessionCaptureSink
-  readonly log?: Logger
-  readonly opencodeDbPath?: string
-}
-
 /**
  * RFC-117 — spawn inputs for a framework "system agent" (distiller / commit /
  * fusion-merger): one agent with a persona + model, NO skills / mcp / plugins /
@@ -852,9 +821,6 @@ export interface RuntimeDriver {
    *  (was an UNCONDITIONAL start, spinning uselessly on claude runs — the
    *  RFC-143 空转 bug). claude omits this → runner uses NOOP_HANDLE. */
   startLiveCapture?(ctx: LivePollOptions): LivePollerHandle
-
-  /** Runtime-specific post-run capture for a memory-distiller conversation. */
-  captureDistillSession?(ctx: DistillSessionCaptureContext): Promise<void>
 
   /**
    * RFC-238 — explicit MCP playground support. Registry rows whose protocol

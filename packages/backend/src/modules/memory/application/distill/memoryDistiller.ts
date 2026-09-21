@@ -59,7 +59,6 @@ import {
   type SystemAgentRunOptions,
   type SystemAgentRunResult,
 } from '@/services/systemAgentRun'
-import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
 import {
   DistillerProtocolError,
   parseDistillerCandidates,
@@ -125,11 +124,6 @@ export interface RunDistillOptions {
    * change-narrative use, so a fake here is a fake everywhere.
    */
   runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
-  /**
-   * RFC-367 — per-attempt live session capture. Omitted → no capture sink
-   * (the run still works; only the detail page's conversation tab is empty).
-   */
-  eventSinkFor?: (input: { distillJobId: string; attemptIndex: number }) => SystemAgentEventSinkV1
   /**
    * `config.memoryDistillTimeoutMs`, default `DEFAULT_TIMEOUT_MS` (1 hour).
    * RFC-367 §3.2: this is the budget for the WHOLE distill — the first round
@@ -1138,7 +1132,10 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   // 会落空（RFC-111 design §225/283/298 实测）。
   const scratchParent = join(Paths.root, 'scratch')
   const scratchName = `distiller-${randomBytes(8).toString('hex')}`
-  const eventSink = options.eventSinkFor?.({
+  // RFC-367: one sink for the whole attempt (all follow-up rounds share the
+  // session, so they share the record). The store owns the DB, so it owns the
+  // writer; `runDistill` only hands it to the runtime.
+  const eventSink = options.store.eventSinkFor({
     distillJobId: options.job.id,
     attemptIndex: options.job.attempts,
   })
@@ -1265,24 +1262,8 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
       describeProtocolFailure(lastFailure, lastResult?.outputEvidence),
     )
   } finally {
-    // RFC-043: capture the whole session (all follow-up rounds share one) once
-    // the chain is over, so the detail page shows every turn — including the
-    // malformed ones that caused the follow-ups.
-    if (sessionId !== undefined) {
-      try {
-        await options.store.captureSession({
-          protocol,
-          distillJobId: options.job.id,
-          attemptIndex: options.job.attempts,
-          rootSessionId: sessionId,
-        })
-      } catch (err) {
-        log.warn('rfc043/distill-capture-failed', {
-          jobId: options.job.id,
-          err: err instanceof Error ? err.message : String(err),
-        })
-      }
-    }
+    // RFC-367: nothing to capture after the fact any more — the sink recorded
+    // every round live, from the same normalized stream the parser read.
     releaseChainScratch(lastResult)
   }
 }

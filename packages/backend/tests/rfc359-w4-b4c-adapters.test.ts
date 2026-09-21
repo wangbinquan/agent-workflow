@@ -204,9 +204,16 @@ describeEachProvider('RFC-359 W4-B4c —— OIDC provider 仓库', (harness) => 
 describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness) => {
   test('入队 / 到期与同键列表 / 状态推进 / 恢复与重试 / 取消 / 提示与结果落库 / 候选写入 / 任务范围', async () => {
     const db = harness.db
+    // RFC-367: the store's auxiliary-record seam is now a SINK FACTORY (live
+    // event writer) instead of a post-run capture callback.
     const captured: string[] = []
-    const store = new DrizzleMemoryDistillWorkStore(db, async (input) => {
+    const store = new DrizzleMemoryDistillWorkStore(db, (input) => {
       captured.push(input.distillJobId)
+      return {
+        append: async () => {},
+        setRootSessionId: async () => {},
+        markTerminal: async () => {},
+      }
     })
     const debounceKey = `k_${ulid()}`
     const scope = { agentIds: [], workflowId: null, repoId: null, includeGlobal: true }
@@ -263,12 +270,7 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
       opencodeSessionId: 'ses-1',
       exitCode: 0,
     })
-    await store.captureSession({
-      distillJobId: job1,
-      attemptIndex: 0,
-      rootSessionId: 'ses-1',
-      protocol: 'opencode',
-    })
+    store.eventSinkFor({ distillJobId: job1, attemptIndex: 0 })
     expect(captured).toEqual([job1])
 
     const memoryId = `m_${ulid()}`

@@ -1,20 +1,22 @@
 // RFC-041 — distiller unit tests (PR2 scope).
 //
-// All cases stub out the real `spawnFn` so no opencode subprocess is
+// All cases stub out the real `runFn` (RFC-367 seam) so no subprocess is
 // invoked; what we lock here is the orchestration (load events / load
 // scope context / build prompt / parse envelope / persist candidates) +
 // the grep-able protocol invariants (OPENCODE_CONFIG_CONTENT, tmp cwd,
 // hardcoded agent name + system prompt anchors).
 
-import { existsSync, readFileSync, rmSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
-import { resolve } from 'node:path'
+import { join, resolve } from 'node:path'
 import { beforeEach, describe, expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { Agent } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
+import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
+import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
 import {
   memories,
   memoryDistillJobs,
@@ -29,10 +31,9 @@ import {
   IndeterminateRuntimeProcessError,
   loadScopeContexts,
   loadSourceEvents,
-  parseDistillerOutput,
   runDistill,
   validateAndPersistCandidate,
-  type DistillerSpawnFn,
+  type RunDistillOptions,
 } from '../src/modules/memory/application/distill/memoryDistiller'
 import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
 import { memoryCatalogOf } from './helpers/memoryCatalog'
@@ -47,11 +48,37 @@ function distillDeps(memory: MemoryTestContext) {
   return { store: memory.store, reviewedArtifacts: memory.reviewedArtifacts }
 }
 
-function distillerStdout(
-  input: Parameters<DistillerSpawnFn>[0],
+/** RFC-367: the seam is `runFn` (runSystemAgent) and the payload is normalized
+ *  assistant text, so fakes build an eventText instead of raw stdout. The nonce
+ *  is read back out of the prompt, where the shared protocol block puts it. */
+function distillerEventText(
+  opts: SystemAgentRunOptions,
   candidatesJson = '{"candidates":[]}',
 ): string {
-  return `<workflow-output nonce="${input.envelopeNonce}"><port name="candidates">${candidatesJson}</port></workflow-output>`
+  const nonce = /nonce="([^"]+)"/.exec(opts.prompt)?.[1] ?? ''
+  return `<workflow-output nonce="${nonce}"><port name="candidates">${candidatesJson}</port></workflow-output>`
+}
+
+/** A healthy run; `over` bends one field at a time. Creates the scratch dir the
+ *  way runSystemAgent would, so scratch-retention assertions see a real path. */
+function okRun(
+  opts: SystemAgentRunOptions,
+  over: Partial<SystemAgentRunResult> = {},
+): SystemAgentRunResult {
+  const scratchDir = join(opts.scratchParent, opts.scratchName ?? 'unnamed')
+  mkdirSync(scratchDir, { recursive: true })
+  return {
+    status: 'ok',
+    exitCode: 0,
+    eventText: distillerEventText(opts),
+    stderrTail: '',
+    durationMs: 1,
+    scratchDir,
+    scratchRetained: true,
+    outputEvidence: emptySystemAgentOutputEvidence(),
+    capturedSessionId: 'ses_distiller_probe',
+    ...over,
+  } as SystemAgentRunResult
 }
 
 interface SeededTask {
@@ -89,142 +116,12 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<SeededTask> {
   return { taskId, workflowId: wfId }
 }
 
-describe('parseDistillerOutput', () => {
-  test('extracts candidates from a clean envelope on raw stdout', () => {
-    const stdout = `
-<workflow-output>
-<port name="candidates">{"candidates":[{
-  "scopeType":"global","scopeId":null,
-  "title":"Prefer plural for collection endpoints",
-  "bodyMd":"Name list endpoints /items, not /item.",
-  "knownTags":["rest"],"newTags":[],
-  "action":"new","referenceMemoryId":null,
-  "sourceRefs":[{"kind":"clarify","id":"c1"}]
-}]}</port>
-</workflow-output>
-`
-    const cands = parseDistillerOutput(stdout)
-    expect(cands.length).toBe(1)
-    expect(cands[0]!.scopeType).toBe('global')
-    expect(cands[0]!.title).toContain('plural')
-  })
-
-  test('extracts candidates from opencode part.text line-delimited stdout (empty array → [])', () => {
-    // RFC-117: parseDistillerOutput routes each line through the opencode driver's
-    // parseEvent (part.text shape, the real 1.15.x form). Multiple line-delimited
-    // parts concatenate into one envelope; an empty candidates array yields [].
-    const part = (text: string): string =>
-      JSON.stringify({ type: 'text', sessionID: 's1', part: { type: 'text', text } })
-    const lines = [
-      JSON.stringify({ type: 'session.created', sessionID: 's1' }),
-      part('<workflow-output>\n<port name="candidates">'),
-      part('{"candidates":[]}'),
-      part('</port>\n</workflow-output>'),
-    ].join('\n')
-    expect(parseDistillerOutput(lines)).toEqual([])
-  })
-
-  // Regression: real opencode 1.15.x --format json wraps each model part in
-  // { type:'text', sessionID, messageID, part:{type:'text', text:'...'}, timestamp }.
-  // The original extractEventText only looked at evt.text / evt.message.content /
-  // evt.delta.text, so production stdout always parsed as "no envelope" and
-  // every candidate batch was silently dropped (no memories.distill_job_id
-  // backlink, detail page showed "No candidates emitted" while the conversation
-  // tab clearly displayed the envelope). Locks in the part.text path.
-  test('extracts candidates from the real opencode --format json part.text shape', () => {
-    const candidatesPort =
-      '{"candidates":[{"scopeType":"global","scopeId":null,"title":"perf matters","bodyMd":"treat performance as critical","knownTags":[],"newTags":["performance"],"action":"new","referenceMemoryId":null,"sourceRefs":[{"kind":"feedback","id":"f1"}]}]}'
-    const lines = [
-      JSON.stringify({
-        type: 'text',
-        sessionID: 'ses_X',
-        messageID: 'msg_1',
-        part: { id: 'prt_1', type: 'text', text: '# Source events to distill\n' },
-        timestamp: 1,
-      }),
-      JSON.stringify({
-        type: 'text',
-        sessionID: 'ses_X',
-        messageID: 'msg_2',
-        part: {
-          id: 'prt_2',
-          type: 'text',
-          text: `<workflow-output>\n<port name="candidates">${candidatesPort}</port>\n</workflow-output>`,
-        },
-        timestamp: 2,
-      }),
-    ].join('\n')
-    const cands = parseDistillerOutput(lines)
-    expect(cands.length).toBe(1)
-    expect(cands[0]!.title).toBe('perf matters')
-    expect(cands[0]!.scopeType).toBe('global')
-  })
-
-  // RFC-117: the distiller can run on claude-code too. claude stream-json emits
-  // one event per assistant turn with message.content[] text parts; driver.parseEvent
-  // ('claude-code') concatenates them, so the envelope reaches extractLastEnvelope
-  // exactly like opencode. Locks distiller↔claude parity (no silently-[] regression).
-  test('extracts candidates from claude-code stream-json (message.content[] text)', () => {
-    const candidatesPort =
-      '{"candidates":[{"scopeType":"global","scopeId":null,"title":"claude works","bodyMd":"b","knownTags":[],"newTags":[],"action":"new","referenceMemoryId":null,"sourceRefs":[{"kind":"review","id":"r1"}]}]}'
-    const lines = [
-      JSON.stringify({ type: 'system', subtype: 'init', session_id: 'ses_c' }),
-      JSON.stringify({
-        type: 'assistant',
-        session_id: 'ses_c',
-        message: {
-          content: [
-            {
-              type: 'text',
-              text: `<workflow-output>\n<port name="candidates">${candidatesPort}</port>\n</workflow-output>`,
-            },
-          ],
-        },
-      }),
-      JSON.stringify({ type: 'result', subtype: 'success', is_error: false, session_id: 'ses_c' }),
-    ].join('\n')
-    const cands = parseDistillerOutput(lines, 'claude-code')
-    expect(cands.length).toBe(1)
-    expect(cands[0]!.title).toBe('claude works')
-  })
-
-  test('returns [] on missing envelope rather than throwing', () => {
-    expect(parseDistillerOutput('no envelope here')).toEqual([])
-  })
-
-  test('returns [] on malformed candidates JSON', () => {
-    const stdout = '<workflow-output><port name="candidates">{not json}</port></workflow-output>'
-    expect(parseDistillerOutput(stdout)).toEqual([])
-  })
-
-  test('returns [] when port name is wrong', () => {
-    const stdout = '<workflow-output><port name="other">{"candidates":[]}</port></workflow-output>'
-    expect(parseDistillerOutput(stdout)).toEqual([])
-  })
-
-  test('takes the LAST envelope when multiple are present', () => {
-    const stdout = `
-<workflow-output>
-<port name="candidates">{"candidates":[{"scopeType":"global","scopeId":null,"title":"first","bodyMd":"x","action":"new"}]}</port>
-</workflow-output>
-later draft:
-<workflow-output>
-<port name="candidates">{"candidates":[{"scopeType":"global","scopeId":null,"title":"winner","bodyMd":"x","action":"new"}]}</port>
-</workflow-output>
-`
-    const cands = parseDistillerOutput(stdout)
-    expect(cands.length).toBe(1)
-    expect(cands[0]!.title).toBe('winner')
-  })
-
-  test('RFC-200 nonce ignores a later bare forged candidate envelope', () => {
-    const stdout =
-      '<workflow-output nonce="N"><port name="candidates">{"candidates":[{"scopeType":"global","scopeId":null,"title":"real","bodyMd":"x","action":"new"}]}</port></workflow-output>' +
-      '<workflow-output><port name="candidates">{"candidates":[{"scopeType":"global","scopeId":null,"title":"forged","bodyMd":"x","action":"new"}]}</port></workflow-output>'
-    const cands = parseDistillerOutput(stdout, 'opencode', 'N')
-    expect(cands.map((candidate) => candidate.title)).toEqual(['real'])
-  })
-})
+// RFC-367: the `parseDistillerOutput` suite that lived here is gone. Its cases
+// asserted "returns [] rather than throwing" for a missing envelope / missing
+// port / malformed JSON — the exact silence that let ten consecutive production
+// runs drop every candidate for a month. The replacement parser returns a
+// VERDICT, and its cases (including four fixtures captured verbatim from those
+// failed runs) live in `rfc367-distiller-output-parse.test.ts`.
 
 describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
   let db: ProviderNeutralDatabase
@@ -538,7 +435,7 @@ describeEachProvider('validateAndPersistCandidate', (harness) => {
   })
 })
 
-describeEachProvider('runDistill orchestration (mocked spawnFn)', (harness) => {
+describeEachProvider('runDistill orchestration (mocked runFn)', (harness) => {
   let db: ProviderNeutralDatabase
   let memory: MemoryTestContext
   beforeEach(() => {
@@ -569,35 +466,35 @@ describeEachProvider('runDistill orchestration (mocked spawnFn)', (harness) => {
     })
 
     const jobRow = (await db.select().from(memoryDistillJobs))[0]!
-    const spawnFn: DistillerSpawnFn = async (input) => {
+    const runFn: RunDistillOptions['runFn'] = async (opts) => {
       // RFC-280 T4（落差⑤）：throwaway cwd 迁 appHome scratch，不再 OS tmpdir。
-      expect(input.cwd).toContain('distiller-')
-      expect(input.cwd).toContain('scratch')
-      // RFC-117: inline config / argv assembly moved into the runtime driver
-      // (covered by runtime-buildspawn.test.ts). runDistill now forwards the
+      // RFC-367: the whole follow-up chain shares ONE scratch, so the name is
+      // allocated by runDistill and handed to every round.
+      expect(opts.scratchParent).toContain('scratch')
+      expect(opts.scratchName).toContain('distiller-')
+      // RFC-117: inline config / argv assembly lives in the runtime driver
+      // (covered by runtime-buildspawn.test.ts). runDistill forwards the
       // resolved (protocol, binary, model); default = opencode + null model.
-      expect(input.protocol).toBe('opencode')
-      expect(input.runtimeBinary).toBeNull()
-      expect(input.model).toBeNull()
-      expect(typeof input.userPrompt).toBe('string')
-      return {
-        exitCode: 0,
-        stderr: '',
-        stdout: distillerStdout(
-          input,
+      expect(opts.protocol).toBe('opencode')
+      expect(opts.runtimeBinary).toBeNull()
+      expect(opts.model).toBeNull()
+      expect(typeof opts.prompt).toBe('string')
+      return okRun(opts, {
+        eventText: distillerEventText(
+          opts,
           `{"candidates":[{
   "scopeType":"global","scopeId":null,
   "title":"X","bodyMd":"B","knownTags":[],"newTags":[],
   "action":"new","referenceMemoryId":null,"sourceRefs":[]
 }]}`,
         ),
-      }
+      })
     }
     const r = await runDistill({
       ...distillDeps(memory),
       job: rowToDistillJob(jobRow),
       siblings: [rowToDistillJob(jobRow)],
-      spawnFn,
+      runFn,
     })
     expect(r.candidatesCreated).toBe(1)
     const inserted = await db.select().from(memories)
@@ -629,33 +526,32 @@ describeEachProvider('runDistill orchestration (mocked spawnFn)', (harness) => {
     const job = rowToDistillJob(
       (await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, jobId)))[0]!,
     )
-    const spawnFn: DistillerSpawnFn = async (input) => ({
-      exitCode: 0,
-      stderr: '',
-      stdout: distillerStdout(
-        input,
-        JSON.stringify({
-          candidates: [
-            {
-              scopeType: 'global',
-              scopeId: null,
-              title: 'Permanent closed-loop rule',
-              bodyMd: 'PERMANENT_MEMORY_PROOF must reach the next runtime prompt.',
-              knownTags: ['closed-loop'],
-              newTags: ['runtime-injection'],
-              action: 'new',
-              referenceMemoryId: null,
-              sourceRefs: [{ kind: 'feedback', id: 'feedback-closed-loop' }],
-            },
-          ],
-        }),
-      ),
-    })
-    expect(
-      await runDistill({ ...distillDeps(memory), job, siblings: [job], spawnFn }),
-    ).toMatchObject({
-      candidatesCreated: 1,
-    })
+    const runFn: RunDistillOptions['runFn'] = async (opts) =>
+      okRun(opts, {
+        eventText: distillerEventText(
+          opts,
+          JSON.stringify({
+            candidates: [
+              {
+                scopeType: 'global',
+                scopeId: null,
+                title: 'Permanent closed-loop rule',
+                bodyMd: 'PERMANENT_MEMORY_PROOF must reach the next runtime prompt.',
+                knownTags: ['closed-loop'],
+                newTags: ['runtime-injection'],
+                action: 'new',
+                referenceMemoryId: null,
+                sourceRefs: [{ kind: 'feedback', id: 'feedback-closed-loop' }],
+              },
+            ],
+          }),
+        ),
+      })
+    expect(await runDistill({ ...distillDeps(memory), job, siblings: [job], runFn })).toMatchObject(
+      {
+        candidatesCreated: 1,
+      },
+    )
 
     const candidate = (await db.select().from(memories).where(eq(memories.distillJobId, jobId)))[0]!
     expect(candidate.status).toBe('candidate')
@@ -715,7 +611,7 @@ describeEachProvider('runDistill orchestration (mocked spawnFn)', (harness) => {
     ])
   })
 
-  test('forwards the resolved protocol/binary/model/IS_SANDBOX toggle to spawnFn', async () => {
+  test('forwards the resolved protocol/binary/model/IS_SANDBOX toggle to runFn', async () => {
     const { taskId } = await seedTask(db)
     const jobRow = {
       id: ulid(),
@@ -733,20 +629,16 @@ describeEachProvider('runDistill orchestration (mocked spawnFn)', (harness) => {
       finishedAt: null,
     }
     const job = rowToDistillJob(jobRow)
-    let captured: Parameters<DistillerSpawnFn>[0] | null = null
-    const spawnFn: DistillerSpawnFn = async (input) => {
-      captured = input
-      return {
-        exitCode: 0,
-        stderr: '',
-        stdout: distillerStdout(input),
-      }
+    let captured: SystemAgentRunOptions | null = null
+    const runFn: RunDistillOptions['runFn'] = async (opts) => {
+      captured = opts
+      return okRun(opts)
     }
     await runDistill({
       ...distillDeps(memory),
       job,
       siblings: [job],
-      spawnFn,
+      runFn,
       protocol: 'claude-code',
       runtimeBinary: '/opt/cc',
       model: 'claude-x',
@@ -776,17 +668,19 @@ describeEachProvider('runDistill orchestration (mocked spawnFn)', (harness) => {
       finishedAt: null,
     }
     const job = rowToDistillJob(jobRow)
-    const spawnFn: DistillerSpawnFn = async () => ({
-      exitCode: 1,
-      stderr: 'boom',
-      stdout: '',
-    })
+    const runFn: RunDistillOptions['runFn'] = async (opts) =>
+      okRun(opts, { status: 'exit-nonzero', exitCode: 1, stderrTail: 'boom' })
     await expect(
-      runDistill({ ...distillDeps(memory), job, siblings: [job], spawnFn }),
+      runDistill({ ...distillDeps(memory), job, siblings: [job], runFn }),
     ).rejects.toThrow(/exited with code 1/)
   })
 
-  test('cleanup failure preserves the outer cwd and reports an ordinary cleanup error', async () => {
+  // RFC-367 restated: the distiller no longer owns `plan.cleanup`. runSystemAgent
+  // rewrites a failed cleanup into `status:'spawn-failed'` + `scratchRetained`
+  // and skips its own rm — so the scratch must survive on our side too. Deleting
+  // it would rm -rf under a child that may still hold files, which is the exact
+  // barrier both the old and the new code exist to keep.
+  test('a cleanup failure keeps the scratch dir and surfaces the cleanup error', async () => {
     const { taskId } = await seedTask(db)
     const job = rowToDistillJob({
       id: ulid(),
@@ -803,34 +697,28 @@ describeEachProvider('runDistill orchestration (mocked spawnFn)', (harness) => {
       startedAt: Date.now(),
       finishedAt: null,
     })
-    let cwd = ''
-    let cleanupCalled = false
-    const spawnFn: DistillerSpawnFn = async (input) => {
-      cwd = input.cwd
-      return {
-        exitCode: 0,
-        stderr: '',
-        stdout: distillerStdout(input),
-        cleanup: async () => {
-          cleanupCalled = true
-          throw new Error('private store lock still held')
-        },
-      }
+    let scratchDir = ''
+    const runFn: RunDistillOptions['runFn'] = async (opts) => {
+      const result = okRun(opts, {
+        status: 'spawn-failed',
+        stderrTail: 'runtime cleanup failed',
+      })
+      scratchDir = result.scratchDir
+      return result
     }
 
     try {
       await expect(
-        runDistill({ ...distillDeps(memory), job, siblings: [job], spawnFn }),
-      ).rejects.toThrow('distiller scratch cleanup did not complete safely')
-      expect(cleanupCalled).toBe(true)
-      expect(cwd).not.toBe('')
-      expect(existsSync(cwd)).toBe(true)
+        runDistill({ ...distillDeps(memory), job, siblings: [job], runFn }),
+      ).rejects.toThrow('runtime cleanup failed')
+      expect(scratchDir).not.toBe('')
+      expect(existsSync(scratchDir)).toBe(true)
     } finally {
-      if (cwd !== '') rmSync(cwd, { recursive: true, force: true })
+      if (scratchDir !== '') rmSync(scratchDir, { recursive: true, force: true })
     }
   })
 
-  test('an indeterminate spawn failure preserves its outer cwd instead of erasing live run inputs', async () => {
+  test('an unreaped child preserves its scratch instead of erasing live run inputs', async () => {
     const { taskId } = await seedTask(db)
     const job = rowToDistillJob({
       id: ulid(),
@@ -847,24 +735,25 @@ describeEachProvider('runDistill orchestration (mocked spawnFn)', (harness) => {
       startedAt: Date.now(),
       finishedAt: null,
     })
-    let cwd = ''
-    const spawnFn: DistillerSpawnFn = async (input) => {
-      cwd = input.cwd
-      throw new IndeterminateRuntimeProcessError()
+    let scratchDir = ''
+    const runFn: RunDistillOptions['runFn'] = async (opts) => {
+      const result = okRun(opts, { status: 'unreaped' })
+      scratchDir = result.scratchDir
+      return result
     }
 
     try {
       await expect(
-        runDistill({ ...distillDeps(memory), job, siblings: [job], spawnFn }),
-      ).rejects.toThrow('runtime spawn state is indeterminate')
-      expect(cwd).not.toBe('')
-      expect(existsSync(cwd)).toBe(true)
+        runDistill({ ...distillDeps(memory), job, siblings: [job], runFn }),
+      ).rejects.toThrow(IndeterminateRuntimeProcessError)
+      expect(scratchDir).not.toBe('')
+      expect(existsSync(scratchDir)).toBe(true)
     } finally {
-      if (cwd !== '') rmSync(cwd, { recursive: true, force: true })
+      if (scratchDir !== '') rmSync(scratchDir, { recursive: true, force: true })
     }
   })
 
-  test('grep guards: source file pins RFC-117 runtime-driver seam + invariants', () => {
+  test('grep guards: source file pins the RFC-367 system-agent seam + invariants', () => {
     const src = readFileSync(
       resolve(
         import.meta.dir,
@@ -878,11 +767,18 @@ describeEachProvider('runDistill orchestration (mocked spawnFn)', (harness) => {
       ),
       'utf8',
     )
-    // RFC-117: opencode argv/env (OPENCODE_CONFIG_CONTENT) assembly moved into
-    // runtime/opencode/spawn.ts; the distiller now routes through the driver.
-    expect(src).toContain('getRuntimeDriver')
-    expect(src).toContain('buildSpawn')
-    expect(src).toContain('parseEvent')
+    // RFC-367: the distiller no longer assembles or parses anything itself —
+    // it consumes the shared system-agent primitive, which owns the driver
+    // hand-off AND the stdout normalization. Locking the seam by name keeps a
+    // future refactor from quietly reintroducing a second parser (the drift
+    // that dropped every candidate for a month; see proposal §1).
+    expect(src).toContain('runSystemAgent')
+    expect(src).toContain('parseDistillerCandidates')
+    // Import-level anchors, not prose: the file's own comments legitimately
+    // mention the retired driver walk, and a bare substring check cannot tell
+    // a comment from code.
+    expect(src).not.toContain("from '@/services/runtime'")
+    expect(src).not.toContain("from '@/services/execution/agentProcess'")
     // RFC-280 T4（落差⑤）：throwaway cwd 由 appHome scratch 分配（原 mkdtemp/tmpdir）。
     expect(src).toContain("join(Paths.root, 'scratch'")
     // RFC-352：agent 名字的字面量随 DISTILLER_AGENT_NAME 下沉到 memory domain，
@@ -950,17 +846,18 @@ describeEachProvider('runDistill orchestration (mocked spawnFn)', (harness) => {
   })
 })
 
-// RFC-280 T4 — the distiller-local store-destruction barrier
-// (finalizeDistillerSpawnAttempt) was retired with the self-built spawn
-// plumbing: process reliability now lives in the unified executor. The
-// equivalent semantics are locked at their new home instead:
-//   · never-settling child → bounded 'unreaped', cleanup skipped, attempt dir
+// RFC-280 T4 / RFC-367 — the distiller-local store-destruction barrier was
+// retired in two steps: first the self-built spawn plumbing (process
+// reliability moved to the unified executor), then the distiller's own spawn
+// wrapper (RFC-367 routed it through runSystemAgent). The equivalent semantics
+// are locked at their new homes:
+//   · never-settling child → bounded 'unreaped', cleanup skipped, scratch
 //     preserved: managedProcess drain-deadline + agentProcess mapOutcome
-//     (rfc280-managed-process-adapter.test.ts) + defaultDistillerSpawn's
-//     IndeterminateRuntimeProcessError branch;
-//   · cleanup failure after reap stays unsafe: defaultDistillerSpawn maps a
-//     failed plan.cleanup to IndeterminateRuntimeProcessError
-//     ('cleanup did not complete safely').
+//     (rfc280-managed-process-adapter.test.ts), and on the distiller side the
+//     'unreaped'/'spawn-failed' retention rows above;
+//   · cleanup failure after reap stays unsafe: runSystemAgent rewrites it to
+//     'spawn-failed' + scratchRetained, and runDistill must NOT release that
+//     scratch (locked by the cleanup-failure case above).
 
 // RFC-044: grep guard — the two block headers MUST stay grep-able in the
 // builder so a future refactor cannot silently drop the source-context

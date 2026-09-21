@@ -57,6 +57,19 @@ describe('RFC-186 — followupForFailure unifies on FOLLOWUP_POLICY', () => {
       expect(notice).toMatch(/workflow-output|workflow-clarify|port/)
     }
   })
+
+  // RFC-367 widened EnvelopeFollowupReason with 'port-missing'. No
+  // FollowupFailureCode maps to it (it is the memory distiller's verdict, not
+  // the node runner's), so the loop above — which enumerates the POLICY table —
+  // cannot reach it. The switch is exhaustive, though, so a missing case is a
+  // typecheck error; this asserts the wording is wg-appropriate rather than a
+  // copy of the "no envelope at all" notice, which would send a workgroup turn
+  // chasing the wrong defect.
+  test('wgFollowupNotice handles the RFC-367 port-missing reason on its own terms', () => {
+    const notice = wgFollowupNotice('port-missing')
+    expect(notice).toContain('<port name="..."')
+    expect(notice).not.toMatch(/had NO <workflow-output> envelope/)
+  })
 })
 
 // The literal <workflow-output> shape example must be present in EVERY role's

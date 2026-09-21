@@ -38,7 +38,6 @@ import {
 } from '../src/modules/memory/application/distill/memoryDistiller'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
-import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { appHome } from '../src/util/paths'
 import { createInMemoryDb } from '../src/db/client'
@@ -47,7 +46,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 function createMemoryDistillTestContext(db: ProviderNeutralDatabase, root = appHome()) {
   return {
-    store: new DrizzleMemoryDistillWorkStore(db, createMemoryDistillSessionCapture(db)),
+    store: new DrizzleMemoryDistillWorkStore(db),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, root),
   }
 }

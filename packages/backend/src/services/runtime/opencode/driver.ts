@@ -10,7 +10,6 @@ import type {
   AgentSpawnContext,
   AgentSpawnPlan,
   BusinessNodeSpawnContext,
-  DistillSessionCaptureContext,
   FinalEventContext,
   InventoryReadContext,
   NormalizedEvent,
@@ -58,7 +57,6 @@ import { captureChildSessions, captureOpencodeSessionsToSink } from './sessionCa
 import { readSnapshotFromRunDir } from './inventory'
 import { startLiveSubagentCapture } from './subagentLiveCapture'
 import { materializeInventoryPlugin } from './plugin'
-import { captureDistillJobSession } from './distillSessionCapture'
 
 /** RFC-282 — the declaration render, driver-internal assembly (was the
  * RuntimeDriver.renderInjection contract method; the contract now has ONE
@@ -399,9 +397,6 @@ export const opencodeDriver: RuntimeDriver = {
         : {}),
       ...(ctx.opencodeDbPath !== undefined ? { opencodeDbPath: ctx.opencodeDbPath } : {}),
     })
-  },
-  async captureDistillSession(ctx: DistillSessionCaptureContext): Promise<void> {
-    await captureDistillJobSession(ctx)
   },
   // RFC-282 B1a — the unified assembly facade: ONE call returns plan +
   // declared manifest (declaration is a by-product of assembly, 决策 2/9).

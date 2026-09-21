@@ -29,7 +29,6 @@ import type { SystemAgentRunOptions } from '../src/services/systemAgentRun'
 import { describeEachProvider } from './helpers/eachProvider'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
-import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
 
 // RFC-366 起 LoadedSourceEvents 有五路源；本文件只断言语言指令，五路全空。
 const EMPTY_EVENTS = { clarify: [], review: [], feedback: [], agentRun: [], taskRun: [] }
@@ -115,7 +114,7 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
       }
       const db = harness.db
       const memory = {
-        store: new DrizzleMemoryDistillWorkStore(db, createMemoryDistillSessionCapture(db)),
+        store: new DrizzleMemoryDistillWorkStore(db),
         reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, root),
       }
       await runDistill({

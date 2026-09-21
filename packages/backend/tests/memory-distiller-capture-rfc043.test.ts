@@ -3,8 +3,13 @@
 //   2. attempts > 0 path does NOT overwrite user_prompt_md (audit trail)
 //   3. exit_code + stderr_excerpt + opencode_session_id always land on
 //      the job row after spawn, regardless of exitCode
-//   4. captureDistillJobSession is invoked iff sessionId is recovered
-//      from stdout (and is swallowed on failure)
+//   4. captureDistillJobSession is invoked iff a session id was recovered
+//      (and is swallowed on failure)
+//
+// RFC-367 migrated the seam from `spawnFn` (raw stdout) to `runFn`
+// (`runSystemAgent`'s normalized result) and made an unparseable reply a real
+// failure instead of a silent empty result — case 4 below changed meaning with
+// it and is re-stated rather than renamed.
 //   5. exit-code throw still propagates so the scheduler can record
 //      last_error + back off
 
@@ -18,27 +23,46 @@ import type { ProviderNeutralDatabase } from '../src/db/query'
 import { memories, memoryDistillJobs } from '../src/db/schema'
 import {
   clipAndRedactStderr,
-  extractFirstSessionIdFromStdout,
   runDistill,
-  type DistillerSpawnFn,
+  type RunDistillOptions,
 } from '../src/modules/memory/application/distill/memoryDistiller'
+import { DistillerProtocolError } from '../src/modules/memory/application/distill/distillerOutput'
+import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
+import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
 import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
-import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { appHome } from '../src/util/paths'
 import { describeEachProvider } from './helpers/eachProvider'
 
 function createMemoryDistillTestContext(db: ProviderNeutralDatabase) {
   return {
-    store: new DrizzleMemoryDistillWorkStore(db, createMemoryDistillSessionCapture(db)),
+    store: new DrizzleMemoryDistillWorkStore(db),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, appHome()),
   }
 }
 
-function emptyDistillerStdout(input: Parameters<DistillerSpawnFn>[0]): string {
-  return `<workflow-output nonce="${input.envelopeNonce}"><port name="candidates">{"candidates":[]}</port></workflow-output>`
+function emptyDistillerEnvelope(opts: SystemAgentRunOptions): string {
+  const nonce = /nonce="([^"]+)"/.exec(opts.prompt)?.[1] ?? ''
+  return `<workflow-output nonce="${nonce}"><port name="candidates">{"candidates":[]}</port></workflow-output>`
+}
+
+/** A run that behaves like a healthy distiller unless `over` says otherwise. */
+function fakeRun(over: Partial<SystemAgentRunResult> = {}): RunDistillOptions['runFn'] {
+  return async (opts) =>
+    ({
+      status: 'ok',
+      exitCode: 0,
+      eventText: emptyDistillerEnvelope(opts),
+      stderrTail: '',
+      durationMs: 1,
+      scratchDir: join(opts.scratchParent, opts.scratchName ?? 'unnamed'),
+      scratchRetained: true,
+      outputEvidence: emptySystemAgentOutputEvidence(),
+      capturedSessionId: 'sess-xyz',
+      ...over,
+    }) as SystemAgentRunResult
 }
 
 async function seedJobRow(db: ProviderNeutralDatabase, attempts = 0) {
@@ -110,17 +134,13 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
     const memId = await seedGlobalApproved(db, 'always run typecheck before push')
     const row = await seedJobRow(db, 0)
     const job = rowToDistillJob(row)
-    const spawnFn: DistillerSpawnFn = async (input) => ({
-      exitCode: 0,
-      stdout: `{"sessionID":"sess-xyz","type":"step-start"}\n${emptyDistillerStdout(input)}`,
-      stderr: 'some warning',
-    })
+    const runFn = fakeRun({ stderrTail: 'some warning' })
     await runDistill({
       store: memory.store,
       reviewedArtifacts: memory.reviewedArtifacts,
       job,
       siblings: [job],
-      spawnFn,
+      runFn,
     })
     const refreshed = (
       await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, job.id)).limit(1)
@@ -146,17 +166,13 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
       .where(eq(memoryDistillJobs.id, row.id))
 
     const job = rowToDistillJob({ ...row, attempts: 1 })
-    const spawnFn: DistillerSpawnFn = async () => ({
-      exitCode: 0,
-      stdout: '',
-      stderr: '',
-    })
+    const runFn = fakeRun()
     await runDistill({
       store: memory.store,
       reviewedArtifacts: memory.reviewedArtifacts,
       job,
       siblings: [job],
-      spawnFn,
+      runFn,
     })
     const refreshed = (
       await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, job.id)).limit(1)
@@ -170,10 +186,11 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
   test('non-zero exitCode still throws but post-spawn columns + capture-attempt landed first', async () => {
     const row = await seedJobRow(db, 0)
     const job = rowToDistillJob(row)
-    const spawnFn: DistillerSpawnFn = async () => ({
+    const runFn = fakeRun({
+      status: 'exit-nonzero',
       exitCode: 1,
-      stdout: '{"sessionID":"sess-fail"}\n',
-      stderr: 'fatal: distiller crashed',
+      stderrTail: 'fatal: distiller crashed',
+      capturedSessionId: 'sess-fail',
     })
     await expect(
       runDistill({
@@ -181,7 +198,7 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
         reviewedArtifacts: memory.reviewedArtifacts,
         job,
         siblings: [job],
-        spawnFn,
+        runFn,
       }),
     ).rejects.toThrow(/exited with code 1/)
     const refreshed = (
@@ -192,21 +209,32 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
     expect(refreshed.stderrExcerpt).toContain('fatal:')
   })
 
-  test('missing sessionId → opencode_session_id stays null and capture is skipped (no throw)', async () => {
+  // RFC-367 restated: this used to assert "no envelope + no session id → no
+  // throw". That silence is exactly the defect the RFC removes (a job went
+  // `done` with zero candidates and an empty last_error). With no session there
+  // is nothing to re-ask either, so the run must fail after ONE round — while
+  // still leaving the post-spawn columns behind for the detail page.
+  test('missing sessionId → capture skipped, columns landed, and the run fails fast', async () => {
     const row = await seedJobRow(db, 0)
     const job = rowToDistillJob(row)
-    const spawnFn: DistillerSpawnFn = async () => ({
-      exitCode: 0,
-      stdout: 'not json at all',
-      stderr: '',
-    })
-    await runDistill({
-      store: memory.store,
-      reviewedArtifacts: memory.reviewedArtifacts,
-      job,
-      siblings: [job],
-      spawnFn,
-    })
+    const calls: SystemAgentRunOptions[] = []
+    const base = fakeRun({ eventText: 'not an envelope at all' })
+    const runFn: RunDistillOptions['runFn'] = async (opts) => {
+      calls.push(opts)
+      const result = await base!(opts)
+      const { capturedSessionId: _dropped, ...withoutSession } = result
+      return withoutSession as SystemAgentRunResult
+    }
+    await expect(
+      runDistill({
+        store: memory.store,
+        reviewedArtifacts: memory.reviewedArtifacts,
+        job,
+        siblings: [job],
+        runFn,
+      }),
+    ).rejects.toThrow(DistillerProtocolError)
+    expect(calls).toHaveLength(1)
     const refreshed = (
       await db.select().from(memoryDistillJobs).where(eq(memoryDistillJobs.id, job.id)).limit(1)
     )[0]!
@@ -216,14 +244,10 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
 })
 
 describe('runDistill RFC-043 capture extensions', () => {
-  test('extractFirstSessionIdFromStdout & clipAndRedactStderr behave per contract', () => {
-    expect(extractFirstSessionIdFromStdout('')).toBeNull()
-    expect(extractFirstSessionIdFromStdout('not-json')).toBeNull()
-    expect(extractFirstSessionIdFromStdout('{"sessionID":"first"}\n{"sessionID":"second"}\n')).toBe(
-      'first',
-    )
-    expect(extractFirstSessionIdFromStdout('{"foo":1}\n{"sessionID":"x"}')).toBe('x')
-
+  // RFC-367 retired `extractFirstSessionIdFromStdout`: the session id now comes
+  // from `runSystemAgent`'s `capturedSessionId` (one owner for stdout parsing,
+  // the executor's pump), so there is no hand-rolled scanner left to lock.
+  test('clipAndRedactStderr behaves per contract', () => {
     expect(clipAndRedactStderr('', 100)).toBeNull()
     const safe = clipAndRedactStderr('plain text', 100)
     expect(safe).toBe('plain text')

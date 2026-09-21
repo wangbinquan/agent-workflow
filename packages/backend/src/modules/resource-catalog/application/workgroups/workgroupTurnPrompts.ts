@@ -248,5 +248,17 @@ export function wgFollowupNotice(reason: EnvelopeFollowupReason): string {
         '  branch ports — re-emit ONE <workflow-output> with plain <port> tags and\n' +
         '  no active attribute.'
       )
+    case 'port-missing':
+      // RFC-367. The envelope framing was fine but carried no <port> child at
+      // all — the model dropped its payload straight inside the envelope (the
+      // memory distiller hit exactly this, usually with a ``` fence around it).
+      // A workgroup turn's whole contract lives in its wg_* ports, so the fix
+      // is to re-emit with real port tags, not to re-emit the envelope.
+      return (
+        '- Your <workflow-output> envelope contained NO <port name="..."> child —\n' +
+        '  the content sat directly inside the envelope (a ``` code fence does not\n' +
+        '  count as a port). Re-emit ONE envelope with every value wrapped in its\n' +
+        '  own <port name="...">...</port> tag.'
+      )
   }
 }

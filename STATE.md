@@ -63,19 +63,22 @@ design.md §11.1，实现期不要把 AC 改成断言 `memories` 表。
 
 ## 进行中 RFC
 
-- [RFC-367 记忆蒸馏输出协议归一（事件流取数 + 严格协议 + 同会话补问）](design/RFC-367-distiller-output-protocol/) —— **已批准、实现中**
-  —— 2026-09-21 生产取证：最近 10 次蒸馏 10/10 输出无 `<port>` 包裹被静默丢弃（只 log.warn
-  之后照样 markDone），最后一条落库候选停在 2026-07-17。设计门（Codex 不可用，按 dev-gotchas
-  替代姿势用 Claude 子代理）判 FAIL 2P1/5P2/7P3，findings 已逐条核实回写（含推翻两条原始
-  前提：子会话清扫其实由 `runSystemAgent` 继承、distiller scratch 有 orphan GC）。
-  **已完成**：T1 shared `port-missing` 补问 reason / T2 `runSystemAgent` 透传 resume /
-  T2b `classifyMissingEnvelope` 归位 / T3 提示词补字面语法 + SHA 基线 / T4 判别式解析
-  `distillerOutput.ts` / T5 实时事件 sink / T6 `runDistill` 迁 `runSystemAgent` + 补问循环 /
-  T8 会话页 promptText。新增 58 条测试全绿（7 个 rfc367-* 文件），生产源码 typecheck 干净。
-  **阻塞待办**：T7（退役 capture 端口 / 接 sink）、T9（迁移 5 个既有 spawnFn 测试文件）、
-  T9b（`architecture:write` 重生成账本）、T10。三者都要等并发 session 的 RFC-366 实现落地
-  ——共享树上只要还有他人未提交源码，账本重生成就会把对方 delta 写进来、CI 干净 checkout 必红，
-  因此本批在那之前一行都不能提交。
+- [RFC-367 记忆蒸馏输出协议归一（事件流取数 + 严格协议 + 同会话补问）](design/RFC-367-distiller-output-protocol/) —— **实现完成，待 CI 验绿**
+  —— 2026-09-21 生产取证：176 个 done 任务里 76 个零候选；有捕获的最近 10 次 **10/10** 输出
+  没有 `<port>` 包裹被静默丢弃（只 log.warn 之后照样 markDone），最后一条落库候选停在
+  2026-07-17。根因两条：提示词从头到尾没出现过 `<port` 字面（唯一出现处是解析正则），
+  以及解析失败只 warn。设计门（Codex CLI 版本不兼容账号模型，按 dev-gotchas 替代姿势用
+  Claude 子代理）判 FAIL 2P1/5P2/7P3，逐条核实回写，并推翻我自己两条前提（子会话清扫由
+  `runSystemAgent` 继承、distiller scratch 有 orphan GC）。
+  **交付**：T1 shared 新增 `port-missing` 补问 reason（三处穷尽点）/ T2 `runSystemAgent`
+  透传 `resumeSessionId` / T2b `classifyMissingEnvelope` 归位中立同侧 / T3 提示词补三层字面
+  语法 + 禁围栏 + SHA 基线 / T4 判别式解析 `distillerOutput.ts` / T5 实时事件 sink /
+  T6 `runDistill` 迁 `runSystemAgent` + 同会话补问循环（整链一个 scratch、总超时预算、
+  AC-14 全部校验失败判失败）/ T7 退役事后 SQLite 走查与 `captureSession` 端口、sink 由 store
+  提供 / T8 会话页 `promptText` / T9 五个既有测试文件迁 `runFn` / T9b 账本重采。
+  新增 58 条 rfc367-* 测试；蒸馏面 264 条全绿，全仓 typecheck / eslint / prettier 干净。
+  **与 RFC-366 同树协作**：两个 RFC 交叠 `memoryDistiller.ts` / `schedule.ts` 与五个测试
+  文件，按「各自提交、最后一起推」协调；账本重采作为本次推送的最后一笔。
 
 ## 2026-09-21 修复：记忆卡片列表横排溢出（CSS 选择器列表被拆散）
 

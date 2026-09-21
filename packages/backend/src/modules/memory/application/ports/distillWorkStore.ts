@@ -2,6 +2,7 @@ import type { Memory, MemoryDistillJob, ResolvedDistillScope } from '@agent-work
 import type { DistillTaskFacts } from '@/modules/memory/domain/distillAdmission'
 import type { RuntimeKind } from '@/modules/runtime-management/public/types'
 import type { MemoryDistillJobRecord } from './distillReadStore'
+import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
 
 export interface MemoryDistillTaskScopeRecord {
   readonly workflowSnapshot: string
@@ -142,9 +143,7 @@ export interface MemoryDistillFailureUpdate {
   readonly retryAt: number | null
 }
 
-export interface MemoryDistillCaptureInput {
-  readonly protocol: RuntimeKind
-  readonly rootSessionId: string
+export interface MemoryDistillSessionSinkInput {
   readonly distillJobId: string
   readonly attemptIndex: number
 }
@@ -206,7 +205,17 @@ export interface MemoryDistillWorkStore {
       readonly stderrExcerpt: string | null
     },
   ): Promise<void>
-  captureSession(input: MemoryDistillCaptureInput): Promise<void>
+  /**
+   * RFC-367 — the auxiliary session record for one attempt. The distiller hands
+   * this sink to `runSystemAgent`, so the conversation tab and the candidate
+   * parse are fed by ONE normalized event stream. It replaces the post-run
+   * `captureSession` SQLite walk, whose separate parse of the same output
+   * drifted from the candidate parser twice (RFC-117, then 2026-09-21).
+   *
+   * Observation only: the contract in `services/sessionEventSink.ts` forbids
+   * letting persistence here decide the agent's business result.
+   */
+  eventSinkFor(input: MemoryDistillSessionSinkInput): SystemAgentEventSinkV1
   insertCandidate(input: MemoryDistillCandidateInsert): Promise<void>
 }
 

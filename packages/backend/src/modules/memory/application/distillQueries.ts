@@ -265,7 +265,8 @@ export function createMemoryDistillQueries(store: MemoryDistillReadStore): Memor
     },
 
     async getJobSessionView(jobId: string): Promise<MemoryDistillSessionView> {
-      if ((await store.findJob(jobId)) === null) {
+      const job = await store.findJob(jobId)
+      if (job === null) {
         throw new NotFoundError('distill-job-not-found', `distill job '${jobId}' not found`)
       }
       const rows = await store.listEvents(jobId)
@@ -296,7 +297,15 @@ export function createMemoryDistillQueries(store: MemoryDistillReadStore): Memor
           try {
             tree = parseSessionTree({
               rootSessionId,
-              promptText: null,
+              // RFC-367: the live stream only carries the CHILD's stdout, so the
+              // user turn no longer arrives as a captured event the way the
+              // retired post-run SQLite walk delivered it (it swept the user
+              // message parts too). Seed it from the stored prompt instead, so
+              // the conversation tab still opens with what the distiller was
+              // asked. Follow-up turns inside the same attempt are not stored
+              // (their text lives in last_error / the log) — documented as
+              // RFC-367 capability-impact C2.
+              promptText: job.userPromptMd,
               startedAt: bucket[0]?.ts ?? null,
               primaryAgentName: DISTILLER_PRIMARY_AGENT_NAME,
               events,

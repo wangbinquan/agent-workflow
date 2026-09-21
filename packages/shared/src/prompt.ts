@@ -1184,6 +1184,14 @@ export type EnvelopeFollowupReason =
   // neither true nor false). Both producer codes render as this one reason: the
   // correction is identical — fix the marker and re-emit.
   | 'branch-marker'
+  // RFC-367 — the envelope parsed fine but carried NO `<port name="...">` child
+  // at all: the agent put the payload straight inside the envelope (typically
+  // wrapped in a ``` fence). Distinct from 'envelope-missing' — telling an agent
+  // that DID emit an envelope that it emitted none sends it chasing the wrong
+  // defect, which is exactly how the memory distiller kept re-failing in
+  // production (RFC-367 proposal §1). Render-domain only: no FollowupFailureCode
+  // maps here, so worker-node routing is unchanged.
+  | 'port-missing'
 
 /**
  * RFC-145 — projection from the 7-value envelope producer domain
@@ -1282,6 +1290,12 @@ export function renderSessionRestartNotice(reason: EnvelopeFollowupReason): stri
         return 'emitted a `<workflow-clarify>` envelope whose JSON body could not be parsed'
       case 'clarify-required':
         return 'failed to ask back with a `<workflow-clarify>` envelope while this node was in mandatory ask-back mode'
+      case 'port-missing':
+        // RFC-367. Unreachable from the worker-node path today (no
+        // FollowupFailureCode maps here), but the union's exhaustiveness
+        // ratchet demands a truthful sentence rather than a fallthrough that
+        // would describe the wrong defect.
+        return 'emitted a `<workflow-output>` envelope that contained no `<port name="...">` element, so every value it carried was discarded'
       default: {
         const exhausted: never = reason
         throw new Error(`unreachable envelope followup reason: ${String(exhausted)}`)
@@ -1398,7 +1412,11 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
           // envelope it DID emit, hiding the actual defect.
           input.reason === 'branch-marker'
           ? 'branch-marker'
-          : 'envelope-missing'
+          : // RFC-367: same survival rule — a missing port is an output-shaped
+            // defect that exists regardless of clarify wiring.
+            input.reason === 'port-missing'
+            ? 'port-missing'
+            : 'envelope-missing'
 
   const isPortValidation = reason === 'port-validation'
 
@@ -1427,6 +1445,12 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
         ? ` ${input.branchMarkerDetail}`
         : '') +
       ' Re-emit the envelope: either drop the marker (the branch then runs) or move it to a declared branch port.'
+  } else if (reason === 'port-missing') {
+    // RFC-367. Placed before the generic `!hasClarify` branch for the same
+    // reason as the two above: the agent DID emit an envelope, so the
+    // "no envelope found" wording would describe a defect that isn't there.
+    opening =
+      'Your previous reply in this session emitted a `<workflow-output>` envelope, but it contained no `<port name="...">` element — the content was placed directly inside the envelope (often wrapped in a ``` code fence). The framework reads ONLY `<port name="...">...</port>` children, so that reply was discarded in full. Re-emit the envelope with every value wrapped in its port tag, and put nothing between the envelope tag and the port tags.'
   } else if (!hasClarify) {
     opening =
       'Your previous reply in this session did not contain a `<workflow-output>` envelope. The framework cannot parse your result without it.'
@@ -1464,13 +1488,21 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
     // RFC-306: like the two output-shaped reasons above, the fix is always to
     // re-emit `<workflow-output>` — offering the clarify escape hatch here would
     // let the agent dodge the correction entirely.
-    reason !== 'branch-marker'
+    reason !== 'branch-marker' &&
+    // RFC-367: same reasoning — the fix is always to re-emit `<workflow-output>`
+    // with real port tags, so the clarify escape hatch must not be offered.
+    reason !== 'port-missing'
   ) {
     bullets =
       '- This node has an OPTIONAL clarify channel: reply with EXACTLY ONE envelope — either a `<workflow-clarify>` block (if something material is still unclear) or a `<workflow-output>` block (if you are ready to finalize), using the formats previously specified in this session.\n' +
       '- Never emit both, and do not emit anything after the closing tag of whichever envelope you pick.\n' +
       '- If you were mid-investigation, finish it first, then pick one envelope.'
-  } else if (isPortValidation || reason === 'envelope-port-malformed' || !hasClarify) {
+  } else if (
+    isPortValidation ||
+    reason === 'envelope-port-malformed' ||
+    reason === 'port-missing' ||
+    !hasClarify
+  ) {
     bullets =
       '- If you have finished the requested work, end your NEXT reply with a `<workflow-output>` block using the EXACT format previously specified in this session (the same port list, the same `<port name="...">...</port>` shape). Do not summarize, do not omit the block.\n' +
       '- If you were not finished, complete the remaining work first, THEN emit the `<workflow-output>` block. The envelope is mandatory either way.\n' +
@@ -1511,7 +1543,11 @@ export function renderEnvelopeFollowupPrompt(input: EnvelopeFollowupInput): stri
   // ---------------------------------------------------------------------------
   const label = isPortValidation
     ? 'Port content validation — follow-up.'
-    : 'Envelope missing — follow-up.'
+    : reason === 'port-missing'
+      ? // RFC-367: a new reason, so no existing log/test anchor shifts — and
+        // "Envelope missing" would be a lie here (the envelope WAS emitted).
+        'Envelope port missing — follow-up.'
+      : 'Envelope missing — follow-up.'
 
   const nonceReminder =
     input.envelopeNonce !== undefined && input.envelopeNonce.length > 0

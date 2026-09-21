@@ -25,14 +25,14 @@ import { tasks, workflows } from '../src/db/schema'
 import { distillTick, enqueueDistillJob } from '../src/modules/memory/application/distill/schedule'
 import {
   runDistill,
-  type DistillerSpawnFn,
+  type RunDistillOptions,
 } from '../src/modules/memory/application/distill/memoryDistiller'
+import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DrizzleMemoryDistillRuntimeResolver } from '../src/modules/memory/infrastructure/memoryDistillRuntimeResolver'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
-import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
 
 /** 用户指定的新默认值：1 小时。 */
 const ONE_HOUR_MS = 3_600_000
@@ -42,7 +42,7 @@ function createContext(db: ProviderNeutralDatabase) {
   const root = mkdtempSync(join(tmpdir(), 'memory-distill-timeout-'))
   process.env.AGENT_WORKFLOW_HOME = root
   return {
-    store: new DrizzleMemoryDistillWorkStore(db, createMemoryDistillSessionCapture(db)),
+    store: new DrizzleMemoryDistillWorkStore(db),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, root),
     cleanup() {
@@ -84,16 +84,37 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
 }
 
 /** Captures the timeout the distiller hands its runtime child, then returns an
- *  empty-but-valid envelope so the run completes normally. */
-function capturingSpawn(seen: number[]): DistillerSpawnFn {
-  return async (input) => {
-    seen.push(input.timeoutMs)
+ *  empty-but-valid envelope so the run completes normally.
+ *
+ *  RFC-367 changed the seam (`spawnFn` → `runFn`) AND the meaning of the number
+ *  being captured: `timeoutMs` is now the budget for the WHOLE distill — the
+ *  first round plus every protocol follow-up share it — so the first round sees
+ *  the configured value minus however long the round-setup took. Assertions
+ *  below are bounded rather than exact; an exact match would be flaky by
+ *  construction. See RFC-367 design §3.2 for why the budget moved. */
+function capturingRun(seen: number[]): RunDistillOptions['runFn'] {
+  return async (opts) => {
+    seen.push(opts.timeoutMs ?? -1)
+    const envelopeNonce = /nonce="([^"]+)"/.exec(opts.prompt)?.[1] ?? ''
     return {
+      status: 'ok',
       exitCode: 0,
-      stderr: '',
-      stdout: `<workflow-output nonce="${input.envelopeNonce}"><port name="candidates">{"candidates":[]}</port></workflow-output>`,
+      eventText: `<workflow-output nonce="${envelopeNonce}"><port name="candidates">{"candidates":[]}</port></workflow-output>`,
+      stderrTail: '',
+      durationMs: 1,
+      scratchDir: join(opts.scratchParent, opts.scratchName ?? 'unnamed'),
+      scratchRetained: true,
+      outputEvidence: emptySystemAgentOutputEvidence(),
+      capturedSessionId: 'ses_timeout_probe',
     }
   }
+}
+
+/** The budget the child actually got, within a generous setup allowance. */
+function expectBudget(seen: number[], configured: number): void {
+  expect(seen).toHaveLength(1)
+  expect(seen[0]).toBeLessThanOrEqual(configured)
+  expect(seen[0]).toBeGreaterThan(configured - 10_000)
 }
 
 describeEachProvider('memory distill timeout — default and override', (harness) => {
@@ -138,9 +159,9 @@ describeEachProvider('memory distill timeout — default and override', (harness
       reviewedArtifacts: ctx.reviewedArtifacts,
       job,
       siblings: [job],
-      spawnFn: capturingSpawn(seen),
+      runFn: capturingRun(seen),
     })
-    expect(seen).toEqual([ONE_HOUR_MS])
+    expectBudget(seen, ONE_HOUR_MS)
   })
 
   test('an explicit timeout overrides the default', async () => {
@@ -152,10 +173,10 @@ describeEachProvider('memory distill timeout — default and override', (harness
       reviewedArtifacts: ctx.reviewedArtifacts,
       job,
       siblings: [job],
-      spawnFn: capturingSpawn(seen),
+      runFn: capturingRun(seen),
       timeoutMs: 45_000,
     })
-    expect(seen).toEqual([45_000])
+    expectBudget(seen, 45_000)
   })
 })
 
@@ -188,11 +209,11 @@ describeEachProvider('memory distill timeout — scheduler plumbing', (harness) 
     const seen: number[] = []
     const r = await distillTick({
       ...deps(),
-      spawnFn: capturingSpawn(seen),
+      runFn: capturingRun(seen),
       timeoutMs: 7_200_000,
     })
     expect(r.succeeded).toBe(1)
-    expect(seen).toEqual([7_200_000])
+    expectBudget(seen, 7_200_000)
   })
 
   test('distillTick without the knob falls through to the one-hour default', async () => {
@@ -204,8 +225,8 @@ describeEachProvider('memory distill timeout — scheduler plumbing', (harness) 
       debounceMs: 0,
     })
     const seen: number[] = []
-    const r = await distillTick({ ...deps(), spawnFn: capturingSpawn(seen) })
+    const r = await distillTick({ ...deps(), runFn: capturingRun(seen) })
     expect(r.succeeded).toBe(1)
-    expect(seen).toEqual([ONE_HOUR_MS])
+    expectBudget(seen, ONE_HOUR_MS)
   })
 })

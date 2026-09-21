@@ -23,7 +23,6 @@ import {
 } from '../src/modules/memory/application/distill/schedule'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
-import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
 
 /**
  * RFC-366: `enqueueDistillJob` now returns null when the admission gate declines
@@ -43,7 +42,7 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
     resetBroadcastersForTests()
     resetMemoryDistillLangProviderForTest()
     db = harness.db
-    memory = { store: new DrizzleMemoryDistillWorkStore(db, createMemoryDistillSessionCapture(db)) }
+    memory = { store: new DrizzleMemoryDistillWorkStore(db) }
   })
 
   afterEach(() => {

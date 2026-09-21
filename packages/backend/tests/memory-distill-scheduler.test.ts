@@ -1,7 +1,7 @@
 // RFC-041 — distill scheduler tests (PR2 scope).
 //
 // Drives `distillTick` synchronously (no setInterval) with a deterministic
-// `now` and a fake `spawnFn`. Locks: debounce_key construction, sibling
+// `now` and a fake `runFn` (RFC-367 seam; was `spawnFn`). Locks: debounce_key construction, sibling
 // merge, exp-backoff retry math, max-attempts flip to `failed`, recovery
 // of leftover `running` rows.
 
@@ -43,11 +43,12 @@ import {
   startMemoryDistillLoop,
 } from '../src/modules/memory/application/distill/schedule'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import type { DistillerSpawnFn } from '../src/modules/memory/application/distill/memoryDistiller'
+import type { RunDistillOptions } from '../src/modules/memory/application/distill/memoryDistiller'
+import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
+import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DrizzleMemoryDistillRuntimeResolver } from '../src/modules/memory/infrastructure/memoryDistillRuntimeResolver'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
-import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
 
 /**
  * RFC-366: `enqueueDistillJob` now returns null when the admission gate declines
@@ -64,7 +65,7 @@ function createMemoryDistillTestContext(db: ProviderNeutralDatabase) {
   const root = mkdtempSync(join(tmpdir(), 'memory-distill-provider-'))
   process.env.AGENT_WORKFLOW_HOME = root
   return {
-    store: new DrizzleMemoryDistillWorkStore(db, createMemoryDistillSessionCapture(db)),
+    store: new DrizzleMemoryDistillWorkStore(db),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, root),
     cleanup() {
@@ -85,15 +86,29 @@ function workerDeps(memory: MemoryTestContext) {
   }
 }
 
-function emptyDistillerStdout(input: Parameters<DistillerSpawnFn>[0]): string {
-  return `<workflow-output nonce="${input.envelopeNonce}"><port name="candidates">{"candidates":[]}</port></workflow-output>`
+/** RFC-367: the distiller consumes `runSystemAgent`'s normalized assistant text,
+ *  so a fake returns `eventText` rather than raw stdout. The nonce comes back
+ *  out of the prompt — the same place the real agent reads it from. */
+function emptyDistillerEnvelope(opts: SystemAgentRunOptions): string {
+  const nonce = /nonce="([^"]+)"/.exec(opts.prompt)?.[1] ?? ''
+  return `<workflow-output nonce="${nonce}"><port name="candidates">{"candidates":[]}</port></workflow-output>`
 }
 
-const EMPTY_ENVELOPE_SPAWN: DistillerSpawnFn = async (input) => ({
-  exitCode: 0,
-  stderr: '',
-  stdout: emptyDistillerStdout(input),
-})
+function okRun(opts: SystemAgentRunOptions, eventText?: string): SystemAgentRunResult {
+  return {
+    status: 'ok',
+    exitCode: 0,
+    eventText: eventText ?? emptyDistillerEnvelope(opts),
+    stderrTail: '',
+    durationMs: 1,
+    scratchDir: `${opts.scratchParent}/${opts.scratchName ?? 'unnamed'}`,
+    scratchRetained: true,
+    outputEvidence: emptySystemAgentOutputEvidence(),
+    capturedSessionId: 'ses_scheduler_probe',
+  }
+}
+
+const EMPTY_ENVELOPE_RUN: RunDistillOptions['runFn'] = async (opts) => okRun(opts)
 
 async function seedTask(
   db: ProviderNeutralDatabase,
@@ -391,7 +406,7 @@ describeEachProvider('distillTick', (harness) => {
   afterEach(() => memory.cleanup())
 
   test('idle: no pending due rows → no-op', async () => {
-    const r = await distillTick({ ...workerDeps(memory), spawnFn: EMPTY_ENVELOPE_SPAWN })
+    const r = await distillTick({ ...workerDeps(memory), runFn: EMPTY_ENVELOPE_RUN })
     expect(r).toEqual({ picked: 0, succeeded: 0, failed: 0, candidatesCreated: 0 })
   })
 
@@ -403,7 +418,7 @@ describeEachProvider('distillTick', (harness) => {
       taskId,
       debounceMs: 0,
     })
-    const r = await distillTick({ ...workerDeps(memory), spawnFn: EMPTY_ENVELOPE_SPAWN })
+    const r = await distillTick({ ...workerDeps(memory), runFn: EMPTY_ENVELOPE_RUN })
     expect(r.succeeded).toBe(1)
     expect(r.failed).toBe(0)
     expect(r.candidatesCreated).toBe(0)
@@ -422,17 +437,13 @@ describeEachProvider('distillTick', (harness) => {
         debounceMs: 0,
       })
     }
-    let spawnCalls = 0
-    const spawnFn: DistillerSpawnFn = async (input) => {
-      spawnCalls += 1
-      return {
-        exitCode: 0,
-        stderr: '',
-        stdout: emptyDistillerStdout(input),
-      }
+    let runCalls = 0
+    const runFn: RunDistillOptions['runFn'] = async (opts) => {
+      runCalls += 1
+      return okRun(opts)
     }
-    const r = await distillTick({ ...workerDeps(memory), spawnFn })
-    expect(spawnCalls).toBe(1)
+    const r = await distillTick({ ...workerDeps(memory), runFn })
+    expect(runCalls).toBe(1)
     expect(r.succeeded).toBe(1)
     const rows = await db.select().from(memoryDistillJobs).all()
     for (const row of rows) expect(row.status).toBe('done')
@@ -446,7 +457,7 @@ describeEachProvider('distillTick', (harness) => {
       taskId,
       debounceMs: 0,
     })
-    const explodeSpawn: DistillerSpawnFn = async () => {
+    const explodeRun: RunDistillOptions['runFn'] = async () => {
       throw new Error('boom')
     }
 
@@ -454,7 +465,7 @@ describeEachProvider('distillTick', (harness) => {
     // is immediately due. Each subsequent attempt jumps to the new
     // backoff-shifted next_run_at.
     let now = Date.now() + 1
-    await distillTick({ ...workerDeps(memory), spawnFn: explodeSpawn, now: () => now })
+    await distillTick({ ...workerDeps(memory), runFn: explodeRun, now: () => now })
     let row = (await db.select().from(memoryDistillJobs).all())[0]!
     expect(row.attempts).toBe(1)
     expect(row.status).toBe('pending')
@@ -462,14 +473,14 @@ describeEachProvider('distillTick', (harness) => {
 
     // Attempt 2 — pump time past backoff.
     now = row.nextRunAt + 1
-    await distillTick({ ...workerDeps(memory), spawnFn: explodeSpawn, now: () => now })
+    await distillTick({ ...workerDeps(memory), runFn: explodeRun, now: () => now })
     row = (await db.select().from(memoryDistillJobs).all())[0]!
     expect(row.attempts).toBe(2)
     expect(row.status).toBe('pending')
 
     // Attempt 3 = max — flip to failed.
     now = row.nextRunAt + 1
-    await distillTick({ ...workerDeps(memory), spawnFn: explodeSpawn, now: () => now })
+    await distillTick({ ...workerDeps(memory), runFn: explodeRun, now: () => now })
     row = (await db.select().from(memoryDistillJobs).all())[0]!
     expect(row.attempts).toBe(DISTILL_MAX_ATTEMPTS)
     expect(row.status).toBe('failed')
@@ -488,7 +499,7 @@ describeEachProvider('distillTick', (harness) => {
 
     const result = await distillTick({
       ...workerDeps(memory),
-      spawnFn: async () => {
+      runFn: async () => {
         throw failure
       },
       now: () => Date.now() + 1,
@@ -515,13 +526,9 @@ describeEachProvider('distillTick', (harness) => {
     let calls = 0
     const r = await distillTick({
       ...workerDeps(memory),
-      spawnFn: async (input) => {
+      runFn: async (opts) => {
         calls += 1
-        return {
-          exitCode: 0,
-          stderr: '',
-          stdout: emptyDistillerStdout(input),
-        }
+        return okRun(opts)
       },
     })
     expect(calls).toBe(5)
@@ -538,7 +545,7 @@ describeEachProvider('distillTick', (harness) => {
     })
     const r = await distillTick({
       ...workerDeps(memory),
-      spawnFn: EMPTY_ENVELOPE_SPAWN,
+      runFn: EMPTY_ENVELOPE_RUN,
       now: () => Date.now(),
     })
     expect(r.picked).toBe(0)
@@ -614,17 +621,13 @@ describeEachProvider('distillTick', (harness) => {
     })
 
     let capturedPrompt: string | null = null
-    const captureSpawn: DistillerSpawnFn = async (input) => {
-      capturedPrompt = input.userPrompt
-      return {
-        exitCode: 0,
-        stderr: '',
-        stdout: emptyDistillerStdout(input),
-      }
+    const capturePromptRun: RunDistillOptions['runFn'] = async (opts) => {
+      capturedPrompt = opts.prompt
+      return okRun(opts)
     }
     await distillTick({
       ...workerDeps(memory),
-      spawnFn: captureSpawn,
+      runFn: capturePromptRun,
       // RFC-366 扩了预算对象；本用例关心的仍是 clarify/review 两项归零。
       sourceContextBudget: {
         ...DEFAULT_SOURCE_CONTEXT_BUDGET,
@@ -642,7 +645,7 @@ describeEachProvider('distillTick', (harness) => {
       .update(memoryDistillJobs)
       .set({ status: 'pending', attempts: 0, nextRunAt: Date.now() - 1 })
     capturedPrompt = null
-    await distillTick({ ...workerDeps(memory), spawnFn: captureSpawn })
+    await distillTick({ ...workerDeps(memory), runFn: capturePromptRun })
     expect(capturedPrompt!).toContain('Source agent transcript:')
     expect(capturedPrompt!).toContain('PLUMBING-MARKER')
   })
@@ -809,18 +812,18 @@ describeEachProvider('startMemoryDistillLoop reentrancy', (harness) => {
     const gate = new Promise<void>((r) => {
       release = r
     })
-    const slowSpawn: DistillerSpawnFn = async (input) => {
+    const slowRun: RunDistillOptions['runFn'] = async (opts) => {
       calls += 1
       inFlight += 1
       maxInFlight = Math.max(maxInFlight, inFlight)
       await gate
       inFlight -= 1
-      return { exitCode: 0, stderr: '', stdout: emptyDistillerStdout(input) }
+      return okRun(opts)
     }
 
     const loop = startMemoryDistillLoop({
       ...workerDeps(memory),
-      spawnFn: slowSpawn,
+      runFn: slowRun,
       intervalMs: 5,
     })
     try {

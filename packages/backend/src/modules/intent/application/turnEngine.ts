@@ -35,12 +35,12 @@ import { Semaphore } from '@/util/semaphore'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
 import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
 import {
+  classifyMissingEnvelope,
   releaseSystemAgentScratch,
   runSystemAgent,
   type SystemAgentRunOptions,
   type SystemAgentRunResult,
 } from '@/services/systemAgentRun'
-import type { SystemAgentOutputEvidence } from '@/services/runtime/types'
 import { IntentTurnSessionEventSink } from './turnSession'
 import { buildIntentDump } from './dumpBuilder'
 import { parseHandleWatermark } from './manifest'
@@ -125,29 +125,6 @@ export interface IntentTurnOutcome {
 
 const intentSem = new Semaphore(2)
 const liveTurnAborts = new Map<string, AbortController>()
-
-export type MissingEnvelopeReason =
-  | 'output-cap-hit'
-  | 'no-assistant-text'
-  | 'terminal-without-envelope'
-  | 'assistant-stopped-without-envelope'
-  | 'runtime-shape-unknown'
-
-export function classifyMissingEnvelope(
-  evidence: SystemAgentOutputEvidence | undefined,
-): MissingEnvelopeReason {
-  if (evidence === undefined) return 'runtime-shape-unknown'
-  if (
-    evidence.eventTextCapHit ||
-    evidence.observedAssistantTextBytes > evidence.retainedAssistantTextBytes
-  ) {
-    return 'output-cap-hit'
-  }
-  if (!evidence.assistantTextSeen) return 'no-assistant-text'
-  if (evidence.terminalResult !== 'not-observed') return 'terminal-without-envelope'
-  if (evidence.assistantTextSeen) return 'assistant-stopped-without-envelope'
-  return 'runtime-shape-unknown'
-}
 
 /**
  * RFC-348 D4 (RFC-235 D33) — the resource type the user picked when opening the

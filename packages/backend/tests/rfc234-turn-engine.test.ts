@@ -32,7 +32,6 @@ import {
 import {
   abortIntentTurn,
   cancelIntentTurn,
-  classifyMissingEnvelope,
   settleReservedIntentTurnStartFailure,
   type IntentTurnConfig,
   requestedArtifactTypeOf,
@@ -114,49 +113,6 @@ function envelope(nonce: string, ports: Record<string, string>): string {
     .join('')
   return `noise before\n<workflow-output nonce="${nonce}">${body}</workflow-output>`
 }
-
-describe('RFC-273 missing-envelope evidence classification', () => {
-  const evidence = (over: Partial<ReturnType<typeof emptySystemAgentOutputEvidence>> = {}) => ({
-    ...emptySystemAgentOutputEvidence(),
-    ...over,
-  })
-
-  test('classifies cap, no-text, terminal and stopped shapes in fixed priority order', () => {
-    expect(
-      classifyMissingEnvelope(
-        evidence({
-          assistantTextSeen: true,
-          observedAssistantTextBytes: 10,
-          retainedAssistantTextBytes: 5,
-          terminalResult: 'success',
-        }),
-      ),
-    ).toBe('output-cap-hit')
-    expect(classifyMissingEnvelope(evidence({ terminalResult: 'success' }))).toBe(
-      'no-assistant-text',
-    )
-    expect(
-      classifyMissingEnvelope(
-        evidence({
-          assistantTextSeen: true,
-          observedAssistantTextBytes: 5,
-          retainedAssistantTextBytes: 5,
-          terminalResult: 'success',
-        }),
-      ),
-    ).toBe('terminal-without-envelope')
-    expect(
-      classifyMissingEnvelope(
-        evidence({
-          assistantTextSeen: true,
-          observedAssistantTextBytes: 5,
-          retainedAssistantTextBytes: 5,
-        }),
-      ),
-    ).toBe('assistant-stopped-without-envelope')
-    expect(classifyMissingEnvelope(undefined)).toBe('runtime-shape-unknown')
-  })
-})
 
 const MINIMAL_CHANGESET = JSON.stringify({
   $schema_version: 1,

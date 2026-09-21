@@ -17,18 +17,27 @@ import {
   tasks,
 } from '@/db/schema'
 import type {
-  MemoryDistillCaptureInput,
+  MemoryDistillSessionSinkInput,
   MemoryDistillWorkStore,
 } from '../application/ports/distillWorkStore'
+import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
+import { createMemoryDistillSessionEventSink } from './memoryDistillSessionEventSink'
 import { listMemoryDistillJobs } from './memoryDistillReadStore'
 
-export type MemoryDistillSessionCapture = (input: MemoryDistillCaptureInput) => Promise<void>
-
 export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
+  private readonly sinkFactory: (input: MemoryDistillSessionSinkInput) => SystemAgentEventSinkV1
+
   constructor(
     private readonly db: ProviderNeutralDatabase,
-    private readonly capture: MemoryDistillSessionCapture,
-  ) {}
+    /**
+     * RFC-367 test seam; production omits it and gets the real
+     * `memory_distill_events` writer. (It replaces the old `capture` argument,
+     * which injected the post-run opencode SQLite walk.)
+     */
+    sinkFactory?: (input: MemoryDistillSessionSinkInput) => SystemAgentEventSinkV1,
+  ) {
+    this.sinkFactory = sinkFactory ?? createMemoryDistillSessionEventSink(db)
+  }
 
   async findTaskScope(taskId: string) {
     const row = (
@@ -420,8 +429,8 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
       .where(eq(memoryDistillJobs.id, jobId))
   }
 
-  async captureSession(input: MemoryDistillCaptureInput): Promise<void> {
-    await this.capture(input)
+  eventSinkFor(input: MemoryDistillSessionSinkInput): SystemAgentEventSinkV1 {
+    return this.sinkFactory(input)
   }
 
   async insertCandidate(input: Parameters<MemoryDistillWorkStore['insertCandidate']>[0]) {

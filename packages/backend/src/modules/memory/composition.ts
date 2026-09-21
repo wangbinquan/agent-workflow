@@ -31,7 +31,6 @@ import {
   type MemoryCatalogTestHooks,
   type MemoryTransaction,
 } from './infrastructure/memoryCatalogOperations'
-import { createMemoryDistillSessionCapture } from './infrastructure/memoryDistillSessionCapture'
 import { DrizzleMemoryDistillRuntimeResolver } from './infrastructure/memoryDistillRuntimeResolver'
 import type { MemoryOperations } from './public/operations'
 import type { MemoryInjectionQueries } from './public/queries'
@@ -151,10 +150,7 @@ export function composeMemoryOperationsFor(
 ): MemoryOperations {
   return composeMemoryOperations({
     readStore: new DrizzleMemoryDistillReadStore(input.db),
-    workStore: new DrizzleMemoryDistillWorkStore(
-      input.db,
-      createMemoryDistillSessionCapture(input.db),
-    ),
+    workStore: new DrizzleMemoryDistillWorkStore(input.db),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(input.db),
     reviewedArtifacts: input.reviewedArtifacts,
     injectionQueries: input.injectionQueries ?? composeMemoryInjectionQueriesFor(input.db),

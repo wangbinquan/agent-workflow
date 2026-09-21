@@ -394,8 +394,6 @@ export interface DistillTickOptions {
   runtimeResolver: MemoryDistillRuntimeResolver
   /** RFC-367 test seam; production uses `runSystemAgent`. */
   runFn?: RunDistillOptions['runFn']
-  /** RFC-367 — per-attempt live session capture sink factory. */
-  eventSinkFor?: RunDistillOptions['eventSinkFor']
   /** RFC-117 — runtime profile NAME (config.memoryDistillRuntime); wins over `model`. */
   runtimeName?: string | null
   /** RFC-117 — global default runtime name (config.defaultRuntime) for inheritance. */
@@ -469,7 +467,6 @@ export async function distillTick(options: DistillTickOptions): Promise<{
         job: rowToDistillJob(head),
         siblings: siblings.map(rowToDistillJob),
         runFn: options.runFn,
-        eventSinkFor: options.eventSinkFor,
         protocol: rt.protocol,
         runtimeBinary: rt.binaryPath,
         model: rt.model,
@@ -524,7 +521,6 @@ export interface StartLoopOptions {
   reviewedArtifacts: MemoryDistillReviewedArtifactReader
   runtimeResolver: MemoryDistillRuntimeResolver
   runFn?: RunDistillOptions['runFn']
-  eventSinkFor?: RunDistillOptions['eventSinkFor']
   /** Settings.memoryDistillerEnabled — when false, ticker is a no-op shell. */
   enabled?: boolean
   /** Default 1000ms (1Hz). Tests can shorten / lengthen. */
@@ -582,7 +578,6 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
       reviewedArtifacts: options.reviewedArtifacts,
       runtimeResolver: options.runtimeResolver,
       runFn: options.runFn,
-      eventSinkFor: options.eventSinkFor,
       runtimeName: options.runtimeName,
       defaultRuntime: options.defaultRuntime,
       model: options.model,

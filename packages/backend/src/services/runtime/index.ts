@@ -79,6 +79,9 @@ export { readSnapshotFromRunDir, runRootFor } from './opencode/inventory'
 // Live-capture null object (runner's no-capability fallback handle).
 export { NOOP_HANDLE } from './opencode/subagentLiveCapture'
 // Distiller session sweep failure marker (memory distill session view).
-export { DISTILL_CAPTURE_FAILED_KIND } from './opencode/distillSessionCapture'
+// RFC-367: the constant outlived its old home (the retired post-run distill
+// SQLite walk). Its neutral definition lives in runtime-management's public
+// types; this re-export keeps existing importers working.
+export { DISTILL_CAPTURE_FAILED_KIND } from '@/modules/runtime-management/public/types'
 // Frozen plugin runtime specifier projection used by startup inventory.
 export { pluginFileSpec } from './opencode/pluginSpec'

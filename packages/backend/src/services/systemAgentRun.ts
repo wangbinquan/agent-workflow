@@ -139,6 +139,15 @@ export interface SystemAgentRunOptions {
   }) => void | Promise<void>
   /** Session-owned scratch survives successful turns; end/idle removes it. */
   retainScratchOnSuccess?: boolean
+  /**
+   * RFC-367 — continue an existing native session instead of opening a new one
+   * (`opencode run --session <id>` / `claude --resume <id>`, assembled by the
+   * driver). Used for protocol follow-ups: the agent already holds the full
+   * task context, so the follow-up turn only has to re-emit a corrected envelope.
+   * Omitted → a fresh session, and the rendered ctx is field-for-field what it
+   * was before this option existed.
+   */
+  resumeSessionId?: string
 }
 
 export type SystemAgentRunStatus =
@@ -182,6 +191,43 @@ export interface SystemAgentRunResult {
    *  assembly. Absent on testPlanOverride fixture runs. Settle-time
    *  verification consumes this instead of re-rendering (same computation). */
   declared?: AgentSpawnPlan['declared']
+}
+
+/**
+ * Why a run produced no parseable envelope, read off the evidence the pump
+ * collected. Lives next to `SystemAgentOutputEvidence`'s only producer
+ * (`runSystemAgent`) so every system agent can classify a missing envelope the
+ * same way.
+ *
+ * RFC-367 moved it here from `modules/intent/application/turnEngine.ts`: it
+ * never touched anything intent-specific, and the memory distiller needs the
+ * same answer to tell "the model wrote the wrong format" apart from "the reply
+ * outgrew `maxEventTextBytes` and the envelope was dropped with it". A bounded
+ * context may not import another's internals, so the choice was relocate or
+ * fork — and a forked copy of a classifier drifts. Behavior is byte-identical
+ * to the intent original; its assertions moved with it.
+ */
+export type MissingEnvelopeReason =
+  | 'output-cap-hit'
+  | 'no-assistant-text'
+  | 'terminal-without-envelope'
+  | 'assistant-stopped-without-envelope'
+  | 'runtime-shape-unknown'
+
+export function classifyMissingEnvelope(
+  evidence: SystemAgentOutputEvidence | undefined,
+): MissingEnvelopeReason {
+  if (evidence === undefined) return 'runtime-shape-unknown'
+  if (
+    evidence.eventTextCapHit ||
+    evidence.observedAssistantTextBytes > evidence.retainedAssistantTextBytes
+  ) {
+    return 'output-cap-hit'
+  }
+  if (!evidence.assistantTextSeen) return 'no-assistant-text'
+  if (evidence.terminalResult !== 'not-observed') return 'terminal-without-envelope'
+  if (evidence.assistantTextSeen) return 'assistant-stopped-without-envelope'
+  return 'runtime-shape-unknown'
 }
 
 export function emptySystemAgentOutputEvidence(): SystemAgentOutputEvidence {
@@ -443,6 +489,11 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
               ? { configDir: { env: opts.configDirEnv, name: opts.configDirName } }
               : {}),
             freshAgentRun: false,
+            // RFC-367: absent → the spread contributes nothing, so a caller that
+            // never resumes renders the exact pre-RFC-367 ctx.
+            ...(opts.resumeSessionId != null && opts.resumeSessionId !== ''
+              ? { resumeSessionId: opts.resumeSessionId }
+              : {}),
             ...(opts.runtimeBinary != null && opts.runtimeBinary !== ''
               ? { runtimeBinary: opts.runtimeBinary }
               : {}),

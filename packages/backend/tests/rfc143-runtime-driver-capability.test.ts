@@ -341,11 +341,17 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     expect(src).not.toContain('buildClaudeSpawn')
   })
 
-  it('memoryDistiller 无 protocol 判别（spawn 与 transcript capture 均走 driver capability）', () => {
+  it('memoryDistiller 无 protocol 判别（spawn 与 transcript 记录均不再由它自己分流）', () => {
     const src = SRC('modules/memory/application/distill/memoryDistiller.ts')
+    // RFC-367：事后按 protocol 分流的 `captureDistillSession` 整条退役了 —— 记录改由
+    // `runSystemAgent` 的实时事件流经 memory 自己的 sink 落库，与候选解析同源。
+    // 这条守卫原先读 `memoryDistillSessionCapture.ts` 的源码；那个文件已删，继续
+    // readFileSync 会 ENOENT 抛错（不是 fail 是 error）。改锁新的不变量：
+    // memory 模块里不得再出现按 protocol 取 driver 做事后捕获的形态。
     expect(src).not.toContain('captureDistillSession')
-    const memoryCapture = SRC('modules/memory/infrastructure/memoryDistillSessionCapture.ts')
-    expect(memoryCapture).toContain('getRuntimeDriver(input.protocol).captureDistillSession?.(')
+    expect(SRC('modules/memory/infrastructure/memoryDistillSessionEventSink.ts')).not.toContain(
+      'getRuntimeDriver',
+    )
     expect(src).not.toContain('bridgeCredentials')
     // 锁读取形态（注释可提及）：env 覆盖不再在 distiller 侧读取，回退逻辑在
     // opencode driver 的 buildSpawn 里。
