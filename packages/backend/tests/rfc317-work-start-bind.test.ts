@@ -49,7 +49,10 @@ describe('RFC-359 W12 —— WorkStart is complete at construction', () => {
       'digitalEmployee.runtime.commands.launchWork({',
     )
     expect(server).toContain('digitalEmployeeWorkStart: apiComposition.digitalEmployeeWorkStart')
-    expect(server).toContain('return Object.freeze({ apiRoutes, digitalEmployeeWorkStart })')
+    // RFC-365 adds `taskExecutionLaunches` to the same frozen API composition return.
+    expect(server).toContain(
+      'return Object.freeze({\n    apiRoutes,\n    digitalEmployeeWorkStart,\n    taskExecutionLaunches: sqliteTaskExecutionLaunches,\n  })',
+    )
     expect(server.slice(portAt)).toMatch(
       /mountDigitalEmployeeRoutes\(\s*app,\s*digitalEmployeePersistence,\s*digitalEmployee,/,
     )

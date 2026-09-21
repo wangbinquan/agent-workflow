@@ -53,8 +53,12 @@ describe('RFC-366 migration 0228 — distill source-kind widening', () => {
   test('登记在迁移链尾（journal idx 连号，否则迁移器会静默跳过）', async () => {
     const text = await Bun.file(resolve(MIGRATIONS_FOLDER, 'meta', '_journal.json')).text()
     const parsed = JSON.parse(text) as { entries: Array<{ idx: number; tag: string }> }
-    const last = parsed.entries[parsed.entries.length - 1]!
-    expect(last.tag).toBe(TAG)
+    // RFC-365 的 0229 落在链尾之后，这里不再要求本迁移在末尾——只要求它已登记，
+    // 且 idx 连号（迁移器按 idx / folderMillis 顺序，不是「最后一个」）。
+    expect(
+      parsed.entries.some((entry) => entry.tag === TAG),
+      `${TAG} 必须登记在 journal 里`,
+    ).toBe(true)
     expect(parsed.entries.map((entry) => entry.idx)).toEqual(
       parsed.entries.map((_, index) => index),
     )

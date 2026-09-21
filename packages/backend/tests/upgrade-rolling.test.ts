@@ -554,7 +554,9 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // memories / memory_distill_jobs 的 source_kind 值域加入 agent-run / task-run。
     // SQLite 的 CHECK 写死在表 DDL 里、没有 ALTER 语法，所以那一条是整表重建
     // （12-step 反序 + pragma 双保险 + 行数断言），不是加列。
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(228)
+    // RFC-365 bumped to 229 with 0229_rfc365_event_automation_work_intents（PostgreSQL 0005）：
+    // EC durable origin/work intent 表 `event_automation_work_intents`。
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(229)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

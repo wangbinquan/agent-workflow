@@ -1607,6 +1607,9 @@ const CAPABILITY_COMPATIBILITY_DEBT: string[] = [
   'modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts#createWorkgroupTaskRoomClarifyParticipantInTx: factory is outside capability owner',
   'modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts: casts/rewraps WorkgroupTaskRoomClarifyParticipantInTx outside owner factory',
   'modules/collaboration/public/types.ts: ReviewActor leaks through public/types',
+  // RFC-365：IA 的 event-automation delegated-context adapter 按既有 `delegatedRequests`
+  // 形态重包 `Actor`（与 `forSchedule` / `forWebhook` 同族），命中这条历史启发式。
+  'modules/identity-access/application/adapters/event-automation-adapter.ts: casts/rewraps Actor outside owner factory',
   'modules/task-execution/application/sourceTerminationCapability.ts#mintSourceTerminationEffectCapability: factory is outside capability owner',
   'modules/task-execution/application/sourceTerminationCapability.ts: casts/rewraps SourceTerminationEffectCapability outside owner factory',
   // RFC-359 AC-1（2026-09-17，plan §5hn 批次二 ①②）：触发器参与者两个引擎合成一份，
