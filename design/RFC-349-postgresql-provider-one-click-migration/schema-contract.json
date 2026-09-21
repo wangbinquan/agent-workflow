@@ -2,7 +2,7 @@
   "activeTableCount": 182,
   "archiveOnlyTableCount": 6,
   "contractVersion": 2,
-  "digest": "sha256:3e64b52d2ac2166405475f71c3160eac22c8617ee8822a108aa6fe2ca472c430",
+  "digest": "sha256:a27693137b6fd52a93912ee8d0e204ae58bb685bdcd2d80eb98538f9e07c9286",
   "sourceProjection": "sqlite",
   "sourceTableCount": 188,
   "tables": [
@@ -35907,7 +35907,7 @@
         },
         {
           "columns": [],
-          "expression": "\"memories\".\"source_kind\" IN ('clarify','review','feedback','manual')",
+          "expression": "\"memories\".\"source_kind\" IN ('clarify','review','feedback','agent-run','task-run','manual')",
           "name": "memories_source_kind_enum"
         },
         {
@@ -36092,6 +36092,8 @@
             "clarify",
             "review",
             "feedback",
+            "agent-run",
+            "task-run",
             "manual"
           ],
           "hasDefault": false,
@@ -36754,7 +36756,7 @@
       "checks": [
         {
           "columns": [],
-          "expression": "\"memory_distill_jobs\".\"source_kind\" IN ('clarify','review','feedback')",
+          "expression": "\"memory_distill_jobs\".\"source_kind\" IN ('clarify','review','feedback','agent-run','task-run')",
           "name": "memory_distill_jobs_source_kind_enum"
         },
         {
@@ -36810,7 +36812,9 @@
           "enumValues": [
             "clarify",
             "review",
-            "feedback"
+            "feedback",
+            "agent-run",
+            "task-run"
           ],
           "hasDefault": false,
           "identity": false,
