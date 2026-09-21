@@ -22,7 +22,6 @@ import type {
   TaskExecutionResourceBinding,
 } from '@/services/execution/taskExecutionResources'
 import type {
-  EventCenterAutomationWorkStarter,
   EventCenterCodeHostDeliveryDispatcher,
   WebhookDispatcher,
   WebhookEndpointRow,
@@ -75,7 +74,6 @@ import type {
 } from '@/modules/integration/public/mrTerminalControl'
 import { DomainError } from '@/util/errors'
 import type { WorkStartReceipt, WorkStartTarget } from '@/modules/integration/public/participants'
-import type { EventResponseTarget } from '@/modules/event-center/public/types'
 import type {
   WebhookDispatchPersistencePort,
   WebhookTriggerRecord,
@@ -93,9 +91,6 @@ export type WebhookDispatchDeps = {
     integrationTriggerResources: IntegrationTriggerResourceBinding
     taskExecutionResources: TaskExecutionResourceBinding
   }>
-  resolveEventTargetAuthority: (
-    userId: string,
-  ) => Promise<Readonly<{ authority: RequestAuthority; actor: Actor }> | null>
   /** per-dispatch 读取（对齐 scheduledTaskScheduler 的 per-tick cfg.defaultRuntime）。 */
   getDefaultRuntime: () => Promise<string | null | undefined>
   /**
@@ -300,73 +295,6 @@ function fireTaskName(triggerName: string, event: CodeHostEvent): string {
 
 export type RenderedLaunch = WorkStartTarget
 
-function renderEventResponseTarget(
-  target: EventResponseTarget,
-  context: TriggerContext,
-): RenderedLaunch {
-  const render = (value: string) => renderTemplate(value, context)
-  if (target.kind === 'workflow') {
-    return {
-      kind: 'workflow',
-      refId: target.refId,
-      payload: {
-        workflowId: target.refId,
-        name: render(target.nameTemplate),
-        inputs: Object.fromEntries(
-          Object.entries(target.inputs).map(([key, value]) => [key, render(value)]),
-        ),
-        scratch: true,
-      },
-    }
-  }
-  if (target.kind === 'agent') {
-    return {
-      kind: 'agent',
-      refId: target.refId,
-      payload: {
-        agentId: target.refId,
-        name: render(target.nameTemplate),
-        allowClarify: true,
-        ...(target.descriptionTemplate === null
-          ? {}
-          : { description: render(target.descriptionTemplate) }),
-        ...(Object.keys(target.inputs).length === 0
-          ? {}
-          : {
-              inputs: Object.fromEntries(
-                Object.entries(target.inputs).map(([key, value]) => [key, render(value)]),
-              ),
-            }),
-        scratch: true,
-      },
-    }
-  }
-  if (target.kind === 'workgroup') {
-    return {
-      kind: 'workgroup',
-      refId: target.refId,
-      payload: {
-        workgroupId: target.refId,
-        name: render(target.nameTemplate),
-        goal: render(target.goalTemplate),
-        scratch: true,
-      },
-    }
-  }
-  return {
-    kind: 'digital-employee',
-    refId: target.refId,
-    intake: {
-      kind: target.intakeKind,
-      target: Object.fromEntries(
-        Object.entries(target.target).map(([key, value]) => [key, render(value)]),
-      ),
-      body: target.intakeKind === 'body' ? render(target.valueTemplate) : null,
-      externalId: target.intakeKind === 'external-id' ? render(target.valueTemplate) : null,
-      uploads: [],
-    },
-  }
-}
 /**
  * RFC-304. Carries only the capability: a round reads its MR, commit and diff
  * from the frozen trigger context, so copying them here would make a second
@@ -930,7 +858,7 @@ async function recordInvalidPayloadFire(
 }
 export function createWebhookDispatcher(
   deps: WebhookDispatchDeps,
-): WebhookDispatcher & EventCenterCodeHostDeliveryDispatcher & EventCenterAutomationWorkStarter {
+): WebhookDispatcher & EventCenterCodeHostDeliveryDispatcher {
   const streamQueue = new KeyedSerialQueue<string>()
   return {
     async dispatch(input) {
@@ -1051,46 +979,6 @@ export function createWebhookDispatcher(
       if (controlEffectId !== null) {
         deps.terminalControl?.wake(controlEffectId)
       }
-    },
-    async dispatchEventTarget(input) {
-      const admitted = await deps.resolveEventTargetAuthority(input.ownerUserId)
-      if (admitted === null) {
-        throw new ValidationError(
-          'event-response-owner-invalid',
-          `event response owner is missing or inactive: ${input.ownerUserId}`,
-        )
-      }
-      const resourceAuthority = Object.freeze({
-        authority: admitted.authority,
-        actor: admitted.actor,
-        resources: deps.identityAccess.integrationTriggerResources,
-        taskExecutionResources: deps.identityAccess.taskExecutionResources,
-      })
-      const rendered = renderEventResponseTarget(input.target, input.triggerContext)
-      await deps.admitLaunch({
-        rendered,
-        resourceAuthority,
-        defaultRuntime: await deps.getDefaultRuntime(),
-        triggerContext: input.triggerContext,
-      })
-      const rawReceipt = await deps.launch(
-        admitted.actor,
-        rendered,
-        {
-          type: 'event',
-          eventSubscriptionId: input.eventSubscriptionId,
-          eventDeliveryId: input.eventDeliveryId,
-          triggerContext: input.triggerContext,
-        },
-        Object.freeze({
-          authority: admitted.authority,
-          actor: admitted.actor,
-          resources: deps.identityAccess.taskExecutionResources,
-        }),
-      )
-      return typeof rawReceipt === 'string'
-        ? { kind: 'orchestration', taskId: rawReceipt }
-        : rawReceipt
     },
   }
 }

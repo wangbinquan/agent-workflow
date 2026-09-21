@@ -72,11 +72,11 @@ import { mountHealthRoutes } from '@/routes/health'
 import { mountWebhookIngressRoutes } from '@/routes/webhooks'
 import {
   supportsEventCenterCodeHostDelivery,
-  supportsEventCenterWorkStart,
   type WebhookDispatcher,
 } from '@/services/webhook/dispatcherTypes'
 import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
 import {
+  createEventAutomationDelegatedContextBinding,
   createIdentityAccessRuntime,
   type IdentityAccessModule,
   type IdentityAccessRuntime,
@@ -294,6 +294,7 @@ import {
   composeDigitalEmployeePlatformInventoryParticipant,
   composeDigitalEmployeeTaskCatalogSource,
   composeDigitalEmployeeWriterCutoverFor,
+  createEmployeeAutomationWorkStartProvider,
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
 } from '@/modules/digital-employee/composition'
@@ -335,7 +336,9 @@ import type {
 import { composeExecutionContract } from '@/modules/execution-contract/composition'
 import {
   composeEventCenter,
+  createEventAutomationWorkIntentStore,
   deferEventCenterModule,
+  type EventCenterAutomationCapability,
   type EventCenterModule,
 } from '@/modules/event-center/composition'
 import {
@@ -354,6 +357,7 @@ import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execu
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
 import {
+  createTaskAutomationWorkStartProvider,
   createSqliteTaskExecutionLaunchParticipant,
   createSqliteTaskRouteLaunchOperations,
   type TaskExecutionLaunchParticipant,
@@ -1629,6 +1633,7 @@ function composeSqliteDevelopmentConfigAclRoutes(
 function composeApplicationEventCenter(
   deps: SqliteAppDeps,
   developmentDeliveryProvider: DevelopmentDeliveryProvider,
+  automation: EventCenterAutomationCapability,
   unstarted?: UnstartedApplicationScope,
 ): EventCenterModule {
   const approvalGateway = composeApprovalGatewayRunnerFor(deps.db)
@@ -1636,10 +1641,6 @@ function composeApplicationEventCenter(
   const codeHostDeliveryDispatcher =
     deps.webhookDispatcher !== undefined &&
     supportsEventCenterCodeHostDelivery(deps.webhookDispatcher)
-      ? deps.webhookDispatcher
-      : null
-  const eventWorkStarter =
-    deps.webhookDispatcher !== undefined && supportsEventCenterWorkStart(deps.webhookDispatcher)
       ? deps.webhookDispatcher
       : null
   const initialization = composeEventCenter({
@@ -1658,13 +1659,7 @@ function composeApplicationEventCenter(
       approval: composeDevelopmentApprovalEventObserver({ gateway: approvalGateway }),
     }),
     routingSubscriptions: createCodeHostWebhookRoutingDirectory(deps.db, missionContinuation),
-    ...(eventWorkStarter === null
-      ? {}
-      : {
-          automationWorkStart: {
-            launch: (input) => eventWorkStarter.dispatchEventTarget(input),
-          },
-        }),
+    automation,
     deliveryConsumers:
       codeHostDeliveryDispatcher === null
         ? []
@@ -2106,6 +2101,31 @@ export function composeSqliteApplicationDeps(
       questionDispatches: createQuestionDispatchCommand(deps.db),
       clarifyDecisions: createClarifyDecisionCommand(deps.db, memoryOperations.distillCommands),
     })
+  const eventAutomationWorkIntents = createEventAutomationWorkIntentStore(deps.db)
+  const eventAutomationContexts = createEventAutomationDelegatedContextBinding(
+    identityAccess.delegatedRequests,
+  )
+  const eventAutomation: EventCenterAutomationCapability = Object.freeze({
+    kind: 'automation',
+    workIntents: eventAutomationWorkIntents,
+    delegatedContexts: eventAutomationContexts.factory,
+    taskWorkStart: createTaskAutomationWorkStartProvider({
+      db: deps.db,
+      origins: eventAutomationWorkIntents,
+      contexts: eventAutomationContexts,
+      resources: identityAccess.taskExecutionResources,
+      async launch(request) {
+        const task = await apiComposition.taskExecutionLaunches.launch(request)
+        return { taskId: task.id }
+      },
+    }),
+    employeeWorkStart: createEmployeeAutomationWorkStartProvider({
+      db: deps.db,
+      origins: eventAutomationWorkIntents,
+      contexts: eventAutomationContexts,
+      launchWork: (request) => apiComposition.digitalEmployeeWorkStart.launch(request),
+    }),
+  })
   const runtimeDeps: RuntimeComposedAppDeps = {
     ...(deps.digitalEmployeeEventCenter === undefined
       ? {
@@ -2113,6 +2133,7 @@ export function composeSqliteApplicationDeps(
           digitalEmployeeEventCenter: composeApplicationEventCenter(
             deps,
             repositoryBootstrap.developmentDeliveryProvider,
+            eventAutomation,
             unstarted,
           ),
         }
@@ -2356,6 +2377,7 @@ export function composeSqliteApplicationDeps(
     agentResourceIntegrity,
     intentApply,
     taskExecutionPersistence,
+    eventAutomation,
     unstarted,
   )
   const application = freezeComposedAppDeps({
@@ -2551,6 +2573,7 @@ export function composeDigitalEmployeeRoutePersistence(input: {
 interface SqliteApiRouteComposition {
   readonly apiRoutes: AppApiRouteMounts
   readonly digitalEmployeeWorkStart: DigitalEmployeeWorkStartPort
+  readonly taskExecutionLaunches: TaskExecutionLaunchParticipant
 }
 
 /** SQLite compatibility composition used by direct `createApp({ db })` tests. */
@@ -2589,6 +2612,7 @@ function composeSqliteApiRouteMounts(
   agentResourceIntegrity: AgentResourceIntegrityComposition,
   intentApply: IntentApplyOperations,
   taskExecutionPersistence: ReturnType<typeof createTaskExecutionPersistence>,
+  eventAutomation: EventCenterAutomationCapability,
   unstarted?: UnstartedApplicationScope,
 ): SqliteApiRouteComposition {
   const appHome = deps.appHome ?? Paths.root
@@ -2752,7 +2776,12 @@ function composeSqliteApiRouteMounts(
   const executionContracts = deps.executionContracts
   const eventCenter =
     deps.digitalEmployeeEventCenter ??
-    composeApplicationEventCenter(deps, deps.developmentDeliveryProvider, unstarted)
+    composeApplicationEventCenter(
+      deps,
+      deps.developmentDeliveryProvider,
+      eventAutomation,
+      unstarted,
+    )
   const digitalEmployeeAgentTemplates =
     deps.digitalEmployeeAgentTemplates ??
     composeDigitalEmployeeAgentTemplateCatalogFor(
@@ -3573,7 +3602,11 @@ function composeSqliteApiRouteMounts(
       ),
     docs: (app) => mountDocsRoutes(app, deps),
   } satisfies AppApiRouteMounts)
-  return Object.freeze({ apiRoutes, digitalEmployeeWorkStart })
+  return Object.freeze({
+    apiRoutes,
+    digitalEmployeeWorkStart,
+    taskExecutionLaunches: sqliteTaskExecutionLaunches,
+  })
 }
 
 /**

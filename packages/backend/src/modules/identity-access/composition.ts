@@ -276,6 +276,8 @@ export function composeIdentityAccess(db: ProviderNeutralDatabase): IdentityAcce
   return buildIdentityAccessRuntime({}, neutralPersistence(db), true)
 }
 
+export { createEventAutomationDelegatedContextBinding } from './application/adapters/event-automation-adapter'
+
 function neutralPersistence(db: ProviderNeutralDatabase): IdentityAccessPersistence {
   // 围栏缓存与写事务绑在同一份：提交后刷新的就是围栏读的那份。
   const fenceCache = new AuthorityFenceCache()

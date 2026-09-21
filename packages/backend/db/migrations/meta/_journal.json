@@ -1597,6 +1597,13 @@
       "when": 1790265612067,
       "tag": "0228_rfc366_distill_source_kinds",
       "breakpoints": true
+    },
+    {
+      "idx": 228,
+      "version": "6",
+      "when": 1790352012067,
+      "tag": "0229_rfc365_event_automation_work_intents",
+      "breakpoints": true
     }
   ]
 }

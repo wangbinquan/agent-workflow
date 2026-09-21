@@ -294,6 +294,9 @@ describe('RFC-347 exact production source locks', () => {
   test('delegated arms and compatibility projection debt match the exact owner ledger', () => {
     expect(callPaths('.forSchedule(')).toEqual(['src/services/scheduledTasks.ts'])
     expect(callPaths('.forWebhook(')).toEqual(['src/services/webhook/webhookDispatch.ts'])
+    expect(callPaths('.forEventAutomation(')).toEqual([
+      'src/modules/identity-access/application/adapters/event-automation-adapter.ts',
+    ])
     expect(callPaths('.forCall(')).toEqual([
       'src/modules/task-execution/composition/nodeMechanics.ts',
     ])

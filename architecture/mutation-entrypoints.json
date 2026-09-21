@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1718,
+    "entries": 1724,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -8117,6 +8117,30 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/digital-employee/application/adapters/event-automation-adapter.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/digital-employee/application/adapters/event-automation-adapter.ts#createEmployeeAutomationWorkStartProvider",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/application/adapters/event-automation-adapter.ts#createEmployeeAutomationWorkStartProvider",
+      "symbol": "createEmployeeAutomationWorkStartProvider",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": false,
         "fenceOrOcc": true,
         "transaction": false
@@ -8426,6 +8450,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#createDigitalEmployeeAuthoringReads",
       "symbol": "createDigitalEmployeeAuthoringReads",
+      "targetContext": "digital-employee",
+      "targetLayer": "composition"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/digital-employee/composition.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/digital-employee/composition.ts#createEmployeeAutomationWorkStartProvider",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#createEmployeeAutomationWorkStartProvider",
+      "symbol": "createEmployeeAutomationWorkStartProvider",
       "targetContext": "digital-employee",
       "targetLayer": "composition"
     },
@@ -8916,7 +8964,7 @@
         "authority": "none-observed",
         "authorization": true,
         "event": true,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/modules/event-center/application/eventResponseRules.ts",
@@ -8925,7 +8973,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/application/eventResponseRules.ts#createEventResponseDeliveryConsumer",
@@ -9064,6 +9111,27 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts#createCustomEventSourceStore",
       "symbol": "createCustomEventSourceStore",
+      "targetContext": "event-center",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts#createEventAutomationWorkIntentStore",
+      "missingControls": [
+        "audit",
+        "authority"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts#createEventAutomationWorkIntentStore",
+      "symbol": "createEventAutomationWorkIntentStore",
       "targetContext": "event-center",
       "targetLayer": "infrastructure"
     },
@@ -9226,6 +9294,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/application/accessAdmission.ts#admitUserSearchQuery",
       "symbol": "admitUserSearchQuery",
+      "targetContext": "identity-access",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "request",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/application/adapters/event-automation-adapter.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/application/adapters/event-automation-adapter.ts#createEventAutomationDelegatedContextBinding",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/application/adapters/event-automation-adapter.ts#createEventAutomationDelegatedContextBinding",
+      "symbol": "createEventAutomationDelegatedContextBinding",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -24034,6 +24125,30 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/adapters/event-automation-adapter.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/adapters/event-automation-adapter.ts#createTaskAutomationWorkStartProvider",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/event-automation-adapter.ts#createTaskAutomationWorkStartProvider",
+      "symbol": "createTaskAutomationWorkStartProvider",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -25825,6 +25940,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createTaskExecutionPersistence",
       "symbol": "createTaskExecutionPersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts#createTaskAutomationWorkStartProvider",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts#createTaskAutomationWorkStartProvider",
+      "symbol": "createTaskAutomationWorkStartProvider",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -41061,7 +41200,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6bba1a69f865a5e58c1d3177ed1a15c91e2c25818df3d29e371a0f3c25e33f09",
+  "sourceDigest": "sha256:c1775a4c5f8388f7d9d36ba31adc59c1841506ff7e1034b249065b67a8e255f4",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

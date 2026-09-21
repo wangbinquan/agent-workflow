@@ -305,6 +305,32 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
       join(BACKEND_SRC, 'services', 'webhook', 'dispatcherTypes.ts'),
       'utf8',
     )
+    const requiredPorts = readFileSync(
+      join(BACKEND_SRC, 'modules', 'event-center', 'composition', 'required-ports.ts'),
+      'utf8',
+    )
+    const taskProvider = readFileSync(
+      join(
+        BACKEND_SRC,
+        'modules',
+        'task-execution',
+        'application',
+        'adapters',
+        'event-automation-adapter.ts',
+      ),
+      'utf8',
+    )
+    const employeeProvider = readFileSync(
+      join(
+        BACKEND_SRC,
+        'modules',
+        'digital-employee',
+        'application',
+        'adapters',
+        'event-automation-adapter.ts',
+      ),
+      'utf8',
+    )
 
     for (const route of [ingress, replay]) {
       expect(route).toContain('commands.observe(')
@@ -314,12 +340,11 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
     expect(dispatcherTypes).toContain(
       'export interface EventCenterCodeHostDeliveryDispatcher {\n  dispatchSubscription',
     )
-    expect(dispatcherTypes).toContain(
-      'export interface EventCenterAutomationWorkStarter {\n  dispatchEventTarget',
-    )
-    expect(dispatcherTypes).not.toMatch(
-      /interface EventCenter\w+ \{[^}]*dispatchSubscription[^}]*dispatchEventTarget/,
-    )
+    expect(dispatcherTypes).not.toContain('dispatchEventTarget')
+    expect(requiredPorts).toContain('export interface TaskAutomationWorkStartPort')
+    expect(requiredPorts).toContain('export interface EmployeeAutomationWorkStartPort')
+    expect(taskProvider).toContain('createTaskAutomationWorkStartProvider')
+    expect(employeeProvider).toContain('createEmployeeAutomationWorkStartProvider')
   })
 })
 

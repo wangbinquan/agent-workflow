@@ -105,6 +105,7 @@ export const RFC349_SOURCE_TABLES = [
   'employee_tool_registrations',
   'employee_type_packages',
   'employee_work_scope_revisions',
+  'event_automation_work_intents',
   'event_deliveries',
   'event_observer_runs',
   'event_records',

@@ -68,6 +68,8 @@ import {
 } from '@/modules/task-execution/composition/providerRuntime'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
+import { createTaskAutomationWorkStartProvider } from '@/modules/task-execution/composition/taskRouteLaunch'
+import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import {
   composeSqliteMemoryOperations,
   composeSqliteMemoryInjectionQueries,
@@ -183,11 +185,16 @@ import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/reso
 import { composeSqliteDynamicWorkflowValidationContext } from '@/modules/resource-catalog/composition/workflowOperations'
 import { composeTaskExecutionResourceBinding } from '@/modules/resource-catalog/composition/taskExecution'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
-import { composeEventCenter, runEventCenterCycle } from '@/modules/event-center/composition'
+import {
+  composeEventCenter,
+  createEventAutomationWorkIntentStore,
+  runEventCenterCycle,
+} from '@/modules/event-center/composition'
 import {
   composeDigitalEmployeeWriterCutoverFor,
   composeDigitalEmployeeAgentTemplateCatalogParticipant,
   composeDigitalEmployee,
+  createEmployeeAutomationWorkStartProvider,
   createEmployeeInputArtifactStore,
   createReactionExecutionAdapter,
   readPersistedDigitalEmployeeTypePackageDescriptorJsons,
@@ -2533,17 +2540,26 @@ async function composeSqliteProviderSession(
     launch: (request) => appComposition.digitalEmployeeWorkStart.launch(request),
   })
   const webhookTaskExecutions = taskExecutionProvider.trigger.taskExecutions
+  const eventAutomationWorkIntents = createEventAutomationWorkIntentStore(db)
+  const eventAutomationContexts = createEventAutomationDelegatedContextBinding(
+    identityAccess.delegatedRequests,
+  )
+  const taskAutomationWorkStart = createTaskAutomationWorkStartProvider({
+    db,
+    origins: eventAutomationWorkIntents,
+    contexts: eventAutomationContexts,
+    resources: taskExecutionResources,
+    launch: (request) => webhookTaskExecutions.launch(request),
+  })
+  const employeeAutomationWorkStart = createEmployeeAutomationWorkStartProvider({
+    db,
+    origins: eventAutomationWorkIntents,
+    contexts: eventAutomationContexts,
+    launchWork: (request) => digitalEmployeeWorkStart.launch(request),
+  })
   const webhookDispatcher = createWebhookDispatcher({
     ...composeWebhookDispatchCore(db, secretBox, scheduledTaskRuntime.operations),
     identityAccess: integrationIdentityAccess,
-    resolveEventTargetAuthority: async (userId) => {
-      const admitted = await identityAccess.localOperator.forLegacyHttpUser(userId)
-      if (admitted === null) return null
-      return Object.freeze({
-        authority: admitted.commandContext().authority,
-        actor: admitted.actor,
-      })
-    },
     getDefaultRuntime: async () => loadConfig(Paths.config).defaultRuntime,
     terminalControl: webhookTerminalControl,
     ...createSqliteWebhookExecutionRuntime({
@@ -2725,8 +2741,12 @@ async function composeSqliteProviderSession(
       }),
     }),
     routingSubscriptions: createCodeHostWebhookRoutingDirectory(db, missionEventContinuation),
-    automationWorkStart: {
-      launch: (input) => webhookDispatcher.dispatchEventTarget(input),
+    automation: {
+      kind: 'automation',
+      workIntents: eventAutomationWorkIntents,
+      delegatedContexts: eventAutomationContexts.factory,
+      taskWorkStart: taskAutomationWorkStart,
+      employeeWorkStart: employeeAutomationWorkStart,
     },
     deliveryConsumers: [
       createCodeHostWebhookDeliveryConsumer(db, webhookDispatcher, missionEventContinuation),

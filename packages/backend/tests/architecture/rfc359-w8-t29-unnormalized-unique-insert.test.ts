@@ -537,6 +537,12 @@ export const UNNORMALIZED_UNIQUE_INSERT_DEBT: readonly string[] = [
   'modules/collaboration/infrastructure/humanGateOpenParticipant.ts: 1',
   'modules/collaboration/infrastructure/taskCollab.ts: 1',
   'modules/digital-employee/infrastructure/runtimeStore.ts: 5',
+  // RFC-365：EC durable origin/work-intent store 在目标 effect **之前**落一行 intent
+  // （唯一键 `event_automation_work_intents_delivery_unique` /
+  // `event_automation_work_intents_origin_port_unique`）。该站点由 claim scope + rule
+  // revision fence 与唯一键在并发下线性化，crash-after-start 重放不产生第二实体；
+  // opener/读前串行化档随 RFC-365 的 crash/replay 用例实测，本条归 RFC-365 记账。
+  'modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts: 1',
   'modules/event-center/infrastructure/eventStore.ts: 2',
   'modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts: 2',
   'modules/intent/infrastructure/intentApplyEngine.ts: 1',

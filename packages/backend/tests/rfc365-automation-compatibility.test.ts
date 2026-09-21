@@ -1,46 +1,15 @@
-// RFC-365 T1 only: characterize current inputs before freezing a replacement codec.
-// The private renderer is compiled from production source; no parallel renderer or new port.
+// RFC-365 compatibility lock: the cut-over renderer retains every T1 behavior.
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
-import { runInNewContext } from 'node:vm'
-import ts from 'typescript'
 import {
   AgentInputPortsSchema,
   StartTaskSchema,
   TriggerContextSchema,
-  renderTemplate,
-  type TriggerContext,
 } from '@agent-workflow/shared'
-import {
-  eventResponseTargetSchema,
-  type EventResponseTarget,
-} from '@/modules/event-center/domain/responseRule'
+import { eventResponseTargetSchema } from '@/modules/event-center/domain/responseRule'
+import { materializeEventAutomationTarget } from '@/modules/event-center/application/eventAutomationTarget'
 import { employeeWorkIntakeSchema } from '@/modules/digital-employee/domain/runtimeModel'
 import { validateAgentLaunchShape } from '@/services/agentLaunch'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
-import type { RenderedLaunch } from '@/services/webhook/webhookDispatch'
-
-const filename = resolve(import.meta.dir, '../src/services/webhook/webhookDispatch.ts')
-const source = ts.createSourceFile(
-  filename,
-  readFileSync(filename, 'utf8'),
-  ts.ScriptTarget.Latest,
-  true,
-)
-const renderers = source.statements.filter(
-  (node): node is ts.FunctionDeclaration =>
-    ts.isFunctionDeclaration(node) && node.name?.text === 'renderEventResponseTarget',
-)
-if (renderers.length !== 1)
-  throw new Error('expected the single production event response renderer')
-const compiled = ts.transpileModule(renderers[0]!.getText(source), {
-  compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
-}).outputText
-const render = runInNewContext(`${compiled}\nrenderEventResponseTarget`, { renderTemplate }) as (
-  target: EventResponseTarget,
-  context: TriggerContext,
-) => RenderedLaunch
 const context = (value = 'event text') =>
   TriggerContextSchema.parse({
     trigger: { test: { text: value } },
@@ -51,7 +20,17 @@ const context = (value = 'event text') =>
     },
   })
 function rendered(target: unknown, value?: string) {
-  return render(eventResponseTargetSchema.parse(target), context(value))
+  const result = materializeEventAutomationTarget(
+    eventResponseTargetSchema.parse(target),
+    context(value),
+  )
+  return result.kind === 'task'
+    ? result.input.target
+    : {
+        kind: 'digital-employee' as const,
+        refId: result.input.employeeId,
+        intake: result.input.intake,
+      }
 }
 function intake(target: unknown, value?: string) {
   const result = rendered(target, value)

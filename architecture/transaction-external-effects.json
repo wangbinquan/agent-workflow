@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 27,
-    "transactionCallbacks": 252
+    "transactionCallbacks": 254
   },
   "entries": [
     {
@@ -977,6 +977,30 @@
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventSourceStore.ts#createCustomEventSourceStore",
       "status": "co-located-risk",
       "symbol": "createCustomEventSourceStore",
+      "targetContext": "event-center",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts#transaction:245",
+      "line": 245,
+      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts#createEventAutomationWorkIntentStore",
+      "status": "clear",
+      "symbol": "createEventAutomationWorkIntentStore",
+      "targetContext": "event-center",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts#transaction:54",
+      "line": 54,
+      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts#createEventAutomationWorkIntentStore",
+      "status": "clear",
+      "symbol": "createEventAutomationWorkIntentStore",
       "targetContext": "event-center",
       "transactionCallee": "transaction"
     },
@@ -3088,7 +3112,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6bba1a69f865a5e58c1d3177ed1a15c91e2c25818df3d29e371a0f3c25e33f09",
+  "sourceDigest": "sha256:c1775a4c5f8388f7d9d36ba31adc59c1841506ff7e1034b249065b67a8e255f4",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

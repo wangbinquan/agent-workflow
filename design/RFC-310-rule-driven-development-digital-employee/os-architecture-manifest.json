@@ -42,7 +42,7 @@
       ]
     },
     "event-center": {
-      "owner": "event and source catalog, response rule, subscription, observer activation, observation cursor, event record and delivery",
+      "owner": "event and source catalog, response rule, automation work intent, subscription, observer activation, observation cursor, event record and delivery",
       "topLevelEntries": [
         "application",
         "composition",
@@ -58,18 +58,19 @@
         "modules/digital-employee/application/ports/runtimeStore.ts -> public/types",
         "modules/digital-employee/application/runtimeService.ts -> public/participants",
         "modules/digital-employee/application/runtimeService.ts -> public/types",
+        "modules/digital-employee/application/adapters/event-automation-adapter.ts -> composition/required-ports",
         "modules/digital-employee/composition.ts -> public/participants",
         "modules/digital-employee/public/events.ts -> public/types",
+        "modules/identity-access/application/adapters/event-automation-adapter.ts -> composition/required-ports",
         "modules/integration/application/adapters/event-center-adapter.ts -> composition/required-ports",
         "modules/integration/public/events.ts -> public/types",
+        "modules/task-execution/application/adapters/event-automation-adapter.ts -> composition/required-ports",
         "modules/task-execution/application/taskLifecycleConsumers.ts -> public/participants",
         "modules/task-execution/public/events.ts -> public/types",
         "routes/eventCenter.ts -> composition",
         "routes/webhookDeliveries.ts -> composition",
         "routes/webhooks.ts -> composition",
-        "server.ts -> composition",
-        "services/webhook/dispatcherTypes.ts -> public/types",
-        "services/webhook/webhookDispatch.ts -> public/types"
+        "server.ts -> composition"
       ]
     },
     "execution-contract": {

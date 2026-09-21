@@ -130,6 +130,7 @@ async function seedFixture(providerHarness: ProviderHarness) {
   const eventCenter = await composeEventCenter({
     db,
     typePackageDescriptorJsons: [codeHostEventCatalogJson],
+    automation: { kind: 'observation-only' },
     routingSubscriptions: createCodeHostWebhookRoutingDirectory(db),
     deliveryConsumers: [createCodeHostWebhookDeliveryConsumer(db, dispatcher)],
   })

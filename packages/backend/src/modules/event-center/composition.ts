@@ -8,11 +8,13 @@ import {
   type ResponseRuleWritePrincipal,
 } from './application/eventResponseRules'
 import type {
-  EventAutomationWorkStartPort,
+  EmployeeAutomationWorkStartPort,
+  EventAutomationDelegatedContextFactory,
   EventDeliveryConsumerPort,
   EventDeliveryRetryLimitsPort,
   EventObserverProgramPort,
   EventRoutingSubscriptionDirectoryPort,
+  TaskAutomationWorkStartPort,
 } from './composition/required-ports'
 import { createCustomEventObserverProgram } from './infrastructure/customEventObserverProgram'
 import { createCustomEventSourceStore } from './infrastructure/customEventSourceStore'
@@ -21,6 +23,7 @@ import { createEventResponseRuleStore } from './infrastructure/eventResponseRule
 import type { CustomEventSourceStorePort } from './application/ports/customEventSourceStore'
 import type { EventStorePort } from './application/ports/eventStore'
 import type { EventResponseRuleStorePort } from './application/ports/responseRuleStore'
+import type { EventAutomationWorkIntentStorePort } from './application/ports/eventAutomationWorkIntentStore'
 import type { EventObservationCommandPort } from './public/commands'
 import type { EventCenterParticipant, EventObserverControlParticipant } from './public/participants'
 import type { EventCenterCatalogQueryPort, EventCenterOperationsQueryPort } from './public/queries'
@@ -36,6 +39,7 @@ import type {
 } from '@/platform/events/committed/types'
 
 export { runEventCenterCycle, startEventCenterWorker } from './application/eventCenterWorker'
+export { createEventAutomationWorkIntentStore } from './infrastructure/eventAutomationWorkIntentStore'
 
 export interface EventCenterModule {
   readonly commands: EventObservationCommandPort
@@ -224,6 +228,16 @@ export const DEFAULT_TARGET_LAUNCH_PERMISSIONS: TargetLaunchPermissions = {
   'digital-employee': 'development-missions:launch',
 }
 
+export type EventCenterAutomationCapability =
+  | Readonly<{ kind: 'observation-only' }>
+  | Readonly<{
+      kind: 'automation'
+      workIntents: EventAutomationWorkIntentStorePort
+      delegatedContexts: EventAutomationDelegatedContextFactory
+      taskWorkStart: TaskAutomationWorkStartPort
+      employeeWorkStart: EmployeeAutomationWorkStartPort
+    }>
+
 export interface ComposeEventCenterOptions {
   readonly db: ProviderNeutralDatabase
   readonly typePackageDescriptorJsons: readonly string[]
@@ -236,7 +250,7 @@ export interface ComposeEventCenterOptions {
   readonly routingSubscriptions?: EventRoutingSubscriptionDirectoryPort
   readonly deliveryConsumers?: readonly EventDeliveryConsumerPort[]
   readonly deliveryRetryLimits?: EventDeliveryRetryLimitsPort
-  readonly automationWorkStart?: EventAutomationWorkStartPort
+  readonly automation: EventCenterAutomationCapability
   readonly now?: () => number
   readonly id?: () => string
   readonly workerId?: string
@@ -307,12 +321,14 @@ export async function composeEventCenterWithPorts(
       },
     },
     deliveryConsumers: [
-      ...(options.automationWorkStart === undefined
+      ...(options.automation.kind === 'observation-only'
         ? []
         : [
             createEventResponseDeliveryConsumer({
-              rules: responseRuleStore,
-              workStart: options.automationWorkStart,
+              workIntents: options.automation.workIntents,
+              delegatedContexts: options.automation.delegatedContexts,
+              taskWorkStart: options.automation.taskWorkStart,
+              employeeWorkStart: options.automation.employeeWorkStart,
               ...(options.now === undefined ? {} : { now: options.now }),
             }),
           ]),

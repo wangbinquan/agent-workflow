@@ -32,6 +32,7 @@ import { createDigitalEmployeeAuthoringPersistence } from './infrastructure/auth
 import type { DigitalEmployeeAuthoringPersistence } from './application/ports/authoringStore'
 import { withTypePackageDraftOverlay } from './application/typePackageDraftOverlay'
 import { createRuntimePersistence } from './infrastructure/runtimeStore'
+import { createEmployeeAutomationWorkStartProvider as bindEmployeeAutomationWorkStartProvider } from './application/adapters/event-automation-adapter'
 import type { RuntimeCasePersistence } from './application/ports/runtimeStore'
 import {
   createDigitalEmployeeWriterCutoverOperations,
@@ -1112,3 +1113,21 @@ export function composeDigitalEmployee(
 }
 
 export { createDigitalEmployeeResourceCatalogAclProviders } from './composition/resourceCatalogAcl'
+type EmployeeAutomationWorkStartProviderInput = Parameters<
+  typeof bindEmployeeAutomationWorkStartProvider
+>[0]
+
+export function createEmployeeAutomationWorkStartProvider(
+  input: Omit<EmployeeAutomationWorkStartProviderInput, 'receiptFor'> & {
+    readonly db: ProviderNeutralDatabase
+  },
+): ReturnType<typeof bindEmployeeAutomationWorkStartProvider> {
+  const runtime = createRuntimePersistence(input.db)
+  return bindEmployeeAutomationWorkStartProvider({
+    origins: input.origins,
+    contexts: input.contexts,
+    launchWork: input.launchWork,
+    receiptFor: async (eventDeliveryId) =>
+      (await runtime.findCaseByEventDelivery(eventDeliveryId))?.id ?? null,
+  })
+}

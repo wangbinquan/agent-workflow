@@ -5811,19 +5811,15 @@
       "boundaryEdgeIds": [
         "import:094f511d0334eae5fa8b",
         "import:49a10497653be80b4451",
-        "import:83afdb2b680df343a6a8",
-        "import:ce1e699302b8e95af80a",
-        "import:f936073e85efbf5d86b6"
+        "import:83afdb2b680df343a6a8"
       ],
       "exportedSymbols": [
-        "EventCenterAutomationWorkStarter",
         "EventCenterCodeHostDeliveryDispatcher",
         "LegacyWebhookDispatcher",
         "WebhookDispatcher",
         "WebhookEndpointRow",
         "WebhookSubscriptionDispatchInput",
-        "supportsEventCenterCodeHostDelivery",
-        "supportsEventCenterWorkStart"
+        "supportsEventCenterCodeHostDelivery"
       ],
       "file": "packages/backend/src/services/webhook/dispatcherTypes.ts",
       "id": "facade:packages/backend/src/services/webhook/dispatcherTypes.ts",
@@ -5954,7 +5950,6 @@
         "import:0611979cc179875aaf5f",
         "import:139778ff64f70937014b",
         "import:1b2f1274eba64c06bc17",
-        "import:3350de6092ebd2db6604",
         "import:3e00a2f39ee508aace8a",
         "import:588f72ff26ec299ca22c",
         "import:6078fcdf219cb86f63fa",
@@ -6218,5 +6213,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6bba1a69f865a5e58c1d3177ed1a15c91e2c25818df3d29e371a0f3c25e33f09"
+  "sourceDigest": "sha256:c1775a4c5f8388f7d9d36ba31adc59c1841506ff7e1034b249065b67a8e255f4"
 }

@@ -42,6 +42,7 @@ describeEachProvider('RFC-310 task lifecycle publication through RFC-341', (prov
     const eventCenter = await composeEventCenter({
       db,
       typePackageDescriptorJsons: [taskLifecycleEventCatalogJson],
+      automation: { kind: 'observation-only' },
       now: () => now,
       id: () => `task-event-resource-${++ordinal}`,
     })

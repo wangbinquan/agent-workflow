@@ -6959,6 +6959,46 @@ export const eventDeliveries = sqliteTable(
   }),
 )
 
+/** EC-owned durable origin and target-specific work intent for one claimed delivery. */
+export const eventAutomationWorkIntents = sqliteTable(
+  'event_automation_work_intents',
+  {
+    originRef: text('origin_ref').primaryKey(),
+    deliveryId: text('delivery_id')
+      .notNull()
+      .references(() => eventDeliveries.id),
+    subscriptionId: text('subscription_id').notNull(),
+    ruleId: text('rule_id').notNull(),
+    ruleRevision: integer('rule_revision').notNull(),
+    ruleDigest: text('rule_digest').notNull(),
+    ownerUserId: text('owner_user_id').notNull(),
+    portId: text('port_id', {
+      enum: ['task-automation-work-start.v1', 'employee-automation-work-start.v1'],
+    }).notNull(),
+    targetPayloadJson: text('target_payload_json').notNull(),
+    targetFormatVersion: integer('target_format_version').notNull().default(1),
+    targetDigest: text('target_digest').notNull(),
+    resolvedTargetRef: text('resolved_target_ref').notNull(),
+    receiptRef: text('receipt_ref'),
+    status: text('status', { enum: ['prepared', 'launched', 'failed', 'obsolete'] })
+      .notNull()
+      .default('prepared'),
+    claimOwner: text('claim_owner').notNull(),
+    claimAttempt: integer('claim_attempt').notNull(),
+    lastError: text('last_error'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    deliveryUq: uniqueIndex('event_automation_work_intents_delivery_unique').on(t.deliveryId),
+    originPortUq: uniqueIndex('event_automation_work_intents_origin_port_unique').on(
+      t.originRef,
+      t.portId,
+    ),
+    statusIdx: index('idx_event_automation_work_intents_status').on(t.status, t.updatedAt),
+  }),
+)
+
 export const employeeOsWriterState = sqliteTable('employee_os_writer_state', {
   id: text('id').primaryKey(),
   activeGeneration: integer('active_generation').notNull(),

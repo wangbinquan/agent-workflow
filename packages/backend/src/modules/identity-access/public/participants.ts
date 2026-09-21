@@ -178,6 +178,16 @@ export interface DelegatedRequestAuthorityFactory {
     readonly deliveryId: string
     readonly fireId: string
   }): Promise<DelegatedAuthorityAdmission | null>
+  forEventAutomation(input: {
+    readonly ownerUserId: string
+    readonly origin: string
+    readonly portId: 'task-automation-work-start.v1' | 'employee-automation-work-start.v1'
+  }): Promise<
+    | (Omit<DelegatedAuthorityAdmission, 'context'> & {
+        readonly context: IdempotentCommandContext
+      })
+    | null
+  >
   forCall(input: {
     readonly kind: 'call-workflow' | 'call-workgroup'
     readonly ownerUserId: string

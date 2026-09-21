@@ -388,6 +388,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
           developmentEmployeeTypePackage.descriptorJson,
           digitalEmployeeLifecycleEventCatalogJson,
         ],
+        automation: { kind: 'observation-only' },
         now: () => now,
         id,
       })
@@ -703,6 +704,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
           developmentEmployeeTypePackage.descriptorJson,
           digitalEmployeeLifecycleEventCatalogJson,
         ],
+        automation: { kind: 'observation-only' },
         now: () => now,
         id: nextId,
       })

@@ -448,13 +448,13 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   // RFC-359（2026-09-12，第五次）：语句条数 **159 → 160**，摘要随之变化。加的是**一条**语句：
   //     const webhookDispatcher = input.webhookDispatcher ?? composedWebhookDispatcher
   // 原来那个 `createWebhookDispatcher(...)` 的结果改名成 `composedWebhookDispatcher`，
-  // 新的 `webhookDispatcher` 绑定挑「覆盖件还是自建的那个」。同轮还把事件中心两处改成
-  // **能力探测**接线（`supportsEventCenterWorkStart` / `supportsEventCenterCodeHostDelivery`），
-  // 与 `server.ts` 对同一件事的做法逐字同构——那两处是既有语句内部的形态变化，不增减条数。
+  // 新的 `webhookDispatcher` 绑定挑「覆盖件还是自建的那个」。同轮当时还把事件中心两处改成
+  // 能力探测接线；RFC-365 已删除 work-start 探测与 union target seam，只保留 code-host delivery
+  // 的独立能力。这里记录的是 RFC-359 指纹演进历史，不是当前装配合同。
   //
   // 为什么要这样而不是像另外两个覆盖口那样纯透传：两个组合根对 dispatcher 的**所有权**
-  // 本来就不同（SQLite 当可选依赖收、PG 自己构造），直接 `??` 会让只有部分能力的测试桩
-  // 在 `automationWorkStart` 处运行时炸。三个选项与取舍见 plan §5bi。
+  // 本来就不同（SQLite 当可选依赖收、PG 自己构造），当时直接 `??` 会让只有部分能力的测试桩
+  // 在旧 work-start 路径运行时炸。三个历史选项与取舍见 plan §5bi。
   //
   // 生产逐字不变：不传覆盖件 ⇒ 取自建的那个 ⇒ 它带全部能力 ⇒ 两个探测门都通过。
   // 已变异验证承重：抽掉 `?? ` 那一侧，`rfc259-github-ingress` 的 [postgresql] 三条当场转红。
@@ -530,7 +530,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     expect(phaseBlocks).toHaveLength(8)
     const restored = oldPhaseBody(pg, 'composePostgresqlApplication')
     // RFC-360 adds one management application shared by the two runtime route families.
-    expect(restored.statements).toHaveLength(161)
+    // RFC-365 adds the Event target provider wiring, the IA event-only delegated-context
+    // factory and the durable work-intent store to the daemon phase: 161 -> 165.
+    expect(restored.statements).toHaveLength(165)
     expect(namedCalls(body, pg, 'composeRuntimeManagement')).toHaveLength(1)
     // RFC-359 AC-10：摘要随 `runFrameBackfillOnBoot({ provider: 'postgresql', db })` →
     // `({ db })` 更新。`FrameBackfillDatabase` 的 provider 标签是摆设（联合两个成员结构逐字
@@ -608,7 +610,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
       // Exact diagnostics bindings are guarded in rfc364-diagnostics-bindings.test.ts.
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
-      'ae0365e491407852ebf48f3687fc85126c2e6b81842e94f559525e89f1363975',
+      // RFC-365: the PostgreSQL root explicitly wires the two exact target providers, the
+      // event-only delegated-context factory and the durable work-intent store.
+      '7582a7611a08b7361078f13c975978d15a07397049f6b824ea761abef0c27153',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -671,7 +675,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
       // Exact diagnostics bindings are guarded in rfc364-diagnostics-bindings.test.ts.
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
-      '16a07147e2f02d084a1e3de0fdb41a59db7e445778c31065a0ed81d916809b56',
+      // RFC-365: the SQLite root explicitly wires the two target providers, the event-only
+      // delegated-context factory and the durable work-intent store.
+      '10594d5141bf9d43426d5b00056ca2296bedfdea4b7db71749bca8eb66a21b02',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -799,7 +805,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // **差量已验证恰好只有这一格**：把该行从 `server.ts` 摘掉后整份文件重算，本文件 10/10
       // 全绿回到旧基线 9aace7e9bfc56b8b2067d7216401459a4d9d71a51f565c37c80e883e8027ee92，
       // 说明没有别的装配变化夹带其中。
-      '409321768aafb9f9242ccd0253049cd4d1f90f8afc71c55e91bd276516b76abb',
+      // RFC-365（2026-09-21）：摘要随 EC/TE/DE target provider 装配再更新——这一层交给
+      // `composeEventCenter` 的依赖里多了两个 exact target provider、IA event-only
+      // delegated-context 工厂与 durable work-intent store；旧 union target seam 与 root
+      // callback 已删除。**装配图确实变了，是有意的**，判据在
+      // `tests/rfc365-event-automation-target-providers.test.ts`。
+      '05eb79fb2b216aabd40b9f09fb6792208a2bb97a8bf3db0248ddc7294e9ef429',
     )
     expect(
       namedCalls(
@@ -808,8 +819,11 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
         'composeRuntimeManagement',
       ),
     ).toHaveLength(1)
+    // RFC-365: the Event Center body now wires the two exact target providers, the IA
+    // event-only delegated-context factory and the durable intent store, and drops the
+    // source-neutral union target switch / root callback.
     expect(digest(oldEventCenterBody(), server)).toBe(
-      '237773ee140c430dceaea8a12a04437482b305f846c45065fe31043fce226148',
+      'bdb2113b0770368ea72bbf4c42815f9602753a61a90be2cfcda46bdf2d149187',
     )
     const eventBody = functionBody(server, 'composeApplicationEventCenter')
     expect(namedCalls(eventBody, server, 'composeEventCenter')).toHaveLength(1)

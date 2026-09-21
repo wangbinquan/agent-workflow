@@ -94,6 +94,7 @@ async function harness(opts?: {
     (await composeEventCenter({
       db,
       typePackageDescriptorJsons: [codeHostEventCatalogJson],
+      automation: { kind: 'observation-only' },
       routingSubscriptions: createCodeHostWebhookRoutingDirectory(db),
       deliveryConsumers: opts?.omitDispatcher
         ? []

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 906,
+    "consumers": 904,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
-    "methods": 1074,
+    "methods": 1075,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20938,
-    "symbols": 1016
+    "recursiveFields": 20929,
+    "symbols": 1015
   },
   "entries": [
     {
@@ -33187,188 +33187,6 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:3350de6092ebd2db6604",
-        "import:ce1e699302b8e95af80a"
-      ],
-      "context": "event-center",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "types",
-      "fields": [
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:0.inputs",
-          "type": "Record<string, string>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:0.kind",
-          "type": "'workflow'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:0.nameTemplate",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:0.refId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:1.descriptionTemplate.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:1.descriptionTemplate.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:1.inputs",
-          "type": "Record<string, string>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:1.kind",
-          "type": "'agent'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:1.nameTemplate",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:1.refId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:2.goalTemplate",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:2.kind",
-          "type": "'workgroup'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:2.nameTemplate",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:2.refId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:3.intakeKind.$variant:0",
-          "type": "'body'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:3.intakeKind.$variant:1",
-          "type": "'external-id'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:3.kind",
-          "type": "'digital-employee'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:3.refId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604",
-            "import:ce1e699302b8e95af80a"
-          ],
-          "fieldPath": "$variant:3.target",
-          "type": "Record<string, string>"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:3350de6092ebd2db6604"
-          ],
-          "fieldPath": "$variant:3.valueTemplate",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/event-center/public/types.ts",
-      "id": "public:event-center:types:EventResponseTarget",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/event-center/public/types.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:3350de6092ebd2db6604",
-          "file": "packages/backend/src/services/webhook/webhookDispatch.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:ce1e699302b8e95af80a",
-          "file": "packages/backend/src/services/webhook/dispatcherTypes.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/webhook/dispatcherTypes.ts#$file"
-        }
-      ],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:6c74c3e51e5ee9fcfbe536df33fe9e3006291cc1c88f2a7c9d120e4255c5b1c7",
-      "status": "target-context-current-surface",
-      "symbol": "EventResponseTarget",
-      "transaction": "none",
-      "unresolvedTypeRefs": [
-        "Record"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
       "consumerEdgeIds": [],
       "context": "event-center",
       "dataClass": "confidential",
@@ -46725,8 +46543,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 121,
-        "maxUnionVariants": 50
+        "maxTransitiveLeafFields": 132,
+        "maxUnionVariants": 54
       },
       "consumerEdgeIds": [
         "import:1b2f1274eba64c06bc17",
@@ -46859,7 +46677,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:1b2f1274eba64c06bc17",
             "import:2e83c47b031dde16f55f",
             "import:f4bbeed18f5ade6b0a66"
           ],
@@ -46924,6 +46741,73 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:forCall.$return.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2e83c47b031dde16f55f",
+            "import:f4bbeed18f5ade6b0a66"
+          ],
+          "fieldPath": "$method:forEventAutomation.$parameter:input.origin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1b2f1274eba64c06bc17",
+            "import:2e83c47b031dde16f55f",
+            "import:f4bbeed18f5ade6b0a66"
+          ],
+          "fieldPath": "$method:forEventAutomation.$parameter:input.ownerUserId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forEventAutomation.$parameter:input.portId.$variant:0",
+          "type": "'task-automation-work-start.v1'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forEventAutomation.$parameter:input.portId.$variant:1",
+          "type": "'employee-automation-work-start.v1'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forEventAutomation.$return.$variant:0",
+          "type": "Omit<DelegatedAuthorityAdmission, 'context'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forEventAutomation.$return.$variant:0.context.causationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forEventAutomation.$return.$variant:0.context.correlationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forEventAutomation.$return.$variant:0.context.idempotencyKey",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1b2f1274eba64c06bc17",
+            "import:2599f06da0dbbbd0f576",
+            "import:2e83c47b031dde16f55f",
+            "import:f4bbeed18f5ade6b0a66"
+          ],
+          "fieldPath": "$method:forEventAutomation.$return.$variant:0.context.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forEventAutomation.$return.$variant:0.context.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:forEventAutomation.$return.$variant:1",
           "type": "null"
         },
         {
@@ -47053,7 +46937,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:1b2f1274eba64c06bc17",
             "import:2e83c47b031dde16f55f",
             "import:f4bbeed18f5ade6b0a66"
           ],
@@ -47226,7 +47109,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:1b2f1274eba64c06bc17",
             "import:2e83c47b031dde16f55f",
             "import:f4bbeed18f5ade6b0a66"
           ],
@@ -47409,7 +47291,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:1b2f1274eba64c06bc17",
             "import:2e83c47b031dde16f55f",
             "import:f4bbeed18f5ade6b0a66"
           ],
@@ -47481,6 +47362,7 @@
       "id": "public:identity-access:participants:DelegatedRequestAuthorityFactory",
       "members": [
         "forCall",
+        "forEventAutomation",
         "forSchedule",
         "forTaskExecution",
         "forWebhook"
@@ -47490,6 +47372,11 @@
           "consumerEdgeIds": [],
           "name": "forCall",
           "signatureDigest": "sha256:bf39ab550348a64ec05a5c3df772feb7c51d52d43051c3ed320004fc582afa70"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "forEventAutomation",
+          "signatureDigest": "sha256:98fe79f88ff9b747f91b9657c191e35c6dd68f3a76e35d6833aaed41199e9736"
         },
         {
           "consumerEdgeIds": [
@@ -47547,12 +47434,13 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:617a22ec15a1d10c2c7422bab7ece72c50d219566255c131b91a774f0cd72ac2",
+      "signatureDigest": "sha256:53a25fd87f2b9431545462749ce23f2849306fc3b70b0c8c917041a98ca8b73b",
       "status": "target-context-current-surface",
       "symbol": "DelegatedRequestAuthorityFactory",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [
         "Extract",
+        "Omit",
         "z.infer"
       ],
       "version": 1
@@ -49468,6 +49356,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:886efa2816774cfe206c",
         "import:a4e2424748e42aaf062c",
         "import:d5ed18e67f674628544e"
       ],
@@ -49492,7 +49381,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:886efa2816774cfe206c"
+          ],
           "fieldPath": "now",
           "type": "number"
         },
@@ -49510,6 +49401,12 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#IdempotentCommandContext",
       "productionConsumers": [
+        {
+          "context": "event-center",
+          "edgeId": "import:886efa2816774cfe206c",
+          "file": "packages/backend/src/modules/event-center/composition/required-ports.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/event-center/composition/required-ports.ts#$file"
+        },
         {
           "context": "task-execution",
           "edgeId": "import:a4e2424748e42aaf062c",
@@ -52499,8 +52396,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:d72b13af2620bbafe5b2",
-        "import:f936073e85efbf5d86b6"
+        "import:d72b13af2620bbafe5b2"
       ],
       "context": "integration",
       "dataClass": "metadata",
@@ -52547,12 +52443,6 @@
           "edgeId": "import:d72b13af2620bbafe5b2",
           "file": "packages/backend/src/services/webhook/webhookDispatch.ts",
           "ownerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:f936073e85efbf5d86b6",
-          "file": "packages/backend/src/services/webhook/dispatcherTypes.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/webhook/dispatcherTypes.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -165678,7 +165568,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6bba1a69f865a5e58c1d3177ed1a15c91e2c25818df3d29e371a0f3c25e33f09",
+  "sourceDigest": "sha256:c1775a4c5f8388f7d9d36ba31adc59c1841506ff7e1034b249065b67a8e255f4",
   "targetContexts": [
     "collaboration",
     "development-automation",

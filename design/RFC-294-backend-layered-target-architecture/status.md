@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:6bba1a69f865a5e58c1d3177ed1a15c91e2c25818df3d29e371a0f3c25e33f09`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:c1775a4c5f8388f7d9d36ba31adc59c1841506ff7e1034b249065b67a8e255f4`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1818 |
+| backend production TS 文件 | 1824 |
 | `services/` 文件 | 291 |
-| `modules/**` 文件 / 非空 context | 1271 / 17 |
+| `modules/**` 文件 / 非空 context | 1277 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 496 |
-| `architectureExceptions` | 4778 |
+| `architectureExceptions` | 4801 |
 | `backgroundJobs` | 332 |
-| `crossContextImports` | 5344 |
+| `crossContextImports` | 5384 |
 | `facades` | 291 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24862 |
-| `mutationEntrypoints` | 1718 |
+| `moduleSymbolOwners` | 24895 |
+| `mutationEntrypoints` | 1724 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1016 |
-| `transactionExternalEffects` | 252 |
+| `publicSurfaces` | 1015 |
+| `transactionExternalEffects` | 254 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -49,7 +49,7 @@
 | --- | --- |
 | resource-catalog / infrastructure | 108 |
 | task-execution / infrastructure | 105 |
-| task-execution / application | 96 |
+| task-execution / application | 97 |
 | resource-catalog / application | 63 |
 | task-execution / composition | 59 |
 | development-automation / application | 51 |
@@ -59,8 +59,8 @@
 | development-automation / domain | 33 |
 | development-automation / infrastructure | 33 |
 | task-execution / domain | 31 |
+| identity-access / application | 25 |
 | intent / application | 25 |
-| identity-access / application | 24 |
 | integration / infrastructure | 22 |
 | code-capability / application | 20 |
 | integration / application | 20 |
@@ -73,7 +73,7 @@
 | code-capability / infrastructure | 15 |
 | collaboration / domain | 14 |
 | development-automation / composition | 14 |
-| digital-employee / application | 13 |
+| digital-employee / application | 14 |
 | runtime-management / application | 13 |
 | code-capability / domain | 11 |
 | memory / application | 11 |
@@ -85,18 +85,19 @@
 | source-control / domain | 9 |
 | collaboration / composition | 8 |
 | digital-employee / infrastructure | 8 |
+| event-center / application | 8 |
 | intent / infrastructure | 8 |
 | knowledge-evolution / domain | 8 |
 | development-automation / engine | 7 |
 | intent / composition | 7 |
 | memory / infrastructure | 7 |
 | task-execution / public | 7 |
-| event-center / application | 6 |
 | identity-access / public | 6 |
 | memory / public | 6 |
 | collaboration / public | 5 |
 | digital-employee / composition | 5 |
 | digital-employee / public | 5 |
+| event-center / infrastructure | 5 |
 | event-center / public | 5 |
 | identity-access / composition | 5 |
 | integration / public | 5 |
@@ -106,7 +107,6 @@
 | system-operations / composition | 5 |
 | code-capability / composition | 4 |
 | development-automation / public | 4 |
-| event-center / infrastructure | 4 |
 | integration / domain | 4 |
 | knowledge-evolution / application | 4 |
 | runtime-management / public | 4 |
@@ -198,14 +198,14 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3161 |
-| legacy-inbound | 1428 |
-| infrastructure-external | 277 |
+| legacy-outbound | 3174 |
+| legacy-inbound | 1438 |
+| infrastructure-external | 278 |
 | offered-consumption | 188 |
 | temporary-internal-debt | 91 |
 | off-dag-offered | 86 |
-| authority-type-only | 75 |
-| required-implementation | 32 |
+| authority-type-only | 76 |
+| required-implementation | 47 |
 | external-layer-debt | 4 |
 | provider-mirror | 2 |
 
@@ -213,8 +213,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3161 |
-| legacy-inbound | 1428 |
+| legacy-outbound | 3174 |
+| legacy-inbound | 1438 |
 | temporary-internal-debt | 91 |
 | off-dag-offered | 86 |
 | no-circular | 6 |
@@ -225,16 +225,16 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2414 |
-| W4-E1 | 823 |
+| W9 | 2424 |
+| W4-E1 | 826 |
 | W4-C | 347 |
-| W4-E0 | 220 |
+| W4-E0 | 226 |
 | W4 | 193 |
 | W5 | 189 |
-| W4-B | 182 |
+| W4-B | 179 |
 | W4-E8 | 110 |
+| W4-E9 | 66 |
 | W4-E4b | 59 |
-| W4-E9 | 59 |
 | W4-E4a | 50 |
 | W4-E7 | 49 |
 | W4-E2 | 37 |
@@ -260,15 +260,15 @@
 | development-automation | 39 |
 | runtime-management | 32 |
 | knowledge-evolution | 25 |
-| event-center | 22 |
 | execution-contract | 22 |
 | memory | 22 |
+| event-center | 21 |
 | code-capability | 19 |
 | integration | 13 |
 | intent | 10 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1016）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1015）
 
 | context | 数量 |
 | --- | --- |
@@ -292,7 +292,7 @@
 | status | 数量 |
 | --- | --- |
 | declared-debt | 20 |
-| active | 10 |
+| active | 12 |
 
 ### 7.2 provider=0 且 consumer=0 的 required port（合计 8）
 

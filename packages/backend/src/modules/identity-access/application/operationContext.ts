@@ -60,7 +60,7 @@ interface AuthorizationSubjectRef {
 type DelegatedSource =
   | 'schedule'
   | 'webhook'
-  | 'event'
+  | 'event-automation'
   | 'task-execution'
   | 'call-workflow'
   | 'call-workgroup'
@@ -76,7 +76,12 @@ interface DelegatedClaim {
   readonly revision: number
   readonly source: Extract<
     DelegatedSource,
-    'schedule' | 'webhook' | 'task-execution' | 'call-workflow' | 'call-workgroup'
+    | 'schedule'
+    | 'webhook'
+    | 'event-automation'
+    | 'task-execution'
+    | 'call-workflow'
+    | 'call-workgroup'
   >
   readonly actor: LegacyActorProjection
   readonly correlationId: string
@@ -511,6 +516,29 @@ export class DelegatedOperationContextFactory implements DelegatedRequestAuthori
       correlationId: JSON.stringify([input.triggerId, input.deliveryId]),
       attemptId: input.fireId,
     })
+  }
+
+  async forEventAutomation(input: {
+    readonly ownerUserId: string
+    readonly origin: string
+    readonly portId: 'task-automation-work-start.v1' | 'employee-automation-work-start.v1'
+  }): Promise<
+    | (Omit<DelegatedAuthorityAdmission, 'context'> & {
+        readonly context: IdempotentCommandContext
+      })
+    | null
+  > {
+    const admitted = await this.admit({
+      userId: input.ownerUserId,
+      source: 'event-automation',
+      correlationId: input.origin,
+      attemptId: input.portId,
+    })
+    if (admitted === null) return null
+    if (!('idempotencyKey' in admitted.context)) {
+      throw new Error('event-automation-idempotent-context-required')
+    }
+    return Object.freeze({ ...admitted, context: admitted.context })
   }
 
   forCall(input: {

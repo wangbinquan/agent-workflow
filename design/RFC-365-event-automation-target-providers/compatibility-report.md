@@ -1,4 +1,4 @@
-# RFC-365 T1 输入兼容性对拍
+# RFC-365 T1 输入兼容性对拍与 T2 合同冻结
 
 2026-09-20；源码起点 `2220057676037f3e6fa0a71bf56dc2a9a05fd6a8`。只做功能兼容分析；未读取用户业务数据库，不能据此统计现存规则受影响数量。生产合同/校验/启动路径未修改。
 
@@ -32,7 +32,7 @@
 
 这是 codec/render/admission 组件的特征测试，**不**冒充真实 Task/Case 写入、current revision 并发冻结或跨进程去重验收。T2+ 仍需原四 target 双库 suites 和新增 crash/claim/replay 测试。未运行本地 Bun 测试；随本批提交，由托管 CI 验证。
 
-## 推荐合同修订（待独立批准）
+## 推荐合同修订（2026-09-21 已冻结）
 
 1. 保留当前 UTF-16 单位与各 target 的真实 admission 规则；Task name 继续由原 trim+255 判据投影。不要在此次 owner 迁移中引入新文本字节上限。
 2. Task input list 保持唯一 key、原 key 身份与全部可表达项，不增加256上限；排序只用于 canonical encoding，不改变还原后的键值。用精确字段合同描述每个 target，避免伪造通用 bounded-text 等价性。
@@ -40,4 +40,4 @@
 4. 将首次 source→render→admission 的 payload 和 revision 持久化，重放同一origin读取原receipt；旧receipt优先映射。默认scratch、allowClarify、省略字段按矩阵逐项保留。
 5. 若产品以后确需更严格预算，另立可见行为变更：先给出用户规则受影响清单和迁移办法，再批准限制；本次不截断、不静默拒绝、不改存量规则。
 
-RFC-365 保持 Draft；T1 七个特征用例已在上述验收源码的 Ubuntu/macOS 通过，完整 Main CI success。 [Main CI 35513285722](https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722)。T2 合同修订/生产切换尚未批准；推荐合同修订仍待独立决定，不能据 T1 完成增加限制。
+T1 七个特征用例已在上述验收源码的 Ubuntu/macOS 通过，完整 Main CI success。[Main CI 35513285722](https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722)。2026-09-21 的继续实施指令批准按上述五条冻结 T2 合同：保留全部现合法输入，不增加限制。T2～T6 实现候选另由本批 exact-SHA hosted CI 验收；通过前 RFC-365 保持 In Progress。

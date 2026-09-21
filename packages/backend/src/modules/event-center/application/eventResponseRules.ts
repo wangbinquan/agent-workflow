@@ -5,9 +5,11 @@ import type { Permission } from '@agent-workflow/shared'
 import { ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
 import { sha256Hex } from '@/util/hash'
 import type {
-  EventAutomationWorkStartPort,
+  EmployeeAutomationWorkStartPort,
+  EventAutomationDelegatedContextFactory,
   EventDeliveryConsumerPort,
   EventRoutingSubscriptionDirectoryPort,
+  TaskAutomationWorkStartPort,
 } from '../composition/required-ports'
 import type { EventObservation } from '../domain/model'
 import {
@@ -18,16 +20,23 @@ import {
   type EventResponseTarget,
 } from '../domain/responseRule'
 import type { EventStorePort } from './ports/eventStore'
+import type { EventAutomationWorkIntentStorePort } from './ports/eventAutomationWorkIntentStore'
 import type { EventResponseRuleStorePort } from './ports/responseRuleStore'
 
-const subscriberPrefix = 'event-response-rule:'
+export const EVENT_RESPONSE_SUBSCRIBER_PREFIX = 'event-response-rule:'
 
 function subscriberRef(id: string): string {
-  return `${subscriberPrefix}${id}`
+  return `${EVENT_RESPONSE_SUBSCRIBER_PREFIX}${id}`
 }
 
-function materializedSubscriptionId(
-  rule: EventResponseRuleRecord,
+export function eventResponseRuleIdFromSubscriberRef(ref: string): string | null {
+  return ref.startsWith(EVENT_RESPONSE_SUBSCRIBER_PREFIX)
+    ? ref.slice(EVENT_RESPONSE_SUBSCRIBER_PREFIX.length)
+    : null
+}
+
+export function eventResponseMaterializedSubscriptionId(
+  rule: Pick<EventResponseRuleRecord, 'id' | 'updatedAt'>,
   subject: EventObservation['subject'],
 ): string {
   return `route:${subscriberRef(rule.id)}:${sha256Hex(
@@ -242,60 +251,78 @@ export function createEventResponseRoutingDirectory(
       return (await rules.matching(observation)).map((rule) => ({
         definition: definitionOf(rule),
         eventTypeRef: observation.eventTypeRef,
-        materializedSubscriptionId: materializedSubscriptionId(rule, observation.subject),
+        materializedSubscriptionId: eventResponseMaterializedSubscriptionId(
+          rule,
+          observation.subject,
+        ),
       }))
     },
   }
 }
 
 export function createEventResponseDeliveryConsumer(input: {
-  readonly rules: EventResponseRuleStorePort
-  readonly workStart: EventAutomationWorkStartPort
+  readonly workIntents: EventAutomationWorkIntentStorePort
+  readonly delegatedContexts: EventAutomationDelegatedContextFactory
+  readonly taskWorkStart: TaskAutomationWorkStartPort
+  readonly employeeWorkStart: EmployeeAutomationWorkStartPort
   readonly now?: () => number
 }): EventDeliveryConsumerPort {
   const now = input.now ?? Date.now
   return {
     subscriberKind: 'automation',
     async canConsume(ref) {
-      return ref.startsWith(subscriberPrefix)
+      return ref.startsWith(EVENT_RESPONSE_SUBSCRIBER_PREFIX)
     },
-    async consume(delivery) {
-      const ruleId = delivery.subscriber.subscriberRef.slice(subscriberPrefix.length)
-      const rule = await input.rules.get(ruleId)
-      if (rule === null || !rule.enabled) return
-      // A rule edit is a new deterministic definition. A delivery selected by
-      // an older definition must never run the newly edited target. The old
-      // delivery settles as obsolete; future observations match the new id.
-      if (delivery.subscriptionId !== materializedSubscriptionId(rule, delivery.subject)) return
-      if (delivery.triggerContext === null) {
-        throw new ValidationError(
-          'event-response-trigger-context-missing',
-          `event delivery has no declared task input contract: ${delivery.deliveryId}`,
-        )
-      }
+    async consume(delivery, claim) {
+      const prepared = await input.workIntents.prepare({ delivery, claim, now: now() })
+      if (prepared.kind === 'obsolete' || prepared.intent.receiptRef !== null) return
+      const intent = prepared.intent
       try {
-        await input.workStart.launch({
-          ownerUserId: rule.ownerUserId,
-          target: rule.target,
-          eventSubscriptionId: delivery.subscriptionId,
-          eventDeliveryId: delivery.deliveryId,
-          triggerContext: delivery.triggerContext,
-        })
-        await input.rules.recordResult({
-          id: rule.id,
-          state: 'launched',
-          error: null,
+        let receiptRef: string
+        if (intent.kind === 'task') {
+          const context = await input.delegatedContexts.create({
+            ownerUserId: intent.ownerUserId,
+            origin: intent.origin,
+            portId: intent.portId,
+          })
+          if (context === null) {
+            throw new ValidationError(
+              'event-response-owner-invalid',
+              `event response owner is missing or inactive: ${intent.ownerUserId}`,
+            )
+          }
+          receiptRef = (await input.taskWorkStart.start(context, intent.input)).taskId
+        } else {
+          const context = await input.delegatedContexts.create({
+            ownerUserId: intent.ownerUserId,
+            origin: intent.origin,
+            portId: intent.portId,
+          })
+          if (context === null) {
+            throw new ValidationError(
+              'event-response-owner-invalid',
+              `event response owner is missing or inactive: ${intent.ownerUserId}`,
+            )
+          }
+          receiptRef = (await input.employeeWorkStart.start(context, intent.input)).caseId
+        }
+        await input.workIntents.recordReceipt({
+          origin: intent.origin,
+          portId: intent.portId,
+          receiptRef,
           now: now(),
         })
       } catch (error) {
-        await input.rules.recordResult({
-          id: rule.id,
-          state: 'failed',
+        await input.workIntents.recordFailure({
+          origin: intent.origin,
           error: (error instanceof Error ? error.message : String(error)).slice(0, 2_000),
           now: now(),
         })
         throw error
       }
+    },
+    async settle(settlement) {
+      return await input.workIntents.settle(settlement)
     },
   }
 }

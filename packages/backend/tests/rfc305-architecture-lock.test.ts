@@ -311,6 +311,7 @@ describe('RFC-305 identity-access architecture', () => {
     expect(identityAccessImportsOutsideOwner()).toEqual([
       'packages/backend/src/auth/session.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/package.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/ownerIdentityQueries',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/userOperations',
@@ -318,6 +319,7 @@ describe('RFC-305 identity-access architecture', () => {
       // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：`cli/start.ts` 是 SQLite 的**第三个
       // 组合根**（`server.ts` / `postgresqlDaemonApplication.ts` 早就在这张表上），列表行的
       // owner 身份投影在这里装配后注入任务路由——与另外两个根同形。
+      'packages/backend/src/cli/start.ts -> @/modules/identity-access/composition',
       'packages/backend/src/cli/start.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/operations',
       'packages/backend/src/cli/user.ts -> @/modules/identity-access/public/participants',
@@ -329,6 +331,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/development-automation/composition/configOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/digital-employee/composition.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/digital-employee/public/participants.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/event-center/composition/required-ports.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/application/ports/intentPersistence.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/application/resourceCatalog.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/intent/composition/platformInventory.ts -> @/modules/identity-access/public/participants',
@@ -780,6 +783,10 @@ describe('RFC-305 reusable-authority fences', () => {
       resolve(BACKEND_SRC, 'services', 'webhook', 'webhookDispatch.ts'),
       'utf8',
     )
+    const eventAutomation = readFileSync(
+      resolve(IDENTITY_ROOT, 'application', 'adapters', 'event-automation-adapter.ts'),
+      'utf8',
+    )
 
     expect(composition).toContain('new DelegatedOperationContextFactory(')
     expect(contexts).toContain('new WeakMap<')
@@ -792,6 +799,8 @@ describe('RFC-305 reusable-authority fences', () => {
     expect(scheduled).toContain('invocation,')
     expect(webhook).toContain('.delegatedRequests.forWebhook({')
     expect(webhook).toContain("'webhook'")
+    expect(eventAutomation).toContain('delegatedRequests.forEventAutomation(input)')
+    expect(eventAutomation).toContain("throw new Error('foreign-event-automation-context')")
   })
 
   test('WS delivery is DB-revision fenced and refreshes the frontend actor cache', () => {

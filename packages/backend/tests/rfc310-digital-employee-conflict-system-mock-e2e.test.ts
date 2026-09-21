@@ -154,6 +154,7 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
             digitalEmployeeLifecycleEventCatalogJson,
             codeHostEventCatalogJson,
           ],
+          automation: { kind: 'observation-only' },
         })
 
         const hostBinding = {

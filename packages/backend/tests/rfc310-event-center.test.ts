@@ -7,7 +7,13 @@ import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-empl
 import {
   composeEventCenter,
   type ComposeEventCenterOptions,
+  type EventCenterAutomationCapability,
 } from '@/modules/event-center/composition'
+import type {
+  EventAutomationDelegatedContext,
+  EventAutomationDelegatedContextFactory,
+} from '@/modules/event-center/composition/required-ports'
+import { createEventAutomationWorkIntentStore } from '@/modules/event-center/infrastructure/eventAutomationWorkIntentStore'
 import {
   advanceDevelopmentCodeHostObserverCursor,
   buildDevelopmentCodeHostFacts,
@@ -35,6 +41,51 @@ function composeForProvider(
   // RFC-359 AC-1（plan §5fz）：两个 provider 同一个装配入口，`db` 收中立句柄——
   // 原来的三元（两臂只差一个 cast）与两个 cast 一起消失。
   return composeEventCenter({ ...options, db: harness.db })
+}
+
+function testAutomation(
+  harness: ProviderHarness,
+  startTask: (input: {
+    readonly eventDeliveryId: string
+    readonly targetRefId: string
+    readonly triggerContext: unknown
+  }) => Promise<{ readonly taskId: string }>,
+): EventCenterAutomationCapability {
+  const workIntents = createEventAutomationWorkIntentStore(harness.db)
+  const delegatedContexts: EventAutomationDelegatedContextFactory = {
+    async create(input) {
+      return Object.freeze({
+        authority: Object.freeze({}),
+        operationId: `event-automation:${input.origin}`,
+        correlationId: `event-automation:${input.origin}`,
+        now: 0,
+        idempotencyKey: input.origin,
+        portId: input.portId,
+        origin: input.origin,
+      }) as unknown as EventAutomationDelegatedContext<typeof input.portId>
+    },
+  }
+  return Object.freeze({
+    kind: 'automation',
+    workIntents,
+    delegatedContexts,
+    taskWorkStart: {
+      async start(context, input) {
+        const origin = await workIntents.resolve(context.origin, context.portId)
+        if (origin === null) throw new Error('event-automation-origin-not-found')
+        return await startTask({
+          eventDeliveryId: origin.eventDeliveryId,
+          targetRefId: input.target.refId,
+          triggerContext: input.trigger,
+        })
+      },
+    },
+    employeeWorkStart: {
+      async start() {
+        throw new Error('unexpected-employee-automation-target')
+      },
+    },
+  })
 }
 
 describeEachProvider('RFC-310 shared Event Center', (harness) => {
@@ -71,16 +122,14 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
       },
       now: () => 31_000,
       id: () => `response-resource-${++ordinal}`,
-      automationWorkStart: {
-        async launch(input) {
-          launches.push({
-            eventDeliveryId: input.eventDeliveryId,
-            targetRefId: input.target.refId,
-            triggerContext: input.triggerContext,
-          })
-          return { kind: 'orchestration' as const, taskId: `task-${launches.length}` }
-        },
-      },
+      automation: testAutomation(harness, async (input) => {
+        launches.push({
+          eventDeliveryId: input.eventDeliveryId,
+          targetRefId: input.targetRefId,
+          triggerContext: input.triggerContext,
+        })
+        return { taskId: `task-${launches.length}` }
+      }),
     })
 
     const catalog = JSON.parse(await eventCenter.queries.catalog.catalogJson()) as {
@@ -282,12 +331,10 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
       ],
       now: () => now,
       id: () => `stale-rule-resource-${++ordinal}`,
-      automationWorkStart: {
-        async launch(input) {
-          launches.push(input.target.refId)
-          return { kind: 'orchestration' as const, taskId: 'unexpected-task' }
-        },
-      },
+      automation: testAutomation(harness, async (input) => {
+        launches.push(input.targetRefId)
+        return { taskId: 'unexpected-task' }
+      }),
     })
     const original = await eventCenter.responseRules.commands.create(
       {
@@ -401,6 +448,7 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
         developmentEmployeeTypePackage.descriptorJson,
         digitalEmployeeLifecycleEventCatalogJson,
       ],
+      automation: { kind: 'observation-only' },
       now: () => 2,
       id: () => 'upgrade-resource',
     })
@@ -759,6 +807,7 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
     const calls: Array<{ cursorJson: string | null; subjects: readonly string[] }> = []
     const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      automation: { kind: 'observation-only' },
       now: () => now,
       id: () => `event-resource-${++ordinal}`,
       workerId: 'observer-test-worker',
@@ -853,6 +902,7 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
     })
     const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      automation: { kind: 'observation-only' },
       now: () => now,
       id: () => `nudge-resource-${++ordinal}`,
       workerId: 'nudge-worker',
@@ -903,6 +953,7 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
     const batches: string[][] = []
     const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      automation: { kind: 'observation-only' },
       now: () => now,
       id: () => `rotation-resource-${++ordinal}`,
       workerId: 'rotation-worker',
@@ -936,6 +987,7 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
     let ordinal = 0
     const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      automation: { kind: 'observation-only' },
       now: () => 30_000,
       id: () => `replay-resource-${++ordinal}`,
     })
@@ -979,6 +1031,7 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
     let ordinal = 0
     const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      automation: { kind: 'observation-only' },
       now: () => 20_000,
       id: () => `event-resource-${++ordinal}`,
     })
@@ -1024,6 +1077,7 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
     let ordinal = 0
     const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      automation: { kind: 'observation-only' },
       now: () => 25_000,
       id: () => `fanout-resource-${++ordinal}`,
     })
@@ -1097,6 +1151,7 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
     const definitions = [definition('automation-fails'), definition('automation-succeeds')]
     const eventCenter = await composeForProvider(harness, {
       typePackageDescriptorJsons: [developmentEmployeeTypePackage.descriptorJson],
+      automation: { kind: 'observation-only' },
       now: () => 27_000,
       id: () => `automation-fanout-${++ordinal}`,
       routingSubscriptions: {
@@ -1160,6 +1215,7 @@ describeEachProvider('RFC-310 shared Event Center', (harness) => {
     const eventCenter = await composeForProvider(harness, {
       // The source is global: no digital-employee type package is required.
       typePackageDescriptorJsons: [],
+      automation: { kind: 'observation-only' },
       now: () => now,
       id: () => `global-event-${++ordinal}`,
       workerId: 'global-custom-source-worker',

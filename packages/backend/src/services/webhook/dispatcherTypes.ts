@@ -1,8 +1,6 @@
 // RFC-257 — provider-neutral dispatcher contract.
 import type { WebhookEndpointRecord } from '@/modules/integration/application/ports/webhookDispatchPersistence'
 import type { CodeHostEvent, TriggerContext } from '@agent-workflow/shared'
-import type { EventResponseTarget } from '@/modules/event-center/public/types'
-import type { WorkStartReceipt } from '@/modules/integration/public/participants'
 
 export type WebhookEndpointRow = WebhookEndpointRecord
 
@@ -41,25 +39,8 @@ export interface EventCenterCodeHostDeliveryDispatcher {
   dispatchSubscription(input: WebhookSubscriptionDispatchInput): Promise<void>
 }
 
-/** Source-neutral work-start port used by standard Event Center response rules. */
-export interface EventCenterAutomationWorkStarter {
-  dispatchEventTarget(input: {
-    readonly ownerUserId: string
-    readonly target: EventResponseTarget
-    readonly eventSubscriptionId: string
-    readonly eventDeliveryId: string
-    readonly triggerContext: TriggerContext
-  }): Promise<WorkStartReceipt>
-}
-
 export function supportsEventCenterCodeHostDelivery(
   dispatcher: WebhookDispatcher,
 ): dispatcher is WebhookDispatcher & EventCenterCodeHostDeliveryDispatcher {
   return dispatcher.dispatchSubscription !== undefined
-}
-
-export function supportsEventCenterWorkStart(
-  dispatcher: WebhookDispatcher,
-): dispatcher is WebhookDispatcher & EventCenterAutomationWorkStarter {
-  return 'dispatchEventTarget' in dispatcher && typeof dispatcher.dispatchEventTarget === 'function'
 }

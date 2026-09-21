@@ -779,6 +779,13 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
       resolve(sourceRoot, 'services/webhook/webhookDispatch.ts'),
       'utf8',
     )
+    const eventAutomationContext = readFileSync(
+      resolve(
+        sourceRoot,
+        'modules/identity-access/application/adapters/event-automation-adapter.ts',
+      ),
+      'utf8',
+    )
     const scheduledRoute = readFileSync(resolve(sourceRoot, 'routes/scheduledTasks.ts'), 'utf8')
     const webhookRoute = readFileSync(resolve(sourceRoot, 'routes/webhookTriggers.ts'), 'utf8')
 
@@ -828,7 +835,8 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(schedules).toContain("kind: 'scheduled-workgroup'")
     expect(schedules).toContain('identityAccess.delegatedRequests.forSchedule({')
     expect(webhookDispatch).toContain('deps.identityAccess.delegatedRequests.forWebhook({')
-    expect(webhookDispatch).toContain('deps.resolveEventTargetAuthority(input.ownerUserId)')
+    expect(webhookDispatch).not.toContain('resolveEventTargetAuthority')
+    expect(eventAutomationContext).toContain('delegatedRequests.forEventAutomation(input)')
     expect(webhookDispatch).not.toContain('buildActor({')
     expect(triggerValidation).toContain("kind: 'webhook-workflow'")
     expect(triggerValidation).toContain("kind: 'webhook-digital-employee'")

@@ -1,0 +1,587 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:1c5c6ed6ba01159c5bd73a92fe1b5f24ec9920a6395d41c77ec687c71502d6da', 183, 6)"
+    },
+    "beforeDigest": "sha256:759a1194f0b42fb374adba9ed4d3d6765446899af186f2fb80b69663570f9879"
+  },
+  "digest": "sha256:36fccb9116efb560678d5ad4416968f00d87e3dab439da0106049b7a2e5e173d",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "event_automation_work_intents",
+      "sql": "CREATE TABLE \"agent_workflow\".\"event_automation_work_intents\" (\n  \"origin_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"delivery_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"subscription_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"rule_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"rule_revision\" BIGINT NOT NULL,\n  \"rule_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"owner_user_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"port_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"target_payload_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"target_format_version\" BIGINT NOT NULL DEFAULT 1,\n  \"target_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"resolved_target_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"receipt_ref\" TEXT COLLATE \"C\",\n  \"status\" TEXT COLLATE \"C\" NOT NULL DEFAULT 'prepared',\n  \"claim_owner\" TEXT COLLATE \"C\" NOT NULL,\n  \"claim_attempt\" BIGINT NOT NULL,\n  \"last_error\" TEXT COLLATE \"C\",\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"event_automation_work_intents_pkey\" PRIMARY KEY (\"origin_ref\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "event_automation_work_intents:index:event_automation_work_intents_delivery_unique",
+      "sql": "CREATE UNIQUE INDEX \"event_automation_work_intents_delivery_unique\" ON \"agent_workflow\".\"event_automation_work_intents\" (\"delivery_id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "event_automation_work_intents:index:event_automation_work_intents_origin_port_unique",
+      "sql": "CREATE UNIQUE INDEX \"event_automation_work_intents_origin_port_unique\" ON \"agent_workflow\".\"event_automation_work_intents\" (\"origin_ref\", \"port_id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "event_automation_work_intents:index:idx_event_automation_work_intents_status",
+      "sql": "CREATE INDEX \"idx_event_automation_work_intents_status\" ON \"agent_workflow\".\"event_automation_work_intents\" (\"status\", \"updated_at\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "event_automation_work_intents:fk:event_automation_work_intents_delivery_id_event_deliveries_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"event_automation_work_intents\" ADD CONSTRAINT \"event_automation_work_intents_delivery_id_event_de_cadd1fff97f2\" FOREIGN KEY (\"delivery_id\") REFERENCES \"agent_workflow\".\"event_deliveries\" (\"id\") ON UPDATE NO ACTION ON DELETE NO ACTION"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:1c5c6ed6ba01159c5bd73a92fe1b5f24ec9920a6395d41c77ec687c71502d6da', active_table_count = 183, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:a27693137b6fd52a93912ee8d0e204ae58bb685bdcd2d80eb98538f9e07c9286' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:a27693137b6fd52a93912ee8d0e204ae58bb685bdcd2d80eb98538f9e07c9286",
+    "planDigest": "sha256:246e6b11aaf19217af8b7da743b35a15e32dc9cd99ecefbc68fef010c51c9c9b"
+  },
+  "id": "0005_rfc365_event_automation_work_intents",
+  "indexAdditions": [
+    {
+      "position": 89,
+      "statement": {
+        "kind": "table",
+        "logicalId": "event_automation_work_intents",
+        "sql": "CREATE TABLE \"agent_workflow\".\"event_automation_work_intents\" (\n  \"origin_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"delivery_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"subscription_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"rule_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"rule_revision\" BIGINT NOT NULL,\n  \"rule_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"owner_user_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"port_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"target_payload_json\" TEXT COLLATE \"C\" NOT NULL,\n  \"target_format_version\" BIGINT NOT NULL DEFAULT 1,\n  \"target_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"resolved_target_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"receipt_ref\" TEXT COLLATE \"C\",\n  \"status\" TEXT COLLATE \"C\" NOT NULL DEFAULT 'prepared',\n  \"claim_owner\" TEXT COLLATE \"C\" NOT NULL,\n  \"claim_attempt\" BIGINT NOT NULL,\n  \"last_error\" TEXT COLLATE \"C\",\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"event_automation_work_intents_pkey\" PRIMARY KEY (\"origin_ref\")\n)"
+      }
+    },
+    {
+      "position": 323,
+      "statement": {
+        "kind": "index",
+        "logicalId": "event_automation_work_intents:index:event_automation_work_intents_delivery_unique",
+        "sql": "CREATE UNIQUE INDEX \"event_automation_work_intents_delivery_unique\" ON \"agent_workflow\".\"event_automation_work_intents\" (\"delivery_id\")"
+      }
+    },
+    {
+      "position": 324,
+      "statement": {
+        "kind": "index",
+        "logicalId": "event_automation_work_intents:index:event_automation_work_intents_origin_port_unique",
+        "sql": "CREATE UNIQUE INDEX \"event_automation_work_intents_origin_port_unique\" ON \"agent_workflow\".\"event_automation_work_intents\" (\"origin_ref\", \"port_id\")"
+      }
+    },
+    {
+      "position": 325,
+      "statement": {
+        "kind": "index",
+        "logicalId": "event_automation_work_intents:index:idx_event_automation_work_intents_status",
+        "sql": "CREATE INDEX \"idx_event_automation_work_intents_status\" ON \"agent_workflow\".\"event_automation_work_intents\" (\"status\", \"updated_at\")"
+      }
+    },
+    {
+      "position": 664,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "event_automation_work_intents:fk:event_automation_work_intents_delivery_id_event_deliveries_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"event_automation_work_intents\" ADD CONSTRAINT \"event_automation_work_intents_delivery_id_event_de_cadd1fff97f2\" FOREIGN KEY (\"delivery_id\") REFERENCES \"agent_workflow\".\"event_deliveries\" (\"id\") ON UPDATE NO ACTION ON DELETE NO ACTION"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 85,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "origin_ref",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "delivery_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "subscription_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "rule_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "rule_revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "rule_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "owner_user_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["task-automation-work-start.v1", "employee-automation-work-start.v1"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "port_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "json-text",
+            "name": "target_payload_json",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "1",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "target_format_version",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "1",
+              "sqlite": "1"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "target_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "resolved_target_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "receipt_ref",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "\"prepared\"",
+            "enumValues": ["prepared", "launched", "failed", "obsolete"],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "status",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "'prepared'",
+              "sqlite": "'prepared'"
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "claim_owner",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "claim_attempt",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "last_error",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["delivery_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "event_deliveries",
+            "name": "event_automation_work_intents_delivery_id_event_deliveries_id_fk",
+            "onDelete": "no action",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "event_automation_work_intents",
+        "indexes": [
+          {
+            "columns": ["delivery_id"],
+            "name": "event_automation_work_intents_delivery_unique",
+            "unique": true,
+            "where": null
+          },
+          {
+            "columns": ["origin_ref", "port_id"],
+            "name": "event_automation_work_intents_origin_port_unique",
+            "unique": true,
+            "where": null
+          },
+          {
+            "columns": ["status", "updated_at"],
+            "name": "idx_event_automation_work_intents_status",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["origin_ref"],
+        "ownerContext": "event-center",
+        "primaryKey": ["origin_ref"],
+        "providerTables": {
+          "postgresql": "event_automation_work_intents",
+          "sqlite": "event_automation_work_intents"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-operational",
+          "owner": "event-center",
+          "rule": "The owning bounded context defines retention and archive jobs through its application port."
+        },
+        "schemaSymbol": "eventAutomationWorkIntents",
+        "sourceTable": "event_automation_work_intents",
+        "unique": [
+          {
+            "columns": ["delivery_id"],
+            "expression": null,
+            "name": "event_automation_work_intents_delivery_unique"
+          },
+          {
+            "columns": ["origin_ref", "port_id"],
+            "expression": null,
+            "name": "event_automation_work_intents_origin_port_unique"
+          }
+        ]
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:873e831069193efcce6a7d9b4f7b9137491182798a1020c5b05b5b85e4be586d",
+  "sequence": 5,
+  "sqlDigest": "sha256:cc488277658aed5fbb72f5438a04571b2d9fd36597bea565f510fd35ac0100fc",
+  "sqlFile": "0005_rfc365_event_automation_work_intents.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1790352012067,
+        "hash": "10f09d53a0a3a287ae881b920efa6f37d791cbf1e6d03f4cdacf8cce7b3d2324",
+        "index": 228,
+        "tag": "0229_rfc365_event_automation_work_intents"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:b7c0ca67cab2148a22c13fd1e247e780d92f0948f94831d7db0572c0b3c18617",
+      "count": 228,
+      "last": {
+        "folderMillis": 1790265612067,
+        "hash": "bc0168c7c99b54f17065cf9d38efe660c267dba339b966f42e20a97c2af412b3",
+        "index": 227,
+        "tag": "0228_rfc366_distill_source_kinds"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:36de8a4250479b0adc9e3000f74cd46c9512b6975cc3a9ab93b8e37c9520a1a1",
+      "count": 229,
+      "last": {
+        "folderMillis": 1790352012067,
+        "hash": "10f09d53a0a3a287ae881b920efa6f37d791cbf1e6d03f4cdacf8cce7b3d2324",
+        "index": 228,
+        "tag": "0229_rfc365_event_automation_work_intents"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:1c5c6ed6ba01159c5bd73a92fe1b5f24ec9920a6395d41c77ec687c71502d6da",
+    "planDigest": "sha256:9df2c87f9905eb518b4ae8015a4f730cf9b2c47cdf68e2b18aed605a16a57f16"
+  },
+  "version": 2
+}

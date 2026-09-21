@@ -207,23 +207,11 @@ export function withIntegrationTriggerResources<T extends IdentityAccessRuntime>
   })
 }
 
-export function eventTargetAuthorityResolver(identityAccess: IdentityAccessRuntime) {
-  return async (userId: string) => {
-    const admitted = await identityAccess.localOperator.forLegacyHttpUser(userId)
-    if (admitted === null) return null
-    return Object.freeze({
-      authority: admitted.commandContext().authority,
-      actor: admitted.actor,
-    })
-  }
-}
-
 export function integrationTriggerWebhookAuthorityDependencies(
   db: ProviderNeutralDatabase,
   identityAccess: IdentityAccessRuntime,
 ) {
   return Object.freeze({
     identityAccess: withIntegrationTriggerResources(db, identityAccess),
-    resolveEventTargetAuthority: eventTargetAuthorityResolver(identityAccess),
   })
 }

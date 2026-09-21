@@ -1,6 +1,6 @@
 # RFC-365：Event Automation target providers 拆分
 
-- 状态：Draft（2026-09-20；待三件套批准，生产切换另受本文兼容判据约束）。
+- 状态：In Progress（2026-09-21；T2～T6 实现完成，等待 exact-SHA hosted CI 终态取证）。
 - 母项：RFC-294 W4-E9 的 Event target slice；RFC-361 仅已完成 Execution Contract providers。
 - 前置：W4-E0/C 已完成；Task provider 接线与 RFC-363 的 launch seam 协调。
 - 源码基线：`cae3e4ea2579bc1d13ff34008fa011d4073d8b59`，见 [source-baseline.json](./source-baseline.json)。
@@ -11,21 +11,26 @@
 
 本 RFC 使 EC 拥有规则选择、模板物化、durable origin/work intent 和 delivery 结算；TE / DE 分别提供唯一 target-specific adapter，只返回自身 receipt。保留 existing Task/Case 去重、重试、错误与旧规则失效语义。Integration 继续拥有 code-host WebhookTrigger，不再承接 EC source-neutral target switch。
 
-## 2. 能力影响与尚待裁决的兼容点
+## 2. 能力影响与已冻结的兼容合同
 
 本方案不批准删除或截断现有合法输入。四种 target、body/external-id intake、模板插值、现 permissions 和配置能力均保留。
 
-当前 `responseRule.ts` 与 RFC-294 design §3.5 的目标 V1 **尚未等价**：
+T1 证明 `responseRule.ts` 与 RFC-294 design §3.5 的原目标 V1 **不等价**；2026-09-21 的 T2
+裁决选择保留现有合法能力，不引入任何收缩：
 
-| 差异                | 当前事实                                                                                 | 切换前的要求                                                                       |
-| ------------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| collection budget   | inputs/target 是 record，规则 schema 没有 max-256 集合限制                               | 盘点完整 admission 链的真实能力；不能假设所有输入都小于 256                        |
-| text budget         | schema 的 `z.string().max(...)` 与目标 UTF-8 字节预算计数不同                            | 非 ASCII 与模板展开后文本逐项对拍，不能静默截断                                    |
-| employee target/ref | 当前保存 field ref，启动时取 employee current revision；V1 要 exact ref/具名 field codec | 映射 must preserve current field grammar 和首次启动时机；不能用“新 machine id”改名 |
+| 差异                | 当前事实                                                                                 | T2 冻结合同                                                                 |
+| ------------------- | ---------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| collection budget   | inputs/target 是 record，规则 schema 没有 max-256 集合限制                               | Task inputs 不新增 256 上限；DE 继续受既有 manifest ≤20 约束                |
+| text budget         | schema 的 `z.string().max(...)` 与目标 UTF-8 字节预算计数不同                            | 全部保留 UTF-16 unit 计数和既有 downstream 限额，不转换、截断或静默拒绝     |
+| employee target/ref | 当前保存 field ref，启动时取 employee current revision；V1 要 exact ref/具名 field codec | 保留现 field grammar 与首次实际 admission 时机，不改名、不提前冻结 revision |
 
-T1 输出可复跑的兼容报告，既覆盖已有 rule，也覆盖当前允许的新输入边界；**存量无超限不能证明能力等价**。默认处置是保留现能力并修订目标合同；如确需收缩某项能力，另列具体输入/部署影响并逐项呈用户批准，不能以批准本 RFC 推导这种许可。
+T1 的可复跑兼容报告同时覆盖原 rule 和当前允许的新输入边界；**存量无超限不能证明能力等价**。
+T2 据此修订目标合同而不是压缩输入：257 个合法 Task inputs、Agent 空 inputs / null description
+省略、`allowClarify=true`、DE body 2 Mi UTF-16 / externalId 500 / value 1000、`uploads=[]` 等均保持。
+以后若要收紧预算，必须另立可见行为变更并给迁移方案，不能从本 RFC 推导许可。
 
-因此本 RFC 的开发顺序为“行为及兼容锁 → 合同定稿 → providers → 切换”。若 T1 证明既有能力无法被目标 V1 无损表达，T2/生产 cutover 暂停，先提交精确合同修订；可继续独立的 receipt/claim oracle 和 RFC-363/364 工作。当前 Draft 不声称 V1 已适合直接上线。
+实施仍遵循“行为及兼容锁 → 合同定稿 → providers → 切换”；当前只剩 hosted gate 和正式证据回填，
+不再存在合同兼容阻塞。
 
 ## 3. 范围与非目标
 

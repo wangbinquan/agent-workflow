@@ -28,7 +28,7 @@ import {
   observerBatchSchema,
   subscriptionIdentity,
 } from '../domain/model'
-import type { EventDeliveryStatusRecord } from '../domain/model'
+import type { EventDeliveryRecord, EventDeliveryStatusRecord } from '../domain/model'
 import type { EventObservationInput } from '../public/types'
 import type { EventStorePort } from './ports/eventStore'
 
@@ -686,6 +686,11 @@ export class EventCenterService {
       leaseMs: this.#deliveryLeaseMs,
     })
     if (delivery === null) return 'idle'
+    const claim = Object.freeze({
+      deliveryId: delivery.deliveryId,
+      leaseOwner: this.#workerId,
+      attemptCount: delivery.attemptCount,
+    })
 
     let consumer: EventDeliveryConsumerPort | undefined
     for (const candidate of this.#deliveryConsumers) {
@@ -699,8 +704,8 @@ export class EventCenterService {
     }
     if (consumer === undefined) {
       await this.#settleDelivery({
-        deliveryId: delivery.deliveryId,
-        attemptCount: delivery.attemptCount,
+        delivery,
+        claim,
         state: 'dead-letter',
         nextAttemptAt: this.#now(),
         error: `event delivery consumer unavailable: ${delivery.subscriber.kind}/${delivery.subscriber.subscriberRef}`,
@@ -709,10 +714,11 @@ export class EventCenterService {
     }
 
     try {
-      await consumer.consume(delivery)
+      await consumer.consume(delivery, claim)
       await this.#settleDelivery({
-        deliveryId: delivery.deliveryId,
-        attemptCount: delivery.attemptCount,
+        delivery,
+        claim,
+        consumer,
         state: 'accepted',
         nextAttemptAt: this.#now(),
         error: null,
@@ -730,8 +736,9 @@ export class EventCenterService {
         ? now
         : now + Math.min(30_000, 1_000 * 2 ** Math.max(0, delivery.attemptCount - 1))
       await this.#settleDelivery({
-        deliveryId: delivery.deliveryId,
-        attemptCount: delivery.attemptCount,
+        delivery,
+        claim,
+        consumer,
         state: terminal ? 'dead-letter' : 'pending',
         nextAttemptAt,
         error: (error instanceof Error ? error.message : String(error)).slice(0, 2_000),
@@ -741,22 +748,41 @@ export class EventCenterService {
   }
 
   async #settleDelivery(input: {
-    readonly deliveryId: string
-    readonly attemptCount: number
+    readonly delivery: EventDeliveryRecord
+    readonly claim: Readonly<{
+      deliveryId: string
+      leaseOwner: string
+      attemptCount: number
+    }>
+    readonly consumer?: EventDeliveryConsumerPort
     readonly state: 'accepted' | 'pending' | 'dead-letter'
     readonly nextAttemptAt: number
     readonly error: string | null
   }): Promise<void> {
-    if (
-      !(await this.#store.settleNotificationDelivery({
-        ...input,
-        leaseOwner: this.#workerId,
-        now: this.#now(),
-      }))
-    ) {
+    const now = this.#now()
+    const settled =
+      input.consumer?.settle === undefined
+        ? await this.#store.settleNotificationDelivery({
+            deliveryId: input.delivery.deliveryId,
+            leaseOwner: input.claim.leaseOwner,
+            attemptCount: input.claim.attemptCount,
+            now,
+            state: input.state,
+            nextAttemptAt: input.nextAttemptAt,
+            error: input.error,
+          })
+        : await input.consumer.settle({
+            delivery: input.delivery,
+            claim: input.claim,
+            now,
+            state: input.state,
+            nextAttemptAt: input.nextAttemptAt,
+            error: input.error,
+          })
+    if (!settled) {
       throw new ConflictError(
         'event-delivery-lease-lost',
-        `event delivery lease was lost: ${input.deliveryId}`,
+        `event delivery lease was lost: ${input.delivery.deliveryId}`,
       )
     }
   }

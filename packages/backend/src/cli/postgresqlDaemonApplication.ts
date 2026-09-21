@@ -43,8 +43,6 @@ import {
 } from '@/modules/runtime-management/composition/runtimeManagement'
 import {
   supportsEventCenterCodeHostDelivery,
-  supportsEventCenterWorkStart,
-  type EventCenterAutomationWorkStarter,
   type WebhookDispatcher,
 } from '@/services/webhook/dispatcherTypes'
 import { loadConfig } from '@/config'
@@ -144,6 +142,7 @@ import {
   composeDigitalEmployee,
   composeDigitalEmployeeBootstrapReadsFor,
   composeDigitalEmployeeWriterCutoverFor,
+  createEmployeeAutomationWorkStartProvider,
   createDigitalEmployeeResourceCatalogAclProviders,
   createEmployeeInputArtifactStore,
   createEmployeeReactionRoundQueries,
@@ -251,7 +250,12 @@ import {
   composeDevelopmentEmployeeEventObserver,
 } from '@/modules/integration/composition/digitalEmployeeEventObserver'
 import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
-import { composeEventCenter } from '@/modules/event-center/composition'
+import {
+  composeEventCenter,
+  createEventAutomationWorkIntentStore,
+} from '@/modules/event-center/composition'
+import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
+import { createTaskAutomationWorkStartProvider } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { taskLifecycleEventCatalogJson } from '@/modules/task-execution/public/events'
 import { collaborationCommittedEventCatalogJson } from '@/modules/collaboration/public/events'
@@ -1253,6 +1257,23 @@ export async function composePostgresqlApplication(
       return { caseId: result.caseRef.id }
     },
   })
+  const eventAutomationWorkIntents = createEventAutomationWorkIntentStore(input.db)
+  const eventAutomationContexts = createEventAutomationDelegatedContextBinding(
+    identityAccess.delegatedRequests,
+  )
+  const taskAutomationWorkStart = createTaskAutomationWorkStartProvider({
+    db: input.db,
+    origins: eventAutomationWorkIntents,
+    contexts: eventAutomationContexts,
+    resources: taskExecutionResources,
+    launch: (request) => taskExecutionProvider.trigger.taskExecutions.launch(request),
+  })
+  const employeeAutomationWorkStart = createEmployeeAutomationWorkStartProvider({
+    db: input.db,
+    origins: eventAutomationWorkIntents,
+    contexts: eventAutomationContexts,
+    launchWork: (request) => digitalEmployeeWorkStart.launch(request),
+  })
   const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(input.db)
   const webhookTerminalControl = composeMrTerminalControl({
     db: input.db,
@@ -1295,14 +1316,6 @@ export async function composePostgresqlApplication(
     persistence: composeWebhookDispatchPersistenceFor(input.db),
     deliveryPersistence: composeWebhookDeliveryPersistenceFor(input.db),
     identityAccess: integrationIdentityAccess,
-    async resolveEventTargetAuthority(userId) {
-      const admitted = await identityAccess.localOperator.forLegacyHttpUser(userId)
-      if (admitted === null) return null
-      return Object.freeze({
-        authority: admitted.commandContext().authority,
-        actor: admitted.actor,
-      })
-    },
     getDefaultRuntime: async () => loadConfig(input.configPath).defaultRuntime,
     ...createPostgresqlWebhookExecutionRuntime({
       taskExecutions: taskExecutionProvider.trigger.taskExecutions,
@@ -1337,22 +1350,13 @@ export async function composePostgresqlApplication(
       approval: composeDevelopmentApprovalEventObserver({ gateway: developmentApprovalGateway }),
     }),
     routingSubscriptions: createCodeHostWebhookRoutingDirectory(input.db, missionEventContinuation),
-    // RFC-359 AC-6 —— 与 SQLite 根逐字同构的**能力探测**接线。
-    // 两个根对 dispatcher 的所有权本来就不同（SQLite 当可选依赖收、PG 自己构造），
-    // 所以这里不是简单 `??`：覆盖件只有部分能力时（测试桩通常只有
-    // `dispatch` / `dispatchSubscription`），直接调 `dispatchEventTarget` 会运行时炸。
-    // `server.ts` 对同一件事的做法是探测不到就置空，这里照抄。
-    //
-    // 生产逐字不变：不传覆盖件 ⇒ 用自己构造的那个 ⇒ 它带全部能力 ⇒ 每个门都通过。
-    ...(supportsEventCenterWorkStart(webhookDispatcher)
-      ? {
-          automationWorkStart: {
-            launch: (
-              request: Parameters<EventCenterAutomationWorkStarter['dispatchEventTarget']>[0],
-            ) => webhookDispatcher.dispatchEventTarget(request),
-          },
-        }
-      : {}),
+    automation: {
+      kind: 'automation',
+      workIntents: eventAutomationWorkIntents,
+      delegatedContexts: eventAutomationContexts.factory,
+      taskWorkStart: taskAutomationWorkStart,
+      employeeWorkStart: employeeAutomationWorkStart,
+    },
     // 同上：能力探测不到就不接这个消费者，与 `server.ts` 的
     // `codeHostDeliveryDispatcher === null ? [] : [...]` 逐字同构。
     deliveryConsumers: supportsEventCenterCodeHostDelivery(webhookDispatcher)

@@ -1372,6 +1372,22 @@ function triggerDefersRepositoryPreparation(invoker: ExecutionInvoker): boolean 
   return invoker.type === 'scheduled' || invoker.type === 'webhook' || invoker.type === 'event'
 }
 
+/** Owner-local receipt lookup used by the Event Center target provider. */
+export async function findTaskAutomationReceipt(
+  db: ProviderNeutralDatabase,
+  eventDeliveryId: string,
+): Promise<string | null> {
+  return (
+    (
+      await db
+        .select({ taskId: tasks.id })
+        .from(tasks)
+        .where(eq(tasks.eventDeliveryId, eventDeliveryId))
+        .get()
+    )?.taskId ?? null
+  )
+}
+
 export function createTaskExecutionLaunchParticipant(
   dependencies: TaskExecutionLaunchParticipantDependencies,
 ): TaskExecutionLaunchParticipant {

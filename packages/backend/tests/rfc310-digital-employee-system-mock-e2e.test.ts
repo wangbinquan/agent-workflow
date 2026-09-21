@@ -75,11 +75,18 @@ import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
 import { composeWebhookDispatchCore } from '@/modules/integration/composition/webhookDispatch'
 import { composeWebhookIngressPersistenceFor } from '@/modules/integration/composition/webhookIngress'
 import { createWebhookDispatchExecutionRuntime } from '@/modules/integration/infrastructure/webhookDispatchRuntime'
-import { composeDigitalEmployee } from '@/modules/digital-employee/composition'
+import {
+  composeDigitalEmployee,
+  createEmployeeAutomationWorkStartProvider,
+} from '@/modules/digital-employee/composition'
 import type { ReactionExecutionPlan } from '@/modules/digital-employee/domain/runtimeModel'
 import { createEmployeeInputArtifactStore } from '@/modules/digital-employee/infrastructure/inputArtifactStore'
 import { digitalEmployeeLifecycleEventCatalogJson } from '@/modules/digital-employee/public/events'
-import { composeEventCenter } from '@/modules/event-center/composition'
+import {
+  composeEventCenter,
+  createEventAutomationWorkIntentStore,
+} from '@/modules/event-center/composition'
+import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   bindCandidateDeliveryParticipant,
@@ -302,10 +309,21 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           return workStartDelegate(input)
         },
       }
+      const identityAccess = createIdentityAccessRuntime({ db })
       const identityDependencies = integrationTriggerWebhookAuthorityDependencies(
         db,
-        createIdentityAccessRuntime({ db }),
+        identityAccess,
       )
+      const eventAutomationWorkIntents = createEventAutomationWorkIntentStore(db)
+      const eventAutomationContexts = createEventAutomationDelegatedContextBinding(
+        identityAccess.delegatedRequests,
+      )
+      const employeeAutomationWorkStart = createEmployeeAutomationWorkStartProvider({
+        db,
+        origins: eventAutomationWorkIntents,
+        contexts: eventAutomationContexts,
+        launchWork: (request) => digitalEmployeeWorkStart.launch(request),
+      })
       const webhookDispatcher = createWebhookDispatcher({
         ...composeWebhookDispatchCore(db, webhookSecretBox, scheduledTaskRuntime(db).operations),
         ...createWebhookDispatchExecutionRuntime({
@@ -327,8 +345,16 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           digitalEmployeeLifecycleEventCatalogJson,
           codeHostEventCatalogJson,
         ],
-        automationWorkStart: {
-          launch: (input) => webhookDispatcher.dispatchEventTarget(input),
+        automation: {
+          kind: 'automation',
+          workIntents: eventAutomationWorkIntents,
+          delegatedContexts: eventAutomationContexts.factory,
+          taskWorkStart: {
+            async start() {
+              throw new Error('digital employee system mock must not start a task target')
+            },
+          },
+          employeeWorkStart: employeeAutomationWorkStart,
         },
       })
       const webhookApp = new Hono()

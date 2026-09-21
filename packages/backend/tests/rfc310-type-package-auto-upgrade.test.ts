@@ -1243,6 +1243,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
           v1Package.descriptorJson,
           digitalEmployeeLifecycleEventCatalogJson,
         ],
+        automation: { kind: 'observation-only' },
         now: () => now,
         id,
       })

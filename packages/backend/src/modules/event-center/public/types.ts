@@ -103,5 +103,3 @@ export interface ObserverHealthDocument {
   readonly lastSuccessAt: number | null
   readonly lastErrorCode: string | null
 }
-
-export type { EventResponseTarget } from '../domain/responseRule'

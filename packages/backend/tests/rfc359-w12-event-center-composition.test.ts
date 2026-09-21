@@ -18,7 +18,10 @@ const firstSubscriber = { kind: 'system' as const, subscriberRef: 'first-consume
 const secondSubscriber = { kind: 'system' as const, subscriberRef: 'second-consumer' }
 
 async function compose(harness: ProviderHarness) {
-  const options = { typePackageDescriptorJsons: [taskLifecycleEventCatalogJson] }
+  const options = {
+    typePackageDescriptorJsons: [taskLifecycleEventCatalogJson],
+    automation: { kind: 'observation-only' as const },
+  }
   // RFC-359 AC-1（plan §5fz）：两个 provider 同一个装配入口，`db` 收中立句柄——
   // 原来的三元（两臂只差一个 cast）与两个 cast 一起消失。
   return await composeEventCenter({ ...options, db: harness.db })
