@@ -1,4 +1,5 @@
 import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
+import type { AgentRunSettledObserver } from '@/modules/task-execution/application/ports/agentRunSettledObserver'
 // RFC-349 provider-neutral task drive options. Provider clients are captured
 // by infrastructure participants and never cross the scheduler/runtime seam.
 import type { Language, ScriptLanguage } from '@agent-workflow/shared'
@@ -183,6 +184,13 @@ export interface RunTaskOptions {
   // RFC-113 §5: the RFC-112 P2 `claudeCodePath` thread is GONE — the built-in
   // claude binary now lives on the claude runtime row's binary_path (config
   // migrated into it) and flows through the normal runtimeBinary freeze.
+  /**
+   * RFC-366: notified once per settled agent node_run (done / failed). Optional —
+   * when bootstrap composes no observer the engine calls the no-op and behaves
+   * exactly as it did before, which is what keeps every existing test and the
+   * dynamic-workflow path unchanged.
+   */
+  agentRunSettled?: AgentRunSettledObserver
 }
 
 export type BoundRunTaskOptions = RunTaskOptions & {

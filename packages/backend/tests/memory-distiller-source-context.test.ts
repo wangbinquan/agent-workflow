@@ -14,6 +14,7 @@
 // The two literal strings above are grep-locked by
 // `memory-distiller.test.ts` so this file is free to focus on behaviour.
 
+import { DEFAULT_SOURCE_CONTEXT_BUDGET } from '@agent-workflow/shared'
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { insertClarifyRoundRaw } from './clarify-fixtures'
 import { join } from 'node:path'
@@ -266,6 +267,9 @@ describeEachProvider('loadSourceEvents — clarify transcript', (harness) => {
       memory.reviewedArtifacts,
       [mkClarifyJob(taskId, clarifyId)],
       {
+        // RFC-366 扩了 SourceContextBudget（agent/task 两类新源各自的字节上限）；
+        // 这里铺默认值，本用例断言的仍然只是它自己那两项。
+        ...DEFAULT_SOURCE_CONTEXT_BUDGET,
         clarifyTranscriptMaxBytes: 2048,
         reviewBodyMaxBytes: 16384,
       },
@@ -287,6 +291,9 @@ describeEachProvider('loadSourceEvents — clarify transcript', (harness) => {
       memory.reviewedArtifacts,
       [mkClarifyJob(taskId, clarifyId)],
       {
+        // RFC-366 扩了 SourceContextBudget（agent/task 两类新源各自的字节上限）；
+        // 这里铺默认值，本用例断言的仍然只是它自己那两项。
+        ...DEFAULT_SOURCE_CONTEXT_BUDGET,
         clarifyTranscriptMaxBytes: 0,
         reviewBodyMaxBytes: 16384,
       },
@@ -387,6 +394,9 @@ describeEachProvider('loadSourceEvents — review body', (harness) => {
       memory.reviewedArtifacts,
       [mkReviewJob(taskId, dvId)],
       {
+        // RFC-366 扩了 SourceContextBudget（agent/task 两类新源各自的字节上限）；
+        // 这里铺默认值，本用例断言的仍然只是它自己那两项。
+        ...DEFAULT_SOURCE_CONTEXT_BUDGET,
         clarifyTranscriptMaxBytes: 16384,
         reviewBodyMaxBytes: 4096,
       },
@@ -405,6 +415,9 @@ describeEachProvider('loadSourceEvents — review body', (harness) => {
       memory.reviewedArtifacts,
       [mkReviewJob(taskId, dvId)],
       {
+        // RFC-366 扩了 SourceContextBudget（agent/task 两类新源各自的字节上限）；
+        // 这里铺默认值，本用例断言的仍然只是它自己那两项。
+        ...DEFAULT_SOURCE_CONTEXT_BUDGET,
         clarifyTranscriptMaxBytes: 16384,
         reviewBodyMaxBytes: 0,
       },
@@ -491,6 +504,9 @@ describe('buildDistillerUserPrompt — context blocks', () => {
         ],
         review: [],
         feedback: [],
+        // RFC-366：两类新源在本用例里为空。
+        agentRun: [],
+        taskRun: [],
       },
       scopeContexts: [{ scopeType: 'global', scopeId: null, approved: [], tagPool: [] }],
       taskId: null,
@@ -516,6 +532,9 @@ describe('buildDistillerUserPrompt — context blocks', () => {
           },
         ],
         feedback: [],
+        // RFC-366：两类新源在本用例里为空。
+        agentRun: [],
+        taskRun: [],
       },
       scopeContexts: [{ scopeType: 'global', scopeId: null, approved: [], tagPool: [] }],
       taskId: null,
@@ -551,6 +570,9 @@ describe('buildDistillerUserPrompt — context blocks', () => {
           },
         ],
         feedback: [],
+        // RFC-366：两类新源在本用例里为空。
+        agentRun: [],
+        taskRun: [],
       },
       scopeContexts: [{ scopeType: 'global', scopeId: null, approved: [], tagPool: [] }],
       taskId: null,
@@ -586,10 +608,17 @@ describe('buildDistillerUserPrompt — context blocks', () => {
           },
         ],
         feedback: [],
+        // RFC-366：两类新源在本用例里为空。
+        agentRun: [],
+        taskRun: [],
       },
       scopeContexts: [{ scopeType: 'global', scopeId: null, approved: [], tagPool: [] }],
       taskId: null,
-      sourceContextBudget: { clarifyTranscriptMaxBytes: 0, reviewBodyMaxBytes: 0 },
+      sourceContextBudget: {
+        ...DEFAULT_SOURCE_CONTEXT_BUDGET,
+        clarifyTranscriptMaxBytes: 0,
+        reviewBodyMaxBytes: 0,
+      },
     })
     expect(prompt).not.toContain('Source agent transcript:')
     expect(prompt).not.toContain('Reviewed document body:')

@@ -13,7 +13,13 @@ export interface CreateTaskFeedbackInput {
 
 export interface CreateTaskFeedbackResult {
   readonly feedback: TaskFeedback
-  readonly distillJobId: string
+  /**
+   * RFC-366: null when the distill gate declined this task's events (e.g. a
+   * scheduled task under the default manual-only whitelist). The note itself is
+   * still saved and listed; only the "queued for distillation" chip goes away,
+   * because `task_feedback.distilled` stays false.
+   */
+  readonly distillJobId: string | null
 }
 
 export class TaskFeedbackService {
@@ -47,12 +53,12 @@ export class TaskFeedbackService {
       sourceEventId: id,
       taskId: input.taskId,
     })
-    await this.store.markDistilled(id, enqueued.jobId)
+    if (enqueued !== null) await this.store.markDistilled(id, enqueued.jobId)
     const feedback = await this.store.getById(id)
     if (feedback === null) {
       throw new Error('task_feedback row vanished immediately after insert')
     }
-    return { feedback, distillJobId: enqueued.jobId }
+    return { feedback, distillJobId: enqueued?.jobId ?? null }
   }
 
   async list(taskId: string): Promise<readonly TaskFeedback[]> {

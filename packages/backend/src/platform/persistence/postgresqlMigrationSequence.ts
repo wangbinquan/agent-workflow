@@ -54,10 +54,62 @@ interface LogicalTableAddition {
   readonly table: LogicalTableContract
 }
 
+/**
+ * RFC-366 — a named CHECK constraint whose expression changes while its table,
+ * columns, codecs, keys and every other constraint stay exactly as they were.
+ *
+ * This is the one non-expand-only edge the sequence admits, and it exists
+ * because widening a value domain is otherwise unreachable: `source_kind`,
+ * `status`, `scope_type` and their siblings are CHECK lists, PostgreSQL has no
+ * `ALTER CONSTRAINT ... CHECK`, and the logical contract is projected from the
+ * same `db/schema.ts` both providers read — so a SQLite-only widening still
+ * moves the contract digest and fails the head assertion. Admitting exactly
+ * "replace a named check's expression, change nothing else" keeps the edge
+ * reviewable: the replay below re-derives both the old and the new statement
+ * from the projection, so a payload cannot smuggle in arbitrary DDL.
+ */
+export interface LogicalCheckReplacement {
+  readonly tableId: string
+  readonly name: string
+  /** The expression BEFORE this upgrade — recorded so the edge reads both ways. */
+  readonly fromExpression: string
+  readonly toExpression: string
+}
+
+/**
+ * RFC-366 — the SAME value domain as its table's CHECK, declared a second time
+ * on the column (`text('source_kind', { enum: [...] })` in `db/schema.ts`).
+ *
+ * It carries no SQL of its own — the contract only reads it to decide the
+ * provider type, and for these columns that stays `text` either way. It must
+ * still travel with the check replacement, because leaving it out makes the two
+ * projections of one domain disagree, and the contract digest would reject the
+ * edge with no hint as to which half was missing.
+ */
+export interface LogicalColumnEnumReplacement {
+  readonly tableId: string
+  readonly column: string
+  readonly fromValues: readonly string[]
+  readonly toValues: readonly string[]
+}
+
+/** The executable pair a {@link LogicalCheckReplacement} projects to. */
+export interface PostgresqlCheckReplacement {
+  readonly logicalId: string
+  readonly before: PostgresqlSchemaStatement
+  readonly drop: PostgresqlSchemaStatement
+  readonly after: PostgresqlSchemaStatement
+}
+
 export interface PostgresqlIndexUpgrade {
-  readonly version: 1 | 2
+  readonly version: 1 | 2 | 3
   /** V2 adds whole new active tables; V1 artifacts remain byte-for-byte unchanged. */
   readonly logicalTables?: readonly LogicalTableAddition[]
+  /** V3 replaces named CHECK expressions; V1/V2 artifacts never carry this key. */
+  readonly logicalChecks?: readonly LogicalCheckReplacement[]
+  readonly checkReplacements?: readonly PostgresqlCheckReplacement[]
+  /** V3 only, and only when the same domain is also declared on the column. */
+  readonly logicalEnums?: readonly LogicalColumnEnumReplacement[]
   readonly id: string
   readonly sequence: number
   readonly digest: string
@@ -261,6 +313,190 @@ export function validatePostgresqlMigrationRoot(
   )
 }
 
+/**
+ * RFC-366 — rewrite the named checks' expressions and nothing else.
+ *
+ * Every rejection here is a case where the caller asked for something this edge
+ * deliberately cannot express (a new check, a dropped check, a rename), so it
+ * belongs in an upgrade kind of its own rather than sliding through this one.
+ */
+function applyLogicalCheckReplacements(
+  contract: LogicalSchemaContract,
+  replacements: readonly LogicalCheckReplacement[],
+): LogicalSchemaContract {
+  if (replacements.length === 0) return contract
+  requireSequence(
+    new Set(replacements.map((item) => `${item.tableId}:${item.name}`)).size ===
+      replacements.length,
+    'duplicate check replacement',
+  )
+  const pending = new Map(
+    replacements.map((item) => [`${item.tableId}:${item.name}`, item] as const),
+  )
+  const tables = contract.tables.map((table) => {
+    const changes = replacements.filter((item) => item.tableId === table.id)
+    if (changes.length === 0) return table
+    requireSequence(
+      table.disposition !== 'ARCHIVE_THEN_OMIT',
+      'check replacement requires an active table',
+    )
+    const checks = table.checks.map((check) => {
+      const change = pending.get(`${table.id}:${check.name}`)
+      if (change === undefined) return check
+      requireSequence(
+        check.expression === change.fromExpression && change.fromExpression !== change.toExpression,
+        'check replacement does not match the existing expression',
+      )
+      pending.delete(`${table.id}:${check.name}`)
+      return { ...check, expression: change.toExpression }
+    })
+    return { ...table, checks }
+  })
+  requireSequence(pending.size === 0, 'check replacement names an unknown table or constraint')
+  const payload = { ...contractPayload(contract), tables }
+  return { ...payload, digest: digestSchemaContract(payload) }
+}
+
+/** RFC-366 — rewrite the named columns' `enumValues` and nothing else. */
+function applyLogicalColumnEnums(
+  contract: LogicalSchemaContract,
+  replacements: readonly LogicalColumnEnumReplacement[],
+): LogicalSchemaContract {
+  if (replacements.length === 0) return contract
+  requireSequence(
+    new Set(replacements.map((item) => `${item.tableId}:${item.column}`)).size ===
+      replacements.length,
+    'duplicate column enum replacement',
+  )
+  const pending = new Map(
+    replacements.map((item) => [`${item.tableId}:${item.column}`, item] as const),
+  )
+  const tables = contract.tables.map((table) => {
+    if (!replacements.some((item) => item.tableId === table.id)) return table
+    const columns = table.columns.map((column) => {
+      const change = pending.get(`${table.id}:${column.name}`)
+      if (change === undefined) return column
+      exact(
+        column.enumValues,
+        change.fromValues,
+        'column enum replacement does not match the existing values',
+      )
+      pending.delete(`${table.id}:${column.name}`)
+      return { ...column, enumValues: change.toValues }
+    })
+    return { ...table, columns }
+  })
+  requireSequence(pending.size === 0, 'column enum replacement names an unknown table or column')
+  const payload = { ...contractPayload(contract), tables }
+  return { ...payload, digest: digestSchemaContract(payload) }
+}
+
+/** RFC-366 — derive the `enumValues`-only column deltas between two contracts. */
+export function logicalColumnEnumReplacements(
+  from: LogicalSchemaContract,
+  to: LogicalSchemaContract,
+): LogicalColumnEnumReplacement[] {
+  const replacements: LogicalColumnEnumReplacement[] = []
+  const byId = new Map(from.tables.map((table) => [table.id, table] as const))
+  for (const table of to.tables) {
+    const previous = byId.get(table.id)
+    if (previous === undefined) continue
+    const previousColumns = new Map(previous.columns.map((column) => [column.name, column]))
+    for (const column of table.columns) {
+      const before = previousColumns.get(column.name)
+      if (before === undefined) continue
+      if (canonicalSchemaJson(before.enumValues) === canonicalSchemaJson(column.enumValues))
+        continue
+      replacements.push({
+        tableId: table.id,
+        column: column.name,
+        fromValues: before.enumValues,
+        toValues: column.enumValues,
+      })
+    }
+  }
+  return replacements
+}
+
+/**
+ * RFC-366 — derive the expression-only check deltas between two contracts.
+ * Anything beyond an expression change (a check added, removed, renamed, or
+ * flipped to/from `null`) is left for `logicalIndexAdditions` to reject, so this
+ * function never widens what the edge admits.
+ */
+export function logicalCheckReplacements(
+  from: LogicalSchemaContract,
+  to: LogicalSchemaContract,
+): LogicalCheckReplacement[] {
+  const replacements: LogicalCheckReplacement[] = []
+  const byId = new Map(from.tables.map((table) => [table.id, table] as const))
+  for (const table of to.tables) {
+    const previous = byId.get(table.id)
+    if (previous === undefined) continue
+    const previousChecks = new Map(previous.checks.map((check) => [check.name, check] as const))
+    for (const check of table.checks) {
+      const before = previousChecks.get(check.name)
+      if (before === undefined) continue
+      if (before.expression === null || check.expression === null) continue
+      if (before.expression === check.expression) continue
+      replacements.push({
+        tableId: table.id,
+        name: check.name,
+        fromExpression: before.expression,
+        toExpression: check.expression,
+      })
+    }
+  }
+  return replacements
+}
+
+/**
+ * RFC-366 — the `DROP CONSTRAINT` that must precede the re-`ADD`.
+ *
+ * Derived by slicing the projection's own `ADD CONSTRAINT` statement rather than
+ * re-deriving the schema/table/identifier quoting here: a second spelling of
+ * those rules is a second thing to keep in sync, and this one cannot drift
+ * because it is literally the projected statement's own prefix.
+ */
+function checkDropStatement(add: PostgresqlSchemaStatement): PostgresqlSchemaStatement {
+  const marker = ' ADD CONSTRAINT '
+  const at = add.sql.indexOf(marker)
+  requireSequence(
+    add.kind === 'constraint' && add.sql.startsWith('ALTER TABLE ') && at > 0,
+    'check constraint statement is not an ALTER TABLE ... ADD CONSTRAINT',
+  )
+  const table = add.sql.slice(0, at)
+  const rest = add.sql.slice(at + marker.length)
+  const nameEnd = rest.indexOf(' ')
+  requireSequence(nameEnd > 0, 'check constraint statement has no constraint name')
+  return {
+    kind: 'constraint',
+    logicalId: `${add.logicalId}:drop`,
+    sql: `${table} DROP CONSTRAINT ${rest.slice(0, nameEnd)}`,
+  }
+}
+
+/** RFC-366 — pair each replaced check's old projection with its drop + new add. */
+function checkReplacementStatements(
+  from: PostgresqlSchemaPlan,
+  to: PostgresqlSchemaPlan,
+  replacements: readonly LogicalCheckReplacement[],
+): PostgresqlCheckReplacement[] {
+  const old = new Map(from.statements.map((statement) => [statementKey(statement), statement]))
+  const next = new Map(to.statements.map((statement) => [statementKey(statement), statement]))
+  return replacements.map((replacement) => {
+    const logicalId = `${replacement.tableId}:check:${replacement.name}`
+    const key = `constraint:${logicalId}`
+    const before = old.get(key)
+    const after = next.get(key)
+    requireSequence(
+      before !== undefined && after !== undefined && before.sql !== after.sql,
+      'check replacement has no projected statement pair',
+    )
+    return { logicalId, before, drop: checkDropStatement(before), after }
+  })
+}
+
 function logicalIndexAdditions(
   from: LogicalSchemaContract,
   to: LogicalSchemaContract,
@@ -398,19 +634,31 @@ interface PostgresqlUpgradeInput {
 export function createPostgresqlIndexUpgrade(
   input: PostgresqlUpgradeInput,
 ): PostgresqlIndexUpgrade {
-  return createPostgresqlUpgrade(input, false)
+  return createPostgresqlUpgrade(input, false, false)
 }
 
 /** RFC-363 expand-only migration: new tables plus ordinary indexes on existing tables. */
 export function createPostgresqlAdditiveUpgrade(
   input: PostgresqlUpgradeInput,
 ): PostgresqlIndexUpgrade {
-  return createPostgresqlUpgrade(input, true)
+  return createPostgresqlUpgrade(input, true, false)
+}
+
+/**
+ * RFC-366 value-domain migration: replace named CHECK expressions (and, if the
+ * same change happens to bring them, new tables/indexes). Everything else about
+ * the schema must still be identical — see {@link LogicalCheckReplacement}.
+ */
+export function createPostgresqlCheckUpgrade(
+  input: PostgresqlUpgradeInput,
+): PostgresqlIndexUpgrade {
+  return createPostgresqlUpgrade(input, true, true)
 }
 
 function createPostgresqlUpgrade(
   input: PostgresqlUpgradeInput,
   allowNewTables: boolean,
+  allowCheckReplacement: boolean,
 ): PostgresqlIndexUpgrade {
   const { from, to } = input
   validateVersion(from)
@@ -421,11 +669,25 @@ function createPostgresqlUpgrade(
         oldTableIds.has(table.id) ? [] : [{ position, table }],
       )
     : []
-  const expanded = appendLogicalTables(from.contract, logicalTables)
+  const withTables = appendLogicalTables(from.contract, logicalTables)
+  const logicalChecks = allowCheckReplacement
+    ? logicalCheckReplacements(withTables, to.contract)
+    : []
+  const logicalEnums = allowCheckReplacement
+    ? logicalColumnEnumReplacements(withTables, to.contract)
+    : []
+  const expanded = applyLogicalColumnEnums(
+    applyLogicalCheckReplacements(withTables, logicalChecks),
+    logicalEnums,
+  )
   const logicalIndexes = logicalIndexAdditions(expanded, to.contract)
   requireSequence(
-    logicalTables.length + logicalIndexes.length > 0,
+    logicalTables.length + logicalIndexes.length + logicalChecks.length > 0,
     'schema upgrade has no new indexes or tables',
+  )
+  requireSequence(
+    !allowCheckReplacement || logicalChecks.length > 0,
+    'check upgrade has no replaced constraint',
   )
   exact(appendLogicalIndexes(expanded, logicalIndexes), to.contract, 'logical index replay differs')
   exact(
@@ -439,12 +701,19 @@ function createPostgresqlUpgrade(
   )
   const old = new Map(from.plan.statements.map((statement) => [statementKey(statement), statement]))
   const next = new Map(to.plan.statements.map((statement) => [statementKey(statement), statement]))
+  const checkReplacements = checkReplacementStatements(from.plan, to.plan, logicalChecks)
+  const replacedKeys = new Set<string>(
+    checkReplacements.map((item) => `constraint:${item.logicalId}`),
+  )
   for (const statement of from.plan.statements) {
     requireSequence(
       next.has(statementKey(statement)),
       'schema upgrade removed an existing statement',
     )
-    if (statementKey(statement) !== 'metadata:contract-row')
+    if (
+      statementKey(statement) !== 'metadata:contract-row' &&
+      !replacedKeys.has(statementKey(statement))
+    )
       exact(
         next.get(statementKey(statement)),
         statement,
@@ -457,13 +726,24 @@ function createPostgresqlUpgrade(
   const before = old.get('metadata:contract-row')
   const after = next.get('metadata:contract-row')
   requireSequence(before !== undefined && after !== undefined, 'schema contract row is missing')
+  // Drop-then-add per constraint, then the additions, then the contract row.
+  // The drop must sit immediately before its own re-add so a partially applied
+  // file never leaves a table with neither the old nor the new domain.
   const executableStatements = [
+    ...checkReplacements.flatMap((item) => [item.drop, item.after]),
     ...indexAdditions.map((addition) => addition.statement),
     contractUpdate(from.plan, to.plan),
   ]
   const payload = {
-    version: logicalTables.length === 0 ? (1 as const) : (2 as const),
+    version:
+      logicalChecks.length > 0
+        ? (3 as const)
+        : logicalTables.length === 0
+          ? (1 as const)
+          : (2 as const),
     ...(logicalTables.length === 0 ? {} : { logicalTables }),
+    ...(logicalChecks.length === 0 ? {} : { logicalChecks, checkReplacements }),
+    ...(logicalEnums.length === 0 ? {} : { logicalEnums }),
     id: input.id,
     sequence: input.sequence,
     previousEntryDigest: input.previousEntryDigest,
@@ -498,7 +778,8 @@ function applyPostgresqlIndexUpgrade(
 ): PostgresqlMigrationVersion {
   const { digest, ...payload } = step
   requireSequence(
-    (step.version === 1 || step.version === 2) && digest === postgresqlMigrationDigest(payload),
+    (step.version === 1 || step.version === 2 || step.version === 3) &&
+      digest === postgresqlMigrationDigest(payload),
     'upgrade entry digest differs',
   )
   requireSequence(
@@ -516,15 +797,40 @@ function applyPostgresqlIndexUpgrade(
     'upgrade baseline identity changed',
   )
   const logicalTables = step.logicalTables ?? []
+  const logicalChecks = step.logicalChecks ?? []
+  const checkReplacements = step.checkReplacements ?? []
+  const logicalEnums = step.logicalEnums ?? []
+  // V1/V2 artifacts never carry the V3 keys, so their canonical JSON — and with
+  // it their digest — is byte-identical to what it was before RFC-366.
   requireSequence(
-    step.version === 1 ? step.logicalTables === undefined : logicalTables.length > 0,
+    step.version === 1
+      ? step.logicalTables === undefined && step.logicalChecks === undefined
+      : step.version === 2
+        ? logicalTables.length > 0 && step.logicalChecks === undefined
+        : logicalChecks.length > 0,
     'upgrade table additions do not match its version',
   )
   requireSequence(
-    step.logicalIndexes.length + logicalTables.length > 0,
+    (step.logicalChecks === undefined) === (step.checkReplacements === undefined) &&
+      checkReplacements.length === logicalChecks.length,
+    'upgrade check replacements are not paired with their logical deltas',
+  )
+  // An enum delta carries no SQL, so on its own it would be an upgrade whose
+  // file is empty apart from the contract row. It only ever travels WITH a
+  // check replacement — the two are one value domain declared twice.
+  requireSequence(
+    logicalEnums.length === 0 || step.version === 3,
+    'upgrade column enum replacements require a value-domain upgrade',
+  )
+  requireSequence(
+    step.logicalIndexes.length + logicalTables.length + logicalChecks.length > 0,
     'schema upgrade has no new indexes or tables',
   )
-  const expanded = appendLogicalTables(previous.contract, logicalTables)
+  const withTables = appendLogicalTables(previous.contract, logicalTables)
+  const expanded = applyLogicalColumnEnums(
+    applyLogicalCheckReplacements(withTables, logicalChecks),
+    logicalEnums,
+  )
   const contract = appendLogicalIndexes(expanded, step.logicalIndexes)
   requireSequence(
     contract.digest === step.to.contractDigest,
@@ -542,8 +848,30 @@ function applyPostgresqlIndexUpgrade(
     statementKey(step.contractRow.after) === 'metadata:contract-row',
     'upgrade contract-row identity differs',
   )
-  const original = previous.plan.statements.map((statement) =>
-    statementKey(statement) === 'metadata:contract-row' ? step.contractRow.after : statement,
+  const replacedByKey = new Map<string, PostgresqlCheckReplacement>(
+    checkReplacements.map((item) => [`constraint:${item.logicalId}`, item]),
+  )
+  const original = previous.plan.statements.map((statement) => {
+    const key = statementKey(statement)
+    if (key === 'metadata:contract-row') return step.contractRow.after
+    const replacement = replacedByKey.get(key)
+    if (replacement === undefined) return statement
+    exact(replacement.before, statement, 'check replacement old statement differs')
+    exact(
+      replacement.drop,
+      checkDropStatement(statement),
+      'check replacement drop statement differs',
+    )
+    return replacement.after
+  })
+  requireSequence(
+    replacedByKey.size === checkReplacements.length &&
+      checkReplacements.every((item) =>
+        previous.plan.statements.some(
+          (statement) => statementKey(statement) === `constraint:${item.logicalId}`,
+        ),
+      ),
+    'check replacement names a statement the previous plan does not have',
   )
   const statements = insertAtPositions(
     original,
@@ -566,9 +894,17 @@ function applyPostgresqlIndexUpgrade(
     previous.plan.statements.map((statement) => [statementKey(statement), statement]),
   )
   for (const statement of projected.statements) {
-    const prior = oldStatements.get(statementKey(statement))
-    if (prior !== undefined && statementKey(statement) !== 'metadata:contract-row')
+    const key = statementKey(statement)
+    const prior = oldStatements.get(key)
+    if (prior !== undefined && key !== 'metadata:contract-row' && !replacedByKey.has(key))
       exact(statement, prior, 'schema upgrade changed an existing statement')
+  }
+  for (const [key, replacement] of replacedByKey) {
+    exact(
+      projected.statements.find((statement) => statementKey(statement) === key),
+      replacement.after,
+      'replaced check SQL differs from its logical projection',
+    )
   }
   const additions = projected.statements.filter(
     (statement) => !oldStatements.has(statementKey(statement)),
@@ -587,6 +923,7 @@ function applyPostgresqlIndexUpgrade(
   exact(
     step.executableStatements,
     [
+      ...checkReplacements.flatMap((item) => [item.drop, item.after]),
       ...step.indexAdditions.map((addition) => addition.statement),
       contractUpdate(previous.plan, plan),
     ],
@@ -722,13 +1059,26 @@ function resolvePostgresqlRowBridge(
   requireSequence(from >= 0 && to >= from, 'unsupported historical index-only row bridge')
   const source = history.versions[from]!.contract
   const target = history.versions[to]!.contract
+  // RFC-366: a value-domain widening is row-compatible by construction — every
+  // row written under the narrower CHECK still satisfies the wider one — so the
+  // additive bridge folds those edges the same way it folds new tables. The
+  // index-only bridge deliberately does NOT: its whole contract is "nothing
+  // about the rows moved", and a widened domain is a change to the rows' shape
+  // even when no row has to be rewritten.
   exact(
     rowContract(
       allowNewTables
         ? history.steps
             .slice(from, to)
             .reduce(
-              (contract, step) => appendLogicalTables(contract, step.logicalTables ?? []),
+              (contract, step) =>
+                applyLogicalColumnEnums(
+                  applyLogicalCheckReplacements(
+                    appendLogicalTables(contract, step.logicalTables ?? []),
+                    step.logicalChecks ?? [],
+                  ),
+                  step.logicalEnums ?? [],
+                ),
               source,
             )
         : source,

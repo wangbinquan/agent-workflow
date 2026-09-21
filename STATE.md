@@ -1,5 +1,46 @@
 # 当前执行状态
 
+## 2026-09-21 RFC-366 完成：执行结束记忆提炼 + 任务来源准入门
+
+起于用户「增加 agent 执行结束、任务执行结束的记忆提炼能力，但是要区分任务类型……默认只提炼
+手工创建任务」。澄清 14 轮（D1–D14 全部逐条拍板，记在 proposal §5），三件套见
+`design/RFC-366-execution-end-memory-distill/`。
+
+**两类新信号源**：`agent-run`（每个 agent node_run 达 done/failed —— loop 每轮 / fanout 每分片 /
+每次重试各一次）走 task-execution 自有端口 `AgentRunSettledObserver`，挂在引擎的 attempt
+结算点、best-effort；`task-run`（任务达 done/failed）走 `taskLifecycleConsumers` 新增的持久化
+committed-event 消费者，必须跳 `continuationHandoff`（PostgreSQL 两段式 retry 的中转态）。
+
+**准入门收敛成一个闸**：五类源全部经过 `enqueueDistillJob`，判据是纯函数
+`memory/domain/distillAdmission.ts`（顺序即契约：源开关 → 无任务放行 → internal 硬拒 →
+`launch_origin` 白名单）。准入三列挂在既有 `findTaskScope` 的投影上，不新增查询。
+配置热读（`setMemoryDistillPolicyProvider`），设置页改完下一个任务即生效。
+
+**能力影响清单 C1–C7 已呈用户确认并落地**：定时 / 事件 / webhook / API 任务的既有
+clarify·review·feedback 提炼默认关闭（加进白名单可恢复）；平台内部执行硬拒、无开关。
+每条拒绝分支都有对应用例（`rfc366-distill-admission` / `rfc366-execution-end-enqueue`）。
+
+**范围扩展（用户批准）**：RFC-349/359 的 PostgreSQL 迁移序列是纯 expand-only 的，只接受
+「新表 / 新索引」，而 `source_kind` 的值域是 CHECK 约束——`ALTER CONSTRAINT … CHECK` 不存在，
+且逻辑契约由 `db/schema.ts` 推导，所以哪怕只改 SQLite 也会动契约摘要、撞历史头断言。
+因此给序列加了**第三种边**：`createPostgresqlCheckUpgrade`（V3 = 具名 CHECK 表达式替换 +
+同一值域在列上的 `enumValues`，发 DROP+ADD，其余一切必须逐字不变）。V1/V2 构件的
+canonical JSON 与摘要逐字节不变，有用例钉住。
+
+**顺带修掉一个前端真 bug**：`Field` 默认渲染成 `<label>`，里面放多个控件时点任何一个都会
+激活**第一个**——实测点「定时任务」改的是「手工创建」。改用组件库已有的 `group` prop。
+坑本身已具普遍性（任何多控件 Field 都会撞），值得后来者一眼看见。
+
+**验收口径**：断言到 `memory_distill_jobs` 的行与蒸馏 user prompt 内容为止，**不**断言候选
+记忆落库——蒸馏器输出协议在 RFC-367 之前是坏的（那条链路归 RFC-367），理由写在
+design.md §11.1，实现期不要把 AC 改成断言 `memories` 表。
+
+新增测试 9 个文件：backend `rfc366-distill-admission`(26) / `rfc366-execution-end-enqueue`(16) /
+`rfc366-task-terminal-consumer`(12) / `rfc366-source-context`(11) / `rfc366-agent-run-observer`(8) /
+`rfc366-postgresql-check-upgrade`(9) / `migration-0228-distill-source-kinds`(6)，frontend
+`rfc366-settings-distill-policy`(11) / `rfc366-distill-source-labels`(5)，外加 e2e
+`rfc366-execution-end-distill.spec.ts`。
+
 ## 2026-09-21 记忆蒸馏超时：默认 120s → 1 小时，并提到设置页可调
 
 用户要求。此前 `DEFAULT_TIMEOUT_MS` 硬编码 120_000，且**没有任何调用方传 timeoutMs**——
@@ -22,14 +63,19 @@
 
 ## 进行中 RFC
 
-- [RFC-366 执行结束记忆提炼 + 任务来源准入门](design/RFC-366-execution-end-memory-distill/)
-  —— Draft，**等用户批准**（含 proposal §6 能力影响清单 C1–C7 的 breaking change 确认）。
-  新增 `agent-run` / `task-run` 两类蒸馏信号源；五类源统一走 `launch_origin` 白名单
-  （默认只 `manual`）+ 逐源开关 + 热读配置。未动任何生产代码。
-- [RFC-367 记忆蒸馏输出协议归一（事件流取数 + 严格协议 + 同会话补问）](design/RFC-367-distiller-output-protocol/) —— Draft，待用户批准后实现
-  —— 2026-09-21 生产取证：最近 10 次蒸馏 10/10 输出无 `<port>` 包裹被静默丢弃（仅 log.warn
-  + markDone），最后一条落库候选停在 2026-07-17。提示词补字面语法 + 候选解析与会话页同源
-  于一条规范化事件流 + 协议失败同会话补问/用尽 markFailed。含能力影响清单 C1–C4。未动生产代码。
+- [RFC-367 记忆蒸馏输出协议归一（事件流取数 + 严格协议 + 同会话补问）](design/RFC-367-distiller-output-protocol/) —— **已批准、实现中**
+  —— 2026-09-21 生产取证：最近 10 次蒸馏 10/10 输出无 `<port>` 包裹被静默丢弃（只 log.warn
+  之后照样 markDone），最后一条落库候选停在 2026-07-17。设计门（Codex 不可用，按 dev-gotchas
+  替代姿势用 Claude 子代理）判 FAIL 2P1/5P2/7P3，findings 已逐条核实回写（含推翻两条原始
+  前提：子会话清扫其实由 `runSystemAgent` 继承、distiller scratch 有 orphan GC）。
+  **已完成**：T1 shared `port-missing` 补问 reason / T2 `runSystemAgent` 透传 resume /
+  T2b `classifyMissingEnvelope` 归位 / T3 提示词补字面语法 + SHA 基线 / T4 判别式解析
+  `distillerOutput.ts` / T5 实时事件 sink / T6 `runDistill` 迁 `runSystemAgent` + 补问循环 /
+  T8 会话页 promptText。新增 58 条测试全绿（7 个 rfc367-* 文件），生产源码 typecheck 干净。
+  **阻塞待办**：T7（退役 capture 端口 / 接 sink）、T9（迁移 5 个既有 spawnFn 测试文件）、
+  T9b（`architecture:write` 重生成账本）、T10。三者都要等并发 session 的 RFC-366 实现落地
+  ——共享树上只要还有他人未提交源码，账本重生成就会把对方 delta 写进来、CI 干净 checkout 必红，
+  因此本批在那之前一行都不能提交。
 
 ## 2026-09-21 修复：记忆卡片列表横排溢出（CSS 选择器列表被拆散）
 

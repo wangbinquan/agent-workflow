@@ -19,6 +19,13 @@ import { createSecretBox } from '@/auth/secretBox'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
 import { loadConfig } from '@/config'
+// RFC-366: the stored budget may carry only the RFC-044 pair; the resolver is the
+// single place the newer per-source caps get their defaults.
+import {
+  DEFAULT_DISTILL_POLICY,
+  resolveDistillPolicy,
+  resolveSourceContextBudget,
+} from '@agent-workflow/shared'
 import { createWebhookDispatcher } from '@/services/webhook/webhookDispatch'
 import {
   composeWebhookDispatchCore,
@@ -148,7 +155,10 @@ import { mcpRouteNow } from '@/routes/mcps'
 import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { pluginOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
-import { setMemoryDistillLangProvider } from '@/modules/memory/composition'
+import {
+  setMemoryDistillLangProvider,
+  setMemoryDistillPolicyProvider,
+} from '@/modules/memory/composition'
 import { acquireLock, adoptCurrentProcessLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import {
   PRESENCE_CHANNEL,
@@ -653,6 +663,13 @@ async function composePostgresqlProviderSession(
           if (isTaskActive(taskId)) return
           await runtime.workspaceMaintenance.finalizeClaimedWorkspace(taskId)
         },
+        async enqueueTaskRunDistill(taskId) {
+          await runtime.memory.distillCommands.enqueue({
+            sourceKind: 'task-run',
+            sourceEventId: taskId,
+            taskId,
+          })
+        },
       }),
       ...createCollaborationDurableConsumerDefinitions({
         events: runtime.eventCenter.commands,
@@ -716,6 +733,20 @@ async function composePostgresqlProviderSession(
       return null
     }
   })
+  // RFC-366: same ambient-provider shape, same reason — the admission gate runs
+  // inside `enqueueDistillJob`, which is reached from clarify / review /
+  // feedback / the two execution-end triggers, none of which have a config path
+  // to thread. Re-reading here means a settings edit gates the very next event
+  // instead of the next daemon restart (D10). A broken config file falls back to
+  // the defaults (manual-only, every source on) rather than silently admitting
+  // everything.
+  setMemoryDistillPolicyProvider(() => {
+    try {
+      return resolveDistillPolicy(loadConfig(Paths.config))
+    } catch {
+      return DEFAULT_DISTILL_POLICY
+    }
+  })
   const memoryDistillRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'memory-distill',
     intervalMs: 1_000,
@@ -727,7 +758,7 @@ async function composePostgresqlProviderSession(
         runtimeName: current.memoryDistillRuntime ?? null,
         defaultRuntime: current.defaultRuntime ?? null,
         model: current.memoryDistillModel ?? null,
-        sourceContextBudget: current.memoryDistillSourceContext,
+        sourceContextBudget: resolveSourceContextBudget(current.memoryDistillSourceContext),
         timeoutMs: current.memoryDistillTimeoutMs,
       })
     },
@@ -2016,6 +2047,12 @@ async function composeSqliteProviderSession(
       db,
       schedulerDriver: taskExecutionRuntime.schedulerDriver,
       configPath: Paths.config,
+      // RFC-366：绑上 memory 的蒸馏入队 participant。
+      // 两个用处，都靠它：`runtimeConfigOpts` 据此组出 agent 运行结束的观察者
+      // （每个 agent node_run 结算一次），`gateContinuationPreDrive` 据此拿到真正的
+      // 入队器而不是那个 fail-closed 的占位（`missingMemoryDistillEnqueuer`，
+      // `StartTaskDeps.memoryDistillEnqueuer` 的注释本来就写明「bootstrap 必须绑」）。
+      memoryDistillEnqueuer: memoryOperations.distillCommands,
       // RFC-359 AC-1（plan §5hn 批次二 ①②，**修 20d4a6ce5 推的 e2e 红**）：
       // 这台协调器的运行期配置必须和 `buildStartTaskDeps` 取自同一处。
       // `createTaskDriveCoordinator` 里的 `runtimeConfigOpts(input.deps)` 从 `deps` 上读
@@ -2767,6 +2804,13 @@ async function composeSqliteProviderSession(
           if (isTaskActive(taskId)) return
           await finishClaimedWebhookWorkspacePrune(db, taskId)
         },
+        async enqueueTaskRunDistill(taskId) {
+          await memoryOperations.distillCommands.enqueue({
+            sourceKind: 'task-run',
+            sourceEventId: taskId,
+            taskId,
+          })
+        },
       }),
       ...createCollaborationDurableConsumerDefinitions({
         events: employeeHttpEventCenter.commands,
@@ -3196,6 +3240,20 @@ async function composeSqliteProviderSession(
       return null
     }
   })
+  // RFC-366: same ambient-provider shape, same reason — the admission gate runs
+  // inside `enqueueDistillJob`, which is reached from clarify / review /
+  // feedback / the two execution-end triggers, none of which have a config path
+  // to thread. Re-reading here means a settings edit gates the very next event
+  // instead of the next daemon restart (D10). A broken config file falls back to
+  // the defaults (manual-only, every source on) rather than silently admitting
+  // everything.
+  setMemoryDistillPolicyProvider(() => {
+    try {
+      return resolveDistillPolicy(loadConfig(Paths.config))
+    } catch {
+      return DEFAULT_DISTILL_POLICY
+    }
+  })
 
   // distill 的这几项**每 tick 重读**，与 PostgreSQL 路径（同文件 memory-distill
   // factory）逐字一致：之前这里是引导期快照（`distillBootConfig`），于是同一个设置
@@ -3219,7 +3277,7 @@ async function composeSqliteProviderSession(
         runtimeName: current.memoryDistillRuntime ?? null,
         defaultRuntime: current.defaultRuntime ?? null,
         model: current.memoryDistillModel ?? null,
-        sourceContextBudget: current.memoryDistillSourceContext,
+        sourceContextBudget: resolveSourceContextBudget(current.memoryDistillSourceContext),
         timeoutMs: current.memoryDistillTimeoutMs,
       })
     },

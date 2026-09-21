@@ -31,6 +31,8 @@ export function createTaskLifecycleDurableConsumerDefinitions(input: {
   readonly notifyChildBudget: (taskId: string, status: TaskStatus) => Promise<void>
   readonly notifyExecutionWatch: (taskId: string, status: TaskStatus) => Promise<void>
   readonly nudgeWorkspacePrune: (taskId: string) => Promise<void>
+  /** RFC-366: enqueue a `task-run` distill for a task that just settled. */
+  readonly enqueueTaskRunDistill: (taskId: string) => Promise<void>
 }): readonly CommittedEventConsumerDefinition[] {
   return [
     {
@@ -105,6 +107,28 @@ export function createTaskLifecycleDurableConsumerDefinitions(input: {
         ) {
           await input.notifyExecutionWatch(event.payload.taskId, event.payload.status)
         }
+      },
+    },
+    {
+      // RFC-366 —— 任务执行结束的记忆提炼信号源。
+      //
+      // 只认 done / failed（D4）：canceled 是人为中止、interrupted 是 daemon 重启
+      // 残留，两者都不代表一次跑完的执行，提不出「这次做完学到了什么」。
+      //
+      // `continuationHandoff` 必须跳过，理由与同文件上面三个消费者逐字相同：
+      // PostgreSQL 的两段式 retry 会先把任务推到一个可 resume 的终态再 CAS 回
+      // pending，这一跳的 status 是中转态不是结局。不跳的话，一次重试就会按
+      // 「任务结束」提炼一遍，而任务其实还在跑。
+      id: 'task-terminal-distill-enqueue',
+      eventTypes: ['task.lifecycle-transitioned.v1'],
+      deliveryClass: 'rebuildable',
+      settle: 'durable-effect-recorded',
+      async handle(value) {
+        const event = decodeTaskLifecycleCommittedEvent(value)
+        if (event.type !== 'task.lifecycle-transitioned.v1') return
+        if (event.payload.status !== 'done' && event.payload.status !== 'failed') return
+        if (event.payload.continuationHandoff) return
+        await input.enqueueTaskRunDistill(event.payload.taskId)
       },
     },
     {

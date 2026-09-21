@@ -77,7 +77,10 @@ describe('Settings numeric bounds parity', () => {
     // 必须在界面上可见可调，不能只藏在 config.json）。
     // 2026-09-21：36 → 37，记忆蒸馏超时。默认从 120s 提到 1 小时的同时把它提到设置页
     // ——这是直接决定「一批蒸馏能不能跑完」的成本/成败旋钮，不能只藏在 config.json。
-    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(37)
+    // RFC-366：37 → 38，agent 结束去抖窗口。每个 agent node_run 结算各入队一次
+    // （loop 每轮 / fanout 每分片 / 每次重试都算），这个窗口直接决定一次任务烧几次
+    // 蒸馏——同样是成本旋钮，同样必须在界面上可调。
+    expect(Object.keys(SETTINGS_NUMERIC_BOUNDS)).toHaveLength(38)
     for (const path of Object.keys(SETTINGS_NUMERIC_BOUNDS) as SettingsNumericPath[]) {
       const matches = SETTINGS_SOURCE.match(
         new RegExp(`setting="${path.replaceAll('.', '\\.')}"`, 'g'),

@@ -1,0 +1,152 @@
+{
+  "checkReplacements": [
+    {
+      "after": {
+        "kind": "constraint",
+        "logicalId": "memories:check:memories_source_kind_enum",
+        "sql": "ALTER TABLE \"agent_workflow\".\"memories\" ADD CONSTRAINT \"memories_source_kind_enum\" CHECK (\"source_kind\" IN ('clarify','review','feedback','agent-run','task-run','manual'))"
+      },
+      "before": {
+        "kind": "constraint",
+        "logicalId": "memories:check:memories_source_kind_enum",
+        "sql": "ALTER TABLE \"agent_workflow\".\"memories\" ADD CONSTRAINT \"memories_source_kind_enum\" CHECK (\"source_kind\" IN ('clarify','review','feedback','manual'))"
+      },
+      "drop": {
+        "kind": "constraint",
+        "logicalId": "memories:check:memories_source_kind_enum:drop",
+        "sql": "ALTER TABLE \"agent_workflow\".\"memories\" DROP CONSTRAINT \"memories_source_kind_enum\""
+      },
+      "logicalId": "memories:check:memories_source_kind_enum"
+    },
+    {
+      "after": {
+        "kind": "constraint",
+        "logicalId": "memory_distill_jobs:check:memory_distill_jobs_source_kind_enum",
+        "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_jobs\" ADD CONSTRAINT \"memory_distill_jobs_source_kind_enum\" CHECK (\"source_kind\" IN ('clarify','review','feedback','agent-run','task-run'))"
+      },
+      "before": {
+        "kind": "constraint",
+        "logicalId": "memory_distill_jobs:check:memory_distill_jobs_source_kind_enum",
+        "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_jobs\" ADD CONSTRAINT \"memory_distill_jobs_source_kind_enum\" CHECK (\"source_kind\" IN ('clarify','review','feedback'))"
+      },
+      "drop": {
+        "kind": "constraint",
+        "logicalId": "memory_distill_jobs:check:memory_distill_jobs_source_kind_enum:drop",
+        "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_jobs\" DROP CONSTRAINT \"memory_distill_jobs_source_kind_enum\""
+      },
+      "logicalId": "memory_distill_jobs:check:memory_distill_jobs_source_kind_enum"
+    }
+  ],
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:a27693137b6fd52a93912ee8d0e204ae58bb685bdcd2d80eb98538f9e07c9286', 182, 6)"
+    },
+    "beforeDigest": "sha256:f54d13055d5d27656088217bc3142b91aebe7e5c306496ccccf29c75bde7448d"
+  },
+  "digest": "sha256:873e831069193efcce6a7d9b4f7b9137491182798a1020c5b05b5b85e4be586d",
+  "executableStatements": [
+    {
+      "kind": "constraint",
+      "logicalId": "memories:check:memories_source_kind_enum:drop",
+      "sql": "ALTER TABLE \"agent_workflow\".\"memories\" DROP CONSTRAINT \"memories_source_kind_enum\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "memories:check:memories_source_kind_enum",
+      "sql": "ALTER TABLE \"agent_workflow\".\"memories\" ADD CONSTRAINT \"memories_source_kind_enum\" CHECK (\"source_kind\" IN ('clarify','review','feedback','agent-run','task-run','manual'))"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "memory_distill_jobs:check:memory_distill_jobs_source_kind_enum:drop",
+      "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_jobs\" DROP CONSTRAINT \"memory_distill_jobs_source_kind_enum\""
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "memory_distill_jobs:check:memory_distill_jobs_source_kind_enum",
+      "sql": "ALTER TABLE \"agent_workflow\".\"memory_distill_jobs\" ADD CONSTRAINT \"memory_distill_jobs_source_kind_enum\" CHECK (\"source_kind\" IN ('clarify','review','feedback','agent-run','task-run'))"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:a27693137b6fd52a93912ee8d0e204ae58bb685bdcd2d80eb98538f9e07c9286', active_table_count = 182, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:3e64b52d2ac2166405475f71c3160eac22c8617ee8822a108aa6fe2ca472c430' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:3e64b52d2ac2166405475f71c3160eac22c8617ee8822a108aa6fe2ca472c430",
+    "planDigest": "sha256:af9cf609499c4d531808dca95676271304fa3ed51315f4165e9b4ecbab0117cb"
+  },
+  "id": "0004_rfc366_distill_source_kinds",
+  "indexAdditions": [],
+  "logicalChecks": [
+    {
+      "fromExpression": "\"memories\".\"source_kind\" IN ('clarify','review','feedback','manual')",
+      "name": "memories_source_kind_enum",
+      "tableId": "memories",
+      "toExpression": "\"memories\".\"source_kind\" IN ('clarify','review','feedback','agent-run','task-run','manual')"
+    },
+    {
+      "fromExpression": "\"memory_distill_jobs\".\"source_kind\" IN ('clarify','review','feedback')",
+      "name": "memory_distill_jobs_source_kind_enum",
+      "tableId": "memory_distill_jobs",
+      "toExpression": "\"memory_distill_jobs\".\"source_kind\" IN ('clarify','review','feedback','agent-run','task-run')"
+    }
+  ],
+  "logicalEnums": [
+    {
+      "column": "source_kind",
+      "fromValues": ["clarify", "review", "feedback", "manual"],
+      "tableId": "memories",
+      "toValues": ["clarify", "review", "feedback", "agent-run", "task-run", "manual"]
+    },
+    {
+      "column": "source_kind",
+      "fromValues": ["clarify", "review", "feedback"],
+      "tableId": "memory_distill_jobs",
+      "toValues": ["clarify", "review", "feedback", "agent-run", "task-run"]
+    }
+  ],
+  "logicalIndexes": [],
+  "previousEntryDigest": "sha256:c4466887b780aaf913693ff5277c2e8d3b027db8fec5e3b7806c7b6319e9774e",
+  "sequence": 4,
+  "sqlDigest": "sha256:1a69ff7d8606fb3d5aff04830687eb8d3e729466f5bbc65694b168f4f88bb95a",
+  "sqlFile": "0004_rfc366_distill_source_kinds.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1790265612067,
+        "hash": "bc0168c7c99b54f17065cf9d38efe660c267dba339b966f42e20a97c2af412b3",
+        "index": 227,
+        "tag": "0228_rfc366_distill_source_kinds"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:55157963993d87903a6d2def98a8605c61e6623f753818ff91e94fb6f105cecc",
+      "count": 227,
+      "last": {
+        "folderMillis": 1790179212067,
+        "hash": "a1b988d318971345827fc7ba6a6f53387acff37238d670fa6269fb921e984f7f",
+        "index": 226,
+        "tag": "0227_rfc363_workspace_preparation_journals"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:b7c0ca67cab2148a22c13fd1e247e780d92f0948f94831d7db0572c0b3c18617",
+      "count": 228,
+      "last": {
+        "folderMillis": 1790265612067,
+        "hash": "bc0168c7c99b54f17065cf9d38efe660c267dba339b966f42e20a97c2af412b3",
+        "index": 227,
+        "tag": "0228_rfc366_distill_source_kinds"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:a27693137b6fd52a93912ee8d0e204ae58bb685bdcd2d80eb98538f9e07c9286",
+    "planDigest": "sha256:246e6b11aaf19217af8b7da743b35a15e32dc9cd99ecefbc68fef010c51c9c9b"
+  },
+  "version": 3
+}

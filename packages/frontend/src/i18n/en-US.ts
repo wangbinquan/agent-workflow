@@ -7088,6 +7088,22 @@ export const enUS: Resources = {
     memoryDistillTimeoutMs: 'Memory distill timeout',
     memoryDistillTimeoutMsHint:
       'Longest a single memory-distill run may take (ms, default 3600000 = 1 hour). A timeout counts as a failure and backs off. Distillation is single-flight, so the whole distill queue waits while one run uses this budget.',
+    memoryDistillOriginsLabel: 'Distill tasks launched by',
+    memoryDistillOriginsHint:
+      'Only tasks from a checked origin produce memory distillation, for all five signal sources. Manual-only by default: scheduled / event / webhook launches tend to be high-frequency and homogeneous, and opening them up floods the approval queue. Child tasks inherit their parent origin. Platform-internal executions never distill and are unaffected by this list.',
+    memoryDistillOrigin: {
+      manual: 'Manual',
+      scheduled: 'Scheduled',
+      event: 'Event',
+      webhook: 'Webhook',
+      api: 'API / token',
+    },
+    memoryDistillSourcesLabel: 'Distill which events',
+    memoryDistillSourcesHint:
+      'One switch per signal source, orthogonal to the origins above: origins pick which tasks, these pick which events. All enabled by default.',
+    memoryDistillAgentRunDebounceMs: 'Agent-run debounce window',
+    memoryDistillAgentRunDebounceMsHint:
+      'Every settled agent run enqueues one job (loop iterations, fan-out shards and retries each count). This window merges the runs of the same agent in the same task that settle within it into a single distillation (ms, default 60000 = 60s). 0 disables debouncing. The other four sources stay at 5s.',
     commitPushRuntime: 'Commit & push runtime',
     commitPushRuntimeHint:
       'Runtime profile the built-in commit agent runs on; its model comes from the profile. Leave empty to inherit the global default runtime.',
@@ -8662,6 +8678,8 @@ export const enUS: Resources = {
         clarify: 'clarify',
         review: 'review',
         feedback: 'feedback',
+        'agent-run': 'agent run',
+        'task-run': 'task run',
         manual: 'manual',
       },
     },
@@ -8716,6 +8734,7 @@ export const enUS: Resources = {
       colId: 'Job ID',
       colStatus: 'Status',
       colSource: 'Source',
+      sourceFilterAll: 'All sources',
       colAttempts: 'Attempts',
       colCreated: 'Created',
       colError: 'Error',
@@ -8737,6 +8756,8 @@ export const enUS: Resources = {
       clarify: 'Clarify',
       review: 'Review',
       feedback: 'Feedback',
+      'agent-run': 'Agent run',
+      'task-run': 'Task run',
       manual: 'Manual',
     },
     distillJobDetail: {

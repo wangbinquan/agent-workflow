@@ -20,7 +20,43 @@ export const MemoryStatusSchema = z.enum([
 ])
 export type MemoryStatus = z.infer<typeof MemoryStatusSchema>
 
-export const MemorySourceKindSchema = z.enum(['clarify', 'review', 'feedback', 'manual'])
+/**
+ * RFC-366 — the closed set of events that can enqueue a distill job.
+ *
+ * `agent-run` / `task-run` join the RFC-041 trio. Multi-word literals are kebab
+ * to match the repo's other multi-word DB enums (`stale-redispatch`,
+ * `conflict-human`, `code-round`); the settings object keys them in camelCase,
+ * and {@link DISTILL_SOURCE_CONFIG_KEY} is the ONLY place the two spellings meet.
+ */
+export const DISTILL_SOURCE_KINDS = [
+  'clarify',
+  'review',
+  'feedback',
+  'agent-run',
+  'task-run',
+] as const
+export const DistillSourceKindSchema = z.enum(DISTILL_SOURCE_KINDS)
+export type DistillSourceKind = z.infer<typeof DistillSourceKindSchema>
+
+/**
+ * RFC-366 — DB/wire literal → `config.memoryDistillSources` key. Single source
+ * of truth: a second spelling anywhere else silently detaches a switch from the
+ * source it is supposed to gate (the switch reads `true` forever).
+ */
+export const DISTILL_SOURCE_CONFIG_KEY = {
+  clarify: 'clarify',
+  review: 'review',
+  feedback: 'feedback',
+  'agent-run': 'agentRun',
+  'task-run': 'taskRun',
+} as const satisfies Record<DistillSourceKind, string>
+export type DistillSourceConfigKey =
+  (typeof DISTILL_SOURCE_CONFIG_KEY)[keyof typeof DISTILL_SOURCE_CONFIG_KEY]
+
+// RFC-366: `manual` is a memory-row-only provenance (a human authored the row
+// via RFC-045); it is not a distill trigger, so it lives here and not in
+// DISTILL_SOURCE_KINDS.
+export const MemorySourceKindSchema = z.enum([...DISTILL_SOURCE_KINDS, 'manual'])
 export type MemorySourceKind = z.infer<typeof MemorySourceKindSchema>
 
 export const DistillActionSchema = z.enum(['new', 'update_of', 'duplicate_of', 'conflict_with'])
@@ -222,7 +258,7 @@ export type ResolvedDistillScope = z.infer<typeof ResolvedDistillScopeSchema>
 export const MemoryDistillJobSchema = z.object({
   id: z.string(),
   debounceKey: z.string(),
-  sourceKind: z.enum(['clarify', 'review', 'feedback']),
+  sourceKind: DistillSourceKindSchema,
   sourceEventId: z.string(),
   taskId: z.string().nullable(),
   scopeResolved: ResolvedDistillScopeSchema,

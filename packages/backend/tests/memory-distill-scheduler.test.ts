@@ -11,7 +11,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
-import { QUARANTINED_SNAPSHOT_AGENT_ID } from '@agent-workflow/shared'
+import {
+  DEFAULT_SOURCE_CONTEXT_BUDGET,
+  QUARANTINED_SNAPSHOT_AGENT_ID,
+} from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
@@ -45,6 +48,16 @@ import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaborat
 import { DrizzleMemoryDistillRuntimeResolver } from '../src/modules/memory/infrastructure/memoryDistillRuntimeResolver'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
+
+/**
+ * RFC-366: `enqueueDistillJob` now returns null when the admission gate declines
+ * the event. Every case in this file uses a manual-origin (or task-less) fixture,
+ * so a null here means the gate regressed — fail loudly rather than `!`-away.
+ */
+function admitted<T>(result: T | null): T {
+  if (result === null) throw new Error('distill enqueue was unexpectedly rejected')
+  return result
+}
 
 function createMemoryDistillTestContext(db: ProviderNeutralDatabase) {
   const previousHome = process.env.AGENT_WORKFLOW_HOME
@@ -339,11 +352,13 @@ describeEachProvider('enqueueDistillJob', (harness) => {
   test('writes a pending row with next_run_at = now + 5s + correct debounce key', async () => {
     const { taskId } = await seedTask(db)
     const before = Date.now()
-    const r = await enqueueDistillJob(memory.store, {
-      sourceKind: 'clarify',
-      sourceEventId: 'c1',
-      taskId,
-    })
+    const r = admitted(
+      await enqueueDistillJob(memory.store, {
+        sourceKind: 'clarify',
+        sourceEventId: 'c1',
+        taskId,
+      }),
+    )
     expect(r.debounceKey).toBe(`${taskId}:clarify`)
     expect(r.nextRunAt).toBeGreaterThanOrEqual(before + 5_000 - 50)
     const rows = await db.select().from(memoryDistillJobs).all()
@@ -353,12 +368,14 @@ describeEachProvider('enqueueDistillJob', (harness) => {
   })
   test('respects debounceMs override (used by tests + manual control)', async () => {
     const before = Date.now()
-    const r = await enqueueDistillJob(memory.store, {
-      sourceKind: 'feedback',
-      sourceEventId: 'f1',
-      taskId: null,
-      debounceMs: 0,
-    })
+    const r = admitted(
+      await enqueueDistillJob(memory.store, {
+        sourceKind: 'feedback',
+        sourceEventId: 'f1',
+        taskId: null,
+        debounceMs: 0,
+      }),
+    )
     expect(r.nextRunAt).toBeLessThanOrEqual(before + 50)
   })
 })
@@ -608,7 +625,12 @@ describeEachProvider('distillTick', (harness) => {
     await distillTick({
       ...workerDeps(memory),
       spawnFn: captureSpawn,
-      sourceContextBudget: { clarifyTranscriptMaxBytes: 0, reviewBodyMaxBytes: 0 },
+      // RFC-366 扩了预算对象；本用例关心的仍是 clarify/review 两项归零。
+      sourceContextBudget: {
+        ...DEFAULT_SOURCE_CONTEXT_BUDGET,
+        clarifyTranscriptMaxBytes: 0,
+        reviewBodyMaxBytes: 0,
+      },
     })
     expect(capturedPrompt).not.toBeNull()
     expect(capturedPrompt!).not.toContain('Source agent transcript:')

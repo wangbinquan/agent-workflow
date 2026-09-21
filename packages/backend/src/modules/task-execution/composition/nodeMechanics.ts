@@ -10,6 +10,7 @@ import type {
   NodeExecutionSnapshot,
 } from '@/modules/task-execution/application/ports/nodeExecutionPersistence'
 import { resolveNodeActivationForDispatch } from '@/modules/task-execution/application/resolveNodeActivation'
+import { NOOP_AGENT_RUN_SETTLED_OBSERVER } from '@/modules/task-execution/application/ports/agentRunSettledObserver'
 import { resolveSchedulerRunRow } from '@/modules/task-execution/application/resolveSchedulerRunRow'
 import {
   decideRetryShape,
@@ -4666,6 +4667,31 @@ export async function runAgentSingleNode(
     }
 
     broadcastNodeStatus(taskId, nodeRunId, node.id, lastResult.status)
+    // RFC-366 —— agent 运行结束的记忆提炼信号。
+    //
+    // 位置：每次 attempt 结算之后（本函数在重试循环体内），所以 loop 每轮、fanout
+    // 每分片、每次重试各通知一次 —— 就是 D1 的粒度。
+    //
+    // 终态过滤留在这里（而不是下游）：哪些状态算「一次跑完的执行」是执行语义。
+    // canceled / interrupted / exhausted / skipped 都不算（D4）。
+    //
+    // best-effort（D13）：通知失败绝不能影响节点结算本身，否则一个蒸馏队列的
+    // 写入错误就能把一次已经成功的 agent 运行改判成失败。
+    if (lastResult.status === 'done' || lastResult.status === 'failed') {
+      await (state.opts.agentRunSettled ?? NOOP_AGENT_RUN_SETTLED_OBSERVER)
+        .onAgentRunSettled({
+          taskId,
+          nodeRunId,
+          nodeId: node.id,
+          status: lastResult.status,
+        })
+        .catch((err: unknown) => {
+          log.warn('agent-run settled observer failed', {
+            nodeRunId,
+            error: err instanceof Error ? err.message : String(err),
+          })
+        })
+    }
     return lastResult
   }
 

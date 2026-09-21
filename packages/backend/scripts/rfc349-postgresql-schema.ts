@@ -18,8 +18,10 @@ import {
 import {
   assertPostgresqlMigrationHead,
   createPostgresqlAdditiveUpgrade,
+  createPostgresqlCheckUpgrade,
   createPostgresqlIndexUpgrade,
   createPostgresqlMigrationRoot,
+  logicalCheckReplacements,
   postgresqlMigrationDigest,
   postgresqlSqliteMigrationIdentity,
   renderPostgresqlUpgradeSql,
@@ -124,9 +126,16 @@ export async function generatePostgresqlMigrationHistory(
   }
   const oldTables = new Set(upgrade.from.contract.tables.map((table) => table.id))
   const addsTables = target.contract.tables.some((table) => !oldTables.has(table.id))
-  const step = addsTables
-    ? createPostgresqlAdditiveUpgrade({ ...upgrade })
-    : createPostgresqlIndexUpgrade({ ...upgrade })
+  // RFC-366: a value-domain widening (a named CHECK's expression changes) is the
+  // one non-expand-only edge the sequence admits, and it has to be detected here
+  // because the other two creators reject it outright — an `index-only upgrade
+  // changed a row` with no hint that a third kind exists.
+  const replacesChecks = logicalCheckReplacements(upgrade.from.contract, target.contract).length > 0
+  const step = replacesChecks
+    ? createPostgresqlCheckUpgrade({ ...upgrade })
+    : addsTables
+      ? createPostgresqlAdditiveUpgrade({ ...upgrade })
+      : createPostgresqlIndexUpgrade({ ...upgrade })
   const sqlFile = resolve(folder, step.sqlFile)
   const journalFile = resolve(folder, 'meta', `${step.id}.upgrade.json`)
   if (await writeImmutable(sqlFile, renderPostgresqlUpgradeSql(step))) created.push(sqlFile)

@@ -18,16 +18,23 @@
 
 import { ulid } from 'ulid'
 import type {
+  DistillPolicy,
+  DistillSourceKind,
   Language,
   MemoryDistillJob,
   MemoryDistillJobWsMessage,
   ResolvedDistillScope,
   SourceContextBudget,
 } from '@agent-workflow/shared'
-import { QUARANTINED_SNAPSHOT_AGENT_ID, WorkgroupRuntimeConfigSchema } from '@agent-workflow/shared'
+import {
+  DEFAULT_DISTILL_POLICY,
+  QUARANTINED_SNAPSHOT_AGENT_ID,
+  WorkgroupRuntimeConfigSchema,
+} from '@agent-workflow/shared'
+import { distillAdmission } from '@/modules/memory/domain/distillAdmission'
 import {
   runDistill,
-  type DistillerSpawnFn,
+  type RunDistillOptions,
   rowToDistillJob,
 } from '@/modules/memory/application/distill/memoryDistiller'
 import { MEMORY_DISTILL_JOB_CHANNEL, memoryDistillJobBroadcaster } from '@/ws/broadcaster'
@@ -36,6 +43,7 @@ import { agentRefOfNode } from '@/services/ref/runtimeRef'
 import type {
   MemoryDistillReviewedArtifactReader,
   MemoryDistillRuntimeResolver,
+  MemoryDistillTaskScopeRecord,
   MemoryDistillWorkStore,
 } from '@/modules/memory/application/ports/distillWorkStore'
 import type { MemoryDistillJobRecord } from '@/modules/memory/application/ports/distillReadStore'
@@ -65,6 +73,29 @@ export function setMemoryDistillLangProvider(fn: () => Language | null): void {
 export function resetMemoryDistillLangProviderForTest(): void {
   memoryDistillLangProvider = () => null
 }
+
+/**
+ * RFC-366: ambient provider for the distill POLICY — which task origins and
+ * which sources may enqueue, plus the agent-run debounce window. Same shape and
+ * same reason as the RFC-050 language provider above: `cli/start.ts` registers
+ * one that re-reads `config.json` on every call, so a settings edit takes effect
+ * on the next event instead of at the next daemon restart (RFC-366 D10).
+ *
+ * The default is deliberately the permissive-for-sources / manual-only-for-origins
+ * shape rather than "everything on": tests and early boot must see the same
+ * defaults a fresh install sees, or the gate's behaviour would differ between
+ * the first event after boot and every later one.
+ */
+let memoryDistillPolicyProvider: () => DistillPolicy = () => DEFAULT_DISTILL_POLICY
+
+export function setMemoryDistillPolicyProvider(fn: () => DistillPolicy): void {
+  memoryDistillPolicyProvider = fn
+}
+
+/** Test-only — see {@link resetMemoryDistillLangProviderForTest}. */
+export function resetMemoryDistillPolicyProviderForTest(): void {
+  memoryDistillPolicyProvider = () => DEFAULT_DISTILL_POLICY
+}
 /** Cap how many distill jobs we kick off per tick to bound LLM concurrency. */
 export const DISTILL_BATCH_LIMIT = 5
 /** Failed jobs flip to permanent `failed` after this many attempts. */
@@ -77,10 +108,20 @@ export const DISTILL_BACKOFF_BASE_MS = 30_000
 // ---------------------------------------------------------------------------
 
 export interface EnqueueDistillJobInput {
-  sourceKind: 'clarify' | 'review' | 'feedback'
+  sourceKind: DistillSourceKind
   sourceEventId: string
   taskId: string | null
-  /** Override the 5s default — useful for tests. */
+  /**
+   * RFC-366 (`agent-run` only): the workflow node whose run just settled.
+   *
+   * Passed instead of a resolved agent id on purpose — resolving a node to its
+   * frozen `agents.id` needs the task's workflow snapshot, which this function
+   * already reads for the scope. Making the caller do it would put a second
+   * copy of that lookup in task-execution, and a second copy is a second thing
+   * that can disagree about what `QUARANTINED_SNAPSHOT_AGENT_ID` means.
+   */
+  nodeId?: string
+  /** Override the default window — useful for tests. */
   debounceMs?: number
   /**
    * RFC-050: language for this job's distiller output. Snapshotted at
@@ -98,15 +139,54 @@ export interface EnqueueResult {
   nextRunAt: number
 }
 
+/**
+ * RFC-366: the ONE place the distill gate runs. Every source kind reaches the
+ * queue through this function, so no caller can route around the policy.
+ *
+ * Returns `null` when the event is not admitted — callers treat that as "this
+ * event produced no job", never as an error (the four pre-RFC-366 call sites
+ * were all best-effort or durable-consumer shaped already).
+ */
 export async function enqueueDistillJob(
   store: MemoryDistillWorkStore,
   input: EnqueueDistillJobInput,
-): Promise<EnqueueResult> {
-  const debounceKey = buildDebounceKey(input)
-  const scopeResolved = await computeEligibleScopes(store, input.taskId)
+): Promise<EnqueueResult | null> {
+  const policy = memoryDistillPolicyProvider()
+  const taskRow = input.taskId === null ? null : await store.findTaskScope(input.taskId)
+  const admission = distillAdmission({
+    sourceKind: input.sourceKind,
+    task:
+      taskRow === null
+        ? null
+        : {
+            launchOrigin: taskRow.launchOrigin,
+            catalogVisibility: taskRow.catalogVisibility,
+            spaceKind: taskRow.spaceKind,
+          },
+    policy,
+  })
+  if (!admission.admitted) {
+    log.debug('distill enqueue rejected', {
+      sourceKind: input.sourceKind,
+      sourceEventId: input.sourceEventId,
+      taskId: input.taskId,
+      reason: admission.reason,
+    })
+    return null
+  }
+  // RFC-366 D11: an agent-run job's candidates must be able to bind to the agent
+  // that just finished, and ONLY that agent. `runDistill` reads the HEAD job's
+  // scope and discards its merged siblings', so the narrowed agent has to be
+  // part of the debounce key too — see buildDebounceKey.
+  const narrowAgentId =
+    input.sourceKind === 'agent-run' && input.nodeId !== undefined && taskRow !== null
+      ? agentIdOfSnapshotNode(taskRow.workflowSnapshot, input.nodeId)
+      : null
+  const debounceKey = buildDebounceKey({ ...input, narrowAgentId })
+  const scopeResolved = scopeFromTaskRow(taskRow, narrowAgentId)
   const jobId = ulid()
   const now = Date.now()
-  const debounceMs = input.debounceMs ?? DISTILL_DEBOUNCE_MS
+  const debounceMs = input.debounceMs ?? defaultDebounceMs(input.sourceKind, policy)
   // RFC-050: explicit per-call wins; otherwise consult the ambient provider
   // registered by cli/start.ts at daemon boot. Null is persisted as-is and
   // means "use the runtime default" (currently 'en-US' / RFC-041 baseline).
@@ -127,9 +207,40 @@ export async function enqueueDistillJob(
   return { jobId, debounceKey, nextRunAt: now + debounceMs }
 }
 
-export function buildDebounceKey(input: EnqueueDistillJobInput): string {
-  if (input.taskId !== null) return `${input.taskId}:${input.sourceKind}`
-  return `noTask:${input.sourceKind}:${input.sourceEventId}`
+/** RFC-366 D8: agent-run gets its own (longer) window; the other four keep 5s. */
+function defaultDebounceMs(
+  sourceKind: DistillSourceKind,
+  policy: Pick<DistillPolicy, 'agentRunDebounceMs'>,
+): number {
+  return sourceKind === 'agent-run' ? policy.agentRunDebounceMs : DISTILL_DEBOUNCE_MS
+}
+
+/**
+ * RFC-366 INVARIANT — **a debounce key must determine the job's scope.**
+ *
+ * `distillTick` merges every pending sibling that shares a key into one
+ * distiller run, and `runDistill` then uses the HEAD job's `scopeResolved` and
+ * throws the siblings' away. For the four task-keyed sources that is harmless:
+ * their scope is a pure function of `taskId`, so head and siblings always agree.
+ * `agent-run` narrows the scope to one agent (D11), so its key carries the agent
+ * too — otherwise agent A's transcript could produce a memory filed under agent
+ * B just because their runs finished within the same window.
+ *
+ * Nodes whose agent cannot be resolved (name-only nodes, the quarantine
+ * sentinel, workgroup hosts) fall back to the node id: still one key per
+ * subject, and `scopeFromTaskRow` correspondingly does not narrow.
+ */
+export function buildDebounceKey(
+  input: Pick<EnqueueDistillJobInput, 'sourceKind' | 'sourceEventId' | 'taskId' | 'nodeId'> & {
+    readonly narrowAgentId?: string | null
+  },
+): string {
+  if (input.taskId === null) return `noTask:${input.sourceKind}:${input.sourceEventId}`
+  if (input.sourceKind === 'agent-run') {
+    const subject = input.narrowAgentId ?? `node:${input.nodeId ?? input.sourceEventId}`
+    return `${input.taskId}:agent-run:${subject}`
+  }
+  return `${input.taskId}:${input.sourceKind}`
 }
 
 // ---------------------------------------------------------------------------
@@ -196,23 +307,61 @@ export function extractAgentIdsFromWorkgroupConfig(workgroupConfigJson: string |
   return [...ids]
 }
 
-export async function computeEligibleScopes(
-  store: MemoryDistillWorkStore,
-  taskId: string | null,
-): Promise<ResolvedDistillScope> {
-  if (taskId === null) {
-    return { agentIds: [], workflowId: null, repoId: null, includeGlobal: true }
+/**
+ * RFC-366 D11 — resolve ONE workflow node to its frozen agent id.
+ *
+ * Same criteria as {@link extractAgentIdsFromSnapshot}, just pointed at a single
+ * node: `agent-single` only, canonical id only (a name-only node must not be
+ * resolved against today's mutable name registry — RFC-223 T15), quarantine
+ * sentinel excluded. Returns null when the node is unresolvable, which is the
+ * signal not to narrow the scope at all.
+ */
+export function agentIdOfSnapshotNode(workflowSnapshot: string, nodeId: string): string | null {
+  let parsed: { nodes?: (SnapshotAgentNode & { id?: string })[] } = {}
+  try {
+    parsed = JSON.parse(workflowSnapshot) as typeof parsed
+  } catch {
+    return null
   }
-  const taskRow = await store.findTaskScope(taskId)
+  for (const node of parsed.nodes ?? []) {
+    if (typeof node !== 'object' || node === null) continue
+    if (node.id !== nodeId) continue
+    if (node.kind !== 'agent-single') return null
+    if (node.agentId === QUARANTINED_SNAPSHOT_AGENT_ID) return null
+    const ref = agentRefOfNode(node)
+    return ref !== null && ref.k === 'id' ? ref.id : null
+  }
+  return null
+}
+
+/**
+ * RFC-366: scope resolution off an already-read task row.
+ *
+ * Split out of {@link computeEligibleScopes} so `enqueueDistillJob` can read the
+ * task once and use it for both the admission gate and the scope — the two used
+ * to be one call, and adding a second `findTaskScope` would have let the gate
+ * and the scope see different rows.
+ *
+ * `narrowAgentId` (D11) restricts the agent scopes to the agent whose run just
+ * settled. Null means "no narrowing" and reproduces the pre-RFC-366 behaviour
+ * byte for byte, which is what the other four sources still get.
+ */
+export function scopeFromTaskRow(
+  taskRow: MemoryDistillTaskScopeRecord | null,
+  narrowAgentId: string | null = null,
+): ResolvedDistillScope {
   if (taskRow === null) {
     return { agentIds: [], workflowId: null, repoId: null, includeGlobal: true }
   }
-  const agentIds = [
-    ...new Set([
-      ...extractAgentIdsFromSnapshot(taskRow.workflowSnapshot),
-      ...extractAgentIdsFromWorkgroupConfig(taskRow.workgroupConfigJson),
-    ]),
-  ]
+  const agentIds =
+    narrowAgentId !== null
+      ? [narrowAgentId]
+      : [
+          ...new Set([
+            ...extractAgentIdsFromSnapshot(taskRow.workflowSnapshot),
+            ...extractAgentIdsFromWorkgroupConfig(taskRow.workgroupConfigJson),
+          ]),
+        ]
   // RFC-204: see memoryInject — join on the stored mirror id. The old URL join
   // compared a REDACTED tasks.repo_url against the plaintext cached_repos.url,
   // so it missed private repos entirely and, once the credential column is
@@ -227,6 +376,14 @@ export async function computeEligibleScopes(
   }
 }
 
+export async function computeEligibleScopes(
+  store: MemoryDistillWorkStore,
+  taskId: string | null,
+): Promise<ResolvedDistillScope> {
+  if (taskId === null) return scopeFromTaskRow(null)
+  return scopeFromTaskRow(await store.findTaskScope(taskId))
+}
+
 // ---------------------------------------------------------------------------
 // Worker tick
 // ---------------------------------------------------------------------------
@@ -235,8 +392,10 @@ export interface DistillTickOptions {
   store: MemoryDistillWorkStore
   reviewedArtifacts: MemoryDistillReviewedArtifactReader
   runtimeResolver: MemoryDistillRuntimeResolver
-  /** Inject a fake spawn for tests; production uses defaultDistillerSpawn. */
-  spawnFn?: DistillerSpawnFn
+  /** RFC-367 test seam; production uses `runSystemAgent`. */
+  runFn?: RunDistillOptions['runFn']
+  /** RFC-367 — per-attempt live session capture sink factory. */
+  eventSinkFor?: RunDistillOptions['eventSinkFor']
   /** RFC-117 — runtime profile NAME (config.memoryDistillRuntime); wins over `model`. */
   runtimeName?: string | null
   /** RFC-117 — global default runtime name (config.defaultRuntime) for inheritance. */
@@ -309,7 +468,8 @@ export async function distillTick(options: DistillTickOptions): Promise<{
         reviewedArtifacts: options.reviewedArtifacts,
         job: rowToDistillJob(head),
         siblings: siblings.map(rowToDistillJob),
-        spawnFn: options.spawnFn,
+        runFn: options.runFn,
+        eventSinkFor: options.eventSinkFor,
         protocol: rt.protocol,
         runtimeBinary: rt.binaryPath,
         model: rt.model,
@@ -363,7 +523,8 @@ export interface StartLoopOptions {
   store: MemoryDistillWorkStore
   reviewedArtifacts: MemoryDistillReviewedArtifactReader
   runtimeResolver: MemoryDistillRuntimeResolver
-  spawnFn?: DistillerSpawnFn
+  runFn?: RunDistillOptions['runFn']
+  eventSinkFor?: RunDistillOptions['eventSinkFor']
   /** Settings.memoryDistillerEnabled — when false, ticker is a no-op shell. */
   enabled?: boolean
   /** Default 1000ms (1Hz). Tests can shorten / lengthen. */
@@ -420,7 +581,8 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
       store: options.store,
       reviewedArtifacts: options.reviewedArtifacts,
       runtimeResolver: options.runtimeResolver,
-      spawnFn: options.spawnFn,
+      runFn: options.runFn,
+      eventSinkFor: options.eventSinkFor,
       runtimeName: options.runtimeName,
       defaultRuntime: options.defaultRuntime,
       model: options.model,

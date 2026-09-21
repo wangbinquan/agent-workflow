@@ -1,9 +1,16 @@
-import type { Language, MemoryDistillJob, SourceContextBudget } from '@agent-workflow/shared'
+import type {
+  DistillSourceKind,
+  Language,
+  MemoryDistillJob,
+  SourceContextBudget,
+} from '@agent-workflow/shared'
 
 export interface EnqueueMemoryDistillJobInput {
-  readonly sourceKind: 'clarify' | 'review' | 'feedback'
+  readonly sourceKind: DistillSourceKind
   readonly sourceEventId: string
   readonly taskId: string | null
+  /** RFC-366 (`agent-run` only): the workflow node whose run settled. */
+  readonly nodeId?: string
   readonly debounceMs?: number
   readonly outputLang?: Language | null
 }
@@ -15,7 +22,12 @@ export interface EnqueueMemoryDistillJobResult {
 }
 
 export interface MemoryDistillCommands {
-  enqueue(input: EnqueueMemoryDistillJobInput): Promise<EnqueueMemoryDistillJobResult>
+  /**
+   * RFC-366: `null` means the RFC-366 admission gate declined this event (source
+   * switched off, task launch origin not whitelisted, or an internal task). It
+   * is an ordinary outcome, never an error — callers just produce no job.
+   */
+  enqueue(input: EnqueueMemoryDistillJobInput): Promise<EnqueueMemoryDistillJobResult | null>
   retryFailed(jobId: string): Promise<boolean>
   cancelPending(jobId: string): Promise<boolean>
 }

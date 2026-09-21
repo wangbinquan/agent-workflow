@@ -58,8 +58,27 @@ async function readPromptBuilderSrc(): Promise<string> {
  * Update this baseline (and only this baseline) when intentionally
  * editing DISTILLER_SYSTEM_PROMPT. Treat the diff line in this file as
  * the audit trail for prompt edits.
+ *
+ * Edit log:
+ *  - d3e640d9… → 813d861c… (RFC-367, 2026-09-21): the envelope paragraph never
+ *    showed the literal `<port name="candidates">…</port>` nesting, only the
+ *    words "workflow-output envelope". Ten consecutive production runs emitted
+ *    a bare envelope with the JSON dropped straight inside it (five behind a
+ *    ```json fence, two mis-spelling the tag as `<wf-output>` / `<wflow-output>`)
+ *    and every candidate was discarded with nothing but a log.warn. The new
+ *    paragraph shows the three-level literal shape and forbids the code fence.
+ *  - 813d861c… → f37ef1e4… (RFC-366, 2026-09-21): two new source kinds reach the
+ *    distiller — `agent-run` (one settled agent node_run) and `task-run` (one
+ *    settled task). Three edits: the opening sentence's event enumeration, the
+ *    `sourceRefs.kind` union, and a new "Source-specific guidance" paragraph.
+ *    That paragraph is the load-bearing one: an agent transcript is a narrative,
+ *    and without an explicit instruction to extract the RULE it revealed, the
+ *    most likely output is a "today the agent did X" log entry — precisely what
+ *    the REJECT list already forbids but which the new sources make tempting.
+ *    It also tells the model that the agent-run block lists the memories already
+ *    injected into that run, so "already known" is a look-up rather than a guess.
  */
-const BASELINE_SHA256 = 'd3e640d98cdbd1b2d09c7b813547879242f9bea944a7761a855dcf68eb054474'
+const BASELINE_SHA256 = 'f37ef1e47160757c4624243b4fb2cbee017c87979dbeecfca5e025a5a4953139'
 
 describe('RFC-050 grep guards — output-language directive', () => {
   test('G1: both directive strings appear verbatim in domain/distillPrompt.ts', async () => {

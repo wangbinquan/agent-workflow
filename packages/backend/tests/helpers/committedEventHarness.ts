@@ -81,6 +81,9 @@ function durableTestConsumers(db: ProviderNeutralDatabase) {
       async notifyChildBudget() {},
       async notifyExecutionWatch() {},
       async nudgeWorkspacePrune() {},
+      // RFC-366: this harness only exercises delivery bookkeeping; the distill
+      // enqueue has its own coverage in rfc366-task-terminal-consumer.test.ts.
+      async enqueueTaskRunDistill() {},
     }),
     ...createCollaborationDurableConsumerDefinitions({
       events,

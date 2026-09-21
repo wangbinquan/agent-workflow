@@ -21,7 +21,11 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from 'reac
 import { useTranslation } from 'react-i18next'
 import {
   CreateOidcProviderBodySchema,
+  DEFAULT_DISTILL_LAUNCH_ORIGINS,
+  DISTILL_SOURCE_CONFIG_KEY,
+  DISTILL_SOURCE_KINDS,
   MaintenanceStatusSchema,
+  TASK_LAUNCH_ORIGINS,
   isValidIanaTz,
   type AuthLoginPolicy,
   type Config,
@@ -32,6 +36,12 @@ import {
   type UpdateAuthLoginPolicyBody,
 } from '@agent-workflow/shared'
 import { api, apiPostMultipart, ApiError } from '@/api/client'
+
+/**
+ * RFC-366：来源白名单的**渲染顺序**。直接用 TASK_LAUNCH_ORIGINS 的顺序，
+ * 免得界面顺序与值域各写一份、改值域时漏改界面。
+ */
+const MEMORY_DISTILL_ORIGINS = TASK_LAUNCH_ORIGINS
 import {
   SettingsDraftProvider,
   useSettingsConfigDraft,
@@ -2236,6 +2246,73 @@ export function SystemAgentsTab({ config, fusionDraft: routeFusionDraft }: Syste
               data-testid="settings-memory-distill-timeout-input"
               value={state.memoryDistillTimeoutMs}
               onChange={(v) => setState({ ...state, memoryDistillTimeoutMs: v })}
+            />
+          </Field>
+          {/* RFC-366：任务来源白名单。五个开关而不是一个多选下拉——仓内没有多选原语，
+              新造一个只为这一处用不划算，而五个 Switch 与下面的逐源开关同形，两条轴
+              在界面上读起来就是并排的两组。
+              `group` 必填：不给它时 `Field` 渲染成 `<label>`，里面多于一个控件就会
+              让点击**任何一个**都去激活它的第一个控件——实测点「定时任务」改的是
+              「手工创建」（tests/rfc366-settings-distill-policy）。 */}
+          <Field
+            group
+            labelId="settings-memory-distill-origins"
+            label={t('settingsForm.memoryDistillOriginsLabel')}
+            hint={t('settingsForm.memoryDistillOriginsHint')}
+          >
+            {MEMORY_DISTILL_ORIGINS.map((origin) => (
+              <Switch
+                key={origin}
+                data-testid={`settings-memory-distill-origin-${origin}`}
+                label={t(`settingsForm.memoryDistillOrigin.${origin}`)}
+                checked={(
+                  state.memoryDistillLaunchOrigins ?? DEFAULT_DISTILL_LAUNCH_ORIGINS
+                ).includes(origin)}
+                onChange={(next) => {
+                  const current = state.memoryDistillLaunchOrigins ?? DEFAULT_DISTILL_LAUNCH_ORIGINS
+                  const updated = next
+                    ? MEMORY_DISTILL_ORIGINS.filter(
+                        (item) => item === origin || current.includes(item),
+                      )
+                    : current.filter((item) => item !== origin)
+                  setState({ ...state, memoryDistillLaunchOrigins: [...updated] })
+                }}
+              />
+            ))}
+          </Field>
+          <Field
+            group
+            labelId="settings-memory-distill-sources"
+            label={t('settingsForm.memoryDistillSourcesLabel')}
+            hint={t('settingsForm.memoryDistillSourcesHint')}
+          >
+            {DISTILL_SOURCE_KINDS.map((kind) => (
+              <Switch
+                key={kind}
+                data-testid={`settings-memory-distill-source-${kind}`}
+                label={t(`memory.sourceKind.${kind}`)}
+                checked={state.memoryDistillSources?.[DISTILL_SOURCE_CONFIG_KEY[kind]] ?? true}
+                onChange={(next) =>
+                  setState({
+                    ...state,
+                    memoryDistillSources: {
+                      ...(state.memoryDistillSources ?? {}),
+                      [DISTILL_SOURCE_CONFIG_KEY[kind]]: next,
+                    },
+                  })
+                }
+              />
+            ))}
+          </Field>
+          <Field
+            label={t('settingsForm.memoryDistillAgentRunDebounceMs')}
+            hint={t('settingsForm.memoryDistillAgentRunDebounceMsHint')}
+          >
+            <SettingsNumberInput
+              setting="memoryDistillAgentRunDebounceMs"
+              data-testid="settings-memory-distill-agent-debounce-input"
+              value={state.memoryDistillAgentRunDebounceMs}
+              onChange={(v) => setState({ ...state, memoryDistillAgentRunDebounceMs: v })}
             />
           </Field>
         </SettingsCard>

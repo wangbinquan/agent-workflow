@@ -348,6 +348,10 @@ describeEachProvider('RFC-359 W4-B4c —— 记忆蒸馏工作存储', (harness)
       workflowId,
       cachedRepoId: repoId,
       cachedRepoExists: true,
+      // RFC-366：准入三列随 scope 一次读出（同一行任务，不多一次查询）。
+      launchOrigin: 'manual',
+      catalogVisibility: 'public',
+      spaceKind: 'remote',
     })
     expect(await store.findTaskScope('missing')).toBeNull()
     const runId = ulid()

@@ -1,7 +1,9 @@
+import type { DistillSourceKind } from '@agent-workflow/shared'
+
 export interface MemoryDistillJobRecord {
   readonly id: string
   readonly debounceKey: string
-  readonly sourceKind: 'clarify' | 'review' | 'feedback'
+  readonly sourceKind: DistillSourceKind
   readonly sourceEventId: string
   readonly taskId: string | null
   readonly scopeResolvedJson: string

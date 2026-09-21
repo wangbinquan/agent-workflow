@@ -48,6 +48,10 @@ describe('RFC-201 Settings draft registry', () => {
       'memoryDistillLang',
       // 2026-09-21：记忆蒸馏超时（默认 120s → 1 小时，并提到设置页可调）。
       'memoryDistillTimeoutMs',
+      // RFC-366 执行结束记忆提炼的三个旋钮。
+      'memoryDistillLaunchOrigins',
+      'memoryDistillSources',
+      'memoryDistillAgentRunDebounceMs',
       'mergeAgentRuntime',
       'mergeAgentModel',
       // RFC-239 change narrative (AI 导读)

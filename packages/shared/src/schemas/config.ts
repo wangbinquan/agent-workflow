@@ -5,6 +5,11 @@
 import { z } from 'zod'
 import { MaintenanceScheduleSchema } from './maintenance'
 import { SETTINGS_NUMERIC_BOUNDS, type SettingsNumericPath } from '../settingsNumericBounds'
+// RFC-366: `memoryDistillLaunchOrigins` is keyed by the same neutral launch-origin
+// codec the task wire uses (taskOperations.ts declares it as exactly that — a
+// provider-neutral shared codec), so the whitelist cannot drift from the column.
+import { TaskLaunchOriginSchema, type TaskLaunchOrigin } from '../taskOperations'
+import { DISTILL_SOURCE_CONFIG_KEY, DISTILL_SOURCE_KINDS, type DistillSourceKind } from './memory'
 
 function utf8ByteLength(value: string): number {
   let bytes = 0
@@ -474,6 +479,49 @@ export const ConfigSchema = z.object({
    */
   memoryDistillTimeoutMs: z.number().int().min(30_000).max(21_600_000).optional(),
 
+  // --- RFC-366 执行结束记忆提炼 + 任务来源准入门 ---
+  /**
+   * RFC-366 — which task launch origins may produce distill jobs AT ALL.
+   *
+   * Applies to every source kind, not just the two RFC-366 added: a scheduled
+   * job that fires hourly used to enqueue a distill on each of its review
+   * decisions / clarify answers / feedback notes — exactly the high-frequency,
+   * homogeneous noise the whitelist exists to stop (proposal §6 C1–C6).
+   *
+   * Unset ≡ `['manual']` — only hand-launched tasks. `[]` disables every
+   * task-attached source. The literals come from `tasks.launch_origin`
+   * (RFC-301), which is immutable and inherited by child tasks, so a child of a
+   * scheduled parent is gated as `scheduled` too.
+   */
+  memoryDistillLaunchOrigins: z.array(TaskLaunchOriginSchema).optional(),
+  /**
+   * RFC-366 — per-source kill switch, orthogonal to the origin whitelist above
+   * (origins answer "which tasks", this answers "which events"). Any omitted
+   * key ≡ `true`, so an existing config keeps every source enabled.
+   *
+   * Keys are the camelCase spelling of `DISTILL_SOURCE_KINDS`; the mapping
+   * lives in `DISTILL_SOURCE_CONFIG_KEY` and nowhere else.
+   */
+  memoryDistillSources: z
+    .object({
+      clarify: z.boolean().optional(),
+      review: z.boolean().optional(),
+      feedback: z.boolean().optional(),
+      agentRun: z.boolean().optional(),
+      taskRun: z.boolean().optional(),
+    })
+    .optional(),
+  /**
+   * RFC-366 — debounce window for the `agent-run` source only (ms).
+   *
+   * Every agent node_run that settles enqueues one job (RFC-366 D1: loop
+   * iterations, fanout shards and retries each count), so the RFC-041 5s window
+   * would leave a long workflow paying for one distiller spawn per agent step.
+   * 60s collapses the agents that finish within a minute of each other into a
+   * single run. Bounds mirror SETTINGS_NUMERIC_BOUNDS; unset ≡ 60000.
+   */
+  memoryDistillAgentRunDebounceMs: z.number().int().min(0).max(600_000).optional(),
+
   // --- RFC-234 intent builder (design §5) ---
   /**
    * RFC-234 — runtime profile NAME the intent-builder system agent runs on.
@@ -537,10 +585,21 @@ export const ConfigSchema = z.object({
    * disables that block — the builder falls back to RFC-041 behaviour for
    * that source. Defaults: 16384 / 16384 (~4K tokens each).
    */
+  /**
+   * RFC-366 adds four more caps, for the `agent-run` / `task-run` blocks. They
+   * are `.optional()` while the RFC-044 pair stays required ON PURPOSE: an
+   * existing `config.json` carries only the original two keys, and promoting the
+   * new ones to required would make `loadConfig` reject that file outright.
+   * `resolveSourceContextBudget` is the single place the defaults get filled in.
+   */
   memoryDistillSourceContext: z
     .object({
       clarifyTranscriptMaxBytes: z.number().int().min(0).max(65536),
       reviewBodyMaxBytes: z.number().int().min(0).max(65536),
+      agentTranscriptMaxBytes: z.number().int().min(0).max(65536).optional(),
+      agentOutputsMaxBytes: z.number().int().min(0).max(65536).optional(),
+      agentInjectedMemoriesMaxBytes: z.number().int().min(0).max(65536).optional(),
+      taskSummaryMaxBytes: z.number().int().min(0).max(65536).optional(),
     })
     .optional(),
 
@@ -921,6 +980,23 @@ export const ConfigPatchSchema = ConfigSchema.partial()
     mergeAgentModel: z.string().min(1).nullable().optional(),
     memoryDistillLang: LanguageSchema.nullable().optional(),
     memoryDistillTimeoutMs: boundedSettingsInteger('memoryDistillTimeoutMs').nullable().optional(),
+    // RFC-366: same "null-in-patch = delete = fall back to default" contract as
+    // its neighbours. Deleting the whitelist restores manual-only, deleting the
+    // switch object re-enables every source.
+    memoryDistillLaunchOrigins: z.array(TaskLaunchOriginSchema).nullable().optional(),
+    memoryDistillSources: z
+      .object({
+        clarify: z.boolean().optional(),
+        review: z.boolean().optional(),
+        feedback: z.boolean().optional(),
+        agentRun: z.boolean().optional(),
+        taskRun: z.boolean().optional(),
+      })
+      .nullable()
+      .optional(),
+    memoryDistillAgentRunDebounceMs: boundedSettingsInteger('memoryDistillAgentRunDebounceMs')
+      .nullable()
+      .optional(),
     commitPushLang: LanguageSchema.nullable().optional(),
     // RFC-234: the intent-builder settings card follows the same
     // "null-in-patch = delete = inherit/default" contract for its selector
@@ -960,10 +1036,94 @@ export type ConfigPatch = z.infer<typeof ConfigPatchSchema>
 export interface SourceContextBudget {
   clarifyTranscriptMaxBytes: number
   reviewBodyMaxBytes: number
+  /** RFC-366: the settled agent run's own session transcript. */
+  agentTranscriptMaxBytes: number
+  /** RFC-366: that run's `workflow-output` port values. */
+  agentOutputsMaxBytes: number
+  /** RFC-366: the approved memories that were injected INTO that run. */
+  agentInjectedMemoriesMaxBytes: number
+  /** RFC-366: the whole task-end summary block (inputs + node table + outputs). */
+  taskSummaryMaxBytes: number
 }
 export const DEFAULT_SOURCE_CONTEXT_BUDGET: SourceContextBudget = {
   clarifyTranscriptMaxBytes: 16384,
   reviewBodyMaxBytes: 16384,
+  agentTranscriptMaxBytes: 16384,
+  agentOutputsMaxBytes: 8192,
+  agentInjectedMemoriesMaxBytes: 4096,
+  taskSummaryMaxBytes: 8192,
+}
+
+/**
+ * RFC-366: the ONLY place `config.memoryDistillSourceContext` becomes a complete
+ * budget. The stored object may carry just the RFC-044 pair (every config
+ * written before RFC-366 does), so every consumer must come through here rather
+ * than reading the raw field and finding `undefined` where a number is required.
+ */
+export function resolveSourceContextBudget(
+  raw?: Config['memoryDistillSourceContext'],
+): SourceContextBudget {
+  if (raw === undefined) return { ...DEFAULT_SOURCE_CONTEXT_BUDGET }
+  return {
+    clarifyTranscriptMaxBytes: raw.clarifyTranscriptMaxBytes,
+    reviewBodyMaxBytes: raw.reviewBodyMaxBytes,
+    agentTranscriptMaxBytes:
+      raw.agentTranscriptMaxBytes ?? DEFAULT_SOURCE_CONTEXT_BUDGET.agentTranscriptMaxBytes,
+    agentOutputsMaxBytes:
+      raw.agentOutputsMaxBytes ?? DEFAULT_SOURCE_CONTEXT_BUDGET.agentOutputsMaxBytes,
+    agentInjectedMemoriesMaxBytes:
+      raw.agentInjectedMemoriesMaxBytes ??
+      DEFAULT_SOURCE_CONTEXT_BUDGET.agentInjectedMemoriesMaxBytes,
+    taskSummaryMaxBytes:
+      raw.taskSummaryMaxBytes ?? DEFAULT_SOURCE_CONTEXT_BUDGET.taskSummaryMaxBytes,
+  }
+}
+
+/**
+ * RFC-366 — the resolved distill policy: which tasks (origins) and which events
+ * (sources) may enqueue, plus the agent-run debounce window. Built from config
+ * on every enqueue so a settings edit takes effect without a daemon restart.
+ */
+export interface DistillPolicy {
+  readonly launchOrigins: readonly TaskLaunchOrigin[]
+  readonly sources: Readonly<Record<DistillSourceKind, boolean>>
+  readonly agentRunDebounceMs: number
+}
+
+/** RFC-366 D2/D9: manual-only, every source on. */
+export const DEFAULT_DISTILL_LAUNCH_ORIGINS: readonly TaskLaunchOrigin[] = ['manual']
+export const DEFAULT_AGENT_RUN_DEBOUNCE_MS = 60_000
+export const DEFAULT_DISTILL_POLICY: DistillPolicy = Object.freeze({
+  launchOrigins: DEFAULT_DISTILL_LAUNCH_ORIGINS,
+  sources: Object.freeze(
+    Object.fromEntries(DISTILL_SOURCE_KINDS.map((kind) => [kind, true])) as Record<
+      DistillSourceKind,
+      boolean
+    >,
+  ),
+  agentRunDebounceMs: DEFAULT_AGENT_RUN_DEBOUNCE_MS,
+})
+
+/**
+ * RFC-366: the ONLY place config turns into a {@link DistillPolicy}. Omitted
+ * keys mean "enabled" so an existing config keeps every source running; an
+ * omitted whitelist means manual-only.
+ */
+export function resolveDistillPolicy(
+  config: Pick<
+    Config,
+    'memoryDistillLaunchOrigins' | 'memoryDistillSources' | 'memoryDistillAgentRunDebounceMs'
+  >,
+): DistillPolicy {
+  const switches = config.memoryDistillSources
+  const sources = Object.fromEntries(
+    DISTILL_SOURCE_KINDS.map((kind) => [kind, switches?.[DISTILL_SOURCE_CONFIG_KEY[kind]] ?? true]),
+  ) as Record<DistillSourceKind, boolean>
+  return {
+    launchOrigins: config.memoryDistillLaunchOrigins ?? DEFAULT_DISTILL_LAUNCH_ORIGINS,
+    sources,
+    agentRunDebounceMs: config.memoryDistillAgentRunDebounceMs ?? DEFAULT_AGENT_RUN_DEBOUNCE_MS,
+  }
 }
 
 /**

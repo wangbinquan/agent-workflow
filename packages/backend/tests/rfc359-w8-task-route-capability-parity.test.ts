@@ -489,6 +489,7 @@ async function deliverLifecycleEvents(
           notifyTaskTerminal(taskId, status)
         },
         async nudgeWorkspacePrune() {},
+        async enqueueTaskRunDistill() {},
       }),
     })
     await dispatcher.drain()

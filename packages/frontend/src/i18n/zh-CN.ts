@@ -5643,6 +5643,19 @@ export interface Resources {
   settingsForm: {
     memoryDistillTimeoutMs: string
     memoryDistillTimeoutMsHint: string
+    memoryDistillOriginsLabel: string
+    memoryDistillOriginsHint: string
+    memoryDistillOrigin: {
+      manual: string
+      scheduled: string
+      event: string
+      webhook: string
+      api: string
+    }
+    memoryDistillSourcesLabel: string
+    memoryDistillSourcesHint: string
+    memoryDistillAgentRunDebounceMs: string
+    memoryDistillAgentRunDebounceMsHint: string
     commitPushModel: string
     commitPushModelHint: string
     commitPushRuntime: string
@@ -6394,6 +6407,8 @@ export interface Resources {
         clarify: string
         review: string
         feedback: string
+        'agent-run': string
+        'task-run': string
         manual: string
       }
     }
@@ -6448,6 +6463,7 @@ export interface Resources {
       colId: string
       colStatus: string
       colSource: string
+      sourceFilterAll: string
       colAttempts: string
       colCreated: string
       colError: string
@@ -6470,6 +6486,9 @@ export interface Resources {
       clarify: string
       review: string
       feedback: string
+      // RFC-366：kebab 字面值来自 DB/wire，必须加引号。
+      'agent-run': string
+      'task-run': string
       manual: string
     }
     distillJobDetail: {
@@ -13373,6 +13392,22 @@ export const zhCN: Resources = {
     memoryDistillTimeoutMs: '记忆蒸馏超时',
     memoryDistillTimeoutMsHint:
       '单次记忆蒸馏允许运行的最长时间（毫秒，默认 3600000 = 1 小时）。超时按失败计并退避重试。蒸馏是单飞的，一次蒸馏跑满这个时长期间整个蒸馏队列都在等它。',
+    memoryDistillOriginsLabel: '提炼哪些来源的任务',
+    memoryDistillOriginsHint:
+      '只有勾选来源的任务才会产生记忆提炼（五类信号源一并受此约束）。默认只勾「手工创建」——定时 / 事件 / Webhook 任务往往高频同质，放开会淹没人审队列。子任务继承父任务的来源。平台内部执行一律不提炼，不受此处影响。',
+    memoryDistillOrigin: {
+      manual: '手工创建',
+      scheduled: '定时任务',
+      event: '事件触发',
+      webhook: 'Webhook 触发',
+      api: 'API / 令牌启动',
+    },
+    memoryDistillSourcesLabel: '提炼哪些事件',
+    memoryDistillSourcesHint:
+      '五类信号源各自的开关，与上面的任务来源正交：来源管「哪些任务」，这里管「哪些事件」。全部默认开启。',
+    memoryDistillAgentRunDebounceMs: 'agent 结束去抖窗口',
+    memoryDistillAgentRunDebounceMsHint:
+      '每个 agent 运行结束各入队一次（loop 每轮 / fanout 每分片 / 每次重试都算），这个窗口把同一任务里同一 agent 在窗口内陆续结束的多次运行并成一次蒸馏（毫秒，默认 60000 = 60 秒）。填 0 = 不去抖。其余四类信号源固定 5 秒。',
     commitPushRuntime: '提交&推送运行时',
     commitPushRuntimeHint:
       '内置 commit agent 运行的运行时 profile，其 model 来自该 profile；留空则继承全局默认运行时。',
@@ -14772,6 +14807,8 @@ export const zhCN: Resources = {
         clarify: '反问',
         review: '评审',
         feedback: '反馈',
+        'agent-run': 'agent 结束',
+        'task-run': '任务结束',
         manual: '手工',
       },
     },
@@ -14825,6 +14862,7 @@ export const zhCN: Resources = {
       colId: '任务 ID',
       colStatus: '状态',
       colSource: '来源',
+      sourceFilterAll: '全部来源',
       colAttempts: '尝试次数',
       colCreated: '创建时间',
       colError: '错误',
@@ -14844,6 +14882,8 @@ export const zhCN: Resources = {
       clarify: '反问',
       review: '评审',
       feedback: '反馈',
+      'agent-run': 'agent 结束',
+      'task-run': '任务结束',
       manual: '手工',
     },
     distillJobDetail: {

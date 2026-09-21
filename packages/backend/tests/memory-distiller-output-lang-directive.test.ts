@@ -22,18 +22,25 @@ import {
   DISTILLER_OUTPUT_LANG_DIRECTIVE,
   DISTILLER_SYSTEM_PROMPT,
   runDistill,
-  type DistillerSpawnFn,
-  type DistillerSpawnInput,
+  type RunDistillOptions,
 } from '../src/modules/memory/application/distill/memoryDistiller'
+import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
+import type { SystemAgentRunOptions } from '../src/services/systemAgentRun'
 import { describeEachProvider } from './helpers/eachProvider'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
 
-const EMPTY_EVENTS = { clarify: [], review: [], feedback: [] }
+// RFC-366 起 LoadedSourceEvents 有五路源；本文件只断言语言指令，五路全空。
+const EMPTY_EVENTS = { clarify: [], review: [], feedback: [], agentRun: [], taskRun: [] }
 
-function emptyDistillerStdout(input: DistillerSpawnInput): string {
-  return `<workflow-output nonce="${input.envelopeNonce}"><port name="candidates">{"candidates":[]}</port></workflow-output>`
+/** RFC-367: the distiller now runs through `runSystemAgent`, so the fake returns
+ *  a run RESULT (normalized assistant text) instead of raw stdout. The nonce is
+ *  read back out of the prompt because that is where the protocol block puts
+ *  it — the same place the real agent reads it from. */
+function emptyDistillerEventText(opts: SystemAgentRunOptions): string {
+  const nonce = /nonce="([^"]+)"/.exec(opts.prompt)?.[1] ?? ''
+  return `<workflow-output nonce="${nonce}"><port name="candidates">{"candidates":[]}</port></workflow-output>`
 }
 
 describe('RFC-050 buildDistillerUserPrompt — output language directive', () => {
@@ -91,13 +98,19 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
       rmSync(root, { recursive: true, force: true })
     })
     test('D3: runDistill reads outputLang from the job row (mid-batch config flip is ignored)', async () => {
-      const captured: DistillerSpawnInput[] = []
-      const spawnFn: DistillerSpawnFn = async (input) => {
-        captured.push(input)
+      const captured: SystemAgentRunOptions[] = []
+      const runFn: RunDistillOptions['runFn'] = async (opts) => {
+        captured.push(opts)
         return {
+          status: 'ok',
           exitCode: 0,
-          stdout: emptyDistillerStdout(input),
-          stderr: '',
+          eventText: emptyDistillerEventText(opts),
+          stderrTail: '',
+          durationMs: 1,
+          scratchDir: `${opts.scratchParent}/${opts.scratchName ?? 'unnamed'}`,
+          scratchRetained: true,
+          outputEvidence: emptySystemAgentOutputEvidence(),
+          capturedSessionId: 'ses_lang_probe',
         }
       }
       const db = harness.db
@@ -108,7 +121,7 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
       await runDistill({
         store: memory.store,
         reviewedArtifacts: memory.reviewedArtifacts,
-        spawnFn,
+        runFn,
         job: {
           id: 'job-zh',
           debounceKey: 'k',
@@ -135,7 +148,7 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
       await runDistill({
         store: memory.store,
         reviewedArtifacts: memory.reviewedArtifacts,
-        spawnFn,
+        runFn,
         job: {
           id: 'job-null',
           debounceKey: 'k2',
@@ -160,9 +173,9 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
         siblings: [],
       })
       expect(captured).toHaveLength(2)
-      expect(captured[0]!.userPrompt.endsWith(DISTILLER_OUTPUT_LANG_DIRECTIVE['zh-CN'])).toBe(true)
+      expect(captured[0]!.prompt.endsWith(DISTILLER_OUTPUT_LANG_DIRECTIVE['zh-CN'])).toBe(true)
       // null on the row → 'en-US' runtime fallback (RFC-041 baseline preserved).
-      expect(captured[1]!.userPrompt.endsWith(DISTILLER_OUTPUT_LANG_DIRECTIVE['en-US'])).toBe(true)
+      expect(captured[1]!.prompt.endsWith(DISTILLER_OUTPUT_LANG_DIRECTIVE['en-US'])).toBe(true)
     })
   })
 

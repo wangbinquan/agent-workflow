@@ -3992,8 +3992,11 @@ export const memories = sqliteTable(
     status: text('status', {
       enum: ['candidate', 'approved', 'archived', 'superseded', 'rejected', 'fused'],
     }).notNull(),
+    // RFC-366: `agent-run` / `task-run` joined the trio; `manual` stays a
+    // memory-only provenance (a human authored the row). Literal list mirrors
+    // shared's MEMORY_SOURCE_KINDS — migration 0228 widened the DB CHECK.
     sourceKind: text('source_kind', {
-      enum: ['clarify', 'review', 'feedback', 'manual'],
+      enum: ['clarify', 'review', 'feedback', 'agent-run', 'task-run', 'manual'],
     }).notNull(),
     sourceEventId: text('source_event_id'),
     sourceTaskId: text('source_task_id'),
@@ -4039,7 +4042,7 @@ export const memories = sqliteTable(
     ),
     sourceKindEnum: check(
       'memories_source_kind_enum',
-      sql`${t.sourceKind} IN ('clarify','review','feedback','manual')`,
+      sql`${t.sourceKind} IN ('clarify','review','feedback','agent-run','task-run','manual')`,
     ),
     distillActionEnum: check(
       'memories_distill_action_enum',
@@ -4183,7 +4186,10 @@ export const memoryDistillJobs = sqliteTable(
   {
     id: text('id').primaryKey(),
     debounceKey: text('debounce_key').notNull(),
-    sourceKind: text('source_kind', { enum: ['clarify', 'review', 'feedback'] }).notNull(),
+    // RFC-366: the five distill trigger kinds (DISTILL_SOURCE_KINDS in shared).
+    sourceKind: text('source_kind', {
+      enum: ['clarify', 'review', 'feedback', 'agent-run', 'task-run'],
+    }).notNull(),
     sourceEventId: text('source_event_id').notNull(),
     taskId: text('task_id'),
     scopeResolvedJson: text('scope_resolved_json').notNull(),
@@ -4218,7 +4224,7 @@ export const memoryDistillJobs = sqliteTable(
     taskIdx: index('idx_distill_jobs_task').on(t.taskId, t.sourceKind),
     sourceKindEnum: check(
       'memory_distill_jobs_source_kind_enum',
-      sql`${t.sourceKind} IN ('clarify','review','feedback')`,
+      sql`${t.sourceKind} IN ('clarify','review','feedback','agent-run','task-run')`,
     ),
     statusEnum: check(
       'memory_distill_jobs_status_enum',

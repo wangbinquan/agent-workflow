@@ -216,13 +216,51 @@ const RootSchema: z.ZodType<PostgresqlMigrationRoot> = z
   .strict()
 const UpgradeSchema: z.ZodType<PostgresqlIndexUpgrade> = z
   .object({
-    version: z.union([z.literal(1), z.literal(2)]),
+    version: z.union([z.literal(1), z.literal(2), z.literal(3)]),
     logicalTables: z
       .array(
         z
           .object({
             position: z.number().int().nonnegative(),
             table: ContractObjectSchema.shape.tables.element,
+          })
+          .strict(),
+      )
+      .optional(),
+    // RFC-366 V3 — value-domain upgrade. All three keys are optional so V1/V2
+    // artifacts decode byte-identically (and therefore keep their digests).
+    logicalChecks: z
+      .array(
+        z
+          .object({
+            tableId: z.string(),
+            name: z.string(),
+            fromExpression: z.string(),
+            toExpression: z.string(),
+          })
+          .strict(),
+      )
+      .optional(),
+    checkReplacements: z
+      .array(
+        z
+          .object({
+            logicalId: z.string(),
+            before: StatementSchema,
+            drop: StatementSchema,
+            after: StatementSchema,
+          })
+          .strict(),
+      )
+      .optional(),
+    logicalEnums: z
+      .array(
+        z
+          .object({
+            tableId: z.string(),
+            column: z.string(),
+            fromValues: z.array(z.string()),
+            toValues: z.array(z.string()),
           })
           .strict(),
       )

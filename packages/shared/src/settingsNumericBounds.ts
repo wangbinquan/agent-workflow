@@ -125,6 +125,17 @@ export const SETTINGS_NUMERIC_BOUNDS = {
     step: 1_000,
     unit: 'ms',
   },
+  // RFC-366：`agent-run` 源专用的去抖窗口。每个 agent node_run 结算各入队一次
+  // （loop 每轮 / fanout 每分片 / 每次重试都算），沿用 RFC-041 的 5s 窗口会让一条
+  // 长工作流每走一步就烧一次蒸馏器。默认 60s 把「一分钟内陆续收尾的 agent」并成
+  // 一次。下界 0 = 不去抖（立即跑，调试用）；上界 10 分钟——再长就不是去抖而是
+  // 延迟发布了，而任务本身可能早已结束、worktree 都被回收。
+  memoryDistillAgentRunDebounceMs: {
+    min: 0,
+    max: 600_000,
+    step: 1_000,
+    unit: 'ms',
+  },
 } as const satisfies Record<string, SettingsNumericBound>
 
 export type SettingsNumericPath = keyof typeof SETTINGS_NUMERIC_BOUNDS

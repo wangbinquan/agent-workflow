@@ -1,6 +1,6 @@
 // RFC-359 W4-B4 —— 记忆蒸馏工作存储：一份实现，两个 provider 共用。
 
-import { and, asc, eq, inArray, lte } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, lte } from 'drizzle-orm'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
@@ -10,6 +10,7 @@ import {
   memories,
   memoryDistillJobs,
   nodeRunEvents,
+  nodeRunOutputs,
   nodeRuns,
   reviewComments,
   taskFeedback,
@@ -38,6 +39,10 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
           workflowId: tasks.workflowId,
           cachedRepoId: tasks.cachedRepoId,
           cachedRepoMatch: cachedRepos.id,
+          // RFC-366 admission facts — same row, no extra query.
+          launchOrigin: tasks.launchOrigin,
+          catalogVisibility: tasks.catalogVisibility,
+          spaceKind: tasks.spaceKind,
         })
         .from(tasks)
         .leftJoin(cachedRepos, eq(cachedRepos.id, tasks.cachedRepoId))
@@ -52,6 +57,9 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
           workflowId: row.workflowId,
           cachedRepoId: row.cachedRepoId,
           cachedRepoExists: row.cachedRepoMatch !== null,
+          launchOrigin: row.launchOrigin,
+          catalogVisibility: row.catalogVisibility,
+          spaceKind: row.spaceKind,
         }
   }
 
@@ -224,6 +232,112 @@ export class DrizzleMemoryDistillWorkStore implements MemoryDistillWorkStore {
       })
       .from(taskFeedback)
       .where(inArray(taskFeedback.id, [...ids]))
+  }
+
+  // RFC-366 agent-run 源：结算的那一行 node_run 本身。
+  async listAgentRunSources(ids: readonly string[]) {
+    if (ids.length === 0) return []
+    return await this.db
+      .select({
+        id: nodeRuns.id,
+        taskId: nodeRuns.taskId,
+        nodeId: nodeRuns.nodeId,
+        status: nodeRuns.status,
+        startedAt: nodeRuns.startedAt,
+        finishedAt: nodeRuns.finishedAt,
+        errorMessage: nodeRuns.errorMessage,
+        failureCode: nodeRuns.failureCode,
+        promptText: nodeRuns.promptText,
+        promptPath: nodeRuns.promptPath,
+        opencodeSessionId: nodeRuns.opencodeSessionId,
+        injectedMemoriesJson: nodeRuns.injectedMemoriesJson,
+      })
+      .from(nodeRuns)
+      .where(inArray(nodeRuns.id, [...ids]))
+  }
+
+  // RFC-366：`active=false` 的端口行是被后续写覆盖掉的历史值，喂给蒸馏器只会制造
+  // 「这个 agent 前后说了两套」的假象，所以只取活的。
+  async listNodeRunOutputs(ids: readonly string[]) {
+    if (ids.length === 0) return []
+    return await this.db
+      .select({
+        nodeRunId: nodeRunOutputs.nodeRunId,
+        portName: nodeRunOutputs.portName,
+        content: nodeRunOutputs.content,
+        kind: nodeRunOutputs.kind,
+      })
+      .from(nodeRunOutputs)
+      .where(and(inArray(nodeRunOutputs.nodeRunId, [...ids]), eq(nodeRunOutputs.active, true)))
+      .orderBy(asc(nodeRunOutputs.nodeRunId), asc(nodeRunOutputs.portName))
+  }
+
+  // RFC-366 task-run 源：任务本身的收尾快照。
+  async listTaskRunSources(ids: readonly string[]) {
+    if (ids.length === 0) return []
+    return await this.db
+      .select({
+        id: tasks.id,
+        name: tasks.name,
+        status: tasks.status,
+        startedAt: tasks.startedAt,
+        finishedAt: tasks.finishedAt,
+        runningMs: tasks.runningMs,
+        errorSummary: tasks.errorSummary,
+        errorMessage: tasks.errorMessage,
+        failedNodeId: tasks.failedNodeId,
+        inputs: tasks.inputs,
+        workflowSnapshot: tasks.workflowSnapshot,
+      })
+      .from(tasks)
+      .where(inArray(tasks.id, [...ids]))
+  }
+
+  /**
+   * RFC-366：任务里每个节点的终态一览。
+   *
+   * 一个节点在一个任务里可能有很多行（重试 / loop 每轮 / fanout 每分片），这里按
+   * id 逆序取每个 (task, node) 的**最新一行**——node_run id 是 ULID，id 序即时间序
+   * （`isFresherNodeRun` 用的也是这条判据），所以不需要再按 finishedAt 排序，后者
+   * 在未结算的行上还是 null。
+   */
+  async listTaskNodeStatuses(taskIds: readonly string[]) {
+    if (taskIds.length === 0) return []
+    const rows = await this.db
+      .select({
+        taskId: nodeRuns.taskId,
+        nodeId: nodeRuns.nodeId,
+        status: nodeRuns.status,
+        retryIndex: nodeRuns.retryIndex,
+        finishedAt: nodeRuns.finishedAt,
+        id: nodeRuns.id,
+      })
+      .from(nodeRuns)
+      .where(inArray(nodeRuns.taskId, [...taskIds]))
+      .orderBy(desc(nodeRuns.id))
+    const seen = new Set<string>()
+    const latest: {
+      taskId: string
+      nodeId: string
+      nodeRunId: string
+      status: string
+      retryIndex: number
+      finishedAt: number | null
+    }[] = []
+    for (const row of rows) {
+      const key = `${row.taskId}\u0000${row.nodeId}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      latest.push({
+        taskId: row.taskId,
+        nodeId: row.nodeId,
+        nodeRunId: row.id,
+        status: row.status,
+        retryIndex: row.retryIndex,
+        finishedAt: row.finishedAt,
+      })
+    }
+    return latest.reverse()
   }
 
   async listNodeRuns(ids: readonly string[]) {

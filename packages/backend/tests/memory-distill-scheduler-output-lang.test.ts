@@ -25,6 +25,16 @@ import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { createMemoryDistillSessionCapture } from '../src/modules/memory/infrastructure/memoryDistillSessionCapture'
 
+/**
+ * RFC-366: `enqueueDistillJob` now returns null when the admission gate declines
+ * the event. Every case in this file uses a manual-origin (or task-less) fixture,
+ * so a null here means the gate regressed — fail loudly rather than `!`-away.
+ */
+function admitted<T>(result: T | null): T {
+  if (result === null) throw new Error('distill enqueue was unexpectedly rejected')
+  return result
+}
+
 describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (harness) => {
   let db: ProviderNeutralDatabase
   let memory: { store: DrizzleMemoryDistillWorkStore }
@@ -42,12 +52,14 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
 
   test('explicit outputLang wins over the ambient provider', async () => {
     setMemoryDistillLangProvider(() => 'en-US')
-    const { jobId } = await enqueueDistillJob(memory.store, {
-      sourceKind: 'feedback',
-      sourceEventId: 'evt-1',
-      taskId: null,
-      outputLang: 'zh-CN',
-    })
+    const { jobId } = admitted(
+      await enqueueDistillJob(memory.store, {
+        sourceKind: 'feedback',
+        sourceEventId: 'evt-1',
+        taskId: null,
+        outputLang: 'zh-CN',
+      }),
+    )
     const row = await db
       .select()
       .from(memoryDistillJobs)
@@ -58,11 +70,13 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
 
   test('ambient provider used when explicit outputLang omitted (production path)', async () => {
     setMemoryDistillLangProvider(() => 'zh-CN')
-    const { jobId } = await enqueueDistillJob(memory.store, {
-      sourceKind: 'feedback',
-      sourceEventId: 'evt-2',
-      taskId: null,
-    })
+    const { jobId } = admitted(
+      await enqueueDistillJob(memory.store, {
+        sourceKind: 'feedback',
+        sourceEventId: 'evt-2',
+        taskId: null,
+      }),
+    )
     const row = await db
       .select()
       .from(memoryDistillJobs)
@@ -72,11 +86,13 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
   })
 
   test('no provider + no explicit → DB row carries NULL (RFC-041 baseline)', async () => {
-    const { jobId } = await enqueueDistillJob(memory.store, {
-      sourceKind: 'feedback',
-      sourceEventId: 'evt-3',
-      taskId: null,
-    })
+    const { jobId } = admitted(
+      await enqueueDistillJob(memory.store, {
+        sourceKind: 'feedback',
+        sourceEventId: 'evt-3',
+        taskId: null,
+      }),
+    )
     const row = await db
       .select()
       .from(memoryDistillJobs)
@@ -87,12 +103,14 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
 
   test('explicit null overrides a provider-set language → DB row NULL', async () => {
     setMemoryDistillLangProvider(() => 'zh-CN')
-    const { jobId } = await enqueueDistillJob(memory.store, {
-      sourceKind: 'feedback',
-      sourceEventId: 'evt-4',
-      taskId: null,
-      outputLang: null,
-    })
+    const { jobId } = admitted(
+      await enqueueDistillJob(memory.store, {
+        sourceKind: 'feedback',
+        sourceEventId: 'evt-4',
+        taskId: null,
+        outputLang: null,
+      }),
+    )
     const row = await db
       .select()
       .from(memoryDistillJobs)
@@ -110,17 +128,21 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
     // and stable through retry.
     let current: 'zh-CN' | 'en-US' = 'zh-CN'
     setMemoryDistillLangProvider(() => current)
-    const a = await enqueueDistillJob(memory.store, {
-      sourceKind: 'feedback',
-      sourceEventId: 'sibling-a',
-      taskId: 't-shared',
-    })
+    const a = admitted(
+      await enqueueDistillJob(memory.store, {
+        sourceKind: 'feedback',
+        sourceEventId: 'sibling-a',
+        taskId: 't-shared',
+      }),
+    )
     current = 'en-US'
-    const b = await enqueueDistillJob(memory.store, {
-      sourceKind: 'feedback',
-      sourceEventId: 'sibling-b',
-      taskId: 't-shared',
-    })
+    const b = admitted(
+      await enqueueDistillJob(memory.store, {
+        sourceKind: 'feedback',
+        sourceEventId: 'sibling-b',
+        taskId: 't-shared',
+      }),
+    )
     // (Same debounceKey because (taskId, sourceKind) identical for feedback.)
     expect(a.debounceKey).toBe(b.debounceKey)
     const rowA = await db

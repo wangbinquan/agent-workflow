@@ -2,16 +2,18 @@
 // Lists rows + per-row [Retry] (failed → pending) / [Cancel] (pending → canceled).
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLayoutEffect, useRef } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from '@tanstack/react-router'
-import type { MemoryDistillJob } from '@agent-workflow/shared'
+import type { DistillSourceKind, MemoryDistillJob } from '@agent-workflow/shared'
+import { DISTILL_SOURCE_KINDS } from '@agent-workflow/shared'
 import type { ApiError } from '@/api/client'
 import { api } from '@/api/client'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { FeedbackStack } from '@/components/FeedbackStack'
 import { LoadingState } from '@/components/LoadingState'
+import { Select } from '@/components/Select'
 import { TableViewport } from '@/components/TableViewport'
 import { hasPermissionAtRequest, usePermission } from '@/hooks/useActor'
 
@@ -58,6 +60,9 @@ export function MemoryDistillJobsTable() {
     }
   }, [action, canManage])
   const permissionSession = permissionSessionRef.current
+  // RFC-366：来源筛选。纯客户端过滤——这张表本来就一次拉全量（无分页），
+  // 再往后端加一个 query 参数只会多一条要维护的契约。
+  const [sourceFilter, setSourceFilter] = useState<'' | DistillSourceKind>('')
 
   const listError = list.error !== null && list.error !== undefined
   if (list.data === undefined) {
@@ -67,8 +72,10 @@ export function MemoryDistillJobsTable() {
     }
     return <LoadingState />
   }
-  const rows = list.data.items
-  if (rows.length === 0) {
+  const allRows = list.data.items
+  const rows =
+    sourceFilter === '' ? allRows : allRows.filter((job) => job.sourceKind === sourceFilter)
+  if (allRows.length === 0) {
     return (
       <>
         <FeedbackStack variant="section">
@@ -85,6 +92,27 @@ export function MemoryDistillJobsTable() {
   return (
     <div className="memory-distill-jobs" data-testid="memory-distill-jobs">
       {listError && <ErrorBanner error={list.error} onRetry={() => void list.refetch()} />}
+      <div className="page__actions">
+        <Select<'' | DistillSourceKind>
+          data-testid="memory-distill-source-filter"
+          ariaLabel={t('memory.distillJobs.colSource')}
+          value={sourceFilter}
+          onChange={setSourceFilter}
+          options={[
+            { value: '', label: t('memory.distillJobs.sourceFilterAll') },
+            ...DISTILL_SOURCE_KINDS.map((kind) => ({
+              value: kind,
+              label: t(`memory.sourceKind.${kind}`),
+            })),
+          ]}
+        />
+      </div>
+      {rows.length === 0 && (
+        <EmptyState
+          title={t('memory.distillJobs.empty')}
+          description={t('memory.distillJobs.emptyDescription')}
+        />
+      )}
       <TableViewport label={t('memory.tab.distillJobs')} minWidth="lg">
         <table className="data-table">
           <thead>

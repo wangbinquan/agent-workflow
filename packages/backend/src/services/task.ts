@@ -202,6 +202,7 @@ import {
   type TaskLaunchProvenance,
 } from '@/modules/task-execution/domain/taskLaunchOrigin'
 import { branchTraceForTask } from '@/modules/task-execution/application/branchTrace'
+import { composeAgentRunDistillObserver } from '@/modules/task-execution/composition/agentRunDistillObserver'
 import { selectResumeRollbackTargets } from '@/modules/task-execution/application/resumeRollbackTargets'
 import { DrizzleBranchTraceSnapshotReader } from '@/modules/task-execution/infrastructure/branchTraceSnapshotReader'
 import * as taskDriveComposition from '@/modules/task-execution/composition/taskDriveLegacy'
@@ -1083,9 +1084,18 @@ export function runtimeConfigOpts(
     | 'maxInvocationDepth'
     | 'scriptInterpreters'
     | 'scriptDepsInstallTimeoutMs'
+    | 'memoryDistillEnqueuer'
   >,
 ): Partial<TaskDriveRuntimeOptions> {
   return {
+    // RFC-366: agent-run distill. Threaded through the SAME funnel as every
+    // other runtime option for the reason this funnel exists (RFC-103 T2): the
+    // three kick sites — startTask / resumeTask / retryNode — must not drift,
+    // and a resumed or retried run's agents are exactly the ones worth learning
+    // from. Absent enqueuer (legacy fixtures) → the engine's no-op observer.
+    ...(deps.memoryDistillEnqueuer === undefined
+      ? {}
+      : { agentRunSettled: composeAgentRunDistillObserver(deps.memoryDistillEnqueuer) }),
     ...(deps.maxActiveChildTasks !== undefined
       ? { maxActiveChildTasks: deps.maxActiveChildTasks }
       : {}),

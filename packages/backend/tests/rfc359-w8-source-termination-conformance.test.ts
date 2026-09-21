@@ -553,6 +553,7 @@ describeEachProvider('RFC-359 W8 —— 源终止参与者在两个引擎上同�
       nudgeWorkspacePrune: async (id) => {
         nudged.push(id)
       },
+      enqueueTaskRunDistill: async () => {},
     })
     const nudge = consumers.find((consumer) => consumer.id === 'task-workspace-prune-nudge')
     expect(nudge).toBeDefined()

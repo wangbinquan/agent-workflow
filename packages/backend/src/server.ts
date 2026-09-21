@@ -2988,6 +2988,12 @@ function composeSqliteApiRouteMounts(
         db: deps.db,
         schedulerDriver,
         configPath: deps.configPath,
+        // RFC-366：绑上 memory 的蒸馏入队 participant。
+        // 两个用处，都靠它：`runtimeConfigOpts` 据此组出 agent 运行结束的观察者
+        // （每个 agent node_run 结算一次），`gateContinuationPreDrive` 据此拿到真正的
+        // 入队器而不是那个 fail-closed 的占位（`missingMemoryDistillEnqueuer`，
+        // `StartTaskDeps.memoryDistillEnqueuer` 的注释本来就写明「bootstrap 必须绑」）。
+        memoryDistillEnqueuer: deps.memoryOperations.distillCommands,
         ...resolveLaunchRuntimeConfig(deps.configPath),
       },
       // 2026-09-19：这台协调器**长驻**（组合根装配一次、之后服务每一次 `POST /api/tasks`），

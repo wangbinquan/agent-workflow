@@ -46,6 +46,11 @@ export const SETTINGS_CONFIG_SCOPE_KEYS = {
     'memoryDistillModel',
     'memoryDistillLang',
     'memoryDistillTimeoutMs',
+    // RFC-366 执行结束记忆提炼：任务来源白名单 / 逐源开关 / agent 源去抖窗口。
+    // 漏登记这三个键会被草稿层静默丢掉（保存看着成功、值没变）。
+    'memoryDistillLaunchOrigins',
+    'memoryDistillSources',
+    'memoryDistillAgentRunDebounceMs',
     'mergeAgentRuntime',
     'mergeAgentModel',
     // RFC-239 change narrative (AI 导读)

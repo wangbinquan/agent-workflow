@@ -138,6 +138,7 @@ describeEachProvider('RFC-310 task lifecycle publication through RFC-341', (prov
         async notifyChildBudget() {},
         async notifyExecutionWatch() {},
         async nudgeWorkspacePrune() {},
+        async enqueueTaskRunDistill() {},
       }),
       now: () => now,
     })

@@ -93,6 +93,12 @@ const DISPOSITION = {
   ensureWorkspaceProfiles: 'dropped-registered',
   mergeAgentModel: 'dropped-registered',
   mergeAgentRuntime: 'dropped-registered',
+  // RFC-366: a live participant the daemon composes per launch from the memory
+  // module's enqueuer — same family as `persistence` / `collaborationRuntime`
+  // above, and for the same reason: a child must not carry a parent's service
+  // instance through the run-config bag. The child launch path builds its own
+  // from the same bootstrap deps, so child agent runs still distill.
+  agentRunSettled: 'dropped-registered',
 } as const satisfies Record<keyof RunTaskOptions, Disposition>
 
 const keysWith = (d: Disposition): string[] =>
@@ -133,6 +139,9 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'ensureWorkspaceProfiles',
         'mergeAgentModel',
         'mergeAgentRuntime',
+        // RFC-366：agent 运行结束的观察者。daemon 每次 launch 从 memory 的入队器
+        // 现组一个，不随子任务的 run-config 包下传——与上面那批服务实例同族。
+        'agentRunSettled',
       ].sort(),
     )
   })

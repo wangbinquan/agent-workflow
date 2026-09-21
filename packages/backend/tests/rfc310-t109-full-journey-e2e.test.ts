@@ -325,6 +325,9 @@ async function envelopeFor(prompt: string, missionId: string): Promise<string> {
               disposition: 'addressed' as const,
             },
           ],
+          // RFC-366：两类新源在本用例里为空。
+          agentRun: [],
+          taskRun: [],
         }
   const json = JSON.stringify({
     protocolVersion: 1,

@@ -6,25 +6,31 @@
 // RFC-041 — memory distiller (PR2 scope).
 //
 // The distiller is a *system* runtime agent — not stored in the `agents` table
-// and not user-editable. It runs naturally in a throwaway worktree (so
-// distillation never creates a git diff in a real worktree), and we parse the
-// `candidates` port out of the last
-// <workflow-output> envelope on stdout.
+// and not user-editable. It runs naturally in a throwaway scratch worktree (so
+// distillation never creates a git diff in a real worktree).
 //
-// Failures (timeout / non-zero exit / unparseable envelope / zod-invalid
-// candidate) are swallowed at the candidate level when the rest of the
-// batch is salvageable; only "no envelope at all" / spawn errors bubble up
-// to the scheduler, which records them in `memory_distill_jobs.last_error`
-// and applies exponential backoff.
+// RFC-367 rewired two things here:
+//   · the run goes through the shared `runSystemAgent` primitive (intent /
+//     change-narrative precedent), so the candidate parse reads the SAME
+//     normalized event stream the session tab is built from. The old split —
+//     candidates from a 256KB stdout tail, conversation from a post-run SQLite
+//     walk — drifted twice and silently dropped every candidate for a month
+//     (see RFC-367 proposal §1).
+//   · an output-protocol failure is no longer a `log.warn` + empty result. It
+//     re-asks IN THE SAME SESSION (the worker-node follow-up machinery), and
+//     after the retry budget the job FAILS with a reason — the scheduler then
+//     records `memory_distill_jobs.last_error` and backs off.
 //
-// Tests inject `spawnFn` to skip the real Bun.spawn — production passes
-// `defaultDistillerSpawn` which actually runs opencode.
+// Still swallowed on purpose: a single zod-invalid candidate when the rest of
+// the batch is salvageable. If NONE survive, that is a failure (AC-14).
+//
+// Tests inject `runFn` to skip the real subprocess.
 
-import { mkdir, rm } from 'node:fs/promises'
 import { randomBytes } from 'node:crypto'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type {
+  DistillSourceKind,
   Memory,
   MemoryDistillJob,
   ParseSessionInputEvent,
@@ -33,19 +39,33 @@ import type {
 } from '@agent-workflow/shared'
 import {
   awInputProtocolNote,
+  buildProtocolBlock,
+  DEFAULT_PROTOCOL_RETRY_BUDGET,
   DEFAULT_SOURCE_CONTEXT_BUDGET,
-  envelopeOpenTag,
+  type EnvelopeFollowupReason,
   fenceUntrusted,
+  renderEnvelopeFollowupPrompt,
   MemorySchema,
   parseSessionTree,
   redactGitUrl,
 } from '@agent-workflow/shared'
 import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
-import { getRuntimeDriver } from '@/services/runtime'
-import { runAgentProcess } from '@/services/execution/agentProcess'
 import { Paths } from '@/util/paths'
-import type { RuntimeKind } from '@/services/runtime/types'
-import { extractLastEnvelope } from '@/services/envelope'
+import type { RuntimeKind, SystemAgentOutputEvidence } from '@/services/runtime/types'
+import {
+  classifyMissingEnvelope,
+  releaseSystemAgentScratch,
+  runSystemAgent,
+  type SystemAgentRunOptions,
+  type SystemAgentRunResult,
+} from '@/services/systemAgentRun'
+import type { SystemAgentEventSinkV1 } from '@/services/sessionEventSink'
+import {
+  DistillerProtocolError,
+  parseDistillerCandidates,
+  type DistillProtocolFailureCode,
+  type RawCandidate,
+} from './distillerOutput'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
 import { clipHeadTail, renderSessionTreeToDistillerMd } from '@/modules/memory/domain/sourceContext'
 import { MEMORY_CHANNEL, memoryBroadcaster } from '@/ws/broadcaster'
@@ -100,10 +120,22 @@ export interface RunDistillOptions {
    * lists all source events from these in one user prompt.
    */
   siblings: MemoryDistillJob[]
-  /** Inject a fake spawn for tests. Default = real Bun.spawn pipeline. */
-  spawnFn?: DistillerSpawnFn
-  /** Default `DEFAULT_TIMEOUT_MS` (1 hour), overridable via
-   *  `config.memoryDistillTimeoutMs`; tests override to keep cases fast. */
+  /**
+   * RFC-367 test seam — defaults to `runSystemAgent`. Same shape intent /
+   * change-narrative use, so a fake here is a fake everywhere.
+   */
+  runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+  /**
+   * RFC-367 — per-attempt live session capture. Omitted → no capture sink
+   * (the run still works; only the detail page's conversation tab is empty).
+   */
+  eventSinkFor?: (input: { distillJobId: string; attemptIndex: number }) => SystemAgentEventSinkV1
+  /**
+   * `config.memoryDistillTimeoutMs`, default `DEFAULT_TIMEOUT_MS` (1 hour).
+   * RFC-367 §3.2: this is the budget for the WHOLE distill — the first round
+   * plus every protocol follow-up share it, so a doomed batch cannot occupy
+   * the single-flight distill queue for 4× the configured time.
+   */
   timeoutMs?: number
   /**
    * RFC-117 — resolved runtime for the distiller. `protocol` (which driver),
@@ -129,44 +161,12 @@ export interface RunDistillOptions {
   envelopeNonce?: string
 }
 
-export interface DistillerSpawnInput {
-  /** RFC-117: resolved runtime protocol — which driver assembles the spawn. */
-  protocol: RuntimeKind
-  /** RFC-117: resolved runtime binary (RFC-112 custom fork); null → driver default head. */
-  runtimeBinary: string | null
-  /** RFC-117: model from the resolved runtime profile; null → the runtime's own default. */
-  model: string | null
-  /** RFC-276: opt-in Claude CLI compatibility marker. */
-  isSandbox?: boolean
-  /** Hardcoded English user prompt assembled in buildDistillerUserPrompt. */
-  userPrompt: string
-  /** RFC-200 nonce already embedded in userPrompt; exposed for deterministic fakes. */
-  envelopeNonce: string
-  /** Tmp cwd allocated for this distill — no git side-effects. */
-  cwd: string
-  timeoutMs: number
-}
-
-export interface DistillerSpawnResult {
-  exitCode: number | null
-  /** Full stdout — caller calls extractLastEnvelope on it. */
-  stdout: string
-  /** Full stderr — caller may persist on failure for debugging. */
-  stderr: string
-  /** Awaited after capture/parse; owns per-attempt runtime material cleanup. */
-  cleanup?: () => Promise<void>
-}
-
-/** The child may still own files below the attempt directory. Callers must
- * preserve that directory for recovery instead of recursively deleting it. */
 export class IndeterminateRuntimeProcessError extends Error {
   constructor(message = 'runtime spawn state is indeterminate') {
     super(message)
     this.name = 'IndeterminateRuntimeProcessError'
   }
 }
-
-export type DistillerSpawnFn = (input: DistillerSpawnInput) => Promise<DistillerSpawnResult>
 
 // -----------------------------------------------------------------------------
 // Source event loading
@@ -205,6 +205,37 @@ export interface LoadedSourceEvents {
     reviewedBodyReason: string | null
   }>
   feedback: Array<{ id: string; taskId: string; bodyMd: string; createdAt: number }>
+  /** RFC-366: one settled agent node_run per entry. */
+  agentRun: Array<{
+    id: string
+    taskId: string
+    nodeId: string
+    agentName: string | null
+    status: string
+    durationMs: number | null
+    failureCode: string | null
+    errorMessage: string | null
+    promptMd: string | null
+    /** Approved memories this run already had injected (RFC-046 snapshot). */
+    injectedMemories: Array<{ scopeType: string; title: string; bodyMdHead: string }>
+    injectedMemoriesReason: string | null
+    transcriptMd: string | null
+    transcriptReason: string | null
+    outputs: Array<{ portName: string; kind: string | null; content: string }>
+  }>
+  /** RFC-366: one settled task per entry. */
+  taskRun: Array<{
+    id: string
+    name: string
+    status: string
+    durationMs: number
+    errorSummary: string | null
+    errorMessage: string | null
+    failedNodeId: string | null
+    inputsMd: string
+    nodeOutcomes: Array<{ nodeId: string; status: string; retryIndex: number }>
+    finalOutputs: Array<{ nodeId: string; portName: string; content: string }>
+  }>
 }
 
 /**
@@ -230,6 +261,9 @@ export async function loadSourceEvents(
   const clarifyIds = jobs.filter((j) => j.sourceKind === 'clarify').map((j) => j.sourceEventId)
   const reviewIds = jobs.filter((j) => j.sourceKind === 'review').map((j) => j.sourceEventId)
   const feedbackIds = jobs.filter((j) => j.sourceKind === 'feedback').map((j) => j.sourceEventId)
+  // RFC-366: agent-run's sourceEventId is a node_run id, task-run's is a task id.
+  const agentRunIds = jobs.filter((j) => j.sourceKind === 'agent-run').map((j) => j.sourceEventId)
+  const taskRunIds = jobs.filter((j) => j.sourceKind === 'task-run').map((j) => j.sourceEventId)
 
   const [clarifyRows, reviewRows, feedbackRows] = await Promise.all([
     store.listClarifySources(clarifyIds),
@@ -258,8 +292,12 @@ export async function loadSourceEvents(
 
   const transcriptsByClarifyId = await loadClarifyTranscripts(store, clarifyRows, budget)
   const reviewBodiesByDvId = await loadReviewBodies(reviewedArtifacts, reviewRows, budget)
+  const agentRun = await loadAgentRunSources(store, agentRunIds, budget)
+  const taskRun = await loadTaskRunSources(store, taskRunIds, budget)
 
   return {
+    agentRun,
+    taskRun,
     clarify: clarifyRows.map((r) => {
       const t = transcriptsByClarifyId.get(r.id) ?? {
         md: null,
@@ -325,10 +363,255 @@ async function loadClarifyTranscripts(
   const sourceRunIds = [
     ...new Set(clarifyRows.flatMap((r) => (r.askingNodeRunId !== null ? [r.askingNodeRunId] : []))),
   ]
-  const runRows = await store.listNodeRuns(sourceRunIds)
-  const runById = new Map(runRows.map((r) => [r.id, r] as const))
+  const byRun = await renderNodeRunTranscripts(
+    store,
+    sourceRunIds,
+    budget.clarifyTranscriptMaxBytes,
+  )
+  for (const c of clarifyRows) {
+    out.set(
+      c.id,
+      c.askingNodeRunId === null
+        ? { md: null, reason: 'source node_run not found' }
+        : (byRun.get(c.askingNodeRunId) ?? { md: null, reason: 'source node_run not found' }),
+    )
+  }
+  return out
+}
 
-  const eventRows = await store.listNodeRunEvents(sourceRunIds)
+/**
+ * RFC-366 — load one `agent-run` source per settled node_run.
+ *
+ * Three blocks, each independently budgeted and each degrading on its own:
+ * the run's transcript, the ports it emitted, and the approved memories that
+ * were injected INTO it. The last one is what lets the distiller answer "is this
+ * already known?" instead of re-proposing a memory the agent was handed.
+ *
+ * The agent's display name comes from the task's workflow snapshot (node_runs
+ * has no agent column). A name-only or quarantined node yields null, and the
+ * prompt just prints the node id — the transcript carries the real context.
+ */
+async function loadAgentRunSources(
+  store: MemoryDistillWorkStore,
+  ids: readonly string[],
+  budget: SourceContextBudget,
+): Promise<LoadedSourceEvents['agentRun']> {
+  if (ids.length === 0) return []
+  const rows = await store.listAgentRunSources(ids)
+  if (rows.length === 0) return []
+  const transcripts = await renderNodeRunTranscripts(
+    store,
+    rows.map((r) => r.id),
+    budget.agentTranscriptMaxBytes,
+  )
+  const outputRows =
+    budget.agentOutputsMaxBytes === 0 ? [] : await store.listNodeRunOutputs(rows.map((r) => r.id))
+  const outputsByRun = new Map<string, LoadedSourceEvents['agentRun'][number]['outputs']>()
+  for (const row of outputRows) {
+    const bucket = outputsByRun.get(row.nodeRunId) ?? []
+    bucket.push({
+      portName: row.portName,
+      kind: row.kind,
+      content: clipHeadTail(row.content, budget.agentOutputsMaxBytes),
+    })
+    outputsByRun.set(row.nodeRunId, bucket)
+  }
+  // Agent display names come from each task's frozen snapshot, read once per task.
+  const taskIds = [...new Set(rows.map((r) => r.taskId))]
+  const snapshots = new Map<string, string>()
+  for (const taskId of taskIds) {
+    const scope = await store.findTaskScope(taskId)
+    if (scope !== null) snapshots.set(taskId, scope.workflowSnapshot)
+  }
+  return rows.map((row) => {
+    const transcript = transcripts.get(row.id) ?? { md: null, reason: 'disabled by config' }
+    const injected = readInjectedMemories(row.injectedMemoriesJson, budget)
+    return {
+      id: row.id,
+      taskId: row.taskId,
+      nodeId: row.nodeId,
+      agentName: agentNameOfSnapshotNode(snapshots.get(row.taskId) ?? null, row.nodeId),
+      status: row.status,
+      durationMs:
+        row.startedAt !== null && row.finishedAt !== null ? row.finishedAt - row.startedAt : null,
+      failureCode: row.failureCode,
+      errorMessage: row.errorMessage,
+      promptMd: readNodeRunPrompt(row),
+      injectedMemories: injected.entries,
+      injectedMemoriesReason: injected.reason,
+      transcriptMd: transcript.md,
+      transcriptReason: transcript.reason,
+      outputs: outputsByRun.get(row.id) ?? [],
+    }
+  })
+}
+
+/**
+ * RFC-366 — the `agent-run` block's "already known" list.
+ *
+ * `node_runs.injected_memories_json` is written by the RFC-046 injection step.
+ * Shape drift or a truncated write must not cost us the whole source, so a parse
+ * failure degrades to a reason string exactly like the transcript does.
+ */
+function readInjectedMemories(
+  json: string | null,
+  budget: SourceContextBudget,
+): {
+  entries: LoadedSourceEvents['agentRun'][number]['injectedMemories']
+  reason: string | null
+} {
+  if (budget.agentInjectedMemoriesMaxBytes === 0)
+    return { entries: [], reason: 'disabled by config' }
+  if (json === null) return { entries: [], reason: null }
+  let raw: unknown
+  try {
+    raw = JSON.parse(json)
+  } catch (err) {
+    return { entries: [], reason: `unreadable: ${err instanceof Error ? err.message : 'parse'}` }
+  }
+  const list = Array.isArray(raw)
+    ? raw
+    : Array.isArray((raw as { items?: unknown }).items)
+      ? (raw as { items: unknown[] }).items
+      : null
+  if (list === null) return { entries: [], reason: 'unreadable: unexpected snapshot shape' }
+  const entries: LoadedSourceEvents['agentRun'][number]['injectedMemories'] = []
+  let used = 0
+  for (const item of list) {
+    if (typeof item !== 'object' || item === null) continue
+    const record = item as Record<string, unknown>
+    const title = typeof record.title === 'string' ? record.title : null
+    if (title === null) continue
+    const scopeType = typeof record.scopeType === 'string' ? record.scopeType : 'unknown'
+    const body = typeof record.bodyMd === 'string' ? record.bodyMd : ''
+    const entry = { scopeType, title, bodyMdHead: body.slice(0, 200) }
+    used += title.length + entry.bodyMdHead.length
+    if (used > budget.agentInjectedMemoriesMaxBytes) break
+    entries.push(entry)
+  }
+  return { entries, reason: null }
+}
+
+/** RFC-366 — display name for a snapshot node; null when it cannot be named. */
+function agentNameOfSnapshotNode(workflowSnapshot: string | null, nodeId: string): string | null {
+  if (workflowSnapshot === null) return null
+  let parsed: { nodes?: Array<Record<string, unknown>> } = {}
+  try {
+    parsed = JSON.parse(workflowSnapshot) as typeof parsed
+  } catch {
+    return null
+  }
+  for (const node of parsed.nodes ?? []) {
+    if (typeof node !== 'object' || node === null) continue
+    if (node.id !== nodeId) continue
+    return typeof node.agentName === 'string' && node.agentName.length > 0 ? node.agentName : null
+  }
+  return null
+}
+
+/**
+ * RFC-366 — load one `task-run` source per settled task.
+ *
+ * Deliberately NOT a transcript dump: every agent in the task already produced
+ * its own `agent-run` source with its full session (D1 + D6), so repeating them
+ * here would pay twice for the same tokens. What this block adds is the shape of
+ * the whole run — what it was asked to do, which nodes ended how, what came out
+ * the far end.
+ */
+async function loadTaskRunSources(
+  store: MemoryDistillWorkStore,
+  ids: readonly string[],
+  budget: SourceContextBudget,
+): Promise<LoadedSourceEvents['taskRun']> {
+  if (ids.length === 0) return []
+  const rows = await store.listTaskRunSources(ids)
+  if (rows.length === 0) return []
+  const statuses = await store.listTaskNodeStatuses(rows.map((r) => r.id))
+  const byTask = new Map<string, LoadedSourceEvents['taskRun'][number]['nodeOutcomes']>()
+  for (const row of statuses) {
+    const bucket = byTask.get(row.taskId) ?? []
+    bucket.push({ nodeId: row.nodeId, status: row.status, retryIndex: row.retryIndex })
+    byTask.set(row.taskId, bucket)
+  }
+  // The final outputs are the OUTPUT nodes' ports — the task's actual product.
+  // Reading every node's ports instead would just restate the agent-run blocks.
+  const outputNodeIdsByTask = new Map<string, Set<string>>()
+  for (const row of rows) outputNodeIdsByTask.set(row.id, outputNodeIds(row.workflowSnapshot))
+  const outputRuns = statuses.filter((row) =>
+    (outputNodeIdsByTask.get(row.taskId) ?? new Set<string>()).has(row.nodeId),
+  )
+  const ownerOfRun = new Map(outputRuns.map((row) => [row.nodeRunId, row] as const))
+  const portRows =
+    outputRuns.length === 0
+      ? []
+      : await store.listNodeRunOutputs(outputRuns.map((row) => row.nodeRunId))
+  const finalOutputsByTask = new Map<
+    string,
+    LoadedSourceEvents['taskRun'][number]['finalOutputs']
+  >()
+  for (const port of portRows) {
+    const owner = ownerOfRun.get(port.nodeRunId)
+    if (owner === undefined) continue
+    const bucket = finalOutputsByTask.get(owner.taskId) ?? []
+    bucket.push({
+      nodeId: owner.nodeId,
+      portName: port.portName,
+      content: clipHeadTail(port.content, budget.taskSummaryMaxBytes),
+    })
+    finalOutputsByTask.set(owner.taskId, bucket)
+  }
+  return rows.map((row) => ({
+    id: row.id,
+    name: row.name,
+    status: row.status,
+    durationMs: row.runningMs,
+    errorSummary: row.errorSummary,
+    errorMessage: row.errorMessage,
+    failedNodeId: row.failedNodeId,
+    inputsMd: clipHeadTail(row.inputs, budget.taskSummaryMaxBytes),
+    nodeOutcomes: byTask.get(row.id) ?? [],
+    finalOutputs: finalOutputsByTask.get(row.id) ?? [],
+  }))
+}
+
+/** RFC-366 — ids of the workflow snapshot's `output` nodes. */
+function outputNodeIds(workflowSnapshot: string): Set<string> {
+  const ids = new Set<string>()
+  let parsed: { nodes?: Array<Record<string, unknown>> } = {}
+  try {
+    parsed = JSON.parse(workflowSnapshot) as typeof parsed
+  } catch {
+    return ids
+  }
+  for (const node of parsed.nodes ?? []) {
+    if (typeof node !== 'object' || node === null) continue
+    if (node.kind !== 'output') continue
+    if (typeof node.id === 'string') ids.add(node.id)
+  }
+  return ids
+}
+
+/**
+ * RFC-366 (T13) — render a batch of node_runs' sessions into distiller markdown.
+ *
+ * Lifted verbatim out of {@link loadClarifyTranscripts} so the `agent-run` source
+ * renders through the SAME code path. Two callers reading `node_run_events` with
+ * two copies of the parse/clip pipeline is how the clarify block and the agent
+ * block would end up formatted differently for no reason anybody could name.
+ *
+ * Returns one entry per requested id; a run that cannot be rendered gets a null
+ * `md` plus the human-readable `reason` the prompt prints as a placeholder.
+ */
+async function renderNodeRunTranscripts(
+  store: MemoryDistillWorkStore,
+  runIds: readonly string[],
+  maxBytes: number,
+): Promise<Map<string, SourceContextResult>> {
+  const out = new Map<string, SourceContextResult>()
+  if (runIds.length === 0 || maxBytes === 0) return out
+  const runRows = await store.listNodeRuns(runIds)
+  const runById = new Map(runRows.map((r) => [r.id, r] as const))
+  const eventRows = await store.listNodeRunEvents(runIds)
   const eventsByRun = new Map<string, ParseSessionInputEvent[]>()
   for (const e of eventRows) {
     const list = eventsByRun.get(e.nodeRunId) ?? []
@@ -342,16 +625,15 @@ async function loadClarifyTranscripts(
     })
     eventsByRun.set(e.nodeRunId, list)
   }
-
-  for (const c of clarifyRows) {
-    const run = c.askingNodeRunId !== null ? runById.get(c.askingNodeRunId) : undefined
+  for (const runId of runIds) {
+    const run = runById.get(runId)
     if (run === undefined) {
-      out.set(c.id, { md: null, reason: 'source node_run not found' })
+      out.set(runId, { md: null, reason: 'source node_run not found' })
       continue
     }
     const events = eventsByRun.get(run.id) ?? []
     if (events.length === 0) {
-      out.set(c.id, { md: null, reason: 'no events captured for source node_run' })
+      out.set(runId, { md: null, reason: 'no events captured for source node_run' })
       continue
     }
     try {
@@ -365,11 +647,13 @@ async function loadClarifyTranscripts(
         primaryAgentName: 'agent',
         events,
       })
-      const md = renderSessionTreeToDistillerMd(tree)
-      out.set(c.id, { md: clipHeadTail(md, budget.clarifyTranscriptMaxBytes), reason: null })
+      out.set(runId, {
+        md: clipHeadTail(renderSessionTreeToDistillerMd(tree), maxBytes),
+        reason: null,
+      })
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
-      out.set(c.id, { md: null, reason: `parse-failed: ${msg}` })
+      out.set(runId, { md: null, reason: `parse-failed: ${msg}` })
     }
   }
   return out
@@ -559,6 +843,76 @@ export function buildDistillerUserPrompt(input: BuildDistillerPromptInput): stri
     }
   }
 
+  // RFC-366 —— agent 运行结束。
+  if (input.events.agentRun.length > 0) {
+    lines.push('## Finished agent runs')
+    for (const ev of input.events.agentRun) {
+      const who = ev.agentName ?? ev.nodeId
+      lines.push(`### agent-run:${ev.id} (agent ${who}, node ${ev.nodeId}, status=${ev.status})`)
+      if (ev.durationMs !== null) lines.push(`Duration: ${ev.durationMs}ms`)
+      if (ev.failureCode !== null) lines.push(`Failure code: ${ev.failureCode}`)
+      if (ev.promptMd !== null) {
+        lines.push('Node prompt:')
+        lines.push(ev.promptMd)
+      }
+      // 先摆「本次运行已经知道的记忆」，再摆过程：模型读到过程时，已有记忆就在上文，
+      // 于是「这条是不是已经有了」是个回看问题，而不是要它凭空回忆。
+      if (ev.injectedMemoriesReason !== null) {
+        lines.push(`Memories already injected into this run: (${ev.injectedMemoriesReason})`)
+      } else if (ev.injectedMemories.length > 0) {
+        lines.push('Memories already injected into this run (do NOT re-propose these as new):')
+        for (const m of ev.injectedMemories) {
+          lines.push(`- [${m.scopeType}] ${m.title} — ${m.bodyMdHead}`)
+        }
+      }
+      lines.push('Agent transcript:')
+      if (ev.transcriptMd !== null) {
+        lines.push(ev.transcriptMd)
+      } else {
+        lines.push(`(agent transcript unavailable: ${ev.transcriptReason ?? 'unknown'})`)
+      }
+      if (ev.outputs.length > 0) {
+        lines.push('Outputs:')
+        for (const o of ev.outputs) {
+          lines.push(`- port "${o.portName}"${o.kind === null ? '' : ` (${o.kind})`}: ${o.content}`)
+        }
+      }
+      if (ev.errorMessage !== null) {
+        lines.push('Error:')
+        lines.push(ev.errorMessage)
+      }
+      lines.push('')
+    }
+  }
+
+  // RFC-366 —— 任务执行结束。没有 transcript：本任务里每个 agent 的会话已经各自
+  // 作为 agent-run 源喂过一遍（D6），这里只补「整次执行长什么样」。
+  if (input.events.taskRun.length > 0) {
+    lines.push('## Finished task executions')
+    for (const ev of input.events.taskRun) {
+      lines.push(`### task-run:${ev.id} (${ev.name}, status=${ev.status})`)
+      lines.push(`Duration: ${ev.durationMs}ms`)
+      if (ev.failedNodeId !== null) lines.push(`Failed node: ${ev.failedNodeId}`)
+      if (ev.errorSummary !== null) lines.push(`Error summary: ${ev.errorSummary}`)
+      if (ev.errorMessage !== null) lines.push(`Error: ${ev.errorMessage}`)
+      lines.push('Launch inputs:')
+      lines.push(stringifyForPrompt(ev.inputsMd))
+      if (ev.nodeOutcomes.length > 0) {
+        lines.push('Node outcomes:')
+        for (const n of ev.nodeOutcomes) {
+          lines.push(`- ${n.nodeId}: ${n.status} (retry ${n.retryIndex})`)
+        }
+      }
+      if (ev.finalOutputs.length > 0) {
+        lines.push('Final outputs:')
+        for (const o of ev.finalOutputs) {
+          lines.push(`- node "${o.nodeId}" port "${o.portName}": ${o.content}`)
+        }
+      }
+      lines.push('')
+    }
+  }
+
   lines.push('# Currently-approved memories (do not duplicate)')
   for (const sc of input.scopeContexts) {
     const id = sc.scopeId ?? 'null'
@@ -584,9 +938,17 @@ export function buildDistillerUserPrompt(input: BuildDistillerPromptInput): stri
     )
   }
 
+  // RFC-367: the reply-format instruction is the shared `buildProtocolBlock`
+  // that every worker node gets — it renders the literal `Format:` example
+  // (`<port name="candidates">...</port>` + the closing tag), which this prompt
+  // never showed before. 2026-09-21 production forensics: ten consecutive runs
+  // emitted a bare envelope with no port wrapper (two of them mis-spelling the
+  // tag as `<wf-output>` / `<wflow-output>`), and every candidate was dropped.
+  // Giving only the opening tag was not enough for a mid-tier model to
+  // reconstruct the rest.
+  lines.push('# Instructions', buildProtocolBlock(['candidates'], undefined, envelopeNonce).trim())
   lines.push(
-    '# Instructions',
-    `Emit exactly one ${envelopeOpenTag(envelopeNonce)} envelope. The "candidates" port carries the JSON shape documented in your system prompt. If nothing is worth distilling, emit \`{"candidates": []}\`.`,
+    'The "candidates" port carries the JSON shape documented in your system prompt. If nothing is worth distilling, emit `{"candidates": []}` INSIDE that port — the envelope and the port tag are required either way.',
   )
   // RFC-050: append the output-language directive last so the model sees it
   // closest to its own generation point. The 'en-US' branch is byte-stable
@@ -614,81 +976,19 @@ function stringifyForPrompt(s: string): string {
 // Envelope parsing (candidates port)
 // -----------------------------------------------------------------------------
 
-export interface RawCandidate {
-  scopeType: 'agent' | 'workflow' | 'repo' | 'global'
-  scopeId: string | null
-  title: string
-  bodyMd: string
-  knownTags?: string[]
-  newTags?: string[]
-  action: 'new' | 'update_of' | 'duplicate_of' | 'conflict_with'
-  referenceMemoryId?: string | null
-  sourceRefs?: Array<{ kind: 'clarify' | 'review' | 'feedback'; id: string }>
-}
+// RFC-367: `RawCandidate` 与新的判别式解析一起搬到 `distillerOutput.ts`（纯函数单独成文件，
+// 便于直接断言）。这里按既有 import 路径原样转出，调用方不动。
+export type {
+  DistillerOutputParse,
+  DistillProtocolFailureCode,
+  RawCandidate,
+} from './distillerOutput'
+export { DistillerProtocolError, parseDistillerCandidates } from './distillerOutput'
 
-/**
- * Pull the `candidates` port content out of the last <workflow-output>
- * envelope and JSON-parse it. Returns [] for "envelope missing" / "port
- * missing" / "JSON malformed" — those are recorded as warnings, not
- * thrown, so a bad envelope produces an empty distill result rather than
- * a permanent failed job. Genuine spawn failures are still thrown.
- */
-export function parseDistillerOutput(
-  stdout: string,
-  protocol: RuntimeKind = 'opencode',
-  envelopeNonce?: string,
-): RawCandidate[] {
-  // RFC-117: normalize each stdout line through the runtime driver (was the
-  // hand-rolled opencode event-shape walker `extractEventText`, which mirrored
-  // runner.ts::extractTextFromEvent). `driver.parseEvent` returns the visible
-  // agent text per event for ANY runtime (opencode --format json / claude
-  // stream-json); `null` = a non-event line, kept verbatim (a test mock can dump
-  // the <workflow-output> envelope straight to stdout). Then pull the envelope.
-  const driver = getRuntimeDriver(protocol)
-  const buffer: string[] = []
-  for (const rawLine of stdout.split('\n')) {
-    const line = rawLine.trim()
-    if (line.length === 0) continue
-    const evt = driver.parseEvent(line)
-    if (evt === null) {
-      buffer.push(line)
-      continue
-    }
-    if (typeof evt.text === 'string' && evt.text.length > 0) buffer.push(evt.text)
-  }
-  const text = buffer.join('')
-  const envelope = extractLastEnvelope(text, envelopeNonce)
-  if (envelope === null) {
-    log.warn('no <workflow-output> envelope in distiller stdout')
-    return []
-  }
-  const portMatch = envelope.match(
-    /<port\s+name=(?:"candidates"|'candidates')\s*>([\s\S]*?)<\/port>/,
-  )
-  if (portMatch === null) {
-    log.warn('distiller envelope missing "candidates" port')
-    return []
-  }
-  let parsed: { candidates?: RawCandidate[] }
-  try {
-    parsed = JSON.parse(portMatch[1]!.trim()) as { candidates?: RawCandidate[] }
-  } catch (err) {
-    log.warn('distiller candidates JSON malformed', {
-      error: err instanceof Error ? err.message : String(err),
-    })
-    return []
-  }
-  if (parsed.candidates === undefined) return []
-  if (!Array.isArray(parsed.candidates)) return []
-  return parsed.candidates
-}
-
-// RFC-117: the hand-rolled per-event text walker `extractEventText` was removed
-// here. Its opencode `part.text` shape now lives in runtime/opencode/events.ts
-// and its claude-style `message.content[]` shape in runtime/claudeCode/events.ts;
-// parseDistillerOutput reaches both via `driver.parseEvent` (one source per
-// runtime — distiller and worker-node text tolerance now genuinely share a path,
-// no longer a drifted copy that claimed to mirror runner.ts but was wider).
+// RFC-367: the candidates parser moved to `distillerOutput.ts` and now takes
+// ALREADY-normalized assistant text (`runSystemAgent`'s `eventText`). The old
+// per-line `driver.parseEvent` walk that lived here is gone — normalization has
+// exactly one owner again, the executor's pump.
 
 // -----------------------------------------------------------------------------
 // Candidate validation + persistence
@@ -708,6 +1008,12 @@ export async function validateAndPersistCandidate(
   store: MemoryDistillWorkStore,
   raw: RawCandidate,
   job: MemoryDistillJob,
+  /**
+   * RFC-367 AC-14: the caller needs the rejection reason to decide whether the
+   * whole batch was lost (N emitted, 0 persisted → a failed job, not a green
+   * zero-candidate one). Optional so existing callers are unaffected.
+   */
+  onReject?: (reason: string) => void,
 ): Promise<PersistedCandidate | null> {
   // Coalesce tag lists to one array; distiller's newTags surface for admin
   // attention but live alongside knownTags in `tags`.
@@ -742,10 +1048,9 @@ export async function validateAndPersistCandidate(
       fusedIntoSkillId: null,
     })
   } catch (err) {
-    log.warn('candidate failed validation; skipping', {
-      jobId: job.id,
-      error: err instanceof Error ? err.message : String(err),
-    })
+    const reason = err instanceof Error ? err.message : String(err)
+    log.warn('candidate failed validation; skipping', { jobId: job.id, error: reason })
+    onReject?.(reason)
     return null
   }
 
@@ -772,116 +1077,13 @@ export async function validateAndPersistCandidate(
 // Spawn helpers
 // -----------------------------------------------------------------------------
 
-const DISTILLER_OUTPUT_CAP_BYTES = 256 * 1024
-const DISTILLER_DRAIN_GRACE_MS = 2_000
-
-/**
- * Real Bun.spawn-based distiller spawn. Held behind `spawnFn` so tests can
- * substitute a deterministic fake without paying for a subprocess.
- */
-export async function defaultDistillerSpawn(
-  input: DistillerSpawnInput,
-): Promise<DistillerSpawnResult> {
-  // RFC-117: route through the runtime driver (was a hand-rolled opencode argv +
-  // env here). buildSpawn yields the protocol-correct cmd/env/stdin; opencode
-  // keeps its prior byte-for-byte form, claude gets system-prompt-file + stdin
-  // pipe. RFC-280 T4: process reliability (spawn/stdin/timeout/TERM→KILL/reap/
-  // drain) moved to the unified agent executor — this function only maps the
-  // typed outcome back onto the distiller's historical error contract.
-  const driver = getRuntimeDriver(input.protocol)
-  const worktreeDir = join(input.cwd, 'worktree')
-  const runDir = join(input.cwd, 'run')
-  await Promise.all([
-    mkdir(worktreeDir, { recursive: true, mode: 0o700 }),
-    mkdir(runDir, { recursive: true, mode: 0o700 }),
-  ])
-  // RFC-282 B1b — unified persona-only assembly (configDir omitted keeps the
-  // legacy system default: opencode config dir = runDir itself, no leaf).
-  const plan = await driver.buildSpawn({
-    injection: { mcps: [] },
-    prompt: input.userPrompt,
-    agentName: DISTILLER_AGENT_NAME,
-    systemPrompt: DISTILLER_SYSTEM_PROMPT,
-    resolvedParamsByAgent: new Map([
-      [
-        DISTILLER_AGENT_NAME,
-        {
-          model: input.model ?? null,
-          variant: null,
-          temperature: null,
-          steps: null,
-          maxSteps: null,
-          isSandbox: input.isSandbox === true,
-        },
-      ],
-    ]),
-    cwd: worktreeDir,
-    runRoot: runDir,
-    freshAgentRun: false,
-    ...(input.runtimeBinary != null && input.runtimeBinary !== ''
-      ? { runtimeBinary: input.runtimeBinary }
-      : {}),
-    nodeRunId: 'memory-distiller',
-    log,
-  })
-
-  const run = await runAgentProcess({
-    cmd: plan.cmd,
-    cwd: worktreeDir,
-    env: plan.env,
-    timeoutMs: input.timeoutMs,
-    termGraceMs: DISTILLER_DRAIN_GRACE_MS,
-    ...(plan.stdin?.mode === 'pipe' ? { stdin: plan.stdin } : {}),
-    ...(plan.beforeSpawn !== undefined ? { beforeSpawn: plan.beforeSpawn } : {}),
-    // Full stdout is the envelope source (extractLastEnvelope); rolling-tail
-    // capped far above DISTILLER_OUTPUT_CAP_BYTES, the last envelope survives.
-    capture: { rawStdout: true },
-  })
-
-  if (run.outcome === 'spawn-failed') {
-    // Spawn assembly may have created temporary files. With no child created,
-    // clean them now.
-    try {
-      await plan.cleanup?.()
-    } catch {
-      throw new Error('distiller runtime cleanup failed after spawn error')
-    }
-    throw new Error(run.spawnError ?? 'distiller runtime failed to spawn')
-  }
-  if (run.outcome === 'unreaped') {
-    // The child may still own files below the attempt directory — preserve it
-    // (RFC-224 store-destruction barrier, now enforced by the executor's
-    // reap-then-cleanup ordering).
-    throw new IndeterminateRuntimeProcessError('distiller runtime process could not be reaped')
-  }
-  if (run.outcome === 'timeout' || run.outcome === 'aborted') {
-    try {
-      await plan.cleanup?.()
-    } catch {
-      throw new IndeterminateRuntimeProcessError(
-        'distiller runtime cleanup did not complete safely',
-      )
-    }
-    throw new Error(`distiller timeout after ${input.timeoutMs}ms`)
-  }
-
-  return {
-    exitCode: run.exitCode,
-    stdout: run.rawStdout.slice(-DISTILLER_OUTPUT_CAP_BYTES),
-    stderr: run.stderrTail.slice(-DISTILLER_OUTPUT_CAP_BYTES),
-    cleanup: async () => {
-      await plan.cleanup?.()
-    },
-  }
-}
-
 // -----------------------------------------------------------------------------
 // Top-level orchestrator
 // -----------------------------------------------------------------------------
 
 export async function runDistill(options: RunDistillOptions): Promise<DistillResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
-  const spawnFn = options.spawnFn ?? defaultDistillerSpawn
+  const runFn = options.runFn ?? runSystemAgent
 
   const scope = options.job.scopeResolved
   const sourceContextBudget = options.sourceContextBudget ?? DEFAULT_SOURCE_CONTEXT_BUDGET
@@ -929,48 +1131,144 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
     }
   }
 
-  // RFC-117: the inline config / argv / env are assembled by the runtime driver
-  // inside spawnFn (defaultDistillerSpawn → getRuntimeDriver(protocol).buildSpawn);
-  // runDistill only forwards the resolved (protocol, binary, model).
   const protocol: RuntimeKind = options.protocol ?? 'opencode'
-  // RFC-280 T4/T5（落差⑤）：appHome scratch，不再 OS tmpdir —— GC 归属确定。
-  const cwd = join(Paths.root, 'scratch', `distiller-${randomBytes(8).toString('hex')}`)
-  await mkdir(cwd, { recursive: true, mode: 0o700 })
-  let cleanup: (() => Promise<void>) | undefined
-  let preserveCwd = false
-  let distillOutcome: { ok: true; value: DistillResult } | { ok: false; error: unknown } | undefined
-  try {
-    const result = await spawnFn({
-      protocol,
-      runtimeBinary: options.runtimeBinary ?? null,
-      model: options.model ?? null,
-      ...(options.isSandbox === true ? { isSandbox: true } : {}),
-      userPrompt,
-      envelopeNonce,
-      cwd,
-      timeoutMs,
-    })
-    cleanup = result.cleanup
+  // RFC-280 T4/T5（落差⑤）：appHome scratch，不再 OS tmpdir —— GC 归属确定
+  // （`runScratchOrphanGc` 24h 兜底）。RFC-367：**整条补问链共用这一个** ——
+  // claude 的 transcript 按 cwd-slug 归档，换 cwd 就等于换项目目录，`--resume`
+  // 会落空（RFC-111 design §225/283/298 实测）。
+  const scratchParent = join(Paths.root, 'scratch')
+  const scratchName = `distiller-${randomBytes(8).toString('hex')}`
+  const eventSink = options.eventSinkFor?.({
+    distillJobId: options.job.id,
+    attemptIndex: options.job.attempts,
+  })
 
-    // RFC-043: stamp the post-spawn artefacts onto the job row before any
-    // throw / capture. Failures here are non-fatal (logged); the original
-    // success/failure semantics of runDistill are preserved.
-    const sessionId = extractFirstSessionIdFromStdout(result.stdout)
-    const stderrExcerpt = clipAndRedactStderr(result.stderr, 2048)
-    try {
-      await options.store.saveSpawnResult(options.job.id, {
-        sessionId,
-        exitCode: result.exitCode,
-        stderrExcerpt,
+  // RFC-367 §3.2：`timeoutMs` 是**整次蒸馏（含全部补问轮）**的总额度，不是单轮额度。
+  // 否则一个 tick 最多 5 个 head 串行 × 每个 4 轮 × 1h = 20h 把蒸馏队列钉死。
+  const deadline = Date.now() + timeoutMs
+
+  let sessionId: string | undefined
+  let lastResult: SystemAgentRunResult | undefined
+  let lastFailure: { code: DistillProtocolFailureCode; detail?: string } | undefined
+
+  /** 链终止时释放一次。见 RFC-367 design §3.1 的状态表。 */
+  const releaseChainScratch = (result: SystemAgentRunResult | undefined): void => {
+    if (result === undefined) return
+    // `unreaped`：子进程未确认死亡，可能仍持有 scratch 下的文件。
+    // `spawn-failed`：runSystemAgent 把「plan cleanup 抛错」也改写成这一档并刻意保留目录，
+    // 从结果上与真正的启动失败不可区分 —— 宁可留给 24h orphan GC，也不在活进程脚下 rm -rf。
+    if (result.status === 'unreaped' || result.status === 'spawn-failed') return
+    releaseSystemAgentScratch({
+      scratchDir: result.scratchDir,
+      expectedParent: scratchParent,
+      expectedName: scratchName,
+    })
+  }
+
+  try {
+    for (let round = 0; round <= DEFAULT_PROTOCOL_RETRY_BUDGET; round += 1) {
+      const remainingMs = deadline - Date.now()
+      if (remainingMs <= 0) throw new Error(`distiller timeout after ${timeoutMs}ms`)
+
+      const prompt =
+        round === 0 || lastFailure === undefined
+          ? userPrompt
+          : buildDistillerFollowupPrompt({
+              failure: lastFailure,
+              evidence: lastResult?.outputEvidence,
+              envelopeNonce,
+            })
+
+      const result = await runFn({
+        feature: 'memory-distiller',
+        agentName: DISTILLER_AGENT_NAME,
+        systemPrompt: DISTILLER_SYSTEM_PROMPT,
+        prompt,
+        protocol,
+        runtimeBinary: options.runtimeBinary ?? null,
+        model: options.model ?? null,
+        isSandbox: options.isSandbox === true,
+        scratchParent,
+        scratchName,
+        timeoutMs: remainingMs,
+        // 链未结束前不许删 scratch（claude 的 --resume 依赖同一 cwd-slug）。
+        retainScratchOnSuccess: true,
+        ...(eventSink === undefined ? {} : { eventSink }),
+        ...(round > 0 && sessionId !== undefined ? { resumeSessionId: sessionId } : {}),
       })
-    } catch (err) {
-      log.warn('rfc043/persist-spawn-result-failed', {
-        jobId: options.job.id,
-        err: err instanceof Error ? err.message : String(err),
-      })
+      lastResult = result
+      sessionId ??= result.capturedSessionId
+
+      // RFC-043: stamp the post-spawn artefacts onto the job row. Failures here
+      // are non-fatal (logged); the original success/failure semantics of
+      // runDistill are preserved. Every round overwrites — same semantics as a
+      // scheduler-level retry overwriting the previous attempt's row.
+      try {
+        await options.store.saveSpawnResult(options.job.id, {
+          sessionId: result.capturedSessionId ?? null,
+          exitCode: result.exitCode,
+          stderrExcerpt: clipAndRedactStderr(result.stderrTail, 2048),
+        })
+      } catch (err) {
+        log.warn('rfc043/persist-spawn-result-failed', {
+          jobId: options.job.id,
+          err: err instanceof Error ? err.message : String(err),
+        })
+      }
+
+      // 进程级失败不补问：模型没得到说话机会，再问一遍也是同样的失败。
+      if (result.status !== 'ok') throw mapSystemAgentFailure(result, timeoutMs)
+
+      const parsed = parseDistillerCandidates(result.eventText, envelopeNonce)
+      if (parsed.ok) {
+        const rejections: string[] = []
+        const persisted: string[] = []
+        for (const raw of parsed.candidates) {
+          const ok = await validateAndPersistCandidate(options.store, raw, options.job, (reason) =>
+            rejections.push(reason),
+          )
+          if (ok !== null) persisted.push(ok.memory.id)
+        }
+        // RFC-367 AC-14: 解析出 N>0 条却一条都没落库 —— 这和「没什么可蒸馏」在 UI 上完全
+        // 同形（绿的 0 候选），正是本 RFC 要消灭的那种静默。判失败，把拒因写进 last_error。
+        if (parsed.candidates.length > 0 && persisted.length === 0) {
+          throw new Error(
+            `distiller emitted ${parsed.candidates.length} candidate(s) but none passed validation: ${
+              rejections[0] ?? 'unknown reason'
+            }`,
+          )
+        }
+        return { candidatesCreated: persisted.length, createdMemoryIds: persisted }
+      }
+
+      lastFailure = {
+        code: parsed.code,
+        ...(parsed.detail === undefined ? {} : { detail: parsed.detail }),
+      }
+      // 没有 session id 就无法 resume；重跑整批是调度器退避的事，不在这里烧第二次 token。
+      if (sessionId === undefined) {
+        throw new DistillerProtocolError(
+          parsed.code,
+          round + 1,
+          describeProtocolFailure(
+            lastFailure,
+            result.outputEvidence,
+            'no runtime session to resume',
+          ),
+        )
+      }
     }
 
-    if (sessionId !== null) {
+    throw new DistillerProtocolError(
+      lastFailure?.code ?? 'envelope-missing',
+      DEFAULT_PROTOCOL_RETRY_BUDGET + 1,
+      describeProtocolFailure(lastFailure, lastResult?.outputEvidence),
+    )
+  } finally {
+    // RFC-043: capture the whole session (all follow-up rounds share one) once
+    // the chain is over, so the detail page shows every turn — including the
+    // malformed ones that caused the follow-ups.
+    if (sessionId !== undefined) {
       try {
         await options.store.captureSession({
           protocol,
@@ -985,93 +1283,113 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
         })
       }
     }
+    releaseChainScratch(lastResult)
+  }
+}
 
-    if (result.exitCode !== 0 && result.exitCode !== null) {
-      throw new Error(
-        `distiller subprocess exited with code ${result.exitCode}: ${result.stderr.slice(0, 400)}`,
+/** `SystemAgentRunStatus` → 蒸馏器历史上的错误契约（调度器只读 message）。 */
+function mapSystemAgentFailure(result: SystemAgentRunResult, timeoutMs: number): Error {
+  switch (result.status) {
+    case 'unreaped':
+      return new IndeterminateRuntimeProcessError('distiller runtime process could not be reaped')
+    case 'timeout':
+      return new Error(`distiller timeout after ${timeoutMs}ms`)
+    case 'aborted':
+      return new Error('distiller run aborted')
+    case 'spawn-failed':
+      return new Error(result.stderrTail || 'distiller runtime failed to spawn')
+    case 'result-error':
+      return new Error(
+        `distiller runtime reported a terminal error: ${result.resultError ?? '(no detail)'}`,
       )
-    }
-    const rawCandidates = parseDistillerOutput(
-      result.stdout,
-      options.protocol ?? 'opencode',
-      envelopeNonce,
+    default:
+      return new Error(
+        `distiller subprocess exited with code ${result.exitCode}: ${result.stderrTail.slice(0, 400)}`,
+      )
+  }
+}
+
+/**
+ * 协议失败的人类可读说明，落 `memory_distill_jobs.last_error`。
+ *
+ * `classifyMissingEnvelope` 的**整个值域都是「为什么没有 envelope」**，所以只在
+ * `envelope-missing` 这一档用它；其余档位 envelope 明明在，套用它会得到
+ * `assistant-stopped-without-envelope` —— 又一句假话。截断这一条独立判断，因为它是唯一
+ * 「不是模型的错」的可能原因。
+ */
+function describeProtocolFailure(
+  failure: { code: DistillProtocolFailureCode; detail?: string } | undefined,
+  evidence: SystemAgentOutputEvidence | undefined,
+  extra?: string,
+): string {
+  const parts: string[] = []
+  if (failure?.detail !== undefined && failure.detail !== '') parts.push(failure.detail)
+  if (evidence?.eventTextCapHit === true) {
+    parts.push(
+      'the reply exceeded the retained-output cap, so the envelope may have been truncated',
     )
-    const persisted: string[] = []
-    for (const raw of rawCandidates) {
-      const ok = await validateAndPersistCandidate(options.store, raw, options.job)
-      if (ok !== null) persisted.push(ok.memory.id)
-    }
-    distillOutcome = {
-      ok: true,
-      value: { candidatesCreated: persisted.length, createdMemoryIds: persisted },
-    }
-  } catch (error) {
-    preserveCwd = error instanceof IndeterminateRuntimeProcessError
-    distillOutcome = { ok: false, error }
-  } finally {
-    if (!preserveCwd) {
-      try {
-        await cleanup?.()
-      } catch {
-        // Cleanup failure can mean a child still owns an artifact. Keep the
-        // outer cwd so later recovery does not remove inputs under a live process.
-        preserveCwd = true
-      }
-    }
-    if (!preserveCwd) {
-      try {
-        await rm(cwd, { recursive: true, force: true })
-      } catch {
-        preserveCwd = true
-      }
-    }
+  } else if (failure?.code === 'envelope-missing') {
+    parts.push(`evidence: ${classifyMissingEnvelope(evidence)}`)
   }
-  if (distillOutcome === undefined) throw new Error('distiller run produced no outcome')
-  if (!distillOutcome.ok) throw distillOutcome.error
-  if (preserveCwd) {
-    throw new IndeterminateRuntimeProcessError('distiller scratch cleanup did not complete safely')
+  if (extra !== undefined) parts.push(extra)
+  return parts.join('; ')
+}
+
+/**
+ * 同会话补问：复用 worker 节点那套渲染件，外加一行本地 detail。
+ * `renderEnvelopeFollowupPrompt` 是纯字符串拼接、不懂业务，所以 detail 在这里拼。
+ */
+function buildDistillerFollowupPrompt(input: {
+  failure: { code: DistillProtocolFailureCode; detail?: string }
+  evidence: SystemAgentOutputEvidence | undefined
+  envelopeNonce: string
+}): string {
+  const base = renderEnvelopeFollowupPrompt({
+    hasClarifyChannel: false,
+    reason: followupReasonFor(input.failure.code),
+    envelopeNonce: input.envelopeNonce,
+  })
+  const notes: string[] = []
+  if (input.failure.code === 'json-malformed') {
+    notes.push(
+      `The \`<port name="candidates">\` element was present, but its content was not valid JSON (${
+        input.failure.detail ?? 'parse error'
+      }). Re-emit the port with a single raw JSON object — no prose, no code fence.`,
+    )
   }
-  return distillOutcome.value
+  if (input.failure.code === 'candidates-not-array') {
+    notes.push(
+      `The \`<port name="candidates">\` element was present, but its JSON did not carry a "candidates" array (${
+        input.failure.detail ?? 'wrong shape'
+      }). The port must hold exactly {"candidates": [ ... ]}.`,
+    )
+  }
+  if (input.evidence?.eventTextCapHit === true) {
+    notes.push(
+      'Your previous reply was long enough to exceed the retained-output cap. Reply with the envelope ONLY — do not restate the input.',
+    )
+  }
+  return notes.length === 0 ? base : `${base}\n\n${notes.join('\n')}`
+}
+
+/** 失败码 → 补问开场白。措辞必须对得上实际缺陷，否则模型改错方向（RFC-367 的来由）。 */
+function followupReasonFor(code: DistillProtocolFailureCode): EnvelopeFollowupReason {
+  switch (code) {
+    case 'envelope-missing':
+      return 'envelope-missing'
+    case 'port-malformed':
+      return 'envelope-port-malformed'
+    default:
+      // port-missing / json-malformed / candidates-not-array 都是「envelope 在、port 这一层
+      // 出了问题」，开场白同款；后两者另由 buildDistillerFollowupPrompt 追加具体 detail。
+      return 'port-missing'
+  }
 }
 
 // -----------------------------------------------------------------------------
 // RFC-043 helpers
 // -----------------------------------------------------------------------------
 
-/**
- * Pull the first `sessionID` field out of opencode's --format json stdout.
- * Mirrors the inline extraction the worker-node runner does in
- * runner.ts:498-510. Lines that don't parse as JSON or lack the field
- * are skipped silently.
- */
-export function extractFirstSessionIdFromStdout(stdout: string): string | null {
-  if (typeof stdout !== 'string' || stdout.length === 0) return null
-  const lines = stdout.split(/\r?\n/)
-  for (const raw of lines) {
-    const line = raw.trim()
-    if (line.length === 0) continue
-    let evt: unknown
-    try {
-      evt = JSON.parse(line)
-    } catch {
-      continue
-    }
-    if (evt !== null && typeof evt === 'object') {
-      const candidate = (evt as { sessionID?: unknown }).sessionID
-      if (typeof candidate === 'string' && candidate.length > 0) return candidate
-    }
-  }
-  return null
-}
-
-/**
- * Truncate + redact a stderr blob before persisting it on the job row.
- * `redactGitUrl` strips SSH / HTTPS credentials embedded in URLs; the
- * trailing slice keeps the column bounded for the detail page.
- *
- * Null/empty stderr becomes null (so the admin UI can detect "nothing
- * was written" vs. "we kept the first N bytes").
- */
 export function clipAndRedactStderr(stderr: string, maxBytes: number): string | null {
   if (typeof stderr !== 'string') return null
   if (stderr.length === 0) return null
@@ -1119,7 +1437,7 @@ export function buildDedupSnapshotForPersist(scopeContexts: ScopeContext[]): Arr
 interface DistillJobRow {
   id: string
   debounceKey: string
-  sourceKind: 'clarify' | 'review' | 'feedback'
+  sourceKind: DistillSourceKind
   sourceEventId: string
   taskId: string | null
   scopeResolvedJson: string
