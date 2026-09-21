@@ -12,6 +12,9 @@ import {
   MemorySourceKindSchema,
   MemoryStatusSchema,
   DistillActionSchema,
+  DISTILL_SOURCE_CONFIG_KEY,
+  DISTILL_SOURCE_KINDS,
+  DistillSourceKindSchema,
   ResolvedDistillScopeSchema,
   MemoryDistillJobSchema,
 } from '../src/schemas/memory'
@@ -58,12 +61,33 @@ describe('MemoryStatusSchema / MemorySourceKindSchema / DistillActionSchema', ()
       expect(MemoryStatusSchema.parse(s)).toBe(s)
     }
   })
-  test('source_kind enum is exactly 4 members', () => {
-    expect(MemorySourceKindSchema.options.length).toBe(4)
-    expect(MemorySourceKindSchema.parse('clarify')).toBe('clarify')
-    expect(MemorySourceKindSchema.parse('feedback')).toBe('feedback')
-    expect(MemorySourceKindSchema.parse('manual')).toBe('manual')
+  // RFC-366 把这条从「正好 4 个成员」改成**成员 + 派生关系**。原先的基数锁
+  // （`options.length === 4`）只说得出「数目变了」，说不出变成了什么——而记忆行的
+  // 来源本来就是派生的：任何能触发蒸馏的源都能产出一行记忆，外加人手写的 manual。
+  // 锁住派生式之后，以后再加一类蒸馏源会自动流过来，不会再以「基数 4 → 5」的形态
+  // 红一次然后被人顺手把数字改大（那恰恰是这条断言唯一能做的事）。
+  test('source_kind = 全部蒸馏源 + manual（派生关系，不是一个基数）', () => {
+    expect(MemorySourceKindSchema.options).toEqual([...DISTILL_SOURCE_KINDS, 'manual'])
+    for (const kind of MemorySourceKindSchema.options) {
+      expect(MemorySourceKindSchema.parse(kind)).toBe(kind)
+    }
+    // manual 只属于记忆行，不是蒸馏触发源——两个值域不是同一个。
+    expect(DISTILL_SOURCE_KINDS).not.toContain('manual')
     expect(() => MemorySourceKindSchema.parse('chat')).toThrow()
+  })
+
+  test('distill 源枚举本身是 clarify/review/feedback/agent-run/task-run 五值', () => {
+    expect([...DISTILL_SOURCE_KINDS]).toEqual([
+      'clarify',
+      'review',
+      'feedback',
+      'agent-run',
+      'task-run',
+    ])
+    expect(DistillSourceKindSchema.options).toEqual([...DISTILL_SOURCE_KINDS])
+    // RFC-366：DB/wire 是 kebab、config 是 camelCase，映射表是两者唯一的会合点。
+    // 少一项就意味着那一类源的开关永远读不到（读出来是 undefined ?? true）。
+    expect(Object.keys(DISTILL_SOURCE_CONFIG_KEY).sort()).toEqual([...DISTILL_SOURCE_KINDS].sort())
   })
   test('distill_action enum is exactly 4 members', () => {
     expect(DistillActionSchema.options.length).toBe(4)
