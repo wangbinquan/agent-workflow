@@ -276,6 +276,12 @@ test('RFC-253 T41: 拖入两个脚本节点 → 写代码 → 连线 → 启动 
   // 连线把目标端口命名为上游的 `stdout`，故注入的环境变量是 AW_PORT_ + scriptEnvSuffix('stdout')。
   await selectAndWriteBashBody(page, 1, `echo "${CONSUMED_PREFIX}$AW_PORT_STDOUT"`)
 
+  // 等自动保存落定再拖拽：autosave 的 1s 去抖若在连线手势中途触发重渲染，xyflow 会重测
+  // 节点、把手移位，手势中断，报出来的是「data-connect-preview 没变成 new」（windows
+  // shard 上实测过：同代码在另一轮 46/46 全绿）。`workflow-editor.spec.ts` 的同一手势
+  // 也有等相机/编辑面稳定这一步。
+  await expect(page.getByTestId('workflow-draft-phase')).toHaveText('Saved', { timeout: 20_000 })
+
   // ── 3. 连线：producer 右把手 → consumer 卡片（走 new-input 解析，不是 catch-all 把手）──
   const cards = page.locator('.react-flow__node')
   const producerId = await cards.nth(0).getAttribute('data-id')

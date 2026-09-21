@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'bun:test'
+import { afterEach, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -23,6 +23,10 @@ import type {
   LogicalSchemaContract,
   LogicalTableContract,
 } from '@/platform/persistence/schemaContract'
+
+// 这条流式汇总在 hosted macOS runner 上实测 9.9s（CI run 35613835974 shard 1/6），
+// 撞 bun 的 5000ms 隐式默认而红。它是一次纯计算，不是被测行为——给扫描量级的预算。
+setDefaultTimeout(60_000)
 
 const roots: string[] = []
 const DIGEST = `sha256:${'a'.repeat(64)}`
