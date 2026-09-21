@@ -786,7 +786,20 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-364: explicit single-instance diagnostics, IA contexts and narrow route/reconcile projections.
       // Exact diagnostics bindings are guarded in rfc364-diagnostics-bindings.test.ts.
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
-      '9aace7e9bfc56b8b2067d7216401459a4d9d71a51f565c37c80e883e8027ee92',
+      // RFC-366（2026-09-21）：摘要随**一格新绑定**更新——这一层交给
+      // `createTaskDriveCoordinator` 的 `runtimeConfigOpts` 里多了一格
+      // `memoryDistillEnqueuer: deps.memoryOperations.distillCommands`。
+      // **装配图确实变了，是有意的**：这条路此前**一处都没绑过**（改前 `server.ts` 里
+      // `memoryDistillEnqueuer` 零命中），于是 `services/task.ts:1274` 的
+      // `?? missingMemoryDistillEnqueuer` 生效，落在那个一调用就抛的 fail-closed 占位上。
+      // 绑上之后这一格才有真入队器：`runtimeConfigOpts` 据此组出 agent 结算观察者
+      // （每个 agent node_run 结算一次），`gateContinuationPreDrive` 据此拿到任务终态入队器。
+      // 判据在 `tests/rfc366-execution-end-enqueue.test.ts` 与
+      // `tests/rfc366-agent-run-observer.test.ts`。
+      // **差量已验证恰好只有这一格**：把该行从 `server.ts` 摘掉后整份文件重算，本文件 10/10
+      // 全绿回到旧基线 9aace7e9bfc56b8b2067d7216401459a4d9d71a51f565c37c80e883e8027ee92，
+      // 说明没有别的装配变化夹带其中。
+      '409321768aafb9f9242ccd0253049cd4d1f90f8afc71c55e91bd276516b76abb',
     )
     expect(
       namedCalls(

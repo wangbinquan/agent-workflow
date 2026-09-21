@@ -50,9 +50,6 @@ const envelopeFixture = {
       { threadRef: 't-1', revision: 'r-3', disposition: 'addressed' },
       { threadRef: 't-2', revision: 'r-1', disposition: 'needs-human' },
     ],
-    // RFC-366：两类新源在本用例里为空。
-    agentRun: [],
-    taskRun: [],
   },
 } as const
 

@@ -2,7 +2,7 @@
 // describe one exact history. These are pure artifact/sequence tests; actual
 // PostgreSQL DDL, transaction rollback and boot resumption have separate coverage.
 
-import { afterEach, beforeAll, describe, expect, test } from 'bun:test'
+import { afterEach, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import {
   cpSync,
@@ -50,6 +50,24 @@ import {
   digestSchemaContract,
   type LogicalIndexContract,
 } from '@/platform/persistence/schemaContract'
+
+// 这一整个文件的成本**随已提交历史长度增长**：每条用例都要读/复制整份 committed
+// PostgreSQL 迁移目录、重导出 schema 合同、并逐条重放校验（load() 单次就要 ~300ms，
+// pgSteps=4 / sqliteMigrations=228 时本机实测）。bun 的隐式 5s 默认预算从来就不够富余，
+// 而这里没有任何一条用例是在等外部资源——慢只意味着 runner 忙。
+//
+// 2026-09-21 实撞（RFC-366 追加第 4 条 PG 迁移 + 第 228 条 SQLite 迁移后）：macOS
+// shard 5/6 上 `generates immutable artifacts` 5305ms 撞上 5000ms 默认预算而红。对照
+// 同一 shard 的前一次绿跑（CI run 35560201522 vs 35567797069）可知这不是算法回归——
+// **同文件里几乎每条用例都同步慢了 1.2~2.4 倍**，其中 `replays multiple edges` 反而由
+// 139.87ms 快到 35.99ms，是 runner 负载的签名；那一跑有 10 个 shard 在同时失败重试。
+// 真正的问题是这条用例在好日子也只用掉 5s 里的 2.4s，**余量从来不够**，而余量还会被
+// 下一条迁移继续吃掉。
+//
+// 因此给整份文件一个显式的宽预算（而不是给撞红的那一条单独放宽）：断言一条没动、
+// 全部照跑，只是不再拿「runner 那天忙不忙」当判据。下次再有人追加迁移，不会换一条
+// 用例重新撞线。
+setDefaultTimeout(60_000)
 
 const committedFolder = resolve(import.meta.dir, '..', 'db', 'postgresql-migrations')
 const roots: string[] = []
