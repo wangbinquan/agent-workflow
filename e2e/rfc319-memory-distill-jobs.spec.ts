@@ -136,7 +136,8 @@ const DONE_LAST_ERROR = 'distiller timeout after 120000ms (recovered on the thir
 const DISTILL_SESSION_ID = 'ses_rfc319_distill'
 const ATTEMPT0_TEXT = 'RFC-319 attempt 0: gateway timed out before any candidate was emitted.'
 const ATTEMPT1_TEXT = 'RFC-319 attempt 1: extracted two candidates from the feedback batch.'
-/** 与 services/runtime/opencode/distillSessionCapture.ts:23 的 DISTILL_CAPTURE_FAILED_KIND 一致。 */
+/** 与 modules/runtime-management/public/types.ts 的 DISTILL_CAPTURE_FAILED_KIND 一致
+ *  （RFC-367 删掉了原定义点 services/runtime/opencode/distillSessionCapture.ts）。 */
 const CAPTURE_FAILED_KIND = 'rfc043/distill-capture-failed'
 
 let daemon: DaemonHandle

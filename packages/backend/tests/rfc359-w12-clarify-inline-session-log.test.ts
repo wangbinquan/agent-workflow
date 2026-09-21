@@ -42,8 +42,10 @@ function fixture(sessionAgent?: string) {
     sessions: () => readFileSync(sessionLog, 'utf8').split('\n'),
     argv: () => readFileSync(argvLog, 'utf8').split('\n'),
     run(agentName: string, resumeSessionId?: string) {
-      // defaultDistillerSpawn supplies DISTILLER_AGENT_NAME to this same argv
-      // producer, with no resumeSessionId. Only the executable is replaced.
+      // The memory distiller drives DISTILLER_AGENT_NAME through this same argv
+      // producer — since RFC-367 it does so via runSystemAgent rather than its
+      // own spawn wrapper, and it DOES pass a resumeSessionId on protocol
+      // follow-up rounds. Only the executable is replaced here.
       const cmd = buildCommand(
         {
           agent: { name: agentName },

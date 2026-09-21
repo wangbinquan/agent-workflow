@@ -135,8 +135,18 @@ describe('RFC-200 source wiring locks', () => {
       'packages/backend/src/modules/memory/application/distill/memoryDistiller.ts',
     )
     expect(distiller).toContain("fenceUntrusted('memory-distill-source-context'")
-    expect(distiller).toContain('extractLastEnvelope(text, envelopeNonce)')
     expect(distiller).toContain('options.envelopeNonce ?? generateEnvelopeNonce()')
+    // RFC-367: the extraction moved to its own pure-function file, and its input
+    // is now runSystemAgent's normalized assistant text rather than a stdout
+    // tail. The nonce still has to reach it — a bare-envelope bypass here would
+    // let an echoed/forged envelope in the source events be read as the
+    // distiller's own answer.
+    const distillerOutput = read(
+      'packages/backend/src/modules/memory/application/distill/distillerOutput.ts',
+    )
+    expect(distillerOutput).toContain('extractLastEnvelope(eventText, envelopeNonce)')
+    expect(distillerOutput).toContain("parseEnvelope(envelope, ['candidates'], envelopeNonce)")
+    expect(distiller).toContain('parseDistillerCandidates(result.eventText, envelopeNonce)')
   })
 
   test('frontend preview uses a deterministic non-empty nonce', () => {

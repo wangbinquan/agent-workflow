@@ -105,6 +105,21 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
       const inputPath = join(f.root, 'input.json')
       writeFileSync(inputPath, JSON.stringify(input))
       const children: Array<Pick<ReturnType<typeof Bun.spawn>, 'exitCode' | 'kill' | 'exited'>> = []
+      // CI evidence (run 35567797069, ubuntu shard 1/12, 2026-09-21): the child
+      // exited 0 and did everything right, but the assertion below compared its
+      // stderr to the empty string and the daemon had logged
+      // `[db-slow] 129ms (cpu 1ms): update "sc_preparation_operations" …`.
+      // A slow-query warning is a load signal, not an error — on a runner with
+      // 12 shards in flight it fires by luck, so "stderr is byte-empty" is a
+      // timing assertion wearing a correctness costume. Strip the known-benign
+      // performance lines and keep asserting that nothing else was written.
+      const errorOutput = (raw: string): string =>
+        raw
+          .split('\n')
+          .filter((line) => !line.includes('[db-slow]'))
+          .join('\n')
+          .trim()
+
       const launch = (crashPoint: string, mode = 'prepare') => {
         const child = Bun.spawn({
           cmd: [process.execPath, 'run', worker, inputPath],
@@ -197,7 +212,10 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
           const cleaned = launch('', 'cleanup')
           const error = new Response(cleaned.stderr).text()
           void new Response(cleaned.stdout).text()
-          expect({ code: await cleaned.exited, error: await error }).toEqual({ code: 0, error: '' })
+          expect({ code: await cleaned.exited, error: errorOutput(await error) }).toEqual({
+            code: 0,
+            error: '',
+          })
           const stored = JSON.parse(readFileSync(join(f.root, 'result.json'), 'utf8'))
           expect(stored.outcome.complete).toBe(true)
           expect(stored.row.state).toBe('cleaned')
@@ -212,7 +230,7 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
           const cleanup = launch('', 'cleanup')
           const cleanupError = new Response(cleanup.stderr).text()
           void new Response(cleanup.stdout).text()
-          expect({ code: await cleanup.exited, error: await cleanupError }).toEqual({
+          expect({ code: await cleanup.exited, error: errorOutput(await cleanupError) }).toEqual({
             code: 0,
             error: '',
           })
@@ -256,7 +274,7 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
           const finish = launch('', 'cleanup')
           const finishError = new Response(finish.stderr).text()
           void new Response(finish.stdout).text()
-          expect({ code: await finish.exited, error: await finishError }).toEqual({
+          expect({ code: await finish.exited, error: errorOutput(await finishError) }).toEqual({
             code: 0,
             error: '',
           })
@@ -278,7 +296,7 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
           const repeat = launch('', 'cleanup')
           const repeatError = new Response(repeat.stderr).text()
           void new Response(repeat.stdout).text()
-          expect({ code: await repeat.exited, error: await repeatError }).toEqual({
+          expect({ code: await repeat.exited, error: errorOutput(await repeatError) }).toEqual({
             code: 0,
             error: '',
           })
@@ -290,7 +308,7 @@ describeEachProvider('RFC-363 real-process preparation recovery', (harness) => {
         const replay = launch('')
         const replayError = new Response(replay.stderr).text()
         void new Response(replay.stdout).text()
-        expect({ code: await replay.exited, error: await replayError }).toEqual({
+        expect({ code: await replay.exited, error: errorOutput(await replayError) }).toEqual({
           code: 0,
           error: '',
         })

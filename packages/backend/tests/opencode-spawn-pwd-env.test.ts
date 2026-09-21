@@ -82,19 +82,40 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
     expect(src).not.toContain('Bun.spawn(')
   })
 
-  test('memoryDistiller.ts passes its isolated worktreeDir into buildSpawn', () => {
+  // RFC-367: the distiller stopped assembling its own spawn. It hands a scratch
+  // name to `runSystemAgent`, which owns the worktreeDir → buildSpawn → executor
+  // chain (the same one intent / change-narrative / the MCP playground use). So
+  // the distiller's PWD contract is now inherited rather than self-asserted, and
+  // this file locks BOTH halves: the distiller must not re-grow a spawn of its
+  // own, and the primitive it delegates to must keep cwd and env in lock-step.
+  test('memoryDistiller.ts delegates its spawn — no self-assembled plan or executor call', () => {
     const src = readFileSync(
       resolve(import.meta.dir, '..', 'src/modules/memory/application/distill/memoryDistiller.ts'),
       'utf-8',
     )
-    expect(src).toContain('buildSpawn(')
-    expect(src).toContain("const worktreeDir = join(input.cwd, 'worktree')")
-    expect(src).toContain('cwd: worktreeDir')
-    // RFC-280 T4: the executor call must keep the SAME worktreeDir as cwd and
-    // the plan's env — the PWD-pinning contract now travels through
-    // runAgentProcess → managedProcess (locked via SPAWN_CWD_SITES above).
-    expect(src).toContain('runAgentProcess({')
+    expect(src).toContain('runSystemAgent')
+    // One scratch for the whole follow-up chain: the name is allocated here and
+    // handed to every round, because claude resolves `--resume` against the
+    // cwd-slugged project dir (RFC-367 design §3).
+    expect(src).toContain('scratchName')
+    expect(src).toContain("join(Paths.root, 'scratch')")
+    // Re-growing any of these here would re-open the PWD gap this file exists for.
+    expect(src).not.toContain('buildSpawn(')
+    expect(src).not.toContain('runAgentProcess(')
+    expect(src).not.toContain('Bun.spawn(')
+  })
+
+  test('runSystemAgent keeps the system-agent cwd and the plan env in lock-step', () => {
+    const src = readFileSync(
+      resolve(import.meta.dir, '..', 'src/services/systemAgentRun.ts'),
+      'utf-8',
+    )
+    // The isolated worktree under the caller's scratch is the ONE cwd handed to
+    // both plan construction and the executor, so buildOpencodeEnv pins the same
+    // PWD (ENV_PWD_SITES above) and managedProcess spawns with it (SPAWN_CWD_SITES).
+    expect(src).toContain("const worktreeDir = join(scratchDir, 'worktree')")
     expect(src).toContain('cwd: worktreeDir,')
+    expect(src).toContain('runAgentProcess({')
     expect(src).toContain('env: plan.env,')
   })
 

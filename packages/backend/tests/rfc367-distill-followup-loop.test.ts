@@ -232,6 +232,31 @@ describeEachProvider('RFC-367 runDistill follow-up loop', (harness) => {
     expect(fake.calls).toHaveLength(1)
   })
 
+  // Distiller ↔ claude-code parity. Before RFC-367 this lived in
+  // `memory-distiller.test.ts` as a parser case fed raw `stream-json` lines;
+  // the parser is runtime-agnostic now (normalization has one owner, the
+  // executor's pump — claude's `message.content[]` shape is locked in
+  // `rfc234-system-agent-run.test.ts`). What still has to be proven here is the
+  // orchestration half: a claude-routed distill reaches the same candidate
+  // persistence. `EXECUTION_CAPABILITY_COVERAGE`'s memory-distill spine anchors
+  // on this case — the distiller is not opencode-only.
+  test('a claude-code run persists candidates the same way (runtime parity)', async () => {
+    const job = await seedJob()
+    const fake = fakeRuns([{ eventText: envelopeWithPort({ candidates: [candidate()] }) }])
+    const result = await runDistill({
+      ...baseOptions(job, fake.runFn),
+      protocol: 'claude-code',
+      runtimeBinary: '/opt/claude',
+      model: 'claude-x',
+      isSandbox: true,
+    })
+    expect(result.candidatesCreated).toBe(1)
+    expect(fake.calls[0]!.protocol).toBe('claude-code')
+    expect(fake.calls[0]!.isSandbox).toBe(true)
+    const rows = await db.select().from(memories).where(eq(memories.distillJobId, job.id))
+    expect(rows).toHaveLength(1)
+  })
+
   test('an empty candidates array succeeds without a follow-up (AC-6)', async () => {
     const job = await seedJob()
     const fake = fakeRuns([{ eventText: envelopeWithPort({ candidates: [] }) }])

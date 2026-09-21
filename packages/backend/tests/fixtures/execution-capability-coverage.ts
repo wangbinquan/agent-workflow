@@ -264,9 +264,14 @@ export const EXECUTION_CAPABILITY_COVERAGE = {
           'packages/backend/tests/memory-distiller.test.ts',
           'closed loop: distilled candidate stays out until approval',
         ),
+        // RFC-367 moved this claim's evidence: the old anchor was a parser case
+        // fed raw claude `stream-json` lines, and the parser no longer sees raw
+        // runtime output (normalization has one owner now). The orchestration
+        // half — a claude-routed distill persisting candidates — is the part
+        // that actually carries the spine's cross-runtime claim.
         fast(
-          'packages/backend/tests/memory-distiller.test.ts',
-          'extracts candidates from claude-code stream-json',
+          'packages/backend/tests/rfc367-distill-followup-loop.test.ts',
+          'a claude-code run persists candidates the same way (runtime parity)',
         ),
         e2e(
           'e2e/runtime-scenario-matrix.spec.ts',

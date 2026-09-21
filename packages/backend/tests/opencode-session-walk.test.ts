@@ -1,9 +1,11 @@
 // RFC-077 — locks in the BFS / per-session SELECT semantics extracted from
-// sessionCapture.ts (RFC-027), distillSessionCapture.ts (RFC-043) and
+// sessionCapture.ts (RFC-027), distillSessionCapture.ts (RFC-043, deleted by
+// RFC-367 — the distiller records its session live through runSystemAgent's
+// event sink instead of walking the store afterwards) and
 // subagentLiveCapture.ts (RFC-048) into the single `walkOpencodeSessions`
-// core. Any divergence asserted here would silently break one of the three
-// capture owners (worker post-run, distiller post-run, live poll), since all
-// three now delegate their traversal to this function. See
+// core. Any divergence asserted here would silently break one of the
+// remaining capture owners (worker post-run, live poll), since they
+// delegate their traversal to this function. See
 // design/RFC-077-capture-layer-unification/design.md §7.2.
 
 import { describe, expect, test } from 'bun:test'
