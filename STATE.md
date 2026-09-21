@@ -1,5 +1,30 @@
 # 当前执行状态
 
+## 2026-09-21 RFC-367 完成收口（补 AC-7/AC-8/AC-10 点名锁，C1–C4 用户逐项确认）
+
+实现与 CI 验绿早在 `271b99aaa`（run 35575845295 46/46）已成立，本轮收掉三件残账：
+
+- **补 AC-7/AC-8/AC-10 点名测试** `packages/backend/tests/rfc367-distill-evidence-invariants.test.ts`
+  （`describeEachProvider` 双引擎）：AC-7 会话页渲染文本**逐字节等于**解析器消费的 envelope
+  （真 store sink，非 fake 缝）；AC-8 claude-code 协议蒸馏在 `memory_distill_events` 留行且会话
+  可渲染（RFC-367 之前 claude-code 无任何蒸馏捕获）；AC-10 成功 + 协议失败两腿跑完后
+  tasks / task_feedback / 既有 memories 行**逐字节不变**，新增行只落本 job 名下。泵侧「一条流
+  喂 eventText 与 sink」由 rfc234-system-agent-run 既有覆盖，两半合起来才是 AC-7 全链。
+- **C1–C4 能力影响清单经用户逐项确认**（本次会话）：C1 无能力损失（子会话清扫由
+  `runSystemAgent` 继承）/ C2 会话页 user turn 改 `promptText` 注入、补问轮 user turn 不落库
+  记为残债 / C3 退役 `spawnFn` 测试缝 / C4 claude-code 蒸馏捕获为纯增益。
+- **记账**：proposal Draft→Done、`design/plan.md` 索引 Done、plan.md 验收清单 7 项补勾（AC-13
+  证据为 `rfc367-distill-followup-loop.test.ts:328`，T9b 为 `5b98bd061` 重采 + 当前守卫全绿，
+  盯 CI 为 `271b99aaa` / `7707a74a3` 两轮 46/46）。rfc367-* 测试 58 → 61。
+
+  背景（原「进行中 RFC」条目存档）：起于 2026-09-21 生产取证——176 个 done 任务里 76 个零候选，
+  有捕获的最近 10 次 10/10 输出没有 `<port>` 包裹被静默丢弃，最后一条落库候选停在 2026-07-17；
+  根因是提示词无 `<port` 字面 + 解析失败只 warn。设计门（Codex 不可用，按 dev-gotchas 用 Claude
+  子代理）判 FAIL 2P1/5P2/7P3 逐条回写。交付：T1 `port-missing` reason / T2 `resumeSessionId`
+  透传 / T2b `classifyMissingEnvelope` 归位 / T3 提示词三层字面语法 / T4 判别式解析 /
+  T5 实时事件 sink / T6 补问循环 / T7 退役事后 SQLite 走查 / T8 会话页 `promptText` /
+  T9 迁 `runFn` 缝 / T9b 账本重采（`5b98bd061`）。与 RFC-366 同树协作、各自提交最后一起推。
+
 ## 2026-09-21 RFC-365 实现候选：Event Automation target providers
 
 RFC-365 T2～T6 已按“保留全部现合法输入”完成实现候选：Event Center 现拥有唯一四臂 renderer、
@@ -110,22 +135,8 @@ design.md §11.1，实现期不要把 AC 改成断言 `memories` 表。
 
 ## 进行中 RFC
 
-- [RFC-367 记忆蒸馏输出协议归一（事件流取数 + 严格协议 + 同会话补问）](design/RFC-367-distiller-output-protocol/) —— **实现完成，待 CI 验绿**
-  —— 2026-09-21 生产取证：176 个 done 任务里 76 个零候选；有捕获的最近 10 次 **10/10** 输出
-  没有 `<port>` 包裹被静默丢弃（只 log.warn 之后照样 markDone），最后一条落库候选停在
-  2026-07-17。根因两条：提示词从头到尾没出现过 `<port` 字面（唯一出现处是解析正则），
-  以及解析失败只 warn。设计门（Codex CLI 版本不兼容账号模型，按 dev-gotchas 替代姿势用
-  Claude 子代理）判 FAIL 2P1/5P2/7P3，逐条核实回写，并推翻我自己两条前提（子会话清扫由
-  `runSystemAgent` 继承、distiller scratch 有 orphan GC）。
-  **交付**：T1 shared 新增 `port-missing` 补问 reason（三处穷尽点）/ T2 `runSystemAgent`
-  透传 `resumeSessionId` / T2b `classifyMissingEnvelope` 归位中立同侧 / T3 提示词补三层字面
-  语法 + 禁围栏 + SHA 基线 / T4 判别式解析 `distillerOutput.ts` / T5 实时事件 sink /
-  T6 `runDistill` 迁 `runSystemAgent` + 同会话补问循环（整链一个 scratch、总超时预算、
-  AC-14 全部校验失败判失败）/ T7 退役事后 SQLite 走查与 `captureSession` 端口、sink 由 store
-  提供 / T8 会话页 `promptText` / T9 五个既有测试文件迁 `runFn` / T9b 账本重采。
-  新增 58 条 rfc367-* 测试；蒸馏面 264 条全绿，全仓 typecheck / eslint / prettier 干净。
-  **与 RFC-366 同树协作**：两个 RFC 交叠 `memoryDistiller.ts` / `schedule.ts` 与五个测试
-  文件，按「各自提交、最后一起推」协调；账本重采作为本次推送的最后一笔。
+（无——RFC-367 已于 2026-09-21 完成收口，见顶部条目；RFC-294 总纲在索引中保持 In Progress，
+RFC-365 实现候选由其会话自行追踪。）
 
 ## 2026-09-21 修复：记忆卡片列表横排溢出（CSS 选择器列表被拆散）
 

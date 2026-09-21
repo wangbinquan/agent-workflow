@@ -175,18 +175,27 @@ T8(会话页 promptText) 独立
 - [x] AC-4 补问成功 → 候选落库 + done（T6+T9-L3）
 - [x] AC-5 用尽 → failed + last_error 含 code/轮次 + 退避（T6+T9-L3）
 - [x] AC-6 `{"candidates": []}` → done 且不补问（T4+T6）
-- [ ] AC-7 解析输入 == 会话页文本（T5+T6+T9-L3）
-- [ ] AC-8 claude-code 有事件行（T5+T9-L3）
+- [x] AC-7 解析输入 == 会话页文本（T5+T6+T9-L3）——点名锁：`rfc367-distill-evidence-invariants.test.ts`
+  （会话页渲染文本逐字节等于解析器消费的 envelope，真 store sink；泵侧同流由 rfc234-system-agent-run 锁）
+- [x] AC-8 claude-code 有事件行（T5+T9-L3）——点名锁：`rfc367-distill-evidence-invariants.test.ts`
+  （claude-code 协议 → `memory_distill_events` 有行 + 会话可渲染）
 - [x] AC-9 无 session id → 直接失败（T6）
-- [ ] AC-10 历史 done 任务零改写（全程无写历史行的代码路径；T9 断言）
+- [x] AC-10 历史 done 任务零改写（全程无写历史行的代码路径；T9 断言）——点名锁：
+  `rfc367-distill-evidence-invariants.test.ts`（成功 + 协议失败两腿后 tasks / task_feedback /
+  既有 memories 行逐字节不变，新增行只落本 job 名下）
 - [x] AC-11 三种生产畸形形态各一条回归用例（T4+T9）
 - [x] AC-12 scratch 逐状态释放/保留（T6）
-- [ ] T9b 账本重生成后 `architecture/` 守卫全绿（且重生成时树内无他人未提交源码）
+- [x] T9b 账本重生成后 `architecture/` 守卫全绿（且重生成时树内无他人未提交源码）——
+  `5b98bd061` 重采（其过期 allowGrowth 已由 `d7b10f57c` 清理），守卫随其后每轮 CI 全绿
 - [x] AC-14 全部候选校验失败 → job failed + last_error（T6）
-- [ ] AC-13 `last_error` 能区分「格式没写对」与「输出超上限被截断」（T2b+T6）
-- [ ] 能力影响清单 C1–C4 经用户逐项确认（本 RFC 批准即视为确认）
+- [x] AC-13 `last_error` 能区分「格式没写对」与「输出超上限被截断」（T2b+T6）——
+  `rfc367-distill-followup-loop.test.ts:328`（实现批已带，收口时补勾）
+- [x] 能力影响清单 C1–C4 经用户逐项确认（本 RFC 批准即视为确认）——2026-09-21 收口会话
+  呈用户逐项确认通过（C1 无能力损失 / C2 promptText 注入、补问轮 user turn 不落库为残债 /
+  C3 退役 spawnFn 测试缝 / C4 纯增益）
 - [x] `bunx prettier --check` + `bunx eslint --max-warnings 0` 对本次改动文件（35 个文件全绿）
-- [ ] push 后按 exact SHA 盯 CI 至绿
+- [x] push 后按 exact SHA 盯 CI 至绿——`271b99aaa`（run 35575845295）与 `7707a74a3`
+  （run 35585298247）各 46/46 success，均含全部 rfc367 测试
 
 ## PR 拆分建议
 
