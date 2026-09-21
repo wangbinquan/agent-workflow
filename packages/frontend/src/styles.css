@@ -18703,16 +18703,6 @@ fieldset.settings-card {
 
 .memory-by-scope__list,
 .memory-scoped-list,
-/* RFC-352 T8 —— 列表底部的「加载更多」。与 .repo-operations__more /
-   .task-operations__more / .intent-recent__more 同形；四处已经重复，
-   下一次动分页 UI 时值得抽成公共件（CLAUDE.md §Frontend UI consistency）。 */
-.memory-all-list__more {
-  display: flex;
-  justify-content: center;
-  padding: 10px 22px;
-  border-top: 1px solid var(--border);
-}
-
 .memory-all-list {
   list-style: none;
   padding: 0;
@@ -18720,6 +18710,22 @@ fieldset.settings-card {
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+}
+
+/* RFC-352 T8 —— 列表底部的「加载更多」。与 .repo-operations__more /
+   .task-operations__more / .intent-recent__more 同形；四处已经重复，
+   下一次动分页 UI 时值得抽成公共件（CLAUDE.md §Frontend UI consistency）。
+
+   ⚠️ 这条规则最初（eb8b331db）是**插进上面那条三选择器规则的选择器列表中间**的。
+   CSS 的选择器列表在第一个 `{` 处终止，于是它把 .memory-by-scope__list 与
+   .memory-scoped-list 一并吞进本规则：两个列表丢掉 flex-direction: column 退回
+   row，记忆卡片横排溢出屏幕（2026-09-21 报障）。新规则一律另起一块，不要插在既有
+   选择器列表里。守卫见 tests/memory-card-lists-column-layout.test.ts。 */
+.memory-all-list__more {
+  display: flex;
+  justify-content: center;
+  padding: 10px 22px;
+  border-top: 1px solid var(--border);
 }
 
 /* RFC-121: Memory page "fusion" tab — clickable rows linking to /fusions/:id.

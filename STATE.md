@@ -1,5 +1,18 @@
 # 当前执行状态
 
+## 2026-09-21 修复：记忆卡片列表横排溢出（CSS 选择器列表被拆散）
+
+用户报障 /memory「按维度」记忆卡片横向堆积超出屏幕。根因是 CSS 选择器列表被拆散：RFC-352 T8
+（`eb8b331db`）把分页 footer `.memory-all-list__more` 插进了
+`.memory-by-scope__list, .memory-scoped-list, .memory-all-list` 这条共享规则的选择器列表中间，
+选择器列表在第一个 `{` 处终止，前两个选择器被 footer 规则吞走、丢掉 `flex-direction: column`
+退回 `row`（并丢 `<ul>` reset、多出一条 border-top）。同样受影响的还有 agent / workflow / repo
+详情页的「记忆」子页签（`MemoryScopedList`）；`.memory-all-list`（已审批页签）留在原规则里，
+所以一直看着正常。已复原三选择器规则、footer 规则整块后移。守卫
+`packages/frontend/tests/memory-card-lists-column-layout.test.ts` 按**选择器列表成员**解析规则
+（旧式 `indexOf('.x {')` helper 对这类回归天然失明），已对破损版本验红。通用坑记入
+`docs/dev-gotchas.md` §前端。架构普查 digest 不变，无需重采。
+
 ## 2026-09-20 RFC-363/364 完成托管验收
 
 验收源码 `7befa335c23c36107f3298e654026d38380159dc`；[Main CI 35513285722](https://github.com/wangbinquan/agent-workflow/actions/runs/35513285722) success（46 个作业终态，失败/取消为 0）；[Windows 35512285261](https://github.com/wangbinquan/agent-workflow/actions/runs/35512285261) success（全部原生测试输入与验收源码相同，Git diff 为 0）。 Task/SC source、snapshot、operation、上传 journal、两 launch lane、工作区 reader 与三个根完成本次纵切；MCP diagnostics 七操作、application/effects 和显式单实例完成 E6 及本域 B/D。逐 AC、目标 suite、15 个 Windows 恢复窗口和精确残债见两 RFC 的 acceptance.md。

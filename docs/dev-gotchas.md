@@ -4208,6 +4208,15 @@ mediaType、`a.b` 形态的任何 ref）取文案时，在数据侧显式带一�
   - 回归锁的写法：`fireEvent.mouseDown(document.querySelector('.dialog__overlay'))` 后断言三件事——弹窗仍在、输入值仍在、**没有 POST 发出**（只断言前两条会漏掉"关了但请求发出去了"的另一种坏）。守卫要配正向对照：同一个 Dialog 不传该 prop 时 mousedown **必须**触发 onClose，否则你锁的可能是别的原因。
   - 判据（下次遇到类似"点了没反应"）：先查**那一下到底点在谁身上**。遮罩是全屏的，任何"页面上仍可见的按钮"在弹窗开着时都点不到；症状是「弹窗消失 + 数据零变化 + 无网络请求」时，几乎一定是误触遮罩而不是提交失败。
 - **CSS 改动别肉眼跳过**：最小 repro HTML + `python3 -m http.server`（chrome MCP 拒 `file://`）+ chrome 截图 light&dark 验像素再推。
+- **新 CSS 规则别插进既有规则的选择器列表中间——它会把前面的选择器一起吞走**（2026-09-21 用户实报，回归自 eb8b331db）：`styles.css` 是三万行的单文件，多选择器共享规则很常见。在
+  ```
+  .a,
+  .b,
+  .c { flex-direction: column; … }
+  ```
+  的 `.b,` 与 `.c` 之间插一条新规则（哪怕先写了整段注释介绍它），选择器列表在**第一个 `{`** 处终止，于是 `.a` / `.b` 被新规则吞走、`.c` 独占原规则。CSS 完全合法，prettier / eslint / typecheck 全绿，diff 也只显示「新增了一块」。实撞：RFC-352 T8 把分页 footer `.memory-all-list__more` 插进了记忆三列表的共享规则里，`.memory-by-scope__list` / `.memory-scoped-list` 当场丢掉 `flex-direction: column` 退回 `row`，记忆卡片在 /memory「按维度」与各详情页「记忆」子页签里横排溢出屏幕，**而插入者本人要用的 `.memory-all-list`（已审批页签）留在原规则里、看着一切正常**——这是它能活到用户报障的原因：改动者只验了自己那一条。
+  - 定式：新规则一律**另起一块**放在整条既有规则之后；插完 `git diff` 里确认原规则的选择器列表**一个不少**。
+  - 守卫写法：源码层断言要按**选择器列表成员**解析规则（`tests/memory-card-lists-column-layout.test.ts` 的 `rulesFor()`），**不能**用仓内常见的 `css.indexOf('.x {')`——被吞走的选择器后面已经不跟 `{` 了，那种 helper 对这类回归天然失明（`memory-tag-nowrap.test.ts` 的 `rule()` 就是这一型）。解析前先剥注释，否则注释里的 `{` 会被当成规则开头。
 - **视觉基线刷新前先 `build:binary -- --include-e2e`**——**少了这个 flag 就白刷**：e2e harness 跑的是 `dist/agent-workflow-e2e-*`（`e2e/harness.ts:defaultBinaryPath`），而裸 `build:binary` 只产 `dist/agent-workflow-<platform>`。拿旧 e2e 二进制刷出来的是**旧页面**的图，且测试还会「通过」；判据是「删掉 png 重生成后与旧图字节完全相同」（RFC-248 实测踩到）。旧 dist 同样刷出「通过但错误」的图；`-g` 只刷单 scene；linux 基线取 CI artifact 不本地生成；`--update-snapshots` 对已存在 png 静默 no-op，必变 scene 先 `rm`。settings.png 只截默认(runtime) tab——子 tab 内改动无需刷基线。
 - **窗口化列表必须常驻 `scrollbar-gutter: stable`，否则 Linux 视觉基线会间歇性红、用户会看到列宽跳动**（2026-08-19 实测，RFC-311）：虚拟列表的总高度是**测量出来的**（`estimateSize` 先给估计值、行测量完再修正），所以「这一刻要不要滚动条」在渲染早期不稳定。经典滚动条（Linux/Windows）一出现就吃掉 ~15px，容器内所有行整体左移；`/repos` 视觉基线因此在同一份代码上红-绿-红交替，差异图表现为**滚动容器外的表头不动、容器内的行内容整体偏移**（这是判据）。**macOS 是 overlay 滚动条、不占布局**，所以本地视觉套件恒绿、永远复现不了——只有 Linux CI 会红。修法是给滚动容器加 `scrollbar-gutter: stable`（`components/VirtualList.tsx` 现行形态，`virtual-list.test.tsx` 锁定），让布局与滚动条出现与否无关；改完 linux 基线要按既有规矩从 CI artifact 取新图。
 - **LAN http = 非安全上下文**：`crypto.subtle`/`navigator.clipboard`/`randomUUID` 皆 `undefined`；「保存卡死/复制无效」先敲 `window.isSecureContext`（防线 `lib/sha256.ts`+`lib/clipboard.ts`+守卫）。
