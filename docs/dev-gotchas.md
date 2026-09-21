@@ -52,6 +52,12 @@
 
 ## 测试 / CI
 
+- **改了共享 union / schema / 导出类型之后，本地自查必须覆盖「爆炸半径」而不是「我改的那几个文件」**（2026-09-21 实撞两次，RFC-366 + RFC-367 各中一次，方向相反）：两次都是「绿」的口径比改动的影响面窄，于是人declare done 之后才由对方查出来。
+  - RFC-366 扩了 `MemorySourceKindSchema` / `DEFAULT_SOURCE_CONTEXT_BUDGET`，本地跑了 backend 与 frontend 两个分片全绿——**没跑 `packages/shared`**。而钉着旧值域的两条锁（`memory-schema.test.ts` 的 `source_kind enum is exactly 4 members`、`config-rfc044.test.ts` 的整体相等）只活在那个分片里。两个分片绿读起来和全绿一模一样。
+  - RFC-367 扩了 `EnvelopeFollowupReason`，`bun run typecheck` 的输出**按自己的文件名过滤**看了一遍——漏掉第三个穷尽 switch（`workgroupTurnPrompts.ts` 的 `wgFollowupNotice`）。它不在改动清单里，正因为它不在，才没人替它把关。
+  - 定式：动了跨包的 union / zod schema / 导出类型，自查是 **`bun run typecheck`（四个包，读全量输出、不按文件名筛）+ 四个包各自的 `bun test`**（`packages/backend` / `packages/shared` / `packages/frontend` / `packages/system-mocks`），不是「我改的那几个文件的测试」。值域扩容尤其要想一遍：谁在**数**它（基数锁）、谁在 switch 它（穷尽性）、谁把它**整体相等**地钉住（快照锁）——这三类都不会出现在你的改动清单里。
+  - 顺带一条：**基数锁（`options.length === N`）是最差的那种锁**。它说得出「数目变了」，说不出变成了什么，红了之后唯一诱导的动作就是把数字改大。能写成成员列表就写成员列表，能写成派生关系（`A.options === [...B, 'x']`）就写派生关系——后者在下次扩容时根本不会红，因为它锁的是关系不是快照。
+
 - **事务测试的故障注入用 SQLite 触发器，不用模块 mock**（2026-08-25 实测，RFC-326 PR-A）：本仓测试零 `mock.module`（bun 的模块 mock 是**全进程**生效，会污染同进程后跑的其它文件），而「事务中途失败 ⇒ 六表整体回滚」这种断言又必须在**事务内的某个指定写点**引爆。做法：`db.$client.exec("CREATE TRIGGER inject BEFORE UPDATE OF status ON node_runs FOR EACH ROW WHEN NEW.status = 'done' BEGIN SELECT RAISE(ABORT, 'injected'); END")`——触发器只对那张表那个写点生效，抛在同一个 `dbTxSync` 里，正好落在「归档之后、提交之前」；`DROP TRIGGER` 后重放同一请求，还能顺手证明「失败可修复」。同一手法能把**提交后的 best-effort 写入**（蒸馏入队 `memory_distill_jobs`）打断而一行生产代码不碰。数「到底开了几个事务」用 `tests/helpers/statementRecorder.ts`：drizzle bun-sqlite 的事务走 `exec`，录到的就是裸 `BEGIN DEFERRED` / `COMMIT` / `ROLLBACK`，按位置还能断言「某条 insert 在 COMMIT 之后」。
   - 判据：想验证的是「哪个写点之后失败」就在**那个写点的下一条语句**上挂触发器；触发器挂在读语句上无效（`SELECT` 不触发）。
 - **`rfc247-route-registry` 与 `rfc317-route-contract-oracle` 不能放进同一个 `bun test` 进程**（2026-08-25 实撞）：registry 用例向全局 route-meta registry 挂了一条 `GET /api/__registry_fixture_public__`，它每个 case 前 `resetRouteMetaRegistry()`，但**最后一个 case 留下的挂载活到进程结束**；oracle 扫的是同一个全局 registry，于是多出一条「无契约端点」假红（`+ "GET /api/__registry_fixture_public__"`）。CI 分片碰巧把两者分开，本地按关键词批量跑（`bun test rfc247 rfc317`）就会撞。判定同族假红的定式同上一条「单跑绿 + 改动面无关」：oracle 单独跑即绿。
