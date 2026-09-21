@@ -1,11 +1,11 @@
 {
   "denominator": {
-    "consumers": 903,
+    "consumers": 906,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
-    "methods": 1069,
+    "methods": 1074,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20897,
+    "recursiveFields": 20938,
     "symbols": 1016
   },
   "entries": [
@@ -71714,6 +71714,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "nodeId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "outputLang.$variant:0",
           "type": "z.infer<typeof LanguageSchema>"
         },
@@ -71729,18 +71734,8 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "sourceKind.$variant:0",
-          "type": "'clarify'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "sourceKind.$variant:1",
-          "type": "'review'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "sourceKind.$variant:2",
-          "type": "'feedback'"
+          "fieldPath": "sourceKind",
+          "type": "z.infer<typeof DistillSourceKindSchema>"
         },
         {
           "consumerEdgeIds": [],
@@ -71757,6 +71752,7 @@
       "id": "public:memory:commands:EnqueueMemoryDistillJobInput",
       "members": [
         "debounceMs",
+        "nodeId",
         "outputLang",
         "sourceEventId",
         "sourceKind",
@@ -71771,7 +71767,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:fe6c7d38bf57f4ea876637c9372e2d3c9ea0a8b30c120920b9da64a55b8008bd",
+      "signatureDigest": "sha256:ed3565faf7f74308e325f7e248d4a10c3851a2326fc3b10eed3d5453d1bb6985",
       "status": "target-context-current-surface",
       "symbol": "EnqueueMemoryDistillJobInput",
       "transaction": "own-tx",
@@ -71867,6 +71863,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:enqueue.$parameter:input.nodeId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:enqueue.$parameter:input.outputLang.$variant:0",
           "type": "z.infer<typeof LanguageSchema>"
         },
@@ -71882,18 +71883,8 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:enqueue.$parameter:input.sourceKind.$variant:0",
-          "type": "'clarify'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:enqueue.$parameter:input.sourceKind.$variant:1",
-          "type": "'review'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:enqueue.$parameter:input.sourceKind.$variant:2",
-          "type": "'feedback'"
+          "fieldPath": "$method:enqueue.$parameter:input.sourceKind",
+          "type": "z.infer<typeof DistillSourceKindSchema>"
         },
         {
           "consumerEdgeIds": [],
@@ -71907,18 +71898,23 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:enqueue.$return.debounceKey",
+          "fieldPath": "$method:enqueue.$return.$variant:0.debounceKey",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:enqueue.$return.jobId",
+          "fieldPath": "$method:enqueue.$return.$variant:0.jobId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:enqueue.$return.nextRunAt",
+          "fieldPath": "$method:enqueue.$return.$variant:0.nextRunAt",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:enqueue.$return.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -71949,7 +71945,7 @@
         {
           "consumerEdgeIds": [],
           "name": "enqueue",
-          "signatureDigest": "sha256:b300e3330c270ebc3cfd7b123cbc15e35040dc81b0ca8a6df743a9f959747200"
+          "signatureDigest": "sha256:83478a4b51e5d31a9e05582898c687d5f41e0191c188926aa766defbf0611162"
         },
         {
           "consumerEdgeIds": [
@@ -71979,7 +71975,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:8b326c1cbda29ec99339f19e3e7508803d508ce71b4252259c5becf90f58f32d",
+      "signatureDigest": "sha256:39d6a1a94ed6c0f461460110622fb67533103167cb5b7e5ad8e4ba230674d2c5",
       "status": "target-context-current-surface",
       "symbol": "MemoryDistillCommands",
       "transaction": "own-tx",
@@ -72059,12 +72055,32 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:start.$parameter:options.sourceContextBudget.agentInjectedMemoriesMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:start.$parameter:options.sourceContextBudget.agentOutputsMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:start.$parameter:options.sourceContextBudget.agentTranscriptMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:start.$parameter:options.sourceContextBudget.clarifyTranscriptMaxBytes",
           "type": "number"
         },
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:start.$parameter:options.sourceContextBudget.reviewBodyMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:start.$parameter:options.sourceContextBudget.taskSummaryMaxBytes",
           "type": "number"
         },
         {
@@ -72211,12 +72227,32 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "sourceContextBudget.agentInjectedMemoriesMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "sourceContextBudget.agentOutputsMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "sourceContextBudget.agentTranscriptMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "sourceContextBudget.clarifyTranscriptMaxBytes",
           "type": "number"
         },
         {
           "consumerEdgeIds": [],
           "fieldPath": "sourceContextBudget.reviewBodyMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "sourceContextBudget.taskSummaryMaxBytes",
           "type": "number"
         },
         {
@@ -72257,8 +72293,8 @@
       "budget": {
         "maxMethods": 28,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 223,
-        "maxUnionVariants": 98
+        "maxTransitiveLeafFields": 227,
+        "maxUnionVariants": 97
       },
       "consumerEdgeIds": [
         "import:3851ede7999917e9ee31",
@@ -73134,6 +73170,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "distillCommands.$method:enqueue.$parameter:input.nodeId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "distillCommands.$method:enqueue.$parameter:input.outputLang.$variant:0",
           "type": "z.infer<typeof LanguageSchema>"
         },
@@ -73149,18 +73190,8 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "distillCommands.$method:enqueue.$parameter:input.sourceKind.$variant:0",
-          "type": "'clarify'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "distillCommands.$method:enqueue.$parameter:input.sourceKind.$variant:1",
-          "type": "'review'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "distillCommands.$method:enqueue.$parameter:input.sourceKind.$variant:2",
-          "type": "'feedback'"
+          "fieldPath": "distillCommands.$method:enqueue.$parameter:input.sourceKind",
+          "type": "z.infer<typeof DistillSourceKindSchema>"
         },
         {
           "consumerEdgeIds": [],
@@ -73174,18 +73205,23 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "distillCommands.$method:enqueue.$return.debounceKey",
+          "fieldPath": "distillCommands.$method:enqueue.$return.$variant:0.debounceKey",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "distillCommands.$method:enqueue.$return.jobId",
+          "fieldPath": "distillCommands.$method:enqueue.$return.$variant:0.jobId",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "distillCommands.$method:enqueue.$return.nextRunAt",
+          "fieldPath": "distillCommands.$method:enqueue.$return.$variant:0.nextRunAt",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "distillCommands.$method:enqueue.$return.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -73288,12 +73324,32 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "distillWorker.$method:start.$parameter:options.sourceContextBudget.agentInjectedMemoriesMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "distillWorker.$method:start.$parameter:options.sourceContextBudget.agentOutputsMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "distillWorker.$method:start.$parameter:options.sourceContextBudget.agentTranscriptMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "distillWorker.$method:start.$parameter:options.sourceContextBudget.clarifyTranscriptMaxBytes",
           "type": "number"
         },
         {
           "consumerEdgeIds": [],
           "fieldPath": "distillWorker.$method:start.$parameter:options.sourceContextBudget.reviewBodyMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "distillWorker.$method:start.$parameter:options.sourceContextBudget.taskSummaryMaxBytes",
           "type": "number"
         },
         {
@@ -73514,7 +73570,7 @@
         {
           "consumerEdgeIds": [],
           "name": "enqueue",
-          "signatureDigest": "sha256:b300e3330c270ebc3cfd7b123cbc15e35040dc81b0ca8a6df743a9f959747200"
+          "signatureDigest": "sha256:83478a4b51e5d31a9e05582898c687d5f41e0191c188926aa766defbf0611162"
         },
         {
           "consumerEdgeIds": [
@@ -73670,7 +73726,8 @@
         "import:519c37546cf4d1f5cb2f",
         "import:9ef226b911cd4c382b5c",
         "import:bbb79d2718cda8147626",
-        "import:bfe5f8b8fa122582774c"
+        "import:bfe5f8b8fa122582774c",
+        "import:ed106674dc4942bfece0"
       ],
       "context": "memory",
       "dataClass": "metadata",
@@ -73730,6 +73787,12 @@
           "edgeId": "import:bfe5f8b8fa122582774c",
           "file": "packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:ed106674dc4942bfece0",
+          "file": "packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -122425,6 +122488,8 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:079166cc8e49ffebb3e4",
+        "import:634747de27078aba6772",
         "import:86c06fa8239e4780e974"
       ],
       "context": "runtime-management",
@@ -122438,6 +122503,18 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#DISTILL_CAPTURE_FAILED_KIND",
       "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:079166cc8e49ffebb3e4",
+          "file": "packages/backend/src/services/runtime/index.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file"
+        },
+        {
+          "context": "memory",
+          "edgeId": "import:634747de27078aba6772",
+          "file": "packages/backend/src/modules/memory/infrastructure/memoryDistillSessionEventSink.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillSessionEventSink.ts#$file"
+        },
         {
           "context": "memory",
           "edgeId": "import:86c06fa8239e4780e974",
@@ -139075,9 +139152,9 @@
     {
       "authority": "request-authority",
       "budget": {
-        "maxMethods": 10,
+        "maxMethods": 11,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 187,
+        "maxTransitiveLeafFields": 197,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
@@ -139110,6 +139187,35 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:driver.$variant:0.$method:cancelChild.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:driver.$variant:0.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.nodeId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:driver.$variant:0.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:71c4bdb921b1873ce84f"
+          ],
+          "fieldPath": "$call.$parameter:driver.$variant:0.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.status",
+          "type": "z.infer<typeof NodeRunStatusSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:71c4bdb921b1873ce84f"
+          ],
+          "fieldPath": "$call.$parameter:driver.$variant:0.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:driver.$variant:0.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$return",
           "type": "void"
         },
         {
@@ -139646,6 +139752,35 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$call.$return.$method:cancelChild.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.nodeId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:71c4bdb921b1873ce84f"
+          ],
+          "fieldPath": "$call.$return.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.status",
+          "type": "z.infer<typeof NodeRunStatusSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:71c4bdb921b1873ce84f"
+          ],
+          "fieldPath": "$call.$return.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$return",
           "type": "void"
         },
         {
@@ -140210,6 +140345,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "onAgentRunSettled",
+          "signatureDigest": "sha256:826444382449e2e3c67e741f101a1bb4a081921ad29c003d25eab3bb5dc47a4a"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "resumeChild",
           "signatureDigest": "sha256:7b2ce90e831fbd1421b56795638affdf09e3f105faeb6e031a6219d72dac588e"
         },
@@ -140245,9 +140385,9 @@
     {
       "authority": "request-authority",
       "budget": {
-        "maxMethods": 9,
+        "maxMethods": 10,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 93,
+        "maxTransitiveLeafFields": 98,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
@@ -140289,6 +140429,43 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:cancelChild.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:52aebe854233bde53a8c"
+          ],
+          "fieldPath": "$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.nodeId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:52aebe854233bde53a8c"
+          ],
+          "fieldPath": "$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:52aebe854233bde53a8c",
+            "import:924a40dfc07194923acc",
+            "import:d6081cab0c06792087a4"
+          ],
+          "fieldPath": "$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.status",
+          "type": "z.infer<typeof NodeRunStatusSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:52aebe854233bde53a8c",
+            "import:924a40dfc07194923acc",
+            "import:d6081cab0c06792087a4"
+          ],
+          "fieldPath": "$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$return",
           "type": "void"
         },
         {
@@ -140987,6 +141164,11 @@
           "signatureDigest": "sha256:cfa14112c5026e220b81935824a4893d8c307f57b9c3e487603a581adccee047"
         },
         {
+          "consumerEdgeIds": [],
+          "name": "onAgentRunSettled",
+          "signatureDigest": "sha256:826444382449e2e3c67e741f101a1bb4a081921ad29c003d25eab3bb5dc47a4a"
+        },
+        {
           "consumerEdgeIds": [
             "import:d6081cab0c06792087a4"
           ],
@@ -141333,9 +141515,9 @@
     {
       "authority": "request-authority",
       "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 33,
-        "maxTransitiveLeafFields": 55,
+        "maxMethods": 6,
+        "maxTopLevelFields": 34,
+        "maxTransitiveLeafFields": 60,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [],
@@ -141344,6 +141526,31 @@
       "direction": "offered",
       "entrypoint": "commands",
       "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRunSettled.$method:onAgentRunSettled.$parameter:event.nodeId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRunSettled.$method:onAgentRunSettled.$parameter:event.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRunSettled.$method:onAgentRunSettled.$parameter:event.status",
+          "type": "z.infer<typeof NodeRunStatusSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRunSettled.$method:onAgentRunSettled.$parameter:event.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRunSettled.$method:onAgentRunSettled.$return",
+          "type": "void"
+        },
         {
           "consumerEdgeIds": [],
           "fieldPath": "appHome",
@@ -141646,6 +141853,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "onAgentRunSettled",
+          "signatureDigest": "sha256:826444382449e2e3c67e741f101a1bb4a081921ad29c003d25eab3bb5dc47a4a"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "warn",
           "signatureDigest": "sha256:712d0eddaddd999fe46288e3d2623a87b364cfc70f199040631682b7770ab0b0"
         }
@@ -141673,9 +141885,9 @@
     {
       "authority": "request-authority",
       "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 30,
-        "maxTransitiveLeafFields": 46,
+        "maxMethods": 6,
+        "maxTopLevelFields": 31,
+        "maxTransitiveLeafFields": 51,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [],
@@ -141684,6 +141896,31 @@
       "direction": "offered",
       "entrypoint": "commands",
       "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRunSettled.$method:onAgentRunSettled.$parameter:event.nodeId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRunSettled.$method:onAgentRunSettled.$parameter:event.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRunSettled.$method:onAgentRunSettled.$parameter:event.status",
+          "type": "z.infer<typeof NodeRunStatusSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRunSettled.$method:onAgentRunSettled.$parameter:event.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "agentRunSettled.$method:onAgentRunSettled.$return",
+          "type": "void"
+        },
         {
           "consumerEdgeIds": [],
           "fieldPath": "appHome",
@@ -141938,6 +142175,11 @@
           "consumerEdgeIds": [],
           "name": "info",
           "signatureDigest": "sha256:99d143485a93dc241a303b14dee68e1d5feb1e25a034b7b87331e8b536cbd055"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "onAgentRunSettled",
+          "signatureDigest": "sha256:826444382449e2e3c67e741f101a1bb4a081921ad29c003d25eab3bb5dc47a4a"
         },
         {
           "consumerEdgeIds": [],
@@ -154685,9 +154927,9 @@
     {
       "authority": "context-bound",
       "budget": {
-        "maxMethods": 9,
+        "maxMethods": 10,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 93,
+        "maxTransitiveLeafFields": 98,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
@@ -154726,6 +154968,40 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "schedulerDriver.$method:cancelChild.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ae39b5aa97c0e6d132ec"
+          ],
+          "fieldPath": "schedulerDriver.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.nodeId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ae39b5aa97c0e6d132ec"
+          ],
+          "fieldPath": "schedulerDriver.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ae39b5aa97c0e6d132ec"
+          ],
+          "fieldPath": "schedulerDriver.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.status",
+          "type": "z.infer<typeof NodeRunStatusSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:71d3a9eedbcc90b75e7f",
+            "import:ae39b5aa97c0e6d132ec"
+          ],
+          "fieldPath": "schedulerDriver.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$parameter:event.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "schedulerDriver.$method:drive.$parameter:request.agentRunSettled.$method:onAgentRunSettled.$return",
           "type": "void"
         },
         {
@@ -155269,6 +155545,11 @@
           "consumerEdgeIds": [],
           "name": "isTaskActive",
           "signatureDigest": "sha256:cfa14112c5026e220b81935824a4893d8c307f57b9c3e487603a581adccee047"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "onAgentRunSettled",
+          "signatureDigest": "sha256:826444382449e2e3c67e741f101a1bb4a081921ad29c003d25eab3bb5dc47a4a"
         },
         {
           "consumerEdgeIds": [],
@@ -165397,7 +165678,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:578930f44eaa797b76c40c0e516ed1aea92e7c58c5f17ecf2c6ea2c858cca4dd",
+  "sourceDigest": "sha256:6bba1a69f865a5e58c1d3177ed1a15c91e2c25818df3d29e371a0f3c25e33f09",
   "targetContexts": [
     "collaboration",
     "development-automation",

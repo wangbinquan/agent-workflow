@@ -3,10 +3,10 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-09-04",
-    "inboundEdges": 252,
+    "inboundEdges": 253,
     "outboundEdges": 31,
     "registeredFindings": 79,
-    "recordedAtShaNote": "RFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged.\n\nRFC-360 T3: register eight exact temporary forwarding imports/exports for the relocated single registry. Remove these with the named compatibility consumers in T6; no directory or scanner exemption is added."
+    "recordedAtShaNote": "RFC-366（2026-09-21）：inbound 边 252→253。执行结束记忆提炼把 agent 运行结束观察者装进 task-execution 自己的 composition，由 legacy `services/task.ts` 的 runtimeConfigOpts 消费；条目文本由 RFC-366 作者提供。\n\nRFC-367（2026-09-21）：outbound 边 27→31。记忆蒸馏器改用共享的 `runSystemAgent` 运行原语，让候选解析与会话页记录同源于一条规范化事件流（此前两条 reader 各解析一次同一段输出，漂移过两次、静默丢光候选）。四条新边分别是 memory→`@/services/systemAgentRun`（type+value）、memory 的 distill 端口→`@/services/sessionEventSink`（type）、以及候选解析改用公共 envelope 解析件带来的 memory→`@/services/envelope`（value）。三个目标都仍在 legacy `services/` 下，本 RFC 只做最小扩展不顺手迁位；随 RFC-294 W4-C / W4-E1 归位时一并销账。\n\nRFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged.\n\nRFC-360 T3: register eight exact temporary forwarding imports/exports for the relocated single registry. Remove these with the named compatibility consumers in T6; no directory or scanner exemption is added."
   },
   "entries": [
     {
@@ -1180,50 +1180,6 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/server.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle",
-      "specifier": "@/modules/task-execution/infrastructure/taskDriverLifecycle",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-359 AC-1（第 10 刀）`resume` 两份实现合一之后，`server.ts` 这条**不装配完整 runtime** 的组合根直接 import 共用实现与它要的生命周期端口。与本文件既有的 19 条 `server.ts → 模块内部` 同形同类：**剩下的是纯分层债**——bootstrap 仍直接 import owner 的 infrastructure，而不是走 owner 的 public/composition 合同。零成本的替代只有「让这条路继续跑退役那份 `resumeTask`」，那正是本 RFC 要消灭的东西（同一个请求两个部署给不同答案）。 这一条交的正是**两个引擎唯一真差异**（认领策略）的那个端口实现：这条路走进程级单例的同步认领。",
-      "introducedByRFC": "RFC-359 AC-1（第 10 刀，resume 合一）",
-      "removeAfterWave": "RFC-294 W4-E1（task-execution public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:b06b92edcd6f5dd08e47"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createDatabaseTaskDriverLifecyclePort"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/task.ts",
-      "to": "packages/backend/src/modules/task-execution/application/resumeRollbackTargets",
-      "specifier": "@/modules/task-execution/application/resumeRollbackTargets",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-359 AC-1（第 10 刀）：resume 的回滚目标选择器原本有两份逐字相同的副本（`services/task.ts` 与 PostgreSQL 的 resume 参与者各一份）。去重之后唯一那份落在 `application/`（它是纯函数、零 provider 依赖，那里是它在目标架构里的家），于是 legacy 的 `resumeKick` 从那里 import。**这条边随 `resumeKick` / `syncTaskWorkflow` 离开 legacy 层一起消失**——把实现留在 legacy 只会把重复留着。",
-      "introducedByRFC": "RFC-359 AC-1（第 10 刀，resume 合一）",
-      "removeAfterWave": "RFC-294 W4-E1（task-execution public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:2a593cdeafd6558a398a"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/application/resumeRollbackTargets.ts#selectResumeRollbackTargets"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/task.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/server.ts",
       "to": "packages/backend/src/modules/integration/public/mrTerminalControl",
       "specifier": "@/modules/integration/public/mrTerminalControl",
       "edgeKind": "type",
@@ -1392,6 +1348,27 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/server.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant",
+      "specifier": "@/modules/task-execution/infrastructure/childTaskLifecycleParticipant",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 AC-1（命名债收尾 §5hj）：这条边**一直就在**（`server.ts` 的人工门续跑直接取 `resumeTaskProjection`），只是此前那个文件叫 `postgresqlChildTaskLifecycleParticipant.ts`，被 R1 当成 provider 命名基础设施让过去了（那类由 W5-T17 的 provider-命名文件账本管）。去掉前缀之后它落回 R1 的视野——**是判据看见了真相，不是新开的债**。随人工门续跑离开 legacy 层一起消失。",
+      "introducedByRFC": "RFC-359 AC-1（命名债收尾 §5hj）",
+      "removeAfterWave": "RFC-294 W4-E1（task-execution public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:f99c53a251e4f255ed31"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#createChildTaskLifecycleParticipant"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/server.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations",
       "specifier": "@/modules/task-execution/infrastructure/fusionEngineTaskOperations",
       "edgeKind": "value",
@@ -1407,6 +1384,48 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts#createSqliteFusionEngineTaskOperations"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/server.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle",
+      "specifier": "@/modules/task-execution/infrastructure/taskDriverLifecycle",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 AC-1（第 10 刀）`resume` 两份实现合一之后，`server.ts` 这条**不装配完整 runtime** 的组合根直接 import 共用实现与它要的生命周期端口。与本文件既有的 19 条 `server.ts → 模块内部` 同形同类：**剩下的是纯分层债**——bootstrap 仍直接 import owner 的 infrastructure，而不是走 owner 的 public/composition 合同。零成本的替代只有「让这条路继续跑退役那份 `resumeTask`」，那正是本 RFC 要消灭的东西（同一个请求两个部署给不同答案）。 这一条交的正是**两个引擎唯一真差异**（认领策略）的那个端口实现：这条路走进程级单例的同步认领。",
+      "introducedByRFC": "RFC-359 AC-1（第 10 刀，resume 合一）",
+      "removeAfterWave": "RFC-294 W4-E1（task-execution public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b06b92edcd6f5dd08e47"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#createDatabaseTaskDriverLifecyclePort"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/server.ts",
+      "to": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots",
+      "specifier": "@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
+      "introducedByRFC": "RFC-349（provider cutover current-source census）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:46915c919758e872be1f"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts#createTaskExecutionResourceBinding"
       ],
       "canonicalFacadeIds": []
     },
@@ -1453,27 +1472,6 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#createTaskRouteOperations"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/server.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots",
-      "specifier": "@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:46915c919758e872be1f"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionResourceSnapshots.ts#createTaskExecutionResourceBinding"
       ],
       "canonicalFacadeIds": []
     },
@@ -4437,29 +4435,6 @@
     {
       "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/startTaskDeps.ts",
-      "to": "modules/task-execution/composition/taskExecutionPersistence",
-      "specifier": "@/modules/task-execution/composition/taskExecutionPersistence",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-359 W4-D24：运行时会话租约合一后只剩一份实现，这条边从 `infrastructure/sqliteRuntimeSessionLeaseOperations`（此前同样在账）改指装配层的转出口。`startTaskDeps` 是 legacy service，规则只放行 bootstrap 指向 composition，所以它仍在账；正解是把租约操作改为由调用方注入（与 W4-D19c 给回合操作做的同一处置），随 StartTaskDeps 的收口一起清。",
-      "introducedByRFC": "RFC-359 W4-D24（运行时会话租约合一）",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:c91264f1cd01c4f3207e"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/startTaskDeps.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/startTaskDeps.ts",
       "to": "packages/backend/src/modules/source-control/composition",
       "specifier": "@/modules/source-control/composition",
       "edgeKind": "value",
@@ -4475,6 +4450,29 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/source-control/composition.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/startTaskDeps.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/startTaskDeps.ts",
+      "to": "modules/task-execution/composition/taskExecutionPersistence",
+      "specifier": "@/modules/task-execution/composition/taskExecutionPersistence",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 W4-D24：运行时会话租约合一后只剩一份实现，这条边从 `infrastructure/sqliteRuntimeSessionLeaseOperations`（此前同样在账）改指装配层的转出口。`startTaskDeps` 是 legacy service，规则只放行 bootstrap 指向 composition，所以它仍在账；正解是把租约操作改为由调用方注入（与 W4-D19c 给回合操作做的同一处置），随 StartTaskDeps 的收口一起清。",
+      "introducedByRFC": "RFC-359 W4-D24（运行时会话租约合一）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:c91264f1cd01c4f3207e"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#$file"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/startTaskDeps.ts"
@@ -4677,6 +4675,52 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/task-execution/application/resumeRollbackTargets",
+      "specifier": "@/modules/task-execution/application/resumeRollbackTargets",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-359 AC-1（第 10 刀）：resume 的回滚目标选择器原本有两份逐字相同的副本（`services/task.ts` 与 PostgreSQL 的 resume 参与者各一份）。去重之后唯一那份落在 `application/`（它是纯函数、零 provider 依赖，那里是它在目标架构里的家），于是 legacy 的 `resumeKick` 从那里 import。**这条边随 `resumeKick` / `syncTaskWorkflow` 离开 legacy 层一起消失**——把实现留在 legacy 只会把重复留着。",
+      "introducedByRFC": "RFC-359 AC-1（第 10 刀，resume 合一）",
+      "removeAfterWave": "RFC-294 W4-E1（task-execution public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:2a593cdeafd6558a398a"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/application/resumeRollbackTargets.ts#selectResumeRollbackTargets"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/task.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/task.ts",
+      "to": "packages/backend/src/modules/task-execution/composition/agentRunDistillObserver",
+      "specifier": "@/modules/task-execution/composition/agentRunDistillObserver",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-366 的 agent 运行结束观察者由 task-execution 自己的 composition 装配（与同目录 gateContinuationPreDrive 同形：都只认 memory 的 exact public participant，引擎本体一无所知）。消费它的是 legacy 的 `runtimeConfigOpts`——start / resume / retry 三个 kick 点共用的那一个运行期配置漏斗，本身就住在 services/ 横向层。观察者放进 owner 的 composition 是为了不让 services/ 直接 import memory，代价是这条 inbound 边；随该漏斗迁入 owner public/commands 一并销账。",
+      "introducedByRFC": "RFC-366（执行结束记忆提炼）",
+      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:affddb28c51615635360"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/task.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts#composeAgentRunDistillObserver"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/task.ts"
@@ -6234,27 +6278,6 @@
     {
       "rule": "R2-outbound-module-to-legacy",
       "from": "packages/backend/src/modules/intent/application/turnEngine.ts",
-      "to": "packages/backend/src/services/runtime/types",
-      "specifier": "@/services/runtime/types",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "owner": "intent",
-      "why": "RFC-355 T7 平移后暴露的既有反向依赖：intent 的编排一直在用 legacy 层的 `@/services/*` / `@/ws/*`（systemAgentRun / envelope / nodeRunMint / privilegedNodeLens / broadcaster / 两个 operationRevision 哈希 helper）。这些 helper 的正确归属分别在 task-execution / resource-catalog / 传输层，不在本刀的刀口内——本 RFC 只把 intent 的编排搬到位并如实入账，逐个归位随各自 owner 的下一波。",
-      "introducedByRFC": "RFC-355 T7（services/intent 归位）",
-      "removeAfterWave": "RFC-294 W4-E（各 owner 认领 systemAgentRun / envelope / nodeRunMint / broadcaster 等公共件）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:f06b8f7e6beb1bea9509"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/turnEngine.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/services/runtime/types.ts#SystemAgentOutputEvidence"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R2-outbound-module-to-legacy",
-      "from": "packages/backend/src/modules/intent/application/turnEngine.ts",
       "to": "packages/backend/src/services/systemAgentRun",
       "specifier": "@/services/systemAgentRun",
       "edgeKind": "type",
@@ -6289,10 +6312,12 @@
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
         "import:48b3c18a0fdb0377aa32",
-        "import:ab9070ad98812d5f5e5a"
+        "import:ab9070ad98812d5f5e5a",
+        "import:c35fd8f01b06d7380c8c"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/turnEngine.ts#$file",
       "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/systemAgentRun.ts#classifyMissingEnvelope",
         "owner:packages/backend/src/services/systemAgentRun.ts#releaseSystemAgentScratch",
         "owner:packages/backend/src/services/systemAgentRun.ts#runSystemAgent"
       ],
@@ -6398,43 +6423,24 @@
     },
     {
       "rule": "R2-outbound-module-to-legacy",
-      "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
+      "from": "packages/backend/src/modules/memory/application/distill/distillerOutput.ts",
       "to": "packages/backend/src/services/envelope",
       "specifier": "@/services/envelope",
       "edgeKind": "value",
       "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-352 T6 把蒸馏从 `services/memoryDistiller.ts` 整体迁进 memory 模块。这条依赖**在迁位前就存在**（那时是 legacy→legacy，跨域图里看不见）；迁进模块后它第一次成为可记账的 module→legacy 边。 解析 `<workflow-output>` 信封是执行协议的一部分，归 task-execution 的执行合同。",
-      "introducedByRFC": "RFC-352",
-      "removeAfterWave": "RFC-294 W4-E1（task-execution vertical slice）",
-      "findingId": "G-01",
+      "owner": "memory",
+      "why": "RFC-367：候选解析改用公共 envelope 解析件（`extractLastEnvelope` / `parseEnvelope`），取代手写正则——手写那版把「端口缺失」和「端口未闭合」压成同一种失败，导致补问说错纠正方向。该解析件是 worker 节点与 intent 共用的既有公共件，仍在 legacy 层。",
+      "introducedByRFC": "RFC-367",
+      "removeAfterWave": "RFC-294 W4-E1（envelope 解析件归位）",
+      "findingId": "RFC-367-R2",
       "canonicalImportEdgeIds": [
-        "import:32c80f7bbec8ec08d008"
+        "import:237027e65851bf907a0e",
+        "import:d37c9f82789cf492db72"
       ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/distillerOutput.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/services/envelope.ts#extractLastEnvelope"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R2-outbound-module-to-legacy",
-      "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
-      "to": "packages/backend/src/services/execution/agentProcess",
-      "specifier": "@/services/execution/agentProcess",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "runtime-management",
-      "why": "RFC-352 T6 把蒸馏从 `services/memoryDistiller.ts` 整体迁进 memory 模块。这条依赖**在迁位前就存在**（那时是 legacy→legacy，跨域图里看不见）；迁进模块后它第一次成为可记账的 module→legacy 边。 真正 spawn agent 进程的入口。同样收进 `DistillerProcessPort` 的 infrastructure 实现。",
-      "introducedByRFC": "RFC-352",
-      "removeAfterWave": "RFC-294 W4-E4b（runtime-management vertical slice）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:2bfaaf344338a8f3fab0"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/services/execution/agentProcess.ts#runAgentProcess"
+        "owner:packages/backend/src/services/envelope.ts#extractLastEnvelope",
+        "owner:packages/backend/src/services/envelope.ts#parseEnvelope"
       ],
       "canonicalFacadeIds": []
     },
@@ -6483,27 +6489,6 @@
     {
       "rule": "R2-outbound-module-to-legacy",
       "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
-      "to": "packages/backend/src/services/runtime",
-      "specifier": "@/services/runtime",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "runtime-management",
-      "why": "RFC-352 T6 把蒸馏从 `services/memoryDistiller.ts` 整体迁进 memory 模块。这条依赖**在迁位前就存在**（那时是 legacy→legacy，跨域图里看不见）；迁进模块后它第一次成为可记账的 module→legacy 边。 蒸馏要按管理员选定的 runtime 起子进程。目标形态是 memory 只认自己的 `DistillerProcessPort`，由 infrastructure 适配 runtime-management 的驱动合同。",
-      "introducedByRFC": "RFC-352",
-      "removeAfterWave": "RFC-294 W4-E4b（runtime-management vertical slice）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:6d5a94d223636922c768"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/services/runtime/index.ts#getRuntimeDriver"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R2-outbound-module-to-legacy",
-      "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
       "to": "packages/backend/src/services/runtime/types",
       "specifier": "@/services/runtime/types",
       "edgeKind": "type",
@@ -6514,11 +6499,61 @@
       "removeAfterWave": "RFC-294 W4-E4b（runtime-management vertical slice）",
       "findingId": "G-01",
       "canonicalImportEdgeIds": [
-        "import:a99307c8c8debf377c51"
+        "import:a99307c8c8debf377c51",
+        "import:b63768891ca64af1cb8d"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
       "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/services/runtime/types.ts#RuntimeKind"
+        "owner:packages/backend/src/services/runtime/types.ts#RuntimeKind",
+        "owner:packages/backend/src/services/runtime/types.ts#SystemAgentOutputEvidence"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
+      "to": "packages/backend/src/services/systemAgentRun",
+      "specifier": "@/services/systemAgentRun",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "memory",
+      "why": "RFC-367：蒸馏器改用共享的非任务系统代理运行原语 `runSystemAgent`（intent / change-narrative 的既有先例），以此让候选解析与会话页记录同源于一条规范化事件流——此前两者各解析一次同一段输出，漂移过两次并静默丢光候选（RFC-117 一次，2026-09-21 一次）。该原语本身仍在 legacy `services/` 下，本 RFC 只做最小扩展（+`resumeSessionId`）不顺手迁位。",
+      "introducedByRFC": "RFC-367",
+      "removeAfterWave": "RFC-294 W4-C（system-agent 运行原语归位；届时 memory 改依赖其 public 合同）",
+      "findingId": "RFC-367-R2",
+      "canonicalImportEdgeIds": [
+        "import:61d4096cb57acaadd536",
+        "import:b81010afdf9fa4d0e839"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/systemAgentRun.ts#SystemAgentRunOptions",
+        "owner:packages/backend/src/services/systemAgentRun.ts#SystemAgentRunResult"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/memory/application/distill/memoryDistiller.ts",
+      "to": "packages/backend/src/services/systemAgentRun",
+      "specifier": "@/services/systemAgentRun",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "memory",
+      "why": "RFC-367：蒸馏器改用共享的非任务系统代理运行原语 `runSystemAgent`（intent / change-narrative 的既有先例），以此让候选解析与会话页记录同源于一条规范化事件流——此前两者各解析一次同一段输出，漂移过两次并静默丢光候选（RFC-117 一次，2026-09-21 一次）。该原语本身仍在 legacy `services/` 下，本 RFC 只做最小扩展（+`resumeSessionId`）不顺手迁位。",
+      "introducedByRFC": "RFC-367",
+      "removeAfterWave": "RFC-294 W4-C（system-agent 运行原语归位；届时 memory 改依赖其 public 合同）",
+      "findingId": "RFC-367-R2",
+      "canonicalImportEdgeIds": [
+        "import:24a9c3ea3be7f83239db",
+        "import:3abac1ba429377dd6f6e",
+        "import:9f9ee23d0b828aefa094"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/systemAgentRun.ts#classifyMissingEnvelope",
+        "owner:packages/backend/src/services/systemAgentRun.ts#releaseSystemAgentScratch",
+        "owner:packages/backend/src/services/systemAgentRun.ts#runSystemAgent"
       ],
       "canonicalFacadeIds": []
     },
@@ -6591,6 +6626,27 @@
     },
     {
       "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/memory/application/ports/distillWorkStore.ts",
+      "to": "packages/backend/src/services/sessionEventSink",
+      "specifier": "@/services/sessionEventSink",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "memory",
+      "why": "RFC-367：`MemoryDistillWorkStore` 的辅助会话记录端口以 `SystemAgentEventSinkV1` 为契约类型（与 intent 的 `turnSession.ts` 同一条既有反向依赖）。该契约随 `runSystemAgent` 一起归位后本条自然销账。",
+      "introducedByRFC": "RFC-367",
+      "removeAfterWave": "RFC-294 W4-C（随 systemAgentRun 一同归位）",
+      "findingId": "RFC-367-R2",
+      "canonicalImportEdgeIds": [
+        "import:7c317ccd0062d9910fdb"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/memory/application/ports/distillWorkStore.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/sessionEventSink.ts#SystemAgentEventSinkV1"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
       "from": "packages/backend/src/modules/task-execution/application/ports/childExecutionLaunchOperations.ts",
       "to": "@/services/execution/closure",
       "specifier": "@/services/execution/closure",
@@ -6628,27 +6684,6 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/resolveNodeActivation.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/services/freshness.ts#pickFrameSourceRun"
-      ],
-      "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/server.ts",
-      "to": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant",
-      "specifier": "@/modules/task-execution/infrastructure/childTaskLifecycleParticipant",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "why": "RFC-359 AC-1（命名债收尾 §5hj）：这条边**一直就在**（`server.ts` 的人工门续跑直接取 `resumeTaskProjection`），只是此前那个文件叫 `postgresqlChildTaskLifecycleParticipant.ts`，被 R1 当成 provider 命名基础设施让过去了（那类由 W5-T17 的 provider-命名文件账本管）。去掉前缀之后它落回 R1 的视野——**是判据看见了真相，不是新开的债**。随人工门续跑离开 legacy 层一起消失。",
-      "introducedByRFC": "RFC-359 AC-1（命名债收尾 §5hj）",
-      "removeAfterWave": "RFC-294 W4-E1（task-execution public/composition vertical-slice convergence）",
-      "findingId": "G-01",
-      "canonicalImportEdgeIds": [
-        "import:f99c53a251e4f255ed31"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#createChildTaskLifecycleParticipant"
       ],
       "canonicalFacadeIds": []
     }
@@ -7831,15 +7866,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:578930f44eaa797b76c40c0e516ed1aea92e7c58c5f17ecf2c6ea2c858cca4dd",
+    "sourceDigest": "sha256:6bba1a69f865a5e58c1d3177ed1a15c91e2c25818df3d29e371a0f3c25e33f09",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "ca5156017ee8d162b7bb5a578cc518186460cebf",
-    "contentDigest": "sha256:9f85328a75ae9de5838a25313e0be04ca0c035d72af95ec3054fe0ca53700844",
+    "currentSnapshotSha": "3246b8b4106622e7bdb44f25d410c313711e620e",
+    "contentDigest": "sha256:61c3761a11b963cff763394887bed2faec0701cbf2e01618d128b0c3b396e467",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

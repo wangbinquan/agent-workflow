@@ -76,7 +76,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'cli.test.ts: 2',
   'contracts/harness.ts: 1',
   'createindb-snapshot-parity.test.ts: 6',
-  'distill-session-capture.test.ts: 1',
+  // RFC-367 **销账**：`distill-session-capture.test.ts` 随被测对象（事后 opencode SQLite
+  // 走查）一并删除；蒸馏会话记录改由实时事件 sink 落库，新套件是
+  // `rfc367-distill-session-event-sink.test.ts`，走 describeEachProvider、不写死引擎。
   'e2e-sqlite-fixture-lock-contention.test.ts: 3',
   'fixtures/rfc322-cpu-probe.ts: 1',
   'fixtures/rfc338-blocking-maintenance-worker.ts: 1',
@@ -175,6 +177,7 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'migration-0220-rfc341-committed-delivery-fk-repair.test.ts: 1',
   'migration-0221-rfc342-memory-scope-move-events.test.ts: 1',
   'migration-0222-rfc341-collaboration-cutover.test.ts: 2',
+  'migration-0228-distill-source-kinds.test.ts: 2',
   'opencode-session-walk.test.ts: 1',
   'rerun-prior-output-e2e.test.ts: 1',
   'resume-multi-repo-rollback.test.ts: 1',

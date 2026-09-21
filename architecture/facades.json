@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 292,
+    "serviceFiles": 291,
     "thinFacades": 49
   },
   "entries": [
@@ -1072,11 +1072,12 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:237027e65851bf907a0e",
         "import:30c979fb8114e7c45873",
-        "import:32c80f7bbec8ec08d008",
         "import:3bdd0a3f60f431a57790",
         "import:5cd2429ca9f560a06c20",
         "import:9cd1ecd28bee8f231dc8",
+        "import:d37c9f82789cf492db72",
         "import:e49c91328fdbaa749ab7"
       ],
       "exportedSymbols": [
@@ -1157,9 +1158,7 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [
-        "import:2bfaaf344338a8f3fab0"
-      ],
+      "boundaryEdgeIds": [],
       "exportedSymbols": [
         "AgentProcessOutcome",
         "AgentProcessRequest",
@@ -3704,16 +3703,14 @@
     {
       "boundaryEdgeIds": [
         "import:05fe4f6fbe5724b98381",
+        "import:079166cc8e49ffebb3e4",
         "import:0d84849979600beb3392",
         "import:28490b02663597eaeebe",
         "import:3b0939b8480fceab955a",
         "import:508585b40e2cf04f1432",
-        "import:55e8e7319736fc529828",
         "import:55f7c3a1e3e1628e4302",
         "import:6086843b83980e7f72de",
-        "import:6d5a94d223636922c768",
         "import:70fef04c52ff0c283a17",
-        "import:933405a99ca17491e5e0",
         "import:9b40bf959bd20a789e88",
         "import:9b54bbf2ad1b84de8700",
         "import:ed4eeb7ac1111ebf2f6e"
@@ -3768,21 +3765,6 @@
       "removeAfterWave": "W4-E4b",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "boundaryEdgeIds": [],
-      "exportedSymbols": [
-        "CaptureDistillJobSessionResult",
-        "DISTILL_CAPTURE_FAILED_KIND",
-        "captureDistillJobSession"
-      ],
-      "file": "packages/backend/src/services/runtime/opencode/distillSessionCapture.ts",
-      "id": "facade:packages/backend/src/services/runtime/opencode/distillSessionCapture.ts",
-      "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/distillSessionCapture.ts#$file",
-      "removeAfterWave": "W4-E2",
-      "status": "legacy-implementation",
-      "targetContext": "memory",
       "targetLayer": "application"
     },
     {
@@ -4073,14 +4055,12 @@
       "boundaryEdgeIds": [
         "import:0f471184ca5f65924937",
         "import:2c57d5f26601e387e86e",
-        "import:7bd3f93dd694207b26f4",
         "import:878817dd026ba03d55c6",
         "import:9866049aeb621599bb0f",
         "import:a99307c8c8debf377c51",
         "import:b2ab14f8e45292d8b3f7",
-        "import:d0954856860ecf571010",
+        "import:b63768891ca64af1cb8d",
         "import:deaf92636d39c1f1d373",
-        "import:f06b8f7e6beb1bea9509",
         "import:fff3516f6ab19099a34d"
       ],
       "exportedSymbols": [
@@ -4091,9 +4071,6 @@
         "BusinessNodeSpawnContext",
         "DeclarationFace",
         "DeclaredRuntimeCapabilities",
-        "DistillSessionCaptureContext",
-        "DistillSessionCaptureSink",
-        "DistillSessionCapturedEvent",
         "FinalEventContext",
         "InventoryReadContext",
         "ListModelsOpts",
@@ -4442,8 +4419,13 @@
     {
       "boundaryEdgeIds": [
         "import:12d3f0f99705bcfcc7d3",
+        "import:204e3b60ca1ec9b64fc8",
+        "import:2a265061a5bc26fb13c3",
         "import:44aa22593d2ee03168f2",
-        "import:71ce3d2a59f1295300bb"
+        "import:5bf61284b1538459ddf4",
+        "import:71ce3d2a59f1295300bb",
+        "import:7c317ccd0062d9910fdb",
+        "import:7e05b891a85932c9f44d"
       ],
       "exportedSymbols": [
         "SessionCaptureIncompleteReason",
@@ -5050,22 +5032,30 @@
     {
       "boundaryEdgeIds": [
         "import:249d06f167e02a472939",
+        "import:24a9c3ea3be7f83239db",
         "import:2711368a4665ccb332af",
         "import:36fa4c83d3ffdf9f5e25",
+        "import:3abac1ba429377dd6f6e",
         "import:48b3c18a0fdb0377aa32",
         "import:53e55db700007e9b1478",
+        "import:61d4096cb57acaadd536",
         "import:8d997d1153638cbf6d9e",
+        "import:9f9ee23d0b828aefa094",
         "import:ab9070ad98812d5f5e5a",
         "import:b46f36cab99cedaaf41c",
+        "import:b81010afdf9fa4d0e839",
+        "import:c35fd8f01b06d7380c8c",
         "import:c5a217a7da3a23f11087",
         "import:cab426d1510e3863950c"
       ],
       "exportedSymbols": [
+        "MissingEnvelopeReason",
         "SystemAgentRunOptions",
         "SystemAgentRunResult",
         "SystemAgentRunStatus",
         "SystemAgentSeedFile",
         "assertSafeSeedPath",
+        "classifyMissingEnvelope",
         "emptySystemAgentOutputEvidence",
         "releaseSystemAgentScratch",
         "runSystemAgent"
@@ -5170,6 +5160,7 @@
         "import:a5e82a1ac5a6bab9b85d",
         "import:a6c457f3889b48ccb192",
         "import:a8d6e431aa2b91146f12",
+        "import:affddb28c51615635360",
         "import:b03db718805f7a7866e8",
         "import:b20c5073febb0f2fcfbe",
         "import:b5b002f79434bc4ab8c1",
@@ -6227,5 +6218,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:578930f44eaa797b76c40c0e516ed1aea92e7c58c5f17ecf2c6ea2c858cca4dd"
+  "sourceDigest": "sha256:6bba1a69f865a5e58c1d3177ed1a15c91e2c25818df3d29e371a0f3c25e33f09"
 }

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1713,
+    "entries": 1718,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -3202,7 +3202,7 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": false,
+        "event": true,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -3213,7 +3213,6 @@
         "audit",
         "authority",
         "authorization",
-        "event",
         "fenceOrOcc",
         "transaction"
       ],
@@ -12834,7 +12833,7 @@
     {
       "controls": {
         "audit": true,
-        "authority": "system",
+        "authority": "none-observed",
         "authorization": true,
         "event": true,
         "fenceOrOcc": false,
@@ -12844,6 +12843,7 @@
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/memory/application/distill/memoryDistiller.ts#runDistill",
       "missingControls": [
+        "authority",
         "fenceOrOcc",
         "transaction"
       ],
@@ -12856,7 +12856,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
+        "authorization": true,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -12867,7 +12867,6 @@
       "missingControls": [
         "audit",
         "authority",
-        "authorization",
         "fenceOrOcc",
         "transaction"
       ],
@@ -12984,6 +12983,31 @@
       },
       "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/memory/application/distill/schedule.ts#setMemoryDistillPolicyProvider",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#setMemoryDistillPolicyProvider",
+      "symbol": "setMemoryDistillPolicyProvider",
+      "targetContext": "memory",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/memory/application/distill/schedule.ts#StartLoopOptions",
       "missingControls": [
         "audit",
@@ -13071,6 +13095,31 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/memory/domain/distillAdmission.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/memory/domain/distillAdmission.ts#ADMITTED",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/domain/distillAdmission.ts#ADMITTED",
+      "symbol": "ADMITTED",
+      "targetContext": "memory",
+      "targetLayer": "domain"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -13120,23 +13169,22 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": false,
+        "event": true,
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/memory/infrastructure/memoryDistillSessionCapture.ts",
+      "file": "packages/backend/src/modules/memory/infrastructure/memoryDistillSessionEventSink.ts",
       "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/memory/infrastructure/memoryDistillSessionCapture.ts#createMemoryDistillSessionCapture",
+      "id": "mutation:packages/backend/src/modules/memory/infrastructure/memoryDistillSessionEventSink.ts#createMemoryDistillSessionEventSink",
       "missingControls": [
         "audit",
         "authority",
         "authorization",
-        "event",
         "fenceOrOcc",
         "transaction"
       ],
-      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillSessionCapture.ts#createMemoryDistillSessionCapture",
-      "symbol": "createMemoryDistillSessionCapture",
+      "ownerEntryId": "owner:packages/backend/src/modules/memory/infrastructure/memoryDistillSessionEventSink.ts#createMemoryDistillSessionEventSink",
+      "symbol": "createMemoryDistillSessionEventSink",
       "targetContext": "memory",
       "targetLayer": "infrastructure"
     },
@@ -32108,6 +32156,54 @@
       },
       "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#applyLogicalCheckReplacements",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#applyLogicalCheckReplacements",
+      "symbol": "applyLogicalCheckReplacements",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#applyLogicalColumnEnums",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#applyLogicalColumnEnums",
+      "symbol": "applyLogicalColumnEnums",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#applyPostgresqlIndexUpgrade",
       "missingControls": [
         "audit",
@@ -32143,6 +32239,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlAdditiveUpgrade",
       "symbol": "createPostgresqlAdditiveUpgrade",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlCheckUpgrade",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#createPostgresqlCheckUpgrade",
+      "symbol": "createPostgresqlCheckUpgrade",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -40940,7 +41061,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:578930f44eaa797b76c40c0e516ed1aea92e7c58c5f17ecf2c6ea2c858cca4dd",
+  "sourceDigest": "sha256:6bba1a69f865a5e58c1d3177ed1a15c91e2c25818df3d29e371a0f3c25e33f09",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -43434,8 +43555,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#2422:tasks",
-        "line": 2422,
+        "id": "task-authority:packages/backend/src/services/task.ts#2432:tasks",
+        "line": 2432,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -43450,8 +43571,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#2550:taskExecutionIntents",
-        "line": 2550,
+        "id": "task-authority:packages/backend/src/services/task.ts#2560:taskExecutionIntents",
+        "line": 2560,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -43466,8 +43587,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#2608:tasks",
-        "line": 2608,
+        "id": "task-authority:packages/backend/src/services/task.ts#2618:tasks",
+        "line": 2618,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -43482,8 +43603,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4457:tasks",
-        "line": 4457,
+        "id": "task-authority:packages/backend/src/services/task.ts#4467:tasks",
+        "line": 4467,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

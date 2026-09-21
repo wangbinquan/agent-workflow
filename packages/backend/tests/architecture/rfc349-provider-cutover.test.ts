@@ -35,7 +35,8 @@ const PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT = [
   'packages/backend/src/services/pendingRestore.ts -> @/platform/persistence/sqlite/systemProviderRestore :: SqlitePostRestoreRecovery',
   'packages/backend/src/services/resourceAcl.ts -> @/modules/resource-catalog/infrastructure/sqliteAclReadRepository :: export:getAclResourceAccessRow,export:getAclResourceAccessRowInTx,export:getAclResourceIdentityRowInTx,export:getAclResourceOwner,export:getAclResourceOwnerInTx,export:listAclResourceIdentityRowsByIds,export:listAclResourceIdentityRowsByIdsInTx,export:listAclResourceIdentityRowsByNames,export:listAclResourceIdentityRowsByNamesInTx,export:listOwnedAclResourceNames,export:loadAclResourceNamesByIds',
   'packages/backend/src/services/resourceAcl.ts -> @/modules/resource-catalog/infrastructure/sqliteResourceGrantRepository :: export:AclColumnRef,export:grantsOfResourceWhere,export:listGrantedResourceIds,export:listGrantedResourceIdsInTx,export:listResourceGrantUserIdsInTx,export:listResourceGrants,export:listWritableGrantedResourceIds,export:loadGrantLevel,export:visibleRowsCondition',
-  'packages/backend/src/services/runtime/opencode/distillSessionCapture.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase,openReadonlySqliteDatabase',
+  // RFC-367：`services/runtime/opencode/distillSessionCapture.ts` 随事后蒸馏会话走查一并删除
+  // （记录改由 runSystemAgent 的实时事件流经 memory 自己的 sink 落库），这条债销账。
   'packages/backend/src/services/runtime/opencode/sessionCapture.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase,openReadonlySqliteDatabase',
   'packages/backend/src/services/runtime/opencode/sessionWalk.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase',
   'packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts -> @/platform/persistence/sqlite/readonlySqliteDatabase :: ReadonlySqliteDatabase,openReadonlySqliteDatabase',

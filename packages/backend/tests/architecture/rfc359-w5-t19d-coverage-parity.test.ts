@@ -289,7 +289,9 @@ export const COVERAGE_PARITY_LEDGER: readonly string[] = [
   // 这一行的性质已经从「强侧独自变强」变成「两侧同步」。
   // 剩下的 9 是 PG 侧多出来的机制专属判据（迁移生成代、schema 锁作用域、计划审计…），
   // SQLite 侧没有对应物；真正的收敛要等那些机制本身消失，不是再补 SQLite 侧的空壳用例。
-  'platform/persistence/Migrator: sqlite 3/2, postgresql 12/11',
+  // RFC-366（2026-09-21）：migration 0228 给 memories.source_kind 扩容，SQLite 侧迁移
+  // 引用 +1（3/2 → 4/3）；PostgreSQL 侧由 V3 upgrade edge 承接，计数不变。
+  'platform/persistence/Migrator: sqlite 4/3, postgresql 12/11',
 ]
 
 /** plan §5 T19d 的「阈值」：两侧 ref 差到这个数就算倒挂，要么补测试、要么进下面的观察名单。 */
@@ -336,7 +338,7 @@ export const INVERTED_PAIRS: readonly string[] = [
   //（新基线 `rfc359-w5hn-workflow-route-launch-provider-parity` 归在 SQLite 一侧）。
   'platform/persistence/LogicalSource: 12 vs 7',
   // 同上：原文件落位使这一既有引用差首次进入观察名单，阈值保持不变。
-  'platform/persistence/Migrator: 3 vs 12',
+  'platform/persistence/Migrator: 4 vs 12',
 ]
 
 interface Side {

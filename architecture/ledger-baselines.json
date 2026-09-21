@@ -125,8 +125,11 @@
       "id": "rfc294-review-off-dag-offered-edges",
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
-      "baseline": 39,
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。 （RFC-359 AC-1 第 13 刀收尾：`/api/tasks` 的两个 provider 绑定合成一个中立工厂 `createTaskRouteOperations`，两份 provider 命名文件退役，这一对随之销账。）基线 41 → 39。"
+      "baseline": 41,
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。 （RFC-359 AC-1 第 13 刀收尾：`/api/tasks` 的两个 provider 绑定合成一个中立工厂 `createTaskRouteOperations`，两份 provider 命名文件退役，这一对随之销账。）基线 41 → 39。",
+      "allowGrowth": {
+        "why": "RFC-366 + RFC-367（2026-09-21，同一次推送里的两个 RFC，账本增量互相交织，按队友与我的约定合记一条）：RFC-366 新增执行结束记忆提炼的信号源（agent-run / task-run）、准入门与观察者装配；RFC-367 把记忆蒸馏器迁到共享的 `runSystemAgent` 运行原语、把候选解析抽成独立纯函数文件、新增实时会话事件 sink，并退役事后 opencode SQLite 走查。两者合起来新增了若干顶层符号、装配点与跨 context 观察边；逐条越界边已各自入 commons-debt（R1 归 RFC-366、R2 四条归 RFC-367）。下一个不涨的 commit 会把本许可判为过期并强制清理。"
+      }
     },
     {
       "id": "rfc294-review-unconsumed-public-symbols",
@@ -342,7 +345,7 @@
       "id": "rfc349-provider-specific-business-dependencies",
       "file": "packages/backend/tests/architecture/rfc349-provider-cutover.test.ts",
       "symbol": "PROVIDER_SPECIFIC_BUSINESS_DEPENDENCY_DEBT",
-      "baseline": 24,
+      "baseline": 23,
       "why": "RFC-349 AC-11：application/domain/public/routes/services 中仍具名导入或转出 SQLite/PostgreSQL adapter 的精确存量。它们不是推荐入口；新业务必须消费 owner-owned closed port，账本只许随兼容层清偿而下降。 RFC-355 T7：删掉 `services/intent/{applyChangeset,postgresqlApplyChangeset}.ts` 两个兼容门面（装配收进 modules/intent/composition），73 → 68。 RFC-357 PR-1：`services/taskOperations.ts` 整文件删除，它对 `legacySqliteTransportMechanisms` 的那条具名依赖随之出账，68 → 67。 RFC-359 W1-T2a：`services/questionDispatchComposition.ts` facade 改指 provider-中立的 `questionDispatchCommand`，67 → 66。 RFC-359 W1-T2b：`services/clarifyDecisionComposition.ts` facade 改指 provider-中立的 `clarifyDecisionCommand`，66 → 65。 RFC-359 W1-T2c：`services/reviewDecisionComposition.ts` facade 改指 provider-中立的 `reviewDecisionCommand`，`services/reviewMutationCoordinator.ts` 改依赖中立的 `reviewMutationScope`，65 → 63。 RFC-359 W4-B1 批 1：services/task.ts → branchTraceSnapshotReader 不再 provider 专属，63 → 62。 RFC-359 W4-B4 批 c：identity-access 公共面改为只导出中立的 DrizzleOidcProviderRepository，public → provider 适配器的两条债与 services/oidcProviders 那条随之还清，58 → 55。 RFC-359 W4-D24：`services/startTaskDeps.ts` 的租约依赖不再是 provider 专属，50→49。 RFC-359 W4-D26：`SqliteHumanGateOperationStore` 随手工提问写面合一整份退役，`humanGateComposition` 对它的 provider 具名依赖随之消失，49 → 48。 RFC-359 W4-D27：任务执行资源快照绑定合一，`services/execution/taskExecutionResources.ts` 对两份 provider 绑定的具名依赖并成一条中立导出，48 → 46。 RFC-359 W4-D28b：同步 owned-mutation 网关（`composition/sqliteOwnedTaskMutation`）整体退役，`public/operations.ts` 与 `public/participants.ts` 对它的两条具名依赖随之出账，46 → 44。。RFC-359（2026-09-13）28 → 27：退役 `services/bundle/postgresqlApply.ts` —— 一条 4 行的 `export *` 兼容门面，全 src 零 importer（plan §5du）。RFC-359（plan §5dy）27 → 25：通用 bundle 引擎的 legacy 依赖表随引擎退役，它名下那两条 provider 专属业务依赖（`createSqliteCapabilityTemplatePackageCommitSync` / `getAclResourceOwnerInTx`）一并销账。RFC-359 AC-1（第 11 刀）24 → 25：cancel 合一后 `services/task.ts` 的薄壳要 import 共用实现，而共用实现所在的文件名仍带 `postgresql` 前缀（plan §5hj 记在案的命名债，实现本身是 provider 中立的），于是被判据记成一条 provider 专属依赖。薄壳删掉或文件改名，两件事任意一件发生它就消失。第 11 刀下半薄壳删除后回落 25 → 24。"
     },
     {
@@ -811,8 +814,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1713,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1718,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-366 + RFC-367（2026-09-21，同一次推送里的两个 RFC，账本增量互相交织，按队友与我的约定合记一条）：RFC-366 新增执行结束记忆提炼的信号源（agent-run / task-run）、准入门与观察者装配；RFC-367 把记忆蒸馏器迁到共享的 `runSystemAgent` 运行原语、把候选解析抽成独立纯函数文件、新增实时会话事件 sink，并退役事后 opencode SQLite 走查。两者合起来新增了若干顶层符号、装配点与跨 context 观察边；逐条越界边已各自入 commons-debt（R1 归 RFC-366、R2 四条归 RFC-367）。下一个不涨的 commit 会把本许可判为过期并强制清理。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -839,15 +845,21 @@
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
-      "baseline": 494,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
+      "baseline": 496,
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
+      "allowGrowth": {
+        "why": "RFC-366 + RFC-367（2026-09-21，同一次推送里的两个 RFC，账本增量互相交织，按队友与我的约定合记一条）：RFC-366 新增执行结束记忆提炼的信号源（agent-run / task-run）、准入门与观察者装配；RFC-367 把记忆蒸馏器迁到共享的 `runSystemAgent` 运行原语、把候选解析抽成独立纯函数文件、新增实时会话事件 sink，并退役事后 opencode SQLite 走查。两者合起来新增了若干顶层符号、装配点与跨 context 观察边；逐条越界边已各自入 commons-debt（R1 归 RFC-366、R2 四条归 RFC-367）。下一个不涨的 commit 会把本许可判为过期并强制清理。"
+      }
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5332,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5344,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-366 + RFC-367（2026-09-21，同一次推送里的两个 RFC，账本增量互相交织，按队友与我的约定合记一条）：RFC-366 新增执行结束记忆提炼的信号源（agent-run / task-run）、准入门与观察者装配；RFC-367 把记忆蒸馏器迁到共享的 `runSystemAgent` 运行原语、把候选解析抽成独立纯函数文件、新增实时会话事件 sink，并退役事后 opencode SQLite 走查。两者合起来新增了若干顶层符号、装配点与跨 context 观察边；逐条越界边已各自入 commons-debt（R1 归 RFC-366、R2 四条归 RFC-367）。下一个不涨的 commit 会把本许可判为过期并强制清理。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,14 +879,17 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4766,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4778,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-366 + RFC-367（2026-09-21，同一次推送里的两个 RFC，账本增量互相交织，按队友与我的约定合记一条）：RFC-366 新增执行结束记忆提炼的信号源（agent-run / task-run）、准入门与观察者装配；RFC-367 把记忆蒸馏器迁到共享的 `runSystemAgent` 运行原语、把候选解析抽成独立纯函数文件、新增实时会话事件 sink，并退役事后 opencode SQLite 走查。两者合起来新增了若干顶层符号、装配点与跨 context 观察边；逐条越界边已各自入 commons-debt（R1 归 RFC-366、R2 四条归 RFC-367）。下一个不涨的 commit 会把本许可判为过期并强制清理。"
+      }
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 292,
+      "baseline": 291,
       "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
@@ -902,12 +917,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24816,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24862,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-366 + RFC-367（2026-09-21，同一次推送里的两个 RFC，账本增量互相交织，按队友与我的约定合记一条）：RFC-366 新增执行结束记忆提炼的信号源（agent-run / task-run）、准入门与观察者装配；RFC-367 把记忆蒸馏器迁到共享的 `runSystemAgent` 运行原语、把候选解析抽成独立纯函数文件、新增实时会话事件 sink，并退役事后 opencode SQLite 走查。两者合起来新增了若干顶层符号、装配点与跨 context 观察边；逐条越界边已各自入 commons-debt（R1 归 RFC-366、R2 四条归 RFC-367）。下一个不涨的 commit 会把本许可判为过期并强制清理。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:578930f44eaa797b76c40c0e516ed1aea92e7c58c5f17ecf2c6ea2c858cca4dd",
+    "sourceDigest": "sha256:6bba1a69f865a5e58c1d3177ed1a15c91e2c25818df3d29e371a0f3c25e33f09",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +938,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ca5156017ee8d162b7bb5a578cc518186460cebf",
-    "contentDigest": "sha256:ffe0c7ee21049ba8c1987ab1bb0a0108c8d00a2320800bf0899d2883e3a41ba6",
+    "currentSnapshotSha": "3246b8b4106622e7bdb44f25d410c313711e620e",
+    "contentDigest": "sha256:edf6a585a45a963867db39df2803dfee4e9e726ff5ee86b01d120c6e0d2788b7",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

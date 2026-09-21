@@ -344,6 +344,19 @@ export function offDagOfferedEdges(
  */
 export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
   {
+    from: 'packages/backend/src/modules/memory/infrastructure/memoryDistillSessionEventSink.ts',
+    to: 'runtime-management',
+    why: 'RFC-367 把蒸馏会话记录从「事后按 protocol 取 driver 走查 opencode SQLite」改成「实时事件 sink」，于是 memory 不再需要 runtime driver，只剩下一个常量依赖：capture-failed marker 行的 kind（`DISTILL_CAPTURE_FAILED_KIND`）。该常量的中立定义点在 runtime-management 的 public types，会话页投影 `distillQueries.ts` 一直从那里取，本文件写 marker 行时取同一个值以免两处字面量漂移。memory→runtime-management 不在 design §3.1 的 offered DAG 上，但这是一条纯常量的 public 依赖，比退回自带字面量更不容易坏。',
+    removeAfterWave:
+      'W4-C（system-agent 会话记录归位：marker kind 随会话捕获契约一并落到共用位置）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts',
+    to: 'memory',
+    why: 'RFC-366 给 task-execution 加了「agent 运行结束」这个中性事实的对外通知口（application/ports/agentRunSettledObserver），本文件是把它接到 memory exact public participant `MemoryDistillEnqueuer` 上的 adapter。TE→memory 不在 design §3.1 的 offered DAG 上，但同一对已有先例在账（taskRouteOperations.ts|memory、collaboration/application/taskFeedback.ts|memory）——本刀只是同一条未收敛的 context 对上多一个精确文件，形态没变。目标形态是 task-execution 经自己的 port 拿这份入队能力，属 TE 侧 adapter 收口。',
+    removeAfterWave: 'W4-E1（task-execution vertical slice：执行结束通知改经 TE 侧 memory port）',
+  },
+  {
     from: 'packages/backend/src/modules/task-execution/composition/providerRuntime.ts',
     to: 'knowledge-evolution',
     why: 'RFC-353 T5 把 fusion 的端口从 `modules/memory/public/fusion.ts` 迁到它真正的 owner knowledge-evolution（RFC-294 design §638：memory 的禁止清单第一条就是「fusion engine」）。这三个文件是 task-execution 实现 KE required `FusionEngineTaskOperations` 的 exact adapter——「消费者实现提供方的合同」本来就不在 design §3.1 的 offered DAG 上；迁移前它们指向 memory、同样在账；本刀只是把边的终点换成正确的 owner，形态与条数都没变。',
