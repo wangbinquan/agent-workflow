@@ -33,7 +33,7 @@
   T5 实时事件 sink / T6 补问循环 / T7 退役事后 SQLite 走查 / T8 会话页 `promptText` /
   T9 迁 `runFn` 缝 / T9b 账本重采（`5b98bd061`）。与 RFC-366 同树协作、各自提交最后一起推。
 
-## 2026-09-21 RFC-365 实现候选：Event Automation target providers
+## 2026-09-21 RFC-365 完成：Event Automation target providers
 
 RFC-365 T2～T6 已按“保留全部现合法输入”完成实现候选：Event Center 现拥有唯一四臂 renderer、
 durable origin/work intent 与 claim-fenced rule/delivery settle；Task Execution / Digital Employee 各自提供
@@ -44,8 +44,15 @@ server、SQLite CLI、PostgreSQL daemon 三 roots 显式装配两 providers、IA
 intent store；observation-only composition 明示能力。Integration dispatcher 的 EC union target switch、
 work-start capability probe 与 root callback 已删除，code-host WebhookTrigger 独立链保留。合同不增加
 Task inputs 256 上限，不改变 UTF-16 限额、Agent 空字段省略/allowClarify 或 DE manifest/value/body/external-id
-判据。SQLite targeted suite、typecheck 已通过；canonical、补充 targeted gates 与 exact-SHA hosted CI 待收口。
-本项只抵扣 RFC-294 W4-E9 的 Event target slice，Reaction、W9 与完整 E9 继续开放。
+判据。
+
+推送链：`a8b1add02`（内容笔）→ `95683855f`（退一次性 allowGrowth + 修正 sourceDigest）→
+`5582f20b3`（补 7 处只在 CI 上才红的连带门与源码锁：preflight capability 账本、RFC-349
+schema/source/backup 计数 188→189 / 182→183、functional-evidence oracle、upgrade-rolling
+228→229、migration-0228 链尾、work-start-bind 源码锁）→ `04934aa0d`（capability-compatibility
+债 +1 带 allowGrowth）→ `4796407fa`（退该许可）；exact-SHA `4796407fa` 的 CI run `35610192882`
+**46/46 success**，`integration-opencode` 同 SHA success。本项只抵扣 RFC-294 W4-E9 的 Event
+target slice，Reaction、W9 与完整 E9 继续开放。
 
 ## 2026-09-21 RFC-335 收口记账（工作 2026-08-28 已落地，本轮补 T10）
 
@@ -143,8 +150,8 @@ design.md §11.1，实现期不要把 AC 改成断言 `memories` 表。
 
 ## 进行中 RFC
 
-（无——RFC-367 已于 2026-09-21 完成收口，见顶部条目；RFC-294 总纲在索引中保持 In Progress，
-RFC-365 实现候选由其会话自行追踪。）
+（无——RFC-367 与 RFC-365 均已于 2026-09-21 完成收口，见顶部条目；RFC-294 总纲在索引中保持
+In Progress。）
 
 ## 2026-09-21 修复：记忆卡片列表横排溢出（CSS 选择器列表被拆散）
 

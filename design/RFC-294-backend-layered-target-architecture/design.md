@@ -9,7 +9,7 @@
 > 同步纯函数不因此改为异步。RFC-360/361/362 已于 2026-09-20 完成批准范围：E4b 全纵切、EC provider 与 Task/SC 合同准备。E1、完整 E9 和 W5 等余项保持开放。
 
 > 后继 RFC-363/364 已完成 Task/SC 启动生产纵切与 MCP diagnostics；RFC-365 的 Event target providers
-> 已于 2026-09-21 按保留现能力的修订合同完成实现候选，等待 hosted exact-SHA 取证。
+> 已于 2026-09-21 按保留现能力的修订合同完成并置 Done（hosted 取证 `4796407fa` / CI run `35610192882`）。
 > Event 合同保留当前 UTF-16、无 Task inputs 256 上限、DE field grammar 与首次 admission 时机；只关闭
 > E9 Event target slice，Reaction 与完整 E9 继续开放。
 

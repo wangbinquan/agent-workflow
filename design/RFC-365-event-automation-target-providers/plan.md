@@ -1,6 +1,6 @@
 # RFC-365 实施计划
 
-状态：In Progress；T1 兼容性对拍已于 2026-09-20 完成，2026-09-21 按“保留全部现合法输入”冻结合同并完成 T2～T6 实现；等待 exact-SHA hosted CI 后正式置 Done。
+状态：Done（2026-09-21）；T1 兼容性对拍 2026-09-20 完成，2026-09-21 按“保留全部现合法输入”冻结合同并完成 T2～T6 实现；exact-SHA `4796407fa` 的 CI run `35610192882` 46/46 success。
 
 | 任务 | 交付物                                                               | 前置 / 退出条件                                                  |
 | ---- | -------------------------------------------------------------------- | ---------------------------------------------------------------- |
@@ -20,7 +20,7 @@ T1 可与 RFC-363/364 独立准备；合同兼容未定时 T2 以后暂停，继
 - [x] origin/digest/确定性 key 与旧 receipt 对齐；双库 harness 覆盖 crash/replay、陈旧 claim 和并发线性化。
 - [x] TE/DE providers 各 1，所有方法真实消费；root 无业务 target switch。
 - [x] Integration WebhookTrigger 仍走自身链路；Reaction 和 W9 无范围外改动。
-- [ ] owned debt 出账、最终 exact-SHA Main CI success；RFC-294 仍 In Progress。
+- [x] owned debt 出账、最终 exact-SHA Main CI success（`4796407fa`，run `35610192882` 46/46；`integration-opencode` 同 SHA success）；RFC-294 仍 In Progress。
 
 ## T1 完成（2026-09-20）
 

@@ -1,6 +1,6 @@
 # RFC-365：Event Automation target providers 拆分
 
-- 状态：In Progress（2026-09-21；T2～T6 实现完成，等待 exact-SHA hosted CI 终态取证）。
+- 状态：Done（2026-09-21；T2～T6 实现完成，exact-SHA `4796407fa` 的 CI run `35610192882` 46/46 success）。
 - 母项：RFC-294 W4-E9 的 Event target slice；RFC-361 仅已完成 Execution Contract providers。
 - 前置：W4-E0/C 已完成；Task provider 接线与 RFC-363 的 launch seam 协调。
 - 源码基线：`cae3e4ea2579bc1d13ff34008fa011d4073d8b59`，见 [source-baseline.json](./source-baseline.json)。
