@@ -319,8 +319,17 @@ design.md §11.1，实现期不要把 AC 改成断言 `memories` 表。
 - **[RFC-368 Reaction 执行合同切换](design/RFC-368-reaction-execution-cutover/proposal.md)（Draft，
   2026-09-22 落档，待用户批准进入实现）** —— RFC-294 W4-E9 的 E9-C，按 `RFC-361 plan §2` 的后继
   顺序（E9-B 已由 RFC-365 关闭）。三件套已写完；**尚未动任何生产代码**。
-  批准前需答复 `plan.md §4` 的一条开放项（C1-R3 栈帧行是否整行丢弃）与 `design.md §2` 的
-  四条偏离项 D1–D4。
+  **设计门 r1 已跑**（Codex 额度用尽到 9/27，按 dev-gotchas 与 RFC-367 先例改用 Claude 子代理）：
+  **FAIL / 9 P1 + 6 P2 + 2 P3，已逐条回写三件套**（处置记录见 `plan.md §5`）。核心教训：
+  退役 `execution-launch` outbox 等于把它承担的**四件事**（租约 / 单行重试 / 终结兜底 / 驱动循环）
+  一起退役，而初稿只补了一件。四条关键断言我已当场核实成立——`listRunningRounds` 只选
+  `state='running'`、`planOneReaction` 遇 `activeRoundId!==null` 直接跳过（新状态 `dispatching`
+  会静默卡死案例）、`runOneOutbox` 被 `osWorker` 与 `activityOperations` **两个**循环调用、
+  以及初稿 AC-1 盯错了文件（DE-owned port 本来就是 typed 的，JSON 串在 adapter 与 TE participant 上）。
+  用户四项裁决已写入：admission **事务内预分配 executionRef**（一举解掉 P1-2/P1-3/P1-5）/
+  反馈与诊断经 **DE-owned reader port** 解引用 / **顺带修取消语义**（今天取消被当 failed、
+  白烧一次重试预算）/ **顺带接上 `cancel`**（今天 `terminateCase` 不停在跑的 agent）。
+  批准前只剩一条开放项：`plan.md §4` 的 C1-R3（裁剪时栈帧行怎么处理）。
 - RFC-294 总纲在索引中保持 In Progress。
 
 ## 2026-09-21 修复：记忆卡片列表横排溢出（CSS 选择器列表被拆散）
