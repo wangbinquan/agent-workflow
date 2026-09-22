@@ -117,7 +117,11 @@ export function composeReactionExecutionPortV1(deps: {
         case 'completed':
           return { kind: 'completed', outputJson: snapshot.outputJson, metering: snapshot.metering }
         case 'stopped':
-          return { kind: 'stopped', receipt: stopReceipt(executionRef), metering: snapshot.metering }
+          return {
+            kind: 'stopped',
+            receipt: stopReceipt(executionRef),
+            metering: snapshot.metering,
+          }
         case 'failed':
           return {
             kind: 'failed',
