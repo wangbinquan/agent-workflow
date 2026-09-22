@@ -328,12 +328,27 @@ function memberId(room: Room, displayName: string): string {
   return member.id
 }
 
-/** 人在房间里发言（夹具用；用户面的发言路径由 WG-29 亲自走界面）。 */
+/** 人在房间里发言（夹具用；用户面的发言路径由 WG-29 亲自走界面）。
+ *
+ *  房间写是**无主写**：引擎正持有 owner（`claimed`）时它必须让路，服务端回
+ *  409 `task-execution-stale-owner`（语义见 `ownedTaskExecution.assertTaskOwnerlessTx`
+ *  与 `fenceTaskWrite` 的「显式上下文 > 环境上下文 > 无主围栏」）。上一条消息会把
+ *  leader-idle 的任务唤醒、引擎随即 drive 并 claim，这个窗口在 CI 高负载下会变宽——
+ *  2026-09-21 run 35666827476 的 WG-31 就是在这条闸上翻红的（本地空载整文件跑不出）。
+ *  人遇到它也是重试一下，夹具照做；但**只**对这个码重试，别的错照旧当场红。
+ */
 async function postMessage(taskId: string, body: string): Promise<void> {
-  await api(`/api/workgroup-tasks/${encodeURIComponent(taskId)}/messages`, {
-    method: 'POST',
-    body: JSON.stringify({ body }),
-  })
+  const path = `/api/workgroup-tasks/${encodeURIComponent(taskId)}/messages`
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const res = await rawPost(path, { body })
+    if (res.status === 201) return
+    if (res.status === 409 && res.code === 'task-execution-stale-owner') {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      continue
+    }
+    throw new Error(`post message ⇒ ${res.status} ${res.text}`)
+  }
+  throw new Error('post message ⇒ 引擎一直持有 owner，40 次重试都没让路')
 }
 
 /** 给人类成员 @owner 开一张 dispatched 卡，返回卡 id。 */
