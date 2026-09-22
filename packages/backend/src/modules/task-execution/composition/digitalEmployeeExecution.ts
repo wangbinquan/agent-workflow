@@ -9,6 +9,7 @@ import {
   DAEMON_RESTART_ERROR_SUMMARY,
   isTerminalTaskStatus,
   type StartTask,
+  type TaskStatus,
   type WorkflowDefinition,
   WorkflowDefinitionSchema,
 } from '@agent-workflow/shared'
@@ -287,6 +288,32 @@ export async function inspectDigitalEmployeeHumanReviewState(
   return 'planning'
 }
 
+/**
+ * 「这个执行还活着吗」的**唯一判据**。
+ *
+ * 两个调用点必须共用它，否则会各自漂开：
+ *   - `inspect`：活着 ⇒ 报 `pending`，数字员工继续等；
+ *   - `launch`：这个 ReactionRound 已经有一个活着的执行 ⇒ 复用它，不再建第二个任务。
+ *
+ * 注意 `interrupted` **是**终态（`shared/lifecycle.ts` 的 `TERMINAL_TASK_STATUSES` 含它），
+ * 但「daemon 重启打断、自动恢复还没被停用」那一种是**要回来的**，必须算活着。这恰恰是崩溃
+ * 窗口里那个孤儿的状态：只看 `isTerminalTaskStatus` 会把它判成死的，于是又起一个新任务。
+ */
+export function digitalEmployeeExecutionIsLive(input: {
+  readonly status: TaskStatus
+  readonly errorSummary: string | null
+  readonly autoRecoverySuspended: boolean
+}): boolean {
+  if (
+    input.status === 'interrupted' &&
+    input.errorSummary === DAEMON_RESTART_ERROR_SUMMARY &&
+    !input.autoRecoverySuspended
+  ) {
+    return true
+  }
+  return !isTerminalTaskStatus(input.status)
+}
+
 export interface DigitalEmployeeExecutionDependencies {
   readonly appHome: string
   /**
@@ -341,6 +368,19 @@ export interface DigitalEmployeeExecutionDependencies {
       readonly roundRef: string | null
       readonly autoRecoverySuspended: boolean
     } | null>
+    /**
+     * 按 ReactionRound 反查已经起过的执行（`tasks.digital_employee_round_id`，
+     * 索引 `idx_tasks_digital_employee_round`）。`launch` 的幂等判据靠它。
+     */
+    findByRound(roundRef: string): Promise<
+      readonly {
+        readonly taskId: string
+        readonly status: TaskStatus
+        readonly errorSummary: string | null
+        readonly autoRecoverySuspended: boolean
+        readonly startedAt: number
+      }[]
+    >
   }>
   /**
    * RFC-359：计划人审闸门的状态读。SQLite 侧的 composition 直接拿 db 算，PG 侧这份 deps 不带 db，
@@ -397,6 +437,29 @@ export function composeDigitalEmployeeExecution(
     async launch(planJson: string, attemptJson: string) {
       const plan = planSchema.parse(JSON.parse(planJson) as unknown)
       const attempt = attemptSchema.parse(JSON.parse(attemptJson) as unknown)
+      // RFC-294 E9-C 前置小修 —— **launch 对同一个 ReactionRound 幂等**。
+      //
+      // 数字员工侧的调用序列是「`launch()` 建任务 → `markRoundRunning()` 记下 executionRef」
+      // （`digital-employee/application/runtimeService.ts:2587-2588`），两步之间没有事务；
+      // 而「这一轮归谁做」只靠 outbox 行 60s 的租约兜着。daemon 在这中间重启，重启后那行
+      // 租约已过期会被重新领走，于是同一个 round 起出第二个任务：第一个从此无人 inspect /
+      // cancel（round 只记得住第二个），却继续吃 Case 的时长与 token 预算，并且和新任务
+      // **写同一个 worktree**（同一个 round 解析出同一个 scene）。
+      //
+      // 反查落在这里而不是数字员工侧，是因为知识在这边：每次启动都会把 round 写进任务行
+      // （`services/task.ts:2441` 的 `digitalEmployeeRoundId`），还带着索引；数字员工那边
+      // 在 `markRoundRunning` 之前手上什么都没有。
+      //
+      // 重试路径天然不受影响：重试只在 `inspect` 判出终态失败之后发生，那时旧任务已经不活了。
+      const launchedForRound = await deps.executionMetadata.findByRound(plan.roundRef)
+      const live = [...launchedForRound]
+        .filter((candidate) => digitalEmployeeExecutionIsLive(candidate))
+        .sort(
+          (left, right) =>
+            left.startedAt - right.startedAt || left.taskId.localeCompare(right.taskId),
+        )
+        .at(0)
+      if (live !== undefined) return { executionRef: live.taskId }
       const implementation = executionContractImplementationSchema.parse(
         JSON.parse(plan.implementationJson) as unknown,
       )
@@ -624,13 +687,14 @@ export function composeDigitalEmployeeExecution(
       }
       const executionMetadata = await deps.executionMetadata.load(executionRef)
       if (
-        task.status === 'interrupted' &&
-        task.errorSummary === DAEMON_RESTART_ERROR_SUMMARY &&
-        executionMetadata?.autoRecoverySuspended !== true
+        digitalEmployeeExecutionIsLive({
+          status: task.status,
+          errorSummary: task.errorSummary,
+          autoRecoverySuspended: executionMetadata?.autoRecoverySuspended === true,
+        })
       ) {
         return { kind: 'pending', executionRef }
       }
-      if (!isTerminalTaskStatus(task.status)) return { kind: 'pending', executionRef }
       const usage = (await deps.resourceUsage.read(executionRef)) ?? {
         effectiveRunningMs: 0,
         totalTokens: 0,
@@ -774,6 +838,19 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
           .where(eq(tasks.id, taskId))
           .get()
         return row ?? null
+      },
+      async findByRound(roundRef: string) {
+        return await db
+          .select({
+            taskId: tasks.id,
+            status: tasks.status,
+            errorSummary: tasks.errorSummary,
+            autoRecoverySuspended: tasks.autoRecoverySuspended,
+            startedAt: tasks.startedAt,
+          })
+          .from(tasks)
+          .where(eq(tasks.digitalEmployeeRoundId, roundRef))
+          .all()
       },
     },
     humanReview: {

@@ -846,8 +846,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5385,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5386,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-294 E9-C 前置小修（2026-09-22）一次性 +1：`cli/postgresqlDaemonApplication.ts` 改为复用 `composeDatabaseDigitalEmployeeExecutionPorts` 的中立 `executionMetadata`（替掉它自己抄的那份 `load`），新增一条指向该导出的跨 context 边；同刀新增导出 `digitalEmployeeExecutionIsLive`——`inspect` 与 `launch` 共用的活性判据，两个调用点漂开就会让「一次 Reaction 起两个任务」原样回来。下一笔不涨的提交退役本许可。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +870,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4802,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4803,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-294 E9-C 前置小修（2026-09-22）一次性 +1：`cli/postgresqlDaemonApplication.ts` 改为复用 `composeDatabaseDigitalEmployeeExecutionPorts` 的中立 `executionMetadata`（替掉它自己抄的那份 `load`），新增一条指向该导出的跨 context 边；同刀新增导出 `digitalEmployeeExecutionIsLive`——`inspect` 与 `launch` 共用的活性判据，两个调用点漂开就会让「一次 Reaction 起两个任务」原样回来。下一笔不涨的提交退役本许可。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +908,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24892,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24893,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-294 E9-C 前置小修（2026-09-22）一次性 +1：`cli/postgresqlDaemonApplication.ts` 改为复用 `composeDatabaseDigitalEmployeeExecutionPorts` 的中立 `executionMetadata`（替掉它自己抄的那份 `load`），新增一条指向该导出的跨 context 边；同刀新增导出 `digitalEmployeeExecutionIsLive`——`inspect` 与 `launch` 共用的活性判据，两个调用点漂开就会让「一次 Reaction 起两个任务」原样回来。下一笔不涨的提交退役本许可。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:11be95dd7d90e6736bdd6c271e366661b34b80f214c57bfcf1fe7df801c3c63b",
+    "sourceDigest": "sha256:6e18f2581d3357f8d6270ba1d1ec147eb6e1e7d933c225a3eaced5c806e533dc",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +929,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "32c0b945cd0e00c9b83dad9cbc588c3cafc5f130",
-    "contentDigest": "sha256:f19fd4d675badaee08ff24e43ce1a60ae1f9afd5fe2bb4526d4234c7966afeda",
+    "currentSnapshotSha": "56ef083f79f7ce25c2b8baf12929e0db3cdfc0e3",
+    "contentDigest": "sha256:c16bd05b613032cdae74ad2eff76c7361585d1db6f7fb090cdaed4fd296ea0de",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

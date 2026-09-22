@@ -31,7 +31,6 @@ import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import type { Config } from '@agent-workflow/shared'
 import { join } from 'node:path'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
-import { eq } from 'drizzle-orm'
 
 import { SYSTEM_USER_ID, type Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
@@ -99,7 +98,6 @@ import {
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
-import { tasks } from '@/db/schema'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
@@ -151,6 +149,7 @@ import {
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { ensureDigitalEmployeeHostWorkflow } from '@/modules/task-execution/composition/actionExecutionRunners'
 import {
+  composeDatabaseDigitalEmployeeExecutionPorts,
   composeDigitalEmployeeExecution,
   inspectDigitalEmployeeHumanReviewState,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
@@ -1484,19 +1483,10 @@ export async function composePostgresqlApplication(
     workflows: {
       get: (id) => classicCatalogs.workflow.queries.get(authorityFor(systemActor), { id }),
     },
-    executionMetadata: {
-      async load(taskId) {
-        const row = await input.db
-          .select({
-            roundRef: tasks.digitalEmployeeRoundId,
-            autoRecoverySuspended: tasks.autoRecoverySuspended,
-          })
-          .from(tasks)
-          .where(eq(tasks.id, taskId))
-          .get()
-        return row ?? null
-      },
-    },
+    // 这两个读点（按 taskId 取 round/恢复开关、按 round 反查已起过的执行）在两个引擎上
+    // 逐字相同，装的就是同一份中立实现——此前 PG 侧抄了一份 `load`，而 E9-C 前置小修要加的
+    // `findByRound` 一旦也各抄一份，`launch` 的幂等判据就会在两个引擎上各修一次。
+    executionMetadata: composeDatabaseDigitalEmployeeExecutionPorts(input.db).executionMetadata,
     // RFC-359：计划人审闸门的状态读装的是与 SQLite 侧**同一个**中立实现；此前 PG 侧根本没有这个
     // 方法，闸门只能按 round 状态推断、永远报不出 `waiting`（同一个案子两个引擎显示不同）。
     humanReview: {

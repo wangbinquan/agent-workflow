@@ -1,5 +1,52 @@
 # 当前执行状态
 
+## 2026-09-22 E9-C 前置小修：一次 Reaction 不得启动出两个任务
+
+用户按 RFC-294 下一步选了 E9-C，并要求「先看证据再决定怎么修」。先复现、给证据，再按用户裁决
+出独立小修（不等 RFC-368）。
+
+**缺陷**：`runtimeService.ts:2587-2588` 的 `launch()` → `markRoundRunning()` 两步之间没有事务，
+而「这一轮归谁做」只靠 outbox 行 60s 的租约兜着（同文件 `:538`）；`claimOutbox` 的重领条件是
+`state='claimed' AND claim_expires_at <= now`（`runtimeStore.ts:1113-1121`）。daemon 在这两行之间
+重启，重启后那行租约已过期会被重新领走 → **同一个 round 起出第二个任务**。后果：第一个从此
+无人 inspect / cancel（round 只记得住第二个），继续吃 Case 的时长与 token 预算，并且和新任务
+**写同一个 worktree**（同一个 round 解析出同一个 scene）。核实过全仓无任何对账兜得住它——
+`tasks.digital_employee_round_id` 每次启动都写、索引也在，但唯一读点是取 roundRef 做工作区校验，
+**没有任何地方问过「这个 round 是不是已经有任务了」**。
+
+**修法**落在 TaskExecution 侧（知识在那边；DE 在 `markRoundRunning` 之前手上什么都没有）：
+`composeDigitalEmployeeExecution().launch` 开头按 round 反查，已有活着的执行就复用它的
+executionRef、不建第二个。重试路径天然不受影响——重试只在 `inspect` 判出终态失败之后发生。
+
+**最容易写错的一点，也是本次真正的判据所在**：`interrupted` **是**终态
+（`shared/lifecycle.ts` 的 `TERMINAL_TASK_STATUSES` 含它），而重启后那个孤儿恰恰是 `interrupted`；
+只看 `isTerminalTaskStatus` 的去重会漏掉它、照样起第二个。所以抽出
+`digitalEmployeeExecutionIsLive` 作为 `inspect` 与 `launch` **共用**的活性判据——两个调用点一旦
+漂开，这个缺陷会原样回来。
+
+**顺带拉齐一处 provider 分叉**：`cli/postgresqlDaemonApplication.ts` 原先逐字抄了一份
+`executionMetadata.load`，改为复用 `composeDatabaseDigitalEmployeeExecutionPorts` 的中立实现——
+否则新增的 `findByRound` 也要各抄一份，幂等判据会在两个引擎上各修一次。
+
+**测试**（`rfc294-e9c-reaction-launch-crash-window.test.ts`，8 例，双引擎）：活性判据四条边界
+（restart-interrupted 活 / 恢复已停用不活 / 别的原因 interrupted 不活 / running 活、done 不活）+
+真库四条（复用活着的任务 / 多个活任务取最早 / 只有终结任务时不复用、继续走真正的启动路径 /
+反查按 round 闭合）。**两处变异均已验红**：去掉幂等短路 → 2 红；把活性判据退化成只看
+`isTerminalTaskStatus` → 3 红。
+
+**踩坑（修正了我前一笔写错的一条）**：`bun run architecture:write` **不重钉 provenance**——
+重钉那整段挂在 `--snapshot-sha` 参数下（`scripts/architecture-census.ts:161`）。动了任一
+provenance 产物的内容就会红 `RFC-294 N1a`，且反复跑 census 不自愈。定式改为手改做完后跑
+`bun run scripts/architecture-census.ts --write --snapshot-sha HEAD`。前一笔我把机制误判成
+「census 在算出来跟磁盘一样时不写文件」，已在 `docs/dev-gotchas.md` 原地改正并说明误判由来。
+
+三份账本各 +1（跨 context 边 / exception / owner），已按仓内规矩写 `allowGrowth` 点名本项，
+下一笔不涨的提交退役。
+
+**E9-C 其余三项裁决已记下，待 RFC-368**：只做功能正确性（`design.md §3.5` 里 authority 二次重验、
+并发竞态终检、变异守卫矩阵列为偏离项逐条呈确认）/ 退役 `execution-launch` outbox 类改由 claim 驱动 /
+retry 反馈换 content-addressed artifact 时顺带做内容裁剪。
+
 ## 2026-09-22 RFC-294 账本治理：legacy owner 改逐文件登记 + 已关闭的波不再承接债
 
 用户问「RFC-294 现在的进展，下一步要做什么」，对完账后选了这一批（零生产代码改动）。三项裁决
