@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1725,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-368 T7（2026-09-23）一次性增长：TaskExecution 侧落地 `ReactionExecutionPortV1` 的 provider——`application/adapters/reaction-execution-adapter.ts` 与它依赖的本模块端口 `application/ports/digitalEmployeeExecutionCore.ts`，以及 `composition/digitalEmployeeExecution.ts` 抽出的 typed core。对 DE required port 的类型引用按账本规则记为 `required-implementation`（合法实现方向、非债）。下一笔不涨的提交退役本许可。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -850,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5407,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-368 T7（2026-09-23）一次性增长：TaskExecution 侧落地 `ReactionExecutionPortV1` 的 provider——`application/adapters/reaction-execution-adapter.ts` 与它依赖的本模块端口 `application/ports/digitalEmployeeExecutionCore.ts`，以及 `composition/digitalEmployeeExecution.ts` 抽出的 typed core。对 DE required port 的类型引用按账本规则记为 `required-implementation`（合法实现方向、非债）。下一笔不涨的提交退役本许可。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,10 +861,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
       "baseline": 34,
-      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。",
-      "allowGrowth": {
-        "why": "RFC-368 T6 修红（2026-09-23）一次性 +1：`ReactionExecutionAdmissionParticipantInTxV1` 改名为 `…ParticipantV1` 并去掉 `__brand`（design.md 偏离项 D11）。改名前它因占用 `…InTx` 这个能力令牌后缀而不计入 required port 统计，改名后才进来。它有 provider（TE 的 `application/adapters/reaction-admission-adapter.ts`），不是死声明。下一笔不涨的提交退役本许可。"
-      }
+      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
     },
     {
       "id": "rfc294-architecture-exceptions",
@@ -912,14 +903,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24964,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-368 T7（2026-09-23）一次性增长：TaskExecution 侧落地 `ReactionExecutionPortV1` 的 provider——`application/adapters/reaction-execution-adapter.ts` 与它依赖的本模块端口 `application/ports/digitalEmployeeExecutionCore.ts`，以及 `composition/digitalEmployeeExecution.ts` 抽出的 typed core。对 DE required port 的类型引用按账本规则记为 `required-implementation`（合法实现方向、非债）。下一笔不涨的提交退役本许可。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:8d2c54d52663ebaf9d41c28a89d113adeec3d5aab0b75af37637f0f3ec9fd9e2",
+    "sourceDigest": "sha256:97e0abf5abfe5c9b86071833c9cb09d98fb44c67bcfa39af1a1047a8600a2b2d",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -932,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9be528d803e9c46137743c46cdeee9bef6ffa63a",
-    "contentDigest": "sha256:30130933a5a00ac02c5a558b417bbfd136a756113bd1d798062859009cf1cded",
+    "currentSnapshotSha": "684aca29914a98efbeeb739443ee14bea2f6895d",
+    "contentDigest": "sha256:93a8ef7b974dbd5104a74f900773689a3c698dcab53a2b5762f41a60121b2fba",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
