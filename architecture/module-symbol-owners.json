@@ -6,7 +6,7 @@
     "moduleFiles": 1277,
     "productionFiles": 2601,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24895
+    "symbolsIncludingFileRoots": 24892
   },
   "entries": [
     {
@@ -71559,18 +71559,6 @@
       "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
-      "id": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#memoryDistillLangProvider",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "memoryDistillLangProvider",
-      "targetContext": "memory",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "memory",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
       "id": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#memoryDistillPolicyProvider",
       "removeAfterWave": null,
       "status": "current-module",
@@ -71607,18 +71595,6 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
-      "id": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#resetMemoryDistillLangProviderForTest",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "resetMemoryDistillLangProviderForTest",
-      "targetContext": "memory",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "memory",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
       "id": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#resetMemoryDistillPolicyProviderForTest",
       "removeAfterWave": null,
       "status": "current-module",
@@ -71647,18 +71623,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "scopeFromTaskRow",
-      "targetContext": "memory",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "memory",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
-      "id": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#setMemoryDistillLangProvider",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "setMemoryDistillLangProvider",
       "targetContext": "memory",
       "targetLayer": "application"
     },
@@ -299462,5 +299426,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:01a8e00636d1e666cfcaebec1d7de1bf028aba655ce0fa324f36e250dbad5b0a"
+  "sourceDigest": "sha256:11be95dd7d90e6736bdd6c271e366661b34b80f214c57bfcf1fe7df801c3c63b"
 }

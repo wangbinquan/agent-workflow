@@ -124,6 +124,48 @@ describeEachProvider('createTaskFeedback', (harness) => {
     expect(fb.distilled).toBe(1)
   })
 
+  // RFC-366 AC-15（能力影响清单 C3 的用户可见后果）。
+  //
+  // 这条存在的理由：RFC-366 给五类源加了 launch_origin 准入门之后，
+  // `enqueueDistillJob` 多了一种**正常结局**——返回 null（定时 / webhook / 事件 / API /
+  // 内部任务在默认白名单下被拒）。留言本身照常保存、照常列出，只是不再有蒸馏 job。
+  // 上面那条正向用例只覆盖了「有 job」的一半；被拒那一半如果写成 `enqueued!.jobId`
+  // 就会在生产上抛，写成 `?? undefined` 就会让 UI 的「已交付提炼」chip 挂着一个不存在
+  // 的 job id。判据在 `taskFeedback.ts` 的 `if (enqueued !== null) await
+  // this.store.markDistilled(...)` 与 `distillJobId: enqueued?.jobId ?? null` 两行。
+  test('AC-15: 入队被准入门拒绝时，留言照常落库但 distilled=false / distillJobId=null', async () => {
+    const taskId = await seedTask(db)
+    const rejecting: MemoryDistillEnqueuer = {
+      async enqueue() {
+        return null
+      },
+    }
+    const r = await service.create(
+      { actor: ACTOR, taskId, bodyMd: 'scheduled-run note' },
+      rejecting,
+    )
+
+    // 留言本体不受影响——被拒的是提炼，不是留言。
+    expect(r.feedback.taskId).toBe(taskId)
+    expect(r.feedback.bodyMd).toBe('scheduled-run note')
+    expect(await service.list(taskId)).toHaveLength(1)
+
+    // 两个字段都必须是「没有 job」的形态，不能是 undefined、空串或残留的旧值。
+    expect(r.distillJobId).toBeNull()
+    expect(r.feedback.distilled).toBe(false)
+    expect(r.feedback.distillJobId).toBeNull()
+
+    // 落库侧同样：markDistilled 一次都不该被调用。
+    const fb = (
+      await db.select().from(taskFeedback).where(eq(taskFeedback.id, r.feedback.id)).all()
+    )[0]!
+    expect(fb.distilled).toBe(0)
+    expect(fb.distillJobId).toBeNull()
+
+    // 而且确实没有任何 job 行被写出来。
+    expect(await db.select().from(memoryDistillJobs).all()).toHaveLength(0)
+  })
+
   test('listTaskFeedback returns asc by createdAt', async () => {
     const taskId = await seedTask(db)
     await service.create({ actor: ACTOR, taskId, bodyMd: 'first' }, createTestDistillEnqueuer(db))

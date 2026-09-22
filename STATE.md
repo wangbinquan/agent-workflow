@@ -1,5 +1,29 @@
 # 当前执行状态
 
+## 2026-09-22 RFC-366 收口补漏：provider 合并 + 三条漏写的验收测试
+
+用户要求「检查下你的 RFC 是否做完」。逐条对着 `plan.md` 的 T1–T20 与 `proposal.md §7` 的
+AC-1–AC-21 对账，查出三类欠账并已补齐（Codex 实现门仍未跑，如实留成未勾选项）：
+
+1. **T6/T8 只做了一半**：计划写的是「策略 provider 吸收既有 lang provider」，实际两套并存——
+   `setMemoryDistillLangProvider` 与 `setMemoryDistillPolicyProvider` 在两个引擎里各注册一次，
+   共四个注册点，读的是同一个文件、同一个时刻、同一个函数要的两个旋钮。现已合并：
+   `memoryDistillLang` 折进 `DistillPolicy.outputLang`（`shared/schemas/config.ts`），
+   `enqueueDistillJob` 复用准入门已经取到的那份 policy，每次入队少一次读盘。
+   `memory-distill-scheduler-output-lang.test.ts` 的断言**一条没改**，只换了承载语言的那道缝。
+2. **三条 AC 有代码、没测试**（违反 §Test-with-every-change），已补并各做变异验证：
+   - AC-15 留言入队被拒 → `distilled=false` / `distillJobId=null`（`task-feedback-service.test.ts`）
+   - AC-20 `memoryDistillerEnabled=false` 仍照常入队——那个开关只闸 worker tick，不闸入队
+   - AC-9 子任务按**自己那一行**的 `launch_origin` 判；继承本身仍归 RFC-301 的既有锁，
+     这里只锁「准入门不对子任务做特殊处理」，并断言 scope 里 workflowId 非空以防假绿
+3. **`plan.md §3` 验收清单**此前 7 个框全空，现已逐条按实际情况勾注，并把交付后才暴露的
+   投递漏登记 bug 写进同一处——不抹掉。
+
+两条踩坑：①单测把两半各自锁死 ≠ 锁住两半接在一起，而唯一验证接合的用例若只在 nightly 跑，
+push 档等于没有守卫；②**`STATE.md` 在 repo 根，不在 format 门禁的 `packages/**` 范围内**，
+对它跑 `prettier --write` 会整份重排、吞掉所有人的历史段落（本次实撞 265 行，已 checkout 还原）。
+根目录与 `design/` 下的 md 只手写、不格式化。
+
 ## 2026-09-21 修复：四条 nightly 红（一条真 bug + 一条真 UX 回归 + 三条按新语义收口）
 
 用户报「定时执行的 ci 挂了」。`e2e-full-nightly`（`7707a74a3`）与 `e2e-webkit-nightly`（`5582f20b3`）

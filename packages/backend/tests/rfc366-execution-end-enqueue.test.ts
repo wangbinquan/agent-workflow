@@ -4,13 +4,16 @@
 // enqueueDistillJob 之后，`memory_distill_jobs` 里到底落了什么行」——包括
 // scope 收窄（D11）、去抖键（D8/D11）与热读策略（D10）。
 //
-// 覆盖 proposal §7 的 AC-1/2/3/4/5/6/7/8/10/11/12。
+// 覆盖 proposal §7 的 AC-1/2/3/4/5/6/7/8/9/10/11/12/20。
 
 import { afterEach, beforeEach, expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import { eq } from 'drizzle-orm'
 import {
+  DEFAULT_CONFIG,
   DEFAULT_DISTILL_POLICY,
+  resolveDistillPolicy,
+  type Config,
   type DistillPolicy,
   type DistillSourceKind,
   type ResolvedDistillScope,
@@ -68,6 +71,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
       launchOrigin?: TaskLaunchOrigin
       catalogVisibility?: 'public' | 'internal'
       spaceKind?: 'local' | 'remote' | 'scratch' | 'internal' | 'inherited'
+      parentTaskId?: string
     } = {},
   ): Promise<Fixture> {
     const workflowId = ulid()
@@ -106,6 +110,9 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
           ? {}
           : { catalogVisibility: overrides.catalogVisibility }),
         ...(overrides.spaceKind === undefined ? {} : { spaceKind: overrides.spaceKind }),
+        ...(overrides.parentTaskId === undefined
+          ? {}
+          : { parentTaskId: overrides.parentTaskId, parentNodeRunId: ulid() }),
       })
       .run()
     const runIds: Record<string, string> = {}
@@ -365,6 +372,95 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     origins = ['manual', 'scheduled']
     expect(await enqueue('task-run')).not.toBeNull()
     expect(await rowsOf(fx.taskId)).toHaveLength(1)
+  })
+
+  // --- AC-9 / AC-20 -------------------------------------------------------
+
+  // RFC-366 AC-9。**继承这件事本身不在这里证**——「子任务原样复制父任务的
+  // `launch_origin`」是 RFC-301 的法条，锁在
+  // `tests/rfc301-task-launch-origin-inheritance.test.ts`。这里锁的是 RFC-366 欠的那一半：
+  // 准入门读的是**任务自己那一行**的 launch_origin，对子任务不做任何特殊处理。
+  // 漏掉它的形态很具体：如果哪天有人为「子任务是平台自己拉起的」加一条旁路
+  // （把子任务当 internal，或按 parent_task_id 另判），定时任务的整棵子树就会
+  // 悄悄恢复提炼 —— 而 C1–C6 的那几条用例只喂根任务，一条都不会红。
+  test('AC-9: 子任务按自己那一行的 launch_origin 判，与父任务同进同出', async () => {
+    const scheduledParent = await seedTask({ launchOrigin: 'scheduled' })
+    const scheduledChild = await seedTask({
+      launchOrigin: 'scheduled', // RFC-301：这一列是父任务值的逐字复制
+      parentTaskId: scheduledParent.taskId,
+    })
+    for (const fx of [scheduledParent, scheduledChild]) {
+      expect(
+        await enqueueDistillJob(memory.store, {
+          sourceKind: 'task-run',
+          sourceEventId: fx.taskId,
+          taskId: fx.taskId,
+        }),
+      ).toBeNull()
+      expect(await rowsOf(fx.taskId)).toHaveLength(0)
+    }
+
+    // 反证：父任务是 manual 时，子任务同样照常入队——被拒的原因只能是 launch_origin
+    // 本身，不能是「它是个子任务」。
+    const manualParent = await seedTask({ launchOrigin: 'manual' })
+    const manualChild = await seedTask({
+      launchOrigin: 'manual',
+      parentTaskId: manualParent.taskId,
+    })
+    for (const fx of [manualParent, manualChild]) {
+      expect(
+        await enqueueDistillJob(memory.store, {
+          sourceKind: 'task-run',
+          sourceEventId: fx.taskId,
+          taskId: fx.taskId,
+        }),
+      ).not.toBeNull()
+      const rows = await rowsOf(fx.taskId)
+      expect(rows).toHaveLength(1)
+      // 否则这半边会**假绿**：任务行要是没被 findTaskScope 找到（父链列写坏、夹具漏了
+      // 某个必填列），准入门走的是「无任务放行」那条分支，`not.toBeNull()` 照样成立，
+      // 而我们其实什么都没验证到。scope 里的 workflowId 只有真读到了行才会有值
+      // ——对照上面那条 orphan 用例，它断言的正是全 null 的退化形态。
+      const scope = JSON.parse(rows[0]!.scopeResolvedJson) as ResolvedDistillScope
+      expect(scope.workflowId).not.toBeNull()
+    }
+  })
+
+  // RFC-366 AC-20：`memoryDistillerEnabled=false` 关的是**蒸馏器**，不是**入队**。
+  // 两者是两个阶段：那个开关只让 worker tick 变成空壳（`cli/start.ts` 的
+  // `if (current.memoryDistillerEnabled === false) return`），队列照常积累、审计行照常写，
+  // 重新打开后积压的行继续被消费。
+  //
+  // 现在它成立是靠构造——`resolveDistillPolicy` 的入参 `Pick` 里根本没有这个键，所以
+  // 准入门物理上读不到它。但「靠构造成立」不等于「有锁」：把它塞进 policy 并在闸里顺手
+  // 一判，是完全写得出来的一行，而那会让关掉蒸馏器的部署**静默丢掉**这段时间的全部信号，
+  // 重新打开也补不回来。所以在这里把它钉死。
+  test('AC-20: memoryDistillerEnabled=false 时五类源仍照常入队（那个开关只闸 worker）', async () => {
+    const fx = await seedTask({ launchOrigin: 'manual' })
+    // 经**完整 Config** 交进去，不是手搓一个只含三个键的字面量：`resolveDistillPolicy`
+    // 的入参是 `Pick<Config, …>`，直接塞 `{ …, memoryDistillerEnabled: false }` 会被
+    // 多余属性检查拦在编译期——那正是本用例要锁的事实（这个键根本不在准入门的可视面里），
+    // 但编译不过就没有运行期断言了，所以先落成一个真正的 Config 再交。
+    const config: Config = { ...DEFAULT_CONFIG, memoryDistillerEnabled: false }
+    setMemoryDistillPolicyProvider(() => resolveDistillPolicy(config))
+    const kinds: readonly DistillSourceKind[] = [
+      'clarify',
+      'review',
+      'feedback',
+      'agent-run',
+      'task-run',
+    ]
+    for (const sourceKind of kinds) {
+      expect(
+        await enqueueDistillJob(memory.store, {
+          sourceKind,
+          sourceEventId: `${sourceKind}-${fx.taskId}`,
+          taskId: fx.taskId,
+          ...(sourceKind === 'agent-run' ? { nodeId: 'agent-a' } : {}),
+        }),
+      ).not.toBeNull()
+    }
+    expect((await rowsOf(fx.taskId)).map((row) => row.sourceKind).sort()).toEqual([...kinds].sort())
   })
 
   test('任务行不存在时仍放行（scope 退化为 global-only，与既有行为一致）', async () => {

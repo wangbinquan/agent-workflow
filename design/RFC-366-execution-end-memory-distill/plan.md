@@ -140,13 +140,36 @@ T1 ─┬─ T2 ── T17
 
 实现完成后逐条对照 `proposal.md` §7：
 
-- [ ] AC-1 … AC-18（功能）
-- [ ] AC-19 … AC-21（回归防护）
-- [ ] §6 能力影响清单 C1–C7 每条各有一条**拒绝分支测试**（design §10.1 / §10.2）
-- [ ] 两个 provider（SQLite / PostgreSQL）的迁移各自跑通
-- [ ] `bunx prettier --check` + `bunx eslint --max-warnings 0` 对本次改动文件
-- [ ] push 后按 exact SHA 盯 GitHub Actions 到绿（CLAUDE.md §Test-with-every-change 运行门槛）
-- [ ] Codex 实现门跑一遍（**只审功能，禁止安全检视**）并修 findings
+2026-09-22 逐条对账（含一次事后补漏，见下）：
+
+- [x] AC-1 … AC-18（功能）。AC-16（候选落库带新 `source_kind`）**有意划在验收边界外**——
+      蒸馏器的输出协议在 RFC-367 之前是坏的，那条链路归 RFC-367，详见 `design.md §11.1`。
+- [x] AC-19 … AC-21（回归防护）。AC-19 由 `rfc366-execution-end-enqueue` 的「其余四类源的
+      scope 不收窄」+「其余四类仍是 5s」两条锁住；AC-21 由 `rfc366-agent-run-observer` 的
+      「best-effort：通知挂了不能改变节点结算结果」锁住。
+- [x] §6 能力影响清单 C1–C7 每条各有一条**拒绝分支测试**：C1–C3 / C4–C6 / C7 分别是
+      `rfc366-execution-end-enqueue.test.ts` 的 AC-5（定时）、AC-5（参数化四种来源）、AC-8。
+- [x] 两个 provider（SQLite / PostgreSQL）的迁移各自跑通：
+      `migration-0228-distill-source-kinds.test.ts` + `rfc366-postgresql-check-upgrade.test.ts` + `upgrade-rolling.test.ts`（journal 228）。
+- [x] `bunx prettier --check` + `bunx eslint --max-warnings 0` 对本次改动文件。
+- [x] push 后按 exact SHA 盯 GitHub Actions 到绿。实际过程不光彩：`5b98bd061` 推红过 main
+      （四条连带伤，归因与处置见 `0b7f0057e`），修完才收敛。
+- [ ] **Codex 实现门未跑**。验收清单列了，实际一次都没跑过；交付后由真实使用暴露出的那个
+      投递漏登记 bug（见下），正是实现门有机会拦下的类型。补跑与否留给下一个接手的人决定。
+
+**交付后发现并已修的真 bug（记在这里而不是抹掉）**：`task-terminal-distill-enqueue` 建了定义、
+daemon 也注册了、单测全绿，却没进 `TASK_LIFECYCLE_DURABLE_CONSUMER_MANIFEST`——而
+`task.lifecycle-transitioned.v1` 的投递名单正是这张 manifest 的过滤结果，于是 task-run 蒸馏
+**永不入队且不报错**。由本 RFC 自己的 e2e 在 nightly 抓到（`a6b4768c5` 修复），并补了结构律守卫
+`committed-event-consumer-delivery-parity` 做两向对账。教训：单测把两半各自锁死，不等于锁住了
+两半接在一起；唯一验证接合的用例被打了 `@nightly`，push 档根本不跑。
+
+**2026-09-22 补漏**：T6/T8 写的「策略 provider 吸收既有 lang provider」当时只做了一半，
+`setMemoryDistillLangProvider` 与新 provider 并存（两个引擎各两处注册）。现已合并——
+`memoryDistillLang` 折进 `DistillPolicy.outputLang`，四个注册点收成两个，每次入队少一次读盘。
+同时补上三条当时漏写的验收测试：AC-15（留言被拒 → `distilled=false` / `distillJobId=null`）、
+AC-20（`memoryDistillerEnabled=false` 仍照常入队）、AC-9（子任务按自己那行的 launch_origin 判）。
+三条都做过变异验证：把对应判据改坏，三条各自如期变红。
 
 ## 4. 残债 / 后续
 

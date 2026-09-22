@@ -1,10 +1,14 @@
 // RFC-050 — locks enqueueDistillJob's output-language plumbing.
 //
 //   - explicit `outputLang` wins over the ambient provider
-//   - ambient provider (registered by cli/start.ts via
-//     setMemoryDistillLangProvider) is consulted when the call site omits
-//     outputLang — this is the production path for review.ts /
-//     clarify.ts / taskFeedback.ts which never pass it explicitly
+//   - the ambient provider (registered by cli/start.ts) is consulted when the
+//     call site omits outputLang — this is the production path for review.ts /
+//     clarify.ts / taskFeedback.ts which never pass it explicitly.
+//     RFC-366 T6/T8 folded the former standalone language provider into the
+//     distill POLICY provider, so the language now arrives as
+//     `DistillPolicy.outputLang`. The assertions below are unchanged: what is
+//     locked is still "explicit wins / ambient fills in / neither ⇒ NULL", only
+//     the seam that carries it is now the one the admission gate already reads.
 //   - no provider + no explicit → DB row keeps NULL (RFC-041 baseline)
 //   - merged-sibling reruns sharing one debounce_key all carry the
 //     same outputLang because each enqueue snapshots independently
@@ -18,9 +22,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { memoryDistillJobs } from '../src/db/schema'
 import {
   enqueueDistillJob,
-  resetMemoryDistillLangProviderForTest,
-  setMemoryDistillLangProvider,
+  resetMemoryDistillPolicyProviderForTest,
+  setMemoryDistillPolicyProvider,
 } from '../src/modules/memory/application/distill/schedule'
+import { DEFAULT_DISTILL_POLICY, type Language } from '@agent-workflow/shared'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 
@@ -34,23 +39,33 @@ function admitted<T>(result: T | null): T {
   return result
 }
 
+/**
+ * Register only the language half of the policy and leave every admission knob
+ * at its default. These cases are about `outputLang`, not about the gate, and a
+ * hand-rolled policy literal here would start silently rejecting if the defaults
+ * ever moved.
+ */
+function setAmbientLang(read: () => Language | null): void {
+  setMemoryDistillPolicyProvider(() => ({ ...DEFAULT_DISTILL_POLICY, outputLang: read() }))
+}
+
 describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (harness) => {
   let db: ProviderNeutralDatabase
   let memory: { store: DrizzleMemoryDistillWorkStore }
 
   beforeEach(() => {
     resetBroadcastersForTests()
-    resetMemoryDistillLangProviderForTest()
+    resetMemoryDistillPolicyProviderForTest()
     db = harness.db
     memory = { store: new DrizzleMemoryDistillWorkStore(db) }
   })
 
   afterEach(() => {
-    resetMemoryDistillLangProviderForTest()
+    resetMemoryDistillPolicyProviderForTest()
   })
 
   test('explicit outputLang wins over the ambient provider', async () => {
-    setMemoryDistillLangProvider(() => 'en-US')
+    setAmbientLang(() => 'en-US')
     const { jobId } = admitted(
       await enqueueDistillJob(memory.store, {
         sourceKind: 'feedback',
@@ -68,7 +83,7 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
   })
 
   test('ambient provider used when explicit outputLang omitted (production path)', async () => {
-    setMemoryDistillLangProvider(() => 'zh-CN')
+    setAmbientLang(() => 'zh-CN')
     const { jobId } = admitted(
       await enqueueDistillJob(memory.store, {
         sourceKind: 'feedback',
@@ -101,7 +116,7 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
   })
 
   test('explicit null overrides a provider-set language → DB row NULL', async () => {
-    setMemoryDistillLangProvider(() => 'zh-CN')
+    setAmbientLang(() => 'zh-CN')
     const { jobId } = admitted(
       await enqueueDistillJob(memory.store, {
         sourceKind: 'feedback',
@@ -126,7 +141,7 @@ describeEachProvider('RFC-050 enqueueDistillJob — output language snapshot', (
     // between the two enqueues, the HEAD row's language is well-defined
     // and stable through retry.
     let current: 'zh-CN' | 'en-US' = 'zh-CN'
-    setMemoryDistillLangProvider(() => current)
+    setAmbientLang(() => current)
     const a = admitted(
       await enqueueDistillJob(memory.store, {
         sourceKind: 'feedback',

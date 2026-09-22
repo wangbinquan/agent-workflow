@@ -1088,6 +1088,15 @@ export interface DistillPolicy {
   readonly launchOrigins: readonly TaskLaunchOrigin[]
   readonly sources: Readonly<Record<DistillSourceKind, boolean>>
   readonly agentRunDebounceMs: number
+  /**
+   * RFC-050's `memoryDistillLang`, folded in here by RFC-366 (plan T6/T8).
+   * It used to ride its own ambient provider with its own setter and its own
+   * `loadConfig` call in each of the two engine compositions — four registration
+   * sites for two knobs that are read at the same instant, from the same file,
+   * by the same function. `null` keeps RFC-041's meaning: "use the runtime
+   * default" (currently 'en-US'), and a per-call `outputLang` still wins.
+   */
+  readonly outputLang: Language | null
 }
 
 /** RFC-366 D2/D9: manual-only, every source on. */
@@ -1102,6 +1111,7 @@ export const DEFAULT_DISTILL_POLICY: DistillPolicy = Object.freeze({
     >,
   ),
   agentRunDebounceMs: DEFAULT_AGENT_RUN_DEBOUNCE_MS,
+  outputLang: null,
 })
 
 /**
@@ -1112,7 +1122,10 @@ export const DEFAULT_DISTILL_POLICY: DistillPolicy = Object.freeze({
 export function resolveDistillPolicy(
   config: Pick<
     Config,
-    'memoryDistillLaunchOrigins' | 'memoryDistillSources' | 'memoryDistillAgentRunDebounceMs'
+    | 'memoryDistillLaunchOrigins'
+    | 'memoryDistillSources'
+    | 'memoryDistillAgentRunDebounceMs'
+    | 'memoryDistillLang'
   >,
 ): DistillPolicy {
   const switches = config.memoryDistillSources
@@ -1123,6 +1136,7 @@ export function resolveDistillPolicy(
     launchOrigins: config.memoryDistillLaunchOrigins ?? DEFAULT_DISTILL_LAUNCH_ORIGINS,
     sources,
     agentRunDebounceMs: config.memoryDistillAgentRunDebounceMs ?? DEFAULT_AGENT_RUN_DEBOUNCE_MS,
+    outputLang: config.memoryDistillLang ?? null,
   }
 }
 

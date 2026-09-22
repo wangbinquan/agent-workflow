@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2873",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2869",
       "kind": "register-call",
-      "line": 2873,
+      "line": 2869,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -25,9 +25,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2879",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2875",
       "kind": "register-call",
-      "line": 2879,
+      "line": 2875,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -36,9 +36,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:721",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:718",
       "kind": "register-call",
-      "line": 721,
+      "line": 718,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -47,9 +47,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:727",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:724",
       "kind": "register-call",
-      "line": 727,
+      "line": 724,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -58,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3216",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3212",
       "kind": "register-call",
-      "line": 3216,
+      "line": 3212,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -69,9 +69,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:906",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:902",
       "kind": "register-call",
-      "line": 906,
+      "line": 902,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -80,42 +80,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1707",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1703",
       "kind": "register-call",
-      "line": 1707,
-      "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
-      "removeAfterWave": "W6/W9",
-      "symbol": "composeSqliteProviderSession",
-      "targetContext": "bootstrap"
-    },
-    {
-      "callee": "setMemoryDistillLangProvider",
-      "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:3256",
-      "kind": "global-setter",
-      "line": 3256,
-      "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
-      "removeAfterWave": "W6/W9",
-      "symbol": "composeSqliteProviderSession",
-      "targetContext": "bootstrap"
-    },
-    {
-      "callee": "setMemoryDistillLangProvider",
-      "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillLangProvider:736",
-      "kind": "global-setter",
-      "line": 736,
-      "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
-      "removeAfterWave": "W6/W9",
-      "symbol": "composePostgresqlProviderSession",
-      "targetContext": "bootstrap"
-    },
-    {
-      "callee": "setMemoryDistillPolicyProvider",
-      "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3270",
-      "kind": "global-setter",
-      "line": 3270,
+      "line": 1703,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -124,9 +91,20 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:750",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3260",
       "kind": "global-setter",
-      "line": 750,
+      "line": 3260,
+      "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
+      "removeAfterWave": "W6/W9",
+      "symbol": "composeSqliteProviderSession",
+      "targetContext": "bootstrap"
+    },
+    {
+      "callee": "setMemoryDistillPolicyProvider",
+      "file": "packages/backend/src/cli/start.ts",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:746",
+      "kind": "global-setter",
+      "line": 746,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -5474,7 +5452,7 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 496,
+    "ambientWiring": 494,
     "disabled": 9,
     "entries": 332,
     "executionLocal": 41,
@@ -7133,7 +7111,7 @@
       ],
       "file": "packages/backend/src/modules/memory/application/distill/schedule.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/memory/application/distill/schedule.ts#$setInterval:573",
+      "id": "background:packages/backend/src/modules/memory/application/distill/schedule.ts#$setInterval:564",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -7147,7 +7125,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/memory/application/distill/schedule.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:573",
+      "symbol": "$setInterval:564",
       "targetContext": "memory"
     },
     {
@@ -12799,5 +12777,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:01a8e00636d1e666cfcaebec1d7de1bf028aba655ce0fa324f36e250dbad5b0a"
+  "sourceDigest": "sha256:11be95dd7d90e6736bdd6c271e366661b34b80f214c57bfcf1fe7df801c3c63b"
 }

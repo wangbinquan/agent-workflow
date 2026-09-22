@@ -62,18 +62,6 @@ export const DISTILL_DEBOUNCE_MS = 5_000
  *
  * Per-call `outputLang` passed to `enqueueDistillJob` always wins.
  */
-let memoryDistillLangProvider: () => Language | null = () => null
-
-export function setMemoryDistillLangProvider(fn: () => Language | null): void {
-  memoryDistillLangProvider = fn
-}
-
-/** Test-only — restore the noop provider so a leaked setter from a prior
- *  case doesn't leak into the next one. Production never calls this. */
-export function resetMemoryDistillLangProviderForTest(): void {
-  memoryDistillLangProvider = () => null
-}
-
 /**
  * RFC-366: ambient provider for the distill POLICY — which task origins and
  * which sources may enqueue, plus the agent-run debounce window. Same shape and
@@ -92,7 +80,8 @@ export function setMemoryDistillPolicyProvider(fn: () => DistillPolicy): void {
   memoryDistillPolicyProvider = fn
 }
 
-/** Test-only — see {@link resetMemoryDistillLangProviderForTest}. */
+/** Test-only — restore the default provider so a leaked setter from a prior
+ *  case does not leak into the next one. Production never calls this. */
 export function resetMemoryDistillPolicyProviderForTest(): void {
   memoryDistillPolicyProvider = () => DEFAULT_DISTILL_POLICY
 }
@@ -187,11 +176,13 @@ export async function enqueueDistillJob(
   const jobId = ulid()
   const now = Date.now()
   const debounceMs = input.debounceMs ?? defaultDebounceMs(input.sourceKind, policy)
-  // RFC-050: explicit per-call wins; otherwise consult the ambient provider
-  // registered by cli/start.ts at daemon boot. Null is persisted as-is and
-  // means "use the runtime default" (currently 'en-US' / RFC-041 baseline).
+  // RFC-050: explicit per-call wins; otherwise take it from the policy already
+  // resolved above for the admission gate (RFC-366 T6/T8 folded the separate
+  // language provider into it — one provider, one `loadConfig` per enqueue,
+  // instead of two that read the same file at the same instant). Null is
+  // persisted as-is and means "use the runtime default" ('en-US' / RFC-041).
   const outputLang: Language | null =
-    input.outputLang !== undefined ? input.outputLang : memoryDistillLangProvider()
+    input.outputLang !== undefined ? input.outputLang : policy.outputLang
   await store.enqueue({
     id: jobId,
     debounceKey,

@@ -157,10 +157,7 @@ import { mcpRouteNow } from '@/routes/mcps'
 import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { pluginOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
-import {
-  setMemoryDistillLangProvider,
-  setMemoryDistillPolicyProvider,
-} from '@/modules/memory/composition'
+import { setMemoryDistillPolicyProvider } from '@/modules/memory/composition'
 import { acquireLock, adoptCurrentProcessLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import {
   PRESENCE_CHANNEL,
@@ -733,20 +730,19 @@ async function composePostgresqlProviderSession(
     },
   })
 
-  setMemoryDistillLangProvider(() => {
-    try {
-      return loadConfig(Paths.config).memoryDistillLang ?? null
-    } catch {
-      return null
-    }
-  })
-  // RFC-366: same ambient-provider shape, same reason — the admission gate runs
-  // inside `enqueueDistillJob`, which is reached from clarify / review /
+  // RFC-366: the ONE ambient provider the distill path needs. The admission gate
+  // runs inside `enqueueDistillJob`, which is reached from clarify / review /
   // feedback / the two execution-end triggers, none of which have a config path
   // to thread. Re-reading here means a settings edit gates the very next event
   // instead of the next daemon restart (D10). A broken config file falls back to
   // the defaults (manual-only, every source on) rather than silently admitting
   // everything.
+  //
+  // RFC-366 T6/T8 (2026-09-22): this also carries RFC-050's `memoryDistillLang`
+  // as `DistillPolicy.outputLang`. It used to be a second provider with its own
+  // setter and its own `loadConfig` call, registered right here in BOTH engine
+  // compositions — four registration sites for two knobs that are read at the
+  // same instant, from the same file, by the same function. One provider now.
   setMemoryDistillPolicyProvider(() => {
     try {
       return resolveDistillPolicy(loadConfig(Paths.config))
@@ -3248,25 +3244,19 @@ async function composeSqliteProviderSession(
       })
     },
   })
-  // RFC-050: register an ambient provider so enqueueDistillJob callers
-  // pick up the current `config.memoryDistillLang` without us having to
-  // thread configPath through review.ts / clarify.ts / taskFeedback.ts.
-  // Re-reads config on every call so admin edits to the config file
-  // (e.g. via `PUT /api/config`) flow through without a daemon restart.
-  setMemoryDistillLangProvider(() => {
-    try {
-      return loadConfig(Paths.config).memoryDistillLang ?? null
-    } catch {
-      return null
-    }
-  })
-  // RFC-366: same ambient-provider shape, same reason — the admission gate runs
-  // inside `enqueueDistillJob`, which is reached from clarify / review /
+  // RFC-366: the ONE ambient provider the distill path needs. The admission gate
+  // runs inside `enqueueDistillJob`, which is reached from clarify / review /
   // feedback / the two execution-end triggers, none of which have a config path
   // to thread. Re-reading here means a settings edit gates the very next event
   // instead of the next daemon restart (D10). A broken config file falls back to
   // the defaults (manual-only, every source on) rather than silently admitting
   // everything.
+  //
+  // RFC-366 T6/T8 (2026-09-22): this also carries RFC-050's `memoryDistillLang`
+  // as `DistillPolicy.outputLang`. It used to be a second provider with its own
+  // setter and its own `loadConfig` call, registered right here in BOTH engine
+  // compositions — four registration sites for two knobs that are read at the
+  // same instant, from the same file, by the same function. One provider now.
   setMemoryDistillPolicyProvider(() => {
     try {
       return resolveDistillPolicy(loadConfig(Paths.config))

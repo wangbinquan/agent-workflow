@@ -19,10 +19,7 @@ import {
 } from './application/distill/schedule'
 
 // RFC-352 T7：bootstrap 只经 composition 取 memory 的东西，不深入 application。
-export {
-  setMemoryDistillLangProvider,
-  setMemoryDistillPolicyProvider,
-} from './application/distill/schedule'
+export { setMemoryDistillPolicyProvider } from './application/distill/schedule'
 import { DrizzleMemoryDistillReadStore } from './infrastructure/memoryDistillReadStore'
 import { DrizzleMemoryDistillWorkStore } from './infrastructure/memoryDistillWorkStore'
 import { DrizzleMemoryInjectionReadStore } from './infrastructure/memoryInjectionReadStore'

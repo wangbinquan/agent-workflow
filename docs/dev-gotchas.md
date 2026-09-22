@@ -544,6 +544,28 @@ grep -rln "<被改文件的 basename 去掉 .test.ts>" packages/backend/tests --
 把扫出来的文件一起跑。本次就是这么捞到的——改完 `rfc349-maintenance-disk-provider`
 的 PG 用例标题，radius 里的 `rfc349-functional-evidence` 当场红。
 
+## `prettier --write` 只对 `packages/**` 是安全的：对 `STATE.md` 跑会整份重排、吞掉所有人的段落（2026-09-22 实撞）
+
+format 门禁的范围是 `package.json` 里写死的 `packages/**/*.{ts,tsx,json,md}`（外加
+`format:check:repo-ui`）。**仓库根下的 `STATE.md`、`README.md`、`CLAUDE.md`，以及 `design/` 下的
+RFC 三件套，全都不在这个范围内**——它们从来没被 prettier 碰过，于是整份文件相对 prettier 的
+规范形态是「脏」的。
+
+实撞：给 `STATE.md` 顶部插了一段 24 行的新纪要，顺手跑了 `bunx prettier --write STATE.md`
+想"保险"，结果 `git diff --stat` 是 **265 insertions / 265 deletions**——它把全文的换行位置重排了
+一遍，把其他 session 写的每一段历史纪要都算成我的改动。在本仓「绝不改动别人的修改」的硬规则下
+这是**一次违规提交**，只是还没 commit 就发现了（`git checkout -- STATE.md` 还原）。
+
+更阴的是它**不会自我暴露**：`prettier --write` 之后再 `--check` 仍然 warn（这些文件本来就不在
+缓存/配置覆盖里），所以"写完还报错"很容易被读成"再写一次就好"，于是越写越偏。
+
+**定式**：
+- 改根目录或 `design/` 下的 markdown，**只手写，不跑 prettier**。要对齐风格就照着邻近段落抄。
+- 只对**自己新增的、位于 `packages/**` 下的**文件跑 `bunx prettier --check <files>`。
+- 任何时候插完段落先看一眼 `git diff --stat`：**纯新增的段落必须是 0 deletions**。出现删除行就
+  说明你动了别人的东西，停下来还原，别 commit。这一步和 §「推之前 `git diff --cached --stat`
+  看一眼暂存区」是同一类兜底，只是更靠前。
+
 ## 本地自查要跑**仓库自己的脚本**，别手搓文件清单（2026-09-14 连撞两次）
 
 **2026-09-16 第三次，这次的代价是把 main 推红**（RFC-359 §5gu）：改了 `src/server.ts` 之后，
