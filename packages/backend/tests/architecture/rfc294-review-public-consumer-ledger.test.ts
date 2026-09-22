@@ -315,6 +315,11 @@ export const UNCONSUMED_PUBLIC_SYMBOL_DEBT: readonly Debt[] = [
 /** provider=0 且 consumer=0 的 required SPI：死声明。 */
 export const DEAD_REQUIRED_PORT_DEBT: readonly DeadPortDebt[] = [
   {
+    id: 'required:digital-employee:ReactionExecutionPortV1',
+    why: 'RFC-368 刀 1 只落合同与 schema，TE 的 provider adapter 在刀 2、装配绑定在刀 3——这期间它按定义 provider=0 / consumer=0。与上面那批 development-automation 的死声明不同类：那些是无人认领的遗留，这条有明确的接入批次与验收（AC-2 / AC-6）。刀 3 切完绑定后本条必须从账本里消失。',
+    removeAfterWave: 'W4-E9',
+  },
+  {
     id: 'required:development-automation:AgentActionExecutionPort',
     why: 'development-automation 声明的 required SPI 既无 provider adapter 也无 consumer；W4-E8 要么接入 use-case-specific provider，要么删除死声明。',
     removeAfterWave: 'W4-E8',

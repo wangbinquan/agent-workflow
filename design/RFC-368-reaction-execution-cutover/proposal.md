@@ -1,6 +1,6 @@
 # RFC-368 Reaction 执行合同切换（RFC-294 W4-E9 的 E9-C）
 
-**状态**：Draft（设计门 r1 已跑并修完，待用户批准进入实现）
+**状态**：**Approved（2026-09-22 用户批准实施）**
 **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) W4-E9
 **前序**：RFC-361（E9-B 的 EC provider，Done）、RFC-365（Event target provider，Done）、
 `56bb82b50`（E9-C 前置小修：launch 幂等，已上线）
@@ -74,7 +74,7 @@ admission 在事务内预分配 executionRef，重放按 operation 身份命中�
 | --- | --- | --- | --- |
 | R1 `errorCode` | 原样 | **原样** | 无 |
 | R2 绝对路径 | 原样（宿主机 worktree 绝对路径） | 改写成工作区相对路径 | agent 拿到的是它 cwd 下可用的路径 |
-| R3 栈帧行（`    at …`） | 原样保留 | **待定，见开放项** | 见 plan.md §4 |
+| R3 栈帧行（`    at …`） | 原样保留 | **整行丢弃**（用户 2026-09-22 裁决） | 去掉对纠错无用的噪音；某类失败若只有栈帧能说明问题会丢信息，已知并接受 |
 | R4 连续重复行 | 原样 | 折叠为一行 + `(× N)` | 压缩上下文 |
 | R5 长度上限 | 4000 硬截断 | 保持 4000（裁剪后仍超则截断） | 无 |
 
@@ -82,7 +82,7 @@ admission 在事务内预分配 executionRef，重放按 operation 身份命中�
 
 | # | 变化 | 说明 |
 | --- | --- | --- |
-| C2-1 | round 新增 `dispatching` 状态 | 案例详情页会出现新状态；需同步文案表与视觉态（`frontend/src/routes/employee-cases.$caseId.tsx:318` 附近的文案表与 `:388` 的 `roundVisualState`），否则落到兜底文案「状态已更新」+ waiting 样式 |
+| ~~C2-1~~ | ~~round 新增 `dispatching` 状态~~ | **不再发生**：实施期发现 PG 迁移序列改不了既有索引谓词，于是改用 `planned` + 派发租约表示那一格（design §5.1）。案例详情页看不到任何新状态，前端零改动 |
 | C2-2 | 派发失败的终结文案变化 | 今天是 `outputJson.kind='platform-dispatch-failed'` + `blockReason` 前缀 `execution-launch: `（`runtimeService.ts:2685-2705`）。退役该 kind 后这两个用户可见字面值必变；新值在 design.md §4.2 固定 |
 | C2-3 | 人审闸门丢掉「按 round 状态兜底」那一层 | 今天 provider 返回 `null` 时回落到 round 状态（`runtimeService.ts:1300-1307`）。改后 `not-applicable` 只表示「这个动作没有闸门」，其余两种 `null` 来源（task 行不存在 / inputs 解析失败）映射见 design.md §3.3 |
 | C2-4 | 在途重试的 `previousError` | 迁移必须把它写进反馈表并挂到 round，否则升级后那次重试的纠错信息消失（design.md §5 在途迁移） |

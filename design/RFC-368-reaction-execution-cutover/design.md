@@ -1,6 +1,6 @@
 # RFC-368 技术设计：Reaction 执行合同切换
 
-**状态**：Draft（设计门 r1 findings 已逐条回写）
+**状态**：**Approved（2026-09-22）**
 **读法**：先读 [proposal.md](./proposal.md)；上游规范是
 [RFC-294 design §3.5](../RFC-294-backend-layered-target-architecture/design.md)，本文件写的是
 **实际实施的子集**与逐条偏离。
@@ -205,10 +205,16 @@ round 状态**。所以：③ ⇒ `not-applicable` ⇒ 投影成 `skipped`；①
 **选择判据**（设计门 P1-1 / P2-1 / P2-4）：
 
 ```sql
-(state = 'planned'     AND next_attempt_at <= :now)
-OR
-(state = 'dispatching' AND dispatch_lease_expires_at <= :now)   -- 崩溃重放
+-- round 仍是 `planned`（不新增状态，见 §5.1）；派发中与否看侧表上的租约。
+SELECT r.* FROM employee_reaction_rounds r
+JOIN employee_reaction_dispatch d ON d.round_ref = r.id
+WHERE r.state = 'planned'
+  AND d.next_attempt_at <= :now
+  AND (d.dispatch_lease_expires_at IS NULL OR d.dispatch_lease_expires_at <= :now)
 ```
+
+租约为 NULL = 从没派发过；租约已过期 = 上一次派发中途崩了，**这一条就是崩溃重放**
+（与 `claimOutbox` 的 `state='claimed' AND claim_expires_at <= now` 同形）。
 
 `next_attempt_at` 是 `NOT NULL DEFAULT 0`（可空会让 `NULL <= now` 恒不成立，新建 round
 永远选不中）。选中后**先查案例**：`case.state === 'terminal'` ⇒ 直接结算该 round，不建任务
@@ -227,10 +233,10 @@ DE: dispatchOneReaction()
         tx: round.claim_epoch = nextEpoch
             round.operation_ref = operation
             round.execution_ref = receipt.execution        // ← 事务内就写下
-            round.state = 'dispatching'
+            dispatch.dispatch_lease_expires_at = now + leaseMs   // 占租约；round 仍是 planned
      })
   └─ port.launch(prepared, receipt)         // act，事务之外，用 receipt.execution 当 taskId
-  └─ store.markRoundRunning(roundId)        // CAS 谓词改成 state='dispatching'
+  └─ store.markRoundRunning(roundId)        // CAS 谓词仍是 state='planned'，不用动
 ```
 
 **为什么预分配解掉三条 P1**：
@@ -285,6 +291,13 @@ plan 算——重放稳定。
 
 SQLite 迁移 `0230`，PostgreSQL 迁移 `0006`。
 
+> **实施期发现的两条硬约束（2026-09-22，已据此改设计）**：本仓 PostgreSQL 的迁移序列自
+> RFC-349 基线以来**只支持三种变更——新表、新索引、CHECK 放宽**。给既有表加列、改既有索引的
+> 谓词都**不可表达**（`platform/persistence/postgresqlMigrationSequence.ts` 的
+> `logicalIndexAdditions` 会以 `index-only upgrade changed a row…` / `old indexes changed…` 拒绝，
+> 且自基线以来没有一条 PG 迁移用过 `ADD COLUMN`）。初稿的「round 加 8 列 + 放宽 one-active 索引」
+> 两样都踩中了，于是改成下面的形状——**结果反而更简单**，见两处说明。
+
 ```sql
 -- TE 拥有：admission 日志。operation 是稳定主键，epoch/fence 是行上被更新的列（§3.2）。
 CREATE TABLE reaction_execution_admissions (
@@ -301,19 +314,25 @@ CREATE TABLE reaction_execution_admissions (
   created_at         INTEGER NOT NULL,
   updated_at         INTEGER NOT NULL
 );
-CREATE INDEX reaction_execution_admissions_round ON reaction_execution_admissions (round_ref);
 
--- DE 拥有：round 上的 claim / 派发调度 / 引用列
-ALTER TABLE employee_reaction_rounds ADD COLUMN claim_epoch                INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE employee_reaction_rounds ADD COLUMN next_attempt_at            INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE employee_reaction_rounds ADD COLUMN dispatch_attempts          INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE employee_reaction_rounds ADD COLUMN dispatch_claimed_by        TEXT;
-ALTER TABLE employee_reaction_rounds ADD COLUMN dispatch_lease_expires_at  INTEGER;
-ALTER TABLE employee_reaction_rounds ADD COLUMN last_dispatch_error        TEXT;
-ALTER TABLE employee_reaction_rounds ADD COLUMN operation_ref              TEXT;
-ALTER TABLE employee_reaction_rounds ADD COLUMN retry_feedback_ref         TEXT;
+-- DE 拥有：派发状态，与 round 一一对应的**侧表**。
+-- 它装的正是 `execution-launch` outbox 行今天装的东西，随那一类退役平移过来。
+CREATE TABLE employee_reaction_dispatch (
+  round_ref                 TEXT PRIMARY KEY,
+  case_id                   TEXT NOT NULL,
+  claim_epoch               INTEGER NOT NULL DEFAULT 0,
+  next_attempt_at           INTEGER NOT NULL DEFAULT 0,   -- 可空会让新 round 永远选不中（P2-4）
+  dispatch_attempts         INTEGER NOT NULL DEFAULT 0,
+  dispatch_claimed_by       TEXT,
+  dispatch_lease_expires_at INTEGER,
+  last_dispatch_error       TEXT,
+  operation_ref             TEXT,
+  retry_feedback_ref        TEXT,
+  created_at                INTEGER NOT NULL,
+  updated_at                INTEGER NOT NULL
+);
 
--- DE 拥有：content-addressed 的反馈与诊断（同一张表，两种 kind）
+-- DE 拥有：content-addressed 的反馈与诊断（一张表，两种 kind）
 CREATE TABLE employee_reaction_artifacts (
   digest     TEXT PRIMARY KEY,             -- sha256(裁剪后正文)
   kind       TEXT NOT NULL,                -- retry-feedback | diagnostics
@@ -323,27 +342,34 @@ CREATE TABLE employee_reaction_artifacts (
 );
 ```
 
-**`dispatching` 状态要同步的判据（设计门 P1-9，漏一处就出 bug）**：
+### 5.1 **不新增 round 状态**（取代初稿的 `dispatching`）
 
-| 位置 | 改法 |
-| --- | --- |
-| 部分唯一索引 `employee_reaction_rounds_one_active`（`db/schema.ts:7378`、`db/migrations/0192_…:532`、`db/postgresql-migrations/0000_rfc349_baseline.sql:3562`） | `WHERE state IN ('planned','dispatching','running','settling')`——否则「一案一活跃 round」对新状态失效 |
-| `markRoundRunning` 的 CAS 谓词（`runtimeStore.ts:1401`） | `state='planned'` → `state='dispatching'` |
-| `activeRound` 判定（`runtimeService.ts:1146` / `:1243`） | 数组加 `dispatching` |
-| 派发终结兜底的 round 过滤 | 同上 |
-| `ReactionRoundRecord.state` 联合（`domain/runtimeModel.ts:316`） | 加 `dispatching` |
-| 前端文案表（`frontend/src/routes/employee-cases.$caseId.tsx:318` 附近）与 `roundVisualState`（`:388-391`） | 加 `dispatching`：文案「正在启动 / Starting」，视觉态归 `running`——否则落兜底文案「状态已更新」+ waiting 样式 |
+「admission 已登记、`launch` 回执未到」那一格由 **`state='planned'` + 侧表上持有中的租约** 表示。
+初稿想新增 `dispatching` 状态，改掉的原因有两条，后一条才是决定性的：
 
-**在途数据迁移（设计门 P2-3）**：对每条 `state IN ('pending','claimed')` 的 `execution-launch` 行：
+1. 新状态要同步到六处以上判据与前端文案（设计门 P1-9 列过清单）；
+2. **它必须进 `employee_reaction_rounds_one_active` 的谓词**，否则「一案一活跃 round」的 DB 级
+   不变量对它失效——而那个索引**改不了**（上面的硬约束）。
+
+用 `planned` + 租约表示之后：不变量原样成立、`markRoundRunning` 的 CAS 谓词（`state='planned'`）
+不用动、`ReactionRoundRecord.state` 联合不用动、**前端不用认识新状态**（P1-9 的前端项与
+`dispatching` 同步项一并消失）。崩溃重放的判据也更直接：**租约过期就重选**——正是
+`claimOutbox` 的旧语义（`state='claimed' AND claim_expires_at <= now`）平移过来。
+
+### 5.2 在途数据迁移（刀 3 / T5b，**不在刀 1**）
+
+对每条 `state IN ('pending','claimed')` 的 `execution-launch` outbox 行：
 - `payload.attempt.previousError` 非空 ⇒ 按 §6 裁剪后写入 `employee_reaction_artifacts`，
-  digest 挂到 `round.retry_feedback_ref`（**不能丢**，否则这次重试的理由消失）；
-- `next_attempt_at` ← 行上的 `next_attempt_at`；`dispatch_attempts` ← `attempt_count`；
-  `last_dispatch_error` ← `last_error`；
+  digest 挂到该 round 的 `retry_feedback_ref`（**不能丢**，否则这次重试的理由消失）；
+- `next_attempt_at` / `dispatch_attempts` / `last_dispatch_error` ← 行上的
+  `next_attempt_at` / `attempt_count` / `last_error`；
 - `mode` 不入库，派发时按 `attempt_ordinal % (policy.sameSceneAttempts + 1)` 重算
-  （公式同 `runtimeService.ts:3218`）；
-- 迁移后删除这些行。`completed`/`failed` 的历史 `execution-launch` 行**原样保留**
-  （`claimOutbox` 不会选中它们）；`kind` 列两个引擎都**没有** CHECK 约束
-  （SQLite `0192_…:460`、PG baseline `:1244` 都是裸 `TEXT NOT NULL`），所以无约束可改。
+  （`domain/retrySchedule.ts` 的 `attemptModeForOrdinal`）；
+- 迁移后删除这些行。`completed`/`failed` 的历史行原样保留（`claimOutbox` 不会选中它们）；
+  `kind` 列两个引擎都**没有** CHECK 约束（SQLite `0192_…:460`、PG baseline `:1244` 都是裸
+  `TEXT NOT NULL`），所以无约束可改——初稿写的「去掉 CHECK」是个空动作，已删。
+
+**为什么必须在刀 3**：行迁走、而派发臂还没接管时，那些 round 会当场停摆。这不是「零行为变更」。
 
 ## 6. 反馈裁剪（proposal §4 C1 的实现）
 
@@ -357,7 +383,7 @@ export function sanitizeReactionText(input: {
 }): { readonly body: string; readonly digest: string }
 ```
 
-顺序：R2 路径改写 → R3 栈帧处理（**待用户定，见 plan.md §4**）→ R4 折叠重复行 →
+顺序：R2 路径改写 → R3 **丢弃栈帧行**（用户 2026-09-22 裁决：整行丢弃）→ R4 折叠重复行 →
 拼 `errorCode: ` 前缀 → R5 截断 4000。同一函数同时服务 retry feedback 与 diagnostics。
 
 ## 7. 失败模式（设计门 P1-1 / P1-2 补全）

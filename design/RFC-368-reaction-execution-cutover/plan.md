@@ -1,6 +1,6 @@
 # RFC-368 任务分解
 
-**状态**：Draft（设计门 r1 已跑，9 P1 / 6 P2 / 2 P3 逐条回写，待用户批准实现）
+**状态**：**Approved（2026-09-22 用户批准实施）**，设计门 r1 的 9 P1 / 6 P2 / 2 P3 已逐条回写
 **读法**：先 [proposal.md](./proposal.md) 再 [design.md](./design.md)。
 
 ---
@@ -13,7 +13,8 @@
 | **T2** | DE domain：`sanitizeReactionText`（C1 的 R1–R5，服务反馈与诊断两种 kind） | `domain/reactionArtifacts.ts` + 单测（5 条正向 + R3/R4 各一反例） | — |
 | **T3** | DE domain：**两套**重试判据抽成纯函数 | `domain/retrySchedule.ts` 的 `roundRetrySchedule`（今天 `#retryOrFailExecution`）与 `dispatchRetrySchedule`（今天 outbox catch），**各自与改造前逐值对拍**的单测 | — |
 | **T4** | 合同落档：三个 required port + 两个 reader port 写进 `composition/required-ports.ts` | 仅类型，旧 `ReactionExecutionPort` 暂留 | T1 |
-| **T5** | schema：SQLite `0230` + PG `0006` | admission 表（`execution_ref NOT NULL`）/ round 八个新列 / artifacts 表 / **部分唯一索引加 `dispatching`** / 在途行迁移（含 `previousError` 入表） + 迁移用例 | T4 |
+| **T5a** | schema **纯增量**：SQLite `0230` + PG `0006` | admission 表（`execution_ref NOT NULL`）/ round 八个新列 / artifacts 表 / **部分唯一索引加 `dispatching`** + 迁移用例 | T4 |
+| **T5b** | schema **切换期**：在途 `execution-launch` 行迁移（含 `previousError` 入 artifacts 表、`mode` 重算）+ outbox `kind` 收缩 | **必须与刀 3 同批**——行迁走而派发臂还没接管时，那些 round 会当场停摆，这不是「零行为变更」 | T17 |
 | **T6** | TE：admission 持久化 + tx-bound participant（含事务内**预分配** executionRef、`admitLaunch` 幂等） | `task-execution/infrastructure/reactionExecutionAdmissions.ts` + `composeReactionExecutionAdmissionParticipantInTx(tx)` | T5 |
 | **T7** | TE：`ReactionExecutionPortV1` 的 provider adapter | `task-execution/application/adapters/reaction-execution-adapter.ts`；`launch` 用预分配 id 建任务并对已存在 id 幂等；`inspect` 补 `stopped` 态；消费 `ReactionRetryFeedbackReaderV1` 拼提示词 | T6 |
 | **T8** | DE：`dispatchOneReaction()` 取代 outbox `execution-launch` 臂 | 选择判据两支（`planned` 到期 ∪ `dispatching` 租约过期）+ case-terminal 短路 + claim/admission 同事务 | T5, T4 |
@@ -23,8 +24,8 @@
 | **T12** | DE：`inspect`/`inspectHumanReview`/`cancel` 改传 `access`；人审三来源映射（`not-applicable` / `unknown` / 其余） | 含投影端保留 round-state 回落 | T7 |
 | **T13** | DE：`closeClaim` 接到**六个**收口点（四个 `settleRound` 入口 + `obsolete` + `terminateCase`） | — | T8 |
 | **T14** | G7 取消语义：`stopped` 不消耗重试预算；`terminateCase` 调 `port.cancel` 停掉在跑的 agent | DE 结算分支 + `terminateCase` 路径 | T7, T12 |
-| **T15** | `dispatching` 状态同步到剩余判据 | `ReactionRoundRecord.state` 联合、`activeRound` 两处、`markRoundRunning` CAS 谓词 | T5 |
-| **T16** | **前端**：round 状态文案表 + `roundVisualState` 加 `dispatching` | `frontend/src/routes/employee-cases.$caseId.tsx`（文案表 `:318` 附近、`roundVisualState` `:388`）+ 前端用例 | T5 |
+| ~~T15~~ | ~~`dispatching` 状态同步~~ | **作废**：实施期发现 PG 迁移改不了既有索引的谓词，于是不新增状态、改用 `planned` + 派发租约表示（design §5.1）。不变量、CAS 谓词、状态联合全部不用动 | — |
+| ~~T16~~ | ~~前端状态文案 + 视觉态~~ | **作废**：同 T15，前端不用认识新状态 | — |
 | **T17** | 三个根切装配绑定 | 只换 binding，不并存双 writer | T7–T14 |
 | **T18** | 删除旧合同与双向边 | `DigitalEmployeeExecutionParticipant`、`digital-employee/application/adapters/task-execution-adapter.ts`、TE 侧 4 处 `WorkspaceFailureClass` import | T17 |
 | **T19** | 迁移回归锁：`rfc294-e9c-reaction-launch-crash-window.test.ts` 换新合同重建，**判据不放宽**，并补「`dispatching` 租约过期被重选」一格 | — | T17 |
@@ -35,9 +36,9 @@
 单 RFC 默认单 PR，但本 RFC 触及 schema + 两个 context + 三个根 + 前端，建议三刀，每刀自带测试、
 每刀 CI 绿：
 
-- **刀 1（T1–T5）**：纯增量——domain 纯函数 + 合同类型 + schema。不接线，零行为变更，可独立回滚。
-- **刀 2（T6–T16）**：实现与编排切换，**装配仍指向旧路径**（新路径只在测试里装配）。
-- **刀 3（T17–T20）**：切绑定、删旧合同、重采账本。回滚只需回绑定。
+- **刀 1（T1–T4, T5a）**：纯增量——domain 纯函数 + 合同类型 + **只加不改**的 schema。不接线，零行为变更，可独立回滚。
+- **刀 2（T6–T14）**：实现与编排切换，**装配仍指向旧路径**（新路径只在测试里装配）。
+- **刀 3（T5b, T17–T20）**：切绑定、迁在途行、收缩 outbox kind、删旧合同、重采账本。回滚只需回绑定。
 
 ## 3. 验收清单
 
@@ -61,15 +62,9 @@
 - [ ] 实现门已跑并回写 findings
 - [ ] exact-SHA 的 Main CI 终态 success（46/46）
 
-## 4. 待用户拍板的开放项
+## 4. 用户裁决记录（2026-09-22，全部已拍板，无开放项）
 
-**仅剩一条**：
-
-- **C1-R3（栈帧行 `    at …` 怎么处理）**——五条裁剪规则里唯一有信息损失风险的一条。
-  选项：①整行丢弃（上下文最干净，但某类失败只有栈帧能说明问题时会丢信息）；
-  ②保留首 N 条；③不裁栈帧，只做 R2+R4（零信息损失）。
-
-**已拍板并写入的（2026-09-22）**：
+- **C1-R3 栈帧行：整行丢弃**（五条裁剪规则里唯一有信息损失风险的一条，用户明确接受该风险）。
 - admission **事务内预分配 executionRef**（解 P1-2/P1-3/P1-5）。
 - retry 反馈与诊断经 **DE-owned reader port** 解引用（保住 G5）。
 - **顺带修**取消语义（G7 上半：`stopped` 不消耗重试预算）。
@@ -90,7 +85,7 @@ FAIL → 9 P1 / 6 P2 / 2 P3，全部已回写：
 | P1-6 派发臂没接进 worker 循环 | T9 新增；design §4.1 写明四处 + `activityOperations` 的插入位置陷阱；AC-7 |
 | P1-7 派发级终结路径整条丢失 | §4.2 两套计数器表 + 三个终结分支；T11；AC-8/AC-16 |
 | P1-8 反馈/诊断只传 ref 无解引用路径 | §3.3 增两个 DE-owned reader port；T7/T12 |
-| P1-9 `dispatching` 未同步到 6+ 处判据与前端 | §5 同步表；T15/T16 |
+| P1-9 `dispatching` 未同步到 6+ 处判据与前端 | **釜底抽薪**：不新增状态（design §5.1），改用 `planned` + 派发租约。P1-9 列的六处判据与前端两处**全部不需要改**，T15/T16 作废 |
 | P2-1 案例 terminal 短路丢失 | §4.1 case-terminal 短路；AC-14 |
 | P2-2 `null` 三来源合并 | §3.3 `not-applicable` / `unknown` 两态 + 保留 round-state 回落；AC-11 |
 | P2-3 在途迁移丢 `previousError` | §5 在途迁移写入 artifacts 表；`mode` 重算公式写明 |

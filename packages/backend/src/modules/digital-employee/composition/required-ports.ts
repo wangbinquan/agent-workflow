@@ -146,3 +146,158 @@ export interface PlatformWorkItemExecutionPort {
     },
   ): Promise<string>
 }
+
+// ---------------------------------------------------------------------------
+// RFC-368 T4 —— Reaction 执行的 V1 合同（DE 拥有，TaskExecution 实现）。
+//
+// 与上面那个 `ReactionExecutionPort` 的区别，逐条都是设计门 r1 或用户裁决的产物：
+//   · 四个执行方法**全必选**——`inspectHumanReview?` 是 optional 时，PostgreSQL 侧曾整个缺席，
+//     人审闸门在 PG 上永远报不出 `waiting`，而编译器一声不吭。
+//   · `launch` 收 factory-built 的 `PreparedReactionExecutionV1` + admission 回执，
+//     不再收裸 plan/attempt——跨缝的 JSON 往返（适配器 stringify → provider parse）随之消失。
+//   · `previousError: string` 换成 content-addressed 的反馈 ref，正文经 reader port 解引用。
+//   · snapshot 多一个 `stopped` 态：今天「取消」被 provider 当成 failed，DE 于是**白烧一次
+//     重试预算**重新起任务（用户 2026-09-22 裁决顺带修）。
+//   · `access` 是 `{operation, executionRef}` 而不是完整 receipt——receipt 在事务外重建不出来
+//     （设计门 P1-5），两个字段都在 round 行上。
+//
+// 旧 port 在本刀里**保留**：刀 1 是纯增量，切换在刀 3。
+// ---------------------------------------------------------------------------
+
+import type {
+  PreparedReactionExecutionV1,
+  ReactionOperationRef,
+  ReactionRequestHash,
+  ReactionRetryFeedbackRef,
+} from '../domain/reactionExecutionRequest'
+
+export type { PreparedReactionExecutionV1, ReactionOperationRef, ReactionRetryFeedbackRef }
+
+export type ReactionClaimEpoch = number & {
+  readonly __reactionClaimEpoch: 'reaction-claim-epoch-v1'
+}
+export type ReactionDiagnosticsRef = string & {
+  readonly __reactionDiagnostics: 'reaction-diagnostics-v1'
+}
+export type ReactionStopReceiptV1 = string & {
+  readonly __reactionStopReceipt: 'reaction-execution-stopped-v1'
+}
+
+export interface ReactionClaimFenceReceiptV1 {
+  readonly __brand: 'te-journal-backed-reaction-claim-fence-v1'
+  readonly roundRef: string
+  readonly claimEpoch: ReactionClaimEpoch
+  readonly fenceRevision: number
+}
+
+export interface ReactionExecutionAdmissionReceiptV1 {
+  readonly __brand: 'te-journal-backed-reaction-admission-v1'
+  readonly fence: ReactionClaimFenceReceiptV1
+  readonly operation: ReactionOperationRef
+  readonly requestHash: ReactionRequestHash
+  /**
+   * **事务内预分配**的执行身份（用户 2026-09-22 裁决）。它必填，是 record-before-act 的关键：
+   * launch 用这个 id 建任务，于是「任务已建、ref 还没写回」那一格根本不存在——崩溃重放
+   * 按 operation 命中同一条 admission、拿回同一个 id，不会起第二个任务。
+   */
+  readonly execution: string
+}
+
+/**
+ * 与 DE 的 claim CAS **同一个事务**。装配沿用仓内 `InTx` 定式：DE 注入
+ * `(tx) => ReactionExecutionAdmissionParticipantInTxV1`，在 `session.transaction` 内部取用；
+ * 参与者不持裸 DB handle，作用域退出即失效。
+ */
+export interface ReactionExecutionAdmissionParticipantInTxV1 {
+  readonly __brand: 'reaction-execution-admission-in-tx-v1'
+  activateClaim(input: {
+    readonly employeeCase: { readonly id: string }
+    readonly reaction: { readonly roundRef: string }
+    readonly expectedPreviousEpoch: ReactionClaimEpoch | null
+    readonly nextEpoch: ReactionClaimEpoch
+    readonly authority: { readonly subject: string; readonly revision: number }
+  }): Promise<ReactionClaimFenceReceiptV1>
+  /**
+   * 对 `(operation, requestHash)` **幂等**：已登记则原样返回既有回执（含同一个 execution），
+   * 同时把 fence 推进到当前 epoch。
+   *
+   * 这条幂等性是 P1-3 的解法：`operation` 是稳定键（round + ordinal），`claimEpoch` 是每次
+   * 派发递增。两者都做唯一键必然互斥——同一个 ordinal 派发失败后重派就插不进去、round 卡死。
+   */
+  admitLaunch(input: {
+    readonly fence: ReactionClaimFenceReceiptV1
+    readonly operation: ReactionOperationRef
+    readonly requestHash: ReactionRequestHash
+  }): Promise<ReactionExecutionAdmissionReceiptV1>
+  closeClaim(input: {
+    readonly reaction: { readonly roundRef: string }
+    readonly expectedCurrentEpoch: ReactionClaimEpoch
+    readonly reason: 'completed' | 'canceled' | 'superseded' | 'exhausted'
+  }): Promise<void>
+}
+
+export interface ReactionExecutionAccessV1 {
+  readonly operation: ReactionOperationRef
+  readonly executionRef: string
+}
+
+export type ReactionExecutionSnapshotV1 =
+  | { readonly kind: 'pending' }
+  | {
+      readonly kind: 'completed'
+      readonly outputJson: string
+      readonly metering: ReactionExecutionMetering
+    }
+  | {
+      readonly kind: 'failed'
+      readonly errorClass: WorkspaceFailureClass
+      readonly errorCode: string
+      readonly diagnostics: ReactionDiagnosticsRef
+      readonly metering: ReactionExecutionMetering
+    }
+  | {
+      readonly kind: 'stopped'
+      readonly receipt: ReactionStopReceiptV1
+      readonly metering: ReactionExecutionMetering
+    }
+
+/**
+ * 人审闸门的六态。`not-applicable` 与 `unknown` 是**两件事**，不能合并（设计门 P2-2）：
+ *   · `not-applicable` —— 这个动作根本没配闸门（执行输入里没有闸门键）。投影成 `skipped`。
+ *   · `unknown`        —— 执行行已不在 / 输入不可解析。投影端**保留今天的 round-state 回落**
+ *                          （completed→approved / failed|obsolete→failed / 否则 planning）。
+ * 合并的后果很具体：一个带闸门的动作正常完成、随后任务行被删（删除任务是既有功能），
+ * 今天闸门显示「已批准」，合并后会变成「跳过」——语义错。
+ */
+export type ReactionHumanReviewSnapshotV1 =
+  | { readonly kind: 'not-applicable' }
+  | { readonly kind: 'unknown' }
+  | { readonly kind: 'planning' }
+  | { readonly kind: 'waiting' }
+  | { readonly kind: 'approved' }
+  | { readonly kind: 'failed' }
+
+export interface ReactionExecutionPortV1 {
+  launch(
+    input: PreparedReactionExecutionV1,
+    admission: ReactionExecutionAdmissionReceiptV1,
+  ): Promise<{ readonly executionRef: string }>
+  inspect(access: ReactionExecutionAccessV1): Promise<ReactionExecutionSnapshotV1>
+  inspectHumanReview(access: ReactionExecutionAccessV1): Promise<ReactionHumanReviewSnapshotV1>
+  cancel(access: ReactionExecutionAccessV1): Promise<ReactionStopReceiptV1>
+}
+
+/**
+ * DE 拥有、**TaskExecution 消费**：把反馈 ref 解回正文拼进固定提示词。
+ *
+ * 没有它，`previousError` 换成 ref 之后 provider 手上只有一串 digest，重试提示里的纠错信息
+ * 会整段消失（设计门 P1-8）。方向与其它 required port 一致（DE 声明、TE 依赖），不新增反向边。
+ */
+export interface ReactionRetryFeedbackReaderV1 {
+  read(ref: ReactionRetryFeedbackRef): Promise<string | null>
+}
+
+/** DE 拥有、DE 自己消费：把诊断 ref 解回正文落 `round.outputJson` 与 `blockReason`。 */
+export interface ReactionDiagnosticsReaderV1 {
+  read(ref: ReactionDiagnosticsRef): Promise<string | null>
+}

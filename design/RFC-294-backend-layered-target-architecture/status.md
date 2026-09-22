@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:6e18f2581d3357f8d6270ba1d1ec147eb6e1e7d933c225a3eaced5c806e533dc`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:daea4a9b3646420c387b78c75e46a890cf609cfe935ab86382c1e8b2bb290596`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1824 |
+| backend production TS 文件 | 1827 |
 | `services/` 文件 | 291 |
-| `modules/**` 文件 / 非空 context | 1277 / 17 |
+| `modules/**` 文件 / 非空 context | 1280 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4803 |
+| `architectureExceptions` | 4804 |
 | `backgroundJobs` | 332 |
-| `crossContextImports` | 5386 |
+| `crossContextImports` | 5387 |
 | `facades` | 291 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24893 |
+| `moduleSymbolOwners` | 24939 |
 | `mutationEntrypoints` | 1723 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1015 |
@@ -92,6 +92,7 @@
 | intent / composition | 7 |
 | memory / infrastructure | 7 |
 | task-execution / public | 7 |
+| digital-employee / domain | 6 |
 | identity-access / public | 6 |
 | memory / public | 6 |
 | collaboration / public | 5 |
@@ -112,7 +113,6 @@
 | runtime-management / public | 4 |
 | source-control / composition | 4 |
 | system-operations / public | 4 |
-| digital-employee / domain | 3 |
 | event-center / domain | 3 |
 | execution-contract / application | 3 |
 | identity-access / domain | 3 |
@@ -201,7 +201,7 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3176 |
+| legacy-outbound | 3177 |
 | legacy-inbound | 1438 |
 | infrastructure-external | 278 |
 | offered-consumption | 188 |
@@ -216,7 +216,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3176 |
+| legacy-outbound | 3177 |
 | legacy-inbound | 1438 |
 | temporary-internal-debt | 91 |
 | off-dag-offered | 86 |
@@ -228,7 +228,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2606 |
+| W9 | 2607 |
 | W9-D | 762 |
 | W4-E1 | 650 |
 | W4 | 201 |
@@ -288,10 +288,10 @@
 
 | status | 数量 |
 | --- | --- |
-| declared-debt | 20 |
+| declared-debt | 21 |
 | active | 12 |
 
-### 7.2 provider=0 且 consumer=0 的 required port（合计 8）
+### 7.2 provider=0 且 consumer=0 的 required port（合计 9）
 
 - `required:development-automation:AgentActionExecutionPort`
 - `required:development-automation:DevelopmentCodeHostEffectsPort`
@@ -301,3 +301,4 @@
 - `required:development-automation:RepositoryUploadPlacementPort`
 - `required:development-automation:RequirementAcquisitionPort`
 - `required:development-automation:RequirementInteractionPort`
+- `required:digital-employee:ReactionExecutionPortV1`

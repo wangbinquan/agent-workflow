@@ -7359,6 +7359,16 @@ export const employeeReactionRounds = sqliteTable(
     executionPolicyRevision: integer('execution_policy_revision').notNull(),
     inputContextRefsJson: text('input_context_refs_json').notNull(),
     planJson: text('plan_json').notNull(),
+    /**
+     * RFC-368 **没有**新增状态。「admission 已登记、`launch` 回执未到」那一格由
+     * `state='planned'` + 持有中的派发租约（`dispatch_lease_expires_at`）表示。
+     *
+     * 一开始设计成新增 `dispatching`，撞上两条才改掉：①PG 迁移机制里索引是**只追加**的，
+     * 改不了 `employee_reaction_rounds_one_active` 的谓词，而新状态不进那个集合，
+     * 「一案一活跃 round」的 DB 级不变量就对它失效；②新状态要同步到六处以上判据与前端文案。
+     * 用 `planned` + 租约表示，不变量原样成立、`markRoundRunning` 的 CAS 谓词不用动、
+     * 前端不用认识新状态，而崩溃重放的判据更直接：租约过期就重选（正是 outbox 的旧语义）。
+     */
     state: text('state', {
       enum: ['planned', 'running', 'settling', 'completed', 'failed', 'obsolete'],
     })
@@ -7377,6 +7387,108 @@ export const employeeReactionRounds = sqliteTable(
       .on(t.caseId)
       .where(sql`${t.state} IN ('planned', 'running', 'settling')`),
     executionIdx: index('idx_employee_reaction_rounds_execution').on(t.executionRef, t.state),
+  }),
+)
+
+/**
+ * RFC-368 —— **TaskExecution 拥有**的 Reaction admission 日志，record-before-act 的落点。
+ *
+ * `operationRef` 是主键（稳定键：round + attempt ordinal）；`claimEpoch` / `fenceRevision` 是
+ * **这一行上被更新的列**，不参与唯一约束。两者都做唯一键会互斥——同一个 ordinal 派发失败后
+ * 重派（epoch 递增）就插不进去，round 当场卡死（设计门 P1-3）。
+ *
+ * `executionRef` **必填**：它在 admission 事务内就被预分配，`launch` 拿它当 taskId 去建任务。
+ * 于是「任务已建、ref 还没写回」那一格根本不存在——崩溃重放按 operation 命中同一条 admission、
+ * 拿回同一个 id，不会起第二个任务（设计门 P1-2；这一格正是 `56bb82b50` 修掉的缺陷）。
+ */
+export const reactionExecutionAdmissions = sqliteTable(
+  'reaction_execution_admissions',
+  {
+    operationRef: text('operation_ref').primaryKey(),
+    caseId: text('case_id').notNull(),
+    roundRef: text('round_ref').notNull(),
+    claimEpoch: integer('claim_epoch').notNull(),
+    fenceRevision: integer('fence_revision').notNull(),
+    requestHash: text('request_hash').notNull(),
+    authoritySubject: text('authority_subject').notNull(),
+    authorityRevision: integer('authority_revision').notNull(),
+    executionRef: text('execution_ref').notNull(),
+    state: text('state', { enum: ['admitted', 'launched', 'closed'] })
+      .notNull()
+      .default('admitted'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    roundIdx: index('idx_reaction_execution_admissions_round').on(t.roundRef, t.claimEpoch),
+    executionIdx: index('idx_reaction_execution_admissions_execution').on(t.executionRef),
+  }),
+)
+
+/**
+ * RFC-368 —— **数字员工拥有**的 Reaction 派发状态，与 round 一一对应。
+ *
+ * 它装的正是 `execution-launch` outbox 行今天装的那些东西（租约、重试计数、下次时间、
+ * 上次错误），随那一类 outbox 退役搬过来。做成**侧表**而不是给 `employee_reaction_rounds`
+ * 加列，是一条硬约束逼出来的：本仓 PostgreSQL 的迁移序列自 RFC-349 基线以来只支持
+ * 新表 / 新索引 / CHECK 放宽三种，**给既有表加列不可表达**
+ * （`postgresqlMigrationSequence.ts` 的 `logicalIndexAdditions` 会以
+ * 「index-only upgrade changed a row」拒绝）。侧表反而更贴事实——派发状态与 round 的业务身份
+ * 本来就是两件事，而且从 outbox 行搬过来是行对行的平移。
+ *
+ * 「admission 已登记、`launch` 回执未到」那一格 = round 仍是 `planned` + 这里持有未过期的租约。
+ * 于是不必新增 round 状态：`employee_reaction_rounds_one_active` 的不变量原样成立，
+ * `markRoundRunning` 的 CAS 谓词不用动，前端也不用认识新状态。崩溃重放的判据就是租约过期
+ * ——正是 `claimOutbox` 的旧语义（`state='claimed' AND claim_expires_at <= now`）。
+ */
+export const employeeReactionDispatch = sqliteTable(
+  'employee_reaction_dispatch',
+  {
+    roundRef: text('round_ref').primaryKey(),
+    caseId: text('case_id').notNull(),
+    /** 每次派发 +1。与 `operation_ref`（稳定键）的分工见 RFC-368 design §3.2。 */
+    claimEpoch: integer('claim_epoch').notNull().default(0),
+    /**
+     * `NOT NULL DEFAULT 0` 而不是可空：判据是 `next_attempt_at <= now`，而 SQL 里
+     * `NULL <= now` 为 NULL（非真）——可空会让新建的 round 永远选不中（设计门 P2-4）。
+     */
+    nextAttemptAt: integer('next_attempt_at').notNull().default(0),
+    dispatchAttempts: integer('dispatch_attempts').notNull().default(0),
+    dispatchClaimedBy: text('dispatch_claimed_by'),
+    dispatchLeaseExpiresAt: integer('dispatch_lease_expires_at'),
+    lastDispatchError: text('last_dispatch_error'),
+    operationRef: text('operation_ref'),
+    retryFeedbackRef: text('retry_feedback_ref'),
+    createdAt: integer('created_at').notNull(),
+    updatedAt: integer('updated_at').notNull(),
+  },
+  (t) => ({
+    dueIdx: index('idx_employee_reaction_dispatch_due').on(
+      t.nextAttemptAt,
+      t.dispatchLeaseExpiresAt,
+    ),
+    caseIdx: index('idx_employee_reaction_dispatch_case').on(t.caseId),
+  }),
+)
+
+/**
+ * RFC-368 —— **数字员工拥有**的 content-addressed 文本产物：重试反馈与失败诊断。
+ *
+ * 今天这两样都是裸错误串直接跨缝（`previousError` / `errorDetail`）。改成按 digest 存一份、
+ * port 上只传 ref，正文由 reader port 解引用。`digest` 是**裁剪后正文**的 sha256——同一条
+ * 反馈不会因为裁剪前的噪音不同而存成两行。
+ */
+export const employeeReactionArtifacts = sqliteTable(
+  'employee_reaction_artifacts',
+  {
+    digest: text('digest').primaryKey(),
+    kind: text('kind', { enum: ['retry-feedback', 'diagnostics'] }).notNull(),
+    body: text('body').notNull(),
+    bytes: integer('bytes').notNull(),
+    createdAt: integer('created_at').notNull(),
+  },
+  (t) => ({
+    kindIdx: index('idx_employee_reaction_artifacts_kind').on(t.kind, t.createdAt),
   }),
 )
 

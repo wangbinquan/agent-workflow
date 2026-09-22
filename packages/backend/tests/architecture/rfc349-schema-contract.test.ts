@@ -27,9 +27,9 @@ function sourceMentionsArchiveTable(text: string, schemaSymbol: string, tableId:
 
 describe('RFC-349 canonical schema contract', () => {
   test('locks the source, active parity and archive-only counts', () => {
-    expect(RFC349_SOURCE_TABLES).toHaveLength(189)
-    expect(contract.sourceTableCount).toBe(189)
-    expect(contract.activeTableCount).toBe(183)
+    expect(RFC349_SOURCE_TABLES).toHaveLength(192)
+    expect(contract.sourceTableCount).toBe(192)
+    expect(contract.activeTableCount).toBe(186)
     expect(contract.archiveOnlyTableCount).toBe(6)
     expect(contract.tables.map((table) => table.id)).toEqual([...RFC349_SOURCE_TABLES])
   })

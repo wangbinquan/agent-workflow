@@ -1,0 +1,888 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:85b914204bdf43d5d3333d819113b3c226c22376465d4540f5d74d1ae7866bf0', 186, 6)"
+    },
+    "beforeDigest": "sha256:3823c0b3b913c839b774c3c8d6229ebd0941914e3cbd90d77eb5bc770ba36a6d"
+  },
+  "digest": "sha256:11cfe1c01c97bcf31c867ee3ac1910d126478911204aed0891d7bbc734ffb87a",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "employee_reaction_artifacts",
+      "sql": "CREATE TABLE \"agent_workflow\".\"employee_reaction_artifacts\" (\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"kind\" TEXT COLLATE \"C\" NOT NULL,\n  \"body\" TEXT COLLATE \"C\" NOT NULL,\n  \"bytes\" BIGINT NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"employee_reaction_artifacts_pkey\" PRIMARY KEY (\"digest\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "employee_reaction_dispatch",
+      "sql": "CREATE TABLE \"agent_workflow\".\"employee_reaction_dispatch\" (\n  \"round_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"case_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"claim_epoch\" BIGINT NOT NULL DEFAULT 0,\n  \"next_attempt_at\" BIGINT NOT NULL DEFAULT 0,\n  \"dispatch_attempts\" BIGINT NOT NULL DEFAULT 0,\n  \"dispatch_claimed_by\" TEXT COLLATE \"C\",\n  \"dispatch_lease_expires_at\" BIGINT,\n  \"last_dispatch_error\" TEXT COLLATE \"C\",\n  \"operation_ref\" TEXT COLLATE \"C\",\n  \"retry_feedback_ref\" TEXT COLLATE \"C\",\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"employee_reaction_dispatch_pkey\" PRIMARY KEY (\"round_ref\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "reaction_execution_admissions",
+      "sql": "CREATE TABLE \"agent_workflow\".\"reaction_execution_admissions\" (\n  \"operation_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"case_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"round_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"claim_epoch\" BIGINT NOT NULL,\n  \"fence_revision\" BIGINT NOT NULL,\n  \"request_hash\" TEXT COLLATE \"C\" NOT NULL,\n  \"authority_subject\" TEXT COLLATE \"C\" NOT NULL,\n  \"authority_revision\" BIGINT NOT NULL,\n  \"execution_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"state\" TEXT COLLATE \"C\" NOT NULL DEFAULT 'admitted',\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"reaction_execution_admissions_pkey\" PRIMARY KEY (\"operation_ref\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "employee_reaction_artifacts:index:idx_employee_reaction_artifacts_kind",
+      "sql": "CREATE INDEX \"idx_employee_reaction_artifacts_kind\" ON \"agent_workflow\".\"employee_reaction_artifacts\" (\"kind\", \"created_at\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "employee_reaction_dispatch:index:idx_employee_reaction_dispatch_due",
+      "sql": "CREATE INDEX \"idx_employee_reaction_dispatch_due\" ON \"agent_workflow\".\"employee_reaction_dispatch\" (\"next_attempt_at\", \"dispatch_lease_expires_at\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "employee_reaction_dispatch:index:idx_employee_reaction_dispatch_case",
+      "sql": "CREATE INDEX \"idx_employee_reaction_dispatch_case\" ON \"agent_workflow\".\"employee_reaction_dispatch\" (\"case_id\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "reaction_execution_admissions:index:idx_reaction_execution_admissions_round",
+      "sql": "CREATE INDEX \"idx_reaction_execution_admissions_round\" ON \"agent_workflow\".\"reaction_execution_admissions\" (\"round_ref\", \"claim_epoch\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "reaction_execution_admissions:index:idx_reaction_execution_admissions_execution",
+      "sql": "CREATE INDEX \"idx_reaction_execution_admissions_execution\" ON \"agent_workflow\".\"reaction_execution_admissions\" (\"execution_ref\")"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:85b914204bdf43d5d3333d819113b3c226c22376465d4540f5d74d1ae7866bf0', active_table_count = 186, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:1c5c6ed6ba01159c5bd73a92fe1b5f24ec9920a6395d41c77ec687c71502d6da' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:1c5c6ed6ba01159c5bd73a92fe1b5f24ec9920a6395d41c77ec687c71502d6da",
+    "planDigest": "sha256:9df2c87f9905eb518b4ae8015a4f730cf9b2c47cdf68e2b18aed605a16a57f16"
+  },
+  "id": "0006_rfc368_reaction_execution_admissions",
+  "indexAdditions": [
+    {
+      "position": 83,
+      "statement": {
+        "kind": "table",
+        "logicalId": "employee_reaction_artifacts",
+        "sql": "CREATE TABLE \"agent_workflow\".\"employee_reaction_artifacts\" (\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"kind\" TEXT COLLATE \"C\" NOT NULL,\n  \"body\" TEXT COLLATE \"C\" NOT NULL,\n  \"bytes\" BIGINT NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  CONSTRAINT \"employee_reaction_artifacts_pkey\" PRIMARY KEY (\"digest\")\n)"
+      }
+    },
+    {
+      "position": 84,
+      "statement": {
+        "kind": "table",
+        "logicalId": "employee_reaction_dispatch",
+        "sql": "CREATE TABLE \"agent_workflow\".\"employee_reaction_dispatch\" (\n  \"round_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"case_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"claim_epoch\" BIGINT NOT NULL DEFAULT 0,\n  \"next_attempt_at\" BIGINT NOT NULL DEFAULT 0,\n  \"dispatch_attempts\" BIGINT NOT NULL DEFAULT 0,\n  \"dispatch_claimed_by\" TEXT COLLATE \"C\",\n  \"dispatch_lease_expires_at\" BIGINT,\n  \"last_dispatch_error\" TEXT COLLATE \"C\",\n  \"operation_ref\" TEXT COLLATE \"C\",\n  \"retry_feedback_ref\" TEXT COLLATE \"C\",\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"employee_reaction_dispatch_pkey\" PRIMARY KEY (\"round_ref\")\n)"
+      }
+    },
+    {
+      "position": 131,
+      "statement": {
+        "kind": "table",
+        "logicalId": "reaction_execution_admissions",
+        "sql": "CREATE TABLE \"agent_workflow\".\"reaction_execution_admissions\" (\n  \"operation_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"case_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"round_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"claim_epoch\" BIGINT NOT NULL,\n  \"fence_revision\" BIGINT NOT NULL,\n  \"request_hash\" TEXT COLLATE \"C\" NOT NULL,\n  \"authority_subject\" TEXT COLLATE \"C\" NOT NULL,\n  \"authority_revision\" BIGINT NOT NULL,\n  \"execution_ref\" TEXT COLLATE \"C\" NOT NULL,\n  \"state\" TEXT COLLATE \"C\" NOT NULL DEFAULT 'admitted',\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"reaction_execution_admissions_pkey\" PRIMARY KEY (\"operation_ref\")\n)"
+      }
+    },
+    {
+      "position": 319,
+      "statement": {
+        "kind": "index",
+        "logicalId": "employee_reaction_artifacts:index:idx_employee_reaction_artifacts_kind",
+        "sql": "CREATE INDEX \"idx_employee_reaction_artifacts_kind\" ON \"agent_workflow\".\"employee_reaction_artifacts\" (\"kind\", \"created_at\")"
+      }
+    },
+    {
+      "position": 320,
+      "statement": {
+        "kind": "index",
+        "logicalId": "employee_reaction_dispatch:index:idx_employee_reaction_dispatch_due",
+        "sql": "CREATE INDEX \"idx_employee_reaction_dispatch_due\" ON \"agent_workflow\".\"employee_reaction_dispatch\" (\"next_attempt_at\", \"dispatch_lease_expires_at\")"
+      }
+    },
+    {
+      "position": 321,
+      "statement": {
+        "kind": "index",
+        "logicalId": "employee_reaction_dispatch:index:idx_employee_reaction_dispatch_case",
+        "sql": "CREATE INDEX \"idx_employee_reaction_dispatch_case\" ON \"agent_workflow\".\"employee_reaction_dispatch\" (\"case_id\")"
+      }
+    },
+    {
+      "position": 420,
+      "statement": {
+        "kind": "index",
+        "logicalId": "reaction_execution_admissions:index:idx_reaction_execution_admissions_round",
+        "sql": "CREATE INDEX \"idx_reaction_execution_admissions_round\" ON \"agent_workflow\".\"reaction_execution_admissions\" (\"round_ref\", \"claim_epoch\")"
+      }
+    },
+    {
+      "position": 421,
+      "statement": {
+        "kind": "index",
+        "logicalId": "reaction_execution_admissions:index:idx_reaction_execution_admissions_execution",
+        "sql": "CREATE INDEX \"idx_reaction_execution_admissions_execution\" ON \"agent_workflow\".\"reaction_execution_admissions\" (\"execution_ref\")"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 79,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "digest",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["retry-feedback", "diagnostics"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "kind",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "body",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "bytes",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "employee_reaction_artifacts",
+        "indexes": [
+          {
+            "columns": ["kind", "created_at"],
+            "name": "idx_employee_reaction_artifacts_kind",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["digest"],
+        "ownerContext": "digital-employee",
+        "primaryKey": ["digest"],
+        "providerTables": {
+          "postgresql": "employee_reaction_artifacts",
+          "sqlite": "employee_reaction_artifacts"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "digital-employee",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "employeeReactionArtifacts",
+        "sourceTable": "employee_reaction_artifacts",
+        "unique": []
+      }
+    },
+    {
+      "position": 80,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "round_ref",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "case_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "claim_epoch",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "next_attempt_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "dispatch_attempts",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "dispatch_claimed_by",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "dispatch_lease_expires_at",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "last_dispatch_error",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "operation_ref",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "retry_feedback_ref",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "employee_reaction_dispatch",
+        "indexes": [
+          {
+            "columns": ["next_attempt_at", "dispatch_lease_expires_at"],
+            "name": "idx_employee_reaction_dispatch_due",
+            "unique": false,
+            "where": null
+          },
+          {
+            "columns": ["case_id"],
+            "name": "idx_employee_reaction_dispatch_case",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["round_ref"],
+        "ownerContext": "digital-employee",
+        "primaryKey": ["round_ref"],
+        "providerTables": {
+          "postgresql": "employee_reaction_dispatch",
+          "sqlite": "employee_reaction_dispatch"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "digital-employee",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "employeeReactionDispatch",
+        "sourceTable": "employee_reaction_dispatch",
+        "unique": []
+      }
+    },
+    {
+      "position": 127,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "operation_ref",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "case_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "round_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "claim_epoch",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "fence_revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "request_hash",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "authority_subject",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "authority_revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "execution_ref",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "\"admitted\"",
+            "enumValues": ["admitted", "launched", "closed"],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "state",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "'admitted'",
+              "sqlite": "'admitted'"
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "reaction_execution_admissions",
+        "indexes": [
+          {
+            "columns": ["round_ref", "claim_epoch"],
+            "name": "idx_reaction_execution_admissions_round",
+            "unique": false,
+            "where": null
+          },
+          {
+            "columns": ["execution_ref"],
+            "name": "idx_reaction_execution_admissions_execution",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["operation_ref"],
+        "ownerContext": "resource-catalog",
+        "primaryKey": ["operation_ref"],
+        "providerTables": {
+          "postgresql": "reaction_execution_admissions",
+          "sqlite": "reaction_execution_admissions"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "resource-catalog",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "reactionExecutionAdmissions",
+        "sourceTable": "reaction_execution_admissions",
+        "unique": []
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:36fccb9116efb560678d5ad4416968f00d87e3dab439da0106049b7a2e5e173d",
+  "sequence": 6,
+  "sqlDigest": "sha256:8eee02eec59f3ace2f299ceb6c59fdb6cf8c7127fc67bfe4af99298f221fbffb",
+  "sqlFile": "0006_rfc368_reaction_execution_admissions.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1790438412067,
+        "hash": "3420115e70e43721a35127262745366378d549888e4a45e118c4c87032217b12",
+        "index": 229,
+        "tag": "0230_rfc368_reaction_execution_admissions"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:36de8a4250479b0adc9e3000f74cd46c9512b6975cc3a9ab93b8e37c9520a1a1",
+      "count": 229,
+      "last": {
+        "folderMillis": 1790352012067,
+        "hash": "10f09d53a0a3a287ae881b920efa6f37d791cbf1e6d03f4cdacf8cce7b3d2324",
+        "index": 228,
+        "tag": "0229_rfc365_event_automation_work_intents"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:886ca79c6d557f9aa932d56ba45d0cdddb119723907fa0a0e7c91917966abbbf",
+      "count": 230,
+      "last": {
+        "folderMillis": 1790438412067,
+        "hash": "3420115e70e43721a35127262745366378d549888e4a45e118c4c87032217b12",
+        "index": 229,
+        "tag": "0230_rfc368_reaction_execution_admissions"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:85b914204bdf43d5d3333d819113b3c226c22376465d4540f5d74d1ae7866bf0",
+    "planDigest": "sha256:01e4bdc0440e0c11644407b37dd75cbd1ebebb47318fce31e82d962740ebfb1e"
+  },
+  "version": 2
+}
