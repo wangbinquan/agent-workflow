@@ -43,6 +43,7 @@
 | D8 | 非 initial attempt **必须**携反馈 artifact，mismatch 在 effect 前拒绝 | **允许降级**：反馈写入失败时 `{kind:'none'}`，不阻塞重试 | 今天 `previousError` 也不是必需品；让反馈写失败卡住重试是功能倒退 |
 | D9 | 请求材料拆成 implementation / executionContract / input / workspace / policy 五个冻结 ref | **合并为单个 `plan: FrozenReactionPlanV1`** | 现状 `planJson` 就是这一整块；拆分属 E9 之后的合同细化，本 RFC 只做 typed 化 |
 | D10 | 启动 liveness gate（两个 port 各恰一个 adapter、方法全实现） | **不做**启动门，只有源码层计数（AC-2） | 属启动期自检，与本 RFC 功能面无关；留给 W9 |
+| D11 | 合同类型名为 `ReactionExecutionAdmissionParticipantInTxV1`（§3.5 与 RFC-294 N1 的 `REQUIRED_CONTEXT_EDGES` 均用此名） | **改名为 `ReactionExecutionAdmissionParticipantV1`，并去掉 `__brand`**；同批改 `REQUIRED_CONTEXT_EDGES` 那一行 | 实施期实测：本仓把名字以 `…InTx`/`…Authority`/`…Token` 结尾的类型当**能力令牌**，`rfc294-architecture-preflight` 强制「只能由**声明它的 context** 里的 `create*` 工厂铸造、且该类型须声明在 `public/`」。而这是「DE 声明、TE 实现」的 required port，按 RFC-294 就该待在 `composition/required-ports.ts`，铸造权也必然在实现方。占着该后缀会让守卫要求结构上不可能满足的东西——先报「在 owner factory 之外构造」，包一层 DE 工厂后又报「factory is outside capability owner」。**函数名 `composeReactionExecutionAdmissionParticipantInTx` 保持不变**（守卫只看类型名），「同事务」的语义由它的签名与文档承载 |
 
 **不再偏离的两项**（r1 之前曾偏离，现已按上游做）：
 - admission receipt 的 `execution` 必填、在事务内预分配（用户 2026-09-22 裁决）。

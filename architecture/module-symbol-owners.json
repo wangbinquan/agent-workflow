@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1830,
+    "backendFiles": 1832,
     "frontendFiles": 622,
     "legacyFiles": 547,
-    "moduleFiles": 1283,
-    "productionFiles": 2607,
+    "moduleFiles": 1285,
+    "productionFiles": 2609,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24949
+    "symbolsIncludingFileRoots": 24964
   },
   "entries": [
     {
@@ -46169,6 +46169,18 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionDiagnosticsSinkV1",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ReactionDiagnosticsSinkV1",
+      "targetContext": "digital-employee",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
       "id": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionAccessV1",
       "removeAfterWave": null,
       "status": "current-module",
@@ -46181,10 +46193,10 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
-      "id": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionAdmissionParticipantInTxV1",
+      "id": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionAdmissionParticipantV1",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "ReactionExecutionAdmissionParticipantInTxV1",
+      "symbol": "ReactionExecutionAdmissionParticipantV1",
       "targetContext": "digital-employee",
       "targetLayer": "composition"
     },
@@ -115967,6 +115979,54 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#composeReactionExecutionPortV1",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeReactionExecutionPortV1",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#FAILURE_CLASS",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "FAILURE_CLASS",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#stopReceipt",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "stopReceipt",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/adapters/task-catalog-adapter.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/adapters/task-catalog-adapter.ts#$file",
       "removeAfterWave": null,
@@ -117532,6 +117592,78 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "CollaborationNodeGatePort",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/digitalEmployeeExecutionCore.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/digitalEmployeeExecutionCore.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/digitalEmployeeExecutionCore.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/digitalEmployeeExecutionCore.ts#DigitalEmployeeExecutionCore",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DigitalEmployeeExecutionCore",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/digitalEmployeeExecutionCore.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/digitalEmployeeExecutionCore.ts#DigitalEmployeeExecutionCoreSnapshot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DigitalEmployeeExecutionCoreSnapshot",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/digitalEmployeeExecutionCore.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/digitalEmployeeExecutionCore.ts#DigitalEmployeeExecutionMeteringV1",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DigitalEmployeeExecutionMeteringV1",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/digitalEmployeeExecutionCore.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/digitalEmployeeExecutionCore.ts#DigitalEmployeeHumanReviewCoreSnapshot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DigitalEmployeeHumanReviewCoreSnapshot",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/digitalEmployeeExecutionCore.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/digitalEmployeeExecutionCore.ts#TaskExecutionFailureClass",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskExecutionFailureClass",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -122722,6 +122854,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#buildDigitalEmployeeExecution",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "buildDigitalEmployeeExecution",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#buildDigitalEmployeeFixedPrompt",
@@ -122764,6 +122908,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "composeDigitalEmployeeExecution",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeDigitalEmployeeExecutionCore",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "composeDigitalEmployeeExecutionCore",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -122856,10 +123012,34 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#inspectDigitalEmployeeHumanReviewSnapshot",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "inspectDigitalEmployeeHumanReviewSnapshot",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#inspectDigitalEmployeeHumanReviewState",
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "inspectDigitalEmployeeHumanReviewState",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#legacyHumanReviewState",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "legacyHumanReviewState",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -300110,5 +300290,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ba53578de21b90873e876bd3d4ca6613b22afa438f62442d0e305dbfb7aa9623"
+  "sourceDigest": "sha256:8d2c54d52663ebaf9d41c28a89d113adeec3d5aab0b75af37637f0f3ec9fd9e2"
 }

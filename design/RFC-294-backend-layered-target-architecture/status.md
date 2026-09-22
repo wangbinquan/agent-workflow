@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:ba53578de21b90873e876bd3d4ca6613b22afa438f62442d0e305dbfb7aa9623`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:8d2c54d52663ebaf9d41c28a89d113adeec3d5aab0b75af37637f0f3ec9fd9e2`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1830 |
+| backend production TS 文件 | 1832 |
 | `services/` 文件 | 291 |
-| `modules/**` 文件 / 非空 context | 1283 / 17 |
+| `modules/**` 文件 / 非空 context | 1285 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -32,11 +32,11 @@
 | `ambientWiring` | 494 |
 | `architectureExceptions` | 4809 |
 | `backgroundJobs` | 332 |
-| `crossContextImports` | 5399 |
+| `crossContextImports` | 5407 |
 | `facades` | 291 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24949 |
-| `mutationEntrypoints` | 1724 |
+| `moduleSymbolOwners` | 24964 |
+| `mutationEntrypoints` | 1725 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1015 |
 | `transactionExternalEffects` | 254 |
@@ -49,7 +49,7 @@
 | --- | --- |
 | resource-catalog / infrastructure | 108 |
 | task-execution / infrastructure | 106 |
-| task-execution / application | 99 |
+| task-execution / application | 101 |
 | resource-catalog / application | 63 |
 | task-execution / composition | 59 |
 | development-automation / application | 51 |
@@ -201,14 +201,14 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3182 |
-| legacy-inbound | 1438 |
+| legacy-outbound | 3183 |
+| legacy-inbound | 1437 |
 | infrastructure-external | 279 |
 | offered-consumption | 188 |
 | temporary-internal-debt | 91 |
 | off-dag-offered | 86 |
 | authority-type-only | 76 |
-| required-implementation | 53 |
+| required-implementation | 61 |
 | external-layer-debt | 4 |
 | provider-mirror | 2 |
 
@@ -216,8 +216,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3182 |
-| legacy-inbound | 1438 |
+| legacy-outbound | 3183 |
+| legacy-inbound | 1437 |
 | temporary-internal-debt | 91 |
 | off-dag-offered | 86 |
 | no-circular | 6 |
@@ -228,9 +228,9 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2612 |
+| W9 | 2613 |
 | W9-D | 762 |
-| W4-E1 | 650 |
+| W4-E1 | 649 |
 | W4 | 201 |
 | W4-B | 183 |
 | W5 | 173 |
@@ -288,10 +288,10 @@
 
 | status | 数量 |
 | --- | --- |
-| declared-debt | 21 |
+| declared-debt | 22 |
 | active | 12 |
 
-### 7.2 provider=0 且 consumer=0 的 required port（合计 9）
+### 7.2 provider=0 且 consumer=0 的 required port（合计 8）
 
 - `required:development-automation:AgentActionExecutionPort`
 - `required:development-automation:DevelopmentCodeHostEffectsPort`
@@ -301,4 +301,3 @@
 - `required:development-automation:RepositoryUploadPlacementPort`
 - `required:development-automation:RequirementAcquisitionPort`
 - `required:development-automation:RequirementInteractionPort`
-- `required:digital-employee:ReactionExecutionPortV1`

@@ -47,8 +47,14 @@ import {
   synthesizeDigitalEmployeeScriptHostSnapshot,
 } from '../domain/digitalEmployeeHost'
 import { borrowedPostgresqlWorkspace } from './actionExecutionEnvironment'
+import { taskStopProjection } from '../domain/sourceTermination'
 import { ensureDigitalEmployeeHostWorkflow } from './actionExecutionRunners'
 import type { DigitalEmployeeWorkspacePort } from './required-ports'
+import type {
+  DigitalEmployeeExecutionCore,
+  DigitalEmployeeExecutionCoreSnapshot,
+  DigitalEmployeeHumanReviewCoreSnapshot,
+} from '../application/ports/digitalEmployeeExecutionCore'
 import type {
   RootTaskLaunchKernel,
   RootTaskLaunchSubject,
@@ -244,27 +250,31 @@ export function buildDigitalEmployeePlanPrompt(
  * 现在改成 async 的一份中立实现（查的是 `tasks` + `nodeRuns`，本来就没有方言），两侧 composition
  * 都装它。
  */
-export async function inspectDigitalEmployeeHumanReviewState(
+/**
+ * RFC-368 —— 人审闸门的**六态**快照。今天那三个 `null` 来源在这里拆开：
+ *   ① 执行行不在 / ② 输入不可解析 ⇒ `unknown`（投影端保留 round-state 回落）；
+ *   ③ 输入里没有闸门键 ⇒ `not-applicable`（这个动作没配闸门，投影成 skipped）。
+ * 合并的后果：带闸门的动作正常完成、随后任务行被删，闸门会从「已批准」变成「跳过」。
+ */
+export async function inspectDigitalEmployeeHumanReviewSnapshot(
   db: ProviderNeutralDatabase,
   executionRef: string,
-): Promise<'planning' | 'waiting' | 'approved' | 'failed' | null> {
+): Promise<DigitalEmployeeHumanReviewCoreSnapshot> {
   const task = await db
     .select({ inputs: tasks.inputs })
     .from(tasks)
     .where(eq(tasks.id, executionRef))
     .get()
-  if (task === undefined) return null
+  if (task === undefined) return 'unknown'
   let parsedInputs: z.SafeParseReturnType<unknown, Record<string, unknown>>
   try {
     parsedInputs = z.record(z.string(), z.unknown()).safeParse(JSON.parse(task.inputs) as unknown)
   } catch {
-    return null
+    return 'unknown'
   }
-  if (
-    !parsedInputs.success ||
-    typeof parsedInputs.data[DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY] !== 'string'
-  ) {
-    return null
+  if (!parsedInputs.success) return 'unknown'
+  if (typeof parsedInputs.data[DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY] !== 'string') {
+    return 'not-applicable'
   }
   const reviewRun = await db
     .select({ status: nodeRuns.status })
@@ -286,6 +296,20 @@ export async function inspectDigitalEmployeeHumanReviewState(
     return 'failed'
   }
   return 'planning'
+}
+
+/** 旧接口：三种「无闸门信号」一律折成 `null`。旧 participant 与既有测试仍用它，行为逐字不变。 */
+export async function inspectDigitalEmployeeHumanReviewState(
+  db: ProviderNeutralDatabase,
+  executionRef: string,
+): Promise<'planning' | 'waiting' | 'approved' | 'failed' | null> {
+  return legacyHumanReviewState(await inspectDigitalEmployeeHumanReviewSnapshot(db, executionRef))
+}
+
+function legacyHumanReviewState(
+  snapshot: DigitalEmployeeHumanReviewCoreSnapshot,
+): DigitalEmployeeHumanReviewState | null {
+  return snapshot === 'unknown' || snapshot === 'not-applicable' ? null : snapshot
 }
 
 /**
@@ -389,7 +413,8 @@ export interface DigitalEmployeeExecutionDependencies {
    * `waiting`。
    */
   readonly humanReview: Readonly<{
-    inspect(executionRef: string): Promise<DigitalEmployeeHumanReviewState | null>
+    /** RFC-368：六态快照（`unknown` 与 `not-applicable` 分开）；旧 participant 自己折回 null。 */
+    inspect(executionRef: string): Promise<DigitalEmployeeHumanReviewCoreSnapshot>
   }>
   readonly workspace?: DigitalEmployeeWorkspacePort
   readonly executionContracts: ExecutionContractParticipant & ExecutionContractProjectionParticipant
@@ -430,248 +455,271 @@ function parsedPlanOutputPath(planPrompt: string): string | null {
  * 内核在两个引擎上都真启动过（`rfc359-w5-kernel-launch-provider-parity`），
  * 库内缺省端口见下面的 `composeDatabaseDigitalEmployeeExecutionPorts`。
  */
-export function composeDigitalEmployeeExecution(
-  deps: DigitalEmployeeExecutionDependencies,
-): DigitalEmployeeExecutionParticipant {
-  const participant: DigitalEmployeeExecutionParticipant = {
-    async launch(planJson: string, attemptJson: string) {
-      const plan = planSchema.parse(JSON.parse(planJson) as unknown)
-      const attempt = attemptSchema.parse(JSON.parse(attemptJson) as unknown)
-      // RFC-294 E9-C 前置小修 —— **launch 对同一个 ReactionRound 幂等**。
-      //
-      // 数字员工侧的调用序列是「`launch()` 建任务 → `markRoundRunning()` 记下 executionRef」
-      // （`digital-employee/application/runtimeService.ts:2587-2588`），两步之间没有事务；
-      // 而「这一轮归谁做」只靠 outbox 行 60s 的租约兜着。daemon 在这中间重启，重启后那行
-      // 租约已过期会被重新领走，于是同一个 round 起出第二个任务：第一个从此无人 inspect /
-      // cancel（round 只记得住第二个），却继续吃 Case 的时长与 token 预算，并且和新任务
-      // **写同一个 worktree**（同一个 round 解析出同一个 scene）。
-      //
-      // 反查落在这里而不是数字员工侧，是因为知识在这边：每次启动都会把 round 写进任务行
-      // （`services/task.ts:2441` 的 `digitalEmployeeRoundId`），还带着索引；数字员工那边
-      // 在 `markRoundRunning` 之前手上什么都没有。
-      //
-      // 重试路径天然不受影响：重试只在 `inspect` 判出终态失败之后发生，那时旧任务已经不活了。
-      const launchedForRound = await deps.executionMetadata.findByRound(plan.roundRef)
-      const live = [...launchedForRound]
-        .filter((candidate) => digitalEmployeeExecutionIsLive(candidate))
-        .sort(
-          (left, right) =>
-            left.startedAt - right.startedAt || left.taskId.localeCompare(right.taskId),
+function buildDigitalEmployeeExecution(deps: DigitalEmployeeExecutionDependencies): {
+  readonly participant: DigitalEmployeeExecutionParticipant
+  readonly core: DigitalEmployeeExecutionCore
+} {
+  /**
+   * RFC-368 T7 —— 启动的 **typed 核心**。plan / attempt 收对象而不是 JSON 字符串；
+   * 旧的字符串 participant（刀 3 之前仍是生产装配）只是先 parse 再调这里，行为逐字不变。
+   *
+   *   · `dedupeByRound`：旧路径保留 `56bb82b50` 的活性反查（它是那条缺陷唯一的兜底）；
+   *     新路径不需要——执行身份在 admission 事务里预分配，重放按 id 命中，不再推断活性。
+   *   · `taskId`：新路径传 admission 预分配的执行身份，内核拿它当 taskId。
+   */
+  async function launchCore(
+    planInput: unknown,
+    attemptInput: unknown,
+    options: { readonly dedupeByRound: boolean; readonly taskId?: string },
+  ): Promise<{ readonly executionRef: string }> {
+    const plan = planSchema.parse(planInput)
+    const attempt = attemptSchema.parse(attemptInput)
+    const attemptJson = JSON.stringify(attempt)
+    // RFC-294 E9-C 前置小修 —— **launch 对同一个 ReactionRound 幂等**。
+    //
+    // 数字员工侧的调用序列是「`launch()` 建任务 → `markRoundRunning()` 记下 executionRef」
+    // （`digital-employee/application/runtimeService.ts:2587-2588`），两步之间没有事务；
+    // 而「这一轮归谁做」只靠 outbox 行 60s 的租约兜着。daemon 在这中间重启，重启后那行
+    // 租约已过期会被重新领走，于是同一个 round 起出第二个任务：第一个从此无人 inspect /
+    // cancel（round 只记得住第二个），却继续吃 Case 的时长与 token 预算，并且和新任务
+    // **写同一个 worktree**（同一个 round 解析出同一个 scene）。
+    //
+    // 反查落在这里而不是数字员工侧，是因为知识在这边：每次启动都会把 round 写进任务行
+    // （`services/task.ts:2441` 的 `digitalEmployeeRoundId`），还带着索引；数字员工那边
+    // 在 `markRoundRunning` 之前手上什么都没有。
+    //
+    // 重试路径天然不受影响：重试只在 `inspect` 判出终态失败之后发生，那时旧任务已经不活了。
+    const launchedForRound = options.dedupeByRound
+      ? await deps.executionMetadata.findByRound(plan.roundRef)
+      : []
+    const live = [...launchedForRound]
+      .filter((candidate) => digitalEmployeeExecutionIsLive(candidate))
+      .sort(
+        (left, right) =>
+          left.startedAt - right.startedAt || left.taskId.localeCompare(right.taskId),
+      )
+      .at(0)
+    if (live !== undefined) return { executionRef: live.taskId }
+    const implementation = executionContractImplementationSchema.parse(
+      JSON.parse(plan.implementationJson) as unknown,
+    )
+    if (implementation.kind !== plan.implementationKind) {
+      throw new Error('reaction plan implementation kind mismatch')
+    }
+    const envelope = inputEnvelopeSchema.parse(JSON.parse(plan.inputEnvelopeJson) as unknown)
+    const environment = environmentSchema.parse(
+      JSON.parse(envelope.executionEnvironmentJson) as unknown,
+    )
+    const scene =
+      deps.workspace === undefined
+        ? ({ kind: 'scratch' } as const)
+        : await deps.workspace.prepare({ planJson: JSON.stringify(plan), attemptJson })
+    const guide = deps.executionContracts.get(plan.workContractRef)
+    const toolInputJson =
+      deps.executionContracts.projectInput?.({
+        contractRef: plan.workContractRef,
+        roundRef: plan.roundRef,
+        executionNonce: plan.executionNonce,
+        inputEnvelopeJson: plan.inputEnvelopeJson,
+        projectionJson: scene.kind === 'repository' ? scene.contractProjectionJson : null,
+      }) ?? plan.inputEnvelopeJson
+    const prompt = buildDigitalEmployeeFixedPrompt(
+      { ...plan, inputEnvelopeJson: toolInputJson },
+      attempt,
+      guide,
+    )
+    const reviewedExecution = envelope.humanReview
+    if (reviewedExecution && implementation.kind !== 'agent') {
+      throw new Error('implementation plan review requires an Agent implementation')
+    }
+    const planPrompt = reviewedExecution
+      ? buildDigitalEmployeePlanPrompt(
+          {
+            ...plan,
+            inputEnvelopeJson:
+              deps.executionContracts.projectInput?.({
+                contractRef: reviewedExecution.planningTool.workContractRef,
+                roundRef: plan.roundRef,
+                executionNonce: plan.executionNonce,
+                inputEnvelopeJson: plan.inputEnvelopeJson,
+              }) ?? plan.inputEnvelopeJson,
+          },
+          attempt,
+          reviewedExecution.documentPath,
+          deps.executionContracts.get(reviewedExecution.planningTool.workContractRef).inputMode,
         )
-        .at(0)
-      if (live !== undefined) return { executionRef: live.taskId }
-      const implementation = executionContractImplementationSchema.parse(
-        JSON.parse(plan.implementationJson) as unknown,
-      )
-      if (implementation.kind !== plan.implementationKind) {
-        throw new Error('reaction plan implementation kind mismatch')
-      }
-      const envelope = inputEnvelopeSchema.parse(JSON.parse(plan.inputEnvelopeJson) as unknown)
-      const environment = environmentSchema.parse(
-        JSON.parse(envelope.executionEnvironmentJson) as unknown,
-      )
-      const scene =
-        deps.workspace === undefined
-          ? ({ kind: 'scratch' } as const)
-          : await deps.workspace.prepare({ planJson: JSON.stringify(plan), attemptJson })
-      const guide = deps.executionContracts.get(plan.workContractRef)
-      const toolInputJson =
-        deps.executionContracts.projectInput?.({
-          contractRef: plan.workContractRef,
-          roundRef: plan.roundRef,
-          executionNonce: plan.executionNonce,
-          inputEnvelopeJson: plan.inputEnvelopeJson,
-          projectionJson: scene.kind === 'repository' ? scene.contractProjectionJson : null,
-        }) ?? plan.inputEnvelopeJson
-      const prompt = buildDigitalEmployeeFixedPrompt(
-        { ...plan, inputEnvelopeJson: toolInputJson },
-        attempt,
-        guide,
-      )
-      const reviewedExecution = envelope.humanReview
-      if (reviewedExecution && implementation.kind !== 'agent') {
-        throw new Error('implementation plan review requires an Agent implementation')
-      }
-      const planPrompt = reviewedExecution
-        ? buildDigitalEmployeePlanPrompt(
-            {
-              ...plan,
-              inputEnvelopeJson:
-                deps.executionContracts.projectInput?.({
-                  contractRef: reviewedExecution.planningTool.workContractRef,
-                  roundRef: plan.roundRef,
-                  executionNonce: plan.executionNonce,
-                  inputEnvelopeJson: plan.inputEnvelopeJson,
-                }) ?? plan.inputEnvelopeJson,
-            },
-            attempt,
-            reviewedExecution.documentPath,
-            deps.executionContracts.get(reviewedExecution.planningTool.workContractRef).inputMode,
-          )
-        : null
-      const task: StartTask = {
-        workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
-        name: `employee:${plan.roundRef}`.slice(0, 255),
-        inputs:
-          implementation.kind === 'program'
-            ? { [EXECUTION_CONTRACT_SCRIPT_INPUT_PORT]: toolInputJson }
-            : reviewedExecution
-              ? {
-                  [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt,
-                  [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]: planPrompt!,
-                }
-              : { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt },
-        maxDurationMs: plan.roundBudgetMs,
-        ...(plan.maxTotalTokens === null ? {} : { maxTotalTokens: plan.maxTotalTokens }),
-        ...(scene.kind === 'repository'
-          ? {}
-          : environment.kind === 'scratch'
-            ? { scratch: true }
-            : environment.kind === 'cached-repository'
-              ? { cachedRepoId: environment.cachedRepoId }
-              : { repoGroupId: environment.repoGroupId }),
-      }
+      : null
+    const task: StartTask = {
+      workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
+      name: `employee:${plan.roundRef}`.slice(0, 255),
+      inputs:
+        implementation.kind === 'program'
+          ? { [EXECUTION_CONTRACT_SCRIPT_INPUT_PORT]: toolInputJson }
+          : reviewedExecution
+            ? {
+                [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt,
+                [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]: planPrompt!,
+              }
+            : { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt },
+      maxDurationMs: plan.roundBudgetMs,
+      ...(plan.maxTotalTokens === null ? {} : { maxTotalTokens: plan.maxTotalTokens }),
+      ...(scene.kind === 'repository'
+        ? {}
+        : environment.kind === 'scratch'
+          ? { scratch: true }
+          : environment.kind === 'cached-repository'
+            ? { cachedRepoId: environment.cachedRepoId }
+            : { repoGroupId: environment.repoGroupId }),
+    }
 
-      let subject: RootTaskLaunchSubject
-      if (implementation.kind === 'workflow') {
-        const workflow = await deps.workflows.get(implementation.workflowRef.id)
-        if (workflow === null || workflow.version !== implementation.workflowRef.revision) {
+    let subject: RootTaskLaunchSubject
+    if (implementation.kind === 'workflow') {
+      const workflow = await deps.workflows.get(implementation.workflowRef.id)
+      if (workflow === null || workflow.version !== implementation.workflowRef.revision) {
+        throw new Error(
+          `exact workflow unavailable: ${implementation.workflowRef.id}@${implementation.workflowRef.revision}`,
+        )
+      }
+      task.workflowId = workflow.id
+      task.expectedWorkflowVersion = workflow.version
+      task.inputs = { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt }
+      subject = {
+        workflowId: workflow.id,
+        workflowName: workflow.name,
+        workflowVersion: workflow.version,
+        workflowSnapshot: workflow.definition,
+        // 用户选定的既有工作流：保留作者几何，不重排（plan §5hn）。
+        builtin: false,
+      }
+    } else {
+      let snapshot: WorkflowDefinition
+      if (implementation.kind === 'agent') {
+        const agent = await deps.agents.get(implementation.agentRef.id)
+        if (agent === null || agent.updatedAt !== implementation.agentRef.revision) {
           throw new Error(
-            `exact workflow unavailable: ${implementation.workflowRef.id}@${implementation.workflowRef.revision}`,
+            `exact agent unavailable: ${implementation.agentRef.id}@${implementation.agentRef.revision}`,
           )
         }
-        task.workflowId = workflow.id
-        task.expectedWorkflowVersion = workflow.version
-        task.inputs = { [DIGITAL_EMPLOYEE_PROMPT_KEY]: prompt }
-        subject = {
-          workflowId: workflow.id,
-          workflowName: workflow.name,
-          workflowVersion: workflow.version,
-          workflowSnapshot: workflow.definition,
-          // 用户选定的既有工作流：保留作者几何，不重排（plan §5hn）。
-          builtin: false,
+        if (!agent.outputs.includes(DIGITAL_EMPLOYEE_RESULT_PORT)) {
+          throw new Error(`agent must expose ${DIGITAL_EMPLOYEE_RESULT_PORT}`)
         }
-      } else {
-        let snapshot: WorkflowDefinition
-        if (implementation.kind === 'agent') {
-          const agent = await deps.agents.get(implementation.agentRef.id)
-          if (agent === null || agent.updatedAt !== implementation.agentRef.revision) {
-            throw new Error(
-              `exact agent unavailable: ${implementation.agentRef.id}@${implementation.agentRef.revision}`,
-            )
-          }
-          if (!agent.outputs.includes(DIGITAL_EMPLOYEE_RESULT_PORT)) {
-            throw new Error(`agent must expose ${DIGITAL_EMPLOYEE_RESULT_PORT}`)
-          }
-          if (reviewedExecution === null) {
-            snapshot = WorkflowDefinitionSchema.parse(
-              synthesizeDigitalEmployeeHostSnapshot({ agentId: agent.id, agentName: agent.name }),
-            )
-          } else {
-            const planAgentRef = reviewedExecution.planningTool.implementation.agentRef
-            const planAgent = await deps.agents.get(planAgentRef.id)
-            if (planAgent === null || planAgent.updatedAt !== planAgentRef.revision) {
-              throw new Error(
-                `exact implementation plan Agent unavailable: ${planAgentRef.id}@${planAgentRef.revision}`,
-              )
-            }
-            if (!planAgent.outputs.includes(reviewedExecution.artifactPort)) {
-              throw new Error(
-                `implementation plan Agent must expose ${reviewedExecution.artifactPort}`,
-              )
-            }
-            snapshot = WorkflowDefinitionSchema.parse(
-              synthesizeReviewedDigitalEmployeeHostSnapshot({
-                planAgentId: planAgent.id,
-                planAgentName: planAgent.name,
-                implementationAgentId: agent.id,
-                implementationAgentName: agent.name,
-                artifactPort: reviewedExecution.artifactPort,
-                documentPath: reviewedExecution.documentPath,
-                reviewTitle: reviewedExecution.title,
-                reviewDescription: reviewedExecution.description,
-              }),
-            )
-          }
+        if (reviewedExecution === null) {
+          snapshot = WorkflowDefinitionSchema.parse(
+            synthesizeDigitalEmployeeHostSnapshot({ agentId: agent.id, agentName: agent.name }),
+          )
         } else {
-          const artifactPath = containedArtifact(deps.appHome, implementation.executableArtifactRef)
-          if (artifactPath === null || !existsSync(artifactPath)) {
-            throw new Error('program executable artifact is unavailable')
+          const planAgentRef = reviewedExecution.planningTool.implementation.agentRef
+          const planAgent = await deps.agents.get(planAgentRef.id)
+          if (planAgent === null || planAgent.updatedAt !== planAgentRef.revision) {
+            throw new Error(
+              `exact implementation plan Agent unavailable: ${planAgentRef.id}@${planAgentRef.revision}`,
+            )
           }
-          const source = readFileSync(artifactPath, 'utf8')
-          if (sha256Hex(source) !== implementation.executableDigest) {
-            throw new Error('program executable artifact digest mismatch')
-          }
-          let parametersJson = '{}'
-          if (implementation.parameterValuesRef !== null) {
-            const parameterPath = containedArtifact(deps.appHome, implementation.parameterValuesRef)
-            if (parameterPath === null || !existsSync(parameterPath)) {
-              throw new Error('program parameter artifact is unavailable')
-            }
-            parametersJson = JSON.stringify(
-              programParametersSchema.parse(
-                JSON.parse(readFileSync(parameterPath, 'utf8')) as unknown,
-              ),
+          if (!planAgent.outputs.includes(reviewedExecution.artifactPort)) {
+            throw new Error(
+              `implementation plan Agent must expose ${reviewedExecution.artifactPort}`,
             )
           }
           snapshot = WorkflowDefinitionSchema.parse(
-            synthesizeDigitalEmployeeScriptHostSnapshot({
-              inputPort: EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,
-              language: implementation.runtimeKind,
-              script: source,
-              dependencies: [],
-              env: {
-                DIGITAL_EMPLOYEE_TOOL_PARAMETERS_JSON: parametersJson,
-                DIGITAL_EMPLOYEE_TOOL_CONNECTION_REF_JSON: JSON.stringify(plan.connectionRef),
-                DIGITAL_EMPLOYEE_TOOL_SLOT: plan.toolSlotRef,
-              },
-              readonly: false,
+            synthesizeReviewedDigitalEmployeeHostSnapshot({
+              planAgentId: planAgent.id,
+              planAgentName: planAgent.name,
+              implementationAgentId: agent.id,
+              implementationAgentName: agent.name,
+              artifactPort: reviewedExecution.artifactPort,
+              documentPath: reviewedExecution.documentPath,
+              reviewTitle: reviewedExecution.title,
+              reviewDescription: reviewedExecution.description,
             }),
           )
         }
-        subject = {
-          workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
-          workflowName: '__digital_employee_host__',
-          workflowVersion: 1,
-          workflowSnapshot: snapshot,
-          // 合成的宿主快照：写时冻结规范排版（plan §5hn）。
-          builtin: true,
+      } else {
+        const artifactPath = containedArtifact(deps.appHome, implementation.executableArtifactRef)
+        if (artifactPath === null || !existsSync(artifactPath)) {
+          throw new Error('program executable artifact is unavailable')
         }
+        const source = readFileSync(artifactPath, 'utf8')
+        if (sha256Hex(source) !== implementation.executableDigest) {
+          throw new Error('program executable artifact digest mismatch')
+        }
+        let parametersJson = '{}'
+        if (implementation.parameterValuesRef !== null) {
+          const parameterPath = containedArtifact(deps.appHome, implementation.parameterValuesRef)
+          if (parameterPath === null || !existsSync(parameterPath)) {
+            throw new Error('program parameter artifact is unavailable')
+          }
+          parametersJson = JSON.stringify(
+            programParametersSchema.parse(
+              JSON.parse(readFileSync(parameterPath, 'utf8')) as unknown,
+            ),
+          )
+        }
+        snapshot = WorkflowDefinitionSchema.parse(
+          synthesizeDigitalEmployeeScriptHostSnapshot({
+            inputPort: EXECUTION_CONTRACT_SCRIPT_INPUT_PORT,
+            language: implementation.runtimeKind,
+            script: source,
+            dependencies: [],
+            env: {
+              DIGITAL_EMPLOYEE_TOOL_PARAMETERS_JSON: parametersJson,
+              DIGITAL_EMPLOYEE_TOOL_CONNECTION_REF_JSON: JSON.stringify(plan.connectionRef),
+              DIGITAL_EMPLOYEE_TOOL_SLOT: plan.toolSlotRef,
+            },
+            readonly: false,
+          }),
+        )
       }
+      subject = {
+        workflowId: DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID,
+        workflowName: '__digital_employee_host__',
+        workflowVersion: 1,
+        workflowSnapshot: snapshot,
+        // 合成的宿主快照：写时冻结规范排版（plan §5hn）。
+        builtin: true,
+      }
+    }
 
-      // RFC-359 AC-1 回补（2026-09-19）：**宿主工作流行的幂等播种在合一（`c932bc8e8`）时丢了**。
-      // `DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID` 是一个合成 id，只有这行 builtin 锚存在，任务的
-      // `workflow_id` 才指得到东西。丢了之后数字员工的执行任务落在一个**不存在的工作流**上，
-      // 用户可见后果在人工评审这条路上炸：`getReviewDetail` 拿 `task.workflowId` 查 workflows
-      // 查不到 ⇒ `review-not-found`，评审页只剩一句「Review not found.」
-      // ——案例一直等着人工评审，而评审人点进去打不开（e2e DE-28 实撞，连红三天）。
-      // 播种必须在 launch **之前**：launch 那一笔就要写 task 行。
-      await deps.hostWorkflow.ensure()
-      const launchActor = await deps.resolveActor()
-      const launched = await deps.launch.launch({
-        actor: launchActor,
-        resourceAuthority: deps.resourceAuthorityFor(launchActor),
-        invoker: { type: 'user', launchKind: 'direct-json' },
-        task,
-        subject,
-        internal: {
-          catalogVisibility: 'internal',
-          digitalEmployeeLaunch: {
-            actionRunId: plan.roundRef,
-            caseId: plan.caseRef.id,
-          },
-          ...(scene.kind === 'repository'
-            ? {
-                platformInputPaths: scene.platformInputPaths,
-                workspace: borrowedPostgresqlWorkspace({
-                  workspacePath: scene.workspacePath,
-                  baselineSha: scene.baselineSha,
-                }),
-              }
-            : {}),
+    // RFC-359 AC-1 回补（2026-09-19）：**宿主工作流行的幂等播种在合一（`c932bc8e8`）时丢了**。
+    // `DIGITAL_EMPLOYEE_HOST_WORKFLOW_ID` 是一个合成 id，只有这行 builtin 锚存在，任务的
+    // `workflow_id` 才指得到东西。丢了之后数字员工的执行任务落在一个**不存在的工作流**上，
+    // 用户可见后果在人工评审这条路上炸：`getReviewDetail` 拿 `task.workflowId` 查 workflows
+    // 查不到 ⇒ `review-not-found`，评审页只剩一句「Review not found.」
+    // ——案例一直等着人工评审，而评审人点进去打不开（e2e DE-28 实撞，连红三天）。
+    // 播种必须在 launch **之前**：launch 那一笔就要写 task 行。
+    await deps.hostWorkflow.ensure()
+    const launchActor = await deps.resolveActor()
+    const launched = await deps.launch.launch({
+      actor: launchActor,
+      resourceAuthority: deps.resourceAuthorityFor(launchActor),
+      invoker: { type: 'user', launchKind: 'direct-json' },
+      task,
+      subject,
+      internal: {
+        catalogVisibility: 'internal',
+        ...(options.taskId === undefined ? {} : { preallocatedTaskId: options.taskId }),
+        digitalEmployeeLaunch: {
+          actionRunId: plan.roundRef,
+          caseId: plan.caseRef.id,
         },
+        ...(scene.kind === 'repository'
+          ? {
+              platformInputPaths: scene.platformInputPaths,
+              workspace: borrowedPostgresqlWorkspace({
+                workspacePath: scene.workspacePath,
+                baselineSha: scene.baselineSha,
+              }),
+            }
+          : {}),
+      },
+    })
+    return { executionRef: launched.id }
+  }
+
+  const participant: DigitalEmployeeExecutionParticipant = {
+    async launch(planJson: string, attemptJson: string) {
+      return await launchCore(JSON.parse(planJson) as unknown, JSON.parse(attemptJson) as unknown, {
+        dedupeByRound: true,
       })
-      return { executionRef: launched.id }
     },
 
     async inspect(executionRef: string) {
@@ -785,7 +833,7 @@ export function composeDigitalEmployeeExecution(
     },
 
     async inspectHumanReview(executionRef) {
-      return await deps.humanReview.inspect(executionRef)
+      return legacyHumanReviewState(await deps.humanReview.inspect(executionRef))
     },
 
     async cancel(executionRef: string) {
@@ -794,7 +842,78 @@ export function composeDigitalEmployeeExecution(
       await deps.tasks.cancel(executionRef)
     },
   }
-  return Object.freeze(participant)
+
+  // 「用户取消」的判据取自单一事实源（`domain/sourceTermination.ts`），不硬编码字符串。
+  // 注意资源上限超时与空闲收割也会把任务置成 `canceled`，只是改写了 errorSummary——
+  // 它们仍按失败走重试（改成 stopped 会让超时不再重试，那是 AC-12 禁止放宽的重试预算）。
+  const userCancelSummary = taskStopProjection({ kind: 'user' }).summary
+
+  const core: DigitalEmployeeExecutionCore = {
+    async launch(input) {
+      return await launchCore(input.plan, input.attempt, {
+        dedupeByRound: false,
+        taskId: input.taskId,
+      })
+    },
+
+    async executionExists(executionRef: string) {
+      return (await deps.tasks.get(executionRef)) !== null
+    },
+
+    async inspect(executionRef: string): Promise<DigitalEmployeeExecutionCoreSnapshot> {
+      const task = await deps.tasks.get(executionRef)
+      if (task !== null && task.status === 'canceled' && task.errorSummary === userCancelSummary) {
+        const usage = (await deps.resourceUsage.read(executionRef)) ?? {
+          effectiveRunningMs: 0,
+          totalTokens: 0,
+        }
+        return {
+          kind: 'stopped',
+          metering: {
+            sourceRef: `task:${executionRef}`,
+            durationMs: usage.effectiveRunningMs,
+            totalTokens: usage.totalTokens,
+          },
+        }
+      }
+      const result = await participant.inspect(executionRef)
+      if (result.kind === 'pending') return { kind: 'pending' }
+      if (result.kind === 'completed') {
+        return { kind: 'completed', outputJson: result.outputJson, metering: result.metering }
+      }
+      return {
+        kind: 'failed',
+        errorClass: result.errorClass,
+        errorCode: result.errorCode,
+        errorDetail: result.errorDetail,
+        workspaceRoot: task?.worktreePath ?? null,
+        metering: result.metering,
+      }
+    },
+
+    async inspectHumanReview(executionRef: string) {
+      return await deps.humanReview.inspect(executionRef)
+    },
+
+    async cancel(executionRef: string) {
+      await participant.cancel(executionRef)
+    },
+  }
+
+  return { participant: Object.freeze(participant), core: Object.freeze(core) }
+}
+
+export function composeDigitalEmployeeExecution(
+  deps: DigitalEmployeeExecutionDependencies,
+): DigitalEmployeeExecutionParticipant {
+  return buildDigitalEmployeeExecution(deps).participant
+}
+
+/** RFC-368 T7 —— typed 核心，供 `ReactionExecutionPortV1` 适配器经端口注入。 */
+export function composeDigitalEmployeeExecutionCore(
+  deps: DigitalEmployeeExecutionDependencies,
+): DigitalEmployeeExecutionCore {
+  return buildDigitalEmployeeExecution(deps).core
 }
 
 /**
@@ -854,7 +973,8 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
       },
     },
     humanReview: {
-      inspect: (executionRef: string) => inspectDigitalEmployeeHumanReviewState(db, executionRef),
+      inspect: (executionRef: string) =>
+        inspectDigitalEmployeeHumanReviewSnapshot(db, executionRef),
     },
   })
 }

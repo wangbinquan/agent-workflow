@@ -361,7 +361,7 @@ flowchart LR
   INTEG -. "implements CodeHostExecutionPort" .-> TE
   TE -. "implements AgentActionExecutionPort" .-> DA
   TE -. "implements ReactionExecutionPortV1" .-> DE
-  TE -. "implements ReactionExecutionAdmissionParticipantInTxV1" .-> DE
+  TE -. "implements ReactionExecutionAdmissionParticipantV1" .-> DE
   INTEG -. "implements development-effect-spi" .-> DA
   TE -. "implements TaskCatalogSource" .-> TC
   DE -. "implements TaskCatalogSource" .-> TC

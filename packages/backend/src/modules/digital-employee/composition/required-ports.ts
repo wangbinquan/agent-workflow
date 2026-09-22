@@ -217,11 +217,19 @@ export interface ReactionExecutionAdmissionReceiptV1 {
 
 /**
  * 与 DE 的 claim CAS **同一个事务**。装配沿用仓内 `InTx` 定式：DE 注入
- * `(tx) => ReactionExecutionAdmissionParticipantInTxV1`，在 `session.transaction` 内部取用；
+ * `(tx) => ReactionExecutionAdmissionParticipantV1`，在 `session.transaction` 内部取用；
  * 参与者不持裸 DB handle，作用域退出即失效。
+ *
+ * ⚠️ 类型名**刻意不叫** `…InTxV1`（RFC-294 §3.5 与 `REQUIRED_CONTEXT_EDGES` 的原名），
+ * 也不带 `__brand`。本仓把名字以 `…InTx`/`…Authority`/`…Token` 结尾的类型当作**能力令牌**，
+ * 由 `rfc294-architecture-preflight` 强制「只能由**声明它的 context** 里的 `create*` 工厂铸造、
+ * 且该类型须声明在 `public/`」。而这是「DE 声明、TaskExecution 实现」的 **required port**——
+ * 它按 RFC-294 就该待在 `composition/required-ports.ts`，且铸造权必然在实现方那边。
+ * 占着能力令牌的后缀会让守卫要求一套结构上不可能满足的东西（实测：先报「在 owner factory
+ * 之外构造」，包一层 DE 工厂后又报「factory is outside capability owner」）。
+ * 见 design.md §2.2 的偏离项 D11。
  */
-export interface ReactionExecutionAdmissionParticipantInTxV1 {
-  readonly __brand: 'reaction-execution-admission-in-tx-v1'
+export interface ReactionExecutionAdmissionParticipantV1 {
   activateClaim(input: {
     readonly employeeCase: { readonly id: string }
     readonly reaction: { readonly roundRef: string }
@@ -313,3 +321,19 @@ export interface ReactionRetryFeedbackReaderV1 {
 export interface ReactionDiagnosticsReaderV1 {
   read(ref: ReactionDiagnosticsRef): Promise<string | null>
 }
+
+/**
+ * DE 拥有、**TaskExecution 消费**：provider 把失败详情交给数字员工裁剪并按内容地址存档，
+ * 执行 snapshot 上只回 ref（G5「port 上只传 ref」）。裁剪规则（R1–R5）在数字员工侧
+ * `domain/reactionArtifacts.ts`，provider 不知道也不需要知道。
+ */
+export interface ReactionDiagnosticsSinkV1 {
+  put(input: {
+    readonly errorCode: string
+    readonly errorDetail: string
+    readonly workspaceRoot: string | null
+  }): Promise<ReactionDiagnosticsRef>
+}
+
+/** 执行 snapshot 的失败类别；provider 适配器据此把自己的类别映射过来。 */
+export type { WorkspaceFailureClass }

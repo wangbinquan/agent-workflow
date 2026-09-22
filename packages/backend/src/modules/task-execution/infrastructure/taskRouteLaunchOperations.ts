@@ -401,6 +401,13 @@ export interface RootTaskLaunchRequest {
     }>
     readonly platformInputPaths?: readonly string[]
     readonly workspace?: TaskRouteWorkspaceParticipant
+    /**
+     * RFC-368 —— 数字员工 Reaction 的执行身份在 admission 事务里就**预分配**好了，
+     * 这里拿它当 taskId，而不是由内核现铸。于是「任务已建、ref 还没写回」那一格不存在：
+     * 崩溃重放拿回同一个 id，调用方先查这个 id 的任务是否已在，已在就不再 launch。
+     * 不传时行为与改造前逐字相同（`nextId()`）。
+     */
+    readonly preallocatedTaskId?: string
   }>
 }
 
@@ -722,7 +729,7 @@ function createRootLaunch(
       guard?.assertCanCommit()
       await guard?.verifyCanCommit()
 
-      const taskId = nextId()
+      const taskId = input.internal?.preallocatedTaskId ?? nextId()
       const intentId = nextId()
       const refClosureJson = await input.resourceAuthority.resources.freezeCallClosure(
         input.resourceAuthority,

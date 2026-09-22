@@ -45410,23 +45410,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:8ee6b2871b6f3bdb4b63",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#inspectDigitalEmployeeHumanReviewState",
-      "toPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "toSymbol": "inspectDigitalEmployeeHumanReviewState",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "fromPath": "packages/backend/src/cli/start.ts",
       "fromSymbol": "$file",
@@ -77047,6 +77030,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f0dd540036531b97fc1c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ConflictError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "fromPath": "packages/backend/src/cli/start.ts",
       "fromSymbol": "$file",
@@ -81757,8 +81757,8 @@
   "denominator": {
     "architectureExceptions": 4809,
     "implementationSccs": 0,
-    "observedEdges": 5399,
-    "requiredPorts": 33,
+    "observedEdges": 5407,
+    "requiredPorts": 34,
     "targetEdges": 66
   },
   "finalCriterion": "Observed imports, offered/required/authority target edges and required-port liveness remain exact, referentially complete and role-preserving.",
@@ -90247,22 +90247,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file",
-      "id": "import:185ef1acb8dee8ce3701",
-      "owner": "task-execution",
-      "removeAfterWave": null,
-      "role": "required-implementation",
-      "specifier": "@/modules/digital-employee/composition/required-ports",
-      "syntax": "static-import",
-      "targetSymbol": "ReactionExecutionAdmissionParticipantInTxV1",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionAdmissionParticipantInTxV1"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver.ts#$file",
@@ -91668,6 +91652,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workgroupMessages"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file",
+      "id": "import:1cfb47eab376b36f645e",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "WorkspaceFailureClass",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -95316,6 +95316,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/codeHost/connections.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/codeHost/connections.ts#CodeHostConnectionsService"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file",
+      "id": "import:26e4970ef4bb35ca0f80",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionExecutionAccessV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionAccessV1"
     },
     {
       "edgeKind": "value",
@@ -99844,6 +99860,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#taskVisibilitySubjectOf"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file",
+      "id": "import:347b86b0129f93fd9405",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionExecutionAdmissionParticipantV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionAdmissionParticipantV1"
     },
     {
       "edgeKind": "value",
@@ -106999,6 +107031,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file",
+      "id": "import:498019b5713bbe0797d3",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionHumanReviewSnapshotV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionHumanReviewSnapshotV1"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/runtime/opencode/inlineConfig.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/runtime/opencode/inlineConfig.ts#$file",
@@ -111508,6 +111556,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/application/ports/humanGateContinuationRecovery.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/application/ports/humanGateContinuationRecovery.ts#PendingHumanGateContinuation"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file",
+      "id": "import:589b3e180058c23357be",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionExecutionSnapshotV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionSnapshotV1"
     },
     {
       "edgeKind": "type",
@@ -125414,6 +125478,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/public/queries.ts#resolveCollaborationTaskAccess"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file",
+      "id": "import:814da297726bd6986e36",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionStopReceiptV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionStopReceiptV1"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/effectQuiescence.ts",
@@ -129704,22 +129784,6 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:8ee6b2871b6f3bdb4b63",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/composition/digitalEmployeeExecution",
-      "syntax": "static-import",
-      "targetSymbol": "inspectDigitalEmployeeHumanReviewState",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#inspectDigitalEmployeeHumanReviewState"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "id": "import:8ef7e5381af7f49fa8ee",
@@ -132646,6 +132710,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#persistIsoBase"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file",
+      "id": "import:984189cf438e3edf645f",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionRetryFeedbackReaderV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionRetryFeedbackReaderV1"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
@@ -134228,6 +134308,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file",
+      "id": "import:9c37908c0e0176f5142b",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionDiagnosticsSinkV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionDiagnosticsSinkV1"
     },
     {
       "edgeKind": "value",
@@ -138532,6 +138628,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/events.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/events.ts#taskLifecycleEventCatalogJson"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file",
+      "id": "import:a890b5a748651c758353",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionExecutionPortV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionPortV1"
     },
     {
       "edgeKind": "value",
@@ -163143,6 +163255,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file",
+      "id": "import:f0dd540036531b97fc1c",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ConflictError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -168343,6 +168471,25 @@
       "symbol": "ProgramArtifactPort"
     },
     {
+      "compositionFiles": [],
+      "compositionOwnerEntryIds": [],
+      "consumerOwnerEntryIds": [],
+      "context": "digital-employee",
+      "id": "required:digital-employee:ReactionExecutionAdmissionParticipantV1",
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionAdmissionParticipantV1",
+      "providerAdapters": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:347b86b0129f93fd9405",
+          "file": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file"
+        }
+      ],
+      "removeAfterWave": "W4-E9",
+      "status": "declared-debt",
+      "symbol": "ReactionExecutionAdmissionParticipantV1"
+    },
+    {
       "compositionFiles": [
         "packages/backend/src/modules/digital-employee/composition.ts"
       ],
@@ -168369,7 +168516,14 @@
       "context": "digital-employee",
       "id": "required:digital-employee:ReactionExecutionPortV1",
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionPortV1",
-      "providerAdapters": [],
+      "providerAdapters": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:a890b5a748651c758353",
+          "file": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file"
+        }
+      ],
       "removeAfterWave": "W4-E9",
       "status": "declared-debt",
       "symbol": "ReactionExecutionPortV1"
@@ -168839,7 +168993,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ba53578de21b90873e876bd3d4ca6613b22afa438f62442d0e305dbfb7aa9623",
+  "sourceDigest": "sha256:8d2c54d52663ebaf9d41c28a89d113adeec3d5aab0b75af37637f0f3ec9fd9e2",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
@@ -169269,9 +169423,9 @@
       "toContext": "development-automation"
     },
     {
-      "contract": "ReactionExecutionAdmissionParticipantInTxV1",
+      "contract": "ReactionExecutionAdmissionParticipantV1",
       "fromContext": "task-execution",
-      "id": "required-implementation:task-execution->digital-employee:reaction-execution-admission-participant-in-tx-v1",
+      "id": "required-implementation:task-execution->digital-employee:reaction-execution-admission-participant-v1",
       "role": "required-implementation",
       "toContext": "digital-employee"
     },

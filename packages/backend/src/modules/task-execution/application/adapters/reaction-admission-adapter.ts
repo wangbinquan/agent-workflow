@@ -1,4 +1,4 @@
-// RFC-368 T6 —— TaskExecution 对数字员工 `ReactionExecutionAdmissionParticipantInTxV1` 的实现。
+// RFC-368 T6 —— TaskExecution 对数字员工 `ReactionExecutionAdmissionParticipantV1` 的实现。
 //
 // 这是 record-before-act 的落点：数字员工在**它自己的 claim 事务里**调 `activateClaim` +
 // `admitLaunch`，两者与 claim 的写入同一笔提交；提交之后才发生真正的 `launch`。
@@ -30,7 +30,7 @@ import type { ReactionAdmissionStore } from '../ports/reactionAdmissionStore'
 import type {
   ReactionClaimEpoch,
   ReactionClaimFenceReceiptV1,
-  ReactionExecutionAdmissionParticipantInTxV1,
+  ReactionExecutionAdmissionParticipantV1,
   ReactionExecutionAdmissionReceiptV1,
   ReactionOperationRef,
   ReactionRequestHash,
@@ -39,12 +39,10 @@ import type {
 export function composeReactionExecutionAdmissionParticipantInTx(
   store: ReactionAdmissionStore,
   options: { readonly now: () => number; readonly mintExecutionRef?: () => string },
-): ReactionExecutionAdmissionParticipantInTxV1 {
+): ReactionExecutionAdmissionParticipantV1 {
   const now = options.now
   const mint = options.mintExecutionRef ?? (() => ulid())
-  const participant: ReactionExecutionAdmissionParticipantInTxV1 = {
-    __brand: 'reaction-execution-admission-in-tx-v1',
-
+  const participant: ReactionExecutionAdmissionParticipantV1 = {
     async activateClaim(input) {
       const existing = await store.listByRound(input.reaction.roundRef)
       const highest = existing.at(-1) ?? null

@@ -160,7 +160,7 @@ const REQUIRED_CONTEXT_EDGES: ReadonlyArray<readonly [TargetContext, TargetConte
   ['integration', 'task-execution', 'CodeHostExecutionPort'],
   ['task-execution', 'development-automation', 'AgentActionExecutionPort'],
   ['task-execution', 'digital-employee', 'ReactionExecutionPortV1'],
-  ['task-execution', 'digital-employee', 'ReactionExecutionAdmissionParticipantInTxV1'],
+  ['task-execution', 'digital-employee', 'ReactionExecutionAdmissionParticipantV1'],
   ['integration', 'development-automation', 'development-effect-spi'],
   ['task-execution', 'task-catalog', 'TaskCatalogSource'],
   ['digital-employee', 'task-catalog', 'TaskCatalogSource'],

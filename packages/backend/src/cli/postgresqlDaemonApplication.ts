@@ -151,7 +151,6 @@ import { ensureDigitalEmployeeHostWorkflow } from '@/modules/task-execution/comp
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
   composeDigitalEmployeeExecution,
-  inspectDigitalEmployeeHumanReviewState,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { composePostgresqlResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import {
@@ -1489,9 +1488,9 @@ export async function composePostgresqlApplication(
     executionMetadata: composeDatabaseDigitalEmployeeExecutionPorts(input.db).executionMetadata,
     // RFC-359：计划人审闸门的状态读装的是与 SQLite 侧**同一个**中立实现；此前 PG 侧根本没有这个
     // 方法，闸门只能按 round 状态推断、永远报不出 `waiting`（同一个案子两个引擎显示不同）。
-    humanReview: {
-      inspect: (executionRef) => inspectDigitalEmployeeHumanReviewState(input.db, executionRef),
-    },
+    // RFC-368：直接复用中立实现（与 executionMetadata 同理），返回六态快照——
+    // `unknown`（执行行不在）与 `not-applicable`（没配闸门）在这里分开，旧 participant 自己折回 null。
+    humanReview: composeDatabaseDigitalEmployeeExecutionPorts(input.db).humanReview,
     workspace: employeeWorkspace,
     executionContracts,
   })

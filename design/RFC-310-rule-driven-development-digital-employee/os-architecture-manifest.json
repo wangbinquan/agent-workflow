@@ -26,6 +26,8 @@
         "modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog.ts -> public/participants",
         "modules/resource-catalog/composition/integrationTrigger.ts -> public/participants",
         "modules/resource-catalog/infrastructure/aggregateAdapters/integrationTriggerResourceSnapshots.ts -> public/participants",
+        "modules/task-execution/application/adapters/reaction-admission-adapter.ts -> composition/required-ports",
+        "modules/task-execution/application/adapters/reaction-execution-adapter.ts -> composition/required-ports",
         "modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts -> public/participants",
         "modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog.ts -> public/types",
         "modules/task-execution/composition/digitalEmployeeExecution.ts -> public/types",

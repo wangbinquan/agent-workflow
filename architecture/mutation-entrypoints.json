@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1724,
+    "entries": 1725,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -24147,6 +24147,31 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#stopReceipt",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#stopReceipt",
+      "symbol": "stopReceipt",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "effect",
         "authorization": false,
         "event": false,
@@ -41198,7 +41223,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ba53578de21b90873e876bd3d4ca6613b22afa438f62442d0e305dbfb7aa9623",
+  "sourceDigest": "sha256:8d2c54d52663ebaf9d41c28a89d113adeec3d5aab0b75af37637f0f3ec9fd9e2",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -43212,8 +43237,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#845:tasks",
-        "line": 845,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#852:tasks",
+        "line": 852,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#createRootLaunch",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -43228,8 +43253,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#930:taskExecutionIntents",
-        "line": 930,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#937:taskExecutionIntents",
+        "line": 937,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#createRootLaunch",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",

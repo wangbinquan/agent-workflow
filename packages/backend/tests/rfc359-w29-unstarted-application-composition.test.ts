@@ -619,7 +619,12 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // `launch` 的幂等判据就会在两个引擎上各修一次。**装配图变的只有这一格**（已按
       // `composePostgresqlApplication` 的打印体逐字对拍：函数体内仅此一处，两条 import 的删除
       // 在函数体之外、不进摘要），方向同样是收敛而非新增装配步骤。
-      '857a2176807137d3c051f1fcba93a77951824d9c8b80b45b80cb1807b61e2d89',
+      // 2026-09-23（RFC-368 T7）：`humanReview` 同样**改用共用实现**——此前 PG 根手写
+      // `{ inspect: (id) => inspectDigitalEmployeeHumanReviewState(input.db, id) }`，现在取
+      // `composeDatabaseDigitalEmployeeExecutionPorts(input.db).humanReview`（端口升级成六态，
+      // 区分 `unknown` 与 `not-applicable`，判据在 `tests/rfc368-reaction-execution-adapter.test.ts`）。
+      // 装配图变的只有这一格，方向是收敛。
+      '5928a4cbbbb86fd2ab7b30f4a1558bfdc3899cd2eb455cfdd88f7431100b1735',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
