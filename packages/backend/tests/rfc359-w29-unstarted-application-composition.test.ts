@@ -612,7 +612,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
       // RFC-365: the PostgreSQL root explicitly wires the two exact target providers, the
       // event-only delegated-context factory and the durable work-intent store.
-      '7582a7611a08b7361078f13c975978d15a07397049f6b824ea761abef0c27153',
+      // 2026-09-22（RFC-294 E9-C 前置小修）：摘要随 `executionMetadata` **改用共用实现**更新——
+      // 这一格此前是 PG 根自己抄的一份 `load`（逐字复制 SQLite 侧那段库读），现在直接取
+      // `composeDatabaseDigitalEmployeeExecutionPorts(input.db).executionMetadata`。
+      // 起因是「一次 Reaction 起两个任务」的修复要在这个端口上加 `findByRound`；两份各抄一遍，
+      // `launch` 的幂等判据就会在两个引擎上各修一次。**装配图变的只有这一格**（已按
+      // `composePostgresqlApplication` 的打印体逐字对拍：函数体内仅此一处，两条 import 的删除
+      // 在函数体之外、不进摘要），方向同样是收敛而非新增装配步骤。
+      '857a2176807137d3c051f1fcba93a77951824d9c8b80b45b80cb1807b61e2d89',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
