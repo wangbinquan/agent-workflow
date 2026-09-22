@@ -357,79 +357,490 @@ function physicalLayer(unit: SourceUnit): string {
   return relative.split('/')[0] ?? 'legacy'
 }
 
-function semanticTokens(path: string, symbol: string): readonly string[] {
-  return `${path}#${symbol}`
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .toLowerCase()
-    .split(/[^a-z0-9]+/)
-    .filter((token) => token.length > 0)
-}
-
-export function hasScheduleTargetToken(path: string, symbol = ''): boolean {
-  return semanticTokens(path, symbol).some((token) =>
-    ['schedule', 'scheduled', 'schedules', 'scheduling'].includes(token),
-  )
-}
-
-const SYSTEM_OPERATIONS_INBOUND_FILES = new Set([
-  'packages/backend/src/cli/backup.ts',
-  'packages/backend/src/cli/restore.ts',
-  'packages/backend/src/routes/backup.ts',
-  'packages/backend/src/routes/restore.ts',
-])
-
-// RFC-352 T10 —— 关键词级联的复数漏网。
-// 第 449 行那条 `/memory|distill/` 判据匹配的是**单数** `memory`，而 `routes/memories.ts`
-// 写的是复数，于是这个纯粹的 memory 路由一路落到兜底的 `task-execution`（W4-E1），
-// 它的兄弟 `routes/memoryDistillJobs.ts` 却因为含 `distill` 正确落在 memory（W4-E2）。
-// 后果不是学术问题：R4 把 legacy→模块 public 面的边按**消费者**记账后，这个路由消费
-// memory / identity-access / resource-catalog public 的 8 条边全记进了 W4-E1——
-// 而把这个路由搬进 `modules/memory` inbound 恰恰是 W4-E2 自己的活（AC-6）。
+// RFC-294 账本治理（2026-09-22，用户当日三项裁决）——**legacy 文件 owner 改为逐文件显式登记**。
 //
-// 不把判据放宽成 `/memor/` 或加上 `memories`：`services/fusion.ts#unfuseMemoriesTx` 一类
-// 符号同样含 `memories`，而 fusion 已由 RFC-352 明确转交 knowledge-evolution（W4-E3），
-// 放宽会把它们反向吸回 memory。所以按本文件既有的 `*_INBOUND_FILES` 形态逐文件登记。
-const MEMORY_INBOUND_FILES = new Set(['packages/backend/src/routes/memories.ts'])
+// 在此之前这里是一条关键词级联（`/identity|auth|.../` → `/memory|distill/` → … → 末尾
+// `return 'task-execution'` 兜底），按 `path#symbol` 的小写全文做正则匹配。三个复合缺陷：
+//
+//  1. **兜底吞掉 168 个 legacy 文件**（全仓 547 个 legacy 后端文件的 31%）。`util/process.ts`、
+//     `util/safePath.ts`、`config/index.ts`、`ws/broadcaster.ts`、`cli/postgresqlDaemonApplication.ts`
+//     一路掉进 `task-execution`，于是平台原语 / 传输机制 / 启动根的债全记在 W4-E1 头上。
+//     2026-09-02 的裁决只钉死了 `util/{errors,hash,log}.ts` 三个，同一类问题剩下的没动。
+//  2. **三个 bounded context 在级联里根本没有分支**：`development-automation`、
+//     `execution-contract`、`code-capability`。`routes/developmentConfig.ts` /
+//     `developmentMissions.ts` / `missionInputUploads.ts` / `capabilityTemplates.ts` /
+//     `executionContracts.ts` / `code.ts` 全部记成 E1 的债——而搬它们是 E8 / E9 的活。
+//  3. **按 symbol 匹配 file 级的归属问题**：`targetRemoveAfterWaveFor(toFile, importedName)`
+//     把符号名喂进同一条级联，于是 `util/gitRef.ts` 的某个含 `user` 的导出把这条边记成
+//     identity-access / W4-E0；同一个文件按不同 import 符号散进不同的波。
+//     还有纯子串巧合：**`digitalEmployees` 里含 "git"**（d-i-**g-i-t**-a-l），于是
+//     `routes/digitalEmployees.ts` 与 `services/digitalEmployeeAgentTemplates.ts` 被判成
+//     source-control / W5。
+//
+// 后果不是学术问题：W4-E1 桶 826 条里 197 条由 `util/`(79) / `routes/`(49) / `ws/`(33) /
+// `cli/`(33) / `config`(10) 驱动，全不是 task-execution 的活；任何以 W4-E1 exact ids 为分母
+// 的退出门都因此失真（plan.md §1.2「owner 对账待办」与 §14 2026-09-02 记账事实都点过名，
+// 但只记了 23 个 route 文件）。
+//
+// 现在：`modules/**`、`platform/**`、`db/**`、frontend、shared 仍按**结构**判定（它们的归属
+// 由目录本身给出，不需要登记）；其余每一个 legacy 后端文件都必须在下表里有一行，**没有兜底**
+// ——未登记直接 throw，census 跑不起来。新增 legacy 文件时必须同时在这里声明它最终属于哪个
+// bounded context；这正是本表的目的：让「这个文件将来搬去哪」成为显式、可复核的一行，而不是
+// 一条正则的副作用。symbol 不再参与归属判定（`targetRemoveAfterWaveFor` 里 `services/scheduler.ts`
+// 的按符号分波是唯一例外，那是 W2-B/W2-D/W3/W5 之间的**波**切分，不是 context 归属）。
+const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
+  'packages/backend/src/auth/actor.ts': 'identity-access',
+  'packages/backend/src/auth/application/authPersistence.ts': 'identity-access',
+  'packages/backend/src/auth/application/authRuntime.ts': 'identity-access',
+  'packages/backend/src/auth/application/patPolicy.ts': 'identity-access',
+  'packages/backend/src/auth/application/tokenCallAudit.ts': 'identity-access',
+  'packages/backend/src/auth/application/tokenSnapshotRedaction.ts': 'identity-access',
+  'packages/backend/src/auth/composition.ts': 'identity-access',
+  'packages/backend/src/auth/infrastructure/authPersistence.ts': 'identity-access',
+  'packages/backend/src/auth/infrastructure/compatibleAuthRuntime.ts': 'identity-access',
+  'packages/backend/src/auth/infrastructure/tokenCallAudit.ts': 'identity-access',
+  'packages/backend/src/auth/oidc/discovery.ts': 'identity-access',
+  'packages/backend/src/auth/oidc/endpoints.ts': 'identity-access',
+  'packages/backend/src/auth/oidc/flow.ts': 'identity-access',
+  'packages/backend/src/auth/oidc/identity.ts': 'identity-access',
+  'packages/backend/src/auth/oidc/tokens.ts': 'identity-access',
+  'packages/backend/src/auth/passwords.ts': 'identity-access',
+  'packages/backend/src/auth/secretBox.ts': 'identity-access',
+  'packages/backend/src/auth/session.ts': 'identity-access',
+  'packages/backend/src/auth/systemIdentity.ts': 'identity-access',
+  'packages/backend/src/auth/token.ts': 'identity-access',
+  'packages/backend/src/cli/auth.ts': 'identity-access',
+  'packages/backend/src/cli/backup.ts': 'system-operations',
+  'packages/backend/src/cli/config-cli.ts': 'bootstrap',
+  'packages/backend/src/cli/daemonProviderBootstrap.ts': 'bootstrap',
+  'packages/backend/src/cli/daemonProviderMigrationAdmission.ts': 'bootstrap',
+  'packages/backend/src/cli/daemonProviderRuntimeHandles.ts': 'runtime-management',
+  'packages/backend/src/cli/daemonProviderRuntimeRouter.ts': 'runtime-management',
+  'packages/backend/src/cli/daemonProviderRuntimeSession.ts': 'runtime-management',
+  'packages/backend/src/cli/daemonProviderSession.ts': 'bootstrap',
+  'packages/backend/src/cli/daemonRealtimePolicy.ts': 'bootstrap',
+  'packages/backend/src/cli/database.ts': 'bootstrap',
+  'packages/backend/src/cli/dbCompact.ts': 'bootstrap',
+  'packages/backend/src/cli/doctor.ts': 'bootstrap',
+  'packages/backend/src/cli/frameBackfill.ts': 'bootstrap',
+  'packages/backend/src/cli/migrate.ts': 'bootstrap',
+  'packages/backend/src/cli/migrationReport.ts': 'bootstrap',
+  'packages/backend/src/cli/package.ts': 'resource-catalog',
+  'packages/backend/src/cli/postgresqlDaemonApplication.ts': 'bootstrap',
+  'packages/backend/src/cli/restore.ts': 'system-operations',
+  'packages/backend/src/cli/rfc295-downgrade-audit.ts': 'bootstrap',
+  'packages/backend/src/cli/start.ts': 'bootstrap',
+  'packages/backend/src/cli/status.ts': 'bootstrap',
+  'packages/backend/src/cli/stop.ts': 'bootstrap',
+  'packages/backend/src/cli/user.ts': 'identity-access',
+  'packages/backend/src/cli/userBootstrap.ts': 'identity-access',
+  'packages/backend/src/config/index.ts': 'platform',
+  'packages/backend/src/embed.generated.ts': 'platform',
+  'packages/backend/src/embed.ts': 'platform',
+  'packages/backend/src/main.ts': 'bootstrap',
+  'packages/backend/src/mcp/operationBindings.ts': 'platform',
+  'packages/backend/src/mcp/operationClient.ts': 'platform',
+  'packages/backend/src/mcp/resourceSchemas.ts': 'platform',
+  'packages/backend/src/mcp/server.ts': 'platform',
+  'packages/backend/src/mcp/tools.ts': 'platform',
+  'packages/backend/src/mcp/watch.ts': 'platform',
+  'packages/backend/src/routes/accountRepositoryTransportCredentials.ts': 'source-control',
+  'packages/backend/src/routes/agents.ts': 'resource-catalog',
+  'packages/backend/src/routes/auth.ts': 'identity-access',
+  'packages/backend/src/routes/backup.ts': 'system-operations',
+  'packages/backend/src/routes/cached-repos.ts': 'source-control',
+  'packages/backend/src/routes/capabilityTemplates.ts': 'development-automation',
+  'packages/backend/src/routes/clarify.ts': 'collaboration',
+  'packages/backend/src/routes/code.ts': 'development-automation',
+  'packages/backend/src/routes/codeHosts.ts': 'integration',
+  'packages/backend/src/routes/config.ts': 'platform',
+  'packages/backend/src/routes/daemon.ts': 'platform',
+  'packages/backend/src/routes/databaseMigrations.ts': 'system-operations',
+  'packages/backend/src/routes/developmentConfig.ts': 'development-automation',
+  'packages/backend/src/routes/developmentMissions.ts': 'development-automation',
+  'packages/backend/src/routes/digitalEmployees.ts': 'digital-employee',
+  'packages/backend/src/routes/docs.ts': 'platform',
+  'packages/backend/src/routes/eventCenter.ts': 'event-center',
+  'packages/backend/src/routes/executionContracts.ts': 'execution-contract',
+  'packages/backend/src/routes/health.ts': 'platform',
+  'packages/backend/src/routes/maintenance.ts': 'platform',
+  'packages/backend/src/routes/maintenanceDisk.ts': 'platform',
+  'packages/backend/src/routes/mcps.ts': 'resource-catalog',
+  'packages/backend/src/routes/memories.ts': 'memory',
+  'packages/backend/src/routes/memoryDistillJobs.ts': 'memory',
+  'packages/backend/src/routes/missionInputUploads.ts': 'development-automation',
+  'packages/backend/src/routes/oidc-auth.ts': 'identity-access',
+  'packages/backend/src/routes/oidc.ts': 'identity-access',
+  'packages/backend/src/routes/operationAuthority.ts': 'identity-access',
+  'packages/backend/src/routes/operationRoute.ts': 'platform',
+  'packages/backend/src/routes/overview.ts': 'system-operations',
+  'packages/backend/src/routes/plantuml.ts': 'platform',
+  'packages/backend/src/routes/plugins.ts': 'resource-catalog',
+  'packages/backend/src/routes/port-artifacts.ts': 'task-execution',
+  'packages/backend/src/routes/publicOrigin.ts': 'platform',
+  'packages/backend/src/routes/registry.ts': 'platform',
+  'packages/backend/src/routes/repoGroups.ts': 'source-control',
+  'packages/backend/src/routes/repos.ts': 'source-control',
+  'packages/backend/src/routes/resourceAcl.ts': 'resource-catalog',
+  'packages/backend/src/routes/resourcePackages.ts': 'resource-catalog',
+  'packages/backend/src/routes/restore.ts': 'system-operations',
+  'packages/backend/src/routes/reviews.ts': 'collaboration',
+  'packages/backend/src/routes/scheduledTasks.ts': 'integration',
+  'packages/backend/src/routes/skills.ts': 'resource-catalog',
+  'packages/backend/src/routes/taskArchive.ts': 'task-execution',
+  'packages/backend/src/routes/taskCatalog.ts': 'task-catalog',
+  'packages/backend/src/routes/taskClarifyDirective.ts': 'collaboration',
+  'packages/backend/src/routes/taskFeedback.ts': 'task-execution',
+  'packages/backend/src/routes/taskQuestions.ts': 'collaboration',
+  'packages/backend/src/routes/tasks.ts': 'task-execution',
+  'packages/backend/src/routes/users.ts': 'identity-access',
+  'packages/backend/src/routes/verifiedBodyLimit.ts': 'platform',
+  'packages/backend/src/routes/webhookDeliveries.ts': 'integration',
+  'packages/backend/src/routes/webhookEndpoints.ts': 'integration',
+  'packages/backend/src/routes/webhooks.ts': 'integration',
+  'packages/backend/src/routes/webhookTriggers.ts': 'integration',
+  'packages/backend/src/routes/workflows.ts': 'resource-catalog',
+  'packages/backend/src/routes/workgroups.ts': 'resource-catalog',
+  'packages/backend/src/routes/workgroupTasks.ts': 'resource-catalog',
+  'packages/backend/src/routes/worktree-files.ts': 'task-execution',
+  'packages/backend/src/server.ts': 'bootstrap',
+  'packages/backend/src/services/accountAuthPolicy.ts': 'identity-access',
+  'packages/backend/src/services/agent.ts': 'resource-catalog',
+  'packages/backend/src/services/agentDeps.ts': 'resource-catalog',
+  'packages/backend/src/services/agentLaunch.ts': 'task-execution',
+  'packages/backend/src/services/agentLaunchReservation.ts': 'task-execution',
+  'packages/backend/src/services/apiDocs.ts': 'platform',
+  'packages/backend/src/services/autoKill.ts': 'task-execution',
+  'packages/backend/src/services/autoRepair.ts': 'task-execution',
+  'packages/backend/src/services/autoResume.ts': 'task-execution',
+  'packages/backend/src/services/backup.ts': 'platform',
+  'packages/backend/src/services/backupManifest.ts': 'platform',
+  'packages/backend/src/services/backupScheduler.ts': 'platform',
+  'packages/backend/src/services/backupVacuumWorker.ts': 'platform',
+  'packages/backend/src/services/bundle/provider.ts': 'platform',
+  'packages/backend/src/services/capabilityTemplates.ts': 'development-automation',
+  'packages/backend/src/services/changeNarrative.ts': 'workspace-insight',
+  'packages/backend/src/services/clarify/autoDispatch.ts': 'collaboration',
+  'packages/backend/src/services/clarify/queue.ts': 'collaboration',
+  'packages/backend/src/services/clarify/rerunLedger.ts': 'collaboration',
+  'packages/backend/src/services/clarify/rounds.ts': 'collaboration',
+  'packages/backend/src/services/clarify/seal.ts': 'collaboration',
+  'packages/backend/src/services/clarify/service.ts': 'collaboration',
+  'packages/backend/src/services/clarifyAutoDispatch.ts': 'collaboration',
+  'packages/backend/src/services/clarifyDecision.ts': 'collaboration',
+  'packages/backend/src/services/clarifyDecisionComposition.ts': 'collaboration',
+  'packages/backend/src/services/clarifyQueue.ts': 'collaboration',
+  'packages/backend/src/services/clarifyRerunLedger.ts': 'collaboration',
+  'packages/backend/src/services/clarifyRounds.ts': 'collaboration',
+  'packages/backend/src/services/clarifySeal.ts': 'collaboration',
+  'packages/backend/src/services/codeCapabilityParams.ts': 'development-automation',
+  'packages/backend/src/services/codeHost/call.ts': 'integration',
+  'packages/backend/src/services/codeHost/connections.ts': 'integration',
+  'packages/backend/src/services/codeHost/project.ts': 'integration',
+  'packages/backend/src/services/codeHost/recoveryProbe.ts': 'integration',
+  'packages/backend/src/services/codeHost/url.ts': 'integration',
+  'packages/backend/src/services/codeHostAuthorGate.ts': 'integration',
+  'packages/backend/src/services/codeIntel/codeIntel.ts': 'workspace-insight',
+  'packages/backend/src/services/codeIntel/fileSymbols.ts': 'workspace-insight',
+  'packages/backend/src/services/codeIntel/snapshot.ts': 'workspace-insight',
+  'packages/backend/src/services/codeReviewAgentCaller.ts': 'development-automation',
+  'packages/backend/src/services/codeRoundContract.ts': 'development-automation',
+  'packages/backend/src/services/commitPush.ts': 'source-control',
+  'packages/backend/src/services/commitPushRunner.ts': 'source-control',
+  'packages/backend/src/services/configAppliedListeners.ts': 'platform',
+  'packages/backend/src/services/controlListener.ts': 'bootstrap',
+  'packages/backend/src/services/daemonCadence.ts': 'platform',
+  'packages/backend/src/services/daemonGeneration.ts': 'platform',
+  'packages/backend/src/services/deleteConfirm.ts': 'platform',
+  'packages/backend/src/services/demoSeed.ts': 'bootstrap',
+  'packages/backend/src/services/developmentDeliveryDeps.ts': 'development-automation',
+  'packages/backend/src/services/digitalEmployeeAgentTemplates.ts': 'digital-employee',
+  'packages/backend/src/services/dispatchFrontier.ts': 'task-execution',
+  'packages/backend/src/services/driverLease.ts': 'runtime-management',
+  'packages/backend/src/services/dynamicWorkflowRunner.ts': 'task-execution',
+  'packages/backend/src/services/employeeCaseMembers.ts': 'digital-employee',
+  'packages/backend/src/services/envelope.ts': 'task-execution',
+  'packages/backend/src/services/eventsArchive.ts': 'system-operations',
+  'packages/backend/src/services/execution/agentInjection.ts': 'runtime-management',
+  'packages/backend/src/services/execution/agentProcess.ts': 'platform',
+  'packages/backend/src/services/execution/callRefTarget.ts': 'task-execution',
+  'packages/backend/src/services/execution/childBudget.ts': 'task-execution',
+  'packages/backend/src/services/execution/closure.ts': 'task-execution',
+  'packages/backend/src/services/execution/executionWatch.ts': 'task-execution',
+  'packages/backend/src/services/execution/inventoryObservation.ts': 'task-execution',
+  'packages/backend/src/services/execution/inventoryRead.ts': 'task-execution',
+  'packages/backend/src/services/execution/managedProcess.ts': 'platform',
+  'packages/backend/src/services/execution/managedProcessLauncher.ts': 'platform',
+  'packages/backend/src/services/execution/outcome.ts': 'task-execution',
+  'packages/backend/src/services/execution/resolveInjection.ts': 'task-execution',
+  'packages/backend/src/services/execution/resourcePolicy.ts': 'task-execution',
+  'packages/backend/src/services/execution/runtimeConfigFreeze.ts': 'runtime-management',
+  'packages/backend/src/services/execution/startupVerification.ts': 'task-execution',
+  'packages/backend/src/services/execution/startupVerificationRead.ts': 'task-execution',
+  'packages/backend/src/services/execution/taskEngineRuntimeOptions.ts': 'task-execution',
+  'packages/backend/src/services/execution/taskExecutionCallClosure.ts': 'task-execution',
+  'packages/backend/src/services/execution/taskExecutionResourceDependencies.ts': 'task-execution',
+  'packages/backend/src/services/execution/taskExecutionResources.ts': 'task-execution',
+  'packages/backend/src/services/execution/taskMechanicsState.ts': 'task-execution',
+  'packages/backend/src/services/execution/triggerPreflight.ts': 'task-execution',
+  'packages/backend/src/services/execution/types.ts': 'task-execution',
+  'packages/backend/src/services/execution/workspaceBoundary.ts': 'task-execution',
+  'packages/backend/src/services/freshness.ts': 'task-execution',
+  'packages/backend/src/services/gc.ts': 'system-operations',
+  'packages/backend/src/services/gitRepoCache.ts': 'source-control',
+  'packages/backend/src/services/gitSubmodule.ts': 'source-control',
+  'packages/backend/src/services/gitVersion.ts': 'source-control',
+  'packages/backend/src/services/humanGateComposition.ts': 'collaboration',
+  'packages/backend/src/services/humanGateContinuationEffects.ts': 'collaboration',
+  'packages/backend/src/services/humanGateContinuationRecovery.ts': 'collaboration',
+  'packages/backend/src/services/humanGateDecisionE2eBarrier.ts': 'collaboration',
+  'packages/backend/src/services/isolatedAgentRun.ts': 'platform',
+  'packages/backend/src/services/launchMultipart.ts': 'task-execution',
+  'packages/backend/src/services/launchRuntimeConfig.ts': 'task-execution',
+  'packages/backend/src/services/lifecycle.ts': 'task-execution',
+  'packages/backend/src/services/lifecycleInvariants.ts': 'task-execution',
+  'packages/backend/src/services/limits.ts': 'task-execution',
+  'packages/backend/src/services/maintenanceDisk.ts': 'platform',
+  'packages/backend/src/services/maintenanceRetention.ts': 'platform',
+  'packages/backend/src/services/maintenanceState.ts': 'platform',
+  'packages/backend/src/services/maintenanceTicker.ts': 'platform',
+  'packages/backend/src/services/managedPeriodicJob.ts': 'platform',
+  'packages/backend/src/services/mcpClosure.ts': 'resource-catalog',
+  'packages/backend/src/services/mcpOperationRevision.ts': 'resource-catalog',
+  'packages/backend/src/services/mcpProbe.ts': 'resource-catalog',
+  'packages/backend/src/services/mcpProbeStore.ts': 'resource-catalog',
+  'packages/backend/src/services/mcpSurface.ts': 'resource-catalog',
+  'packages/backend/src/services/mergeAgent.ts': 'source-control',
+  'packages/backend/src/services/nodeIsolation.ts': 'platform',
+  'packages/backend/src/services/nodeRollback.ts': 'task-execution',
+  'packages/backend/src/services/nodeRunMint.ts': 'task-execution',
+  'packages/backend/src/services/nodeRunPrompt.ts': 'task-execution',
+  'packages/backend/src/services/oidc/provisioning.ts': 'identity-access',
+  'packages/backend/src/services/oidcProviders.ts': 'identity-access',
+  'packages/backend/src/services/orchestratorAgent.ts': 'task-execution',
+  'packages/backend/src/services/orphanReconcile.ts': 'task-execution',
+  'packages/backend/src/services/orphans.ts': 'task-execution',
+  'packages/backend/src/services/ownerIdentity.ts': 'identity-access',
+  'packages/backend/src/services/ownerScopedName.ts': 'identity-access',
+  'packages/backend/src/services/pendingRestore.ts': 'platform',
+  'packages/backend/src/services/plantuml.ts': 'platform',
+  'packages/backend/src/services/pluginClosure.ts': 'resource-catalog',
+  'packages/backend/src/services/pluginGenerationGc.ts': 'resource-catalog',
+  'packages/backend/src/services/pluginInstaller.ts': 'resource-catalog',
+  'packages/backend/src/services/pluginOperationRevision.ts': 'resource-catalog',
+  'packages/backend/src/services/portableBackupArchive.ts': 'system-operations',
+  'packages/backend/src/services/portArtifacts.ts': 'task-execution',
+  'packages/backend/src/services/processNodeConcurrency.ts': 'task-execution',
+  'packages/backend/src/services/protocol.ts': 'task-execution',
+  'packages/backend/src/services/questionDispatchComposition.ts': 'collaboration',
+  'packages/backend/src/services/rawDbSnapshot.ts': 'platform',
+  'packages/backend/src/services/recovery.ts': 'task-execution',
+  'packages/backend/src/services/recoveryBreaker.ts': 'task-execution',
+  'packages/backend/src/services/ref/runtimeRef.ts': 'runtime-management',
+  'packages/backend/src/services/repo.ts': 'source-control',
+  'packages/backend/src/services/repoBatchImport.ts': 'source-control',
+  'packages/backend/src/services/repoCredentials.ts': 'source-control',
+  'packages/backend/src/services/repoGroup.ts': 'source-control',
+  'packages/backend/src/services/repoLabels.ts': 'source-control',
+  'packages/backend/src/services/resourceAcl.ts': 'resource-catalog',
+  'packages/backend/src/services/resourceCopyName.ts': 'resource-catalog',
+  'packages/backend/src/services/resourceOperationCoordinator.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/closure.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/commit.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/executionAdapter.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/export.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/importPermissions.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/parse.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/preview.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/providerReadPort.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/requirements.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/secretInputs.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/serialize.ts': 'resource-catalog',
+  'packages/backend/src/services/resourcePackage/skillTree.ts': 'resource-catalog',
+  'packages/backend/src/services/resourceRefs.ts': 'resource-catalog',
+  'packages/backend/src/services/restore.ts': 'platform',
+  'packages/backend/src/services/review.ts': 'collaboration',
+  'packages/backend/src/services/reviewDecisionComposition.ts': 'collaboration',
+  'packages/backend/src/services/reviewMutationCoordinator.ts': 'collaboration',
+  'packages/backend/src/services/reviewRoundStart.ts': 'collaboration',
+  'packages/backend/src/services/rfc295DowngradeAudit.ts': 'bootstrap',
+  'packages/backend/src/services/runLiveness.ts': 'task-execution',
+  'packages/backend/src/services/runner.ts': 'platform',
+  'packages/backend/src/services/runtime/claudeCode/boundary.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/claudeCode/config.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/claudeCode/driver.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/claudeCode/events.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/claudeCode/inject.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/claudeCode/models.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/claudeCode/permissionMap.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/claudeCode/probe.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/claudeCode/sessionCapture.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/claudeCode/spawn.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/head.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/index.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/injectionIdentity.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/boundary.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/driver.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/events.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/inlineConfig.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/inventory.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/models.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/plugin/index.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/plugin/transcoder.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/pluginSpec.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/sessionCapture.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/sessionWalk.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/spawn.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/util.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/versionRegistry.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/selfCheck.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/spawnCtx.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/stageSkills.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/types.ts': 'runtime-management',
+  'packages/backend/src/services/runtimeSessionLease.ts': 'runtime-management',
+  'packages/backend/src/services/runtimeSmoke.ts': 'runtime-management',
+  'packages/backend/src/services/scheduledTaskRefs.ts': 'integration',
+  'packages/backend/src/services/scheduledTasks.ts': 'integration',
+  'packages/backend/src/services/scheduledTaskScheduler.ts': 'integration',
+  'packages/backend/src/services/scheduler.ts': 'task-execution',
+  'packages/backend/src/services/schedulerAssembly.ts': 'task-execution',
+  'packages/backend/src/services/scriptAuthorGate.ts': 'resource-catalog',
+  'packages/backend/src/services/scriptDepsEnv.ts': 'task-execution',
+  'packages/backend/src/services/scriptPorts.ts': 'task-execution',
+  'packages/backend/src/services/scriptRun.ts': 'task-execution',
+  'packages/backend/src/services/sessionEventSink.ts': 'task-execution',
+  'packages/backend/src/services/sessionModeFallback.ts': 'task-execution',
+  'packages/backend/src/services/sessionView.ts': 'task-execution',
+  'packages/backend/src/services/shutdown.ts': 'bootstrap',
+  'packages/backend/src/services/skillBootVerify.ts': 'resource-catalog',
+  'packages/backend/src/services/skillIdentityMigration.ts': 'resource-catalog',
+  'packages/backend/src/services/skillIdentityPaths.ts': 'resource-catalog',
+  'packages/backend/src/services/startTaskDeps.ts': 'task-execution',
+  'packages/backend/src/services/structuralDiff/assemble.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/baseline.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/bodyDelta.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/callGraph/classIndex.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/callGraph/expandService.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/callGraph/extractCalls.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/callGraph/service.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/classGraph.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/deep/deepImpact.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/deep/indexCache.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/deep/indexers.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/deep/runner.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/deep/scip.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/deep/service.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/deps/diff.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/deps/manifests.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/digest.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/gitBackend.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/impact.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/lang/extract.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/lang/grammars.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/lang/mask.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/lang/parser.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/lang/queries.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/refSelect.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/service.ts': 'workspace-insight',
+  'packages/backend/src/services/structuralDiff/store.ts': 'workspace-insight',
+  'packages/backend/src/services/stuckTaskDetector.ts': 'task-execution',
+  'packages/backend/src/services/submoduleRefresh.ts': 'source-control',
+  'packages/backend/src/services/systemAgentRun.ts': 'task-execution',
+  'packages/backend/src/services/systemResources.ts': 'resource-catalog',
+  'packages/backend/src/services/task.ts': 'task-execution',
+  'packages/backend/src/services/taskAlerts.ts': 'task-execution',
+  'packages/backend/src/services/taskArchive.ts': 'task-execution',
+  'packages/backend/src/services/taskAuthorization.ts': 'task-execution',
+  'packages/backend/src/services/taskClarifyDirective.ts': 'collaboration',
+  'packages/backend/src/services/taskCollab.ts': 'collaboration',
+  'packages/backend/src/services/taskDelete.ts': 'task-execution',
+  'packages/backend/src/services/taskExecutionParticipants.ts': 'task-execution',
+  'packages/backend/src/services/taskFanoutPools.ts': 'task-execution',
+  'packages/backend/src/services/taskFeedback.ts': 'task-execution',
+  'packages/backend/src/services/taskLaunchGate.ts': 'task-execution',
+  'packages/backend/src/services/taskPlatformInputPaths.ts': 'task-execution',
+  'packages/backend/src/services/taskQuestionConflicts.ts': 'collaboration',
+  'packages/backend/src/services/taskQuestionDispatch.ts': 'collaboration',
+  'packages/backend/src/services/taskQuestions.ts': 'collaboration',
+  'packages/backend/src/services/taskWorkspacePhase.ts': 'source-control',
+  'packages/backend/src/services/taskWriteLocks.ts': 'task-execution',
+  'packages/backend/src/services/terminalSweep.ts': 'task-execution',
+  'packages/backend/src/services/tokenAudit.ts': 'identity-access',
+  'packages/backend/src/services/tokenRedaction.ts': 'identity-access',
+  'packages/backend/src/services/upload.ts': 'task-execution',
+  'packages/backend/src/services/userIdentities.ts': 'identity-access',
+  'packages/backend/src/services/users.ts': 'identity-access',
+  'packages/backend/src/services/webhook/codeHostAdapter.ts': 'integration',
+  'packages/backend/src/services/webhook/deliveryStore.ts': 'integration',
+  'packages/backend/src/services/webhook/dispatcherTypes.ts': 'integration',
+  'packages/backend/src/services/webhook/githubAdapter.ts': 'integration',
+  'packages/backend/src/services/webhook/gitlabAdapter.ts': 'integration',
+  'packages/backend/src/services/webhook/matching.ts': 'integration',
+  'packages/backend/src/services/webhook/rateLimiter.ts': 'integration',
+  'packages/backend/src/services/webhook/terminalWorkspaceCleanup.ts': 'integration',
+  'packages/backend/src/services/webhook/triggerValidation.ts': 'integration',
+  'packages/backend/src/services/webhook/webhookDispatch.ts': 'integration',
+  'packages/backend/src/services/webhook/webhookGc.ts': 'integration',
+  'packages/backend/src/services/webhookEndpoints.ts': 'integration',
+  'packages/backend/src/services/webhookTriggers.ts': 'integration',
+  'packages/backend/src/services/workflow.ts': 'resource-catalog',
+  'packages/backend/src/services/workflow.validator.ts': 'resource-catalog',
+  'packages/backend/src/services/workflow.yaml.ts': 'resource-catalog',
+  'packages/backend/src/services/workflowLaunchInputs.ts': 'resource-catalog',
+  'packages/backend/src/services/workgroup/askerKey.ts': 'resource-catalog',
+  'packages/backend/src/services/workgroup/constants.ts': 'resource-catalog',
+  'packages/backend/src/services/workgroup/state.ts': 'resource-catalog',
+  'packages/backend/src/services/workgroups.ts': 'resource-catalog',
+  'packages/backend/src/services/worktreeBackup.ts': 'source-control',
+  'packages/backend/src/services/worktreeFileContent.ts': 'source-control',
+  'packages/backend/src/util/archive.ts': 'platform',
+  'packages/backend/src/util/daemonInfo.ts': 'platform',
+  'packages/backend/src/util/errors.ts': 'platform',
+  'packages/backend/src/util/fileTrust.ts': 'platform',
+  'packages/backend/src/util/frontmatter.ts': 'platform',
+  'packages/backend/src/util/fsReclaim.ts': 'platform',
+  'packages/backend/src/util/git.ts': 'source-control',
+  'packages/backend/src/util/gitCredentialHelper.ts': 'source-control',
+  'packages/backend/src/util/gitCredentialLease.ts': 'source-control',
+  'packages/backend/src/util/gitHardening.ts': 'source-control',
+  'packages/backend/src/util/gitRef.ts': 'source-control',
+  'packages/backend/src/util/hash.ts': 'platform',
+  'packages/backend/src/util/http.ts': 'platform',
+  'packages/backend/src/util/inFlight.ts': 'platform',
+  'packages/backend/src/util/jsonDocument.ts': 'platform',
+  'packages/backend/src/util/keyedSerialQueue.ts': 'platform',
+  'packages/backend/src/util/lock.ts': 'platform',
+  'packages/backend/src/util/log.ts': 'platform',
+  'packages/backend/src/util/migrationsFolder.ts': 'platform',
+  'packages/backend/src/util/oidcResponse.ts': 'identity-access',
+  'packages/backend/src/util/paths.ts': 'platform',
+  'packages/backend/src/util/platformExec.ts': 'platform',
+  'packages/backend/src/util/process.ts': 'platform',
+  'packages/backend/src/util/redact.ts': 'platform',
+  'packages/backend/src/util/safePath.ts': 'platform',
+  'packages/backend/src/util/semaphore.ts': 'platform',
+  'packages/backend/src/util/semver.ts': 'platform',
+  'packages/backend/src/util/spawnDiagnostics.ts': 'platform',
+  'packages/backend/src/util/sqlChunk.ts': 'platform',
+  'packages/backend/src/util/time.ts': 'platform',
+  'packages/backend/src/util/timeoutSignal.ts': 'platform',
+  'packages/backend/src/util/version.ts': 'platform',
+  'packages/backend/src/util/win32Acl.ts': 'platform',
+  'packages/backend/src/util/windowsJobObject.ts': 'platform',
+  'packages/backend/src/util/zip.ts': 'platform',
+  'packages/backend/src/ws/broadcaster.ts': 'platform',
+  'packages/backend/src/ws/connections.ts': 'platform',
+  'packages/backend/src/ws/registry.ts': 'platform',
+  'packages/backend/src/ws/revalidationHook.ts': 'platform',
+  'packages/backend/src/ws/server.ts': 'platform',
+}
 
-const PLATFORM_ADMIN_MECHANISM_FILES = new Set([
-  'packages/backend/src/routes/maintenance.ts',
-  'packages/backend/src/routes/maintenanceDisk.ts',
-  'packages/backend/src/services/backup.ts',
-  'packages/backend/src/services/backupManifest.ts',
-  'packages/backend/src/services/backupScheduler.ts',
-  'packages/backend/src/services/backupVacuumWorker.ts',
-  'packages/backend/src/services/daemonCadence.ts',
-  'packages/backend/src/services/maintenanceDisk.ts',
-  'packages/backend/src/services/maintenanceRetention.ts',
-  'packages/backend/src/services/maintenanceState.ts',
-  'packages/backend/src/services/maintenanceTicker.ts',
-  'packages/backend/src/services/pendingRestore.ts',
-  'packages/backend/src/services/rawDbSnapshot.ts',
-  'packages/backend/src/services/restore.ts',
-  'packages/backend/src/util/migrationsFolder.ts',
-])
-
-const BOOTSTRAP_ADMIN_AGGREGATE_FILES = new Set([
-  'packages/backend/src/cli/dbCompact.ts',
-  'packages/backend/src/cli/doctor.ts',
-  'packages/backend/src/cli/migrate.ts',
-  'packages/backend/src/cli/migrationReport.ts',
-  'packages/backend/src/cli/rfc295-downgrade-audit.ts',
-  'packages/backend/src/services/rfc295DowngradeAudit.ts',
-])
-
-// RFC-294 W4-C 收口后的记账裁决（用户 2026-09-02）：模块 infrastructure 层引用平台持久化 /
-// 错误 / 摘要 / 日志原语，在目标架构里是**合法形态**，不是某个 bounded context 的跨域债。
-// 在此之前它们按 `db/schema.ts#<导入符号名>` 走下面的关键词级联被散进各波（`#memories` 判 W4-E2、
-// `#tasks` 判 W4-E1），而 `util/errors.ts` 因为不匹配任何关键词直接掉进兜底的 `task-execution`——
-// 单是这两个文件就把 1836 条平台边记成了子波的债（RFC-345 `plan.md §7.3.4-2` 已量到这个偏差，
-// RFC-294 `plan.md §14` 2026-09-02 记账事实要求下一个 wave 立项前裁决）。
-// 现在它们统一归 `platform` / W9 平台合同，由 W9-A/B/C 一次性处置。
-const PLATFORM_PRIMITIVE_FILES = new Set([
-  'packages/backend/src/util/errors.ts',
-  'packages/backend/src/util/hash.ts',
-  'packages/backend/src/util/log.ts',
-])
+/** 登记表的键，供守卫核对「表里每一行都指向真实存在的文件」（没有幽灵条目）。 */
+export const LEGACY_BACKEND_FILE_OWNER_PATHS: readonly string[] = Object.keys(
+  LEGACY_BACKEND_FILE_OWNERS,
+)
 
 const RFC346_W9_E_COMPATIBILITY_FILES = new Set([
   'packages/backend/src/cli/rfc295-downgrade-audit.ts',
@@ -441,54 +852,29 @@ const RFC346_W9_E_COMPATIBILITY_FILES = new Set([
   'packages/backend/src/services/worktreeBackup.ts',
 ])
 
-export function targetContextFor(path: string, symbol = ''): TargetOwner {
+export function targetContextFor(path: string): TargetOwner {
   const location = moduleLocation(path)
-  if (
-    location !== null &&
-    (TARGET_PUBLIC_CONTEXTS as readonly string[]).includes(location.context)
-  ) {
-    return location.context as TargetContext
+  if (location !== null) {
+    if ((TARGET_PUBLIC_CONTEXTS as readonly string[]).includes(location.context)) {
+      return location.context as TargetContext
+    }
+    // `modules/code-capability/**` 是 RFC-304 的存量物理模块，不是目标架构里的 bounded
+    // context：它的归宿是 development-automation 的 ActionTemplate（plan.md §8 E8）。
+    // 下面 `targetRemoveAfterWaveFor` 的 physicalContext 特判早就把它钉在 W4-E8 上，这里
+    // 只是把 context 也说清楚，免得它掉进已被删掉的兜底里。
+    if (location.context === 'code-capability') return 'development-automation'
   }
   if (path.startsWith('packages/frontend/src/')) return 'frontend'
   if (path.startsWith('packages/shared/src/')) return 'shared-contracts'
   if (path.startsWith('packages/backend/src/platform/')) return 'platform'
-  if (path.startsWith('packages/backend/src/db/') || PLATFORM_PRIMITIVE_FILES.has(path)) {
-    return 'platform'
-  }
-  if (path === 'packages/backend/src/server.ts' || path === 'packages/backend/src/cli/start.ts') {
-    return 'bootstrap'
-  }
-  if (
-    /^(?:packages\/backend\/src\/services\/(?:isolatedAgentRun|nodeIsolation|runner)\.ts|packages\/backend\/src\/services\/execution\/managedProcess(?:Launcher)?\.ts)$/.test(
-      path,
-    )
-  ) {
-    return 'platform'
-  }
-  if (SYSTEM_OPERATIONS_INBOUND_FILES.has(path)) return 'system-operations'
-  if (MEMORY_INBOUND_FILES.has(path)) return 'memory'
-  if (PLATFORM_ADMIN_MECHANISM_FILES.has(path)) return 'platform'
-  if (BOOTSTRAP_ADMIN_AGGREGATE_FILES.has(path)) return 'bootstrap'
-  const value = `${path}#${symbol}`.toLowerCase()
-  if (/identity|auth|user|permission|grant|oidc|presence/.test(value)) return 'identity-access'
-  if (/memory|distill/.test(value)) return 'memory'
-  if (/intent/.test(value)) return 'intent'
-  if (/fusion|skillversion|knowledge/.test(value)) return 'knowledge-evolution'
-  if (/structural|symbol|insight|narrative/.test(value)) return 'workspace-insight'
-  if (/runtime|opencode|claudecode|providerprofile/.test(value)) return 'runtime-management'
-  if (
-    /webhook|codehost|gitlab|github|integration/.test(value) ||
-    hasScheduleTargetToken(path, symbol)
-  ) {
-    return 'integration'
-  }
-  if (/repo|git|worktree|workspace|candidate|commit|publish/.test(value)) return 'source-control'
-  if (/review|clarify|question|collaboration|continuation/.test(value)) return 'collaboration'
-  if (/employee|reaction|casecontext/.test(value)) return 'digital-employee'
-  if (/eventcenter|eventdelivery|eventsource/.test(value)) return 'event-center'
-  if (/catalog/.test(value)) return 'task-catalog'
-  if (/agent|workflow|workgroup|plugin|skill|mcp/.test(value)) return 'resource-catalog'
-  return 'task-execution'
+  if (path.startsWith('packages/backend/src/db/')) return 'platform'
+  const registered = LEGACY_BACKEND_FILE_OWNERS[path]
+  if (registered !== undefined) return registered
+  throw new Error(
+    `RFC-294 owner registry: 未登记的 legacy 后端文件 ${path}。` +
+      '新增 legacy 文件必须在 rfc294Canonical.ts 的 LEGACY_BACKEND_FILE_OWNERS 里声明它最终属于' +
+      '哪个 bounded context（这张表没有兜底，见该表头部注释）。',
+  )
 }
 
 const SCHEDULER_W2_B_SYMBOLS = new Set([
@@ -532,10 +918,45 @@ function isRfc332CompatibilityEdge(
   )
 }
 
+// RFC-294 账本治理（2026-09-22，用户裁决其二）——**已关闭的波不再承接新债**。
+//
+// 2026-09-02 的 R4 把「legacy 文件消费模块 public 面」的边改成按**消费者**记账（「修法落在谁
+// 的代码里就归谁的波」）。这条规则本身是对的，但它是在 W4-C / E0 / E2 / E3 / E4a / E4b / E7
+// 各自宣告 Done **之后**生效的，于是这些已关闭的桶里又被灌进 794 条：`auth/actor.ts` 上的 117
+// 条（W4-E0）、`routes/agents.ts` 一类消费者的边（W4-C）……它们记的都是「某个 legacy 文件还
+// 没搬进它自己的 context」，而搬迁那件事在对应的波里既没做、也没被它的退出门要求做。
+//
+// 结果是 `removeAfterWave` 在这些桶上说了假话：波是 Done 的，桶却不空，而且还在长。本次按用户
+// 裁决改为**重定到未完成的波**：`plan.md §13 W9-D「Facade/legacy contract」`的退出门逐字就是
+// 「cross-context internal import=0」「删除到期旧路径和临时 export」——这批债的终局正是那里。
+// 重定只改「谁来销」，不改「债是什么」：每条 exact id、它的 from/to/rule 都原样保留。
+//
+// 注意这是**全账本一致**的重定，不只是 cross-context 异常表：facade 账本与 owner 账本用的是同一
+// 个函数，让其中一份继续写 Done 的波，就会在下一次对账时重新制造同样的假话。
+const CLOSED_WAVES: ReadonlySet<string> = new Set([
+  'W4-C',
+  'W4-E0',
+  'W4-E2',
+  'W4-E3',
+  'W4-E4a',
+  'W4-E4b',
+  'W4-E7',
+])
+const CLOSED_WAVE_SUCCESSOR = 'W9-D'
+
 export function targetRemoveAfterWaveFor(
   path: string,
   symbol: string,
-  targetContext: TargetOwner = targetContextFor(path, symbol),
+  targetContext: TargetOwner = targetContextFor(path),
+): string {
+  const wave = uncollectedRemoveAfterWaveFor(path, symbol, targetContext)
+  return CLOSED_WAVES.has(wave) ? CLOSED_WAVE_SUCCESSOR : wave
+}
+
+function uncollectedRemoveAfterWaveFor(
+  path: string,
+  symbol: string,
+  targetContext: TargetOwner,
 ): string {
   if (RFC346_W9_E_COMPATIBILITY_FILES.has(path)) return 'W9-E'
   if (path === 'packages/backend/src/services/scheduler.ts') {
@@ -637,7 +1058,7 @@ function buildOwnerEntries(units: readonly SourceUnit[]): OwnerEntry[] {
     const named = topLevelNamedNodes(unit)
     const nodes = [{ name: '$file', node: unit.source as ts.Node, exported: false }, ...named]
     for (const item of nodes) {
-      const targetContext = targetContextFor(unit.path, item.name)
+      const targetContext = targetContextFor(unit.path)
       const compositionDebt =
         location !== null &&
         location.rest.startsWith('composition/') &&
@@ -2331,7 +2752,7 @@ function buildMutationEntries(backend: readonly SourceUnit[]): MutationEntry[] {
         file: unit.path,
         symbol: item.name,
         ownerEntryId: ownerEntryId(unit.path, item.name),
-        targetContext: targetContextFor(unit.path, item.name),
+        targetContext: targetContextFor(unit.path),
         targetLayer: targetLayerFor(unit.path, item.name),
         controls: evidence,
         missingControls,
@@ -2354,7 +2775,7 @@ function buildMutationEntries(backend: readonly SourceUnit[]): MutationEntry[] {
           file: unit.path,
           symbol,
           ownerEntryId: ownerEntryId(unit.path, '$file'),
-          targetContext: targetContextFor(unit.path, symbol),
+          targetContext: targetContextFor(unit.path),
           targetLayer: 'inbound',
           controls: evidence,
           missingControls: missingControlNames(evidence),
@@ -3060,7 +3481,7 @@ function buildTransactionEffects(backend: readonly SourceUnit[]): TransactionExt
             line,
             transactionCallee: callee,
             ownerEntryId: ownerEntryId(unit.path, symbol),
-            targetContext: targetContextFor(unit.path, symbol),
+            targetContext: targetContextFor(unit.path),
             effectTokens,
             status: effectTokens.length === 0 ? 'clear' : 'co-located-risk',
             finalCriterion:
@@ -3279,7 +3700,7 @@ function buildBackgroundEntries(backend: readonly SourceUnit[]): BackgroundEntry
         file: unit.path,
         symbol: item.name,
         ownerEntryId: ownerEntryId(unit.path, item.name),
-        targetContext: targetContextFor(unit.path, item.name),
+        targetContext: targetContextFor(unit.path),
         kind,
         lifetime:
           kind === 'disabled'
@@ -3328,7 +3749,7 @@ function buildBackgroundEntries(backend: readonly SourceUnit[]): BackgroundEntry
           file: unit.path,
           symbol,
           ownerEntryId: ownerEntryId(unit.path, '$file'),
-          targetContext: targetContextFor(unit.path, symbol),
+          targetContext: targetContextFor(unit.path),
           kind: 'periodic',
           lifetime: 'daemon',
           managed: /maintenanceTicker|timerPort/.test(node.parent.getText(unit.source)),
@@ -3394,7 +3815,7 @@ function buildAmbientWiringEntries(backend: readonly SourceUnit[]): AmbientWirin
             line,
             callee,
             ownerEntryId: ownerEntryId(unit.path, symbol),
-            targetContext: targetContextFor(unit.path, symbol),
+            targetContext: targetContextFor(unit.path),
             kind: callee.startsWith('set') ? 'global-setter' : 'register-call',
             removeAfterWave: 'W6/W9',
           })

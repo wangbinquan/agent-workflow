@@ -582,7 +582,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderBootstrap.ts#createDaemonProviderBootstrap",
       "symbol": "createDaemonProviderBootstrap",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -606,7 +606,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderBootstrap.ts#CreateDaemonProviderBootstrapInput",
       "symbol": "CreateDaemonProviderBootstrapInput",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -630,7 +630,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderMigrationAdmission.ts#createDaemonProviderMigrationAdmission",
       "symbol": "createDaemonProviderMigrationAdmission",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -842,7 +842,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/daemonProviderSession.ts#createDaemonProviderSessionController",
       "symbol": "createDaemonProviderSessionController",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -866,7 +866,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/package.ts#runExport",
       "symbol": "runExport",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "inbound"
     },
     {
@@ -889,7 +889,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/package.ts#runImport",
       "symbol": "runImport",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "inbound"
     },
     {
@@ -1057,7 +1057,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/stop.ts#stopCommand",
       "symbol": "stopCommand",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -1082,7 +1082,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/stop.ts#StopOptions",
       "symbol": "StopOptions",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -1106,7 +1106,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/stop.ts#StopResult",
       "symbol": "StopResult",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
     {
@@ -1154,7 +1154,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/config/index.ts#applyConfigPatch",
       "symbol": "applyConfigPatch",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -1179,7 +1179,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/config/index.ts#saveConfigRaw",
       "symbol": "saveConfigRaw",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -1202,7 +1202,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/config/index.ts#saveConfigValueAtomic",
       "symbol": "saveConfigValueAtomic",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -1502,7 +1502,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/mcp/operationClient.ts#createBoundMcpOperationHandles",
       "symbol": "createBoundMcpOperationHandles",
-      "targetContext": "resource-catalog",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -1526,7 +1526,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/mcp/tools.ts#LAUNCH_TASK_INPUT_SCHEMA",
       "symbol": "LAUNCH_TASK_INPUT_SCHEMA",
-      "targetContext": "resource-catalog",
+      "targetContext": "platform",
       "targetLayer": "domain"
     },
     {
@@ -1547,7 +1547,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/mcp/tools.ts#SUBMIT_REVIEW_INPUT_SCHEMA",
       "symbol": "SUBMIT_REVIEW_INPUT_SCHEMA",
-      "targetContext": "collaboration",
+      "targetContext": "platform",
       "targetLayer": "domain"
     },
     {
@@ -1571,7 +1571,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/mcp/watch.ts#SETTLED",
       "symbol": "SETTLED",
-      "targetContext": "resource-catalog",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -1593,7 +1593,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/capabilityTemplateOperations.ts#createCapabilityTemplateOperations",
       "symbol": "createCapabilityTemplateOperations",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -1618,7 +1618,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts#createCodeDeliveryChainQuery",
       "symbol": "createCodeDeliveryChainQuery",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -1642,7 +1642,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts#createCodeMatrixQuery",
       "symbol": "createCodeMatrixQuery",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -1667,7 +1667,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts#createCodeRoundAttemptsQuery",
       "symbol": "createCodeRoundAttemptsQuery",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -1692,7 +1692,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/codeMatrixQuery.ts#createCodeWorkItemProjectionQuery",
       "symbol": "createCodeWorkItemProjectionQuery",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -1717,7 +1717,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/codeMetricsQuery.ts#createCodeMetricsQuery",
       "symbol": "createCodeMetricsQuery",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -1741,7 +1741,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/demoSeed.ts#createCodeCapabilityDemoSeedParticipant",
       "symbol": "createCodeCapabilityDemoSeedParticipant",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -1766,7 +1766,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/ports/deliveryChainRead.ts#DeliveryChainReadPort",
       "symbol": "DeliveryChainReadPort",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -1791,7 +1791,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/ports/deliveryChainRead.ts#DeliveryRow",
       "symbol": "DeliveryRow",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -1816,7 +1816,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/ports/repoEndpointRead.ts#EnabledCodeHostEndpoint",
       "symbol": "EnabledCodeHostEndpoint",
-      "targetContext": "integration",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -1841,7 +1841,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/application/templateUpstreamStatus.ts#createTemplateUpstreamOperations",
       "symbol": "createTemplateUpstreamOperations",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -1865,7 +1865,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/deliveryChain.ts#DELIVERY_STEPS",
       "symbol": "DELIVERY_STEPS",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -1890,7 +1890,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/deliveryChain.ts#DeliveryOutcome",
       "symbol": "DeliveryOutcome",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -1915,7 +1915,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/deliveryChain.ts#DeliveryStep",
       "symbol": "DeliveryStep",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -1937,7 +1937,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/frameworkRelease.ts#TRANSITIONS",
       "symbol": "TRANSITIONS",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -1962,7 +1962,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/frameworkRelease.ts#TransitionVerdict",
       "symbol": "TransitionVerdict",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -1985,7 +1985,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/stageContract.ts#StageBase",
       "symbol": "StageBase",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -2009,7 +2009,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/stageContract.ts#StageContract",
       "symbol": "StageContract",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -2033,7 +2033,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/stageContract.ts#StageContractIssue",
       "symbol": "StageContractIssue",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -2057,7 +2057,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/stageContract.ts#StageContractRegistry",
       "symbol": "StageContractRegistry",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -2079,7 +2079,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/stageContract.ts#StageDef",
       "symbol": "StageDef",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -2102,7 +2102,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/stageGraph.ts#StageGraph",
       "symbol": "StageGraph",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -2127,7 +2127,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/stageGraph.ts#StageGraphEdge",
       "symbol": "StageGraphEdge",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -2149,7 +2149,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/stageGraph.ts#StageGraphNode",
       "symbol": "StageGraphNode",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -2174,7 +2174,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/stageGraph.ts#StageGraphNodeKind",
       "symbol": "StageGraphNodeKind",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -2198,7 +2198,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/stageGraph.ts#StageGraphSoundnessIssue",
       "symbol": "StageGraphSoundnessIssue",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -2223,7 +2223,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/stateViewScale.ts#stageMayHaveAttempts",
       "symbol": "stageMayHaveAttempts",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -2247,7 +2247,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/domain/templateLayers.ts#rejectFrameworkOnlyFields",
       "symbol": "rejectFrameworkOnlyFields",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "domain"
     },
     {
@@ -2269,7 +2269,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/capabilityMatrixRead.ts#createCapabilityMatrixRead",
       "symbol": "createCapabilityMatrixRead",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2293,7 +2293,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/capabilityParamRead.ts#createCapabilityParamRead",
       "symbol": "createCapabilityParamRead",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2316,7 +2316,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/capabilityTemplatePackageCommit.ts#createPostgresqlCapabilityTemplatePackageCommit",
       "symbol": "createPostgresqlCapabilityTemplatePackageCommit",
-      "targetContext": "source-control",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2339,7 +2339,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/capabilityTemplatePersistence.ts#createCapabilityTemplatePersistence",
       "symbol": "createCapabilityTemplatePersistence",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2362,7 +2362,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/codeMetricsRead.ts#createCodeMetricsRead",
       "symbol": "createCodeMetricsRead",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2387,7 +2387,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/codeWorkspaceRead.ts#createCodeWorkspaceRead",
       "symbol": "createCodeWorkspaceRead",
-      "targetContext": "source-control",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2412,7 +2412,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/deliveryChainRead.ts#createDeliveryChainRead",
       "symbol": "createDeliveryChainRead",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2437,7 +2437,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/deliveryChainRead.ts#DeliveryProjection",
       "symbol": "DeliveryProjection",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2459,7 +2459,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/demoSeedPersistence.ts#createCodeCapabilityDemoSeedPersistence",
       "symbol": "createCodeCapabilityDemoSeedPersistence",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2481,7 +2481,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/postgresqlCapabilityTemplatePackageMutationOwner.ts#createPostgresqlCapabilityTemplatePackageMutationOwner",
       "symbol": "createPostgresqlCapabilityTemplatePackageMutationOwner",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2503,7 +2503,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/readinessFactsRead.ts#createReadinessFactsRead",
       "symbol": "createReadinessFactsRead",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2528,7 +2528,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/repoEndpointRead.ts#createRepoEndpointRead",
       "symbol": "createRepoEndpointRead",
-      "targetContext": "source-control",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2553,7 +2553,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/roundAttemptsRead.ts#createRoundAttemptsRead",
       "symbol": "createRoundAttemptsRead",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2577,7 +2577,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/templateUpstreamPersistence.ts#createTemplateUpstreamPersistence",
       "symbol": "createTemplateUpstreamPersistence",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2601,7 +2601,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/workItemProjectionRead.ts#createWorkItemProjectionRead",
       "symbol": "createWorkItemProjectionRead",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2626,7 +2626,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/workItemProjectionRead.ts#stageFields",
       "symbol": "stageFields",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -2651,7 +2651,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/public/queries.ts#StageGraph",
       "symbol": "StageGraph",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "public"
     },
     {
@@ -2676,7 +2676,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/public/queries.ts#StageGraphEdge",
       "symbol": "StageGraphEdge",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "public"
     },
     {
@@ -2700,7 +2700,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/public/queries.ts#StageGraphNode",
       "symbol": "StageGraphNode",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "public"
     },
     {
@@ -2725,7 +2725,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/public/queries.ts#StageGraphNodeKind",
       "symbol": "StageGraphNodeKind",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "public"
     },
     {
@@ -34021,7 +34021,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/capabilityTemplates.ts#$file",
       "symbol": "$http:delete:176",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "inbound"
     },
     {
@@ -34046,7 +34046,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#$file",
       "symbol": "$http:delete:342",
-      "targetContext": "source-control",
+      "targetContext": "digital-employee",
       "targetLayer": "inbound"
     },
     {
@@ -34069,7 +34069,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/eventCenter.ts#committedDeliveryRetryBodySchema",
       "symbol": "committedDeliveryRetryBodySchema",
-      "targetContext": "source-control",
+      "targetContext": "event-center",
       "targetLayer": "domain"
     },
     {
@@ -34144,7 +34144,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/missionInputUploads.ts#$file",
       "symbol": "$http:delete:84",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "inbound"
     },
     {
@@ -34291,7 +34291,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/routes/verifiedBodyLimit.ts#$file",
       "symbol": "$http:delete:37",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -34434,7 +34434,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/agentLaunchReservation.ts#launchingAgentIds",
       "symbol": "launchingAgentIds",
-      "targetContext": "resource-catalog",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -34549,7 +34549,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/bundle/provider.ts#StagedSkillVersionLike",
       "symbol": "StagedSkillVersionLike",
-      "targetContext": "knowledge-evolution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -34573,7 +34573,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/capabilityTemplates.ts#commitPreparedTemplate",
       "symbol": "commitPreparedTemplate",
-      "targetContext": "source-control",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -34595,7 +34595,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/capabilityTemplates.ts#createTemplate",
       "symbol": "createTemplate",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -34619,7 +34619,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/capabilityTemplates.ts#deleteTemplate",
       "symbol": "deleteTemplate",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -34641,7 +34641,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/capabilityTemplates.ts#updateTemplate",
       "symbol": "updateTemplate",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -34833,7 +34833,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/codeReviewAgentCaller.ts#createReviewAgentCaller",
       "symbol": "createReviewAgentCaller",
-      "targetContext": "collaboration",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -34858,7 +34858,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/codeRoundContract.ts#StartCodeRoundInput",
       "symbol": "StartCodeRoundInput",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -35125,7 +35125,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/controlListener.ts#removeControlFile",
       "symbol": "removeControlFile",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -35147,7 +35147,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/controlListener.ts#startControlListener",
       "symbol": "startControlListener",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -35172,7 +35172,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#createDevelopmentMrEffects",
       "symbol": "createDevelopmentMrEffects",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -35196,7 +35196,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#createDevelopmentWorkspaceRepositoryPreparation",
       "symbol": "createDevelopmentWorkspaceRepositoryPreparation",
-      "targetContext": "source-control",
+      "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
     {
@@ -35221,7 +35221,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/digitalEmployeeAgentTemplates.ts#DELIVERY_CONTENT_INSTRUCTION",
       "symbol": "DELIVERY_CONTENT_INSTRUCTION",
-      "targetContext": "source-control",
+      "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
     {
@@ -35246,7 +35246,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/dynamicWorkflowRunner.ts#openDwGate",
       "symbol": "openDwGate",
-      "targetContext": "resource-catalog",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -35268,7 +35268,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/dynamicWorkflowRunner.ts#runDynamicWorkflowGenerate",
       "symbol": "runDynamicWorkflowGenerate",
-      "targetContext": "resource-catalog",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -35315,7 +35315,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/execution/agentProcess.ts#runAgentProcess",
       "symbol": "runAgentProcess",
-      "targetContext": "resource-catalog",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -35774,7 +35774,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/launchMultipart.ts#attachWorkspaceCleanupToMultipartError",
       "symbol": "attachWorkspaceCleanupToMultipartError",
-      "targetContext": "source-control",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -35943,7 +35943,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/managedPeriodicJob.ts#createManagedPeriodicJob",
       "symbol": "createManagedPeriodicJob",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -36399,7 +36399,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/portableBackupArchive.ts#createPortableBackupArchive",
       "symbol": "createPortableBackupArchive",
-      "targetContext": "task-execution",
+      "targetContext": "system-operations",
       "targetLayer": "application"
     },
     {
@@ -36424,7 +36424,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/portableBackupArchive.ts#CreatePortableBackupArchiveOptions",
       "symbol": "CreatePortableBackupArchiveOptions",
-      "targetContext": "task-execution",
+      "targetContext": "system-operations",
       "targetLayer": "application"
     },
     {
@@ -36917,7 +36917,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#updateResourceAcl",
       "symbol": "updateResourceAcl",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -36941,7 +36941,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/commit.ts#CommitPackageInput",
       "symbol": "CommitPackageInput",
-      "targetContext": "source-control",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -36966,7 +36966,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/executionAdapter.ts#createPostgresqlResourcePackageExecutionAdapter",
       "symbol": "createPostgresqlResourcePackageExecutionAdapter",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
     {
@@ -36991,7 +36991,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/executionAdapter.ts#createResourcePackageExecutionAdapter",
       "symbol": "createResourcePackageExecutionAdapter",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
     {
@@ -37040,7 +37040,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/secretInputs.ts#applyPackageSecretInputs",
       "symbol": "applyPackageSecretInputs",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -38410,7 +38410,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/submoduleRefresh.ts#startSubmoduleRefreshLoop",
       "symbol": "startSubmoduleRefreshLoop",
-      "targetContext": "task-execution",
+      "targetContext": "source-control",
       "targetLayer": "application"
     },
     {
@@ -38431,7 +38431,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#runSystemAgent",
       "symbol": "runSystemAgent",
-      "targetContext": "resource-catalog",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -38479,7 +38479,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#createPersistedRepositoryPreparationStep",
       "symbol": "createPersistedRepositoryPreparationStep",
-      "targetContext": "source-control",
+      "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
     {
@@ -38523,7 +38523,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#resumeDynamicWorkflowExecution",
       "symbol": "resumeDynamicWorkflowExecution",
-      "targetContext": "resource-catalog",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -38583,7 +38583,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#retryRepoPreparation",
       "symbol": "retryRepoPreparation",
-      "targetContext": "source-control",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -38607,7 +38607,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#retryRepositoryPreparation",
       "symbol": "retryRepositoryPreparation",
-      "targetContext": "source-control",
+      "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
     {
@@ -38627,7 +38627,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
       "symbol": "runDeferredRepoPreparation",
-      "targetContext": "source-control",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -38651,7 +38651,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#runtimeConfigOpts",
       "symbol": "runtimeConfigOpts",
-      "targetContext": "runtime-management",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -38764,7 +38764,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskWithLocalRepo",
       "symbol": "startTaskWithLocalRepo",
-      "targetContext": "source-control",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -38788,7 +38788,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#submitContinuationIntentInTx",
       "symbol": "submitContinuationIntentInTx",
-      "targetContext": "intent",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -39218,7 +39218,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#RuntimeStopTicket",
       "symbol": "RuntimeStopTicket",
-      "targetContext": "runtime-management",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -39243,7 +39243,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/taskLaunchGate.ts#LaunchableWorkflow",
       "symbol": "LaunchableWorkflow",
-      "targetContext": "resource-catalog",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -39290,7 +39290,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/upload.ts#applyUploadsToWorktree",
       "symbol": "applyUploadsToWorktree",
-      "targetContext": "source-control",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -39996,7 +39996,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/util/fsReclaim.ts#removeDirectoryWithRetry",
       "symbol": "removeDirectoryWithRetry",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -40021,7 +40021,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/util/fsReclaim.ts#RemoveDirectoryWithRetryResult",
       "symbol": "RemoveDirectoryWithRetryResult",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
     {
@@ -40486,7 +40486,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/util/inFlight.ts#createInFlightCoalescer",
       "symbol": "createInFlightCoalescer",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -40560,7 +40560,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/util/platformExec.ts#disabledShellCommand",
       "symbol": "disabledShellCommand",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -40585,7 +40585,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/util/platformExec.ts#disabledShellCommandForHost",
       "symbol": "disabledShellCommandForHost",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -40610,7 +40610,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/util/platformExec.ts#SEALED_SHELL_SUPPORTED",
       "symbol": "SEALED_SHELL_SUPPORTED",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -40635,7 +40635,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/util/win32Acl.ts#runAsync",
       "symbol": "runAsync",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -40660,7 +40660,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/util/win32Acl.ts#runSync",
       "symbol": "runSync",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -40685,7 +40685,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/util/win32Acl.ts#sealDirectoryOwnerOnly",
       "symbol": "sealDirectoryOwnerOnly",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -40710,7 +40710,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/broadcaster.ts#$file",
       "symbol": "$http:delete:41",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -40735,7 +40735,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/broadcaster.ts#$file",
       "symbol": "$http:delete:42",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -40760,7 +40760,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/connections.ts#$file",
       "symbol": "$http:delete:84",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -40785,7 +40785,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
       "symbol": "$http:delete:667",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -40810,7 +40810,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
       "symbol": "$http:delete:702",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -40835,7 +40835,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
       "symbol": "$http:delete:707",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -40860,7 +40860,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
       "symbol": "$http:delete:735",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -40885,7 +40885,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
       "symbol": "$http:delete:740",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -40909,7 +40909,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#deletedWorkflowAudienceVisible",
       "symbol": "deletedWorkflowAudienceVisible",
-      "targetContext": "resource-catalog",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -40933,7 +40933,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#deletedWorkgroupAudienceVisible",
       "symbol": "deletedWorkgroupAudienceVisible",
-      "targetContext": "resource-catalog",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -40957,7 +40957,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#openWsChannel",
       "symbol": "openWsChannel",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -40982,7 +40982,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/registry.ts#setExpiredCredentialHandler",
       "symbol": "setExpiredCredentialHandler",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -41007,7 +41007,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/server.ts#$file",
       "symbol": "$http:delete:118",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -41032,7 +41032,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/server.ts#$file",
       "symbol": "$http:delete:128",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -41057,7 +41057,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/server.ts#$file",
       "symbol": "$http:delete:150",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -41082,7 +41082,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/server.ts#$file",
       "symbol": "$http:delete:155",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -41107,7 +41107,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/server.ts#$file",
       "symbol": "$http:delete:168",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -41132,7 +41132,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/server.ts#$file",
       "symbol": "$http:delete:169",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     },
     {
@@ -41156,7 +41156,7 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/ws/server.ts#createWebSocketAdmissionController",
       "symbol": "createWebSocketAdmissionController",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "inbound"
     }
   ],

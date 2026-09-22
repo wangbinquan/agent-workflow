@@ -89,7 +89,7 @@
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/demoSeedPersistence.ts#createCodeCapabilityDemoSeedPersistence",
       "status": "clear",
       "symbol": "createCodeCapabilityDemoSeedPersistence",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "transactionCallee": "transaction"
     },
     {
@@ -101,7 +101,7 @@
       "ownerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/templateUpstreamPersistence.ts#createTemplateUpstreamPersistence",
       "status": "clear",
       "symbol": "createTemplateUpstreamPersistence",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "transactionCallee": "transaction"
     },
     {

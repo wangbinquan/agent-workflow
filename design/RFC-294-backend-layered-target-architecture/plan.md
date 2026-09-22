@@ -214,6 +214,64 @@ facade/service entries=295（246 legacy implementation、49 thin facade），arc
 这些不能因桶名就并入 task launch 改造；需单独核对 actual consumer，分别归配置用例、platform liveness/docs 与 system operations。
 本次只登记问题，canonical ownership 尚未更改；后续治理批必须同步 generator 规则与全量 replay，不能手改数值降低债务。
 
+### 1.3 账本治理批（2026-09-22，已完成；零生产代码改动）
+
+上条「owner 对账待办」的处置。复算发现问题比当时记的 23 个 route 文件大一个量级：`targetContextFor`
+的关键词级联末尾那条 `return 'task-execution'` 兜底**吞掉了 168 个 legacy 文件**（全仓 547 个
+legacy 后端文件的 31%），另有两类结构性错分：
+
+- **三个 bounded context 在级联里没有任何分支**——`development-automation`、`execution-contract`、
+  `code-capability`。`routes/{developmentConfig,developmentMissions,missionInputUploads,capabilityTemplates,executionContracts,code}.ts`
+  因此全部记成 E1 的债，而搬它们是 E8 / E9 的活。
+- **按 import 符号名判定 file 级归属**——`targetRemoveAfterWaveFor(toFile, importedName)` 把符号
+  喂进同一条级联，同一个文件按不同符号散进不同的波（`util/gitRef.ts` 的某个含 `user` 的导出把边
+  记成 W4-E0）；还有纯子串巧合：**`digitalEmployees` 里含 "git"**（d-i-**g-i-t**-a-l），于是
+  `routes/digitalEmployees.ts` 与 `services/digitalEmployeeAgentTemplates.ts` 被判成 source-control / W5。
+
+量化：W4-E1 桶 826 条里 **197 条**由 `util/`(79) / `routes/`(49) / `ws/`(33) / `cli/`(33) / `config`(10)
+驱动，都不是 task-execution 的活。
+
+**处置（用户当日三项裁决）**：
+
+1. **彻底取消兜底**。`modules/**` / `platform/**` / `db/**` / frontend / shared 仍按结构判定；其余
+   **446 个 legacy 后端文件逐个显式登记**在 `rfc294Canonical.ts` 的 `LEGACY_BACKEND_FILE_OWNERS`
+   里，未登记直接 throw，census 跑不起来。关键词级联、`hasScheduleTargetToken` 与各
+   `*_INBOUND_FILES` / `PLATFORM_*_FILES` 补丁集一并退役；symbol 不再参与归属判定
+   （`services/scheduler.ts` 的按符号分波是唯一例外，那是 W2-B/W2-D/W3/W5 之间的**波**切分）。
+2. **已关闭的波不再承接债**。R4「按消费者记账」是在 W4-C / E0 / E2 / E3 / E4a / E4b / E7 各自
+   宣告 Done **之后**才生效的，于是这些桶里又被灌进 794 条，`removeAfterWave` 在它们上面说了假话。
+   现按 `CLOSED_WAVES` 统一重定到 **W9-D**（§13「Facade/legacy contract」的退出门逐字就是
+   「cross-context internal import=0」「删除到期旧路径和临时 export」）。重定只改「谁来销」，
+   不改「债是什么」：每条 exact id 与它的 from/to/rule 原样保留，全账本一致（cross-context /
+   facade / owner 三份用同一个函数）。
+3. **不立 RFC**，按本文件 §RFC workflow 第 6 条例外直接提交；裁决逐条写在生成器注释里。
+
+**重分桶结果**（分母不变：exception 4802、facade 291）：
+
+| 波 | exact exceptions | facades |
+| --- | ---: | ---: |
+| W9 | 2425 → **2606** | 14 → 25 |
+| W9-D（新） | 0 → **762** | 0 → **91** |
+| W4-E1 | 826 → **649** | 99 → 68 |
+| W4-E8 | 110 → **130** | 0 → 5 |
+| W4-E9 | 66 → **79** | 1 → 2 |
+| W5 | 190 → 173 | 15 → 14 |
+| W4 | 193 → 201 | 26 → 27 |
+| W4-B | 179 → 183 | 21 → 22 |
+| W4-E5 | 2 → 2 | 29 → 31 |
+| W4-C / E0 / E2 / E3 / E4a / E4b / E7 | 794 → **0** | 80 → **0** |
+
+legacy 文件按目标 context 同步纠正：`task-execution` **167 → 74**、`platform` 124 → 180、
+`development-automation` 0 → 10、`execution-contract` 0 → 1、`digital-employee` 1 → 3。
+
+**守卫**（`rfc294-canonical-manifests.test.ts`，均已对治理前状态验红）：每个 legacy 后端文件都有
+owner（分母自证 >300）/ 登记表无幽灵条目 / 归属与符号无关（点名 digitalEmployees、gitRef、
+developmentMissions、util/process、postgresqlDaemonApplication）/ 已关闭的波在三份账本里都是空桶 /
+未登记文件必 throw。
+
+**此后各波退出门的分母以本批重采后的 exact ids 为准**；治理前引用 W4-E1 `826`、W4-C `347`、
+W4-E0 `226` 等数字的表述一律作废。
+
 RFC-360（E4b 全纵切）、RFC-361（EC provider）与 RFC-362（E1/SC 合同准备）已完成各自范围。
 下一步先立 Task/SC 生产 cutover 后继，明确 durable source/revision/group/replay；E6 的 E4b 前置已满足，可另案推进。
 Event target/Reaction 仍按 RFC-361 plan 的后继顺序立项；E10 等完整 E9 与 task query；
@@ -1317,6 +1375,13 @@ import=0；终局指标全绿。
 > 「属独立切片（未编号）」的条目被兜进 `RFC-owner-cutover`，在任何 wave 的退出门里都不出现）。结果：exception
 > `6071→5220`、W4-E1 `2528→837`、W4-C `916→435`、W4-E2 `96→67`、W9 `514→2679`。**重分桶后的 exact ids 是此后各波退出门
 > 的唯一分母**，上表冻结的手抄快照与膨胀期的中间数一律作废；下一个子波按 `status.md` 的当期值定门。
+
+> **2026-09-22 账本治理（上一条留下的两笔未决的处置，逐条见 §1.3）**：①「下一批账本工作时一并处理」的
+> route owner 纠正做完了，而且范围比当时记的 23 个 route 文件大一个量级——关键词级联的兜底吞掉 168 个
+> legacy 文件，现已改为 446 个文件**逐个显式登记、无兜底**；② 已关闭的波（W4-C / E0 / E2 / E3 / E4a /
+> E4b / E7）桶里那 794 条按用户裁决重定到 **W9-D**，这些桶归零且加了守卫不许再涨。W4-E1 `826→649`、
+> W9 `2425→2606`、新增 W9-D `762`，分母（exception 4802 / facade 291）不变。**本批重采后的 exact ids
+> 取代 2026-09-02 那次重分桶的数字**，成为此后各波退出门的唯一分母。
 
 所有 architecture debt 必须逐 exact id 不增、new violation/edge=0，不能靠“总数没升”用新债替换旧债。N1 已把
 RFC-297～343 的已发布 module/register/worker/facade 纳入分母；这只建立 lifecycle 分类与 debt owner，不宣称 265 个存量

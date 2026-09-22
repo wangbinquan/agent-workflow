@@ -9,7 +9,7 @@
       "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlApplication",
-      "targetContext": "task-execution"
+      "targetContext": "bootstrap"
     },
     {
       "callee": "registerAfterCommitEventPump",
@@ -130,7 +130,7 @@
       "ownerEntryId": "owner:packages/backend/src/mcp/server.ts#buildMcpServer",
       "removeAfterWave": "W6/W9",
       "symbol": "buildMcpServer",
-      "targetContext": "resource-catalog"
+      "targetContext": "platform"
     },
     {
       "callee": "registerMcpOperationProjection",
@@ -141,7 +141,7 @@
       "ownerEntryId": "owner:packages/backend/src/mcp/tools.ts#$file",
       "removeAfterWave": "W6/W9",
       "symbol": "$file",
-      "targetContext": "resource-catalog"
+      "targetContext": "platform"
     },
     {
       "callee": "registerEventType",
@@ -1153,7 +1153,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/capabilityTemplates.ts#mountCapabilityTemplateRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCapabilityTemplateRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1164,7 +1164,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/capabilityTemplates.ts#mountCapabilityTemplateRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCapabilityTemplateRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1175,7 +1175,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/capabilityTemplates.ts#mountCapabilityTemplateRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCapabilityTemplateRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1186,7 +1186,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/capabilityTemplates.ts#mountCapabilityTemplateRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCapabilityTemplateRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1197,7 +1197,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/capabilityTemplates.ts#mountCapabilityTemplateRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCapabilityTemplateRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1208,7 +1208,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/capabilityTemplates.ts#mountCapabilityTemplateRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCapabilityTemplateRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1219,7 +1219,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/capabilityTemplates.ts#mountCapabilityTemplateRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCapabilityTemplateRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1230,7 +1230,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/capabilityTemplates.ts#mountCapabilityTemplateRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCapabilityTemplateRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1296,7 +1296,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/code.ts#mountCodeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCodeRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1307,7 +1307,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/code.ts#mountCodeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCodeRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1318,7 +1318,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/code.ts#mountCodeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCodeRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1329,7 +1329,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/code.ts#mountCodeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCodeRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1340,7 +1340,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/code.ts#mountCodeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCodeRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1351,7 +1351,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/code.ts#mountCodeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCodeRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1362,7 +1362,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/code.ts#mountCodeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountCodeRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -1417,7 +1417,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/config.ts#mountConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountConfigRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerRoute",
@@ -1428,7 +1428,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/config.ts#mountConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountConfigRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerRoute",
@@ -1439,7 +1439,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/daemon.ts#mountDaemonRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDaemonRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerOperationRoute",
@@ -1450,7 +1450,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/databaseMigrations.ts#mountDatabaseMigrationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDatabaseMigrationRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerOperationRoute",
@@ -1461,7 +1461,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/databaseMigrations.ts#mountDatabaseMigrationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDatabaseMigrationRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerOperationRoute",
@@ -1472,7 +1472,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/databaseMigrations.ts#mountDatabaseMigrationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDatabaseMigrationRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerOperationRoute",
@@ -1483,7 +1483,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/databaseMigrations.ts#mountDatabaseMigrationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDatabaseMigrationRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerOperationRoute",
@@ -1494,7 +1494,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/databaseMigrations.ts#mountDatabaseMigrationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDatabaseMigrationRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerOperationRoute",
@@ -1505,7 +1505,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/databaseMigrations.ts#mountDatabaseMigrationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDatabaseMigrationRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerOperationRoute",
@@ -1516,7 +1516,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/databaseMigrations.ts#mountDatabaseMigrationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDatabaseMigrationRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerOperationRoute",
@@ -1527,7 +1527,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/databaseMigrations.ts#mountDatabaseMigrationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDatabaseMigrationRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerOperationRoute",
@@ -1538,7 +1538,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/databaseMigrations.ts#mountDatabaseMigrationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDatabaseMigrationRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerOperationRoute",
@@ -1549,7 +1549,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/databaseMigrations.ts#mountDatabaseMigrationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDatabaseMigrationRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerOperationRoute",
@@ -1560,7 +1560,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/databaseMigrations.ts#mountDatabaseMigrationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDatabaseMigrationRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerOperationRoute",
@@ -1571,7 +1571,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/databaseMigrations.ts#mountDatabaseMigrationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDatabaseMigrationRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerOperationRoute",
@@ -1582,7 +1582,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountConfigResource",
       "removeAfterWave": "W6/W9",
       "symbol": "mountConfigResource",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1593,7 +1593,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountConfigResource",
       "removeAfterWave": "W6/W9",
       "symbol": "mountConfigResource",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1604,7 +1604,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountConfigResource",
       "removeAfterWave": "W6/W9",
       "symbol": "mountConfigResource",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1615,7 +1615,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountConfigResource",
       "removeAfterWave": "W6/W9",
       "symbol": "mountConfigResource",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1626,7 +1626,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountDevelopmentConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentConfigRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1637,7 +1637,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountDevelopmentConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentConfigRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1648,7 +1648,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountDevelopmentConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentConfigRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1659,7 +1659,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountDevelopmentConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentConfigRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1670,7 +1670,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountDevelopmentConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentConfigRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1681,7 +1681,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountDevelopmentConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentConfigRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1692,7 +1692,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountDevelopmentConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentConfigRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1703,7 +1703,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountDevelopmentConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentConfigRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1714,7 +1714,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountDevelopmentConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentConfigRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1725,7 +1725,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountConfigResource",
       "removeAfterWave": "W6/W9",
       "symbol": "mountConfigResource",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1736,7 +1736,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentConfig.ts#mountConfigResource",
       "removeAfterWave": "W6/W9",
       "symbol": "mountConfigResource",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1747,7 +1747,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1758,7 +1758,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1769,7 +1769,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1780,7 +1780,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1791,7 +1791,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1802,7 +1802,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1813,7 +1813,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1824,7 +1824,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1835,7 +1835,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1846,7 +1846,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1857,7 +1857,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1868,7 +1868,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1879,7 +1879,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1890,7 +1890,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1901,7 +1901,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1912,7 +1912,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1923,7 +1923,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1934,7 +1934,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1945,7 +1945,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1956,7 +1956,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1967,7 +1967,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1978,7 +1978,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -1989,7 +1989,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -2000,7 +2000,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -2011,7 +2011,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -2022,7 +2022,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/developmentMissions.ts#mountDevelopmentMissionRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDevelopmentMissionRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerOperationRoute",
@@ -2033,7 +2033,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2044,7 +2044,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2055,7 +2055,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2066,7 +2066,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2077,7 +2077,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2088,7 +2088,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2099,7 +2099,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2110,7 +2110,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2121,7 +2121,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2132,7 +2132,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2143,7 +2143,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2154,7 +2154,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2165,7 +2165,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2176,7 +2176,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2187,7 +2187,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2198,7 +2198,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2209,7 +2209,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2220,7 +2220,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2231,7 +2231,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2242,7 +2242,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2253,7 +2253,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2264,7 +2264,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2275,7 +2275,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2286,7 +2286,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2297,7 +2297,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2308,7 +2308,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2319,7 +2319,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2330,7 +2330,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2341,7 +2341,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2352,7 +2352,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2363,7 +2363,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2374,7 +2374,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/digitalEmployees.ts#mountDigitalEmployeeRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDigitalEmployeeRoutes",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "callee": "registerRoute",
@@ -2385,7 +2385,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/docs.ts#mountDocsRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountDocsRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerRoute",
@@ -2396,7 +2396,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/docs.ts#mountWellKnownRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountWellKnownRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerRoute",
@@ -2671,7 +2671,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/executionContracts.ts#mountExecutionContractRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountExecutionContractRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "execution-contract"
     },
     {
       "callee": "registerRoute",
@@ -2682,7 +2682,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/executionContracts.ts#mountExecutionContractRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountExecutionContractRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "execution-contract"
     },
     {
       "callee": "registerRoute",
@@ -2693,7 +2693,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/executionContracts.ts#mountExecutionContractRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountExecutionContractRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "execution-contract"
     },
     {
       "callee": "registerRoute",
@@ -2704,7 +2704,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/health.ts#mountHealthRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountHealthRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerRoute",
@@ -3111,7 +3111,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/missionInputUploads.ts#mountMissionInputUploadRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMissionInputUploadRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -3122,7 +3122,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/missionInputUploads.ts#mountMissionInputUploadRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountMissionInputUploadRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "development-automation"
     },
     {
       "callee": "registerRoute",
@@ -3254,7 +3254,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/operationRoute.ts#registerOperationRoute",
       "removeAfterWave": "W6/W9",
       "symbol": "registerOperationRoute",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerRoute",
@@ -3265,7 +3265,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/operationRoute.ts#registerOperationRoute",
       "removeAfterWave": "W6/W9",
       "symbol": "registerOperationRoute",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerRoute",
@@ -3276,7 +3276,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/operationRoute.ts#registerOperationRoute",
       "removeAfterWave": "W6/W9",
       "symbol": "registerOperationRoute",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerRoute",
@@ -3287,7 +3287,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/overview.ts#mountOverviewRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountOverviewRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "system-operations"
     },
     {
       "callee": "registerRoute",
@@ -3298,7 +3298,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/plantuml.ts#mountPlantumlRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountPlantumlRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerOperationRoute",
@@ -3430,7 +3430,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/registry.ts#registerRoute",
       "removeAfterWave": "W6/W9",
       "symbol": "registerRoute",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerBoundOperationMiddleware",
@@ -3441,7 +3441,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/registry.ts#registerRouteMiddleware",
       "removeAfterWave": "W6/W9",
       "symbol": "registerRouteMiddleware",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerHttpOperationProjection",
@@ -3452,7 +3452,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/registry.ts#registerRoute",
       "removeAfterWave": "W6/W9",
       "symbol": "registerRoute",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "registerRoute",
@@ -3562,7 +3562,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/resourceAcl.ts#mountAclEndpoints",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAclEndpoints",
-      "targetContext": "task-execution"
+      "targetContext": "resource-catalog"
     },
     {
       "callee": "registerRoute",
@@ -3573,7 +3573,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/resourceAcl.ts#mountAclEndpoints",
       "removeAfterWave": "W6/W9",
       "symbol": "mountAclEndpoints",
-      "targetContext": "task-execution"
+      "targetContext": "resource-catalog"
     },
     {
       "callee": "registerOperationRoute",
@@ -3584,7 +3584,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "resource-catalog"
     },
     {
       "callee": "registerOperationRoute",
@@ -3595,7 +3595,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "resource-catalog"
     },
     {
       "callee": "registerOperationRoute",
@@ -3606,7 +3606,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "resource-catalog"
     },
     {
       "callee": "registerOperationRoute",
@@ -3617,7 +3617,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "resource-catalog"
     },
     {
       "callee": "registerOperationRoute",
@@ -3628,7 +3628,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "resource-catalog"
     },
     {
       "callee": "registerOperationRoute",
@@ -3639,7 +3639,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "resource-catalog"
     },
     {
       "callee": "registerOperationRoute",
@@ -3650,7 +3650,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "resource-catalog"
     },
     {
       "callee": "registerOperationRoute",
@@ -3661,7 +3661,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "resource-catalog"
     },
     {
       "callee": "registerOperationRoute",
@@ -3672,7 +3672,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/resourcePackages.ts#registerResourcePackageRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "registerResourcePackageRoutes",
-      "targetContext": "task-execution"
+      "targetContext": "resource-catalog"
     },
     {
       "callee": "registerOperationRoute",
@@ -5355,7 +5355,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/worktree-files.ts#mountWorktreeFilesRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountWorktreeFilesRoutes",
-      "targetContext": "source-control"
+      "targetContext": "task-execution"
     },
     {
       "callee": "registerRoute",
@@ -5366,7 +5366,7 @@
       "ownerEntryId": "owner:packages/backend/src/routes/worktree-files.ts#mountWorktreeFilesRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountWorktreeFilesRoutes",
-      "targetContext": "source-control"
+      "targetContext": "task-execution"
     },
     {
       "callee": "registerOperationAlias",
@@ -5421,7 +5421,7 @@
       "ownerEntryId": "owner:packages/backend/src/ws/connections.ts#$file",
       "removeAfterWave": "W6/W9",
       "symbol": "$file",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "callee": "setExpiredCredentialHandler",
@@ -5432,7 +5432,7 @@
       "ownerEntryId": "owner:packages/backend/src/ws/connections.ts#$file",
       "removeAfterWave": "W6/W9",
       "symbol": "$file",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     }
   ],
   "definitionContract": {
@@ -5636,7 +5636,7 @@
       "ownerEntryId": "owner:packages/backend/src/config/index.ts#invalidateReadConfigCache",
       "phase": "unknown",
       "symbol": "invalidateReadConfigCache",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -5660,7 +5660,7 @@
       "ownerEntryId": "owner:packages/backend/src/config/index.ts#migrateDeprecatedRuntimeHardeningConfig",
       "phase": "unknown",
       "symbol": "migrateDeprecatedRuntimeHardeningConfig",
-      "targetContext": "runtime-management"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -5683,7 +5683,7 @@
       "ownerEntryId": "owner:packages/backend/src/config/index.ts#readConfigCache",
       "phase": "unknown",
       "symbol": "readConfigCache",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -5727,7 +5727,7 @@
       "ownerEntryId": "owner:packages/backend/src/mcp/watch.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:57",
-      "targetContext": "resource-catalog"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -5748,7 +5748,7 @@
       "ownerEntryId": "owner:packages/backend/src/mcp/watch.ts#WATCH_HEARTBEAT_MS",
       "phase": "unknown",
       "symbol": "WATCH_HEARTBEAT_MS",
-      "targetContext": "resource-catalog"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -5769,7 +5769,7 @@
       "ownerEntryId": "owner:packages/backend/src/mcp/watch.ts#WATCH_POLL_MS",
       "phase": "unknown",
       "symbol": "WATCH_POLL_MS",
-      "targetContext": "resource-catalog"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -11236,7 +11236,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/digitalEmployeeAgentTemplates.ts#reconcileBuiltinAgentTemplate",
       "phase": "unknown",
       "symbol": "reconcileBuiltinAgentTemplate",
-      "targetContext": "source-control"
+      "targetContext": "digital-employee"
     },
     {
       "dependencies": [
@@ -11619,7 +11619,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/managedPeriodicJob.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:10",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -11640,7 +11640,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/managedPeriodicJob.ts#nativeTimerApi",
       "phase": "unknown",
       "symbol": "nativeTimerApi",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -11751,7 +11751,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/plantuml.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:136",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [],
@@ -11793,7 +11793,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/pluginGenerationGc.ts#hasPluginGenerationGcCandidates",
       "phase": "unknown",
       "symbol": "hasPluginGenerationGcCandidates",
-      "targetContext": "source-control"
+      "targetContext": "resource-catalog"
     },
     {
       "dependencies": [],
@@ -12400,7 +12400,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/tokenAudit.ts#pruneTokenAudit",
       "phase": "unknown",
       "symbol": "pruneTokenAudit",
-      "targetContext": "task-execution"
+      "targetContext": "identity-access"
     },
     {
       "dependencies": [],
@@ -12421,7 +12421,7 @@
       "ownerEntryId": "owner:packages/backend/src/services/tokenAudit.ts#pruneTokenAuditSlice",
       "phase": "unknown",
       "symbol": "pruneTokenAuditSlice",
-      "targetContext": "task-execution"
+      "targetContext": "identity-access"
     },
     {
       "dependencies": [],
@@ -12679,7 +12679,7 @@
       "ownerEntryId": "owner:packages/backend/src/util/process.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:460",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -12702,7 +12702,7 @@
       "ownerEntryId": "owner:packages/backend/src/util/process.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:601",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -12725,7 +12725,7 @@
       "ownerEntryId": "owner:packages/backend/src/util/process.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:621",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -12748,7 +12748,7 @@
       "ownerEntryId": "owner:packages/backend/src/util/timeoutSignal.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:32",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     },
     {
       "dependencies": [
@@ -12771,7 +12771,7 @@
       "ownerEntryId": "owner:packages/backend/src/util/win32Acl.ts#$file",
       "phase": "unknown",
       "symbol": "$setTimeout:171",
-      "targetContext": "task-execution"
+      "targetContext": "platform"
     }
   ],
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",

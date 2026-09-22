@@ -1,5 +1,56 @@
 # 当前执行状态
 
+## 2026-09-22 RFC-294 账本治理：legacy owner 改逐文件登记 + 已关闭的波不再承接债
+
+用户问「RFC-294 现在的进展，下一步要做什么」，对完账后选了这一批（零生产代码改动）。三项裁决
+均由用户当日拍板：**彻底取消兜底 / 把已 Done 波桶里的债重定到未完成的波 / 不立 RFC 直接改**。
+
+**查出来的问题比 `plan.md §1.2` 记的「23 个 route 文件」大一个量级**：`targetContextFor` 的关键词
+级联末尾那条 `return 'task-execution'` 兜底**吞掉了 168 个 legacy 文件**（全仓 547 个的 31%）——
+`util/process.ts` / `config/index.ts` / `ws/broadcaster.ts` / `cli/postgresqlDaemonApplication.ts`
+全掉进 W4-E1。另有两类结构性错分：①`development-automation` / `execution-contract` /
+`code-capability` 三个 context 在级联里**没有任何分支**，六个 development / code / executionContracts
+路由因此记成 E1 的债，而搬它们是 E8 / E9 的活；②按 **import 符号名**判 file 级归属，同一个文件
+按不同符号散进不同的波，还撞上纯子串巧合——**`digitalEmployees` 里含 "git"**（d-i-**g-i-t**-a-l），
+于是它和 `digitalEmployeeAgentTemplates.ts` 被判成 source-control / W5。量化：W4-E1 桶 826 条里
+**197 条**由 `util/`(79) / `routes/`(49) / `ws/`(33) / `cli/`(33) / `config`(10) 驱动。
+
+**做了什么**：
+
+1. **446 个 legacy 后端文件逐个显式登记**进 `rfc294Canonical.ts` 的 `LEGACY_BACKEND_FILE_OWNERS`，
+   未登记直接 throw、census 跑不起来。关键词级联、`hasScheduleTargetToken` 与四个
+   `*_INBOUND_FILES` / `PLATFORM_*_FILES` 补丁集一并退役；symbol 不再参与归属判定
+   （`services/scheduler.ts` 按符号分 W2-B/W2-D/W3/W5 是唯一例外，那是波切分不是归属）。
+   `modules/**` / `platform/**` / `db/**` / frontend / shared 仍按结构判定，不进表。
+2. **已关闭的波（W4-C / E0 / E2 / E3 / E4a / E4b / E7）统一重定到 W9-D**。R4「按消费者记账」是在
+   这些波宣告 Done **之后**才生效的，于是它们桶里又被灌进 794 条，`removeAfterWave` 在这些桶上
+   说了假话。重定只改「谁来销」不改「债是什么」，且三份账本（cross-context / facade / owner）
+   走同一个函数、口径一致。
+3. **重分桶结果**（分母不变：exception 4802 / facade 291）：W4-E1 `826→649`、W9 `2425→2606`、
+   新增 W9-D `762`、W4-E8 `110→130`、W4-E9 `66→79`、W5 `190→173`，七个已关闭的波 `794→0`。
+   legacy 文件按目标 context：`task-execution` **167→74**、`platform` 124→180、
+   `development-automation` 0→10、`execution-contract` 0→1、`digital-employee` 1→3。
+4. **守卫五条**（`rfc294-canonical-manifests.test.ts`，30 pass；两条关键的已对治理前状态验红）：
+   每个 legacy 文件都有 owner（分母自证 >300）/ 登记表无幽灵条目 / 归属与符号无关（点名
+   digitalEmployees、gitRef、developmentMissions、util/process、postgresqlDaemonApplication）/
+   已关闭的波在三份账本里都是空桶 / 未登记文件必 throw。
+5. 记账：`plan.md` 新增 §1.3（完整裁决与数字）+ §14 追加 2026-09-22 说明；`rfc346` / `rfc332`
+   两个旧用例改锁新不变量（它们原本探的 `services/scheduleLaunch.ts`、`services/skillVersion.ts`
+   都已不存在，是级联时代的假想路径）。
+
+**本地验证**：backend typecheck 干净；`tests/architecture/` 全量 735 pass / 0 fail（+ rfc332 / rfc346）；
+改动文件 prettier + eslint `--max-warnings 0` 干净。
+
+**踩坑**（已进 `docs/dev-gotchas.md`）：census 在「重算结果 == 磁盘内容」时**整个文件不写**，
+于是上一次写入留下的错 `contentDigest` 永远自愈不了——`architecture:write` 反复跑都说写了 8 个产物、
+git diff 干净，而 `RFC-294 N1a` 一直红在同一个 digest 上；只能用 `artifactContentDigest` 手动重钉。
+另：`guard-manifest.json` 的 `lines` 是 census 重算的，手改会被写回。
+
+**下一步**（分母已可信，按 `RFC-361 plan §2` 的 E9 后继顺序）：**E9-C Reaction execution cutover**
+——typed 四方法 `ReactionExecutionPortV1` + 同事务 `ReactionExecutionAdmissionParticipantInTxV1`
+（现状是 `runtimeService.ts:2518` 抢租约 → `:2587` 事务外 launch → `markRoundRunning`，崩在中间
+就是 TE 起了任务而 DE 那轮停在 claimed），并同刀删掉 DE↔TE 双向边。RFC-362/363 已解除它的前置。
+
 ## 2026-09-22 RFC-366 收口补漏：provider 合并 + 三条漏写的验收测试
 
 用户要求「检查下你的 RFC 是否做完」。逐条对着 `plan.md` 的 T1–T20 与 `proposal.md §7` 的

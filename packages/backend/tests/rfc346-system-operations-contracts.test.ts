@@ -328,7 +328,11 @@ describe('RFC-346 System Operations contracts', () => {
       'packages/backend/src/routes/restore.ts',
     ]) {
       expect(targetContextFor(path)).toBe('system-operations')
-      expect(targetRemoveAfterWaveFor(path, '$file')).toBe('W4-E7')
+      // 归属仍是 system-operations，但清偿波不再写 W4-E7：RFC-346 已于 2026-08-30 关闭 W4-E7，
+      // 而这四个文件至今还在 `cli/` / `routes/` 下、没有搬进 `modules/system-operations`。
+      // 2026-09-22 的账本治理（用户裁决其二）规定已关闭的波不再承接债，这类「消费者尚未迁位」
+      // 一律重定到 W9-D（`plan.md §13` 的 facade / cross-context import 清仓）。
+      expect(targetRemoveAfterWaveFor(path, '$file')).toBe('W9-D')
     }
 
     for (const path of [
@@ -362,18 +366,16 @@ describe('RFC-346 System Operations contracts', () => {
       targetRemoveAfterWaveFor('packages/backend/src/services/backupScheduler.ts', '$file'),
     ).toBe('W9')
 
-    expect(
-      targetContextFor(
-        'packages/backend/src/services/taskArchive.ts',
-        'restoreLegacyMovedDirectories',
-      ),
-    ).toBe('task-execution')
-    expect(
-      targetContextFor('packages/backend/src/services/skillVersion.ts', 'restoreSkillVersion'),
-    ).toBe('knowledge-evolution')
-    expect(targetContextFor('packages/backend/src/util/git.ts', 'restoreBranchRefCas')).toBe(
-      'source-control',
-    )
+    // 原三条锁的是「符号名里的 `restore` 不得把别人的文件吸进 system-operations」。
+    // 2026-09-22 的账本治理把 owner 改成逐文件登记（`rfc294Canonical.ts` 的
+    // LEGACY_BACKEND_FILE_OWNERS），symbol 彻底不参与归属判定，这条风险在结构上消失。
+    // 保留仍存在的两个文件作为回归锚，改成断言它们的登记归属（`skillVersion.ts` 已随 RFC-353
+    // 迁进 `modules/knowledge-evolution`，legacy 侧已无同域文件可锚）；第三条换成
+    // `routes/memories.ts`——RFC-352 T10 那次「复数名字漏网、纯 memory 路由记成 W4-E1」的
+    // 原始现场，登记制之后它不再依赖任何正则是否写了复数。
+    expect(targetContextFor('packages/backend/src/services/taskArchive.ts')).toBe('task-execution')
+    expect(targetContextFor('packages/backend/src/util/git.ts')).toBe('source-control')
+    expect(targetContextFor('packages/backend/src/routes/memories.ts')).toBe('memory')
   })
 
   test('canonical registers both coordinator ports and the authority edge as live', () => {

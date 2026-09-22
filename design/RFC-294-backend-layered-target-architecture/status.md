@@ -141,20 +141,22 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| task-execution | 167 |
-| platform | 124 |
-| identity-access | 44 |
-| resource-catalog | 43 |
-| runtime-management | 39 |
-| collaboration | 30 |
-| workspace-insight | 29 |
-| integration | 27 |
-| source-control | 27 |
-| bootstrap | 8 |
-| system-operations | 4 |
+| platform | 180 |
+| task-execution | 74 |
+| resource-catalog | 51 |
+| runtime-management | 41 |
+| identity-access | 38 |
+| collaboration | 31 |
+| workspace-insight | 31 |
+| integration | 28 |
+| source-control | 24 |
+| bootstrap | 22 |
+| development-automation | 10 |
+| system-operations | 9 |
+| digital-employee | 3 |
 | memory | 2 |
-| digital-employee | 1 |
 | event-center | 1 |
+| execution-contract | 1 |
 | task-catalog | 1 |
 
 ## 4. Facade 账本（`facades.json`）
@@ -163,34 +165,35 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| task-execution | 100 |
-| runtime-management | 36 |
-| resource-catalog | 30 |
-| workspace-insight | 29 |
-| collaboration | 26 |
-| integration | 21 |
-| platform | 17 |
-| source-control | 16 |
-| identity-access | 14 |
-| bootstrap | 1 |
-| digital-employee | 1 |
+| task-execution | 69 |
+| resource-catalog | 41 |
+| runtime-management | 38 |
+| workspace-insight | 31 |
+| collaboration | 27 |
+| platform | 25 |
+| integration | 22 |
+| source-control | 15 |
+| identity-access | 9 |
+| development-automation | 5 |
+| bootstrap | 4 |
+| system-operations | 3 |
+| digital-employee | 2 |
 
 ### 4.2 按清偿波次
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W4-E1 | 99 |
-| W4-E4b | 36 |
-| W4-C | 30 |
-| W4-E5 | 29 |
-| W4 | 26 |
-| W4-B | 21 |
-| W5 | 15 |
-| W4-E0 | 14 |
-| W9 | 14 |
+| W9-D | 91 |
+| W4-E1 | 68 |
+| W4-E5 | 31 |
+| W4 | 27 |
+| W9 | 25 |
+| W4-B | 22 |
+| W5 | 14 |
+| W4-E8 | 5 |
 | W9-E | 5 |
+| W4-E9 | 2 |
 | W2-D/W3/W5 | 1 |
-| W4-E9 | 1 |
 
 ## 5. 跨 context 边（`cross-context-imports.json`）
 
@@ -225,20 +228,14 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2425 |
-| W4-E1 | 826 |
-| W4-C | 347 |
-| W4-E0 | 226 |
-| W4 | 193 |
-| W5 | 190 |
-| W4-B | 179 |
-| W4-E8 | 110 |
-| W4-E9 | 66 |
-| W4-E4b | 59 |
-| W4-E4a | 50 |
-| W4-E7 | 49 |
-| W4-E2 | 36 |
-| W4-E3 | 27 |
+| W9 | 2606 |
+| W9-D | 762 |
+| W4-E1 | 649 |
+| W4 | 201 |
+| W4-B | 183 |
+| W5 | 173 |
+| W4-E8 | 130 |
+| W4-E9 | 79 |
 | W2-D/W3/W5 | 8 |
 | W9-E | 6 |
 | W4-E10 | 3 |

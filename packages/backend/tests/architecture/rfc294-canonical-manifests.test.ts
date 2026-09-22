@@ -14,6 +14,7 @@ import {
   CANONICAL_MANIFEST_PATHS,
   PROVENANCE_ARTIFACTS,
   PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST,
+  LEGACY_BACKEND_FILE_OWNER_PATHS,
   TARGET_CONTEXT_EDGES,
   TARGET_PUBLIC_CONTEXTS,
   artifactContentDigest,
@@ -21,6 +22,7 @@ import {
   buildCanonicalArtifacts,
   projectGovernanceArtifacts,
   stableJson,
+  targetContextFor,
   validateCanonicalArtifacts,
   type CanonicalArtifacts,
 } from './rfc294Canonical'
@@ -801,6 +803,88 @@ describe('RFC-294 N1a content-addressed current artifact provenance', () => {
     tampered.note = `${String(tampered.note)} tampered`
     expect(artifactContentDigest(tampered)).not.toBe(
       (current.provenance as Record<string, unknown>).contentDigest,
+    )
+  })
+})
+
+// RFC-294 账本治理（2026-09-22）—— legacy owner 登记制与「已关闭的波不再承接债」。
+//
+// 这两条锁的都是 2026-09-22 之前**真实发生过**的记账失真：
+//   - 关键词级联的末尾兜底把 168 个 legacy 文件（util/ws/cli/config/三个无分支的 context）
+//     一律记成 task-execution，W4-E1 桶 826 条里 197 条是别人的活；
+//   - R4「按消费者记账」在 W4-C/E0/E2/E3/E4a/E4b/E7 宣告 Done **之后**才生效，于是这些
+//     已关闭的桶里又被灌进 794 条，`removeAfterWave` 在这些桶上说了假话。
+// 判据都在生成器里（LEGACY_BACKEND_FILE_OWNERS / CLOSED_WAVES），这里钉住它们的外部可观察结果。
+describe('RFC-294 owner registry — 登记制没有兜底，已关闭的波不再承接债', () => {
+  const backendSourceFiles = (): readonly string[] => {
+    const listed = git('ls-files', 'packages/backend/src')
+    expect(listed.ok).toBe(true)
+    return listed.out
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.endsWith('.ts') && !line.endsWith('.d.ts'))
+  }
+
+  test('每个 legacy 后端文件都有 owner——没有一个靠兜底', () => {
+    const legacy = backendSourceFiles().filter(
+      (path) =>
+        !path.startsWith('packages/backend/src/modules/') &&
+        !path.startsWith('packages/backend/src/platform/') &&
+        !path.startsWith('packages/backend/src/db/'),
+    )
+    // 分母自证：这条规则要有意义，legacy 面必须还相当大（真迁完了就该整段删掉，而不是空跑）。
+    expect(legacy.length).toBeGreaterThan(300)
+    const unregistered = legacy.filter((path) => {
+      try {
+        targetContextFor(path)
+        return false
+      } catch {
+        return true
+      }
+    })
+    expect(unregistered).toEqual([])
+  })
+
+  test('登记表不留幽灵条目——每一行都指向仓里真实存在的文件', () => {
+    const existing = new Set(backendSourceFiles())
+    const stale = LEGACY_BACKEND_FILE_OWNER_PATHS.filter((path) => !existing.has(path))
+    expect(stale).toEqual([])
+  })
+
+  test('归属只由文件决定，与 import 的符号名无关', () => {
+    // 治理前的真实事故形态：`digitalEmployees` 含子串 "git" 被判 source-control；
+    // `util/gitRef.ts` 的某个含 `user` 的导出把那条边记成 identity-access。
+    expect(targetContextFor('packages/backend/src/routes/digitalEmployees.ts')).toBe(
+      'digital-employee',
+    )
+    expect(targetContextFor('packages/backend/src/util/gitRef.ts')).toBe('source-control')
+    expect(targetContextFor('packages/backend/src/routes/developmentMissions.ts')).toBe(
+      'development-automation',
+    )
+    expect(targetContextFor('packages/backend/src/util/process.ts')).toBe('platform')
+    expect(targetContextFor('packages/backend/src/cli/postgresqlDaemonApplication.ts')).toBe(
+      'bootstrap',
+    )
+  })
+
+  test('已关闭的波在所有账本里都是空桶', () => {
+    const closed = ['W4-C', 'W4-E0', 'W4-E2', 'W4-E3', 'W4-E4a', 'W4-E4b', 'W4-E7']
+    const waveFields: ReadonlyArray<readonly [string, string]> = [
+      ['cross-context-imports.json', 'architectureExceptions'],
+      ['facades.json', 'entries'],
+      ['module-symbol-owners.json', 'entries'],
+    ]
+    for (const [file, field] of waveFields) {
+      const rows = readJson(`architecture/${file}`)[field] as ReadonlyArray<Record<string, unknown>>
+      expect(rows.length).toBeGreaterThan(0)
+      const leaked = rows.filter((row) => closed.includes(String(row.removeAfterWave)))
+      expect(leaked).toEqual([])
+    }
+  })
+
+  test('mutation: 只要有一个 legacy 文件没登记，census 就跑不起来', () => {
+    expect(() => targetContextFor('packages/backend/src/services/__not_registered__.ts')).toThrow(
+      /未登记的 legacy 后端文件/,
     )
   })
 })

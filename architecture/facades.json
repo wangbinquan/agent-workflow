@@ -14,7 +14,7 @@
       "file": "packages/backend/src/services/accountAuthPolicy.ts",
       "id": "facade:packages/backend/src/services/accountAuthPolicy.ts",
       "ownerEntryId": "owner:packages/backend/src/services/accountAuthPolicy.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "identity-access",
       "targetLayer": "domain"
@@ -28,7 +28,7 @@
       "file": "packages/backend/src/services/agent.ts",
       "id": "facade:packages/backend/src/services/agent.ts",
       "ownerEntryId": "owner:packages/backend/src/services/agent.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -51,7 +51,7 @@
       "file": "packages/backend/src/services/agentDeps.ts",
       "id": "facade:packages/backend/src/services/agentDeps.ts",
       "ownerEntryId": "owner:packages/backend/src/services/agentDeps.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -77,9 +77,9 @@
       "file": "packages/backend/src/services/agentLaunch.ts",
       "id": "facade:packages/backend/src/services/agentLaunch.ts",
       "ownerEntryId": "owner:packages/backend/src/services/agentLaunch.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-implementation",
-      "targetContext": "resource-catalog",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -97,9 +97,9 @@
       "file": "packages/backend/src/services/agentLaunchReservation.ts",
       "id": "facade:packages/backend/src/services/agentLaunchReservation.ts",
       "ownerEntryId": "owner:packages/backend/src/services/agentLaunchReservation.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-implementation",
-      "targetContext": "resource-catalog",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -115,9 +115,9 @@
       "file": "packages/backend/src/services/apiDocs.ts",
       "id": "facade:packages/backend/src/services/apiDocs.ts",
       "ownerEntryId": "owner:packages/backend/src/services/apiDocs.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -261,9 +261,9 @@
       "file": "packages/backend/src/services/bundle/provider.ts",
       "id": "facade:packages/backend/src/services/bundle/provider.ts",
       "ownerEntryId": "owner:packages/backend/src/services/bundle/provider.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -296,9 +296,9 @@
       "file": "packages/backend/src/services/capabilityTemplates.ts",
       "id": "facade:packages/backend/src/services/capabilityTemplates.ts",
       "ownerEntryId": "owner:packages/backend/src/services/capabilityTemplates.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W4-E8",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -511,9 +511,9 @@
       "file": "packages/backend/src/services/codeCapabilityParams.ts",
       "id": "facade:packages/backend/src/services/codeCapabilityParams.ts",
       "ownerEntryId": "owner:packages/backend/src/services/codeCapabilityParams.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W4-E8",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -629,9 +629,9 @@
       "file": "packages/backend/src/services/codeHostAuthorGate.ts",
       "id": "facade:packages/backend/src/services/codeHostAuthorGate.ts",
       "ownerEntryId": "owner:packages/backend/src/services/codeHostAuthorGate.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W4-B",
       "status": "legacy-implementation",
-      "targetContext": "identity-access",
+      "targetContext": "integration",
       "targetLayer": "application"
     },
     {
@@ -646,9 +646,9 @@
       "file": "packages/backend/src/services/codeIntel/codeIntel.ts",
       "id": "facade:packages/backend/src/services/codeIntel/codeIntel.ts",
       "ownerEntryId": "owner:packages/backend/src/services/codeIntel/codeIntel.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W4-E5",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "workspace-insight",
       "targetLayer": "application"
     },
     {
@@ -677,9 +677,9 @@
       "file": "packages/backend/src/services/codeIntel/snapshot.ts",
       "id": "facade:packages/backend/src/services/codeIntel/snapshot.ts",
       "ownerEntryId": "owner:packages/backend/src/services/codeIntel/snapshot.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W4-E5",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "workspace-insight",
       "targetLayer": "application"
     },
     {
@@ -698,9 +698,9 @@
       "file": "packages/backend/src/services/codeReviewAgentCaller.ts",
       "id": "facade:packages/backend/src/services/codeReviewAgentCaller.ts",
       "ownerEntryId": "owner:packages/backend/src/services/codeReviewAgentCaller.ts#$file",
-      "removeAfterWave": "W4",
+      "removeAfterWave": "W4-E8",
       "status": "legacy-implementation",
-      "targetContext": "collaboration",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -717,9 +717,9 @@
       "file": "packages/backend/src/services/codeRoundContract.ts",
       "id": "facade:packages/backend/src/services/codeRoundContract.ts",
       "ownerEntryId": "owner:packages/backend/src/services/codeRoundContract.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W4-E8",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -785,9 +785,9 @@
       "file": "packages/backend/src/services/configAppliedListeners.ts",
       "id": "facade:packages/backend/src/services/configAppliedListeners.ts",
       "ownerEntryId": "owner:packages/backend/src/services/configAppliedListeners.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -806,9 +806,9 @@
       "file": "packages/backend/src/services/controlListener.ts",
       "id": "facade:packages/backend/src/services/controlListener.ts",
       "ownerEntryId": "owner:packages/backend/src/services/controlListener.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -845,9 +845,9 @@
       "file": "packages/backend/src/services/daemonGeneration.ts",
       "id": "facade:packages/backend/src/services/daemonGeneration.ts",
       "ownerEntryId": "owner:packages/backend/src/services/daemonGeneration.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -863,9 +863,9 @@
       "file": "packages/backend/src/services/deleteConfirm.ts",
       "id": "facade:packages/backend/src/services/deleteConfirm.ts",
       "ownerEntryId": "owner:packages/backend/src/services/deleteConfirm.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -888,9 +888,9 @@
       "file": "packages/backend/src/services/demoSeed.ts",
       "id": "facade:packages/backend/src/services/demoSeed.ts",
       "ownerEntryId": "owner:packages/backend/src/services/demoSeed.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -928,9 +928,9 @@
       "file": "packages/backend/src/services/developmentDeliveryDeps.ts",
       "id": "facade:packages/backend/src/services/developmentDeliveryDeps.ts",
       "ownerEntryId": "owner:packages/backend/src/services/developmentDeliveryDeps.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W4-E8",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "development-automation",
       "targetLayer": "application"
     },
     {
@@ -959,9 +959,9 @@
       "file": "packages/backend/src/services/digitalEmployeeAgentTemplates.ts",
       "id": "facade:packages/backend/src/services/digitalEmployeeAgentTemplates.ts",
       "ownerEntryId": "owner:packages/backend/src/services/digitalEmployeeAgentTemplates.ts#$file",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W4-E9",
       "status": "legacy-implementation",
-      "targetContext": "source-control",
+      "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
     {
@@ -1011,9 +1011,9 @@
       "file": "packages/backend/src/services/driverLease.ts",
       "id": "facade:packages/backend/src/services/driverLease.ts",
       "ownerEntryId": "owner:packages/backend/src/services/driverLease.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
     {
@@ -1041,9 +1041,9 @@
       "file": "packages/backend/src/services/dynamicWorkflowRunner.ts",
       "id": "facade:packages/backend/src/services/dynamicWorkflowRunner.ts",
       "ownerEntryId": "owner:packages/backend/src/services/dynamicWorkflowRunner.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-implementation",
-      "targetContext": "resource-catalog",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -1116,9 +1116,9 @@
       "file": "packages/backend/src/services/eventsArchive.ts",
       "id": "facade:packages/backend/src/services/eventsArchive.ts",
       "ownerEntryId": "owner:packages/backend/src/services/eventsArchive.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
-      "targetContext": "task-execution",
+      "targetContext": "system-operations",
       "targetLayer": "application"
     },
     {
@@ -1152,9 +1152,9 @@
       "file": "packages/backend/src/services/execution/agentInjection.ts",
       "id": "facade:packages/backend/src/services/execution/agentInjection.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/agentInjection.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "resource-catalog",
+      "targetContext": "runtime-management",
       "targetLayer": "application"
     },
     {
@@ -1168,9 +1168,9 @@
       "file": "packages/backend/src/services/execution/agentProcess.ts",
       "id": "facade:packages/backend/src/services/execution/agentProcess.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/agentProcess.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "resource-catalog",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -1413,7 +1413,7 @@
       "file": "packages/backend/src/services/execution/runtimeConfigFreeze.ts",
       "id": "facade:packages/backend/src/services/execution/runtimeConfigFreeze.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/runtimeConfigFreeze.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -1465,9 +1465,9 @@
       "file": "packages/backend/src/services/execution/taskEngineRuntimeOptions.ts",
       "id": "facade:packages/backend/src/services/execution/taskEngineRuntimeOptions.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/taskEngineRuntimeOptions.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W4-E1",
       "status": "thin-facade",
-      "targetContext": "runtime-management",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -1628,9 +1628,9 @@
       "file": "packages/backend/src/services/execution/workspaceBoundary.ts",
       "id": "facade:packages/backend/src/services/execution/workspaceBoundary.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/workspaceBoundary.ts#$file",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-implementation",
-      "targetContext": "source-control",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -1690,9 +1690,9 @@
       "file": "packages/backend/src/services/gc.ts",
       "id": "facade:packages/backend/src/services/gc.ts",
       "ownerEntryId": "owner:packages/backend/src/services/gc.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
-      "targetContext": "task-execution",
+      "targetContext": "system-operations",
       "targetLayer": "application"
     },
     {
@@ -1847,9 +1847,9 @@
       "file": "packages/backend/src/services/humanGateComposition.ts",
       "id": "facade:packages/backend/src/services/humanGateComposition.ts",
       "ownerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W4",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "collaboration",
       "targetLayer": "application"
     },
     {
@@ -1909,9 +1909,9 @@
       "file": "packages/backend/src/services/humanGateDecisionE2eBarrier.ts",
       "id": "facade:packages/backend/src/services/humanGateDecisionE2eBarrier.ts",
       "ownerEntryId": "owner:packages/backend/src/services/humanGateDecisionE2eBarrier.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W4",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "collaboration",
       "targetLayer": "application"
     },
     {
@@ -1986,9 +1986,9 @@
       "file": "packages/backend/src/services/launchRuntimeConfig.ts",
       "id": "facade:packages/backend/src/services/launchRuntimeConfig.ts",
       "ownerEntryId": "owner:packages/backend/src/services/launchRuntimeConfig.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-implementation",
-      "targetContext": "runtime-management",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -2133,9 +2133,9 @@
       "file": "packages/backend/src/services/managedPeriodicJob.ts",
       "id": "facade:packages/backend/src/services/managedPeriodicJob.ts",
       "ownerEntryId": "owner:packages/backend/src/services/managedPeriodicJob.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -2151,7 +2151,7 @@
       "file": "packages/backend/src/services/mcpClosure.ts",
       "id": "facade:packages/backend/src/services/mcpClosure.ts",
       "ownerEntryId": "owner:packages/backend/src/services/mcpClosure.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "inbound"
@@ -2168,7 +2168,7 @@
       "file": "packages/backend/src/services/mcpOperationRevision.ts",
       "id": "facade:packages/backend/src/services/mcpOperationRevision.ts",
       "ownerEntryId": "owner:packages/backend/src/services/mcpOperationRevision.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "inbound"
@@ -2189,7 +2189,7 @@
       "file": "packages/backend/src/services/mcpProbe.ts",
       "id": "facade:packages/backend/src/services/mcpProbe.ts",
       "ownerEntryId": "owner:packages/backend/src/services/mcpProbe.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "inbound"
@@ -2208,7 +2208,7 @@
       "file": "packages/backend/src/services/mcpProbeStore.ts",
       "id": "facade:packages/backend/src/services/mcpProbeStore.ts",
       "ownerEntryId": "owner:packages/backend/src/services/mcpProbeStore.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -2222,7 +2222,7 @@
       "file": "packages/backend/src/services/mcpSurface.ts",
       "id": "facade:packages/backend/src/services/mcpSurface.ts",
       "ownerEntryId": "owner:packages/backend/src/services/mcpSurface.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "inbound"
@@ -2255,9 +2255,9 @@
       "file": "packages/backend/src/services/mergeAgent.ts",
       "id": "facade:packages/backend/src/services/mergeAgent.ts",
       "ownerEntryId": "owner:packages/backend/src/services/mergeAgent.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W5",
       "status": "legacy-implementation",
-      "targetContext": "resource-catalog",
+      "targetContext": "source-control",
       "targetLayer": "application"
     },
     {
@@ -2438,7 +2438,7 @@
       "file": "packages/backend/src/services/oidc/provisioning.ts",
       "id": "facade:packages/backend/src/services/oidc/provisioning.ts",
       "ownerEntryId": "owner:packages/backend/src/services/oidc/provisioning.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "identity-access",
       "targetLayer": "application"
@@ -2457,7 +2457,7 @@
       "file": "packages/backend/src/services/oidcProviders.ts",
       "id": "facade:packages/backend/src/services/oidcProviders.ts",
       "ownerEntryId": "owner:packages/backend/src/services/oidcProviders.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "identity-access",
       "targetLayer": "application"
@@ -2486,9 +2486,9 @@
       "file": "packages/backend/src/services/orchestratorAgent.ts",
       "id": "facade:packages/backend/src/services/orchestratorAgent.ts",
       "ownerEntryId": "owner:packages/backend/src/services/orchestratorAgent.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-implementation",
-      "targetContext": "resource-catalog",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -2542,7 +2542,7 @@
       "file": "packages/backend/src/services/ownerIdentity.ts",
       "id": "facade:packages/backend/src/services/ownerIdentity.ts",
       "ownerEntryId": "owner:packages/backend/src/services/ownerIdentity.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "identity-access",
       "targetLayer": "application"
@@ -2565,9 +2565,9 @@
       "file": "packages/backend/src/services/ownerScopedName.ts",
       "id": "facade:packages/backend/src/services/ownerScopedName.ts",
       "ownerEntryId": "owner:packages/backend/src/services/ownerScopedName.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "identity-access",
       "targetLayer": "application"
     },
     {
@@ -2612,9 +2612,9 @@
       "file": "packages/backend/src/services/plantuml.ts",
       "id": "facade:packages/backend/src/services/plantuml.ts",
       "ownerEntryId": "owner:packages/backend/src/services/plantuml.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "platform",
       "targetLayer": "application"
     },
     {
@@ -2630,7 +2630,7 @@
       "file": "packages/backend/src/services/pluginClosure.ts",
       "id": "facade:packages/backend/src/services/pluginClosure.ts",
       "ownerEntryId": "owner:packages/backend/src/services/pluginClosure.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -2650,7 +2650,7 @@
       "file": "packages/backend/src/services/pluginGenerationGc.ts",
       "id": "facade:packages/backend/src/services/pluginGenerationGc.ts",
       "ownerEntryId": "owner:packages/backend/src/services/pluginGenerationGc.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -2687,7 +2687,7 @@
       "file": "packages/backend/src/services/pluginInstaller.ts",
       "id": "facade:packages/backend/src/services/pluginInstaller.ts",
       "ownerEntryId": "owner:packages/backend/src/services/pluginInstaller.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -2703,7 +2703,7 @@
       "file": "packages/backend/src/services/pluginOperationRevision.ts",
       "id": "facade:packages/backend/src/services/pluginOperationRevision.ts",
       "ownerEntryId": "owner:packages/backend/src/services/pluginOperationRevision.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -2725,9 +2725,9 @@
       "file": "packages/backend/src/services/portableBackupArchive.ts",
       "id": "facade:packages/backend/src/services/portableBackupArchive.ts",
       "ownerEntryId": "owner:packages/backend/src/services/portableBackupArchive.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "system-operations",
       "targetLayer": "application"
     },
     {
@@ -2886,7 +2886,7 @@
       "file": "packages/backend/src/services/ref/runtimeRef.ts",
       "id": "facade:packages/backend/src/services/ref/runtimeRef.ts",
       "ownerEntryId": "owner:packages/backend/src/services/ref/runtimeRef.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3072,9 +3072,9 @@
       "file": "packages/backend/src/services/resourceAcl.ts",
       "id": "facade:packages/backend/src/services/resourceAcl.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3089,9 +3089,9 @@
       "file": "packages/backend/src/services/resourceCopyName.ts",
       "id": "facade:packages/backend/src/services/resourceCopyName.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourceCopyName.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3105,9 +3105,9 @@
       "file": "packages/backend/src/services/resourceOperationCoordinator.ts",
       "id": "facade:packages/backend/src/services/resourceOperationCoordinator.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourceOperationCoordinator.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3127,9 +3127,9 @@
       "file": "packages/backend/src/services/resourcePackage/closure.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/closure.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/closure.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3150,9 +3150,9 @@
       "file": "packages/backend/src/services/resourcePackage/commit.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/commit.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/commit.ts#$file",
-      "removeAfterWave": "W5",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "source-control",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3169,9 +3169,9 @@
       "file": "packages/backend/src/services/resourcePackage/executionAdapter.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/executionAdapter.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/executionAdapter.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
     {
@@ -3187,9 +3187,9 @@
       "file": "packages/backend/src/services/resourcePackage/export.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/export.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/export.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3203,9 +3203,9 @@
       "file": "packages/backend/src/services/resourcePackage/importPermissions.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/importPermissions.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/importPermissions.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "identity-access",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3223,9 +3223,9 @@
       "file": "packages/backend/src/services/resourcePackage/parse.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/parse.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/parse.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3236,7 +3236,7 @@
       "file": "packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/pluginInstallerAdapter.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
@@ -3265,9 +3265,9 @@
       "file": "packages/backend/src/services/resourcePackage/preview.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/preview.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/preview.ts#$file",
-      "removeAfterWave": "W4",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "collaboration",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3280,9 +3280,9 @@
       "file": "packages/backend/src/services/resourcePackage/providerReadPort.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/providerReadPort.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/providerReadPort.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3295,9 +3295,9 @@
       "file": "packages/backend/src/services/resourcePackage/requirements.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/requirements.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/requirements.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3311,9 +3311,9 @@
       "file": "packages/backend/src/services/resourcePackage/secretInputs.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/secretInputs.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/secretInputs.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3326,9 +3326,9 @@
       "file": "packages/backend/src/services/resourcePackage/serialize.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/serialize.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/serialize.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -3340,7 +3340,7 @@
       "file": "packages/backend/src/services/resourcePackage/skillTree.ts",
       "id": "facade:packages/backend/src/services/resourcePackage/skillTree.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourcePackage/skillTree.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -3354,9 +3354,9 @@
       "file": "packages/backend/src/services/resourceRefs.ts",
       "id": "facade:packages/backend/src/services/resourceRefs.ts",
       "ownerEntryId": "owner:packages/backend/src/services/resourceRefs.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
     {
@@ -3535,7 +3535,7 @@
       "file": "packages/backend/src/services/runtime/claudeCode/boundary.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/boundary.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/boundary.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3553,7 +3553,7 @@
       "file": "packages/backend/src/services/runtime/claudeCode/config.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/config.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/config.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3569,7 +3569,7 @@
       "file": "packages/backend/src/services/runtime/claudeCode/driver.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/driver.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/driver.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
@@ -3585,7 +3585,7 @@
       "file": "packages/backend/src/services/runtime/claudeCode/events.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/events.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/events.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3598,7 +3598,7 @@
       "file": "packages/backend/src/services/runtime/claudeCode/inject.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/inject.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/inject.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3611,7 +3611,7 @@
       "file": "packages/backend/src/services/runtime/claudeCode/models.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/models.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/models.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "domain"
@@ -3629,9 +3629,9 @@
       "file": "packages/backend/src/services/runtime/claudeCode/permissionMap.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/permissionMap.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/permissionMap.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "identity-access",
+      "targetContext": "runtime-management",
       "targetLayer": "application"
     },
     {
@@ -3644,7 +3644,7 @@
       "file": "packages/backend/src/services/runtime/claudeCode/probe.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/probe.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/probe.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3663,7 +3663,7 @@
       "file": "packages/backend/src/services/runtime/claudeCode/sessionCapture.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/sessionCapture.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/sessionCapture.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3683,7 +3683,7 @@
       "file": "packages/backend/src/services/runtime/claudeCode/spawn.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/spawn.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/spawn.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3696,7 +3696,7 @@
       "file": "packages/backend/src/services/runtime/head.ts",
       "id": "facade:packages/backend/src/services/runtime/head.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/head.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3725,7 +3725,7 @@
       "file": "packages/backend/src/services/runtime/index.ts",
       "id": "facade:packages/backend/src/services/runtime/index.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3748,9 +3748,9 @@
       "file": "packages/backend/src/services/runtime/injectionIdentity.ts",
       "id": "facade:packages/backend/src/services/runtime/injectionIdentity.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/injectionIdentity.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "identity-access",
+      "targetContext": "runtime-management",
       "targetLayer": "application"
     },
     {
@@ -3763,7 +3763,7 @@
       "file": "packages/backend/src/services/runtime/opencode/boundary.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/boundary.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/boundary.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3779,7 +3779,7 @@
       "file": "packages/backend/src/services/runtime/opencode/driver.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/driver.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/driver.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
@@ -3797,7 +3797,7 @@
       "file": "packages/backend/src/services/runtime/opencode/events.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/events.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/events.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3812,7 +3812,7 @@
       "file": "packages/backend/src/services/runtime/opencode/inlineConfig.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/inlineConfig.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/inlineConfig.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3827,7 +3827,7 @@
       "file": "packages/backend/src/services/runtime/opencode/inventory.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/inventory.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/inventory.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3845,7 +3845,7 @@
       "file": "packages/backend/src/services/runtime/opencode/models.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/models.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/models.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "domain"
@@ -3859,7 +3859,7 @@
       "file": "packages/backend/src/services/runtime/opencode/plugin/index.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/plugin/index.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/plugin/index.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3875,7 +3875,7 @@
       "file": "packages/backend/src/services/runtime/opencode/plugin/transcoder.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/plugin/transcoder.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/plugin/transcoder.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3891,7 +3891,7 @@
       "file": "packages/backend/src/services/runtime/opencode/pluginSpec.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/pluginSpec.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/pluginSpec.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3914,7 +3914,7 @@
       "file": "packages/backend/src/services/runtime/opencode/sessionCapture.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/sessionCapture.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/sessionCapture.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3932,7 +3932,7 @@
       "file": "packages/backend/src/services/runtime/opencode/sessionWalk.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/sessionWalk.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/sessionWalk.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3953,7 +3953,7 @@
       "file": "packages/backend/src/services/runtime/opencode/spawn.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/spawn.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/spawn.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3972,7 +3972,7 @@
       "file": "packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -3987,7 +3987,7 @@
       "file": "packages/backend/src/services/runtime/opencode/util.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/util.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/util.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -4002,7 +4002,7 @@
       "file": "packages/backend/src/services/runtime/opencode/versionRegistry.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/versionRegistry.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/versionRegistry.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -4018,7 +4018,7 @@
       "file": "packages/backend/src/services/runtime/selfCheck.ts",
       "id": "facade:packages/backend/src/services/runtime/selfCheck.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/selfCheck.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -4033,7 +4033,7 @@
       "file": "packages/backend/src/services/runtime/spawnCtx.ts",
       "id": "facade:packages/backend/src/services/runtime/spawnCtx.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/spawnCtx.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -4047,7 +4047,7 @@
       "file": "packages/backend/src/services/runtime/stageSkills.ts",
       "id": "facade:packages/backend/src/services/runtime/stageSkills.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/stageSkills.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -4105,7 +4105,7 @@
       "file": "packages/backend/src/services/runtime/types.ts",
       "id": "facade:packages/backend/src/services/runtime/types.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -4135,7 +4135,7 @@
       "file": "packages/backend/src/services/runtimeSessionLease.ts",
       "id": "facade:packages/backend/src/services/runtimeSessionLease.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtimeSessionLease.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -4156,7 +4156,7 @@
       "file": "packages/backend/src/services/runtimeSmoke.ts",
       "id": "facade:packages/backend/src/services/runtimeSmoke.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtimeSmoke.ts#$file",
-      "removeAfterWave": "W4-E4b",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
@@ -4339,9 +4339,9 @@
       "file": "packages/backend/src/services/scriptAuthorGate.ts",
       "id": "facade:packages/backend/src/services/scriptAuthorGate.ts",
       "ownerEntryId": "owner:packages/backend/src/services/scriptAuthorGate.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "identity-access",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -4490,9 +4490,9 @@
       "file": "packages/backend/src/services/shutdown.ts",
       "id": "facade:packages/backend/src/services/shutdown.ts",
       "ownerEntryId": "owner:packages/backend/src/services/shutdown.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "bootstrap",
       "targetLayer": "application"
     },
     {
@@ -4504,7 +4504,7 @@
       "file": "packages/backend/src/services/skillBootVerify.ts",
       "id": "facade:packages/backend/src/services/skillBootVerify.ts",
       "ownerEntryId": "owner:packages/backend/src/services/skillBootVerify.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -4517,9 +4517,9 @@
       "file": "packages/backend/src/services/skillIdentityMigration.ts",
       "id": "facade:packages/backend/src/services/skillIdentityMigration.ts",
       "ownerEntryId": "owner:packages/backend/src/services/skillIdentityMigration.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
-      "targetContext": "identity-access",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -4531,9 +4531,9 @@
       "file": "packages/backend/src/services/skillIdentityPaths.ts",
       "id": "facade:packages/backend/src/services/skillIdentityPaths.ts",
       "ownerEntryId": "owner:packages/backend/src/services/skillIdentityPaths.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
-      "targetContext": "identity-access",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -5025,9 +5025,9 @@
       "file": "packages/backend/src/services/submoduleRefresh.ts",
       "id": "facade:packages/backend/src/services/submoduleRefresh.ts",
       "ownerEntryId": "owner:packages/backend/src/services/submoduleRefresh.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W5",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "source-control",
       "targetLayer": "application"
     },
     {
@@ -5064,9 +5064,9 @@
       "file": "packages/backend/src/services/systemAgentRun.ts",
       "id": "facade:packages/backend/src/services/systemAgentRun.ts",
       "ownerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-implementation",
-      "targetContext": "resource-catalog",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -5101,9 +5101,9 @@
       "file": "packages/backend/src/services/systemResources.ts",
       "id": "facade:packages/backend/src/services/systemResources.ts",
       "ownerEntryId": "owner:packages/backend/src/services/systemResources.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
     {
@@ -5336,9 +5336,9 @@
       "file": "packages/backend/src/services/taskAuthorization.ts",
       "id": "facade:packages/backend/src/services/taskAuthorization.ts",
       "ownerEntryId": "owner:packages/backend/src/services/taskAuthorization.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W4-E1",
       "status": "legacy-implementation",
-      "targetContext": "identity-access",
+      "targetContext": "task-execution",
       "targetLayer": "application"
     },
     {
@@ -5375,9 +5375,9 @@
       "file": "packages/backend/src/services/taskCollab.ts",
       "id": "facade:packages/backend/src/services/taskCollab.ts",
       "ownerEntryId": "owner:packages/backend/src/services/taskCollab.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W4",
       "status": "thin-facade",
-      "targetContext": "task-execution",
+      "targetContext": "collaboration",
       "targetLayer": "application"
     },
     {
@@ -5643,9 +5643,9 @@
       "file": "packages/backend/src/services/tokenAudit.ts",
       "id": "facade:packages/backend/src/services/tokenAudit.ts",
       "ownerEntryId": "owner:packages/backend/src/services/tokenAudit.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "identity-access",
       "targetLayer": "application"
     },
     {
@@ -5666,9 +5666,9 @@
       "file": "packages/backend/src/services/tokenRedaction.ts",
       "id": "facade:packages/backend/src/services/tokenRedaction.ts",
       "ownerEntryId": "owner:packages/backend/src/services/tokenRedaction.ts#$file",
-      "removeAfterWave": "W4-E1",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
-      "targetContext": "task-execution",
+      "targetContext": "identity-access",
       "targetLayer": "application"
     },
     {
@@ -5720,7 +5720,7 @@
       "file": "packages/backend/src/services/userIdentities.ts",
       "id": "facade:packages/backend/src/services/userIdentities.ts",
       "ownerEntryId": "owner:packages/backend/src/services/userIdentities.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "identity-access",
       "targetLayer": "application"
@@ -5750,7 +5750,7 @@
       "file": "packages/backend/src/services/users.ts",
       "id": "facade:packages/backend/src/services/users.ts",
       "ownerEntryId": "owner:packages/backend/src/services/users.ts#$file",
-      "removeAfterWave": "W4-E0",
+      "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "identity-access",
       "targetLayer": "application"
@@ -6069,7 +6069,7 @@
       "file": "packages/backend/src/services/workflow.ts",
       "id": "facade:packages/backend/src/services/workflow.ts",
       "ownerEntryId": "owner:packages/backend/src/services/workflow.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -6082,7 +6082,7 @@
       "file": "packages/backend/src/services/workflow.validator.ts",
       "id": "facade:packages/backend/src/services/workflow.validator.ts",
       "ownerEntryId": "owner:packages/backend/src/services/workflow.validator.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -6095,7 +6095,7 @@
       "file": "packages/backend/src/services/workflow.yaml.ts",
       "id": "facade:packages/backend/src/services/workflow.yaml.ts",
       "ownerEntryId": "owner:packages/backend/src/services/workflow.yaml.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -6110,7 +6110,7 @@
       "file": "packages/backend/src/services/workflowLaunchInputs.ts",
       "id": "facade:packages/backend/src/services/workflowLaunchInputs.ts",
       "ownerEntryId": "owner:packages/backend/src/services/workflowLaunchInputs.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -6124,7 +6124,7 @@
       "file": "packages/backend/src/services/workgroup/askerKey.ts",
       "id": "facade:packages/backend/src/services/workgroup/askerKey.ts",
       "ownerEntryId": "owner:packages/backend/src/services/workgroup/askerKey.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -6139,7 +6139,7 @@
       "file": "packages/backend/src/services/workgroup/constants.ts",
       "id": "facade:packages/backend/src/services/workgroup/constants.ts",
       "ownerEntryId": "owner:packages/backend/src/services/workgroup/constants.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -6152,7 +6152,7 @@
       "file": "packages/backend/src/services/workgroup/state.ts",
       "id": "facade:packages/backend/src/services/workgroup/state.ts",
       "ownerEntryId": "owner:packages/backend/src/services/workgroup/state.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
@@ -6166,7 +6166,7 @@
       "file": "packages/backend/src/services/workgroups.ts",
       "id": "facade:packages/backend/src/services/workgroups.ts",
       "ownerEntryId": "owner:packages/backend/src/services/workgroups.ts#$file",
-      "removeAfterWave": "W4-C",
+      "removeAfterWave": "W9-D",
       "status": "thin-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"

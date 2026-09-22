@@ -919,6 +919,24 @@ const codeOnly = (src: string): string =>
 **定式**：所有手改（`allowGrowth` 增删、手工维护的 baseline 数字、`guard-manifest` 的种子格）
 先做完，**census 跑在最后一个编辑之后**；census 会原样保留这些手工格并重算 digest。
 
+### census 在「算出来的跟磁盘上一样」时**不写文件**，于是上一次写入留下的错 digest 不会被纠正（2026-09-22 实撞）
+
+上一条的定式（手改在 census 之前）我照做了，还是红了一次 `RFC-294 N1a`。复盘出的是这条更细的机制：
+
+1. `guard-manifest.json` 里那些看着像「手工种子格」的字段，有一部分其实是 census **重算**的——
+   实测把 `lines` 手填成 891，census 直接写回真实行数 890。所以手改它没有意义。
+2. 真正的坑在后面：census 发现「重算结果 == 磁盘内容」时**整个文件不写**，连带 provenance 的
+   `contentDigest` 也不重钉。如果上一次写入时的 payload 和现在不同（我的情形：census 跑完之后
+   `prettier --write` 把测试文件从 892 行改成 890 行），那个**为旧 payload 算的 digest 就一直挂着**，
+   而后续每次 census 都认为「没变化、不用写」，于是永远自愈不了。
+3. 症状很迷惑：`bun run architecture:write` 反复跑都说写了 8 个产物、git diff 也干净，
+   但 `RFC-294 N1a` 一直红在同一个 digest 上。
+
+**处置**：这种卡死状态不能靠重跑 census 解开，直接按仓内既有姿势手动重钉——
+用生成器导出的 `artifactContentDigest(payload)` 算出正确值写回 `provenance.contentDigest`，
+再跑一次 census 确认它不再改动该文件。判断是不是撞上这条：N1a 的报错里
+`Expected`（= 重算值）与 `Received`（= 存档值）两个 digest 同时出现，而 `git diff` 里该文件是干净的。
+
 ### 指向**测试文件**的 baseline，census 不重算（2026-09-18 实撞）
 
 `ledger-baselines.json` 的条目分两类，看 `file` 字段：

@@ -19,7 +19,6 @@ import {
 import type { TaskDriveRuntimeOptions } from '../src/modules/task-execution/public/commands'
 import {
   buildCanonicalArtifacts,
-  hasScheduleTargetToken,
   targetContextFor,
   targetRemoveAfterWaveFor,
 } from './architecture/rfc294Canonical'
@@ -246,18 +245,26 @@ describe('RFC-332 T10-T13 — single-consumer production cutover', () => {
 })
 
 describe('RFC-332 T6 — canonical scheduler token and wave projection', () => {
-  test('schedule is a semantic token; scheduler is not', () => {
-    expect(hasScheduleTargetToken('packages/backend/src/services/scheduleLaunch.ts')).toBe(true)
-    expect(hasScheduleTargetToken('packages/backend/src/services/tasks.ts', 'scheduledTask')).toBe(
-      true,
+  // 原用例锁的是「`schedule` 是语义 token，`scheduler` 不是」——那是关键词级联时代的判据，
+  // 用来挡住 `services/scheduler.ts`（任务引擎）被 `/schedule/` 吸进 integration。2026-09-22
+  // 的账本治理删掉了整条级联（见 `rfc294Canonical.ts` 的 LEGACY_BACKEND_FILE_OWNERS 表头），
+  // owner 改为逐文件登记，token 判据连同 `hasScheduleTargetToken` 一起退役。
+  //
+  // 这里保留它真正要锁的那件事——**scheduler 与 scheduled-task 分属两个 context，不因名字相像
+  // 而合流**——并补上登记制自带的新不变量：symbol 不再影响归属（同一个文件的任何导出都回同一个
+  // owner），以及未登记的 legacy 文件必须炸而不是静默掉进 task-execution。
+  test('scheduler 与 scheduled-task 分属两个 context，且归属与 symbol 无关', () => {
+    expect(targetContextFor('packages/backend/src/services/scheduler.ts')).toBe('task-execution')
+    expect(targetContextFor('packages/backend/src/services/scheduledTaskScheduler.ts')).toBe(
+      'integration',
     )
-    expect(hasScheduleTargetToken('packages/backend/src/services/scheduler.ts')).toBe(false)
-    expect(targetContextFor('packages/backend/src/services/scheduler.ts', 'runTaskInner')).toBe(
-      'task-execution',
+    expect(targetContextFor('packages/backend/src/services/scheduledTasks.ts')).toBe('integration')
+  })
+
+  test('未登记的 legacy 文件没有兜底：直接 throw，不再静默记成 task-execution', () => {
+    expect(() => targetContextFor('packages/backend/src/services/scheduleLaunch.ts')).toThrow(
+      /未登记的 legacy 后端文件/,
     )
-    expect(
-      targetContextFor('packages/backend/src/services/scheduleLaunch.ts', 'launchSchedule'),
-    ).toBe('integration')
   })
 
   test('remaining scheduler key symbols project to their exact removal wave', () => {
