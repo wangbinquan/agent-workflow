@@ -316,8 +316,12 @@ design.md §11.1，实现期不要把 AC 改成断言 `memories` 表。
 
 ## 进行中 RFC
 
-（无——RFC-367 与 RFC-365 均已于 2026-09-21 完成收口，见顶部条目；RFC-294 总纲在索引中保持
-In Progress。）
+- **[RFC-368 Reaction 执行合同切换](design/RFC-368-reaction-execution-cutover/proposal.md)（Draft，
+  2026-09-22 落档，待用户批准进入实现）** —— RFC-294 W4-E9 的 E9-C，按 `RFC-361 plan §2` 的后继
+  顺序（E9-B 已由 RFC-365 关闭）。三件套已写完；**尚未动任何生产代码**。
+  批准前需答复 `plan.md §4` 的一条开放项（C1-R3 栈帧行是否整行丢弃）与 `design.md §2` 的
+  四条偏离项 D1–D4。
+- RFC-294 总纲在索引中保持 In Progress。
 
 ## 2026-09-21 修复：记忆卡片列表横排溢出（CSS 选择器列表被拆散）
 
