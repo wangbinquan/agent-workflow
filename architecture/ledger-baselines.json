@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1723,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1724,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-368 T6（2026-09-23）一次性增长：TaskExecution 侧的 Reaction admission 落地——持久化在 `infrastructure/reactionExecutionAdmissions.ts`（不引 DE 类型），参与者实现在 `application/adapters/reaction-admission-adapter.ts`。对 DE required port 的 6 条类型引用按账本规则记为 `required-implementation`（合法实现方向、非债）；exceptions 的 +4 是该适配器与持久化对平台原语（db/schema、util/errors）的引用。下一笔不涨的提交退役本许可。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,10 +849,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5389,
+      "baseline": 5399,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-368 刀 1 修红（2026-09-22）一次性 +2：两个 domain 纯函数模块按 RFC-284 T7 的唯一性文本锁改用 `util/hash.ts` 的 `sha256Hex`（单步 sha256 只允许出现在那一处），于是各新增一条指向平台原语的边。这是被既有守卫要求的形状，不是新增耦合。下一笔不涨的提交退役本许可。"
+        "why": "RFC-368 T6（2026-09-23）一次性增长：TaskExecution 侧的 Reaction admission 落地——持久化在 `infrastructure/reactionExecutionAdmissions.ts`（不引 DE 类型），参与者实现在 `application/adapters/reaction-admission-adapter.ts`。对 DE required port 的 6 条类型引用按账本规则记为 `required-implementation`（合法实现方向、非债）；exceptions 的 +4 是该适配器与持久化对平台原语（db/schema、util/errors）的引用。下一笔不涨的提交退役本许可。"
       }
     },
     {
@@ -870,10 +873,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4806,
+      "baseline": 4809,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-368 刀 1 修红（2026-09-22）一次性 +2：两个 domain 纯函数模块按 RFC-284 T7 的唯一性文本锁改用 `util/hash.ts` 的 `sha256Hex`（单步 sha256 只允许出现在那一处），于是各新增一条指向平台原语的边。这是被既有守卫要求的形状，不是新增耦合。下一笔不涨的提交退役本许可。"
+        "why": "RFC-368 T6（2026-09-23）一次性增长：TaskExecution 侧的 Reaction admission 落地——持久化在 `infrastructure/reactionExecutionAdmissions.ts`（不引 DE 类型），参与者实现在 `application/adapters/reaction-admission-adapter.ts`。对 DE required port 的 6 条类型引用按账本规则记为 `required-implementation`（合法实现方向、非债）；exceptions 的 +4 是该适配器与持久化对平台原语（db/schema、util/errors）的引用。下一笔不涨的提交退役本许可。"
       }
     },
     {
@@ -908,12 +911,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24939,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24949,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-368 T6（2026-09-23）一次性增长：TaskExecution 侧的 Reaction admission 落地——持久化在 `infrastructure/reactionExecutionAdmissions.ts`（不引 DE 类型），参与者实现在 `application/adapters/reaction-admission-adapter.ts`。对 DE required port 的 6 条类型引用按账本规则记为 `required-implementation`（合法实现方向、非债）；exceptions 的 +4 是该适配器与持久化对平台原语（db/schema、util/errors）的引用。下一笔不涨的提交退役本许可。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:e281546745c6afcdadefdf545a8350db864ba701f68cf15eee20837e960fabd1",
+    "sourceDigest": "sha256:ba53578de21b90873e876bd3d4ca6613b22afa438f62442d0e305dbfb7aa9623",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -926,8 +932,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a6fb97c247bdee1ac3308ce64f152ebe17dc99fd",
-    "contentDigest": "sha256:e7a566d755e6935b2de3477e1a6fd24f2098b0a84e7dc30d36c08c26efd3bd1b",
+    "currentSnapshotSha": "375094137dcefb8e31a11d6f6619a5790f175c4d",
+    "contentDigest": "sha256:bce2e8039c17621b814ed1b9293df8a8996a8645d2bf5be60061a9f63ebe53bd",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

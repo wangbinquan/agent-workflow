@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1723,
+    "entries": 1724,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -27776,6 +27776,29 @@
     {
       "controls": {
         "audit": false,
+        "authority": "internal-family",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts#createReactionAdmissionStore",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts#createReactionAdmissionStore",
+      "symbol": "createReactionAdmissionStore",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": true,
@@ -41175,7 +41198,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e281546745c6afcdadefdf545a8350db864ba701f68cf15eee20837e960fabd1",
+  "sourceDigest": "sha256:ba53578de21b90873e876bd3d4ca6613b22afa438f62442d0e305dbfb7aa9623",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

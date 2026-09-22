@@ -23123,6 +23123,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4639419937d4f634b61d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ConflictError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/clarifyDecision.ts#$file",
       "fromPath": "packages/backend/src/services/clarifyDecision.ts",
       "fromSymbol": "$file",
@@ -23493,6 +23510,23 @@
       "toPath": "packages/backend/src/modules/knowledge-evolution/inbound/skillProvenanceRoutes.ts",
       "toSymbol": "mountSkillProvenanceRoutes",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4750618972a144347386",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#reactionExecutionAdmissions",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "reactionExecutionAdmissions",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -26383,6 +26417,23 @@
       "toPath": "packages/backend/src/modules/development-automation/composition/configOperations.ts",
       "toSymbol": "DevelopmentConfigResourceAccess",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:518f29f8c592b267f9ce",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -81704,9 +81755,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4806,
+    "architectureExceptions": 4809,
     "implementationSccs": 0,
-    "observedEdges": 5389,
+    "observedEdges": 5399,
     "requiredPorts": 33,
     "targetEdges": 66
   },
@@ -90193,6 +90244,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts#developmentImplicitAgentContractDeclarations"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file",
+      "id": "import:185ef1acb8dee8ce3701",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionExecutionAdmissionParticipantInTxV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionAdmissionParticipantInTxV1"
     },
     {
       "edgeKind": "type",
@@ -104787,6 +104854,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#SelectedSqliteTaskExecutionProviderRuntime"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file",
+      "id": "import:43a15e3937b30eb85231",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionExecutionAdmissionReceiptV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionAdmissionReceiptV1"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
@@ -105828,6 +105911,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file",
+      "id": "import:4639419937d4f634b61d",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ConflictError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/clarifyDecision.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/clarifyDecision.ts#$file",
@@ -106225,6 +106324,22 @@
       "toContext": "knowledge-evolution",
       "toFile": "packages/backend/src/modules/knowledge-evolution/inbound/skillProvenanceRoutes.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/skillProvenanceRoutes.ts#mountSkillProvenanceRoutes"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts#$file",
+      "id": "import:4750618972a144347386",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "reactionExecutionAdmissions",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#reactionExecutionAdmissions"
     },
     {
       "edgeKind": "value",
@@ -109281,6 +109396,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/composition/configOperations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/configOperations.ts#DevelopmentConfigResourceAccess"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts#$file",
+      "id": "import:518f29f8c592b267f9ce",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
       "edgeKind": "value",
@@ -128499,6 +128630,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file",
+      "id": "import:8b5bfa7aca002d6a81e2",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionClaimEpoch",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionClaimEpoch"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "memory",
       "fromFile": "packages/backend/src/modules/memory/infrastructure/memoryDistillWorkStore.ts",
@@ -133428,6 +133575,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts#$file",
+      "id": "import:9b116ec1e1743a736bf2",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/scheduledTaskPersistence.ts#$file",
@@ -136532,6 +136695,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file",
+      "id": "import:a32ab3a59492aaec3e92",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionClaimFenceReceiptV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionClaimFenceReceiptV1"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/mcps.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file",
@@ -137393,6 +137572,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#composeDevelopmentAutomation"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file",
+      "id": "import:a617c466e0b6baffe365",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionOperationRef",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -142785,6 +142980,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file",
+      "id": "import:b6b99f3c2a7060e002af",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionRequestHash",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -168628,7 +168839,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e281546745c6afcdadefdf545a8350db864ba701f68cf15eee20837e960fabd1",
+  "sourceDigest": "sha256:ba53578de21b90873e876bd3d4ca6613b22afa438f62442d0e305dbfb7aa9623",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

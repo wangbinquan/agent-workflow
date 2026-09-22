@@ -171,7 +171,12 @@ import type {
   ReactionRetryFeedbackRef,
 } from '../domain/reactionExecutionRequest'
 
-export type { PreparedReactionExecutionV1, ReactionOperationRef, ReactionRetryFeedbackRef }
+export type {
+  PreparedReactionExecutionV1,
+  ReactionOperationRef,
+  ReactionRequestHash,
+  ReactionRetryFeedbackRef,
+}
 
 export type ReactionClaimEpoch = number & {
   readonly __reactionClaimEpoch: 'reaction-claim-epoch-v1'
@@ -188,6 +193,13 @@ export interface ReactionClaimFenceReceiptV1 {
   readonly roundRef: string
   readonly claimEpoch: ReactionClaimEpoch
   readonly fenceRevision: number
+  /**
+   * `activateClaim` 收到的 case 与 authority 由 fence **带下去**给 `admitLaunch`。
+   * 它是 provider 自己铸、自己消费的回执，让它承载这些比在 `admitLaunch` 上再要一遍好：
+   * 两次调用之间这些值不可能变（同一笔事务、同一次 claim），再要一遍就多一处可以写错的地方。
+   */
+  readonly caseId: string
+  readonly authority: { readonly subject: string; readonly revision: number }
 }
 
 export interface ReactionExecutionAdmissionReceiptV1 {

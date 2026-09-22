@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1827,
+    "backendFiles": 1830,
     "frontendFiles": 622,
     "legacyFiles": 547,
-    "moduleFiles": 1280,
-    "productionFiles": 2604,
+    "moduleFiles": 1283,
+    "productionFiles": 2607,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24939
+    "symbolsIncludingFileRoots": 24949
   },
   "entries": [
     {
@@ -115931,6 +115931,42 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#composeReactionExecutionAdmissionParticipantInTx",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeReactionExecutionAdmissionParticipantInTx",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#frozenReceipt",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "frozenReceipt",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/adapters/task-catalog-adapter.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/adapters/task-catalog-adapter.ts#$file",
       "removeAfterWave": null,
@@ -118216,6 +118252,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "WorktreeCleanupProvenance",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/reactionAdmissionStore.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/reactionAdmissionStore.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/reactionAdmissionStore.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/reactionAdmissionStore.ts#ReactionAdmissionInsert",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ReactionAdmissionInsert",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/reactionAdmissionStore.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/reactionAdmissionStore.ts#ReactionAdmissionRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ReactionAdmissionRow",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/reactionAdmissionStore.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/reactionAdmissionStore.ts#ReactionAdmissionStore",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ReactionAdmissionStore",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -133576,6 +133660,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "preparePreMaterializedRepository",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts#createReactionAdmissionStore",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createReactionAdmissionStore",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/reactionExecutionAdmissions.ts#rowColumns",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "rowColumns",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -299990,5 +300110,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e281546745c6afcdadefdf545a8350db864ba701f68cf15eee20837e960fabd1"
+  "sourceDigest": "sha256:ba53578de21b90873e876bd3d4ca6613b22afa438f62442d0e305dbfb7aa9623"
 }
