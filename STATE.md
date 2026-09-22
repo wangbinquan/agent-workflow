@@ -43,6 +43,21 @@ provenance 产物的内容就会红 `RFC-294 N1a`，且反复跑 census 不自�
 三份账本各 +1（跨 context 边 / exception / owner），已按仓内规矩写 `allowGrowth` 点名本项，
 下一笔不涨的提交退役。
 
+**推红两次的修复（都不是新功能问题，都是我漏跑门）**：
+
+1. `56bb82b50` → W29 装配摘要红（ubuntu shard 10/12 + macos 4/6 同一条）。它是源码派生摘要，
+   而我只跑了 `tests/architecture/` ——**这条守卫不在那个目录下**，正是 dev-gotchas 已记的
+   「本地架构守卫全绿 ≠ 守卫全绿」。`0a3307b2b` 按该文件既有规矩重采并写清变的是哪一格
+   （逐字对拍过函数体：体内仅 `executionMetadata` 一处，两条 import 删除在体外不进摘要）。
+   此后改法固定为：按**改动的源文件名**反查引用它的测试再跑（`grep -rl` 出 49 个，非架构目录
+   40 个全跑 291 pass）。
+2. `0a3307b2b` → 两类红：①`allowGrowth` 过期——那笔没涨账本，按规矩必须当场退役（dev-gotchas
+   早记过「退役时机是下一笔**不涨**的提交」）；②`execution-contract-platform.test.ts:1143`
+   的 `.run()` **漏了 await**，PG 上是 Promise、SQLite 上是同步，于是
+   `autoRecoverySuspended: true` 还没落库就去 inspect，期望 failed 拿到 pending。
+   **是这条用例自带的 PG 竞态，不是本次改动引入**（上一轮 CI 它还绿，属于撞运气），
+   按仓内既有定式补 await 并写明两引擎差异。
+
 **E9-C 其余三项裁决已记下，待 RFC-368**：只做功能正确性（`design.md §3.5` 里 authority 二次重验、
 并发竞态终检、变异守卫矩阵列为偏离项逐条呈确认）/ 退役 `execution-launch` outbox 类改由 claim 驱动 /
 retry 反馈换 content-addressed artifact 时顺带做内容裁剪。

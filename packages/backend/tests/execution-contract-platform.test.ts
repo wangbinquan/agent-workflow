@@ -1140,7 +1140,10 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
       executionRef: taskId,
     })
 
-    db.update(tasks).set({ autoRecoverySuspended: true }).where(eq(tasks.id, taskId)).run()
+    // `.run()` 在 SQLite 上是同步的、在 PostgreSQL 上返回 Promise——漏了 await，这次写入
+    // 就可能还没落库，下面那次 inspect 读到的仍是 `autoRecoverySuspended: false`，于是
+    // 期望 failed 却拿到 pending（2026-09-22 在 CI 的 PG 臂上实撞，SQLite 臂一直绿）。
+    await db.update(tasks).set({ autoRecoverySuspended: true }).where(eq(tasks.id, taskId)).run()
     expect(await execution.inspect(taskId)).toEqual({
       kind: 'failed',
       executionRef: taskId,
