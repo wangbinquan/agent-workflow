@@ -16,7 +16,7 @@
 // 虽然会被丢掉，但路径改写不依赖行是否保留）；R4 必须在 R3 之后（丢掉栈帧之后才会暴露出
 // 真正相邻的重复行）；R5 必须最后（前面每一步都在减长度）。
 
-import { createHash } from 'node:crypto'
+import { sha256Hex } from '@/util/hash'
 
 export type ReactionArtifactKind = 'retry-feedback' | 'diagnostics'
 
@@ -73,7 +73,7 @@ export function sanitizeReactionText(input: {
   const detail = kept.join('\n').trim()
   const composed = detail.length === 0 ? input.errorCode : `${input.errorCode}: ${detail}`
   const body = composed.slice(0, REACTION_ARTIFACT_MAX_CHARS)
-  return { body, digest: createHash('sha256').update(body).digest('hex') }
+  return { body, digest: sha256Hex(body) }
 }
 
 /** 产物 ref 的外部形态。`kind` 进 ref 是为了让一个 ref 自解释它该被谁读。 */

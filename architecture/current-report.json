@@ -2,9 +2,9 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 4804,
+    "architectureExceptions": 4806,
     "backgroundJobs": 332,
-    "crossContextImports": 5387,
+    "crossContextImports": 5389,
     "facades": 291,
     "governedFieldSurfaces": 5,
     "moduleSymbolOwners": 24939,
@@ -157,5 +157,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:daea4a9b3646420c387b78c75e46a890cf609cfe935ab86382c1e8b2bb290596"
+  "sourceDigest": "sha256:e281546745c6afcdadefdf545a8350db864ba701f68cf15eee20837e960fabd1"
 }

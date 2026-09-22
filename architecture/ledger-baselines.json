@@ -112,10 +112,7 @@
       "file": "packages/backend/tests/architecture/rfc294-review-public-consumer-ledger.test.ts",
       "symbol": "DEAD_REQUIRED_PORT_DEBT",
       "baseline": 9,
-      "why": "RFC-294 review 2026-08-30 §C2：provider adapter=0 且 consumer=0 的 required SPI 死声明（全部在 development-automation）；W4-E8 接线或删除。只许降。 RFC-362：TaskWorkspaceReadPort 仅测试装配，生产 Task consumer/adapter 留 W4-E1/W5，8 → 9。 RFC-363 reader production binding retires TaskWorkspaceReadPort: 9 -> 8.",
-      "allowGrowth": {
-        "why": "RFC-368 刀 1（2026-09-22）一次性 +1：`required:digital-employee:ReactionExecutionPortV1` 在刀 1 只有合同、provider 在刀 2、装配在刀 3，这期间按定义 provider=0 / consumer=0。它与账本里其余 8 条不同类——那些是无人认领的遗留死声明，这条有明确的接入批次与验收（AC-2 / AC-6），刀 3 切完绑定后必须从账本消失、基线随之回落到 8。下一笔不涨的提交退役本许可。"
-      }
+      "why": "RFC-294 review 2026-08-30 §C2：provider adapter=0 且 consumer=0 的 required SPI 死声明（全部在 development-automation）；W4-E8 接线或删除。只许降。 RFC-362：TaskWorkspaceReadPort 仅测试装配，生产 Task consumer/adapter 留 W4-E1/W5，8 → 9。 RFC-363 reader production binding retires TaskWorkspaceReadPort: 9 -> 8."
     },
     {
       "id": "rfc294-review-module-layer-rules",
@@ -849,10 +846,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5387,
+      "baseline": 5389,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-368 刀 1（2026-09-22）一次性增长：Reaction 执行合同的三个 domain 纯函数模块（reactionExecutionRequest / reactionArtifacts / retrySchedule）与 DE-owned 的 V1 required port 落档。合同已声明但 provider 在刀 2、装配在刀 3，故 required-port-liveness +1 属预期（同批已登记进 DEAD_REQUIRED_PORT_DEBT 并写明刀 3 必须消失）。下一笔不涨的提交退役本许可。"
+        "why": "RFC-368 刀 1 修红（2026-09-22）一次性 +2：两个 domain 纯函数模块按 RFC-284 T7 的唯一性文本锁改用 `util/hash.ts` 的 `sha256Hex`（单步 sha256 只允许出现在那一处），于是各新增一条指向平台原语的边。这是被既有守卫要求的形状，不是新增耦合。下一笔不涨的提交退役本许可。"
       }
     },
     {
@@ -867,19 +864,16 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
       "baseline": 33,
-      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。",
-      "allowGrowth": {
-        "why": "RFC-368 刀 1（2026-09-22）一次性增长：Reaction 执行合同的三个 domain 纯函数模块（reactionExecutionRequest / reactionArtifacts / retrySchedule）与 DE-owned 的 V1 required port 落档。合同已声明但 provider 在刀 2、装配在刀 3，故 required-port-liveness +1 属预期（同批已登记进 DEAD_REQUIRED_PORT_DEBT 并写明刀 3 必须消失）。下一笔不涨的提交退役本许可。"
-      }
+      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
     },
     {
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4804,
+      "baseline": 4806,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-368 刀 1（2026-09-22）一次性增长：Reaction 执行合同的三个 domain 纯函数模块（reactionExecutionRequest / reactionArtifacts / retrySchedule）与 DE-owned 的 V1 required port 落档。合同已声明但 provider 在刀 2、装配在刀 3，故 required-port-liveness +1 属预期（同批已登记进 DEAD_REQUIRED_PORT_DEBT 并写明刀 3 必须消失）。下一笔不涨的提交退役本许可。"
+        "why": "RFC-368 刀 1 修红（2026-09-22）一次性 +2：两个 domain 纯函数模块按 RFC-284 T7 的唯一性文本锁改用 `util/hash.ts` 的 `sha256Hex`（单步 sha256 只允许出现在那一处），于是各新增一条指向平台原语的边。这是被既有守卫要求的形状，不是新增耦合。下一笔不涨的提交退役本许可。"
       }
     },
     {
@@ -915,14 +909,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24939,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-368 刀 1（2026-09-22）一次性增长：Reaction 执行合同的三个 domain 纯函数模块（reactionExecutionRequest / reactionArtifacts / retrySchedule）与 DE-owned 的 V1 required port 落档。合同已声明但 provider 在刀 2、装配在刀 3，故 required-port-liveness +1 属预期（同批已登记进 DEAD_REQUIRED_PORT_DEBT 并写明刀 3 必须消失）。下一笔不涨的提交退役本许可。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:daea4a9b3646420c387b78c75e46a890cf609cfe935ab86382c1e8b2bb290596",
+    "sourceDigest": "sha256:e281546745c6afcdadefdf545a8350db864ba701f68cf15eee20837e960fabd1",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -935,8 +926,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b53ecbcf08aa803a711213406251c3460a043ed5",
-    "contentDigest": "sha256:55570f16e01434cccf253a47f429e069fe12d57fbd4d939b582d3dcfa4236988",
+    "currentSnapshotSha": "a6fb97c247bdee1ac3308ce64f152ebe17dc99fd",
+    "contentDigest": "sha256:e7a566d755e6935b2de3477e1a6fd24f2098b0a84e7dc30d36c08c26efd3bd1b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

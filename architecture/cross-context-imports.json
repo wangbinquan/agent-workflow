@@ -42280,6 +42280,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/domain/reactionArtifacts.ts#$file",
+      "fromPath": "packages/backend/src/modules/digital-employee/domain/reactionArtifacts.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:84fe3b2caeda9fe41ccf",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "digital-employee",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/memories.ts#$file",
@@ -48380,6 +48397,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#scRepositorySnapshots",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "scRepositorySnapshots",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/domain/reactionExecutionRequest.ts#$file",
+      "fromPath": "packages/backend/src/modules/digital-employee/domain/reactionExecutionRequest.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:9939810b39f0d6844ae3",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "digital-employee",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -81670,9 +81704,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4804,
+    "architectureExceptions": 4806,
     "implementationSccs": 0,
-    "observedEdges": 5387,
+    "observedEdges": 5389,
     "requiredPorts": 33,
     "targetEdges": 66
   },
@@ -126257,6 +126291,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#gitChangedFiles"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "digital-employee",
+      "fromFile": "packages/backend/src/modules/digital-employee/domain/reactionArtifacts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/domain/reactionArtifacts.ts#$file",
+      "id": "import:84fe3b2caeda9fe41ccf",
+      "owner": "digital-employee",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/memories.ts",
@@ -132783,6 +132833,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#scRepositorySnapshots"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "digital-employee",
+      "fromFile": "packages/backend/src/modules/digital-employee/domain/reactionExecutionRequest.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/domain/reactionExecutionRequest.ts#$file",
+      "id": "import:9939810b39f0d6844ae3",
+      "owner": "digital-employee",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
       "edgeKind": "type",
@@ -168562,7 +168628,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:daea4a9b3646420c387b78c75e46a890cf609cfe935ab86382c1e8b2bb290596",
+  "sourceDigest": "sha256:e281546745c6afcdadefdf545a8350db864ba701f68cf15eee20837e960fabd1",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
