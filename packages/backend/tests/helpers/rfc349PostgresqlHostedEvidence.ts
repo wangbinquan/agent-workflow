@@ -39,6 +39,7 @@ import {
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { timeoutSignal } from '@/util/timeoutSignal'
 
 import {
@@ -50,6 +51,13 @@ import {
 
 const ROOT = resolve(import.meta.dir, '..', '..', '..', '..')
 const CRASH_WORKER = resolve(import.meta.dir, '..', 'fixtures', 'rfc349-postgresql-crash-worker.ts')
+
+/**
+ * 续跑后逐表完成的期望数——取自逻辑合同，而不是写死的数字。原先写死 `184`，schema 长到 192 张表后
+ * 续跑明明成功（finalized、用户行在、归档表已删），判据仍稳定红（2026-09-23 postgresql-evidence）。
+ */
+const EXPECTED_TABLE_COUNT = buildLogicalSchemaContract().tables.length
+
 /**
  * 取证的三个尺度档。
  *
@@ -62,7 +70,7 @@ const CRASH_WORKER = resolve(import.meta.dir, '..', 'fixtures', 'rfc349-postgres
  *
  * RFC-349 的**验收**取证已由 `b3883154e` / `adcea41bf` 两轮 full 档 Verdict PASS 钉死
  * 存档（见该 RFC 的 `verification.md`）。周跑此后承担的是**漂移检测**而非重新验收，
- * 所以 `weekly` 按 full 的 1/10 取样：184 张表照跑、多切片拷贝与多切片归档照走、
+ * 所以 `weekly` 按 full 的 1/10 取样：逻辑合同里的全部表照跑、多切片拷贝与多切片归档照走、
  * 100 客户端与 180 秒相位一字未改，整个 job 落进 30 分钟。要重新取证就手动 dispatch
  * `full`——它一个数都没动。
  *
@@ -881,7 +889,7 @@ async function runCrashMatrix(
       }
       if (
         result.phase !== 'finalized' ||
-        result.tablesCompleted !== 184 ||
+        result.tablesCompleted !== EXPECTED_TABLE_COUNT ||
         !result.userPresent ||
         !result.archiveTableAbsent
       ) {
