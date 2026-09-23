@@ -70,6 +70,19 @@ checkout 默认分支 HEAD——不是那个提交引入的。要按失败用例
 带 `target_sha` 钉到具体提交做二分）；②它是 RFC-359 AC-7/AC-9 依赖的真 PG 证据面，
 红着不该长期挂。
 
+**后续数据点**（同一条用例、同一个断言 `expected the real PostgreSQL target operation to fail`，即五种故障注入里
+有一种**没有让目标操作失败**；栈只给到 `captureFailure`，看不出是哪一种）：
+
+| 日期 | 触发 | headSha | 结论 |
+| --- | --- | --- | --- |
+| 2026-09-14 | dispatch ×5 | `56713f376`…`070af2205` | 全红 |
+| 2026-09-18 | dispatch | `e7831c498` | **绿** |
+| 2026-09-20 | schedule | `5663a01a6` | 红 |
+| 2026-09-23 | dispatch | `6936c133e` | 红（run 35832424184；同 run 其余四个 job 全绿） |
+
+绿过一次、其余都红，更像**时序相关的注入没打中**而不是稳定回归。下一步：先让 `captureFailure` 带上是哪一种
+故障的标签（纯测试改动），再按 `target_sha` 重跑定位。
+
 ## RFC-359：`inspectHumanReview` 是**同步**公共端口，PostgreSQL 上按签名实现不了
 
 `modules/task-execution/public/participants.ts:373`
