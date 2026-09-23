@@ -5401,5 +5401,11 @@ shard 5/12 红（run `35814805097`，提交 `356bb594d` 只挪了一个与工作
   去掉那次范围读或换成不触发页级谓词冲突的写法（影响 TaskExecution 所有 node_run 铸造，需走设计门）。
   owner：发起该 RFC 的 session；在它落地前，本条两条用例（`rfc359-w4-d19c`、`rfc185-leader-fanout:901`）
   在 CI 上仍可能间歇红——**按本条归因，不要当成自己提交的回归去追**。
+- **根治方案已立 RFC-369**（2026-09-23 Draft）。其设计门 r3 顺带照出一个**既有**问题（不在 RFC-369 范围）：
+  生产宿主在**普通失败**路径上也有两个出口把 node_run 留在 `pending`——`onIsoSetupFailure`
+  （`task-execution/composition/nodeMechanics.ts:350-354`）与 `runNode` 之前触发的 `onUnhandledThrow`
+  （`:758-762`）只返回 failed、不落 node_run 终态。工作组驱动下一次 drive 会把这类 run 当崩溃恢复采纳
+  （`workgroupTurnsDriver.ts:2684-2687`），对应卡片已 failed 时 `assignmentStartOperations` 返回空、host
+  会再跑一次。待办 owner：下一个触及工作组宿主失败出口的 RFC。
 
 

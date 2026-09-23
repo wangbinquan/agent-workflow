@@ -339,6 +339,11 @@ design.md §11.1，实现期不要把 AC 改成断言 `memories` 表。
 
 ## 进行中 RFC
 
+- **[RFC-369 node_run 旧代作废改由读侧推导](design/RFC-369-node-run-supersession-derived/proposal.md)（Draft，
+  2026-09-23 落档，待用户批准进入实现）** —— 根治工作组回合在 CI 的 PG 臂上间歇红（`rfc359-w4-d19c` /
+  `rfc185-leader-fanout:901`，backlog 条目已钉到语句级）。设计门三轮，findings 处置见 `plan.md` 末尾。
+  **尚未动任何生产代码**。
+
 - **[RFC-368 Reaction 执行合同切换](design/RFC-368-reaction-execution-cutover/proposal.md)（✅ Done
   2026-09-23，见本文件顶部；以下为落档时的记录）** —— RFC-294 W4-E9 的 E9-C，按 `RFC-361 plan §2` 的后继
   顺序（E9-B 已由 RFC-365 关闭）。三件套已写完；**尚未动任何生产代码**。
