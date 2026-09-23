@@ -47,7 +47,14 @@ import type {
   PlatformWorkItemExecutionPort,
   ReactionExecutionMetering,
   ReactionExecutionPort,
+  ReactionExecutionPortV1,
 } from '../composition/required-ports'
+import {
+  prepareReactionExecution,
+  type ReactionRetryFeedbackRef,
+  type ReactionRetryFeedbackV1,
+} from '../domain/reactionExecutionRequest'
+import { attemptModeForOrdinal, dispatchRetrySchedule } from '../domain/retrySchedule'
 import {
   employeeCollaborationBindingSchema,
   effectiveReactionPriority,
@@ -346,6 +353,17 @@ export interface DigitalEmployeeRuntimeServiceDependencies {
   readonly id?: () => string
   readonly workerId?: string
   readonly outboxLeaseMs?: number
+  /**
+   * RFC-368 刀 2 —— 新执行合同的装配。缺席 ⇒ 仍走 `execution-launch` outbox（旧路径）。
+   * 刀 3 切完三个根的绑定后，本字段转必选、旧路径与 `execution` 字段一起删除（plan T17/T18）。
+   */
+  readonly reactionExecution?: DigitalEmployeeReactionExecutionWiring
+}
+
+export interface DigitalEmployeeReactionExecutionWiring {
+  readonly port: ReactionExecutionPortV1
+  /** 派发租约时长；缺省沿用 outbox 租约。 */
+  readonly dispatchLeaseMs?: number
 }
 
 function sameRef(
@@ -514,12 +532,14 @@ export class DigitalEmployeeRuntimeService {
   readonly #id: () => string
   readonly #workerId: string
   readonly #outboxLeaseMs: number
+  readonly #reactionExecution: DigitalEmployeeReactionExecutionWiring | undefined
 
   constructor(deps: DigitalEmployeeRuntimeServiceDependencies) {
     this.#store = deps.store
     this.#authoringStore = deps.authoringStore
     this.#eventCenter = deps.eventCenter
     this.#execution = deps.execution
+    this.#reactionExecution = deps.reactionExecution
     this.#platformWorkItems = deps.platformWorkItems
     this.#inputUploads = deps.inputUploads
     this.#inputArtifacts = deps.inputArtifacts
@@ -2719,6 +2739,144 @@ export class DigitalEmployeeRuntimeService {
     }
   }
 
+  /**
+   * RFC-368 T8 —— 取代 outbox 的 `execution-launch` 臂：选一个到期的 `planned` round，
+   * **在同一个事务里**推进派发 epoch 并登记 admission（预分配执行身份），提交之后才 `launch`。
+   *
+   * 崩溃重放不靠别的机制：派发租约过期后该 round 会被再次选中，同一个 ordinal 算出同一个
+   * operation 与 hash，admission 幂等返回同一个执行身份，TE 按该 id 发现任务已存在就直接返回。
+   * 「一次 Reaction 起两个任务」于是在结构上不可能发生（design §4.1 / §7）。
+   */
+  async dispatchOneReaction(): Promise<'launched' | 'retried' | 'settled' | 'idle'> {
+    const wiring = this.#reactionExecution
+    if (wiring === undefined) return 'idle'
+    const claimed = await this.#store.claimReactionDispatch({
+      workerId: this.#workerId,
+      now: this.#now(),
+      leaseMs: wiring.dispatchLeaseMs ?? this.#outboxLeaseMs,
+    })
+    if (claimed === null) return 'idle'
+    const { round, dispatch } = claimed
+    const caseRecord = await this.#store.getCase(round.caseId)
+    // 案例已终止：不建任务，直接把 round 收掉（今天的 outbox 臂在这里只 complete 掉 outbox 行、
+    // 把 round 留在 planned；`terminateCase` 并不清 round）。`terminalKind` 原样传回——
+    // 不传的话 settleRound 会把它覆写成 'completed'。
+    if (caseRecord?.state === 'terminal') {
+      await this.#store.settleRound({
+        roundId: round.id,
+        state: 'obsolete',
+        outputJson: null,
+        terminalKind: caseRecord.terminalKind,
+        now: this.#now(),
+      })
+      return 'settled'
+    }
+    try {
+      if (caseRecord === null) throw new Error(`employee case missing: ${round.caseId}`)
+      const policy = await this.#authoringStore.getExecutionPolicyRevision(
+        round.executionPolicyRevision,
+      )
+      if (policy === null) throw new Error('pinned execution policy disappeared')
+      const ordinal = round.attemptOrdinal
+      const retryFeedback: ReactionRetryFeedbackV1 =
+        ordinal === 0 || dispatch.retryFeedbackRef === null
+          ? { kind: 'none' }
+          : { kind: 'artifact', ref: dispatch.retryFeedbackRef as ReactionRetryFeedbackRef }
+      // 请求里的每个值都必须在同一 ordinal 的重放之间保持不变，否则 hash 变了 admission 会拒绝：
+      // 案例 revision 取 round 上冻结的那个（案例本身的 revision 随计量等写入不断前进）。
+      const prepared = prepareReactionExecution({
+        employeeCase: { id: round.caseId, revision: round.caseRevision },
+        roundRef: round.id,
+        authority: { subject: caseRecord.ownerUserId ?? 'system', revision: round.caseRevision },
+        attempt: {
+          ordinal,
+          mode: attemptModeForOrdinal(ordinal, policy.content.sameSceneAttempts),
+          retryFeedback,
+        },
+        plan: reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown),
+      })
+      const admission = await this.#store.admitReactionDispatch({
+        roundId: round.id,
+        workerId: this.#workerId,
+        operation: prepared.request.operation,
+        requestHash: prepared.requestHash,
+        authority: prepared.request.authority,
+        now: this.#now(),
+      })
+      const receipt = await wiring.port.launch(prepared, admission)
+      await this.#store.markRoundRunning(round.id, receipt.executionRef, this.#now())
+      return 'launched'
+    } catch (error) {
+      // 租约已被别的 worker 接管：这一轮不是我们的了，不计失败。
+      if (error instanceof DomainError && error.code === 'employee-reaction-dispatch-lost') {
+        return 'idle'
+      }
+      return await this.#retryOrFailDispatch(round, dispatch.dispatchAttempts, caseRecord, error)
+    }
+  }
+
+  /**
+   * RFC-368 T11 —— 派发级的预算 / 退避 / 终结，逐字搬自 `runOneOutbox` 的 catch
+   * （`dispatchRetrySchedule` 与改造前逐值对拍）。三个终结分支都保留；用户可见的两个字面值
+   * 按 design §4.2 固定为 `reaction-dispatch-failed` 与 `reaction-dispatch: ` 前缀。
+   */
+  async #retryOrFailDispatch(
+    round: ReactionRoundRecord,
+    dispatchAttempts: number,
+    caseRecord: EmployeeCaseRecord | null,
+    error: unknown,
+  ): Promise<'retried' | 'settled'> {
+    const detail = error instanceof Error ? error.message : String(error)
+    const errorCode = error instanceof DomainError ? error.code : 'internal-error'
+    const policy =
+      caseRecord === null
+        ? await this.#authoringStore.getCurrentExecutionPolicy()
+        : await this.#authoringStore.getExecutionPolicyRevision(caseRecord.executionPolicyRevision)
+    const decision = dispatchRetrySchedule({
+      dispatchAttempts,
+      limitReached: false,
+      policy: policy?.content ?? null,
+    })
+    if (!decision.terminal) {
+      await this.#store.retryReactionDispatch({
+        roundId: round.id,
+        workerId: this.#workerId,
+        nextAttemptAt: this.#now() + decision.delayMs,
+        error: detail,
+        now: this.#now(),
+      })
+      return 'retried'
+    }
+    const blockReason = `reaction-dispatch: ${detail}`.slice(0, 2_000)
+    const activeRound = (await this.#store.listRounds(round.caseId)).find(
+      (candidate) => candidate.id === round.id,
+    )
+    if (
+      activeRound !== undefined &&
+      ['planned', 'running', 'settling'].includes(activeRound.state)
+    ) {
+      await this.#store.settleRound({
+        roundId: activeRound.id,
+        state: 'failed',
+        outputJson: JSON.stringify({
+          kind: 'reaction-dispatch-failed',
+          errorCode,
+          detail: detail.slice(0, 4_000),
+        }),
+        nextCaseState: policy?.content.handoffOnExhausted === false ? 'terminal' : undefined,
+        terminalKind:
+          policy?.content.handoffOnExhausted === false ? 'platform-dispatch-failed' : undefined,
+        blockReason,
+        now: this.#now(),
+      })
+    } else if (policy?.content.handoffOnExhausted === false) {
+      await this.#store.terminateCase(round.caseId, 'platform-dispatch-failed', this.#now())
+    } else {
+      await this.#store.blockCase(round.caseId, blockReason, this.#now())
+    }
+    return 'settled'
+  }
+
   async pumpOneDelivery(): Promise<boolean> {
     for (const caseRecord of await this.#store.listCases()) {
       const deliveries = await this.#eventCenter.pendingDeliveries(
@@ -3117,6 +3275,12 @@ export class DigitalEmployeeRuntimeService {
           updatedAt: now,
           settledAt: null,
         }
+        // RFC-368：装配了新执行合同时，业务工具 round 不再写 `execution-launch` outbox，改在
+        // 派发侧表上插一行、由 `dispatchOneReaction` 领取（design §4.1）。
+        const reactionDispatched =
+          this.#reactionExecution !== undefined &&
+          item.nodeKind === 'business-tool' &&
+          !platformSelected
         const launchOutbox: EmployeeOutboxRecord = {
           id: this.#id(),
           caseId: caseRecord.id,
@@ -3149,7 +3313,8 @@ export class DigitalEmployeeRuntimeService {
             inboxId: selectedContinuation === null ? inbox!.id : null,
             round,
             plan,
-            launchOutbox,
+            launchOutbox: reactionDispatched ? null : launchOutbox,
+            reactionDispatch: reactionDispatched ? { nextAttemptAt: now } : null,
           }))
         ) {
           continue

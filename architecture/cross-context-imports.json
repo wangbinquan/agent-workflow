@@ -17037,6 +17037,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:33428068a96d9203975d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "digital-employee",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeReactionDispatch",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "employeeReactionDispatch",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
       "fromSymbol": "$file",
@@ -81755,9 +81772,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4809,
+    "architectureExceptions": 4810,
     "implementationSccs": 0,
-    "observedEdges": 5407,
+    "observedEdges": 5410,
     "requiredPorts": 34,
     "targetEdges": 66
   },
@@ -82964,6 +82981,22 @@
       "toContext": "runtime-management",
       "toFile": "packages/backend/src/modules/runtime-management/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProfile"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "digital-employee",
+      "fromFile": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#$file",
+      "id": "import:03fb6baf15f677e8cd1d",
+      "owner": "digital-employee",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionExecutionAdmissionParticipantV1",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionAdmissionParticipantV1"
     },
     {
       "edgeKind": "value",
@@ -99444,6 +99477,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/composition/committedEvents.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/composition/committedEvents.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "digital-employee",
+      "fromFile": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#$file",
+      "id": "import:33428068a96d9203975d",
+      "owner": "digital-employee",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "employeeReactionDispatch",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeReactionDispatch"
     },
     {
       "edgeKind": "value",
@@ -137462,6 +137511,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/required-ports.ts#EventRoutingSubscriptionDirectoryPort"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "digital-employee",
+      "fromFile": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#$file",
+      "id": "import:a4f1b94cebe11630fb27",
+      "owner": "digital-employee",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ReactionClaimEpoch",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionClaimEpoch"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/infrastructure/postgresqlProviderBackup.ts",
@@ -168473,11 +168538,19 @@
     {
       "compositionFiles": [],
       "compositionOwnerEntryIds": [],
-      "consumerOwnerEntryIds": [],
+      "consumerOwnerEntryIds": [
+        "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#$file"
+      ],
       "context": "digital-employee",
       "id": "required:digital-employee:ReactionExecutionAdmissionParticipantV1",
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionAdmissionParticipantV1",
       "providerAdapters": [
+        {
+          "context": "digital-employee",
+          "edgeId": "import:03fb6baf15f677e8cd1d",
+          "file": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#$file"
+        },
         {
           "context": "task-execution",
           "edgeId": "import:347b86b0129f93fd9405",
@@ -168512,7 +168585,9 @@
     {
       "compositionFiles": [],
       "compositionOwnerEntryIds": [],
-      "consumerOwnerEntryIds": [],
+      "consumerOwnerEntryIds": [
+        "owner:packages/backend/src/modules/digital-employee/application/runtimeService.ts#$file"
+      ],
       "context": "digital-employee",
       "id": "required:digital-employee:ReactionExecutionPortV1",
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionPortV1",
@@ -168993,7 +169068,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:97e0abf5abfe5c9b86071833c9cb09d98fb44c67bcfa39af1a1047a8600a2b2d",
+  "sourceDigest": "sha256:e2df564e182b1c35a475a7edeeddf28c04c6e0c565dd6039cbf6a4e070b707b2",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -6,7 +6,7 @@
     "moduleFiles": 1285,
     "productionFiles": 2609,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24964
+    "symbolsIncludingFileRoots": 24969
   },
   "entries": [
     {
@@ -45041,6 +45041,18 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/digital-employee/application/ports/runtimeStore.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/application/ports/runtimeStore.ts#ReactionDispatchRecord",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ReactionDispatchRecord",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/application/ports/runtimeStore.ts",
       "id": "owner:packages/backend/src/modules/digital-employee/application/ports/runtimeStore.ts#RuntimeCasePersistence",
       "removeAfterWave": null,
       "status": "current-module",
@@ -45165,6 +45177,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "boundedCaseTaskName",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/application/runtimeService.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/application/runtimeService.ts#DigitalEmployeeReactionExecutionWiring",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DigitalEmployeeReactionExecutionWiring",
       "targetContext": "digital-employee",
       "targetLayer": "application"
     },
@@ -48893,6 +48917,18 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#CLOSE_REASON",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "CLOSE_REASON",
+      "targetContext": "digital-employee",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
       "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#contextRecord",
       "removeAfterWave": null,
       "status": "current-module",
@@ -48909,6 +48945,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createRuntimePersistence",
+      "targetContext": "digital-employee",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#dispatchRecord",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "dispatchRecord",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -48969,6 +49017,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "roundRecord",
+      "targetContext": "digital-employee",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#RuntimePersistenceOptions",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RuntimePersistenceOptions",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -300290,5 +300350,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:97e0abf5abfe5c9b86071833c9cb09d98fb44c67bcfa39af1a1047a8600a2b2d"
+  "sourceDigest": "sha256:e2df564e182b1c35a475a7edeeddf28c04c6e0c565dd6039cbf6a4e070b707b2"
 }

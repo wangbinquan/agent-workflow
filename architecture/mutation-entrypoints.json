@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1725,
+    "entries": 1726,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -8860,6 +8860,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#createRuntimePersistence",
       "symbol": "createRuntimePersistence",
+      "targetContext": "digital-employee",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#RuntimePersistenceOptions",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#RuntimePersistenceOptions",
+      "symbol": "RuntimePersistenceOptions",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -41223,7 +41246,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:97e0abf5abfe5c9b86071833c9cb09d98fb44c67bcfa39af1a1047a8600a2b2d",
+  "sourceDigest": "sha256:e2df564e182b1c35a475a7edeeddf28c04c6e0c565dd6039cbf6a4e070b707b2",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

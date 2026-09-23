@@ -47,6 +47,7 @@ import {
   employeeInputUploads,
   employeeInvocations,
   employeeOsOutbox,
+  employeeReactionDispatch,
   employeeReactionRounds,
 } from '@/db/schema'
 import { ConflictError, NotFoundError } from '@/util/errors'
@@ -56,8 +57,13 @@ import type {
   EmployeeChannelResultRecord,
   EmployeeInvocationRecord,
   EmployeeOutboxRecord,
+  ReactionDispatchRecord,
   RuntimeCasePersistence,
 } from '../application/ports/runtimeStore'
+import type {
+  ReactionClaimEpoch,
+  ReactionExecutionAdmissionParticipantV1,
+} from '../composition/required-ports'
 import type {
   CaseInboxRecord,
   EmployeeCaseRecord,
@@ -219,6 +225,28 @@ function outboxRecord(row: typeof employeeOsOutbox.$inferSelect): EmployeeOutbox
   }
 }
 
+function dispatchRecord(row: typeof employeeReactionDispatch.$inferSelect): ReactionDispatchRecord {
+  return {
+    roundRef: row.roundRef,
+    caseId: row.caseId,
+    claimEpoch: row.claimEpoch,
+    nextAttemptAt: row.nextAttemptAt,
+    dispatchAttempts: row.dispatchAttempts,
+    dispatchClaimedBy: row.dispatchClaimedBy,
+    dispatchLeaseExpiresAt: row.dispatchLeaseExpiresAt,
+    lastDispatchError: row.lastDispatchError,
+    operationRef: row.operationRef,
+    retryFeedbackRef: row.retryFeedbackRef,
+  }
+}
+
+/** round 结算状态 → admission 收口原因（RFC-368 T13）。 */
+const CLOSE_REASON = {
+  completed: 'completed',
+  failed: 'exhausted',
+  obsolete: 'superseded',
+} as const
+
 function invocationRecord(row: typeof employeeInvocations.$inferSelect): EmployeeInvocationRecord {
   return {
     id: row.id,
@@ -269,7 +297,20 @@ function channelResultRecord(
   }
 }
 
-export function createRuntimePersistence(db: ProviderNeutralDatabase): RuntimeCasePersistence {
+export interface RuntimePersistenceOptions {
+  /**
+   * RFC-368 —— TaskExecution 的 admission 参与者工厂，按事务句柄取用（`InTx` 定式）。
+   * 由组合根注入；缺席时 `admitReactionDispatch` 抛错，结算也不收口 claim（旧装配路径）。
+   */
+  readonly reactionAdmission?: (
+    tx: ProviderNeutralDatabase,
+  ) => ReactionExecutionAdmissionParticipantV1
+}
+
+export function createRuntimePersistence(
+  db: ProviderNeutralDatabase,
+  options: RuntimePersistenceOptions = {},
+): RuntimeCasePersistence {
   const session = databaseSessionFor(db)
   const engine = session.engine
   const maxEmployeeOutcomeGroups = 50_000
@@ -1389,6 +1430,18 @@ export function createRuntimePersistence(db: ProviderNeutralDatabase): RuntimeCa
             })
             .run()
         }
+        if (input.reactionDispatch !== undefined && input.reactionDispatch !== null) {
+          await tx
+            .insert(employeeReactionDispatch)
+            .values({
+              roundRef: input.round.id,
+              caseId: input.round.caseId,
+              nextAttemptAt: input.reactionDispatch.nextAttemptAt,
+              createdAt: input.round.createdAt,
+              updatedAt: input.round.createdAt,
+            })
+            .run()
+        }
         return true
       })
     },
@@ -1401,6 +1454,173 @@ export function createRuntimePersistence(db: ProviderNeutralDatabase): RuntimeCa
           and(eq(employeeReactionRounds.id, roundId), eq(employeeReactionRounds.state, 'planned')),
         )
         .run()
+    },
+
+    async claimReactionDispatch(input) {
+      const candidate = await db
+        .select({ dispatch: employeeReactionDispatch, round: employeeReactionRounds })
+        .from(employeeReactionDispatch)
+        .innerJoin(
+          employeeReactionRounds,
+          eq(employeeReactionRounds.id, employeeReactionDispatch.roundRef),
+        )
+        .where(
+          and(
+            eq(employeeReactionRounds.state, 'planned'),
+            lte(employeeReactionDispatch.nextAttemptAt, input.now),
+            or(
+              isNull(employeeReactionDispatch.dispatchLeaseExpiresAt),
+              lte(employeeReactionDispatch.dispatchLeaseExpiresAt, input.now),
+            ),
+          ),
+        )
+        .orderBy(
+          asc(employeeReactionDispatch.nextAttemptAt),
+          asc(employeeReactionDispatch.roundRef),
+        )
+        .get()
+      if (candidate === undefined) return null
+      const leaseExpiresAt = input.now + input.leaseMs
+      // CAS：尝试次数没变且租约仍可领——两个 worker 同时选中同一行时只有一个能改到。
+      const claimed = affectedRows(
+        await db
+          .update(employeeReactionDispatch)
+          .set({
+            dispatchClaimedBy: input.workerId,
+            dispatchLeaseExpiresAt: leaseExpiresAt,
+            dispatchAttempts: candidate.dispatch.dispatchAttempts + 1,
+            updatedAt: input.now,
+          })
+          .where(
+            and(
+              eq(employeeReactionDispatch.roundRef, candidate.dispatch.roundRef),
+              eq(employeeReactionDispatch.dispatchAttempts, candidate.dispatch.dispatchAttempts),
+              or(
+                isNull(employeeReactionDispatch.dispatchLeaseExpiresAt),
+                lte(employeeReactionDispatch.dispatchLeaseExpiresAt, input.now),
+              ),
+            ),
+          )
+          .run(),
+      )
+      if (claimed !== 1) return null
+      return {
+        round: roundRecord(candidate.round),
+        dispatch: dispatchRecord({
+          ...candidate.dispatch,
+          dispatchClaimedBy: input.workerId,
+          dispatchLeaseExpiresAt: leaseExpiresAt,
+          dispatchAttempts: candidate.dispatch.dispatchAttempts + 1,
+          updatedAt: input.now,
+        }),
+      }
+    },
+
+    async admitReactionDispatch(input) {
+      const participantFor = options.reactionAdmission
+      if (participantFor === undefined) {
+        throw new Error('reaction admission participant is not wired into runtime persistence')
+      }
+      return await session.transaction(async (tx) => {
+        const row = await tx
+          .select({ dispatch: employeeReactionDispatch, round: employeeReactionRounds })
+          .from(employeeReactionDispatch)
+          .innerJoin(
+            employeeReactionRounds,
+            eq(employeeReactionRounds.id, employeeReactionDispatch.roundRef),
+          )
+          .where(eq(employeeReactionDispatch.roundRef, input.roundId))
+          .get()
+        if (
+          row === undefined ||
+          row.round.state !== 'planned' ||
+          row.dispatch.dispatchClaimedBy !== input.workerId ||
+          row.dispatch.dispatchLeaseExpiresAt === null ||
+          row.dispatch.dispatchLeaseExpiresAt <= input.now
+        ) {
+          throw new ConflictError(
+            'employee-reaction-dispatch-lost',
+            `reaction dispatch lease is no longer held: ${input.roundId}`,
+          )
+        }
+        const participant = participantFor(tx)
+        const previous = row.dispatch.claimEpoch
+        const nextEpoch = (previous + 1) as ReactionClaimEpoch
+        const fence = await participant.activateClaim({
+          employeeCase: { id: row.dispatch.caseId },
+          reaction: { roundRef: input.roundId },
+          expectedPreviousEpoch: previous === 0 ? null : (previous as ReactionClaimEpoch),
+          nextEpoch,
+          authority: input.authority,
+        })
+        const receipt = await participant.admitLaunch({
+          fence,
+          operation: input.operation,
+          requestHash: input.requestHash,
+        })
+        await tx
+          .update(employeeReactionDispatch)
+          .set({ claimEpoch: nextEpoch, operationRef: input.operation, updatedAt: input.now })
+          .where(
+            and(
+              eq(employeeReactionDispatch.roundRef, input.roundId),
+              eq(employeeReactionDispatch.claimEpoch, previous),
+            ),
+          )
+          .run()
+        // 执行身份在事务内就写下（design §4.1）：「任务已建、ref 未写回」这一格因此不存在。
+        await tx
+          .update(employeeReactionRounds)
+          .set({ executionRef: receipt.execution, updatedAt: input.now })
+          .where(
+            and(
+              eq(employeeReactionRounds.id, input.roundId),
+              eq(employeeReactionRounds.state, 'planned'),
+            ),
+          )
+          .run()
+        return receipt
+      })
+    },
+
+    async retryReactionDispatch(input) {
+      await session.transaction(async (tx) => {
+        const released = affectedRows(
+          await tx
+            .update(employeeReactionDispatch)
+            .set({
+              dispatchClaimedBy: null,
+              dispatchLeaseExpiresAt: null,
+              nextAttemptAt: input.nextAttemptAt,
+              lastDispatchError: input.error.slice(0, 2_000),
+              operationRef: null,
+              updatedAt: input.now,
+            })
+            .where(
+              and(
+                eq(employeeReactionDispatch.roundRef, input.roundId),
+                eq(employeeReactionDispatch.dispatchClaimedBy, input.workerId),
+              ),
+            )
+            .run(),
+        )
+        if (released !== 1) {
+          throw new ConflictError(
+            'employee-reaction-dispatch-lost',
+            `reaction dispatch lease is no longer held: ${input.roundId}`,
+          )
+        }
+        await tx
+          .update(employeeReactionRounds)
+          .set({ executionRef: null, updatedAt: input.now })
+          .where(
+            and(
+              eq(employeeReactionRounds.id, input.roundId),
+              eq(employeeReactionRounds.state, 'planned'),
+            ),
+          )
+          .run()
+      })
     },
 
     async retryRound(input) {
@@ -1704,6 +1924,23 @@ export function createRuntimePersistence(db: ProviderNeutralDatabase): RuntimeCa
           })
           .where(eq(employeeReactionRounds.id, round.id))
           .run()
+        // RFC-368 T13 —— admission 收口与结算同事务。集中在这里而不是散到各个结算入口：
+        // 四个 `settleRound` 调用点 + obsolete 全部经过这一处，不会漏掉任何一个而让 admission
+        // 行永久停在 admitted/launched。从没 admission 过（epoch 0）的 round 不用收口。
+        if (options.reactionAdmission !== undefined) {
+          const dispatch = await tx
+            .select()
+            .from(employeeReactionDispatch)
+            .where(eq(employeeReactionDispatch.roundRef, round.id))
+            .get()
+          if (dispatch !== undefined && dispatch.claimEpoch > 0) {
+            await options.reactionAdmission(tx).closeClaim({
+              reaction: { roundRef: round.id },
+              expectedCurrentEpoch: dispatch.claimEpoch as ReactionClaimEpoch,
+              reason: CLOSE_REASON[input.state],
+            })
+          }
+        }
         if (round.inboxId !== null) {
           await tx
             .update(employeeCaseInbox)

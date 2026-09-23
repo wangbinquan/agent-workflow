@@ -7,6 +7,11 @@ import type {
   ReactionExecutionPlan,
   ReactionRoundRecord,
 } from '../../domain/runtimeModel'
+import type {
+  ReactionExecutionAdmissionReceiptV1,
+  ReactionOperationRef,
+  ReactionRequestHash,
+} from '../../composition/required-ports'
 
 export interface AttentionBindingRecord {
   readonly id: string
@@ -35,6 +40,26 @@ export interface EmployeeOutboxRecord {
   readonly payloadJson: string
   readonly dedupeKey: string
   readonly attemptCount: number
+}
+
+/**
+ * RFC-368 —— round 的派发状态（`employee_reaction_dispatch` 侧表，与 round 一一对应）。
+ * 装的正是 `execution-launch` outbox 行今天装的东西：租约、单行重试计数、退避时刻、上次错误。
+ * round 本身仍是 `planned`——「派发中」由这里持有中的租约表示（design §5.1，不新增 round 状态）。
+ */
+export interface ReactionDispatchRecord {
+  readonly roundRef: string
+  readonly caseId: string
+  /** 每次派发 +1；与 TE admission 日志上的 epoch 同步推进（design §3.2）。 */
+  readonly claimEpoch: number
+  readonly nextAttemptAt: number
+  /** 领取时 +1（与 outbox 的 `attemptCount` 同语义：从 1 起）。 */
+  readonly dispatchAttempts: number
+  readonly dispatchClaimedBy: string | null
+  readonly dispatchLeaseExpiresAt: number | null
+  readonly lastDispatchError: string | null
+  readonly operationRef: string | null
+  readonly retryFeedbackRef: string | null
 }
 
 export interface EmployeeInvocationRecord {
@@ -269,8 +294,48 @@ export interface RuntimeCaseStorePort {
     readonly round: ReactionRoundRecord
     readonly plan: ReactionExecutionPlan
     readonly launchOutbox: EmployeeOutboxRecord | null
+    /**
+     * RFC-368：Reaction 执行走派发侧表而不是 `execution-launch` outbox 时，同事务插一行派发
+     * 状态。与 `launchOutbox` 互斥。
+     */
+    readonly reactionDispatch?: { readonly nextAttemptAt: number } | null
   }): boolean
   markRoundRunning(roundId: string, executionRef: string, now: number): void
+  /**
+   * RFC-368 T8 —— 选一个到期的 `planned` round 并占派发租约。判据（design §4.1）：
+   * `next_attempt_at <= now` 且租约为空（从没派发过）或已过期（上一次派发中途崩了——
+   * 这一支就是崩溃重放）。领取时 `dispatch_attempts + 1`。
+   */
+  claimReactionDispatch(input: {
+    readonly workerId: string
+    readonly now: number
+    readonly leaseMs: number
+  }): { readonly round: ReactionRoundRecord; readonly dispatch: ReactionDispatchRecord } | null
+  /**
+   * RFC-368 T8 —— record-before-act：在**同一个事务**里推进派发 epoch、调 TE 的 admission
+   * 参与者（`activateClaim` + `admitLaunch`，预分配执行身份），并把 operation 与执行身份写回
+   * 侧表与 round（round 仍是 `planned`）。租约已丢（别的 worker 接管了）⇒ 抛 conflict。
+   */
+  admitReactionDispatch(input: {
+    readonly roundId: string
+    readonly workerId: string
+    readonly operation: ReactionOperationRef
+    readonly requestHash: ReactionRequestHash
+    readonly authority: { readonly subject: string; readonly revision: number }
+    readonly now: number
+  }): ReactionExecutionAdmissionReceiptV1
+  /**
+   * RFC-368 T8/T11 —— `launch` 本身失败、预算未尽：释放租约，按派发级退避排下一次。
+   * 清 `operation_ref` 与 round 上预写的执行身份（同一 ordinal 重派仍命中同一个 operation，
+   * admission 幂等返回同一个执行身份）。
+   */
+  retryReactionDispatch(input: {
+    readonly roundId: string
+    readonly workerId: string
+    readonly nextAttemptAt: number
+    readonly error: string
+    readonly now: number
+  }): void
   retryRound(input: {
     readonly roundId: string
     readonly expectedExecutionRef: string
