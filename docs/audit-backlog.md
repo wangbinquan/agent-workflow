@@ -5300,7 +5300,9 @@ LOG:  checkpointer process was terminated by signal 6: Aborted
 在腾出空间之前，任何足够大的 PG 测试都可能再把它写满、再崩一次，而症状每次都会伪装成
 「某个测试文件有 teardown 竞态」。备用端点：`aw-pg-w57`，`postgres://postgres:postgres@127.0.0.1:55460/awtest`。
 
-## PostgreSQL 的 40001 仍会逃逸到调用方：`rfc359-w4-d19c` / `rfc185-leader-fanout` 工作组回合在 CI 上间歇红（2026-09-15 实撞，2026-09-23 钉到语句级，未修）
+## PostgreSQL 的 40001 仍会逃逸到调用方：`rfc359-w4-d19c` / `rfc185-leader-fanout` 工作组回合在 CI 上间歇红（2026-09-15 实撞，2026-09-23 钉到语句级，**RFC-369 已修**）
+
+> **已修（2026-09-23，RFC-369）**：铸造事务不再做同帧范围读（旧代作废改由读侧推导），同任务并发铸造不再互判读写依赖；回归锁 `rfc369-node-run-supersession` AC-2（PG 上两笔并发铸造各只执行一次）。内部错误的无界重来另由 RFC-369 G3 收口（`rfc369-workgroup-internal-error`）。下文 `onIsoSetupFailure` / `onUnhandledThrow` 在普通失败路径上留 pending 的既有问题**未在 RFC-369 范围内**，仍开放。若两条用例在 CI 上再撞，重开本条。
 
 **现象**：`RFC-359 W4-D19c —— 工作组回合引擎 [postgresql] > 成员瞬态故障重试耗尽…` 在
 ubuntu shard 5/12 红，**同名的 `[sqlite]` 那条同一次全绿**：

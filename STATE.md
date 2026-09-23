@@ -1,5 +1,20 @@
 # 当前执行状态
 
+## 2026-09-23 RFC-369 node_run 旧代作废改由读侧推导 —— ✅ Done
+
+根治工作组回合在 CI 的 PG 臂上间歇红（`rfc359-w4-d19c` / `rfc185-leader-fanout:901`）：同一任务内并发铸 run
+时，铸造事务里的同帧范围读在 SERIALIZABLE 下按索引页互判读写依赖、把 10 次重放用光。提交序列
+`f78add93d`（刀 1）→ `93f54e349`（刀 2）→ `2b2a92835`（广播快照）→ `6a76a82fd`（实现门处置），CI 绿。
+
+- **刀 1**：铸造只 insert；「旧代作废」由 merge 状态机迁移（被取代即收成 abandoned 并提交、事务外抛非法迁移）
+  与入口重放（`excludeSuperseded`）按同一判据推导（`task-execution/domain/nodeRunSupersession.ts` + SQL 谓词，
+  双引擎对拍）。用户接受的收紧：同帧存在更新一代即旧代不合并。调度器跳过已被取代的旧 pending 行（本帧终结为
+  canceled 并广播），新铸一行。
+- **刀 2**：工作组一轮内部错误按这一轮失败收场，孤儿 run 经新宿主账本操作 `fail-host-run` 单独一笔终结、不再被
+  采纳；卡片按实际状态落 failed（open 卡 bump 尝试次数）；领队补 `internalDriveError`。
+- 落地记录、变异验证与实现门处置见 `design/RFC-369-node-run-supersession-derived/plan.md` 末尾。
+- 顺带教训已进 `docs/dev-gotchas.md`（allowGrowth 在紧急修红提交上过期，第五次同形）。
+
 ## 2026-09-23 RFC-368 Reaction 执行合同切换 —— ✅ Done
 
 RFC-294 W4-E9 的 E9-C。数字员工 → TaskExecution 的执行合同从「字符串 participant + `execution-launch`
@@ -339,11 +354,8 @@ design.md §11.1，实现期不要把 AC 改成断言 `memories` 表。
 
 ## 进行中 RFC
 
-- **[RFC-369 node_run 旧代作废改由读侧推导](design/RFC-369-node-run-supersession-derived/proposal.md)（In Progress，
-  2026-09-23 用户批准实施）** —— 根治工作组回合在 CI 的 PG 臂上间歇红（`rfc359-w4-d19c` /
-  `rfc185-leader-fanout:901`，backlog 条目已钉到语句级）。设计门三轮，findings 处置见 `plan.md` 末尾。
-  **刀 1（T1–T5、T8：取代改由读侧推导 + 调度器跳过）与刀 2（T6：工作组内部错误即判这一轮失败）已落**，落地记录见
-  `plan.md` 末尾；下一步 T7 收口（CI 连续绿后 backlog 条目改已修）与实现门。
+- **[RFC-369 node_run 旧代作废改由读侧推导](design/RFC-369-node-run-supersession-derived/proposal.md)（✅ Done
+  2026-09-23，见本文件顶部）**
 
 - **[RFC-368 Reaction 执行合同切换](design/RFC-368-reaction-execution-cutover/proposal.md)（✅ Done
   2026-09-23，见本文件顶部；以下为落档时的记录）** —— RFC-294 W4-E9 的 E9-C，按 `RFC-361 plan §2` 的后继
