@@ -903,14 +903,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24972,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-368 实现门 P2-1（2026-09-23）一次性 +1：`task-execution/domain/sourceTermination.ts` 新增导出类型 `ResourceReapStopCause`——资源上限 / 空闲收割带真实原因取消，状态与原因同一次写入落下（用户裁决：原因一次写对）。下一笔不涨的提交退役本许可。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:317ee95d0c8b52aa7b4ca0df132dd5f7d34beaa071450d755ad206bf32e68645",
+    "sourceDigest": "sha256:a1761e3340ba7d26dece1c311b3f994d70b51b02914aff4221862a2485dca9bf",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -923,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "6bdd753a218f36b6e895f6c7d833be3da5f4966e",
-    "contentDigest": "sha256:96a4253230f0af6621bbb8471be0804d11bc88f988a387b09b9f91b2d086db72",
+    "currentSnapshotSha": "e729bdf537487f736d672bf024ed2d709ebba099",
+    "contentDigest": "sha256:e3fb7f687f31066518aba484bcb9dcba3001da1194ecb8474dd4c84bb150fa9c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -764,6 +764,8 @@ export async function cancelTaskProjection(
       }
       const now = Date.now()
       const projection = taskStopProjection(cause)
+      // 收割的详细原因（超了多少、静默多久）随取消一起落下，不再事后改写（RFC-368 实现门 P2-1）。
+      const stopMessage = cause.kind === 'resource-reaped' ? cause.message : projection.code
       const nextRevision = task.lifecycleEventRevision + 1
 
       // RFC-359 AC-1（第 11 刀移植）：注入点**紧贴**状态 CAS，生产从不传。
@@ -775,8 +777,7 @@ export async function cancelTaskProjection(
           status: 'canceled',
           finishedAt: now,
           errorSummary: projection.summary,
-          // 收割的详细原因（超了多少、静默多久）随取消一起落下，不再事后改写。
-          errorMessage: cause.kind === 'resource-reaped' ? cause.message : projection.code,
+          errorMessage: stopMessage,
           ...(prune.prune ? { workspacePruningAt: now, workspacePruneCause: prune.cause } : {}),
           lifecycleEventRevision: nextRevision,
         })
