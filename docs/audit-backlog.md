@@ -5300,7 +5300,7 @@ LOG:  checkpointer process was terminated by signal 6: Aborted
 在腾出空间之前，任何足够大的 PG 测试都可能再把它写满、再崩一次，而症状每次都会伪装成
 「某个测试文件有 teardown 竞态」。备用端点：`aw-pg-w57`，`postgres://postgres:postgres@127.0.0.1:55460/awtest`。
 
-## PostgreSQL 的 40001 仍会逃逸到调用方：`rfc359-w4-d19c` 工作组回合在 CI 上间歇红（2026-09-15 实撞，未修）
+## PostgreSQL 的 40001 仍会逃逸到调用方：`rfc359-w4-d19c` / `rfc185-leader-fanout` 工作组回合在 CI 上间歇红（2026-09-15 实撞，2026-09-23 钉到语句级，未修）
 
 **现象**：`RFC-359 W4-D19c —— 工作组回合引擎 [postgresql] > 成员瞬态故障重试耗尽…` 在
 ubuntu shard 5/12 红，**同名的 `[sqlite]` 那条同一次全绿**：
@@ -5373,5 +5373,33 @@ SERIALIZABLE，PG 根本不会抛 40001（`could not serialize access due to rea
 3. **只加大重试预算**——最省事，但 `postgresqlSerializationRetry.ts` 头注已经说明预算是为
    「常态 0 冲突 + 偶发尖峰」设的；**连撞十次说明的是结构性争用**，加大预算只是把概率往后推，
    而且会把一次失败的回合拖成秒级。**不推荐**。
+
+**2026-09-23 再撞（换了一条用例），冲突点已钉到语句级**：`rfc185-leader-fanout.test.ts:901`
+「runtime stream retries are bounded even for a single-shot message turn」[postgresql] 在 ubuntu
+shard 5/12 红（run `35814805097`，提交 `356bb594d` 只挪了一个与工作组无关的局部变量；同一分片前两笔
+都绿；最近 12 次失败的 main CI 只有这一次命中它）。`memberCalls` 期望 4 实得 6。
+
+- **服务端日志**：失败前 0.13 秒（03:42:54.709 → .835）连续 10 条以上 40001，DETAIL 全是
+  `Canceled on identification as a pivot`，失败语句是成员铸 run 的
+  `insert into node_runs`——与 09-15 那次同形。
+- **冲突的两笔事务（本地 `log_statement=all` 抓到，2026-09-23）**：领队回合与成员回合**同时**铸 run，
+  两笔 SERIALIZABLE 事务都执行 `nodeRunMintParticipant.ts:90-108` 的「先读同 task/node/iteration 的
+  旧行（走 `idx_node_runs_task (task_id, node_id, iteration, retry_index)`）→ 再 insert」。
+  PG 的谓词锁按**索引页**加，同一 task 的领队行与成员行落在同一批页上，两笔互判读写依赖、其一
+  在 commit 时被中止。本地单次运行只撞 1 次（重放即过）；CI 带 coverage 更慢，窗口里连撞到把
+  10 次重放用光。**这是所有「同一 task 内并发铸 node_run」的通病**，不止工作组（扇出节点同理）。
+- **为什么是 6 次调用（连锁，不是源头）**：铸 run 抛错 → `workgroupTurnsDriver.ts:2742` 记
+  「workgroup turn threw」、这一轮作废；下一圈把仍是 `pending` 的 run 当崩溃恢复接管
+  （`:2684-2690` adoptable），`executeHostTurn` 的协议 / 瞬态两份预算都是**内存计数**，重来时
+  重新给一份。于是 2 次（抛错前）+ 4 次（接管 1 + 瞬态重试 3）= 6。
+- **已排除的修法**：
+  - 「重试预算按账本计」挡不住源头（冲突照样把重放用光），且测试 harness
+    （`tests/helpers/workgroupTurns.ts`）不回写 host run 的状态 / 失败码，账本里分不清用掉的是哪份预算。
+  - 「同 task 的铸 run 先加行锁 / advisory lock 排队」无效：SERIALIZABLE 的快照在第一条语句（即加锁那条）
+    就定了，等锁之后读写依赖照样成环。
+- **下一步（用户 2026-09-23 裁决：先登记、main 恢复绿，再立 RFC 根治）**：立 RFC 改写铸 run 事务，
+  去掉那次范围读或换成不触发页级谓词冲突的写法（影响 TaskExecution 所有 node_run 铸造，需走设计门）。
+  owner：发起该 RFC 的 session；在它落地前，本条两条用例（`rfc359-w4-d19c`、`rfc185-leader-fanout:901`）
+  在 CI 上仍可能间歇红——**按本条归因，不要当成自己提交的回归去追**。
 
 
