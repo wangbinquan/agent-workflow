@@ -127,3 +127,16 @@ live CAS `isolatedAgentRun.ts:157-192, 237-258, 376-395, 473-484`；只看最新
   runHost 抛错）、领队、free_collab open 卡按卡预算收敛、采纳变体（dispatched / awaiting_human）、参与者只终结 pending。
   **变异验证**：让外层 catch 重新抛出（= 改前行为）⇒ 10 条红，free_collab 三条卡死到超时（即无界重来）；去掉 open 卡的
   bump ⇒ 收敛用例卡死到超时。
+
+## 实现门（2026-09-23，Claude 子代理，只审功能；范围 f78add93d + 93f54e349）
+
+**PASS-WITH-FINDINGS** → 0 P1 / 1 P2 / 3 P3，全部为纯实现问题，已处置：
+
+| finding | 处置 |
+| --- | --- |
+| P2-1 测试缺 design §6 的几格 | 补：§4.5 / AC-7 情形 1 端到端（`rfc144-stale-replay-regression`：较老 pending + 更新失败代，retry 后旧行 canceled、新一代合并、任务 done；关掉跳过即红成 merge-back-failed）；真库上「先铸 pending 再调度」四条路径（retry-node-cascade / clarify-answer / review-reject / revival）照常采纳；G3 卡片 CAS 不中时孤儿照样终结；消息轮内部错误推进游标 + messageTurnFailed |
+| P3-1 code-host 线不广播 canceled | 补 `broadcastCanceled`；广播序列快照同步 |
+| P3-2 跨帧终结 + 冲突上抛 | 只终结本帧的被取代行（跨帧仍不采纳）；CAS 不中 / 非法迁移跳过，其余错误照抛；单元 + 真库跨帧用例 |
+| P3-3 `latestExisting` 在终结前算 | 刚终结的最新顶层行按 canceled 定 cause（revival）；单元用例 |
+
+另：刀 1 推红 `rfc287-t1-broadcast-sequence`（取行前奏新增 canceled 广播是有意变化），`2b2a92835` 补基线。

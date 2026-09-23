@@ -20,7 +20,14 @@ import {
 } from '@agent-workflow/shared'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks, workflows, workgroupAssignments, workgroupMessages } from '@/db/schema'
+import {
+  nodeRuns,
+  tasks,
+  workflows,
+  workgroupAssignments,
+  workgroupMemberCursors,
+  workgroupMessages,
+} from '@/db/schema'
 import { composeWorkgroupTaskRoomClarifyParticipantFactory } from '@/modules/collaboration/composition/workgroupTaskRoomClarify'
 import { createWorkgroupClarifyAskGate } from '@/modules/collaboration/public/participants'
 import {
@@ -563,6 +570,81 @@ describeEachProvider('RFC-369 AC-5 —— free_collab 批量认领 / 采纳变�
       expect(card).toMatchObject({ status: 'done', attemptCount: 2 })
     },
   )
+})
+
+describeEachProvider('RFC-369 AC-5 补格（实现门 P2-1）', (harness) => {
+  let db: ProviderNeutralDatabase
+  beforeEach(() => {
+    db = harness.db
+  })
+
+  test('卡片那笔 CAS 不中（执行中卡被取消）⇒ 孤儿 run 照样被终结（两笔分开提交的理由）', async () => {
+    const taskId = await seedLeaderWorkerTask(db)
+    const leader = leaderScript()
+    const outcome = await injectedDrive({
+      db,
+      taskId,
+      injection: {},
+      runHost: async (request) => {
+        const scripted = leader(request)
+        if (scripted !== null) return scripted
+        if (!request.promptTemplate.includes('## Your assignment')) return memberDone
+        // 用户中途取消了这张卡，随后宿主内部出错：落卡片 failed 的那笔会 CAS 不中。
+        await db
+          .update(workgroupAssignments)
+          .set({ status: 'canceled' })
+          .where(eq(workgroupAssignments.taskId, taskId))
+        throw new Error('host blew up after cancel')
+      },
+    })
+    expect(outcome.kind, why(outcome)).toBe('ok')
+    const rows = await rowsOf(db, taskId)
+    expect(rows.cards[0]?.status).toBe('canceled')
+    expect(rows.cardRuns).toHaveLength(1)
+    expect(rows.cardRuns[0]).toMatchObject({
+      status: 'failed',
+      errorMessage: 'internal error: host blew up after cancel',
+    })
+  })
+
+  test('消息轮内部错误 ⇒ 推进游标 + messageTurnFailed，这批消息不再重来', async () => {
+    const taskId = await seedLeaderWorkerTask(db)
+    const leaderQueue: WorkgroupTurnHostResult[] = [
+      {
+        status: 'done',
+        outputs: {
+          wg_decision: JSON.stringify({ action: 'continue' }),
+          wg_messages: JSON.stringify([{ to: 'worker', body: 'please look at this' }]),
+        },
+      },
+    ]
+    const messageTurns: string[] = []
+    const outcome = await injectedDrive({
+      db,
+      taskId,
+      injection: {},
+      runHost: async (request) => {
+        if (request.nodeId === WORKGROUP_TURN_LEADER_NODE_ID)
+          return leaderQueue.shift() ?? leaderDone
+        messageTurns.push(request.nodeRunId)
+        throw new Error('message host exploded')
+      },
+    })
+    expect(outcome.kind, why(outcome)).toBe('ok')
+    expect(messageTurns).toHaveLength(1)
+    const rows = await rowsOf(db, taskId)
+    const failures = rows.messages.filter((message) => message.templateKey === 'messageTurnFailed')
+    expect(failures).toHaveLength(1)
+    expect(failures[0]?.bodyMd).toContain('internal error: message host exploded')
+    expect(rows.memberRuns.find((run) => run.id === messageTurns[0])?.status).toBe('failed')
+    const cursor = (
+      await db
+        .select()
+        .from(workgroupMemberCursors)
+        .where(eq(workgroupMemberCursors.taskId, taskId))
+    ).find((row) => row.memberId === 'm-worker')
+    expect(cursor?.lastConsumedMessageId ?? '').not.toBe('')
+  })
 })
 
 describeEachProvider('RFC-369 §4.4 —— fail-host-run 宿主账本操作', (harness) => {

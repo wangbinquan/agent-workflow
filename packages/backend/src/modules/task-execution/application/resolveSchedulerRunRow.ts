@@ -115,15 +115,31 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
 
   // RFC-369 §4.5：同帧已有更新一代的旧 pending 行即便采纳也必定在 mark-pending-merge 处被拦
   // （白跑一轮、节点失败），不采纳它、就地终结为 canceled，没有可采纳的行就走下面的新铸路径。
+  // 调用方按 {taskId, nodeId, iteration} 取行、不按帧过滤：判定与「不采纳」跨帧生效，但只终结
+  // **本帧**的行（别的帧由它自己的调度器收尾）；终结时行已被别处改走（取消 / 并发收尾）就跳过。
   const superseded = supersededPendingRows(input)
+  const canceled = new Set<string>()
   for (const row of topLevelRows) {
     if (!superseded.has(row.id)) continue
-    await input.lifecycle.transition({
-      nodeRunId: row.id,
-      event: { kind: 'cancel-by-supersede', reason: 'superseded-by-newer-generation' },
-      extra: { finishedAt: Date.now() },
-      ...(input.executionContext === undefined ? {} : { executionContext: input.executionContext }),
-    })
+    if ((row.containerRunId ?? null) !== input.containerRunId) continue
+    try {
+      await input.lifecycle.transition({
+        nodeRunId: row.id,
+        event: { kind: 'cancel-by-supersede', reason: 'superseded-by-newer-generation' },
+        extra: { finishedAt: Date.now() },
+        ...(input.executionContext === undefined
+          ? {}
+          : { executionContext: input.executionContext }),
+      })
+    } catch (error) {
+      // CAS 不中 / 状态已不允许迁移：这行已被别处改走，跳过即可。
+      const code = (error as { code?: unknown } | null)?.code
+      if (code === 'concurrent-node-run-transition' || code === 'illegal-node-run-transition') {
+        continue
+      }
+      throw error
+    }
+    canceled.add(row.id)
     input.broadcastCanceled?.(row.id)
   }
   const pendingExisting = topLevelRows.find(
@@ -149,7 +165,12 @@ export async function resolveSchedulerRunRow<R extends SchedulerRunRowCandidate>
     taskId: input.taskId,
     nodeId: input.nodeId,
     status: 'pending',
-    cause: schedulerMintCause(latestExisting),
+    // 刚在上面终结的那行按终结后的状态分档（实现门 P3-3）。
+    cause: schedulerMintCause(
+      latestExisting !== undefined && canceled.has(latestExisting.id)
+        ? { status: 'canceled' }
+        : latestExisting,
+    ),
     retryIndex,
     containerRunId: input.containerRunId,
     iteration: input.iteration,

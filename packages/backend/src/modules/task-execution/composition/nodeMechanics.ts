@@ -2358,6 +2358,8 @@ export async function runCodeHostCallNode(
     clearAgentOverride: false,
     trackRetryIndex: false,
     broadcastPending: null,
+    // RFC-369 实现门 P3-1：canceled 是真实终态（不像 pending 马上转 running），照常广播。
+    broadcastCanceled: (id) => broadcastNodeStatus(taskId, id, node.id, 'canceled'),
   })
   await setRunStatus(state, {
     nodeRunId,

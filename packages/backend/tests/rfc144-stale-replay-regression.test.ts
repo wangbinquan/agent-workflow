@@ -256,6 +256,60 @@ emit(envelope)`,
   }, 30000)
 })
 
+describe('RFC-369 §4.5 / AC-7 情形 1 —— 同帧已被取代的较老 pending 行：不采纳、终结、新铸并跑通', () => {
+  let h: Harness
+  beforeEach(async () => {
+    h = await buildGitHarness()
+  })
+  afterEach(() => h.cleanup())
+
+  test('retryNode 之后调度器跳过较老 pending 行（canceled），新一代正常隔离 + 合并，任务 done', async () => {
+    const { taskId } = await seedAgentWorkflowTask(h, 'interrupted')
+    // 较老的一代停在 pending（崩在开跑之前），其后又有一代跑失败了。
+    const stalePending = mkId(1)
+    const failed = mkId(2)
+    for (const [id, status] of [
+      [stalePending, 'pending'],
+      [failed, 'failed'],
+    ] as const) {
+      await h.db.insert(nodeRuns).values({
+        id,
+        taskId,
+        nodeId: 'A',
+        status,
+        startedAt: Date.now() - 1000,
+      })
+    }
+    const mockPath = writeMockAgent(
+      h,
+      `writeFileSync(join(process.cwd(), 'fresh.txt'), 'fresh generation\\n')
+emit(envelope)`,
+    )
+    await createRetryEngine(h.db, {
+      appHome: h.appHome,
+      resumeWith: {
+        db: h.db,
+        schedulerDriver: createTaskExecutionTestTopology({ db: h.db, driver: 'real' })
+          .schedulerDriver,
+        taskRecoveryOperations: taskRecoveryOperations(h.db),
+        appHome: h.appHome,
+        binaryOverride: ['bun', 'run', mockPath],
+      },
+    }).retry({ taskId, nodeRunId: failed, cascade: true })
+    const final = await waitForTerminalTask(h.db, taskId)
+    expect(`${final.status}:${final.errorSummary ?? ''}`).toBe('done:')
+
+    const rows = await h.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
+    const byId = new Map(rows.map((row) => [row.id, row]))
+    // 采纳它会在 mark-pending-merge 处被拦、节点失败；改为不采纳、就地终结。
+    expect(byId.get(stalePending)?.status).toBe('canceled')
+    const fresh = rows.filter((row) => row.status === 'done' && row.id > failed)
+    expect(fresh).toHaveLength(1)
+    expect(fresh[0]!.mergeState).toBe('merged')
+    expect(readFileSync(join(h.worktreePath, 'fresh.txt'), 'utf-8')).toBe('fresh generation\n')
+  }, 30000)
+})
+
 describe('RFC-144 mint 收口 — mintNodeRun 铸出后代，前代行及其子行按推导被取代（RFC-369）', () => {
   let db: DbClient
   let taskId: string

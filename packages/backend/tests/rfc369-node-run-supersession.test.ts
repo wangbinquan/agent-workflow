@@ -35,6 +35,7 @@ import type {
 } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import { DrizzleMergeStateLifecyclePersistence } from '@/modules/task-execution/infrastructure/mergeStateLifecyclePersistence'
 import { DrizzleNodeExecutionPersistence } from '@/modules/task-execution/infrastructure/nodeExecutionPersistence'
+import { DrizzleNodeRunLifecyclePersistence } from '@/modules/task-execution/infrastructure/nodeRunLifecyclePersistence'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { structurallySupersededCondition } from '@/modules/task-execution/infrastructure/nodeRunSupersession'
 import {
@@ -495,8 +496,17 @@ function fakes() {
   return { calls, lifecycle, projections }
 }
 
-async function resolveWith(rows: readonly FakeRow[], containerRunId: string | null = null) {
+async function resolveWith(
+  rows: readonly FakeRow[],
+  containerRunId: string | null = null,
+  transitionError?: unknown,
+) {
   const f = fakes()
+  if (transitionError !== undefined) {
+    f.lifecycle.transition = async () => {
+      throw transitionError
+    }
+  }
   const result = await resolveSchedulerRunRow({
     lifecycle: f.lifecycle,
     projections: f.projections,
@@ -564,6 +574,35 @@ describe('RFC-369 AC-8 —— 调度器跳过已被同帧更新一代取代的 p
     expect(result.nodeRunId).toBe(mkId(1))
   })
 
+  test('实现门 P3-2：终结时行已被别处改走（CAS 不中 / 非法迁移）⇒ 跳过、不广播，照常新铸', async () => {
+    for (const code of ['concurrent-node-run-transition', 'illegal-node-run-transition']) {
+      const { result, calls } = await resolveWith(
+        [candidate(1, 'pending'), candidate(2, 'failed', { retryIndex: 1 })],
+        null,
+        Object.assign(new Error('moved'), { code }),
+      )
+      expect(calls.canceled).toEqual([])
+      expect(calls.mints).toHaveLength(1)
+      expect(result.nodeRunId).toBe(mkId(99))
+    }
+    await expect(
+      resolveWith(
+        [candidate(1, 'pending'), candidate(2, 'failed')],
+        null,
+        new Error('database down'),
+      ),
+    ).rejects.toThrow('database down')
+  })
+
+  test('实现门 P3-3：唯一更新一代是子行时，刚终结的最新顶层行按 canceled 定 cause（revival）', async () => {
+    const { calls } = await resolveWith([
+      candidate(1, 'pending'),
+      candidate(2, 'done', { parent: 5 }),
+    ])
+    expect(calls.canceled).toEqual([mkId(1)])
+    expect(calls.mints[0]!.cause).toBe('revival')
+  })
+
   test('比较集合是全部行：子行（非顶层）作为更新一代同样取代较老的顶层 pending 行', () => {
     expect([
       ...supersededPendingRows({
@@ -574,3 +613,92 @@ describe('RFC-369 AC-8 —— 调度器跳过已被同帧更新一代取代的 p
     ]).toEqual([mkId(1)])
   })
 })
+
+describeEachProvider(
+  'RFC-369 AC-8 反向（真库）—— 既有「先铸 pending 再调度」路径照常采纳新铸行',
+  (harness) => {
+    // 重试级联 / 反问回答重跑 / 评审驳回重跑 / 中断续跑：都是先铸一条**最新**的 pending 行、再交给调度器。
+    // 它不被任何更新一代取代，必须照常被采纳；更老的各代一行都不动。
+    test.each(['retry-node-cascade', 'clarify-answer', 'review-reject', 'revival'] as const)(
+      '%s：采纳新铸的 pending 行，不终结任何行、不新铸',
+      async (cause) => {
+        const db = harness.db
+        const taskId = await seedTask(db)
+        await seedRun(db, taskId, row(1), { status: 'done', mergeState: 'merged' })
+        await seedRun(db, taskId, row(2), { status: 'failed' })
+        await seedRun(db, taskId, row(3), { status: 'interrupted' })
+        const lifecycle = new DrizzleNodeRunLifecyclePersistence(db)
+        const projections = new DrizzleNodeExecutionPersistence(db)
+        const minted = await lifecycle.mint({
+          taskId,
+          nodeId: 'n',
+          status: 'pending',
+          cause,
+          retryIndex: 1,
+          containerRunId: null,
+          iteration: 0,
+        })
+        const canceled: string[] = []
+        const result = await resolveSchedulerRunRow({
+          lifecycle,
+          projections,
+          taskId,
+          nodeId: 'n',
+          containerRunId: null,
+          iteration: 0,
+          consumedUpstreamJson: '{}',
+          rows: await projections.list({ taskId, nodeId: 'n', iteration: 0 }),
+          inheritReviewIteration: true,
+          clearAgentOverride: true,
+          trackRetryIndex: true,
+          broadcastPending: null,
+          broadcastCanceled: (id) => canceled.push(id),
+        })
+        expect(result).toMatchObject({ nodeRunId: minted, adopted: false })
+        expect(canceled).toEqual([])
+        const statuses = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId)))
+          .map((r) => [r.id === minted ? 'minted' : r.id, r.status])
+          .sort()
+        expect(statuses).toEqual(
+          [
+            [mkId(1), 'done'],
+            [mkId(2), 'failed'],
+            [mkId(3), 'interrupted'],
+            ['minted', 'pending'],
+          ].sort(),
+        )
+      },
+    )
+
+    test('跨帧：另一帧里被取代的 pending 行不采纳、也不由本帧终结（留给它自己的调度器）', async () => {
+      const db = harness.db
+      const taskId = await seedTask(db)
+      const frame = await seedRun(db, taskId, row(1, { nodeId: 'wrap' }))
+      const otherFrameStale = await seedRun(db, taskId, row(2, { containerRunId: frame }), {
+        status: 'pending',
+      })
+      await seedRun(db, taskId, row(3, { containerRunId: frame }), { status: 'failed' })
+      const lifecycle = new DrizzleNodeRunLifecyclePersistence(db)
+      const projections = new DrizzleNodeExecutionPersistence(db)
+      const canceled: string[] = []
+      const result = await resolveSchedulerRunRow({
+        lifecycle,
+        projections,
+        taskId,
+        nodeId: 'n',
+        containerRunId: null,
+        iteration: 0,
+        consumedUpstreamJson: '{}',
+        rows: await projections.list({ taskId, nodeId: 'n', iteration: 0 }),
+        inheritReviewIteration: true,
+        clearAgentOverride: true,
+        trackRetryIndex: true,
+        broadcastPending: null,
+        broadcastCanceled: (id) => canceled.push(id),
+      })
+      expect(result.nodeRunId).not.toBe(otherFrameStale)
+      expect(canceled).toEqual([])
+      expect((await mergeStateOf(db, otherFrameStale)).status).toBe('pending')
+    })
+  },
+)

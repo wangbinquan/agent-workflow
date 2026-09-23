@@ -95,7 +95,9 @@ const BASELINE: ReadonlyArray<readonly [string, readonly string[]]> = [
   // RFC-328's effect-ledger transaction settles the node and effect together;
   // those two branches broadcast the committed terminal state explicitly,
   // while legacy/no-context execution still broadcasts through `settle(to)`.
-  ['async function runCodeHostCallNode(', ["'running'", 'to', "'failed'", "'done'"]],
+  // RFC-369 实现门 P3-1：取行前奏跳过同帧已被取代的旧 pending 行时广播 canceled（本线不广播 pending
+  // 的理由是「马上转 running」，不适用于这条真实终态）。
+  ['async function runCodeHostCallNode(', ["'canceled'", "'running'", 'to', "'failed'", "'done'"]],
   // 四轮门测试有效性自查纠正:第 4 项 `'status as NodeStatus'` **根本不在
   // runHostNode 里** —— 它是 `buildWorkgroupHooks` 返回对象里的兄弟钩子
   // `broadcastNodeStatus`。旧 `bodyOf` 靠「下一个 function 声明」当边界,而这些兄弟
