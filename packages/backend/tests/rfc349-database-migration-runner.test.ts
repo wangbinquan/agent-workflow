@@ -294,6 +294,19 @@ describe('RFC-349 database migration runner', () => {
     })
   })
 
+  // 2026-09-23：复制阶段撞上迁移会话的 lock_timeout（55P03）此前被记成 copy-permanent，迁移不可续跑；
+  // 真 PG 故障矩阵（rfc349-postgresql-target-faults）的锁超时那一格照出。
+  test('a copy-phase lock timeout (55P03) is a retryable transient, like statement timeout and deadlock', () => {
+    for (const sqlState of ['55P03', '57014', '40P01']) {
+      expect(
+        classifyDatabaseMigrationFailure(
+          Object.assign(new Error('canceling statement due to lock wait'), { code: sqlState }),
+          'copying',
+        ),
+      ).toMatchObject({ category: 'copy-transient', retryable: true })
+    }
+  })
+
   test('classifies phase-specific failures without confusing target and source integrity', () => {
     const classify = (
       code: string,

@@ -53,6 +53,15 @@ users:                created_by               -> users(id)
 
 ## RFC-349/359：周度 `postgresql-evidence` 的真 PG 故障/恢复矩阵在 2026-09-13 的计划运行里红了一条
 
+> **已修（2026-09-23）**：不是 flake，是**自 `b214688e1`（09-04）起的稳定红**。那笔提交有意让迁移会话不受
+> `statement_timeout` 约束（打开目标时置 0），而矩阵的「超时」格仍靠触发器 `pg_sleep(5)` 撞 1s 语句超时——注入
+> 必然落空，`captureFailure` 报「expected … to fail」（栈落在第 319 行）。改为按现行设计注入**锁超时**：另一会话
+> 持有目标表排他锁，复制撞迁移会话保留的 `lock_timeout`（55P03）。这一改又照出真缺陷：复制阶段的 55P03 被分类成
+> `copy-permanent`、迁移不可续跑——已并入瞬态码表（与 57014 / 40P01 同类），单测锁在
+> `rfc349-database-migration-runner`。本地 Bun 1.4.0 + 真 PG 连跑 5 次全绿。
+> **更正**：下表 09-18 那次「绿」是该 job 被 **skipped**（只跑了 HTTP P95 套件），不是矩阵通过；本机 Bun 1.3.13
+> 上这条报的是另一种错（`close()` 的 `Connection closed`），复现必须用仓库钉死的 Bun 1.4.0。
+
 `postgresql-evidence` workflow（`on: schedule: cron '30 3 * * 0'`，不进推送门）2026-09-13 的运行里
 `PostgreSQL crash matrix + 100-client full seed` 这一格失败，失败用例是：
 
@@ -76,12 +85,10 @@ checkout 默认分支 HEAD——不是那个提交引入的。要按失败用例
 | 日期 | 触发 | headSha | 结论 |
 | --- | --- | --- | --- |
 | 2026-09-14 | dispatch ×5 | `56713f376`…`070af2205` | 全红 |
-| 2026-09-18 | dispatch | `e7831c498` | **绿** |
+| 2026-09-18 | dispatch | `e7831c498` | 该 job **skipped**（非绿，见上方更正） |
 | 2026-09-20 | schedule | `5663a01a6` | 红 |
 | 2026-09-23 | dispatch | `6936c133e` | 红（run 35832424184；同 run 其余四个 job 全绿） |
 
-绿过一次、其余都红，更像**时序相关的注入没打中**而不是稳定回归。下一步：先让 `captureFailure` 带上是哪一种
-故障的标签（纯测试改动），再按 `target_sha` 重跑定位。
 
 ## RFC-359：`inspectHumanReview` 是**同步**公共端口，PostgreSQL 上按签名实现不了
 

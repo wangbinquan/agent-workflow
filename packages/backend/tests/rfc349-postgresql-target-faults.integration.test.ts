@@ -308,21 +308,24 @@ describe('RFC-349 real PostgreSQL target fault/resume matrix', () => {
           id: 'agt_fault_timeout',
           name: 'timeout-fault',
         })
-        await installTrigger(adminRuntime, {
-          functionName: 'rfc349_fault_timeout',
-          body: `
-            IF NEW.id = 'agt_fault_timeout' THEN
-              PERFORM pg_sleep(5);
-            END IF;
-          `,
-        })
-        const timeoutError = await captureFailure(target.copyChunk(table, timeout, Date.now()))
-        expect(errorCodes(timeoutError)).toContain('57014')
+        // 迁移会话按设计**不**受语句超时约束（`b214688e1`：建索引等长语句在大库上会被在线的
+        // statement_timeout 误杀，打开目标时就置 0）——这里原先用触发器 pg_sleep 撞 1s 的语句超时，
+        // 自那以后注入必然落空、整条矩阵稳定红。迁移会话仍保留的是 `lock_timeout`（别人挡住我们是
+        // 真故障，值得快失败）：另一个会话持有目标表的排他锁，复制的 INSERT 等锁超时。
+        const lockHolder = await adminRuntime.providerPool().reserve()
+        let timeoutError: unknown
+        try {
+          await lockHolder.unsafe('BEGIN')
+          await lockHolder.unsafe(`LOCK TABLE ${TARGET_TABLE} IN ACCESS EXCLUSIVE MODE`)
+          timeoutError = await captureFailure(target.copyChunk(table, timeout, Date.now()))
+        } finally {
+          await release(lockHolder)
+        }
+        expect(errorCodes(timeoutError)).toContain('55P03')
         expect(classifyDatabaseMigrationFailure(timeoutError, 'copying')).toMatchObject({
           category: 'copy-transient',
           retryable: true,
         })
-        await removeTrigger(adminRuntime, 'rfc349_fault_timeout')
         await assertRolledBack(adminRuntime, timeout)
         await retryAndAssertCommitted(target, adminRuntime, table, timeout)
 

@@ -8525,3 +8525,10 @@ SQLite 专有的东西。判据是整份源码 `not.toContain('sqlite')`，**注
 顺带：摘要红了**不要直接抄新值了事**——先回答「装配出来的东西变了没有」。
 如果只是改名 / 换取用位置，在断言旁写清「装配图一格没动，动的是文本」；
 如果真的多交了一格依赖（本例就是），写清多的是哪一格、为什么是补齐而不是回归。
+
+## 复现 CI 的 PG 失败要用仓库钉死的 Bun 版本（2026-09-23）
+
+`package.json` 钉 `bun@1.4.0`，CI 全部 `bun-version: '1.4.0'`；本机若停在旧版（实测 1.3.13），`bun:sql` 的
+连接关闭语义不同，同一条 `rfc349-postgresql-target-faults` 在本机报 `close()` 的 `Connection closed`、在 CI 报
+注入落空——两处看到的根本不是同一个失败。不想动全局安装时，装一份到临时目录直接用：
+`npm i --prefix <tmp> bun@1.4.0 && <tmp>/node_modules/.bin/bun test <file>`。

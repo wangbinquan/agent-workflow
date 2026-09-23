@@ -235,8 +235,12 @@ export function classifyDatabaseMigrationFailure(
     normalizedMessages.includes('connection terminated') ||
     normalizedMessages.includes('idle-in-transaction') ||
     codes.some((candidate) => /^08[0-9a-z]{3}$/i.test(candidate)) ||
+    // 55P03 lock_not_available：迁移会话保留了 `lock_timeout`（别人挡住独占目标是真故障、值得快失败），
+    // 但快失败不等于永久失败——对方放手后续跑即可，与 57014 / 40P01 同类。
     codes.some((candidate) =>
-      ['40001', '40P01', '57014', '57P01', '57P02', '57P03'].includes(candidate.toUpperCase()),
+      ['40001', '40P01', '55P03', '57014', '57P01', '57P02', '57P03'].includes(
+        candidate.toUpperCase(),
+      ),
     )
 
   if (phase === 'copying') {
