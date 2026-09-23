@@ -89,7 +89,9 @@ const BASELINE: ReadonlyArray<readonly [string, readonly string[]]> = [
     'async function dispatchFanoutAggregatorAttempt(',
     ["'done'", "'pending'", "'failed'", 'result.status', "'failed'"],
   ],
-  ['async function runScriptNode(', ["'pending'", "'failed'", "'pending'"]],
+  // RFC-369 §4.5：取行前奏跳过同帧已被取代的旧 pending 行、把它终结为 canceled 并广播
+  // （`broadcastCanceled`，proposal §7 能力影响清单「调度器采纳同帧较老的 pending 行」）。
+  ['async function runScriptNode(', ["'pending'", "'canceled'", "'failed'", "'pending'"]],
   // RFC-328's effect-ledger transaction settles the node and effect together;
   // those two branches broadcast the committed terminal state explicitly,
   // while legacy/no-context execution still broadcasts through `settle(to)`.
@@ -103,7 +105,11 @@ const BASELINE: ReadonlyArray<readonly [string, readonly string[]]> = [
   // ⚠️ L4 一直缺席（五轮门终局对账点名）：design §7 T1-④ 点名的**第一项**就是它，
   // 而它是本 RFC 唯一做了真手术的线（拆成 outer + 模式 B 重试窗口）。基线在
   // `d0f6333c` 上按括号配平的 `bodyOf` 实测导出，与其余四线同法。
-  ['async function runAgentSingleNode(', ["'pending'", "'pending'", 'lastResult.status']],
+  // RFC-369 §4.5：同上，取行前奏新增一次 canceled 广播。
+  [
+    'async function runAgentSingleNode(',
+    ["'pending'", "'canceled'", "'pending'", 'lastResult.status'],
+  ],
   ['async function runOutputNode(', ["'done'"]],
   ['async function runInputNode(', ["'done'"]],
   ['async function runCrossClarifyNode(', ["'done'"]],
