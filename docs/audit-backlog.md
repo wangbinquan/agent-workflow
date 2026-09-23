@@ -61,6 +61,9 @@ users:                created_by               -> users(id)
 > `rfc349-database-migration-runner`。本地 Bun 1.4.0 + 真 PG 连跑 5 次全绿。
 > **更正**：下表 09-18 那次「绿」是该 job 被 **skipped**（只跑了 HTTP P95 套件），不是矩阵通过；本机 Bun 1.3.13
 > 上这条报的是另一种错（`close()` 的 `Connection closed`），复现必须用仓库钉死的 Bun 1.4.0。
+> **故障矩阵修好后 job 第一次跑到崩溃续跑矩阵**，又撞一条过时判据：续跑成功（finalized、用户行在、归档表已删），
+> 但期望表数写死 `184`、schema 已有 192 张——改为取自逻辑合同（`ab5049419`）。此后 postgresql-evidence
+> 全部 job 绿（run 35843898830，含故障矩阵、26 个崩溃点、weekly 档大迁移与 180s 双引擎 soak）。
 
 `postgresql-evidence` workflow（`on: schedule: cron '30 3 * * 0'`，不进推送门）2026-09-13 的运行里
 `PostgreSQL crash matrix + 100-client full seed` 这一格失败，失败用例是：
