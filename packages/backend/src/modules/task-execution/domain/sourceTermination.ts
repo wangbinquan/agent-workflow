@@ -19,8 +19,20 @@ export type WebhookTerminalCause = Readonly<{
   streamRevision: number
 }>
 
+/**
+ * 资源上限 / 空闲收割发起的取消。原因文案随取消**同一次写入**落下——此前收割方先按「用户取消」
+ * 取消、事后再改写原因，中间几秒里任务看起来像用户取消的，数字员工会据此判成 `stopped`、
+ * 不再重试（RFC-368 实现门 P2-1，用户 2026-09-23 裁决：原因一次写对）。
+ */
+export type ResourceReapStopCause = Readonly<{
+  kind: 'resource-reaped'
+  summary: string
+  message: string
+}>
+
 export type TaskStopCause =
   | Readonly<{ kind: 'user' }>
+  | ResourceReapStopCause
   | Readonly<{ kind: 'daemon-shutdown' }>
   | Readonly<{
       kind: 'parent-cascade'
@@ -41,6 +53,7 @@ export type TaskStopProjection = Readonly<{
     | 'canceled-by-parent-cascade'
     | 'webhook-mr-closed'
     | 'webhook-mr-merged'
+    | 'resource-reaped'
   summary: string
 }>
 
@@ -50,6 +63,8 @@ export function taskStopProjection(cause: TaskStopCause): TaskStopProjection {
       return { code: 'canceled-by-user', summary: 'canceled by user' }
     case 'daemon-shutdown':
       return { code: 'daemon-shutdown', summary: 'interrupted by daemon shutdown' }
+    case 'resource-reaped':
+      return { code: 'resource-reaped', summary: cause.summary }
     case 'parent-cascade':
       return { code: 'canceled-by-parent-cascade', summary: 'canceled by parent task' }
     case 'webhook-terminal':

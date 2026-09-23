@@ -1,5 +1,28 @@
 # 当前执行状态
 
+## 2026-09-23 RFC-368 Reaction 执行合同切换 —— ✅ Done
+
+RFC-294 W4-E9 的 E9-C。数字员工 → TaskExecution 的执行合同从「字符串 participant + `execution-launch`
+outbox」切到 DE-owned 的 typed `ReactionExecutionPortV1` + 同事务 admission 参与者 + DE 自己的派发侧表，
+三刀全部落地、CI 绿（提交序列见 `design/RFC-368-reaction-execution-cutover/plan.md §6`）。
+
+- **结构性解掉「一次 Reaction 起两个任务」**：执行身份在数字员工 claim 事务里经 TE 的 admission 日志
+  预分配，崩溃重放按 operation 命中同一个 id、TE 按 id 发现任务已存在就返回。E9-C 前置小修
+  `56bb82b50` 的按 round 反查兜底随旧合同删除；回归锁 `rfc294-e9c-reaction-launch-crash-window`
+  按新合同端到端重建（两个崩溃窗口，任务表恰好一行）。
+- **两套重试判据**（round 级 / 派发级）抽成纯函数逐值对拍；预算收敛写回 round；反馈与诊断
+  content-addressed 存档、只传 ref。取消单列 `stopped`（不耗重试预算），终止案例会停掉在跑的 agent。
+- **DE↔TE 6 条双向边销账**，旧合同、旧适配器、outbox 臂全部删除。
+- **实施期用户裁决**：D11 合同类型去 `InTx` 后缀；D12 在途 outbox 行改为启动后第一次派发时一次性收编
+  （PG 迁移序列表达不了数据迁移）；D13 切换前已在跑的 round 由 TE 按 executionRef 放行；实现门 P2-1
+  「收割取消原因一次写对」——`TaskStopCause` 增 `resource-reaped`，资源上限 / 空闲收割不再先按用户取消
+  落库再改写原因（中间几秒会被数字员工误判成用户取消、不再重试）。
+- **已知一次性残余**：升级前那一刻恰有旧臂 launch 中途崩溃的 `claimed` 行，收编后按新合同重派、预分配
+  新执行身份，旧进程可能已建出的那个任务认不出来（design §5.2）。
+- **门**：设计门 r1 FAIL/9 P1 已回写；实现门 PASS-WITH-FINDINGS（1 P1 / 2 P2 / 4 P3）已全部处置并补
+  回归锁 `tests/rfc368-implementation-gate.test.ts`（逐项撤修复验红）。两门均因 Codex 额度用尽改用
+  Claude 子代理、只审功能。
+
 ## 2026-09-22 E9-C 前置小修：一次 Reaction 不得启动出两个任务
 
 用户按 RFC-294 下一步选了 E9-C，并要求「先看证据再决定怎么修」。先复现、给证据，再按用户裁决
@@ -316,8 +339,8 @@ design.md §11.1，实现期不要把 AC 改成断言 `memories` 表。
 
 ## 进行中 RFC
 
-- **[RFC-368 Reaction 执行合同切换](design/RFC-368-reaction-execution-cutover/proposal.md)（Draft，
-  2026-09-22 落档，待用户批准进入实现）** —— RFC-294 W4-E9 的 E9-C，按 `RFC-361 plan §2` 的后继
+- **[RFC-368 Reaction 执行合同切换](design/RFC-368-reaction-execution-cutover/proposal.md)（✅ Done
+  2026-09-23，见本文件顶部；以下为落档时的记录）** —— RFC-294 W4-E9 的 E9-C，按 `RFC-361 plan §2` 的后继
   顺序（E9-B 已由 RFC-365 关闭）。三件套已写完；**尚未动任何生产代码**。
   **设计门 r1 已跑**（Codex 额度用尽到 9/27，按 dev-gotchas 与 RFC-367 先例改用 Claude 子代理）：
   **FAIL / 9 P1 + 6 P2 + 2 P3，已逐条回写三件套**（处置记录见 `plan.md §5`）。核心教训：

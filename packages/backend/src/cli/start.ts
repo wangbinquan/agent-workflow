@@ -3139,7 +3139,8 @@ async function composeSqliteProviderSession(
   // AbortController / driver stop ticket / WS 广播，Worker 线程拿不到。
   const idleTimeoutOperations = composeTaskIdleTimeoutOperations({
     persistence: createSqliteTaskIdleTimeoutPersistence(db),
-    cancelTask: (taskId: string) => composeTaskCancellation(db).cancel(taskId),
+    cancelTask: (taskId, reason) =>
+      composeTaskCancellation(db).cancel(taskId, { kind: 'resource-reaped', ...reason }),
   })
   const idleTimeoutRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'task-idle-timeout',

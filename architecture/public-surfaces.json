@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1071,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20890,
+    "recursiveFields": 20903,
     "symbols": 1011
   },
   "entries": [
@@ -134521,7 +134521,7 @@
       "budget": {
         "maxMethods": 7,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 32,
+        "maxTransitiveLeafFields": 34,
         "maxUnionVariants": 14
       },
       "consumerEdgeIds": [
@@ -134532,6 +134532,20 @@
       "direction": "offered",
       "entrypoint": "operations",
       "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:d257804213ee3e465a82"
+          ],
+          "fieldPath": "cancelTask.$parameter:reason.message",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d257804213ee3e465a82"
+          ],
+          "fieldPath": "cancelTask.$parameter:reason.summary",
+          "type": "string"
+        },
         {
           "consumerEdgeIds": [],
           "fieldPath": "cancelTask.$parameter:taskId",
@@ -141185,6 +141199,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:cancel.$parameter:input.cause.$variant:2.kind",
+          "type": "'resource-reaped'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:cancel.$parameter:input.cause.$variant:2.message",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:cancel.$parameter:input.cause.$variant:2.summary",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:cancel.$parameter:input.taskId",
           "type": "string"
         },
@@ -141203,7 +141232,7 @@
         {
           "consumerEdgeIds": [],
           "name": "cancel",
-          "signatureDigest": "sha256:f625f771b245c4a0d6b5c613a159e953464ffda922d2fce678d04e8cbd3ce90b"
+          "signatureDigest": "sha256:bfc9bb28de8974ce2eed3ea1aa601c1bef7dc148481592570d275f6fc3a0e701"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#TaskCancellationCommand",
@@ -141211,7 +141240,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:edee2b02a7435f67020f9d4ae7aba979f390356a084c1d64718aeb38aec4a4e3",
+      "signatureDigest": "sha256:b935f9b8d98da9f11a9ec826916b6f1945b7c62a60323280cbc3cd24ba64a73a",
       "status": "target-context-current-surface",
       "symbol": "TaskCancellationCommand",
       "transaction": "own-tx",
@@ -164237,75 +164266,96 @@
             "import:066c853fca987668f726"
           ],
           "fieldPath": "$variant:1.kind",
-          "type": "'daemon-shutdown'"
+          "type": "'resource-reaped'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:066c853fca987668f726"
+          ],
+          "fieldPath": "$variant:1.message",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:066c853fca987668f726"
+          ],
+          "fieldPath": "$variant:1.summary",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
             "import:066c853fca987668f726"
           ],
           "fieldPath": "$variant:2.kind",
-          "type": "'parent-cascade'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:066c853fca987668f726"
-          ],
-          "fieldPath": "$variant:2.parentTaskId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:066c853fca987668f726"
-          ],
-          "fieldPath": "$variant:2.rootCause.deliveryId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:066c853fca987668f726"
-          ],
-          "fieldPath": "$variant:2.rootCause.streamRevision",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:2.rootCause.terminal.$variant:0",
-          "type": "'closed'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:2.rootCause.terminal.$variant:1",
-          "type": "'merged'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:066c853fca987668f726"
-          ],
-          "fieldPath": "$variant:3.deliveryId",
-          "type": "string"
+          "type": "'daemon-shutdown'"
         },
         {
           "consumerEdgeIds": [
             "import:066c853fca987668f726"
           ],
           "fieldPath": "$variant:3.kind",
+          "type": "'parent-cascade'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:066c853fca987668f726"
+          ],
+          "fieldPath": "$variant:3.parentTaskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:066c853fca987668f726"
+          ],
+          "fieldPath": "$variant:3.rootCause.deliveryId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:066c853fca987668f726"
+          ],
+          "fieldPath": "$variant:3.rootCause.streamRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:3.rootCause.terminal.$variant:0",
+          "type": "'closed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:3.rootCause.terminal.$variant:1",
+          "type": "'merged'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:066c853fca987668f726"
+          ],
+          "fieldPath": "$variant:4.deliveryId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:066c853fca987668f726"
+          ],
+          "fieldPath": "$variant:4.kind",
           "type": "'webhook-terminal'"
         },
         {
           "consumerEdgeIds": [
             "import:066c853fca987668f726"
           ],
-          "fieldPath": "$variant:3.streamRevision",
+          "fieldPath": "$variant:4.streamRevision",
           "type": "number"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:3.terminal.$variant:0",
+          "fieldPath": "$variant:4.terminal.$variant:0",
           "type": "'closed'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:3.terminal.$variant:1",
+          "fieldPath": "$variant:4.terminal.$variant:1",
           "type": "'merged'"
         }
       ],
@@ -164340,7 +164390,7 @@
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 13
+        "maxUnionVariants": 15
       },
       "consumerEdgeIds": [
         "import:059db0d841a2f75e2314"
@@ -164362,75 +164412,96 @@
             "import:059db0d841a2f75e2314"
           ],
           "fieldPath": "$call.$parameter:cause.$variant:1.kind",
-          "type": "'daemon-shutdown'"
+          "type": "'resource-reaped'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:059db0d841a2f75e2314"
+          ],
+          "fieldPath": "$call.$parameter:cause.$variant:1.message",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:059db0d841a2f75e2314"
+          ],
+          "fieldPath": "$call.$parameter:cause.$variant:1.summary",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
             "import:059db0d841a2f75e2314"
           ],
           "fieldPath": "$call.$parameter:cause.$variant:2.kind",
-          "type": "'parent-cascade'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:059db0d841a2f75e2314"
-          ],
-          "fieldPath": "$call.$parameter:cause.$variant:2.parentTaskId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:059db0d841a2f75e2314"
-          ],
-          "fieldPath": "$call.$parameter:cause.$variant:2.rootCause.deliveryId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:059db0d841a2f75e2314"
-          ],
-          "fieldPath": "$call.$parameter:cause.$variant:2.rootCause.streamRevision",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:cause.$variant:2.rootCause.terminal.$variant:0",
-          "type": "'closed'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:cause.$variant:2.rootCause.terminal.$variant:1",
-          "type": "'merged'"
-        },
-        {
-          "consumerEdgeIds": [
-            "import:059db0d841a2f75e2314"
-          ],
-          "fieldPath": "$call.$parameter:cause.$variant:3.deliveryId",
-          "type": "string"
+          "type": "'daemon-shutdown'"
         },
         {
           "consumerEdgeIds": [
             "import:059db0d841a2f75e2314"
           ],
           "fieldPath": "$call.$parameter:cause.$variant:3.kind",
+          "type": "'parent-cascade'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:059db0d841a2f75e2314"
+          ],
+          "fieldPath": "$call.$parameter:cause.$variant:3.parentTaskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:059db0d841a2f75e2314"
+          ],
+          "fieldPath": "$call.$parameter:cause.$variant:3.rootCause.deliveryId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:059db0d841a2f75e2314"
+          ],
+          "fieldPath": "$call.$parameter:cause.$variant:3.rootCause.streamRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:cause.$variant:3.rootCause.terminal.$variant:0",
+          "type": "'closed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:cause.$variant:3.rootCause.terminal.$variant:1",
+          "type": "'merged'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:059db0d841a2f75e2314"
+          ],
+          "fieldPath": "$call.$parameter:cause.$variant:4.deliveryId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:059db0d841a2f75e2314"
+          ],
+          "fieldPath": "$call.$parameter:cause.$variant:4.kind",
           "type": "'webhook-terminal'"
         },
         {
           "consumerEdgeIds": [
             "import:059db0d841a2f75e2314"
           ],
-          "fieldPath": "$call.$parameter:cause.$variant:3.streamRevision",
+          "fieldPath": "$call.$parameter:cause.$variant:4.streamRevision",
           "type": "number"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:cause.$variant:3.terminal.$variant:0",
+          "fieldPath": "$call.$parameter:cause.$variant:4.terminal.$variant:0",
           "type": "'closed'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:cause.$variant:3.terminal.$variant:1",
+          "fieldPath": "$call.$parameter:cause.$variant:4.terminal.$variant:1",
           "type": "'merged'"
         },
         {
@@ -164459,6 +164530,11 @@
           "type": "'webhook-mr-merged'"
         },
         {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.code.$variant:5",
+          "type": "'resource-reaped'"
+        },
+        {
           "consumerEdgeIds": [
             "import:059db0d841a2f75e2314"
           ],
@@ -164473,7 +164549,7 @@
         {
           "consumerEdgeIds": [],
           "name": "$call",
-          "signatureDigest": "sha256:c14ccf5217ef96dd416fb78db939573e7ea120ef01be85f4fa38e48194bc6221"
+          "signatureDigest": "sha256:2ea98c3fbdffe07ddff3c8ef32a810c90759570a2f9faaf499c2c9aefb738230"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
@@ -164533,6 +164609,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "code.$variant:4",
           "type": "'webhook-mr-merged'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "code.$variant:5",
+          "type": "'resource-reaped'"
         },
         {
           "consumerEdgeIds": [],
@@ -165129,7 +165210,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:df6b4ef07776aac8c420fa3bebce39c3f2dd3d857e1e017d1547fa86c78b4711",
+  "sourceDigest": "sha256:317ee95d0c8b52aa7b4ca0df132dd5f7d34beaa071450d755ad206bf32e68645",
   "targetContexts": [
     "collaboration",
     "development-automation",

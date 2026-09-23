@@ -7,7 +7,7 @@
     "crossContextImports": 5407,
     "facades": 291,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 24971,
+    "moduleSymbolOwners": 24972,
     "mutationEntrypoints": 1726,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 1011,
@@ -157,5 +157,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:df6b4ef07776aac8c420fa3bebce39c3f2dd3d857e1e017d1547fa86c78b4711"
+  "sourceDigest": "sha256:317ee95d0c8b52aa7b4ca0df132dd5f7d34beaa071450d755ad206bf32e68645"
 }

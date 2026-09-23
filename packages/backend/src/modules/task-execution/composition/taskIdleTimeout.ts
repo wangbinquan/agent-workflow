@@ -39,7 +39,7 @@ export type {
  */
 export function composeTaskIdleTimeoutOperations(input: {
   readonly persistence: TaskIdleTimeoutPersistence
-  readonly cancelTask: (taskId: string) => Promise<void>
+  readonly cancelTask: TaskIdleTimeoutOperations['cancelTask']
   readonly killRunProcessTree?: TaskIdleTimeoutOperations['killRunProcessTree']
 }): TaskIdleTimeoutOperations {
   return Object.freeze({

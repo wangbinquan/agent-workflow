@@ -72,8 +72,14 @@ export interface IdleTimeoutAuditRecord {
 
 export interface TaskIdleTimeoutOperations {
   readonly persistence: TaskIdleTimeoutPersistence
-  /** 由 task-execution composition 注入；application 不知道是哪个 provider。 */
-  readonly cancelTask: (taskId: string) => Promise<void>
+  /**
+   * 由 task-execution composition 注入；application 不知道是哪个 provider。带上**真实原因**取消，
+   * 状态与原因同一次写入落下（RFC-368 实现门 P2-1）。
+   */
+  readonly cancelTask: (
+    taskId: string,
+    reason: { readonly summary: string; readonly message: string },
+  ) => Promise<void>
   /** 注入 `killStaleRunProcessTree`（带 PID 复用窗口 + 二进制身份门）。 */
   readonly killRunProcessTree: (run: IdleTimeoutRunSnapshot) => Promise<StaleRunKillOutcome>
 }

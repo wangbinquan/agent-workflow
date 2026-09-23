@@ -1,6 +1,6 @@
 # RFC-368 任务分解
 
-**状态**：**Approved（2026-09-22 用户批准实施）**，设计门 r1 的 9 P1 / 6 P2 / 2 P3 已逐条回写
+**状态**：**Done（2026-09-23）**——三刀全部落地、CI 绿；实现门处置见 plan.md §6（设计门 r1 的 9 P1 / 6 P2 / 2 P3 已逐条回写）
 **读法**：先 [proposal.md](./proposal.md) 再 [design.md](./design.md)。
 
 ---
@@ -94,3 +94,26 @@ FAIL → 9 P1 / 6 P2 / 2 P3，全部已回写：
 | P2-6 6 条未声明的功能性偏离 | design §2.2 的 D5–D10；其中 `stopped` 态改为**实施**（G7） |
 | P3-1 `cancel` 零调用方 | 用户裁决顺带接上（T14） |
 | P3-2 `closeClaim` 调用点不完整 | §4.2 列出六个收口点；T13 |
+
+## 6. 实施记录与实现门处置（2026-09-23）
+
+**提交**：刀 1 `a6fb97c24`（+ `375094137` 修红）；刀 2 T6 `9be528d80` → T7 `bae41a843` → T8/T11/T13
+`b2242a00c` → T9 `faca18715` → T10/T12/T14 `5f5fcd76b`；刀 3（T5b/T17/T18/T19）`6bdd753a2`；
+实现门修复见本节末提交。各笔 CI 绿（中间几笔的 run 被下一笔 push 顶掉，由覆盖它们的后继 run 兜底）。
+
+**实施期新增的偏离**（均呈用户裁决）：D11 合同类型去掉 `InTx` 后缀；D12 T5b 改为启动后第一次派发时
+一次性收编（PG 迁移序列表达不了数据迁移）；D13 TE 在 admission 日志查不到行时按 executionRef 放行
+（切换前已在跑的 round）。详见 design.md §2.2 / §5.2。
+
+**实现门**（Codex 额度用尽到 9/27，改 Claude 子代理，只审功能）：PASS-WITH-FINDINGS，全部已处置：
+
+| finding | 处置 |
+| --- | --- |
+| P1-1 收编失败的 rejected promise 被永久缓存，此后每个 cycle 在派发处抛、inspect 跑不到，全部 round 卡死 | 失败时清缓存，下一次派发重试收编 |
+| P2-1 资源上限 / 空闲收割先按「用户取消」落库、事后改写原因，中间几秒被数字员工误判成 stopped、不再重试 | **用户裁决：原因一次写对**。`TaskStopCause` 增 `resource-reaped`（带 summary/message），两个收割方的 `cancelTask` 端口带真实原因，三个根以它接线；状态与原因同一次 CAS 落下 |
+| P2-2 launch 进行中 / 崩溃重放期间终止案例，agent 停不掉 | `terminate` 也取消 planned 且已有执行身份的 round；launch 返回后复查案例终止即取消；case-terminal 短路先取消已预分配的执行 |
+| P3-1 已终止案例再收掉残留 round 时 `terminalAt` 被改写 | `settleRound` 在案例已终止时保留原 `terminalAt` |
+| P3-2 launch 成功后 `markRoundRunning` 抛错被当成派发失败 | 把 `markRoundRunning` 移出派发失败判定；抛错交给租约过期后的幂等重放 |
+| P3-3 epoch 冲突消耗派发预算，与 design §7 不一致 | `employee-reaction-claim-stale` 按 idle 处理 |
+| P3-4 测试缺口 | `tests/rfc368-implementation-gate.test.ts` 补齐（P1-1 / P2-1 / P2-2 / P3-1 / P3-3 / AC-3 数字员工侧），逐项撤掉修复验红。人审六态的投影仍只有源码层兜底（投影需要完整 type descriptor），双引擎的真实闸门状态由 `rfc359-w12-digital-employee-human-review-parity` 与 `rfc310-digital-employee-human-review-system-mock-e2e` 覆盖 |
+

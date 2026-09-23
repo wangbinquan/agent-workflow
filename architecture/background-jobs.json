@@ -58,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3211",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3212",
       "kind": "register-call",
-      "line": 3211,
+      "line": 3212,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3259",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3260",
       "kind": "global-setter",
-      "line": 3259,
+      "line": 3260,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -8722,7 +8722,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#$setTimeout:855",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#$setTimeout:857",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -8736,7 +8736,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:855",
+      "symbol": "$setTimeout:857",
       "targetContext": "task-execution"
     },
     {
@@ -12777,5 +12777,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:df6b4ef07776aac8c420fa3bebce39c3f2dd3d857e1e017d1547fa86c78b4711"
+  "sourceDigest": "sha256:317ee95d0c8b52aa7b4ca0df132dd5f7d34beaa071450d755ad206bf32e68645"
 }

@@ -1445,18 +1445,23 @@ export async function composePostgresqlApplication(
     },
   })
   const taskLaunchKernel = taskExecutionProvider.routeLaunch.workflow
+  // RFC-368 实现门 P2-1：资源上限与空闲收割都带真实原因取消（`resource-reaped`），状态与原因
+  // 同一次写入落下——此前按 `user` 取消、事后改写原因，中间几秒像是用户取消的。
   const resourceLimitOperations = composePostgresqlResourceLimitOperations({
     db: input.db,
-    cancelTask: (taskId) =>
-      taskExecutionProvider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
+    cancelTask: (taskId, reason) =>
+      taskExecutionProvider.cancellation.cancel({
+        taskId,
+        cause: { kind: 'resource-reaped', ...reason },
+      }),
   })
-  // RFC-350：收割器与资源上限走同一条终结路径（cancel + 覆盖专用原因文案）；
-  // `user` 是 TaskCancellationCommand 今天仅有的非级联 cause，用户可见的原因由
-  // `writeIdleTimeoutReason` 覆盖出来，与 limits 先例完全同形。
   const taskIdleTimeoutOperations = composeTaskIdleTimeoutOperations({
     persistence: createPostgresqlTaskIdleTimeoutPersistence(input.db),
-    cancelTask: (taskId) =>
-      taskExecutionProvider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
+    cancelTask: (taskId, reason) =>
+      taskExecutionProvider.cancellation.cancel({
+        taskId,
+        cause: { kind: 'resource-reaped', ...reason },
+      }),
   })
   // RFC-368 T17 —— Reaction 执行走 `ReactionExecutionPortV1` + 同事务 admission 参与者。
   const employeeExecution = composeReactionExecutionProvider({

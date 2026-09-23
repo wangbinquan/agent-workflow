@@ -826,10 +826,7 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 257,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-368 T5b（2026-09-23）一次性 +1：`digital-employee/infrastructure/runtimeStore.ts` 新增 `adoptLegacyReactionLaunches` 的事务回调——一次性收编切换前在途的 `execution-launch` outbox 行（搬成派发行、反馈存档、plan 写回、删行），全部是本库写入、无外部副作用（用户裁决：启动时一次性回填，PG 迁移序列表达不了数据迁移）。下一笔不涨的提交退役本许可。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
@@ -905,12 +902,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24971,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24972,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-368 实现门 P2-1（2026-09-23）一次性 +1：`task-execution/domain/sourceTermination.ts` 新增导出类型 `ResourceReapStopCause`——资源上限 / 空闲收割带真实原因取消，状态与原因同一次写入落下（用户裁决：原因一次写对）。下一笔不涨的提交退役本许可。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:df6b4ef07776aac8c420fa3bebce39c3f2dd3d857e1e017d1547fa86c78b4711",
+    "sourceDigest": "sha256:317ee95d0c8b52aa7b4ca0df132dd5f7d34beaa071450d755ad206bf32e68645",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -923,8 +923,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "5f5fcd76b753cbdaea1fd070fc6f1bfab66215de",
-    "contentDigest": "sha256:3575b011fc8b1032f7deadf191c56d25ea26c6efcbc767ca69780e366dfd69b6",
+    "currentSnapshotSha": "6bdd753a218f36b6e895f6c7d833be3da5f4966e",
+    "contentDigest": "sha256:96a4253230f0af6621bbb8471be0804d11bc88f988a387b09b9f91b2d086db72",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

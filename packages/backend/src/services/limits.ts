@@ -67,12 +67,13 @@ export async function enforceLimits(
     if (reason === null) continue
 
     try {
-      await operations.cancelTask(t.id)
+      await operations.cancelTask(t.id, reason)
     } catch {
       // Already terminal between read and cancel; ignore.
     }
-    // cancelTask sets a generic 'canceled by user' summary; overwrite with the
-    // limit-specific reason so the UI surfaces it. RFC-097 (audit S-14): only
+    // The cancel above already lands the limit-specific reason in the same write
+    // (RFC-368 implementation gate P2-1). This rewrite stays for the race where a
+    // concurrent user cancel landed first: RFC-097 (audit S-14): only
     // on rows where the cancel actually landed — a task that reached
     // done/failed between the scan and the cancel keeps its real terminal
     // message instead of being painted over with limit copy.

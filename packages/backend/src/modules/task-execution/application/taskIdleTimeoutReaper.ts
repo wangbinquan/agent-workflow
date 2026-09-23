@@ -161,7 +161,7 @@ async function reapTree(
   let reaped = 0
   for (const taskId of ordered) {
     try {
-      await operations.cancelTask(taskId)
+      await operations.cancelTask(taskId, reason)
     } catch (err) {
       // 已终态（自身级联 / 竞态里别的写手先到）不是错误：原因文案的写入门会再判一次
       // 「这行到底是不是我们取消的」，不会覆盖别人的真实原因。

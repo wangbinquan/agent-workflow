@@ -12,6 +12,7 @@ import {
   reactionExecutionAdmissions,
 } from '@/db/schema'
 import type { ReactionArtifactPersistence } from '@/modules/digital-employee/application/ports/reactionArtifacts'
+import type { RuntimeCasePersistence } from '@/modules/digital-employee/application/ports/runtimeStore'
 import { DigitalEmployeeRuntimeService } from '@/modules/digital-employee/application/runtimeService'
 import type {
   PreparedReactionExecutionV1,
@@ -192,6 +193,8 @@ export function reactionService(
     readonly workerId?: string
     readonly handoffOnExhausted?: boolean
     readonly artifacts?: ReactionArtifactPersistence
+    /** 包一层 store（注入故障用）。 */
+    readonly wrapStore?: (store: RuntimeCasePersistence) => RuntimeCasePersistence
   },
 ): DigitalEmployeeRuntimeService {
   const policy = {
@@ -211,13 +214,15 @@ export function reactionService(
     publishedBy: null,
   }
   return new DigitalEmployeeRuntimeService({
-    store: createRuntimePersistence(db, {
-      reactionAdmission: (tx) =>
-        composeReactionExecutionAdmissionParticipantInTx(createReactionAdmissionStore(tx), {
-          now: input.now,
-          mintExecutionRef: input.mint,
-        }),
-    }),
+    store: (input.wrapStore ?? ((store) => store))(
+      createRuntimePersistence(db, {
+        reactionAdmission: (tx) =>
+          composeReactionExecutionAdmissionParticipantInTx(createReactionAdmissionStore(tx), {
+            now: input.now,
+            mintExecutionRef: input.mint,
+          }),
+      }),
+    ),
     authoringStore: {
       getExecutionPolicyRevision: async () => policy,
       getCurrentExecutionPolicy: async () => policy,

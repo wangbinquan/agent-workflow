@@ -1,6 +1,6 @@
 # RFC-368 技术设计：Reaction 执行合同切换
 
-**状态**：**Approved（2026-09-22）**
+**状态**：**Done（2026-09-23）**——三刀全部落地、CI 绿；实现门处置见 plan.md §6
 **读法**：先读 [proposal.md](./proposal.md)；上游规范是
 [RFC-294 design §3.5](../RFC-294-backend-layered-target-architecture/design.md)，本文件写的是
 **实际实施的子集**与逐条偏离。

@@ -2105,7 +2105,14 @@ export function createRuntimePersistence(
               nextState === 'blocked'
                 ? (input.blockReason ?? current.blockReason ?? 'reaction failed')
                 : null,
-            terminalAt: nextState === 'terminal' ? input.now : null,
+            // 已经终止的案例再结算一轮（终止后收掉残留 round）时保留真正终止的时刻，
+            // 不改成 round 被收掉的时刻（RFC-368 实现门 P3-1）。
+            terminalAt:
+              nextState === 'terminal'
+                ? current.state === 'terminal'
+                  ? current.terminalAt
+                  : input.now
+                : null,
             writerGeneration:
               nextState === 'terminal' && current.state !== 'terminal'
                 ? current.writerGeneration + 1

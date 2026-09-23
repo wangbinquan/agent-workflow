@@ -1,6 +1,6 @@
 # RFC-368 Reaction 执行合同切换（RFC-294 W4-E9 的 E9-C）
 
-**状态**：**Approved（2026-09-22 用户批准实施）**
+**状态**：**Done（2026-09-23）**——三刀全部落地、CI 绿；实现门处置见 plan.md §6
 **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md) W4-E9
 **前序**：RFC-361（E9-B 的 EC provider，Done）、RFC-365（Event target provider，Done）、
 `56bb82b50`（E9-C 前置小修：launch 幂等，已上线）

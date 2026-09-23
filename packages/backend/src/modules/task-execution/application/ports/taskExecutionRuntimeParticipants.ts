@@ -13,6 +13,11 @@ export interface ChildTaskLifecycleParticipant {
     readonly cause:
       | Readonly<{ readonly kind: 'user' }>
       | Readonly<{ readonly kind: 'parent-cascade'; readonly parentTaskId: string }>
+      | Readonly<{
+          readonly kind: 'resource-reaped'
+          readonly summary: string
+          readonly message: string
+        }>
   }): Promise<void>
   resume(
     input: { readonly taskId: string; readonly runtime: ChildResumeRuntime },

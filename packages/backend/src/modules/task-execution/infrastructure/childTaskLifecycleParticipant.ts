@@ -48,7 +48,7 @@ import type { TaskExecutionPersistence } from '../application/ports/taskExecutio
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type { ProviderTaskExecutionModule } from '../composition'
 import type { TaskExecutionPostCommitEventRef } from '../domain/postCommitEventRef'
-import { taskStopProjection } from '../domain/sourceTermination'
+import { taskStopProjection, type ResourceReapStopCause } from '../domain/sourceTermination'
 import { DrizzleTaskRollbackQueries } from './taskRollbackQueries'
 import { submitTaskContinuation } from './taskContinuationAdmission'
 import { terminalizeTaskExecutionIntentsInTx } from './taskExecutionIntentTerminalPersistence'
@@ -614,7 +614,8 @@ export async function cancelTaskProjection(
   taskId: string,
   cause:
     | Readonly<{ readonly kind: 'user' }>
-    | Readonly<{ readonly kind: 'parent-cascade'; readonly parentTaskId: string }>,
+    | Readonly<{ readonly kind: 'parent-cascade'; readonly parentTaskId: string }>
+    | ResourceReapStopCause,
   options: TaskCancelOptions = {},
 ): Promise<void> {
   // RFC-359 AC-1（第 11 刀第 1 步照出的真分叉）：**取消与评审写入共用任务级 FIFO**。
@@ -774,7 +775,8 @@ export async function cancelTaskProjection(
           status: 'canceled',
           finishedAt: now,
           errorSummary: projection.summary,
-          errorMessage: projection.code,
+          // 收割的详细原因（超了多少、静默多久）随取消一起落下，不再事后改写。
+          errorMessage: cause.kind === 'resource-reaped' ? cause.message : projection.code,
           ...(prune.prune ? { workspacePruningAt: now, workspacePruneCause: prune.cause } : {}),
           lifecycleEventRevision: nextRevision,
         })

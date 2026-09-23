@@ -43,7 +43,14 @@ export interface ResourceLimitPersistence {
  */
 export interface ResourceLimitOperations {
   readonly persistence: ResourceLimitPersistence
-  readonly cancelTask: (taskId: string) => Promise<void>
+  /**
+   * 带上**真实原因**取消：状态与原因文案同一次写入落下，不再先按「用户取消」落库、事后改写
+   * （RFC-368 实现门 P2-1——中间那几秒会让数字员工把超时误判成用户取消、不再重试）。
+   */
+  readonly cancelTask: (
+    taskId: string,
+    reason: { readonly summary: string; readonly message: string },
+  ) => Promise<void>
 }
 
 /** Aggregate expressions are not column-decoded by every provider driver. */

@@ -630,7 +630,11 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // admission 日志），交给 `composeDigitalEmployee` 的字段从 `execution` 改名
       // `reactionExecution`。**是有意的装配变化**：旧合同与旧路径随 T18 删除，判据在
       // `tests/rfc368-*.test.ts` 与 `tests/rfc294-e9c-reaction-launch-crash-window.test.ts`。
-      '37b0d4e9fca56feb7496ca94270ebe2e74311847fb3250461a4f874dbd21c3f5',
+      // 2026-09-23（RFC-368 实现门 P2-1）：资源上限与空闲收割两处 `cancelTask` 改为带真实原因
+      // 取消（`cause: { kind: 'resource-reaped', ...reason }`），状态与原因同一次写入落下；此前
+      // 按 `user` 取消、事后改写原因，中间几秒数字员工会把超时误判成用户取消。装配图变的是这两格，
+      // 判据在 `tests/rfc368-implementation-gate.test.ts`。
+      '00cf72c87121ab7fcfbafced2710f27be23679b50148cd1002b22950081b82d8',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

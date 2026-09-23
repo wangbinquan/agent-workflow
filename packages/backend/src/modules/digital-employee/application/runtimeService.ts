@@ -2749,7 +2749,15 @@ export class DigitalEmployeeRuntimeService {
     const wiring = this.#reactionExecution
     // RFC-368 T5b —— 每个进程第一次派发前收编一次切换前留下的在途 `execution-launch` 行
     // （启动时的一次性回填，与 RFC-354 的 frame backfill 同一种做法；两个引擎共用这一份）。
-    this.#legacyLaunchesAdopted ??= this.#store.adoptLegacyReactionLaunches({ now: this.#now() })
+    // 失败时清掉缓存：瞬时错误（SQLITE_BUSY、PG 连接抖动）之后下一次派发会重试收编，而不是
+    // 把被拒绝的 promise 缓存住、让每个 cycle 都在这里抛——那会连带 inspect 一起跑不到，
+    // 所有 round 卡死（RFC-368 实现门 P1-1）。
+    this.#legacyLaunchesAdopted ??= this.#store
+      .adoptLegacyReactionLaunches({ now: this.#now() })
+      .catch((error: unknown) => {
+        this.#legacyLaunchesAdopted = null
+        throw error
+      })
     await this.#legacyLaunchesAdopted
     const claimed = await this.#store.claimReactionDispatch({
       workerId: this.#workerId,
@@ -2763,6 +2771,9 @@ export class DigitalEmployeeRuntimeService {
     // 把 round 留在 planned；`terminateCase` 并不清 round）。`terminalKind` 原样传回——
     // 不传的话 settleRound 会把它覆写成 'completed'。
     if (caseRecord?.state === 'terminal') {
+      // 执行身份已经预分配过（上一次派发崩在 launch 之后、markRoundRunning 之前）⇒ 任务可能已经
+      // 建出来在跑：先停掉它，否则收掉 round 之后再没人 inspect 它（RFC-368 实现门 P2-2）。
+      if (round.executionRef !== null) await this.#cancelQuietly(round, round.executionRef)
       await this.#store.settleRound({
         roundId: round.id,
         state: 'obsolete',
@@ -2772,6 +2783,7 @@ export class DigitalEmployeeRuntimeService {
       })
       return 'settled'
     }
+    let launched: { readonly executionRef: string }
     try {
       if (caseRecord === null) throw new Error(`employee case missing: ${round.caseId}`)
       const policy = await this.#authoringStore.getExecutionPolicyRevision(
@@ -2804,16 +2816,36 @@ export class DigitalEmployeeRuntimeService {
         authority: prepared.request.authority,
         now: this.#now(),
       })
-      const receipt = await wiring.port.launch(prepared, admission)
-      await this.#store.markRoundRunning(round.id, receipt.executionRef, this.#now())
-      return 'launched'
+      launched = await wiring.port.launch(prepared, admission)
     } catch (error) {
-      // 租约已被别的 worker 接管：这一轮不是我们的了，不计失败。
-      if (error instanceof DomainError && error.code === 'employee-reaction-dispatch-lost') {
+      // 租约已被别的 worker 接管，或 epoch 被别处推进过：这一轮不是我们的了，不计派发失败，
+      // 下一 tick 重来（design §7）。
+      if (
+        error instanceof DomainError &&
+        (error.code === 'employee-reaction-dispatch-lost' ||
+          error.code === 'employee-reaction-claim-stale')
+      ) {
         return 'idle'
       }
       return await this.#retryOrFailDispatch(round, dispatch.dispatchAttempts, caseRecord, error)
     }
+    // launch 已经成功（任务已建）之后的错误**不是**派发失败：不走派发预算、不结算 round。
+    // markRoundRunning 抛错就让它抛——租约过期后重放，admission 与 launch 都按 id 幂等，
+    // 再写一次即可（RFC-368 实现门 P3-2）。
+    await this.#store.markRoundRunning(round.id, launched.executionRef, this.#now())
+    // launch 进行中案例被终止：`terminate` 那时看到的还是 planned、任务可能还没建出来，停不掉；
+    // 这里补一刀（RFC-368 实现门 P2-2）。
+    if ((await this.#store.getCase(round.caseId))?.state === 'terminal') {
+      await this.#cancelQuietly(round, launched.executionRef)
+    }
+    return 'launched'
+  }
+
+  /** 尽力停掉一个执行：停不掉（已结束 / 已不在）不影响调用方，那一轮随后由 inspect 按快照结算。 */
+  async #cancelQuietly(round: ReactionRoundRecord, executionRef: string): Promise<void> {
+    await this.#reactionExecution.port
+      .cancel({ operation: reactionOperationRef(round.id, round.attemptOrdinal), executionRef })
+      .catch(() => undefined)
   }
 
   /**
@@ -3562,16 +3594,14 @@ export class DigitalEmployeeRuntimeService {
     // RFC-368 G7 —— 终止案例时停掉还在跑的 agent（今天不停，agent 跑到自然结束、继续吃预算）。
     // 取消是尽力而为：案例已经终止成功，停不掉也不该把终止本身报成失败；那一轮随后由
     // inspect 按快照结算（停掉了就是 stopped，没停掉就等它自然结束）。
-    const running = (await this.#store.listRounds(caseId)).find(
-      (round) => round.state === 'running' && round.executionRef !== null,
+    // planned 且已有执行身份的 round 也算：派发已登记 admission、launch 可能正在进行或已完成
+    // 但还没 markRoundRunning（RFC-368 实现门 P2-2）。任务若尚未建出，cancel 是空操作，由派发臂
+    // launch 之后的终止复查补上。
+    const active = (await this.#store.listRounds(caseId)).find(
+      (round) => ['planned', 'running'].includes(round.state) && round.executionRef !== null,
     )
-    if (running?.executionRef !== undefined && running.executionRef !== null) {
-      await this.#reactionExecution.port
-        .cancel({
-          operation: reactionOperationRef(running.id, running.attemptOrdinal),
-          executionRef: running.executionRef,
-        })
-        .catch(() => undefined)
+    if (active?.executionRef !== undefined && active.executionRef !== null) {
+      await this.#cancelQuietly(active, active.executionRef)
     }
     return terminated
   }
