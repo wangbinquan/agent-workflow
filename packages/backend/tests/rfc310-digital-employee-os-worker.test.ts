@@ -25,6 +25,10 @@ describe('RFC-310 durable Digital Employee OS worker', () => {
             calls.push(`outbox:${cycle}`)
             return cycle === 0 ? 'completed' : 'idle'
           },
+          async dispatchOneReaction() {
+            calls.push(`dispatch:${cycle}`)
+            return cycle === 0 ? 'launched' : 'idle'
+          },
           async inspectOneExecution() {
             calls.push(`inspect:${cycle}`)
             const result = cycle === 0 ? 'completed' : 'idle'
@@ -40,10 +44,12 @@ describe('RFC-310 durable Digital Employee OS worker', () => {
       'delivery:0',
       'plan:0',
       'outbox:0',
+      'dispatch:0',
       'inspect:0',
       'delivery:1',
       'plan:1',
       'outbox:1',
+      'dispatch:1',
       'inspect:1',
     ])
     expect(result).toEqual({
@@ -51,6 +57,7 @@ describe('RFC-310 durable Digital Employee OS worker', () => {
       deliveries: 1,
       plannedRounds: 1,
       outboxSettlements: 1,
+      reactionDispatches: 1,
       executionSettlements: 1,
       channelResults: 0,
       madeProgress: true,
@@ -65,6 +72,7 @@ describe('RFC-310 durable Digital Employee OS worker', () => {
           pumpOneDelivery: async () => true,
           planOneReaction: async () => 'round',
           runOneOutbox: async () => 'completed',
+          dispatchOneReaction: async () => 'idle',
           inspectOneExecution: async () => 'completed',
         },
       },

@@ -10,6 +10,7 @@ type Actor = DirectAuthenticatedAuthority
 export type DevelopmentActivityResult =
   | { readonly activity: 'channel'; readonly state: 'completed' }
   | { readonly activity: 'outbox'; readonly state: 'completed' | 'retried' }
+  | { readonly activity: 'dispatch'; readonly state: 'launched' | 'retried' | 'settled' }
   | { readonly activity: 'delivery'; readonly state: 'completed' }
   | { readonly activity: 'reaction'; readonly state: string }
   | {
@@ -24,6 +25,12 @@ export interface DevelopmentActivityOperations {
 const activityResultSchema = z.discriminatedUnion('activity', [
   z.object({ activity: z.literal('channel'), state: z.literal('completed') }).strict(),
   z.object({ activity: z.literal('outbox'), state: z.enum(['completed', 'retried']) }).strict(),
+  z
+    .object({
+      activity: z.literal('dispatch'),
+      state: z.enum(['launched', 'retried', 'settled']),
+    })
+    .strict(),
   z.object({ activity: z.literal('delivery'), state: z.literal('completed') }).strict(),
   z.object({ activity: z.literal('reaction'), state: z.string().min(1) }).strict(),
   z

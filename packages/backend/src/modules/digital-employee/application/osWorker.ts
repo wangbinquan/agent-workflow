@@ -10,6 +10,8 @@
 export interface DigitalEmployeeOsWorkerDependencies {
   readonly runtime: {
     runOneOutbox(): Promise<'completed' | 'retried' | 'idle'>
+    /** RFC-368 T8 —— Reaction 派发臂（取代 outbox 的 `execution-launch`）。 */
+    dispatchOneReaction(): Promise<'launched' | 'retried' | 'settled' | 'idle'>
     pumpOneDelivery(): Promise<boolean>
     planOneReaction(): Promise<string | null>
     inspectOneExecution(): Promise<'completed' | 'retried' | 'failed' | 'pending' | 'idle'>
@@ -22,6 +24,7 @@ export interface DigitalEmployeeOsCycleResult {
   readonly deliveries: number
   readonly plannedRounds: number
   readonly outboxSettlements: number
+  readonly reactionDispatches: number
   readonly executionSettlements: number
   readonly channelResults: number
   readonly madeProgress: boolean
@@ -37,6 +40,7 @@ export async function runDigitalEmployeeOsCycle(
   let deliveries = 0
   let plannedRounds = 0
   let outboxSettlements = 0
+  let reactionDispatches = 0
   let executionSettlements = 0
   let channelResults = 0
   let steps = 0
@@ -63,6 +67,12 @@ export async function runDigitalEmployeeOsCycle(
       progressed = true
     }
 
+    // 派发必须在 inspect 之前：刚派发出去的 round 本轮就能被看到。
+    if ((await deps.runtime.dispatchOneReaction()) !== 'idle') {
+      reactionDispatches += 1
+      progressed = true
+    }
+
     const execution = await deps.runtime.inspectOneExecution()
     if (execution === 'completed' || execution === 'retried' || execution === 'failed') {
       executionSettlements += 1
@@ -75,10 +85,17 @@ export async function runDigitalEmployeeOsCycle(
     deliveries,
     plannedRounds,
     outboxSettlements,
+    reactionDispatches,
     executionSettlements,
     channelResults,
     madeProgress:
-      deliveries + plannedRounds + outboxSettlements + executionSettlements + channelResults > 0,
+      deliveries +
+        plannedRounds +
+        outboxSettlements +
+        reactionDispatches +
+        executionSettlements +
+        channelResults >
+      0,
   }
 }
 

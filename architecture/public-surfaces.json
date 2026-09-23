@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1075,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20929,
+    "recursiveFields": 20941,
     "symbols": 1015
   },
   "entries": [
@@ -17674,7 +17674,7 @@
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
+        "maxUnionVariants": 16
       },
       "consumerEdgeIds": [
         "import:272a0abfbc1979c0bc2c"
@@ -17714,55 +17714,75 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:2.activity",
+          "type": "'dispatch'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:2.state.$variant:0",
+          "type": "'launched'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:2.state.$variant:1",
+          "type": "'retried'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:2.state.$variant:2",
+          "type": "'settled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:3.activity",
           "type": "'delivery'"
         },
         {
           "consumerEdgeIds": [
             "import:272a0abfbc1979c0bc2c"
           ],
-          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:2.state",
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:3.state",
           "type": "'completed'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:3.activity",
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:4.activity",
           "type": "'reaction'"
         },
         {
           "consumerEdgeIds": [
             "import:272a0abfbc1979c0bc2c"
           ],
-          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:3.state",
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:4.state",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:4.activity",
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:5.activity",
           "type": "'execution'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:4.state.$variant:0",
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:5.state.$variant:0",
           "type": "'completed'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:4.state.$variant:1",
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:5.state.$variant:1",
           "type": "'retried'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:4.state.$variant:2",
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:5.state.$variant:2",
           "type": "'failed'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:4.state.$variant:3",
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:5.state.$variant:3",
           "type": "'pending'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:4.state.$variant:4",
+          "fieldPath": "$call.$parameter:operations.$method:runOneWorkerCycle.$return.$variant:5.state.$variant:4",
           "type": "'idle'"
         }
       ],
@@ -20885,7 +20905,7 @@
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
+        "maxUnionVariants": 16
       },
       "consumerEdgeIds": [
         "import:a6679ec78d68f71f76ea"
@@ -20925,55 +20945,75 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:runOneWorkerCycle.$return.$variant:2.activity",
+          "type": "'dispatch'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:2.state.$variant:0",
+          "type": "'launched'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:2.state.$variant:1",
+          "type": "'retried'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:2.state.$variant:2",
+          "type": "'settled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:3.activity",
           "type": "'delivery'"
         },
         {
           "consumerEdgeIds": [
             "import:a6679ec78d68f71f76ea"
           ],
-          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:2.state",
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:3.state",
           "type": "'completed'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:3.activity",
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:4.activity",
           "type": "'reaction'"
         },
         {
           "consumerEdgeIds": [
             "import:a6679ec78d68f71f76ea"
           ],
-          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:3.state",
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:4.state",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:4.activity",
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:5.activity",
           "type": "'execution'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:4.state.$variant:0",
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:5.state.$variant:0",
           "type": "'completed'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:4.state.$variant:1",
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:5.state.$variant:1",
           "type": "'retried'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:4.state.$variant:2",
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:5.state.$variant:2",
           "type": "'failed'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:4.state.$variant:3",
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:5.state.$variant:3",
           "type": "'pending'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:4.state.$variant:4",
+          "fieldPath": "$method:runOneWorkerCycle.$return.$variant:5.state.$variant:4",
           "type": "'idle'"
         }
       ],
@@ -21014,7 +21054,7 @@
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
+        "maxUnionVariants": 16
       },
       "consumerEdgeIds": [],
       "context": "development-automation",
@@ -21050,51 +21090,71 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$variant:2.activity",
-          "type": "'delivery'"
+          "type": "'dispatch'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:2.state",
-          "type": "'completed'"
+          "fieldPath": "$variant:2.state.$variant:0",
+          "type": "'launched'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:3.activity",
-          "type": "'reaction'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:3.state",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:4.activity",
-          "type": "'execution'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:4.state.$variant:0",
-          "type": "'completed'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:4.state.$variant:1",
+          "fieldPath": "$variant:2.state.$variant:1",
           "type": "'retried'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:4.state.$variant:2",
+          "fieldPath": "$variant:2.state.$variant:2",
+          "type": "'settled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:3.activity",
+          "type": "'delivery'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:3.state",
+          "type": "'completed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:4.activity",
+          "type": "'reaction'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:4.state",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:5.activity",
+          "type": "'execution'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:5.state.$variant:0",
+          "type": "'completed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:5.state.$variant:1",
+          "type": "'retried'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:5.state.$variant:2",
           "type": "'failed'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:4.state.$variant:3",
+          "fieldPath": "$variant:5.state.$variant:3",
           "type": "'pending'"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:4.state.$variant:4",
+          "fieldPath": "$variant:5.state.$variant:4",
           "type": "'idle'"
         }
       ],
@@ -165568,7 +165628,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e2df564e182b1c35a475a7edeeddf28c04c6e0c565dd6039cbf6a4e070b707b2",
+  "sourceDigest": "sha256:46b7bcd3cc46da60b296c9ac59a103468d50c1ecb76cd4f901835048f3d5f35a",
   "targetContexts": [
     "collaboration",
     "development-automation",

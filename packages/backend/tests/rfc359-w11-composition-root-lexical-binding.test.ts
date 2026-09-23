@@ -49,6 +49,10 @@ function recordingWorker(
       calls.push('outbox')
       return 'idle'
     },
+    dispatchOneReaction: async () => {
+      calls.push('dispatch')
+      return 'idle'
+    },
     pumpOneDelivery: async () => {
       calls.push('delivery')
       return false
@@ -76,8 +80,29 @@ describe('RFC-359 W11 —— 活动 operations 的 worker 是构造参数，不�
       activity: 'execution',
       state: 'idle',
     })
-    // 顺序本身是契约：先发布渠道结果，再收发件箱，再泵投递，再规划反应，最后才查执行。
-    expect(calls).toEqual(['channel', 'outbox', 'delivery', 'reaction', 'execution'])
+    // 顺序本身是契约：先发布渠道结果，再收发件箱，再派发 Reaction，再泵投递，再规划反应，
+    // 最后才查执行。
+    expect(calls).toEqual(['channel', 'outbox', 'dispatch', 'delivery', 'reaction', 'execution'])
+  })
+
+  // RFC-368 T9：派发档必须排在 inspect 之前——`runOneWorkerCycle` 的最后一句是无条件 return，
+  // 派发接在它后面就是永远跑不到的死代码，整条新执行链不会被驱动（设计门 P1-6）。
+  test('派发档有活儿时当场收工，且排在执行检查之前', async () => {
+    const calls: string[] = []
+    const operations = activityComposition.composeDevelopmentActivityOperations(
+      recordingWorker(calls, {
+        dispatchOneReaction: async () => {
+          calls.push('dispatch')
+          return 'launched'
+        },
+      }),
+    )
+
+    await expect(operations.runOneWorkerCycle()).resolves.toEqual({
+      activity: 'dispatch',
+      state: 'launched',
+    })
+    expect(calls).toEqual(['channel', 'outbox', 'dispatch'])
   })
 
   test('前一档有活儿就当场收工，后面的档位一个都不问', async () => {
@@ -122,7 +147,14 @@ describe('RFC-359 W11 —— 活动 operations 的 worker 是构造参数，不�
       activity: 'execution',
       state: 'idle',
     })
-    expect(firstCalls).toEqual(['channel', 'outbox', 'delivery', 'reaction', 'execution'])
+    expect(firstCalls).toEqual([
+      'channel',
+      'outbox',
+      'dispatch',
+      'delivery',
+      'reaction',
+      'execution',
+    ])
     expect(secondCalls).toEqual(['channel'])
   })
 

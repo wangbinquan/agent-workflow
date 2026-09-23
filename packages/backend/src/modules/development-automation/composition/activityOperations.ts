@@ -2,6 +2,7 @@ import type { DevelopmentActivityOperations, DevelopmentActivityResult } from '.
 
 export interface DevelopmentActivityWorker {
   runOneOutbox(): Promise<'completed' | 'retried' | 'idle'>
+  dispatchOneReaction(): Promise<'launched' | 'retried' | 'settled' | 'idle'>
   pumpOneDelivery(): Promise<boolean>
   planOneReaction(): Promise<string | null>
   inspectOneExecution(): Promise<'completed' | 'retried' | 'failed' | 'pending' | 'idle'>
@@ -32,6 +33,10 @@ export function composeDevelopmentActivityOperations(
       if (channel !== 'idle') return { activity: 'channel', state: channel }
       const outbox = await worker.runOneOutbox()
       if (outbox !== 'idle') return { activity: 'outbox', state: outbox }
+      // RFC-368 T9 —— 必须插在 `inspectOneExecution` 之前：最后一句是无条件 return，
+      // 追加在其后就是死代码（design §4.1）。
+      const dispatch = await worker.dispatchOneReaction()
+      if (dispatch !== 'idle') return { activity: 'dispatch', state: dispatch }
       if (await worker.pumpOneDelivery()) return { activity: 'delivery', state: 'completed' }
       const roundId = await worker.planOneReaction()
       if (roundId !== null) return { activity: 'reaction', state: roundId }

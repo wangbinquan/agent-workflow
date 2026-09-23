@@ -391,6 +391,7 @@ export interface DigitalEmployeeModule {
     }
     readonly worker: {
       runOneOutbox(): Promise<'completed' | 'retried' | 'idle'>
+      dispatchOneReaction(): Promise<'launched' | 'retried' | 'settled' | 'idle'>
       pumpOneDelivery(): Promise<boolean>
       planOneReaction(): Promise<string | null>
       inspectOneExecution(): Promise<'completed' | 'retried' | 'failed' | 'pending' | 'idle'>
@@ -1081,6 +1082,7 @@ function composeDigitalEmployeeFromPersistence(
             },
             worker: {
               runOneOutbox: () => runtimeService.runOneOutbox(),
+              dispatchOneReaction: () => runtimeService.dispatchOneReaction(),
               pumpOneDelivery: () => runtimeService.pumpOneDelivery(),
               planOneReaction: async () => (await runtimeService.planOneReaction())?.id ?? null,
               inspectOneExecution: () => runtimeService.inspectOneExecution(),
