@@ -51,10 +51,17 @@ import type {
 } from '../composition/required-ports'
 import {
   prepareReactionExecution,
+  reactionOperationRef,
   type ReactionRetryFeedbackRef,
   type ReactionRetryFeedbackV1,
 } from '../domain/reactionExecutionRequest'
-import { attemptModeForOrdinal, dispatchRetrySchedule } from '../domain/retrySchedule'
+import {
+  attemptModeForOrdinal,
+  dispatchRetrySchedule,
+  roundRetrySchedule,
+} from '../domain/retrySchedule'
+import { sanitizeReactionText } from '../domain/reactionArtifacts'
+import type { ReactionArtifactPersistence } from './ports/reactionArtifacts'
 import {
   employeeCollaborationBindingSchema,
   effectiveReactionPriority,
@@ -362,6 +369,8 @@ export interface DigitalEmployeeRuntimeServiceDependencies {
 
 export interface DigitalEmployeeReactionExecutionWiring {
   readonly port: ReactionExecutionPortV1
+  /** 重试反馈 / 失败诊断的存档（数字员工持有，content-addressed）。 */
+  readonly artifacts: ReactionArtifactPersistence
   /** 派发租约时长；缺省沿用 outbox 租约。 */
   readonly dispatchLeaseMs?: number
 }
@@ -1317,7 +1326,17 @@ export class DigitalEmployeeRuntimeService {
           const taskState =
             round.executionRef === null
               ? null
-              : ((await this.#execution.inspectHumanReview?.(round.executionRef)) ?? null)
+              : await this.#inspectRoundHumanReview(round, round.executionRef)
+          if (taskState === 'not-applicable') {
+            return [
+              {
+                parentWorkItemRef: item.workItemRef,
+                optionRef: item.humanReview.optionRef,
+                state: 'skipped' as const,
+                executionRef: round.executionRef,
+              },
+            ]
+          }
           const state =
             taskState ??
             (round.state === 'completed'
@@ -3345,23 +3364,19 @@ export class DigitalEmployeeRuntimeService {
     if (policy === null) throw new Error('pinned execution policy disappeared')
     // RFC-317 T31（DE-03）—— 原本是 `errorCode.startsWith('workspace-boundary-')`：
     // 平台级的重试策略由某个业务模块**拼字符串的拼法**决定。现在读端口上的闭合字段。
-    const boundaryFailure = boundaryEscalates(errorClass)
-    const attemptsPerScene = policy.content.sameSceneAttempts + 1
-    const nextOrdinal = boundaryFailure
-      ? Math.max(
-          round.attemptOrdinal + 1,
-          (Math.floor(round.attemptOrdinal / attemptsPerScene) + 1) * attemptsPerScene,
-        )
-      : round.attemptOrdinal + 1
-    const retryBudget =
-      retryAttemptCap(policy.content.sameSceneAttempts, policy.content.freshSceneAttempts) - 1
+    const decision = roundRetrySchedule({
+      attemptOrdinal: round.attemptOrdinal,
+      boundaryFailure: boundaryEscalates(errorClass),
+      policy: policy.content,
+    })
     const errorJson = JSON.stringify({
       kind: 'failed',
       executionRef: round.executionRef,
       errorCode,
       errorDetail: errorDetail.slice(0, 4_000),
     })
-    if (nextOrdinal <= retryBudget) {
+    if (decision.retry) {
+      const nextOrdinal = decision.nextOrdinal
       const frozenPlan = reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown)
       const caseRecord = await this.getCase(round.caseId)
       const remainingDurationMs =
@@ -3380,12 +3395,38 @@ export class DigitalEmployeeRuntimeService {
             : Math.min(frozenPlan.roundBudgetMs, Math.max(1, remainingDurationMs)),
         maxTotalTokens: remainingTotalTokens === null ? null : Math.max(1, remainingTotalTokens),
       })
-      const mode = nextOrdinal % attemptsPerScene === 0 ? 'fresh-scene' : 'same-scene'
       const now = this.#now()
-      const retryDelay = Math.min(
-        policy.content.maxBackoffMs,
-        policy.content.initialBackoffMs * 2 ** Math.max(0, nextOrdinal - 1),
-      )
+      const wiring = this.#reactionExecution
+      if (wiring !== undefined) {
+        // RFC-368 T10：纠错反馈裁剪后按内容地址存档，派发时只带 ref。写失败降级成不带反馈，
+        // 不阻塞重试（偏离 D8——今天的 previousError 也不是必需品），并把原因记在派发行上。
+        let retryFeedbackRef: string | null = null
+        let lastDispatchError: string | null = null
+        try {
+          retryFeedbackRef = await wiring.artifacts.put(
+            'retry-feedback',
+            sanitizeReactionText({ errorCode, errorDetail, workspaceRoot: null }),
+            now,
+          )
+        } catch (error) {
+          lastDispatchError =
+            `retry-feedback-unavailable: ${error instanceof Error ? error.message : String(error)}`.slice(
+              0,
+              2_000,
+            )
+        }
+        await this.#store.retryRound({
+          roundId: round.id,
+          expectedExecutionRef: round.executionRef,
+          attemptOrdinal: nextOrdinal,
+          errorJson,
+          launchOutbox: null,
+          reactionDispatch: { plan, retryFeedbackRef, lastDispatchError },
+          nextAttemptAt: now + decision.delayMs,
+          now,
+        })
+        return 'retried'
+      }
       await this.#store.retryRound({
         roundId: round.id,
         expectedExecutionRef: round.executionRef,
@@ -3400,14 +3441,14 @@ export class DigitalEmployeeRuntimeService {
             plan,
             attempt: {
               ordinal: nextOrdinal,
-              mode,
+              mode: decision.mode,
               previousError: `${errorCode}: ${errorDetail}`.slice(0, 4_000),
             },
           }),
           dedupeKey: `execution-launch:${round.id}:${nextOrdinal}`,
           attemptCount: 0,
         },
-        nextAttemptAt: now + retryDelay,
+        nextAttemptAt: now + decision.delayMs,
         now,
       })
       return 'retried'
@@ -3446,12 +3487,18 @@ export class DigitalEmployeeRuntimeService {
     let hasPendingExecution = false
     for (const round of rounds) {
       if (round.executionRef === null) continue
-      const snapshot = await this.#execution.inspect(round.executionRef)
+      const snapshot = await this.#inspectRoundExecution(round, round.executionRef)
       if (snapshot.kind === 'pending') {
         hasPendingExecution = true
         continue
       }
       const limitTerminalKind = await this.#recordReactionMetering(round, snapshot.metering)
+      if (snapshot.kind === 'stopped') {
+        if (limitTerminalKind !== null) {
+          return await this.#failRoundForUserLimit(round, limitTerminalKind)
+        }
+        return await this.#settleStoppedRound(round, round.executionRef)
+      }
       if (snapshot.kind === 'failed') {
         if (limitTerminalKind !== null) {
           return await this.#failRoundForUserLimit(round, limitTerminalKind)
@@ -3483,11 +3530,123 @@ export class DigitalEmployeeRuntimeService {
     return hasPendingExecution ? 'pending' : 'idle'
   }
 
+  /**
+   * 取一个在跑 round 的执行快照。旧装配走字符串合同；新装配（RFC-368 T12）按
+   * `{operation, executionRef}` 查——两者都在 round 行上，调用点构造得出（设计门 P1-5）——
+   * 并把失败诊断 ref 解回正文。`stopped` 只在新合同上出现（G7）。
+   */
+  async #inspectRoundExecution(
+    round: ReactionRoundRecord,
+    executionRef: string,
+  ): Promise<
+    | { readonly kind: 'pending' }
+    | {
+        readonly kind: 'completed'
+        readonly outputJson: string
+        readonly metering: ReactionExecutionMetering
+      }
+    | {
+        readonly kind: 'failed'
+        readonly errorClass: WorkspaceFailureClass
+        readonly errorCode: string
+        readonly errorDetail: string
+        readonly metering: ReactionExecutionMetering
+      }
+    | { readonly kind: 'stopped'; readonly metering: ReactionExecutionMetering }
+  > {
+    const wiring = this.#reactionExecution
+    if (wiring === undefined) return await this.#execution.inspect(executionRef)
+    const snapshot = await wiring.port.inspect({
+      operation: reactionOperationRef(round.id, round.attemptOrdinal),
+      executionRef,
+    })
+    switch (snapshot.kind) {
+      case 'pending':
+        return { kind: 'pending' }
+      case 'completed':
+        return { kind: 'completed', outputJson: snapshot.outputJson, metering: snapshot.metering }
+      case 'stopped':
+        return { kind: 'stopped', metering: snapshot.metering }
+      case 'failed': {
+        // 诊断正文是 `<errorCode>: <detail>` 形态（sanitizeReactionText 拼的）；这里还原出 detail，
+        // 免得结算输出与 blockReason 里 errorCode 出现两遍。
+        const body = (await wiring.artifacts.read(snapshot.diagnostics)) ?? snapshot.errorCode
+        const prefix = `${snapshot.errorCode}: `
+        return {
+          kind: 'failed',
+          errorClass: snapshot.errorClass,
+          errorCode: snapshot.errorCode,
+          errorDetail: body.startsWith(prefix) ? body.slice(prefix.length) : body,
+          metering: snapshot.metering,
+        }
+      }
+    }
+  }
+
+  /**
+   * 人审闸门状态。`null` = 「不知道」，调用方回落到 round 状态；`not-applicable` = 这个动作
+   * 没有闸门，投影成 skipped。新合同把两者分开（RFC-368 T12 / 设计门 P2-2）：执行行不在或
+   * 输入不可解析是 `unknown`（⇒ null，保留回落），只有真没配闸门才是 `not-applicable`——
+   * 合成一态会让「任务行被删」的闸门从「已批准」变成「跳过」。旧合同只有 null。
+   */
+  async #inspectRoundHumanReview(
+    round: ReactionRoundRecord,
+    executionRef: string,
+  ): Promise<'not-applicable' | 'planning' | 'waiting' | 'approved' | 'failed' | null> {
+    const wiring = this.#reactionExecution
+    if (wiring === undefined) {
+      return (await this.#execution.inspectHumanReview?.(executionRef)) ?? null
+    }
+    const snapshot = await wiring.port.inspectHumanReview({
+      operation: reactionOperationRef(round.id, round.attemptOrdinal),
+      executionRef,
+    })
+    return snapshot.kind === 'unknown' ? null : snapshot.kind
+  }
+
+  /**
+   * RFC-368 G7 —— 执行被取消：结算成失败但**不进重试判定**，不消耗重试预算（今天取消被当成
+   * failed、白烧一次预算重起一轮）。案例已终止（用户终止时顺手停掉了 agent）就保持终止与原
+   * terminalKind；否则挂起等人处理，与其他不可自动恢复的失败同形。
+   */
+  async #settleStoppedRound(round: ReactionRoundRecord, executionRef: string): Promise<'failed'> {
+    const caseRecord = await this.#store.getCase(round.caseId)
+    const terminal = caseRecord?.state === 'terminal'
+    await this.#store.settleRound({
+      roundId: round.id,
+      state: 'failed',
+      outputJson: JSON.stringify({ kind: 'stopped', executionRef }),
+      nextCaseState: terminal ? 'terminal' : undefined,
+      terminalKind: terminal ? caseRecord.terminalKind : undefined,
+      blockReason: terminal ? null : 'execution-canceled',
+      now: this.#now(),
+    })
+    return 'failed'
+  }
+
   async terminate(caseId: string, terminalKind: string): Promise<EmployeeCaseRecord> {
     if (!/^[a-z][a-z0-9._-]{0,159}$/.test(terminalKind)) {
       throw new ValidationError('employee-terminal-kind-invalid', 'invalid terminal kind')
     }
-    return await this.#store.terminateCase(caseId, terminalKind, this.#now())
+    const terminated = await this.#store.terminateCase(caseId, terminalKind, this.#now())
+    // RFC-368 G7 —— 终止案例时停掉还在跑的 agent（今天不停，agent 跑到自然结束、继续吃预算）。
+    // 取消是尽力而为：案例已经终止成功，停不掉也不该把终止本身报成失败；那一轮随后由
+    // inspect 按快照结算（停掉了就是 stopped，没停掉就等它自然结束）。
+    const wiring = this.#reactionExecution
+    if (wiring !== undefined) {
+      const running = (await this.#store.listRounds(caseId)).find(
+        (round) => round.state === 'running' && round.executionRef !== null,
+      )
+      if (running?.executionRef !== undefined && running.executionRef !== null) {
+        await wiring.port
+          .cancel({
+            operation: reactionOperationRef(running.id, running.attemptOrdinal),
+            executionRef: running.executionRef,
+          })
+          .catch(() => undefined)
+      }
+    }
+    return terminated
   }
 
   async resume(caseId: string): Promise<EmployeeCaseRecord> {

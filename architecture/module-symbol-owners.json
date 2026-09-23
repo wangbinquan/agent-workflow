@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1832,
+    "backendFiles": 1835,
     "frontendFiles": 622,
     "legacyFiles": 547,
-    "moduleFiles": 1285,
-    "productionFiles": 2609,
+    "moduleFiles": 1288,
+    "productionFiles": 2612,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24969
+    "symbolsIncludingFileRoots": 24976
   },
   "entries": [
     {
@@ -44908,6 +44908,30 @@
       "currentContext": "digital-employee",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/digital-employee/application/ports/reactionArtifacts.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/application/ports/reactionArtifacts.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/application/ports/reactionArtifacts.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/application/ports/reactionArtifacts.ts#ReactionArtifactPersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ReactionArtifactPersistence",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/digital-employee/application/ports/runtimeStore.ts",
       "id": "owner:packages/backend/src/modules/digital-employee/application/ports/runtimeStore.ts#$file",
       "removeAfterWave": null,
@@ -46077,6 +46101,42 @@
       "removeAfterWave": "W4-E9",
       "status": "current-module",
       "symbol": "composeDigitalEmployeeAgentTemplateCatalogParticipant",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/digital-employee/composition/reactionArtifacts.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/composition/reactionArtifacts.ts#$file",
+      "removeAfterWave": "W4-E9",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/composition/reactionArtifacts.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/composition/reactionArtifacts.ts#composeReactionArtifactPorts",
+      "removeAfterWave": "W4-E9",
+      "status": "current-module",
+      "symbol": "composeReactionArtifactPorts",
+      "targetContext": "digital-employee",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/composition/reactionArtifacts.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/composition/reactionArtifacts.ts#ReactionArtifactPortsV1",
+      "removeAfterWave": "W4-E9",
+      "status": "current-module",
+      "symbol": "ReactionArtifactPortsV1",
       "targetContext": "digital-employee",
       "targetLayer": "application"
     },
@@ -48813,6 +48873,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "putImmutable",
+      "targetContext": "digital-employee",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/reactionArtifactStore.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/reactionArtifactStore.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "digital-employee",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/reactionArtifactStore.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/infrastructure/reactionArtifactStore.ts#createReactionArtifactPersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createReactionArtifactPersistence",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -300350,5 +300434,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:46b7bcd3cc46da60b296c9ac59a103468d50c1ecb76cd4f901835048f3d5f35a"
+  "sourceDigest": "sha256:31c749fac44ace1668b5a7b7f4fd9fc8d32419e5b19c26ee79aaae362be0183c"
 }

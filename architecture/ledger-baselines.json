@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1726,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1727,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-368 T10/T12/T14（2026-09-23）一次性增长：数字员工持有的 Reaction 文本产物存档落地——新增 `infrastructure/reactionArtifactStore.ts`（content-addressed 的 `employee_reaction_artifacts` 存取，对 `@/db/query` / `@/db/schema` / drizzle 的常规基础设施依赖）、应用层端口 `application/ports/reactionArtifacts.ts` 与组合视图 `composition/reactionArtifacts.ts`（给 TaskExecution 的反馈 reader / 诊断 sink）；`runtimeService` 新增 access-based inspect、stopped 结算与终止时取消。下一笔不涨的提交退役本许可。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5410,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5413,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-368 T10/T12/T14（2026-09-23）一次性增长：数字员工持有的 Reaction 文本产物存档落地——新增 `infrastructure/reactionArtifactStore.ts`（content-addressed 的 `employee_reaction_artifacts` 存取，对 `@/db/query` / `@/db/schema` / drizzle 的常规基础设施依赖）、应用层端口 `application/ports/reactionArtifacts.ts` 与组合视图 `composition/reactionArtifacts.ts`（给 TaskExecution 的反馈 reader / 诊断 sink）；`runtimeService` 新增 access-based inspect、stopped 结算与终止时取消。下一笔不涨的提交退役本许可。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +873,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4810,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4812,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-368 T10/T12/T14（2026-09-23）一次性增长：数字员工持有的 Reaction 文本产物存档落地——新增 `infrastructure/reactionArtifactStore.ts`（content-addressed 的 `employee_reaction_artifacts` 存取，对 `@/db/query` / `@/db/schema` / drizzle 的常规基础设施依赖）、应用层端口 `application/ports/reactionArtifacts.ts` 与组合视图 `composition/reactionArtifacts.ts`（给 TaskExecution 的反馈 reader / 诊断 sink）；`runtimeService` 新增 access-based inspect、stopped 结算与终止时取消。下一笔不涨的提交退役本许可。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +911,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24969,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24976,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-368 T10/T12/T14（2026-09-23）一次性增长：数字员工持有的 Reaction 文本产物存档落地——新增 `infrastructure/reactionArtifactStore.ts`（content-addressed 的 `employee_reaction_artifacts` 存取，对 `@/db/query` / `@/db/schema` / drizzle 的常规基础设施依赖）、应用层端口 `application/ports/reactionArtifacts.ts` 与组合视图 `composition/reactionArtifacts.ts`（给 TaskExecution 的反馈 reader / 诊断 sink）；`runtimeService` 新增 access-based inspect、stopped 结算与终止时取消。下一笔不涨的提交退役本许可。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:46b7bcd3cc46da60b296c9ac59a103468d50c1ecb76cd4f901835048f3d5f35a",
+    "sourceDigest": "sha256:31c749fac44ace1668b5a7b7f4fd9fc8d32419e5b19c26ee79aaae362be0183c",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +932,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b2242a00ce7354c1ff63e577ba4b14f3253d5bf5",
-    "contentDigest": "sha256:18f6371c57bdda79fa27a0b49bac7ac7f66acdf61281d8a4d7b832d0c2830066",
+    "currentSnapshotSha": "faca1871528dcc69b896f826ace5e9e3cf996cbd",
+    "contentDigest": "sha256:4e6149c6994fd4885f6ecdb65e4a76bb150409bb1c1c6b14670588e4879f1289",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

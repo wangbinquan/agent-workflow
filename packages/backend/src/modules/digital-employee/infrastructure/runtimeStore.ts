@@ -1640,6 +1640,7 @@ export function createRuntimePersistence(
             `reaction round cannot be retried: ${input.roundId}`,
           )
         }
+        const dispatch = input.reactionDispatch ?? null
         await tx
           .update(employeeReactionRounds)
           .set({
@@ -1647,6 +1648,7 @@ export function createRuntimePersistence(
             executionRef: null,
             outputJson: input.errorJson,
             attemptOrdinal: input.attemptOrdinal,
+            ...(dispatch === null ? {} : { planJson: JSON.stringify(dispatch.plan) }),
             updatedAt: input.now,
           })
           .where(
@@ -1657,21 +1659,47 @@ export function createRuntimePersistence(
             ),
           )
           .run()
-        await tx
-          .insert(employeeOsOutbox)
-          .values({
-            id: input.launchOutbox.id,
-            caseId: input.launchOutbox.caseId,
-            kind: input.launchOutbox.kind,
-            payloadJson: input.launchOutbox.payloadJson,
-            dedupeKey: input.launchOutbox.dedupeKey,
-            state: 'pending',
-            attemptCount: 0,
-            nextAttemptAt: input.nextAttemptAt,
-            createdAt: input.now,
-            updatedAt: input.now,
-          })
-          .run()
+        if (dispatch !== null) {
+          const reset = affectedRows(
+            await tx
+              .update(employeeReactionDispatch)
+              .set({
+                nextAttemptAt: input.nextAttemptAt,
+                dispatchAttempts: 0,
+                dispatchClaimedBy: null,
+                dispatchLeaseExpiresAt: null,
+                operationRef: null,
+                retryFeedbackRef: dispatch.retryFeedbackRef,
+                lastDispatchError: dispatch.lastDispatchError,
+                updatedAt: input.now,
+              })
+              .where(eq(employeeReactionDispatch.roundRef, input.roundId))
+              .run(),
+          )
+          if (reset !== 1) {
+            throw new NotFoundError(
+              'employee-reaction-dispatch-not-found',
+              `reaction dispatch row missing: ${input.roundId}`,
+            )
+          }
+        }
+        if (input.launchOutbox !== null) {
+          await tx
+            .insert(employeeOsOutbox)
+            .values({
+              id: input.launchOutbox.id,
+              caseId: input.launchOutbox.caseId,
+              kind: input.launchOutbox.kind,
+              payloadJson: input.launchOutbox.payloadJson,
+              dedupeKey: input.launchOutbox.dedupeKey,
+              state: 'pending',
+              attemptCount: 0,
+              nextAttemptAt: input.nextAttemptAt,
+              createdAt: input.now,
+              updatedAt: input.now,
+            })
+            .run()
+        }
       })
     },
 

@@ -341,7 +341,18 @@ export interface RuntimeCaseStorePort {
     readonly expectedExecutionRef: string
     readonly attemptOrdinal: number
     readonly errorJson: string
-    readonly launchOutbox: EmployeeOutboxRecord
+    /** 旧路径：插一条 `execution-launch` outbox。与 `reactionDispatch` 互斥。 */
+    readonly launchOutbox: EmployeeOutboxRecord | null
+    /**
+     * RFC-368 T10 —— 新路径：把派发侧表重置成「下一个 ordinal 待派发」（尝试次数清零、租约与
+     * operation 清空、挂上反馈 ref），并把**预算收敛后的 plan 写回 round**——请求 hash 只对
+     * round 上冻结的 plan 算，写回之后同一 ordinal 的重放才稳定（设计门 P1-4）。
+     */
+    readonly reactionDispatch?: {
+      readonly plan: ReactionExecutionPlan
+      readonly retryFeedbackRef: string | null
+      readonly lastDispatchError: string | null
+    } | null
     readonly nextAttemptAt: number
     readonly now: number
   }): void

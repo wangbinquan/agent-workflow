@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1726,
+    "entries": 1727,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -8790,6 +8790,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/programArtifactStore.ts#createProgramArtifactStore",
       "symbol": "createProgramArtifactStore",
+      "targetContext": "digital-employee",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/digital-employee/infrastructure/reactionArtifactStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/digital-employee/infrastructure/reactionArtifactStore.ts#createReactionArtifactPersistence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/reactionArtifactStore.ts#createReactionArtifactPersistence",
+      "symbol": "createReactionArtifactPersistence",
       "targetContext": "digital-employee",
       "targetLayer": "infrastructure"
     },
@@ -41246,7 +41270,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:46b7bcd3cc46da60b296c9ac59a103468d50c1ecb76cd4f901835048f3d5f35a",
+  "sourceDigest": "sha256:31c749fac44ace1668b5a7b7f4fd9fc8d32419e5b19c26ee79aaae362be0183c",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
