@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 896,
+    "consumers": 897,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
     "methods": 1071,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20903,
-    "symbols": 1011
+    "recursiveFields": 20912,
+    "symbols": 1012
   },
   "entries": [
     {
@@ -142968,6 +142968,81 @@
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:4adda79ccb9772596b91"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:4adda79ccb9772596b91"
+          ],
+          "fieldPath": "kind",
+          "type": "'fail-host-run'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4adda79ccb9772596b91"
+          ],
+          "fieldPath": "message",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4adda79ccb9772596b91"
+          ],
+          "fieldPath": "operationKey",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4adda79ccb9772596b91"
+          ],
+          "fieldPath": "runId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/commands.ts",
+      "id": "public:task-execution:commands:WorkgroupHostLedgerFailRunOperation",
+      "members": [
+        "kind",
+        "message",
+        "operationKey",
+        "runId"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#WorkgroupHostLedgerFailRunOperation",
+      "productionConsumers": [
+        {
+          "context": "resource-catalog",
+          "edgeId": "import:4adda79ccb9772596b91",
+          "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:commands:WorkgroupHostLedgerOperation"
+      ],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:834b8dedcb6e1e0bc18c0631c1a92747c6363d7275db525594f962ce7a3af5d3",
+      "status": "target-context-current-surface",
+      "symbol": "WorkgroupHostLedgerFailRunOperation",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 17
       },
       "consumerEdgeIds": [
@@ -143206,8 +143281,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 26,
-        "maxUnionVariants": 19
+        "maxTransitiveLeafFields": 30,
+        "maxUnionVariants": 20
       },
       "consumerEdgeIds": [
         "import:4c99bf7067d55ba52585"
@@ -143354,6 +143429,32 @@
           "consumerEdgeIds": [],
           "fieldPath": "$variant:1.wgRound",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4c99bf7067d55ba52585"
+          ],
+          "fieldPath": "$variant:2.kind",
+          "type": "'fail-host-run'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4c99bf7067d55ba52585"
+          ],
+          "fieldPath": "$variant:2.message",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4c99bf7067d55ba52585"
+          ],
+          "fieldPath": "$variant:2.operationKey",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2.runId",
+          "type": "string"
         }
       ],
       "file": "packages/backend/src/modules/task-execution/public/commands.ts",
@@ -143372,7 +143473,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:cef00f402e589d494a9755bb4bdbc2fa2bd3b4bfe1e774eb44cd606a90aabf84",
+      "signatureDigest": "sha256:0c75c243af3d8348f0ee17a70fcbaa0d5ebf18898b9e70d0e5191b0576579ecd",
       "status": "target-context-current-surface",
       "symbol": "WorkgroupHostLedgerOperation",
       "transaction": "own-tx",
@@ -143415,6 +143516,13 @@
           ],
           "fieldPath": "$method:apply.$return.$variant:0.committed",
           "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:9a1d09e2c4306fd57257"
+          ],
+          "fieldPath": "$method:apply.$return.$variant:0.failedRunIds",
+          "type": "readonly string[]"
         },
         {
           "consumerEdgeIds": [
@@ -143484,7 +143592,7 @@
             "import:9a1d09e2c4306fd57257"
           ],
           "name": "apply",
-          "signatureDigest": "sha256:867a58168fbc710964127c7cc75cf38a36a903373b7616b727d52308d8b42f2d"
+          "signatureDigest": "sha256:4ff1caac7e6e6f73680d3b2d6c0da985235898e283ff3e3ecbc283b43b3a028d"
         },
         {
           "consumerEdgeIds": [
@@ -143506,7 +143614,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:711bbc6cd960329d0c877b47c9c0d2b65528ce6b911641daac6fece346352038",
+      "signatureDigest": "sha256:e749eff2c65df24e53817d7c8b6eca020c9329be2c82d94aaac518f84f6af1b7",
       "status": "target-context-current-surface",
       "symbol": "WorkgroupHostLedgerParticipantInTx",
       "transaction": "own-tx",
@@ -165210,7 +165318,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:54509bf94118c122f646f12498615eee15cc99f0039891835a8234867da0555e",
+  "sourceDigest": "sha256:11a14b88f502cfbd1795c61113c0f23861fc2acba347f231d5b255ed42384eeb",
   "targetContexts": [
     "collaboration",
     "development-automation",

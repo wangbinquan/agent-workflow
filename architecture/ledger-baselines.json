@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1726,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1727,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-369 刀 2（2026-09-23）一次性 +1：`executeHostTurn` 外包内部错误转换，原体改名 `runHostTurnAttempts`，普查把两者各算一个入口。下一笔不涨的提交退役本许可。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,10 +849,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5413,
+      "baseline": 5414,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-369（2026-09-23）一次性 +6：新增 `task-execution/infrastructure/nodeRunSupersession.ts`（旧代取代判据的 SQL 谓词，从铸造事务挪到读侧）沿用本模块 infrastructure 既有的 `@/db/schema` / `@/db/query` 等 legacy-outbound 边，外加围栏对 `@/db/transactionScope#holdsExplicitTransaction` 的引用。下一笔不涨的提交退役本许可。"
+        "why": "RFC-369 刀 2（2026-09-23）一次性 +1：RC 工作组驱动从 TE 公开合同导入新类型 `WorkgroupHostLedgerFailRunOperation`（内部错误路径上终结孤儿宿主 run 的账本操作，与 mint / stamp 同属宿主账本合同，offered-edge DAG 的精确 SPI 清单已登记）。下一笔不涨的提交退役本许可。"
       }
     },
     {
@@ -870,10 +873,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4810,
+      "baseline": 4811,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-369（2026-09-23）一次性 +4：同上新文件与围栏的 legacy-outbound 边，归 W9 随 owner adapter cutover 收敛。下一笔不涨的提交退役本许可。"
+        "why": "RFC-369 刀 2（2026-09-23）一次性 +1：同上那条 RC→TE 类型边的 exact exception。下一笔不涨的提交退役本许可。"
       }
     },
     {
@@ -887,8 +890,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1011,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1012,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-369 刀 2（2026-09-23）一次性 +1：TE `public/commands` 新增 `WorkgroupHostLedgerFailRunOperation`。下一笔不涨的提交退役本许可。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -908,15 +914,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24984,
+      "baseline": 24989,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-369（2026-09-23）一次性 +12：新增 `task-execution/domain/nodeRunSupersession.ts`（纯函数判据）与 `infrastructure/nodeRunSupersession.ts`（SQL 谓词）及其导出、`resolveSchedulerRunRow` 的 `supersededPendingRows`。下一笔不涨的提交退役本许可。"
+        "why": "RFC-369 刀 2（2026-09-23）一次性 +5：`WorkgroupHostLedgerFailRunOperation` / RC 别名 `WorkgroupTurnFailHostRunOperation`、驱动拆出的 `runHostTurnAttempts` / `HostTurnTrace`、参与者 `failPendingHostRun`。下一笔不涨的提交退役本许可。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:54509bf94118c122f646f12498615eee15cc99f0039891835a8234867da0555e",
+    "sourceDigest": "sha256:11a14b88f502cfbd1795c61113c0f23861fc2acba347f231d5b255ed42384eeb",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -929,8 +935,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "870c920e3c658baf7b261593489e13ae48111ad2",
-    "contentDigest": "sha256:84f8d34d1f63cd1eaf1b9a5af5af3b22792ad09f45d04712ad5399ef49de32d5",
+    "currentSnapshotSha": "f78add93de18d30eef18d0c1f025fdb750beeb8b",
+    "contentDigest": "sha256:f17e06374da52ae828c07fd0020c7e0bd5826c3bb4829f34e513966ce4d2c46d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

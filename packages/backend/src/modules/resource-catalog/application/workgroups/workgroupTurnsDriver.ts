@@ -39,6 +39,7 @@ import { monotonicFactory, ulid } from 'ulid'
 import {
   WORKGROUP_TURN_LEADER_NODE_ID,
   WORKGROUP_TURN_MEMBER_NODE_ID,
+  type WorkgroupHostLedgerFailRunOperation,
   type WorkgroupHostLedgerMintOperation,
   type WorkgroupHostLedgerMintReceipt,
   type WorkgroupHostLedgerRun,
@@ -186,6 +187,8 @@ export type WorkgroupTurnMintHostRunOperation = WorkgroupHostLedgerMintOperation
 
 export type WorkgroupTurnStampHostRunOperation = WorkgroupHostLedgerStampOperation
 
+export type WorkgroupTurnFailHostRunOperation = WorkgroupHostLedgerFailRunOperation
+
 export interface WorkgroupTurnTransitionAssignmentOperation extends WorkgroupTurnLedgerOperationBase {
   readonly kind: 'transition-assignment'
   readonly assignmentId: string
@@ -249,6 +252,7 @@ export type WorkgroupTurnLedgerOperation =
   | WorkgroupTurnSeedGoalOperation
   | WorkgroupTurnMintHostRunOperation
   | WorkgroupTurnStampHostRunOperation
+  | WorkgroupTurnFailHostRunOperation
   | WorkgroupTurnTransitionAssignmentOperation
   | WorkgroupTurnRepointAssignmentOperation
   | WorkgroupTurnCreateAssignmentOperation
@@ -275,6 +279,8 @@ export type WorkgroupTurnsLedgerCommitReceipt =
        * 「这一条是不是重复」只可能在提交这一刻定论，所以要报回来让驱动往房间贴系统消息。
        */
       skippedOperationKeys?: readonly string[]
+      /** RFC-369 —— `fail-host-run` 真正从 pending 落成 failed 的 run（提交后据此广播）。 */
+      failedRunIds?: readonly string[]
     }>
   | Readonly<{ committed: false; conflictOperationKey: string }>
 
@@ -314,7 +320,17 @@ type HostTurnOutcome<T> =
   | Readonly<{ kind: 'done'; value: T; runId: string }>
   | Readonly<{ kind: 'awaiting'; runId: string }>
   | Readonly<{ kind: 'canceled'; runId: string }>
-  | Readonly<{ kind: 'failed'; runId: string; message: string }>
+  | Readonly<{
+      kind: 'failed'
+      runId: string
+      message: string
+      /**
+       * RFC-369 §4.4 —— 执行过程中**抛出**的内部错误（铸 run / 开跑提交 / 反问判定读 / runHost 在
+       * assembly 之前抛出）转成的失败。`started`：本轮的开跑提交是否已落库——没落时卡片还停在派单前
+       * 的状态，调用方必须按卡片**实际**状态落 failed。孤儿 run 已在返回前终结。
+       */
+      internal?: Readonly<{ started: boolean }>
+    }>
   | Readonly<{ kind: 'protocol-exhausted'; runId: string; errors: readonly string[] }>
   | Readonly<{ kind: 'clarify-forbidden-exhausted'; runId: string; message: string }>
   | Readonly<{ kind: 'lost' }>
@@ -517,11 +533,62 @@ function mintedRun(
   return receipt.mintedRuns.find((run) => run.operationKey === operationKey) ?? null
 }
 
+/** 一次 executeHostTurn 的进度痕迹：出内部错误时据此决定卡片的起点状态与要终结的孤儿 run。 */
+interface HostTurnTrace {
+  started: boolean
+  /** 本次铸出或采纳过的全部 run（铸出后立刻记下）；是否真是孤儿由 `fail-host-run` 按库里状态判。 */
+  readonly runIds: string[]
+}
+
+/**
+ * RFC-369 §4.4 —— 工作组一轮在 host 执行中遇到内部错误时，**按这一轮失败收场**，不再让驱动把它当作
+ * 崩溃恢复：那样仍是 pending 的 run 会在下一圈被重新采纳、拿到一份全新的内存预算，「重试有上限」失效。
+ * 孤儿 run（仍 pending）单独先提交一笔终结为 failed——与调用方随后落卡片失败的那笔分开，免得卡片 CAS
+ * 不中把终结一起回滚。这两笔自身再抛错时仍走驱动既有 catch（库在持续故障，任务本就推进不了）。
+ */
 async function executeHostTurn<T>(
   persistence: WorkgroupTurnsPersistencePort,
   spec: HostTurnSpec<T>,
 ): Promise<HostTurnOutcome<T>> {
+  const trace: HostTurnTrace = { started: false, runIds: [] }
+  try {
+    return await runHostTurnAttempts(persistence, spec, trace)
+  } catch (error) {
+    const message = `internal error: ${error instanceof Error ? error.message : String(error)}`
+    if (trace.runIds.length > 0) {
+      const receipt = await commit(
+        persistence,
+        spec.taskId,
+        trace.runIds.map((runId) => ({
+          kind: 'fail-host-run' as const,
+          operationKey: `fail-host-run:${runId}`,
+          runId,
+          message,
+        })),
+      )
+      if (receipt.committed) {
+        for (const runId of receipt.failedRunIds ?? []) {
+          spec.host.broadcastNodeStatus?.(runId, spec.nodeId, 'failed')
+        }
+      }
+    }
+    return {
+      kind: 'failed',
+      // 一条 run 都没铸出时用合成 id：只作为调用方账本操作的幂等键，不据此读写 node_runs。
+      runId: trace.runIds.at(-1) ?? `internal:${ulid()}`,
+      message,
+      internal: { started: trace.started },
+    }
+  }
+}
+
+async function runHostTurnAttempts<T>(
+  persistence: WorkgroupTurnsPersistencePort,
+  spec: HostTurnSpec<T>,
+  trace: HostTurnTrace,
+): Promise<HostTurnOutcome<T>> {
   let adopted = spec.adoptedRun
+  if (adopted !== undefined) trace.runIds.push(adopted.id)
   let errorNotice: string | null = null
   let lastRunId = adopted?.id ?? ''
   const retryBase = adopted?.retryIndex ?? 0
@@ -540,6 +607,7 @@ async function executeHostTurn<T>(
     if (adopted !== undefined && attempt === 0) {
       const prepared = await commit(persistence, spec.taskId, spec.firstStartOperations(adopted.id))
       if (!prepared.committed) return { kind: 'lost' }
+      trace.started = true
       run = {
         operationKey: 'adopted-run',
         runId: adopted.id,
@@ -568,6 +636,8 @@ async function executeHostTurn<T>(
       ])
       const minted = mintedRun(started, operationKey)
       if (minted === null) return { kind: 'lost' }
+      trace.runIds.push(minted.runId)
+      if (isFirstStart) trace.started = true
       run = minted
       freshMintOffset += 1
       spec.registerMint?.(run.runId)
@@ -1044,13 +1114,19 @@ async function driveAssignmentTurn(input: {
     // RFC-181 C —— 被压制的反问耗尽后与普通失败同路：卡面浮出 failed，绝不 park。
     const detail =
       outcome.kind === 'protocol-exhausted' ? outcome.errors.join('; ') : outcome.message
+    // RFC-369 §4.4 —— 开跑提交没落库的内部错误：卡片还停在派单时的状态（dispatched / awaiting_human，
+    // 或 running 等待改指），按实际状态落 failed；其余出口卡片都已是 running。
+    const from =
+      outcome.kind === 'failed' && outcome.internal?.started === false
+        ? input.assignment.status
+        : 'running'
     const receipt = await commit(
       input.persistence,
       input.snapshot.taskId,
       assignmentFailureOperations({
         snapshot: input.snapshot,
         assignment: input.assignment,
-        from: 'running',
+        from,
         detail,
         keyPrefix: `assignment-host-failed:${input.assignment.id}:${outcome.runId}`,
         ...(outcome.kind === 'protocol-exhausted' ? { protocolViolation: true } : {}),
@@ -1409,12 +1485,33 @@ async function driveBatchTurn(input: {
         }),
       ),
     ]
+    // RFC-369 §4.4 —— 开跑提交没落库的内部错误：卡片还停在认领前的状态，按实际状态落 failed。认领中的
+    // open 卡先 `open → dispatched` 并 **bump** 尝试次数（与 agent-missing 分支同形）——不 bump 的话
+    // free_collab 按 `attempts < budget` 把卡重开，稳定的内部错误会变成无界循环。
+    const notStarted = outcome.kind === 'failed' && outcome.internal?.started === false
     for (const card of cards) {
+      let from: WorkgroupAssignmentStatus = 'running'
+      if (notStarted) {
+        from = card.status
+        if (card.status === 'open') {
+          operations.push(
+            transitionAssignment({
+              key: `batch-failed-claim:${outcome.runId}:${card.id}`,
+              assignmentId: card.id,
+              from: 'open',
+              to: 'dispatched',
+              set: { assigneeMemberId: input.memberId },
+              bumpAttempt: true,
+            }),
+          )
+          from = 'dispatched'
+        }
+      }
       operations.push(
         ...assignmentFailureOperations({
           snapshot: input.snapshot,
           assignment: card,
-          from: 'running',
+          from,
           detail: outcome.message,
           keyPrefix: `batch-failed-card:${outcome.runId}:${card.id}`,
           effectiveAttemptCount: card.attemptCount + (card.status === 'open' ? 1 : 0),
@@ -3057,6 +3154,22 @@ async function driveLeaderTurn(input: {
   if (outcome.kind === 'failed' || outcome.kind === 'protocol-exhausted') {
     const detail =
       outcome.kind === 'failed' ? outcome.message : `protocol: ${outcome.errors.join('; ')}`
+    if (outcome.kind === 'failed' && outcome.internal !== undefined) {
+      // RFC-369 §4.4 —— 领队内部错误：房间里补一条内部错误消息（与驱动 catch 分支同一模板），再让任务失败。
+      await commit(input.persistence, input.snapshot.taskId, [
+        createMessage(
+          `internal-error:leader:${outcome.runId}`,
+          messageDraft({
+            round: messageRound(input.snapshot),
+            authorKind: 'system',
+            kind: 'system',
+            bodyMd: `workgroup turn leader failed internally: ${outcome.message}`,
+            templateKey: 'internalDriveError',
+            templateParams: { item: 'leader', detail: outcome.message },
+          }),
+        ),
+      ])
+    }
     return {
       kind: 'terminal',
       outcome: {

@@ -322,7 +322,11 @@ type WorkgroupTurnResourceCatalogOperation = Exclude<
 function isHostLedgerOperation(
   operation: WorkgroupTurnLedgerOperation,
 ): operation is WorkgroupHostLedgerOperation {
-  return operation.kind === 'mint-host-run' || operation.kind === 'stamp-host-run-round'
+  return (
+    operation.kind === 'mint-host-run' ||
+    operation.kind === 'stamp-host-run-round' ||
+    operation.kind === 'fail-host-run'
+  )
 }
 
 /**
@@ -550,6 +554,7 @@ export function createWorkgroupTurnsPersistence(
           const hostLedger = dependencies.hostLedgerFactory.inTransaction(transaction)
           const mintedRuns: WorkgroupTurnMintedRun[] = []
           const skippedOperationKeys: string[] = []
+          const failedRunIds: string[] = []
           for (const operation of input.operations) {
             if (isHostLedgerOperation(operation)) {
               const receipt = await hostLedger.apply({
@@ -560,6 +565,7 @@ export function createWorkgroupTurnsPersistence(
                 throw new WorkgroupLedgerConflict(receipt.conflictOperationKey)
               }
               mintedRuns.push(...receipt.mintedRuns)
+              failedRunIds.push(...(receipt.failedRunIds ?? []))
               continue
             }
             const skipped = await applyResourceCatalogOperation(
@@ -569,7 +575,7 @@ export function createWorkgroupTurnsPersistence(
             )
             if (skipped !== null) skippedOperationKeys.push(skipped)
           }
-          return { committed: true, mintedRuns, skippedOperationKeys }
+          return { committed: true, mintedRuns, skippedOperationKeys, failedRunIds }
         })
       } catch (error) {
         if (error instanceof WorkgroupLedgerConflict) {

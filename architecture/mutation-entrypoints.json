@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1726,
+    "entries": 1727,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -14534,7 +14534,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
+        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -14545,6 +14545,7 @@
       "missingControls": [
         "audit",
         "authority",
+        "authorization",
         "event",
         "fenceOrOcc",
         "transaction"
@@ -14600,6 +14601,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#RejectedTurn",
       "symbol": "RejectedTurn",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#runHostTurnAttempts",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#runHostTurnAttempts",
+      "symbol": "runHostTurnAttempts",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -41246,7 +41271,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:54509bf94118c122f646f12498615eee15cc99f0039891835a8234867da0555e",
+  "sourceDigest": "sha256:11a14b88f502cfbd1795c61113c0f23861fc2acba347f231d5b255ed42384eeb",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -43388,8 +43413,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#131:nodeRuns",
-        "line": 131,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#161:nodeRuns",
+        "line": 161,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/workgroupHostLedgerParticipant.ts#applyOperation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

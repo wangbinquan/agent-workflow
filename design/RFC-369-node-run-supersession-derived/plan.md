@@ -1,6 +1,6 @@
 # RFC-369 任务分解
 
-**状态**：**In Progress（2026-09-23 用户批准实施）**——刀 1（T1–T5、T8）已落，刀 2（T6）待做
+**状态**：**In Progress（2026-09-23 用户批准实施）**——刀 1（T1–T5、T8）与刀 2（T6）已落，待 T7 收口与实现门
 **读法**：先 [proposal.md](./proposal.md) 再 [design.md](./design.md)。
 
 ---
@@ -33,7 +33,7 @@
 - [ ] AC-2 本地 PG 复跑冲突为 0
 - [x] AC-3 RFC-144 / 172 行为锁改写后全绿、判据不放宽（变异验证）
 - [x] AC-4 读到即收尾 abandoned
-- [ ] AC-5 三个注入点：内部错误按这一轮失败收场、不自动重来（双引擎）
+- [x] AC-5 三个注入点：内部错误按这一轮失败收场、不自动重来（双引擎）
 - [x] AC-7 收紧三情形各一条测试
 - [x] AC-8 调度器跳过已被取代的 pending 行
 - [ ] AC-6 两条间歇红用例 CI 连续绿、backlog 条目改已修
@@ -111,3 +111,19 @@ live CAS `isolatedAgentRun.ts:157-192, 237-258, 376-395, 473-484`；只看最新
   子行按 §3(a) 本就取代父行（改前铸出这样一行同样会废父行），生产子行不会是这种形状。
 - **变异验证**：换回改前的铸造参与者 ⇒ AC-1 源码锁、AC-2（PG 上事务体被重放）、RFC-144 / 349 / W47 共 11 条红；SQL 去掉
   shard 收口 ⇒ 对拍与 rfc172 红；关掉围栏 ⇒ AC-4 / AC-7 / rfc144-cas 共 8 条红。
+
+## 刀 2 落地记录（2026-09-23）
+
+- **TE 合同**：`public/commands.ts` 新增 `WorkgroupHostLedgerFailRunOperation`（`fail-host-run`），apply 回执带
+  `failedRunIds`。参与者 `workgroupHostLedgerParticipant.ts` 显式分支：先点读，只有 pending 才经 `setNodeRunStatusTx`
+  落 failed（failureCode NULL、errorMessage / finishedAt 走 extra），其余状态空操作；stamp 分支加 `satisfies` 穷尽锁。
+- **RC**：`isHostLedgerOperation` 与账本提交循环补 `fail-host-run`，回执透传 `failedRunIds`；offered-edge DAG 的精确
+  SPI 绑定清单登记新类型。
+- **驱动**：`executeHostTurn` 外包一层（原体改名 `runHostTurnAttempts`），执行中抛出的错误转成
+  `failed{ internal: { started } }`；本次铸出 / 采纳的 run 铸出后立刻记下，出错时单独先提交一笔 `fail-host-run`
+  并按回执广播 failed。调用方：单卡按卡实际状态落 failed；批次里认领中的 open 卡 `open → dispatched（bump）→ failed`；
+  领队补 `internalDriveError`（item=leader）后任务失败；消息轮无卡、照常推进游标 + 失败消息。
+- **测试** `rfc369-workgroup-internal-error.test.ts`（双引擎）：四个注入点（首次开跑提交 / 重试铸造 / 铸后执行前 /
+  runHost 抛错）、领队、free_collab open 卡按卡预算收敛、采纳变体（dispatched / awaiting_human）、参与者只终结 pending。
+  **变异验证**：让外层 catch 重新抛出（= 改前行为）⇒ 10 条红，free_collab 三条卡死到超时（即无界重来）；去掉 open 卡的
+  bump ⇒ 收敛用例卡死到超时。

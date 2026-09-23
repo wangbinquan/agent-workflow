@@ -101,6 +101,8 @@ const EXACT_REQUIRED_SPI_BINDINGS: readonly ExactRequiredSpiBinding[] = [
     [
       ['WORKGROUP_TURN_LEADER_NODE_ID', 'value'],
       ['WORKGROUP_TURN_MEMBER_NODE_ID', 'value'],
+      // RFC-369 §4.4：内部错误路径上终结孤儿宿主 run 的账本操作，与 mint / stamp 同属宿主账本合同。
+      ['WorkgroupHostLedgerFailRunOperation', 'type'],
       ['WorkgroupHostLedgerMintOperation', 'type'],
       ['WorkgroupHostLedgerMintReceipt', 'type'],
       ['WorkgroupHostLedgerRun', 'type'],

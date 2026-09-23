@@ -24583,6 +24583,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4adda79ccb9772596b91",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "rule": "off-dag-offered",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#WorkgroupHostLedgerFailRunOperation",
+      "toPath": "packages/backend/src/modules/task-execution/public/commands.ts",
+      "toSymbol": "WorkgroupHostLedgerFailRunOperation",
+      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -81772,9 +81789,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4810,
+    "architectureExceptions": 4811,
     "implementationSccs": 0,
-    "observedEdges": 5413,
+    "observedEdges": 5414,
     "requiredPorts": 33,
     "targetEdges": 66
   },
@@ -107509,6 +107526,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#FrozenTaskExecutionResourceSnapshot"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#$file",
+      "id": "import:4adda79ccb9772596b91",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W4-E1",
+      "role": "off-dag-offered",
+      "specifier": "@/modules/task-execution/public/commands",
+      "syntax": "static-import",
+      "targetSymbol": "WorkgroupHostLedgerFailRunOperation",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/commands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#WorkgroupHostLedgerFailRunOperation"
     },
     {
       "edgeKind": "value",
@@ -169106,7 +169139,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:54509bf94118c122f646f12498615eee15cc99f0039891835a8234867da0555e",
+  "sourceDigest": "sha256:11a14b88f502cfbd1795c61113c0f23861fc2acba347f231d5b255ed42384eeb",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

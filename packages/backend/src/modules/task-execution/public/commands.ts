@@ -189,9 +189,21 @@ export interface WorkgroupHostLedgerStampOperation {
   readonly wgRound: number
 }
 
+/**
+ * RFC-369 §4.4 —— 工作组一轮在 host 执行中遇到内部错误时，终结本次铸出 / 采纳、却没执行完的宿主 run：
+ * 只有库里**仍是 pending** 的才落 failed，其余状态一律空操作（它们已有归宿，不能被改写）。
+ */
+export interface WorkgroupHostLedgerFailRunOperation {
+  readonly kind: 'fail-host-run'
+  readonly operationKey: string
+  readonly runId: string
+  readonly message: string
+}
+
 export type WorkgroupHostLedgerOperation =
   | WorkgroupHostLedgerMintOperation
   | WorkgroupHostLedgerStampOperation
+  | WorkgroupHostLedgerFailRunOperation
 
 export interface WorkgroupHostLedgerMintReceipt {
   readonly operationKey: string
@@ -210,7 +222,12 @@ export interface WorkgroupHostLedgerParticipantInTx {
     readonly taskId: string
     readonly operations: readonly WorkgroupHostLedgerOperation[]
   }): Promise<
-    | Readonly<{ committed: true; mintedRuns: readonly WorkgroupHostLedgerMintReceipt[] }>
+    | Readonly<{
+        committed: true
+        mintedRuns: readonly WorkgroupHostLedgerMintReceipt[]
+        /** RFC-369 —— `fail-host-run` 真正从 pending 落成 failed 的 run（调用方提交后据此广播）。 */
+        failedRunIds?: readonly string[]
+      }>
     | Readonly<{ committed: false; conflictOperationKey: string }>
   >
 }

@@ -2,6 +2,7 @@ import { and, asc, eq, inArray, isNull } from 'drizzle-orm'
 
 import { nodeRuns, tasks } from '@/db/schema'
 import type {
+  WorkgroupHostLedgerFailRunOperation,
   WorkgroupHostLedgerMintReceipt,
   WorkgroupHostLedgerOperation,
   WorkgroupHostLedgerParticipantInTx,
@@ -11,6 +12,7 @@ import type {
 import { WORKGROUP_TURN_LEADER_NODE_ID, WORKGROUP_TURN_MEMBER_NODE_ID } from '../public/commands'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
+import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
 
 class WorkgroupHostLedgerConflict extends Error {
   constructor(readonly operationKey: string) {
@@ -92,10 +94,37 @@ export function leaderClarifyParkedOf(
   )
 }
 
+/**
+ * RFC-369 §4.4 —— 先点读，只有 pending 才走事务内生命周期 CAS 落 failed；其余状态空操作。
+ * `setNodeRunStatusTx` 遇终态 / 不在 allowedFrom 会抛 ConflictError，把整笔提交带成 lost，所以不能直接调。
+ * failureCode 留 NULL：封闭的 FAILURE_CODES 里没有「内部错误」这一档。
+ */
+async function failPendingHostRun(
+  transaction: DatabaseTransaction,
+  taskId: string,
+  operation: WorkgroupHostLedgerFailRunOperation,
+): Promise<boolean> {
+  const rows = await transaction
+    .select({ status: nodeRuns.status })
+    .from(nodeRuns)
+    .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.id, operation.runId)))
+    .limit(1)
+  if (rows[0]?.status !== 'pending') return false
+  await setNodeRunStatusTx({
+    tx: transaction,
+    nodeRunId: operation.runId,
+    to: 'failed',
+    allowedFrom: ['pending'],
+    extra: { errorMessage: operation.message, finishedAt: Date.now() },
+    reason: 'workgroup-host-turn-internal-error',
+  })
+  return true
+}
+
 async function applyOperation(
   transaction: DatabaseTransaction,
   taskId: string,
-  operation: WorkgroupHostLedgerOperation,
+  operation: Exclude<WorkgroupHostLedgerOperation, WorkgroupHostLedgerFailRunOperation>,
 ): Promise<WorkgroupHostLedgerMintReceipt | null> {
   if (operation.kind === 'mint-host-run') {
     await createNodeRunMintParticipantInTx(transaction).mint({
@@ -128,6 +157,7 @@ async function applyOperation(
     }
   }
 
+  operation.kind satisfies 'stamp-host-run-round'
   const changed = await transaction
     .update(nodeRuns)
     .set({ wgRound: operation.wgRound })
@@ -157,11 +187,18 @@ export function createWorkgroupHostLedgerParticipantInTx(
     async apply(input: Parameters<WorkgroupHostLedgerParticipantInTx['apply']>[0]) {
       try {
         const mintedRuns: WorkgroupHostLedgerMintReceipt[] = []
+        const failedRunIds: string[] = []
         for (const operation of input.operations) {
+          if (operation.kind === 'fail-host-run') {
+            if (await failPendingHostRun(transaction, input.taskId, operation)) {
+              failedRunIds.push(operation.runId)
+            }
+            continue
+          }
           const minted = await applyOperation(transaction, input.taskId, operation)
           if (minted !== null) mintedRuns.push(minted)
         }
-        return { committed: true as const, mintedRuns }
+        return { committed: true as const, mintedRuns, failedRunIds }
       } catch (error) {
         if (error instanceof WorkgroupHostLedgerConflict) {
           return { committed: false as const, conflictOperationKey: error.operationKey }
