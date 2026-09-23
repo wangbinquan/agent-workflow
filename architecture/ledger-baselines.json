@@ -55,8 +55,8 @@
       "id": "merge-state-blind-writes",
       "file": "packages/backend/tests/rfc144-merge-state-blind-write-inventory.test.ts",
       "symbol": "MERGE_STATE_WRITE_ALLOWLIST",
-      "baseline": 2,
-      "why": "merge_state 的盲写站点（C9 点名的 blind-write marker 家族）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-359 4 → 2：去掉零生产调用方的 SQLite 孪生 `platform/persistence/sqlite/taskLifecycle.ts`（2 处）与一个早已退役、文件都不在了的 `sqliteNodeRunMintParticipant.ts`（1 处，allowlist 条目失效而守卫照绿的活样本）；今天两条写路径各自只剩 provider 中立的一份"
+      "baseline": 1,
+      "why": "merge_state 的盲写站点（C9 点名的 blind-write marker 家族）（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表）。RFC-359 4 → 2：去掉零生产调用方的 SQLite 孪生 `platform/persistence/sqlite/taskLifecycle.ts`（2 处）与一个早已退役、文件都不在了的 `sqliteNodeRunMintParticipant.ts`（1 处，allowlist 条目失效而守卫照绿的活样本）；今天两条写路径各自只剩 provider 中立的一份。RFC-369 2 → 1：铸造事务里的集合写（旧代 abandon）删除，旧代作废改由读侧推导，唯一写手是迁移的事件 CAS"
     },
     {
       "id": "node-run-direct-status-writes",
@@ -846,8 +846,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5407,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5413,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-369（2026-09-23）一次性 +6：新增 `task-execution/infrastructure/nodeRunSupersession.ts`（旧代取代判据的 SQL 谓词，从铸造事务挪到读侧）沿用本模块 infrastructure 既有的 `@/db/schema` / `@/db/query` 等 legacy-outbound 边，外加围栏对 `@/db/transactionScope#holdsExplicitTransaction` 的引用。下一笔不涨的提交退役本许可。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +870,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4806,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4810,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-369（2026-09-23）一次性 +4：同上新文件与围栏的 legacy-outbound 边，归 W9 随 owner adapter cutover 收敛。下一笔不涨的提交退役本许可。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +908,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24972,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24984,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-369（2026-09-23）一次性 +12：新增 `task-execution/domain/nodeRunSupersession.ts`（纯函数判据）与 `infrastructure/nodeRunSupersession.ts`（SQL 谓词）及其导出、`resolveSchedulerRunRow` 的 `supersededPendingRows`。下一笔不涨的提交退役本许可。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:a1761e3340ba7d26dece1c311b3f994d70b51b02914aff4221862a2485dca9bf",
+    "sourceDigest": "sha256:54509bf94118c122f646f12498615eee15cc99f0039891835a8234867da0555e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +929,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e729bdf537487f736d672bf024ed2d709ebba099",
-    "contentDigest": "sha256:e3fb7f687f31066518aba484bcb9dcba3001da1194ecb8474dd4c84bb150fa9c",
+    "currentSnapshotSha": "870c920e3c658baf7b261593489e13ae48111ad2",
+    "contentDigest": "sha256:84f8d34d1f63cd1eaf1b9a5af5af3b22792ad09f45d04712ad5399ef49de32d5",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

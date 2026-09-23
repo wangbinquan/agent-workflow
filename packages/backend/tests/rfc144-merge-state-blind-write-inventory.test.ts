@@ -5,10 +5,12 @@
 // RFC-144 把全部写点收进两个内核：merge_state 迁移的事件 CAS
 // （`mergeStateLifecyclePersistence.ts`）与铸行 supersede 闭包的集合式守卫写
 // （`nodeRunMintParticipant.ts`，WHERE 即转移守卫）——RFC-359 后两者都是 provider 中立的一份。
+// RFC-369：铸造事务里的集合写已删除（旧代作废改由读侧推导，被取代的行在迁移 CAS 里收成
+// abandoned），唯一剩下的写手是迁移的事件 CAS。
 // 本文件是第 4 层防护——s14 同款源码扫描棘轮：
 //
 //   1. 「`.update(nodeRuns)` 且 `.set({...})` 含 `mergeState:`」的直写，唯一的
-//      永久 allowlist 是上面两个内核（各恰 1 处，各带
+//      永久 allowlist 是迁移内核（恰 1 处，带
 //      `rfc144-allow-direct-merge-state-write` 标记）。其余任何 src 文件出现
 //      merge_state 直写 → 本测试红，作者必须改走 `MergeStateLifecyclePersistence`。
 //   2. 「`.insert(nodeRuns)` 且 `.values({...})` 含 `mergeState:`」在生产代码
@@ -34,7 +36,7 @@ const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
  * 两条写路径今天各自只剩**中立的一份**，两个引擎共用。
  */
 const MERGE_STATE_WRITE_ALLOWLIST: Record<string, number> = {
-  'modules/task-execution/infrastructure/nodeRunMintParticipant.ts': 1,
+  // RFC-369：铸造参与者的集合写已删除，铸造只 insert（mergeState 生为 NULL，见下方 insert 格）。
   'modules/task-execution/infrastructure/mergeStateLifecyclePersistence.ts': 1,
 }
 
@@ -120,7 +122,7 @@ describe('RFC-144 ratchet: direct node_runs.merge_state writes confined to provi
       if (allowed !== undefined) {
         if (n !== allowed) {
           violations.push(
-            `${file}: ${n} merge_state write(s), allowlist pins exactly ${allowed} — route new writes through transitionMergeState / abandonSupersededMergeStates`,
+            `${file}: ${n} merge_state write(s), allowlist pins exactly ${allowed} — route new writes through transitionMergeState`,
           )
         }
         continue
@@ -131,7 +133,7 @@ describe('RFC-144 ratchet: direct node_runs.merge_state writes confined to provi
     }
     expect(violations).toEqual([])
     // allowlist 的每一条都必须**被占用**（防扫描器失效的空洞绿，也防退役文件留在表里）：
-    // merge_state 迁移的事件 CAS 写 + 铸行 supersede 闭包的集合写。
+    // merge_state 迁移的事件 CAS 写（RFC-369 起它也负责把被取代的行收成 abandoned）。
     expect(
       Object.fromEntries(
         Object.keys(MERGE_STATE_WRITE_ALLOWLIST).map((file) => [file, counts.updateWrites[file]]),

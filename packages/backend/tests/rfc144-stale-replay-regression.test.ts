@@ -20,11 +20,17 @@
 //      任务 fail-loud（而非 done+isolating 卡 blocked 桶）。
 //   源码锁：mintNodeRun 必须在 dbTxSync 内先 abandon 再 insert（P1-1）；
 //      taskQuestionDispatch 的同步 mint 同样接线。
+//
+// RFC-369：「作废」不再由铸造事务写出（那次同帧范围读在 PostgreSQL SERIALIZABLE 下让同任务的并发
+// 铸造互相中止），改由读侧推导——入口重放排除已被取代的行并收成 abandoned，迁移 CAS 把已被取代的行
+// 拦成非法迁移并收成 abandoned。场景 A 的端到端断言一字未改；B/C / D19 的判据集合不变，改断言
+// 「铸造不写旧代 + 推导集合 + 迁移被拦落 abandoned」；源码锁改为锁铸造里**没有**旧代读写（AC-1）。
 
 import type { WorkflowDefinition } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 
 import { taskRecoveryOperations } from './helpers/taskRecoveryOperations'
+import { derivedSupersededIds, expectFencedToAbandoned } from './helpers/nodeRunSupersession'
 import { createRetryEngine } from './helpers/retryEngine'
 import { eq } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -250,7 +256,7 @@ emit(envelope)`,
   }, 30000)
 })
 
-describe('RFC-144 mint 收口 — mintNodeRun 原子废弃前代行及其子行', () => {
+describe('RFC-144 mint 收口 — mintNodeRun 铸出后代，前代行及其子行按推导被取代（RFC-369）', () => {
   let db: DbClient
   let taskId: string
   beforeEach(async () => {
@@ -296,7 +302,7 @@ describe('RFC-144 mint 收口 — mintNodeRun 原子废弃前代行及其子行'
     })
   }
 
-  test('场景 B/C：前代 top-level（conflict-human）+ 其 shard 子行（pending-merge）随 mint 废弃；他节点崩溃窗口行不动', async () => {
+  test('场景 B/C：前代 top-level（conflict-human）+ 其 shard 子行（pending-merge）随 mint 被取代；他节点崩溃窗口行不动', async () => {
     await seedRow({ id: mkId(1), mergeState: 'conflict-human' }) // 前代 wrapper/agent 行
     await seedRow({ id: mkId(2), mergeState: 'pending-merge', parentNodeRunId: mkId(1) }) // 其 shard 子行
     await seedRow({ id: mkId(3), nodeId: 'other', mergeState: 'pending-merge' }) // 他节点合法崩溃窗口行
@@ -305,8 +311,11 @@ describe('RFC-144 mint 收口 — mintNodeRun 原子废弃前代行及其子行'
 
     const stateOf = async (id: string): Promise<string | null> =>
       (await db.select().from(nodeRuns).where(eq(nodeRuns.id, id)))[0]!.mergeState
-    expect(await stateOf(mkId(1))).toBe('abandoned') // 修复前：conflict-human 原样残留
-    expect(await stateOf(mkId(2))).toBe('abandoned') // (b) 支：随父废弃
+    // 铸造不写旧代（AC-1）；前代与其子行由推导判为已取代，他节点行不在内。
+    expect(await stateOf(mkId(1))).toBe('conflict-human')
+    expect(await derivedSupersededIds(db, taskId)).toEqual([mkId(1), mkId(2)])
+    await expectFencedToAbandoned(db, mkId(2)) // (b) 支：随父被取代
+    await expectFencedToAbandoned(db, mkId(1))
     expect(await stateOf(mkId(3))).toBe('pending-merge') // freshest 他节点行是合法 replay 对象
   })
 
@@ -332,7 +341,9 @@ describe('RFC-144 mint 收口 — mintNodeRun 原子废弃前代行及其子行'
           .from(nodeRuns)
           .where(eq(nodeRuns.id, mkId(1)))
       )[0]!
-      expect(row.mergeState).toBe('abandoned')
+      expect(row.mergeState).toBe('isolating') // 铸造不写旧代（RFC-369）
+      expect(await derivedSupersededIds(db, taskId)).toEqual([mkId(1)])
+      await expectFencedToAbandoned(db, mkId(1))
       expect(existsSync(isoDir)).toBe(true) // 目录原封不动（答后续跑还要用）
     } finally {
       rmSync(isoDir, { recursive: true, force: true })
@@ -719,29 +730,36 @@ describe('RFC-144 deriveFrontier — abandoned 分桶（穷举 switch 的新格�
 })
 
 describe('RFC-144 源码锁 — mint 收口点的原子接线形态', () => {
-  // RFC-359：原来这条还先读 `sqliteNodeRunMintParticipant.ts`，钉「同步 runner 必须先走到共享
-  // program」。同步那个参与者随本波退役（生产侧只有一层零调用方的转发），于是只剩中立那份——
-  // 它本来就是两个引擎唯一在跑的实现，判据的承重部分（**同一笔事务内先 abandon 同代旧行、再
-  // insert 新行**）一个字没变。顺带钉住事务内工厂确实驱动的是同一个 program。
-  test('node-run mint participant：同一 reserved tx 内先 abandon superseded rows 再 insert（D12/P1-1）', () => {
+  // RFC-369 AC-1：铸造事务里**没有**同帧旧代的范围读与 abandon 写——那次范围读在 PostgreSQL
+  // SERIALIZABLE 下让同一任务的并发铸造互相中止（RFC-369 design §1）。「作废」改由读侧推导，
+  // 行为锁见上面的 mint 收口两格与 rfc144-merge-state-cas。唯一允许的 node_runs 读是按主键点读容器行。
+  test('node-run mint participant：铸造 program 只 insert，不读同帧旧代、不写 merge_state（RFC-369 AC-1）', () => {
     const src = readFileSync(
       join(BACKEND_SRC, 'modules', 'task-execution', 'infrastructure', 'nodeRunMintParticipant.ts'),
       'utf-8',
     )
     const participantAt = src.indexOf('function* nodeRunMintProgram(')
-    const abandonAt = src.indexOf(".set({ mergeState: 'abandoned' })", participantAt)
-    const insertAt = src.indexOf('.insert(nodeRuns)', abandonAt)
-    expect(participantAt).toBeGreaterThan(-1)
-    expect(abandonAt).toBeGreaterThan(participantAt)
-    expect(insertAt).toBeGreaterThan(abandonAt)
-    // 事务内工厂驱动的必须是上面这同一个 program，而不是自己再抄一份写序列。
     const factoryAt = src.indexOf('export function createNodeRunMintParticipantInTx(')
-    expect(factoryAt).toBeGreaterThan(-1)
-    expect(src.slice(factoryAt)).toContain('nodeRunMintProgram(tx, input,')
+    expect(participantAt).toBeGreaterThan(-1)
+    expect(factoryAt).toBeGreaterThan(participantAt)
+    const program = src
+      .slice(participantAt, factoryAt)
+      .split('\n')
+      .filter((line) => !/^\s*(\/\/|\*|\/\*)/.test(line))
+      .join('\n')
+    expect(program).not.toContain('.update(nodeRuns)')
+    expect(program).not.toContain('mergeState')
+    expect(program).not.toContain("'abandoned'")
+    expect(program).not.toMatch(/\blt\(nodeRuns\.id/)
+    expect(program.match(/\.from\(nodeRuns\)/g) ?? []).toHaveLength(1)
+    expect(program).toContain('.where(eq(nodeRuns.id, record.containerRunId!))')
+    expect(program.match(/\.insert\(nodeRuns\)/g) ?? []).toHaveLength(1)
+    // 事务内工厂驱动的必须是上面这同一个 program，而不是自己再抄一份写序列。
+    expect(src.slice(factoryAt)).toContain('nodeRunMintProgram(tx, input)')
     expect(src.slice(factoryAt)).not.toContain('.insert(nodeRuns)')
   })
 
-  test('taskQuestionDispatch：同步 tx 内 mint 前同参 abandon（RFC-120 原子 claim+mint 通道）', () => {
+  test('taskQuestionDispatch：同步 tx 内经中立铸造参与者铸行（RFC-120 原子 claim+mint 通道）', () => {
     const src = readFileSync(
       join(BACKEND_SRC, 'modules', 'collaboration', 'infrastructure', 'taskQuestionDispatch.ts'),
       'utf-8',

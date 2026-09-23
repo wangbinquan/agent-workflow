@@ -1,6 +1,6 @@
 # RFC-369 任务分解
 
-**状态**：**Draft（2026-09-23）**——设计门 r3 PASS-WITH-FINDINGS 已回写，待用户批准
+**状态**：**In Progress（2026-09-23 用户批准实施）**——刀 1（T1–T5、T8）已落，刀 2（T6）待做
 **读法**：先 [proposal.md](./proposal.md) 再 [design.md](./design.md)。
 
 ---
@@ -29,13 +29,13 @@
 
 ## 3. 验收清单
 
-- [ ] AC-1 铸造事务里无 node_runs 范围读 / abandon 写（源码锁 + 行为锁）
+- [x] AC-1 铸造事务里无 node_runs 范围读 / abandon 写（源码锁 + 行为锁）
 - [ ] AC-2 本地 PG 复跑冲突为 0
-- [ ] AC-3 RFC-144 / 172 行为锁改写后全绿、判据不放宽（变异验证）
-- [ ] AC-4 读到即收尾 abandoned
+- [x] AC-3 RFC-144 / 172 行为锁改写后全绿、判据不放宽（变异验证）
+- [x] AC-4 读到即收尾 abandoned
 - [ ] AC-5 三个注入点：内部错误按这一轮失败收场、不自动重来（双引擎）
-- [ ] AC-7 收紧三情形各一条测试
-- [ ] AC-8 调度器跳过已被取代的 pending 行
+- [x] AC-7 收紧三情形各一条测试
+- [x] AC-8 调度器跳过已被取代的 pending 行
 - [ ] AC-6 两条间歇红用例 CI 连续绿、backlog 条目改已修
 
 ## 附录：盘点来源
@@ -93,3 +93,21 @@ live CAS `isolatedAgentRun.ts:157-192, 237-258, 376-395, 473-484`；只看最新
 | P2-6 被跳过的旧 pending 行永远 pending | 同一步终结为 canceled（§4.5）；AC-8 断言 |
 | P3-1…P3-6 | 类型守卫与参与者显式分支；failureCode 为 NULL；终结后广播；领队 internal 分支先发消息再返回并写明两处差别；§4.5 跨帧取行、比较集合传全部 rows、containerRunId undefined 按 NULL；AC-8 反向用例 |
 
+
+## 刀 1 落地记录（2026-09-23）
+
+- **T1** 判据：`task-execution/domain/nodeRunSupersession.ts`（纯函数）+ `infrastructure/nodeRunSupersession.ts`（SQL 谓词，
+  只用在 SELECT）。
+- **T2** 围栏：`mergeStateLifecyclePersistence.transition` 在事务内判取代 ⇒ 同一处 `.update` 收成 abandoned（不带 extra）并提交，
+  提交后在事务外抛 `IllegalMergeStateTransition`；在外层事务帧里调用直接拒绝。
+- **T3** 入口重放：`nodeExecution.list({ excludeSuperseded })`；两段重放先把被排除的行 `tryTransition(abandon)` 收尾。
+- **T4** 铸造：`nodeRunMintProgram` 只剩 scope / lineage 解析与 insert；`readPriorRows` 参数、`ABANDONABLE_MERGE_STATES`
+  （含死值 `conflict-agent`）删除；blind-write 白名单去掉铸造那一处。
+- **T8** 调度器：`resolveSchedulerRunRow` 用 `supersededPendingRows`（比较集合 = 全部 rows、带帧维度）跳过已被取代的 pending 行，
+  同一步 `cancel-by-supersede` 终结为 canceled 并广播，没有可采纳的行就走既有新铸路径。
+- **T5** 测试：`rfc369-node-run-supersession.test.ts`（纯函数逐格、SQL/纯函数双引擎对拍、AC-2 并发铸造无重放、AC-4、
+  excludeSuperseded、AC-7、AC-8 及反向）；共享断言面 `tests/helpers/nodeRunSupersession.ts`；RFC-144 / 172 / 326 / 349 /
+  359-t1 / W47 / 287-t8 按新语义改写，判据集合不变。rfc144-cas 的 P1-2 格夹具补了 shardKey：同帧、null shard、id 更大的
+  子行按 §3(a) 本就取代父行（改前铸出这样一行同样会废父行），生产子行不会是这种形状。
+- **变异验证**：换回改前的铸造参与者 ⇒ AC-1 源码锁、AC-2（PG 上事务体被重放）、RFC-144 / 349 / W47 共 11 条红；SQL 去掉
+  shard 收口 ⇒ 对拍与 rfc172 红；关掉围栏 ⇒ AC-4 / AC-7 / rfc144-cas 共 8 条红。

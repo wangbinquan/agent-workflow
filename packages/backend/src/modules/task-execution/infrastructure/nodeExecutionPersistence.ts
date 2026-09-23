@@ -1,7 +1,7 @@
 // RFC-359 W4-B1 批 2f —— node run 执行投影（快照 / 输出 / 事件）：一份实现，两个 provider 共用。
 // 写路径是产品里最热的（agent 每吐一行就 appendEvents 一次）：统一写事务 + owner 围栏 + 聚合根行锁。
 
-import { and, asc, count, eq, inArray, isNotNull, isNull, notLike, sql } from 'drizzle-orm'
+import { and, asc, count, eq, inArray, isNotNull, isNull, not, notLike, sql } from 'drizzle-orm'
 
 import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -14,13 +14,14 @@ import type {
   NodeExecutionSnapshot,
 } from '../application/ports/nodeExecutionPersistence'
 import type { TaskExecutionContextRef } from '../application/ports/taskExecutionTopology'
+import { structurallySupersededCondition } from './nodeRunSupersession'
 import {
   fenceTaskWrite,
   type TaskExecutionTransaction,
   withTaskExecutionWrite,
 } from './ownedTaskExecution'
 
-function whereQuery(input: NodeExecutionQuery) {
+function whereQuery(db: ProviderNeutralDatabase, input: NodeExecutionQuery) {
   const conditions = [eq(nodeRuns.taskId, input.taskId)]
   if (input.nodeId !== undefined) conditions.push(eq(nodeRuns.nodeId, input.nodeId))
   if (input.iteration !== undefined) conditions.push(eq(nodeRuns.iteration, input.iteration))
@@ -39,6 +40,7 @@ function whereQuery(input: NodeExecutionQuery) {
   else if (input.containerRunId !== undefined) {
     conditions.push(eq(nodeRuns.containerRunId, input.containerRunId))
   }
+  if (input.excludeSuperseded === true) conditions.push(not(structurallySupersededCondition(db)))
   return and(...conditions)
 }
 
@@ -92,7 +94,11 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
 
   async list(input: NodeExecutionQuery): Promise<readonly NodeExecutionSnapshot[]> {
     return (
-      await this.db.select().from(nodeRuns).where(whereQuery(input)).orderBy(asc(nodeRuns.id))
+      await this.db
+        .select()
+        .from(nodeRuns)
+        .where(whereQuery(this.db, input))
+        .orderBy(asc(nodeRuns.id))
     ).map(snapshotOf)
   }
 

@@ -31,6 +31,7 @@ import { committedEventGroupId } from '@/platform/events/committed/types'
 import { ConcurrentTaskTransition } from '@/platform/persistence/sqlite/taskLifecycle'
 import { ConflictError } from '@/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
+import { derivedSupersededIds } from './helpers/nodeRunSupersession'
 
 const TASK_ID = 'task_rfc359_atoms'
 const NOW = 1_788_969_612_066
@@ -143,7 +144,9 @@ describeEachProvider('RFC-359 T1 —— committed-event 的唯一 append 实现'
 })
 
 describeEachProvider('RFC-359 T1 —— node_runs 铸造参与者', (harness) => {
-  test('替换铸造与旧代 merge 状态的退役在同一事务提交（移植自 rfc349 的 SQLite 用例）', async () => {
+  // RFC-369：铸造不再在同一事务里退役旧代（那次同帧范围读让同任务并发铸造在 PG 上互相中止），
+  // 旧代改由读侧推导为已取代。
+  test('替换铸造只 insert；旧代 merge 状态不被写、由读侧推导为已取代（RFC-369）', async () => {
     await seedTask(harness.db, 'running')
     await harness.session.transaction(async (tx) => {
       const mint = createNodeRunMintParticipantInTx(tx)
@@ -174,9 +177,10 @@ describeEachProvider('RFC-359 T1 —— node_runs 铸造参与者', (harness) =>
         .where(eq(nodeRuns.taskId, TASK_ID))
         .orderBy(nodeRuns.id),
     ).toEqual([
-      { id: '01RFC359000000000000000001', mergeState: 'abandoned' },
+      { id: '01RFC359000000000000000001', mergeState: 'pending-merge' },
       { id: '01RFC359000000000000000002', mergeState: null },
     ])
+    expect(await derivedSupersededIds(harness.db, TASK_ID)).toEqual(['01RFC359000000000000000001'])
   })
 })
 

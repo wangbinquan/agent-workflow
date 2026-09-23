@@ -2,12 +2,12 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 494,
-    "architectureExceptions": 4806,
+    "architectureExceptions": 4810,
     "backgroundJobs": 332,
-    "crossContextImports": 5407,
+    "crossContextImports": 5413,
     "facades": 291,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 24972,
+    "moduleSymbolOwners": 24984,
     "mutationEntrypoints": 1726,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 1011,
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 494,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1834,
+    "backendProductionFiles": 1836,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -118,16 +118,16 @@
       },
       {
         "context": "task-execution",
-        "files": 325
+        "files": 327
       }
     ],
-    "moduleFiles": 1287,
+    "moduleFiles": 1289,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
         "guard": "rfc098-node-run-mint-grep-guard",
-        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#127",
-        "line": 127,
+        "id": "node-runs-insert:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#82",
+        "line": 82,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#nodeRunMintProgram",
         "removeAfterWave": null,
         "status": "canonical-writer",
@@ -157,5 +157,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a1761e3340ba7d26dece1c311b3f994d70b51b02914aff4221862a2485dca9bf"
+  "sourceDigest": "sha256:54509bf94118c122f646f12498615eee15cc99f0039891835a8234867da0555e"
 }

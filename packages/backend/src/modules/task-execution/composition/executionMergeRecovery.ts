@@ -56,11 +56,55 @@ function replaySubmodulesMissing(
  * ever sees merged/failed rows. A conflict or missing node_tree throws → the caller
  * fails the task loudly (PR-B upgrades the conflict path to the merge agent).
  */
+/**
+ * RFC-369 §4.3 —— 把某一 merge 状态下、已被同帧更新一代结构性取代的行收成 abandoned。
+ * 收尾失败只记日志：重放本身已经按 `excludeSuperseded` 排除了它们，结果不依赖这一步。
+ */
+async function abandonSupersededRuns(
+  state: SchedulerState,
+  mergeState: 'pending-merge' | 'conflict-human',
+  log: Logger,
+): Promise<void> {
+  const all = await state.opts.persistence.nodeExecution.list({
+    taskId: state.taskId,
+    mergeState,
+  })
+  if (all.length === 0) return
+  const live = new Set(
+    (
+      await state.opts.persistence.nodeExecution.list({
+        taskId: state.taskId,
+        mergeState,
+        excludeSuperseded: true,
+      })
+    ).map((row) => row.id),
+  )
+  for (const row of all) {
+    if (live.has(row.id)) continue
+    const abandoned = await state.opts.persistence.mergeStates.tryTransition({
+      nodeRunId: row.id,
+      event: { kind: 'abandon', reason: 'superseded-by-newer-generation' },
+      ...(state.opts.executionContext === undefined
+        ? {}
+        : { executionContext: state.opts.executionContext }),
+    })
+    log.info('superseded merge row retired on replay', {
+      nodeRunId: row.id,
+      mergeState,
+      abandoned,
+    })
+  }
+}
+
 async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<void> {
   const { taskId, task } = state
+  // RFC-369 —— 被同帧更新一代取代的旧代不重放（它过期的 delta 不得进 canonical，RFC-144）；顺手收成
+  // abandoned。旧代作废原先在铸造事务里同事务落库，现在由读侧推导。
+  await abandonSupersededRuns(state, 'pending-merge', log)
   const rows = await state.opts.persistence.nodeExecution.list({
     taskId,
     mergeState: 'pending-merge',
+    excludeSuperseded: true,
   })
   if (rows.length === 0) return
   const taskBaseHeads: Record<string, string> = {}
@@ -153,9 +197,11 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
  */
 async function replayConflictHumanResolutions(state: SchedulerState, log: Logger): Promise<void> {
   const { taskId, task } = state
+  await abandonSupersededRuns(state, 'conflict-human', log)
   const rows = await state.opts.persistence.nodeExecution.list({
     taskId,
     mergeState: 'conflict-human',
+    excludeSuperseded: true,
   })
   if (rows.length === 0) return
   const taskBaseHeads: Record<string, string> = {}

@@ -3,6 +3,10 @@
 // the same closed application inputs. In particular, observers may read a
 // task but may never act on it, and minting retires superseded merge attempts
 // in the same transaction that creates the replacement run.
+//
+// RFC-369: minting no longer retires anything — that same-frame range read made
+// concurrent mints of one task abort each other under PostgreSQL SERIALIZABLE.
+// Supersession is derived on read; the mint's transaction holds only the insert.
 
 import { afterEach, expect, test } from 'bun:test'
 
@@ -10,6 +14,7 @@ import { eq, sql } from 'drizzle-orm'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
+import { derivedSupersededIds } from './helpers/nodeRunSupersession'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { nodeRuns, taskCollaborators, tasks, users } from '@/db/schema'
 import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
@@ -155,7 +160,7 @@ describeEachProvider('RFC-349 task transaction participants', (harness) => {
   // 生产侧只有 `services/nodeRunMint.ts#mintNodeRunTx` 一层零调用方的转发）。判据锁的是
   // **铸行与退役同笔提交**，与解释无关；改走中立参与者之后，本用例的两半（SQLite / PostgreSQL）
   // 现在是同一个形状、同一个 `nodeRunMintProgram`。
-  test('replacement mint and superseded-merge retirement commit atomically', async () => {
+  test('replacement mint commits alone; the superseded prior attempt is derived, not written (RFC-369)', async () => {
     const db = await seedTask(harness.db)
     await databaseSessionFor(db).transaction(async (tx) => {
       const mint = createNodeRunMintParticipantInTx(tx)
@@ -186,9 +191,10 @@ describeEachProvider('RFC-349 task transaction participants', (harness) => {
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, TASK_ID)),
     ).toEqual([
-      { id: '01RFC349000000000000000001', mergeState: 'abandoned' },
+      { id: '01RFC349000000000000000001', mergeState: 'pending-merge' },
       { id: '01RFC349000000000000000002', mergeState: null },
     ])
+    expect(await derivedSupersededIds(db, TASK_ID)).toEqual(['01RFC349000000000000000001'])
   })
 
   test('PostgreSQL binds authorization and minting to one reserved transaction', async () => {
@@ -217,7 +223,9 @@ describeEachProvider('RFC-349 task transaction participants', (harness) => {
     })
 
     const sqlText = fixture.statements.map((statement) => statement.sql.toLowerCase()).join('\n')
-    expect(sqlText).toContain('update "agent_workflow"."node_runs"')
+    // RFC-369 AC-1: the mint neither reads prior generations nor writes them.
+    expect(sqlText).not.toContain('update "agent_workflow"."node_runs"')
+    expect(sqlText).not.toContain('from "agent_workflow"."node_runs"')
     expect(sqlText).toContain('insert into "agent_workflow"."node_runs"')
     expect(
       fixture.statements.filter((statement) => /^begin\b/i.test(statement.sql.trim())),

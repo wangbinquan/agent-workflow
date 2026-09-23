@@ -123,10 +123,12 @@ describe('RFC-287 T8 — 取行前奏单一实现 + 四线×五项差异矩阵',
       "topLevelRows.find((row) => row.status === 'pending')",
     )
     expect(`${SCHEDULER}\n${NODE_MECHANICS}`).not.toMatch(/cause: schedulerMintCause\(/)
-    // 正向：收编函数里各有且仅有一处。
+    // 正向：收编函数里各有且仅有一处（RFC-369 起 pending 候选还要排除已被同帧更新一代取代的行）。
     expect(
-      RUN_ROW_RESOLVER.split("topLevelRows.find((row) => row.status === 'pending')").length - 1,
+      RUN_ROW_RESOLVER.split("(row) => row.status === 'pending' && !superseded.has(row.id)")
+        .length - 1,
     ).toBe(1)
+    expect(`${SCHEDULER}\n${NODE_MECHANICS}`).not.toContain('!superseded.has(row.id)')
     expect(RUN_ROW_RESOLVER.split('cause: schedulerMintCause(').length - 1).toBe(1)
   })
 

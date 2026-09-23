@@ -1,5 +1,11 @@
 // RFC-359 W47: one mint program must retain both callers' terminal and completion contracts.
 // These extracted-function controls execute no database or record/path derivation helper.
+//
+// RFC-369: the program no longer reads same-frame prior generations nor abandons them (that
+// range read made concurrent mints of one task abort each other under PostgreSQL SERIALIZABLE;
+// supersession is derived on read). The stage sequence shrinks to record → container? → task? →
+// insert, and every scenario — including ones that seed prior rows — must issue no update and no
+// third select.
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -304,9 +310,8 @@ function control(mode: Mode, scenario: Scenario, options: { fail?: Stage; hold?:
                 shared as (
                   tx: unknown,
                   input: unknown,
-                  run: (q: unknown) => unknown,
                 ) => Generator<TransactionProgramStep, unknown, unknown>
-              )(handle, value, (query: unknown) => (query as { all(): unknown }).all()),
+              )(handle, value),
               executeTransactionStepSync,
             )
           },
@@ -369,18 +374,16 @@ describe('RFC-359 W47 node-run mint completion contracts', () => {
         const result = await pending
         expect(result).toBe('minted-id')
         expect(run.inserted).toEqual(run.expectedValues)
-        expect(run.abandoned).toEqual(
-          scenario.priorIds.length === 0 ? undefined : { mergeState: 'abandoned' },
-        )
+        // RFC-369 AC-1: prior rows exist in some scenarios, yet nothing is read or abandoned.
+        expect(run.abandoned).toBeUndefined()
         expect<readonly string[]>(run.completed).toEqual([
           ...(scenario.scopePath === null && scenario.containerRunId !== null ? ['container'] : []),
           ...(scenario.lineageSlotPathJson === null ? ['task'] : []),
-          'prior',
-          ...(scenario.priorIds.length === 0 ? [] : ['abandon']),
           'insert',
         ])
-        const terminal = encode({ operation: mode === 'sync' ? 'all' : 'then', args: ['prior'] })
-        expect(run.events).toContainEqual(terminal)
+        expect(
+          run.events.filter((event) => (event as { operation?: unknown }).operation === 'update'),
+        ).toEqual([])
         run.snapshot(result)
       }
     }
@@ -388,7 +391,7 @@ describe('RFC-359 W47 node-run mint completion contracts', () => {
 
   test('native errors remain immediate and asynchronous errors reject with the same identity', async () => {
     const scenario = scenarios[1]!
-    for (const stage of ['record', 'container', 'task', 'prior', 'abandon', 'insert'] as const) {
+    for (const stage of ['record', 'container', 'task', 'insert'] as const) {
       for (const mode of ['sync', 'async'] as const) {
         const run = control(mode, scenario, { fail: stage })
         let error: unknown
@@ -411,7 +414,7 @@ describe('RFC-359 W47 node-run mint completion contracts', () => {
           }
           expect(error).toBe(run.failure)
         }
-        const allStages: readonly Stage[] = ['container', 'task', 'prior', 'abandon', 'insert']
+        const allStages: readonly Stage[] = ['container', 'task', 'insert']
         expect(run.completed).toEqual(
           stage === 'record' ? [] : allStages.slice(0, allStages.indexOf(stage) + 1),
         )
@@ -425,7 +428,7 @@ describe('RFC-359 W47 node-run mint completion contracts', () => {
   })
 
   test('every asynchronous terminal finishes before the following operation or returned id', async () => {
-    const stages: readonly Stage[] = ['container', 'task', 'prior', 'abandon', 'insert']
+    const stages: readonly Stage[] = ['container', 'task', 'insert']
     for (const stage of stages) {
       const run = control('async', scenarios[1]!, { hold: stage })
       const pending = run.mint()

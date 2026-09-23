@@ -120,6 +120,11 @@ export interface NodeExecutionQuery {
   readonly childOnly?: boolean
   /** RFC-354 — restrict to one frame: null = the top scope, an id = that generation's body. */
   readonly containerRunId?: string | null
+  /**
+   * RFC-369 —— 排除已被同帧更新一代结构性取代的行（判据见 `domain/nodeRunSupersession.ts`）。
+   * 入口重放必须带上：旧代作废不再在铸造时落 abandoned，而是由读侧推导。
+   */
+  readonly excludeSuperseded?: boolean
 }
 
 export type NodeExecutionProjectionPatch = Partial<

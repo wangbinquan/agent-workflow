@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1834,
+    "backendFiles": 1836,
     "frontendFiles": 622,
     "legacyFiles": 547,
-    "moduleFiles": 1287,
-    "productionFiles": 2611,
+    "moduleFiles": 1289,
+    "productionFiles": 2613,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 24972
+    "symbolsIncludingFileRoots": 24984
   },
   "entries": [
     {
@@ -121414,6 +121414,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/resolveSchedulerRunRow.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/resolveSchedulerRunRow.ts#supersededPendingRows",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "supersededPendingRows",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/resumeRollbackTargets.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/resumeRollbackTargets.ts#$file",
@@ -123280,6 +123292,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts#abandonSupersededRuns",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "abandonSupersededRuns",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -128483,6 +128507,78 @@
       "currentContext": "task-execution",
       "currentLayer": "domain",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts#isStructurallySuperseded",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "isStructurallySuperseded",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts#isSupersedableMergeState",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "isSupersedableMergeState",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts#SUPERSEDABLE_MERGE_STATES",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SUPERSEDABLE_MERGE_STATES",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts#supersededTopLevel",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "supersededTopLevel",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/nodeRunSupersession.ts#SupersessionRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SupersessionRow",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/domain/ownership.ts",
       "id": "owner:packages/backend/src/modules/task-execution/domain/ownership.ts#$file",
       "removeAfterWave": null,
@@ -133127,6 +133223,18 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/mergeStateLifecyclePersistence.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/mergeStateLifecyclePersistence.ts#isRunSuperseded",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "isRunSuperseded",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/nodeActivationSnapshotReader.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeActivationSnapshotReader.ts#$file",
       "removeAfterWave": null,
@@ -133450,18 +133558,6 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#ABANDONABLE_MERGE_STATES",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "ABANDONABLE_MERGE_STATES",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#createNodeRunMintParticipantInTx",
@@ -133499,30 +133595,6 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#PriorRows",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "PriorRows",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#ReadPriorRows",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "ReadPriorRows",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunRuntimePersistence.ts#$file",
       "removeAfterWave": null,
@@ -133552,6 +133624,78 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "projection",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts#newerGenerationExists",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "newerGenerationExists",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts#NodeRunColumns",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NodeRunColumns",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts#nullableEquals",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "nullableEquals",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts#QueryBuilder",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "QueryBuilder",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunSupersession.ts#structurallySupersededCondition",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "structurallySupersededCondition",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -300382,5 +300526,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a1761e3340ba7d26dece1c311b3f994d70b51b02914aff4221862a2485dca9bf"
+  "sourceDigest": "sha256:54509bf94118c122f646f12498615eee15cc99f0039891835a8234867da0555e"
 }

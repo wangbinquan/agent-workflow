@@ -7,8 +7,8 @@
 // `…Tx` twins that take the caller's handle. The async originals became pure
 // wrappers around the twins. This file pins:
 //   - same input → byte-identical resulting rows (ALL node_runs rows, including
-//     the prior generations `abandonSupersededMergeStates` retires on mint) and
-//     the same return value;
+//     the prior generations — RFC-369: the mint no longer writes them; their
+//     supersession is derived on read) and the same return value;
 //   - same refusal → same DomainError subclass + code (not found / illegal
 //     transition / RFC-303 source-termination fence);
 //   - the originals really are wrappers (no second direct write in the async
@@ -29,6 +29,7 @@ import { mintNodeRun, type MintNodeRunArgs } from '../src/services/nodeRunMint'
 import { createNodeRunMintParticipantInTx } from '@/modules/task-execution/infrastructure/nodeRunMintParticipant'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { hasActingMembership } from '../src/services/taskCollab'
+import { derivedSupersededIds } from './helpers/nodeRunSupersession'
 import { DomainError } from '../src/util/errors'
 
 const MIGRATIONS = resolve(import.meta.dir, '..', 'db', 'migrations')
@@ -253,7 +254,7 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retir
     return dump(db).map((r) => ({ ...r, id: r.id === mintedId ? '<minted>' : r.id }))
   }
 
-  test('same rows after the mint — the new row AND every abandoned prior generation', async () => {
+  test('same rows after the mint — the new row AND every prior generation (untouched, derived superseded)', async () => {
     expect(ABANDONABLE.length).toBeGreaterThan(0)
     expect(NOT_ABANDONABLE.length).toBeGreaterThan(0)
     const [a, b] = await pair()
@@ -267,10 +268,13 @@ describe('RFC-326 AC-19 — mintNodeRun ≡ in-transaction mint (including retir
     const rowsA = normalised(a, idA)
     expect(normalised(b, idB)).toEqual(rowsA)
 
-    // The fixture exercised the retire path: the abandonable prior generation of
-    // the SAME (task, node, iteration) flipped, everything else stayed.
+    // RFC-369: the mint writes no prior generation; the abandonable prior generation of
+    // the SAME (task, node, iteration) is derived superseded — in both databases alike —
+    // and everything else is not.
     const byId = new Map(rowsA.map((r) => [r.id, r]))
-    expect(byId.get(DOC_PRIOR)!.mergeState).toBe('abandoned')
+    expect(byId.get(DOC_PRIOR)!.mergeState).toBe(ABANDONABLE[0]!)
+    expect(await derivedSupersededIds(a, TASK)).toEqual([DOC_PRIOR])
+    expect(await derivedSupersededIds(b, TASK)).toEqual([DOC_PRIOR])
     expect(byId.get(DOC_PRIOR_KEPT)!.mergeState).toBe(NOT_ABANDONABLE[0]!)
     expect(byId.get(OTHER_NODE)!.mergeState).toBe(ABANDONABLE[0]!)
     expect(byId.get(DOC_ITER1)!.mergeState).toBe(ABANDONABLE[0]!)

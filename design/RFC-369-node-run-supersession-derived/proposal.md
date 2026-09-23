@@ -1,6 +1,6 @@
 # RFC-369 node_run 旧代作废改由读侧推导（根治同任务并发铸 run 的 PG 序列化冲突）
 
-**状态**：**Draft（2026-09-23）**——待设计门与用户批准
+**状态**：**In Progress（2026-09-23 用户批准实施）**——刀 1（G1/G2/G4）已落，刀 2（G3）待做
 **来源**：`docs/audit-backlog.md`「PostgreSQL 的 40001 仍会逃逸到调用方：`rfc359-w4-d19c` /
 `rfc185-leader-fanout` 工作组回合在 CI 上间歇红」条目（2026-09-15 首撞，2026-09-23 钉到语句级）
 **母 RFC**：[RFC-294](../RFC-294-backend-layered-target-architecture/proposal.md)（落在 task-execution context）

@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs'
 import type { WorkflowDefinition, WorkgroupRuntimeConfig } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
+import { derivedSupersededIds, expectFencedToAbandoned } from './helpers/nodeRunSupersession'
 import { clarifyRounds, nodeRuns, taskQuestions, tasks, workflows } from '../src/db/schema'
 import {
   buildFrontierMintPlan,
@@ -696,6 +697,8 @@ describe('RFC-172b T6 — hasOpenDispatchedEntryOnHome shard scoping (S4)', () =
 // RFC-359：判据原本打在 `abandonSupersededMergeStates` 上——那个 SQLite 孪生已随
 // merge_state 孪生一并删除（零生产调用方）。生产的 supersede 闭包是铸行程序
 // `nodeRunMintProgram` 的一步，provider 中立的一份，所以判据改打在铸行入口上，两个引擎各跑一遍。
+// RFC-369：「作废」改由读侧推导（铸造不再写旧代），按 shard 收口的判据一字不变——推导集合与迁移围栏
+// 两面各断言一次；兄弟 shard 仍可正常前进。
 describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 shard 收口', (harness) => {
   async function seedRun(db: ProviderNeutralDatabase, taskId: string, shard: string) {
     return seedNodeRun(db, taskId, WG_MEMBER_NODE_ID, {
@@ -706,9 +709,9 @@ describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 sha
   }
 
   /**
-   * 铸一行新的 __wg_member__ run —— supersede 闭包是它同事务内的一步。
+   * 铸一行新的 __wg_member__ run（RFC-369 起只 insert，取代关系由读侧推导）。
    *
-   * **id 必须显式给本文件的 monotonic `ulid()`**：supersede 的谓词是 `lt(id, 新行 id)`，
+   * **id 必须显式给本文件的 monotonic `ulid()`**：取代的判据是「同帧存在 id 更大的行」，
    * 而铸行程序默认用 `ulid` 包的**随机** ulid——同毫秒内它可能排在前面几行**之下**，
    * 于是一条前代也不废、判据在快机器上随机变红（macOS 分片 4/6 实撞）。
    * 前面的 seed 行同样出自这个 monotonic 工厂，所以这里再取一个必然严格更大。
@@ -738,6 +741,8 @@ describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 sha
     const runA = await seedRun(db, taskId, 'assign-A') // member A: running + isolating
     const runB = await seedRun(db, taskId, 'assign-B') // member B: prior generation
     await mintMemberRun(db, taskId, 'assign-B')
+    expect(await derivedSupersededIds(db, taskId)).toEqual([runB])
+    await expectFencedToAbandoned(db, runB)
     const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
     const byId = new Map(rows.map((r) => [r.id, r.mergeState]))
     expect(byId.get(runA)).toBe('isolating') // sibling member A UNTOUCHED (the fix)
@@ -751,10 +756,9 @@ describeEachProvider('RFC-172b Codex P1 —— 铸行的 supersede 闭包按 sha
     const runA = await seedRun(db, taskId, 'assign-A')
     const runB = await seedRun(db, taskId, 'assign-B')
     await mintMemberRun(db, taskId, null)
-    const rows = await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))
-    const byId = new Map(rows.map((r) => [r.id, r.mergeState]))
-    expect(byId.get(runA)).toBe('abandoned')
-    expect(byId.get(runB)).toBe('abandoned')
+    expect(await derivedSupersededIds(db, taskId)).toEqual([runA, runB].sort())
+    await expectFencedToAbandoned(db, runA)
+    await expectFencedToAbandoned(db, runB)
   })
 })
 

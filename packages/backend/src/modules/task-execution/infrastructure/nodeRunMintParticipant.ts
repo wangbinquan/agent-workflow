@@ -1,7 +1,7 @@
 // RFC-359 W47 —— one node-run mint program, driven by the existing sync/async entries.
-// The callers retain transaction ownership and their original prior-row read terminal.
+// The callers retain transaction ownership.
 
-import { and, eq, inArray, isNull, lt, or } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 
 import { nodeRuns, tasks } from '@/db/schema'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
@@ -17,28 +17,23 @@ import {
 import type { NodeRunMintInput } from '../application/ports/nodeRunLifecyclePersistence'
 import { childScopePath } from '../domain/environmentChain'
 
-const ABANDONABLE_MERGE_STATES = [
-  'isolating',
-  'pending-merge',
-  'conflict-agent',
-  'conflict-human',
-] as const
-
 /** 在调用方已持有的事务里铸造 node_runs 行。 */
 export interface NodeRunMintParticipantInTx {
   mint(input: NodeRunMintInput): Promise<string>
 }
 
-type PriorRows = Array<Pick<typeof nodeRuns.$inferSelect, 'id'>>
-type ReadPriorRows = (
-  query: PromiseLike<PriorRows> & { all(): PriorRows | PromiseLike<PriorRows> },
-) => PriorRows | PromiseLike<PriorRows>
-
-/** One mint sequence; each existing entry retains its own prior-row terminal. */
+/**
+ * One mint sequence: scope / lineage resolution, then the insert.
+ *
+ * RFC-369 —— 这里**不再**读同帧旧代、也不再把它们标成 abandoned。那次范围读在 PostgreSQL
+ * SERIALIZABLE 下按索引页加谓词锁，同一任务里的任意两次并发铸造几乎必然互判读写依赖、其一被中止
+ * （工作组领队 / 成员并发时 CI 上间歇红，本地实验去掉后 8→0 次冲突）。「旧代作废」改由读侧按同一
+ * 判据推导：merge 状态机迁移（`mergeStateLifecyclePersistence.ts`）与入口重放
+ * （`executionMergeRecovery.ts`），判据见 `domain/nodeRunSupersession.ts`。
+ */
 export function* nodeRunMintProgram(
   tx: DatabaseTransaction,
   input: NodeRunMintInput,
-  readPriorRows: ReadPriorRows,
 ): Generator<TransactionProgramStep, string, void> {
   const record = buildNodeRunMintRecord(input)
   // RFC-354 — derive the breadcrumb from the generation row this row hangs
@@ -84,46 +79,6 @@ export function* nodeRunMintProgram(
     continuationSlotKey: lineage.continuationSlotKey,
     lineageSlotPathJson: lineage.lineageSlotPathJson,
   }
-  // Prior generations of the SAME frame are superseded by this mint. The frame is part of
-  // the key: a nested loop's round-0 row under outer round 1 must never abandon the round-0
-  // row under outer round 0.
-  const priorRows = yield* transactionStep(() =>
-    readPriorRows(
-      tx
-        .select({ id: nodeRuns.id })
-        .from(nodeRuns)
-        .where(
-          and(
-            eq(nodeRuns.taskId, values.taskId),
-            eq(nodeRuns.nodeId, values.nodeId),
-            eq(nodeRuns.iteration, values.iteration),
-            values.containerRunId === null
-              ? isNull(nodeRuns.containerRunId)
-              : eq(nodeRuns.containerRunId, values.containerRunId),
-            isNull(nodeRuns.parentNodeRunId),
-            lt(nodeRuns.id, values.id),
-            ...(values.shardKey === null ? [] : [eq(nodeRuns.shardKey, values.shardKey)]),
-          ),
-        ),
-    ),
-  )
-  const priorIds = priorRows.map((row) => row.id)
-  if (priorIds.length > 0) {
-    yield* transactionStep(() =>
-      tx
-        .update(nodeRuns)
-        // rfc144-allow-direct-merge-state-write -- supersede 闭包：WHERE 的 IN(from 集) 即转移守卫
-        .set({ mergeState: 'abandoned' })
-        .where(
-          and(
-            eq(nodeRuns.taskId, values.taskId),
-            inArray(nodeRuns.mergeState, [...ABANDONABLE_MERGE_STATES]),
-            or(inArray(nodeRuns.id, priorIds), inArray(nodeRuns.parentNodeRunId, priorIds)),
-          ),
-        )
-        .run(),
-    )
-  }
   yield* transactionStep(() => tx.insert(nodeRuns).values(values).run())
   return values.id
 }
@@ -133,10 +88,7 @@ export function createNodeRunMintParticipantInTx(
 ): NodeRunMintParticipantInTx {
   return Object.freeze({
     async mint(input: NodeRunMintInput) {
-      return driveAsyncProgram(
-        nodeRunMintProgram(tx, input, (query) => query),
-        (step) => step(),
-      )
+      return driveAsyncProgram(nodeRunMintProgram(tx, input), (step) => step())
     },
   })
 }

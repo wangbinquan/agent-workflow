@@ -1338,6 +1338,7 @@ export async function runCallWorkflowNode(
     clearAgentOverride: true,
     trackRetryIndex: true,
     broadcastPending: (id) => broadcastNodeStatus(taskId, id, node.id, 'pending'),
+    broadcastCanceled: (id) => broadcastNodeStatus(taskId, id, node.id, 'canceled'),
     preResolve: async (latestExisting) => {
       // RFC-243-LOCK:adoption-no-mint-begin — this block re-attaches; minting
       // here would let the mint program's supersede closure retire the child's
@@ -2660,6 +2661,7 @@ export async function runScriptNode(
     clearAgentOverride: false,
     trackRetryIndex: true,
     broadcastPending: (id) => broadcastNodeStatus(taskId, id, node.id, 'pending'),
+    broadcastCanceled: (id) => broadcastNodeStatus(taskId, id, node.id, 'canceled'),
   })
   let nodeRunId = resolvedRow.nodeRunId
   const retryIndex = resolvedRow.retryIndex
@@ -3841,6 +3843,7 @@ export async function runAgentSingleNode(
     clearAgentOverride: true,
     trackRetryIndex: true,
     broadcastPending: (id) => broadcastNodeStatus(taskId, id, node.id, 'pending'),
+    broadcastCanceled: (id) => broadcastNodeStatus(taskId, id, node.id, 'canceled'),
   })
   let nodeRunId = resolvedRow.nodeRunId
   const retryIndex = resolvedRow.retryIndex

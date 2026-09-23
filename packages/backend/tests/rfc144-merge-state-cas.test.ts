@@ -11,7 +11,11 @@
 //   ④ supersede 闭包：(a) 废前代 top-level / (b) 废前代子行闭包 /
 //      merged 与 merge-failed 不可误废弃 / id< 边界（新行自身与更新行不动）/
 //      **父行未被取代的子行不误伤**（Codex 设计门 P1-2 对应格）/ 幂等 /
-//      **同事务原子性**（tx 内注入故障 → abandon 与 insert 一起回滚，P1-1 对应格）。
+//      **同事务原子性**（tx 内注入故障 → insert 回滚，P1-1 对应格）。
+//
+// RFC-369：④ 的判据集合逐格不变，但「作废」不再由铸造事务写出——铸造只 insert，旧代由读侧推导
+// （`derivedSupersededIds` = 生产 SQL 谓词），并在下一次迁移尝试时被拦成非法迁移、收成 abandoned 落库
+// （`expectFencedToAbandoned`）。每格断言「铸造没写旧代」+「推导集合 = 改前会被 abandon 的集合」。
 //
 // RFC-359：判据原本打在 `platform/persistence/sqlite/taskLifecycle.ts` 的
 // `transitionMergeState` / `tryTransitionMergeState` / `abandonSupersededMergeStates`
@@ -34,6 +38,7 @@ import { withTaskExecutionWrite } from '@/modules/task-execution/infrastructure/
 import { IllegalMergeStateTransition, type MergeStateOrNull } from '@agent-workflow/shared'
 import type { NodeRunStatus } from '@agent-workflow/shared'
 import { dbWithCompetingWriter } from './helpers/competingWriter'
+import { derivedSupersededIds, expectFencedToAbandoned } from './helpers/nodeRunSupersession'
 import { describeEachProvider } from './helpers/eachProvider'
 
 /** 定长补零 id：字典序 = 数值序，供 supersede 的 id< 边界断言。 */
@@ -70,6 +75,7 @@ async function seedRun(
     iteration?: number
     mergeState?: MergeStateOrNull
     parentNodeRunId?: string | null
+    shardKey?: string | null
     status?: NodeRunStatus
   } = {},
 ): Promise<string> {
@@ -83,6 +89,7 @@ async function seedRun(
     status: opts.status ?? 'done',
     mergeState: opts.mergeState ?? null,
     parentNodeRunId: opts.parentNodeRunId ?? null,
+    shardKey: opts.shardKey ?? null,
     startedAt: Date.now() - 10,
   })
   return id
@@ -313,7 +320,7 @@ describeEachProvider('RFC-144 tryTransition —— 域错误折 false', (harness
   })
 })
 
-/** 铸一行新 node_run —— 生产铸行链路的唯一入口，supersede 闭包是它的一步。 */
+/** 铸一行新 node_run —— 生产铸行链路的唯一入口（RFC-369 起只 insert，不再写旧代）。 */
 async function mint(
   db: ProviderNeutralDatabase,
   taskId: string,
@@ -340,9 +347,13 @@ describeEachProvider('RFC-144 铸行即取代 —— supersede 闭包', (harness
     const a2 = await seedRun(db, taskId, { id: mkId(2), mergeState: 'pending-merge' })
     const a3 = await seedRun(db, taskId, { id: mkId(3), mergeState: 'conflict-human' })
     await mint(db, taskId, { id: mkId(10) })
-    expect(await mergeStateOf(db, a1)).toBe('abandoned')
-    expect(await mergeStateOf(db, a2)).toBe('abandoned')
-    expect(await mergeStateOf(db, a3)).toBe('abandoned')
+    // 铸造不写旧代（AC-1）……
+    expect(await mergeStateOf(db, a1)).toBe('isolating')
+    expect(await mergeStateOf(db, a2)).toBe('pending-merge')
+    expect(await mergeStateOf(db, a3)).toBe('conflict-human')
+    // ……旧代由读侧推导为已取代，下一次迁移被拦、收成 abandoned 落库（AC-3 / AC-4）。
+    expect(await derivedSupersededIds(db, taskId)).toEqual([a1, a2, a3])
+    for (const id of [a1, a2, a3]) await expectFencedToAbandoned(db, id)
   })
 
   test('(b) 废：前代父行的子行（shard/aggregator）随父废弃；merged 前代与 NULL 行不动', async () => {
@@ -364,8 +375,9 @@ describeEachProvider('RFC-144 铸行即取代 —— supersede 闭包', (harness
       parentNodeRunId: oldParent,
     })
     await mint(db, taskId, { id: mkId(10) })
-    expect(await mergeStateOf(db, oldParent)).toBe('abandoned')
-    expect(await mergeStateOf(db, oldChildPending)).toBe('abandoned')
+    expect(await derivedSupersededIds(db, taskId)).toEqual([oldParent, oldChildPending])
+    await expectFencedToAbandoned(db, oldChildPending)
+    await expectFencedToAbandoned(db, oldParent)
     expect(await mergeStateOf(db, oldMerged)).toBe('merged')
     expect(await mergeStateOf(db, oldNull)).toBeNull()
     expect(await mergeStateOf(db, oldChildMerged)).toBe('merged')
@@ -377,12 +389,16 @@ describeEachProvider('RFC-144 铸行即取代 —— supersede 闭包', (harness
     // freshest 父行（id 大于新铸行的场景不存在——mint 后代行必然最大；这里构造
     // 「新铸行早于现存行」的越界调用，断言零命中）。
     const freshParent = await seedRun(db, taskId, { id: mkId(20), mergeState: 'isolating' })
+    // 子行带 shard（生产里的子行要么带 shard、要么在父行之下的另一帧 / 另一个 nodeId）：同帧、
+    // null shard、id 更大的行本身就会按 §3(a) 取代父行——改前的铸造闭包在铸出这样一行时同样会废掉父行。
     const freshChild = await seedRun(db, taskId, {
       id: mkId(21),
       mergeState: 'pending-merge',
       parentNodeRunId: freshParent,
+      shardKey: 's1',
     })
     await mint(db, taskId, { id: mkId(10) }) // 早于两行 → 都不是「前代」
+    expect(await derivedSupersededIds(db, taskId)).toEqual([])
     expect(await mergeStateOf(db, freshParent)).toBe('isolating')
     expect(await mergeStateOf(db, freshChild)).toBe('pending-merge')
   })
@@ -401,23 +417,26 @@ describeEachProvider('RFC-144 铸行即取代 —— supersede 闭包', (harness
       mergeState: 'pending-merge',
     })
     await mint(db, taskId, { id: mkId(10) })
+    expect(await derivedSupersededIds(db, taskId)).toEqual([])
     expect(await mergeStateOf(db, otherNode)).toBe('pending-merge')
     expect(await mergeStateOf(db, otherIter)).toBe('pending-merge')
   })
 
-  test('幂等：再铸一行时前代已是 abandoned 终态、不在 from 集，不再二次翻面', async () => {
+  test('幂等：前代收成 abandoned 终态后不在可取代集，再铸一行也不二次翻面', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
     const prior = await seedRun(db, taskId, { id: mkId(1), mergeState: 'pending-merge' })
     await mint(db, taskId, { id: mkId(10) })
-    expect(await mergeStateOf(db, prior)).toBe('abandoned')
-    // 第二次铸行：mkId(10) 这一代自身 mergeState 为 NULL（不在 from 集），前代已 abandoned。
+    await expectFencedToAbandoned(db, prior)
+    expect(await derivedSupersededIds(db, taskId)).toEqual([])
+    // 第二次铸行：mkId(10) 这一代自身 mergeState 为 NULL（不在可取代集），前代已 abandoned。
     await mint(db, taskId, { id: mkId(11) })
+    expect(await derivedSupersededIds(db, taskId)).toEqual([])
     expect(await mergeStateOf(db, prior)).toBe('abandoned')
     expect(await mergeStateOf(db, mkId(10))).toBeNull()
   })
 
-  test('P1-1 对应格：事务内注入故障 → abandon 与 insert 一起回滚（生死与共）', async () => {
+  test('P1-1 对应格：事务内注入故障 → insert 回滚，旧代仍按推导未被取代', async () => {
     const db = harness.db
     const taskId = await seedTask(db)
     const zombie = await seedRun(db, taskId, { id: mkId(1), mergeState: 'pending-merge' })
@@ -431,11 +450,12 @@ describeEachProvider('RFC-144 铸行即取代 —— supersede 闭包', (harness
           status: 'pending',
           cause: 'initial',
         })
-        throw new Error('simulated crash between abandon and insert')
+        throw new Error('simulated crash after mint')
       }),
-    ).rejects.toThrow('simulated crash between abandon and insert')
-    // 回滚后旧行保持 pending-merge——不存在「已废弃但后代行不存在」的撕裂态。
+    ).rejects.toThrow('simulated crash after mint')
+    // 回滚后新一代不存在 ⇒ 旧行按推导未被取代、保持 pending-merge，入口重放仍会合并它。
     expect(await mergeStateOf(db, zombie)).toBe('pending-merge')
+    expect(await derivedSupersededIds(db, taskId)).toEqual([])
     expect(
       (
         await db
