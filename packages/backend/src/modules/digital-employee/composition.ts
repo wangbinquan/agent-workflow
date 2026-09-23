@@ -15,7 +15,10 @@ import type {
   EmployeeRetryLimitsPort,
   ProgramArtifactPort,
   PlatformWorkItemExecutionPort,
-  ReactionExecutionPort,
+  ReactionDiagnosticsSinkV1,
+  ReactionExecutionAdmissionParticipantV1,
+  ReactionExecutionPortV1,
+  ReactionRetryFeedbackReaderV1,
   ToolConnectionCatalogPort,
   ToolConnectionVisibilitySubject,
 } from './composition/required-ports'
@@ -32,6 +35,9 @@ import { createDigitalEmployeeAuthoringPersistence } from './infrastructure/auth
 import type { DigitalEmployeeAuthoringPersistence } from './application/ports/authoringStore'
 import { withTypePackageDraftOverlay } from './application/typePackageDraftOverlay'
 import { createRuntimePersistence } from './infrastructure/runtimeStore'
+import { createReactionArtifactPersistence } from './infrastructure/reactionArtifactStore'
+import type { ReactionArtifactPersistence } from './application/ports/reactionArtifacts'
+import { composeReactionArtifactPorts } from './composition/reactionArtifacts'
 import { createEmployeeAutomationWorkStartProvider as bindEmployeeAutomationWorkStartProvider } from './application/adapters/event-automation-adapter'
 import type { RuntimeCasePersistence } from './application/ports/runtimeStore'
 import {
@@ -91,7 +97,6 @@ export { createDigitalEmployeeIntegrationTriggerParticipantIn }
 export const createPostgresqlDigitalEmployeeIntegrationTriggerParticipant =
   createDigitalEmployeeIntegrationTriggerParticipantIn
 
-export { createReactionExecutionAdapter } from './application/adapters/task-execution-adapter'
 export { composeDigitalEmployeeTaskCatalogSource } from './application/adapters/task-catalog-adapter'
 export { runDigitalEmployeeOsCycle, startDigitalEmployeeOsWorker } from './application/osWorker'
 export { composeDigitalEmployeeAgentTemplateCatalogParticipant } from './composition/agentTemplateCatalog'
@@ -419,7 +424,7 @@ export interface DigitalEmployeeCompositionOptions {
    */
   readonly runtime?: {
     readonly eventCenter: EventCenterParticipant
-    readonly execution: ReactionExecutionPort
+    readonly reactionExecution: DigitalEmployeeReactionExecutionProvider
     readonly platformWorkItems?: PlatformWorkItemExecutionPort
     readonly codecs: readonly EmployeeTypeRuntimeCodec[]
     readonly detailProjectionParticipants?: readonly EmployeeCaseDetailProjectionParticipant[]
@@ -427,6 +432,21 @@ export interface DigitalEmployeeCompositionOptions {
   }
   readonly now?: () => number
   readonly id?: () => string
+}
+
+/**
+ * RFC-368 T17 —— Reaction 执行的装配面，由 TaskExecution 的
+ * `composeReactionExecutionProvider` 产出、组合根交进来：
+ *   · `admission(tx)` 绑到数字员工 store 的 claim 事务上（record-before-act 同事务）；
+ *   · `port(artifacts)` 是执行 port，它消费数字员工持有的反馈 reader 与诊断 sink——由这里把
+ *     自己的产物视图交过去，根上不形成装配环。
+ */
+export interface DigitalEmployeeReactionExecutionProvider {
+  readonly admission: (tx: ProviderNeutralDatabase) => ReactionExecutionAdmissionParticipantV1
+  port(artifacts: {
+    readonly retryFeedback: ReactionRetryFeedbackReaderV1
+    readonly diagnosticsSink: ReactionDiagnosticsSinkV1
+  }): ReactionExecutionPortV1
 }
 
 export interface DigitalEmployeeModuleWithRuntime extends DigitalEmployeeModule {
@@ -453,6 +473,7 @@ export interface ComposePostgresqlDigitalEmployeeOptions extends DigitalEmployee
 interface DigitalEmployeePersistenceBundle {
   readonly authoring: DigitalEmployeeAuthoringPersistence
   readonly runtime: RuntimeCasePersistence
+  readonly reactionArtifacts: ReactionArtifactPersistence
   readonly inputUploads: EmployeeInputUploadPersistence
   readonly migrationStatus: () => Promise<DigitalEmployeeMigrationStatus>
 }
@@ -854,7 +875,12 @@ function composeDigitalEmployeeFromPersistence(
           store: persistence.runtime,
           authoringStore: store,
           eventCenter: options.runtime.eventCenter,
-          execution: options.runtime.execution,
+          reactionExecution: {
+            port: options.runtime.reactionExecution.port(
+              composeReactionArtifactPorts(persistence.reactionArtifacts, options.now ?? Date.now),
+            ),
+            artifacts: persistence.reactionArtifacts,
+          },
           platformWorkItems: options.runtime.platformWorkItems ?? {
             async execute(plan) {
               return JSON.stringify({
@@ -1108,7 +1134,13 @@ export function composeDigitalEmployee(
       options.typePackageDriftPolicy === 'draft-overlay'
         ? withTypePackageDraftOverlay(persisted)
         : persisted,
-    runtime: createRuntimePersistence(options.db),
+    runtime: createRuntimePersistence(
+      options.db,
+      options.runtime === undefined
+        ? {}
+        : { reactionAdmission: options.runtime.reactionExecution.admission },
+    ),
+    reactionArtifacts: createReactionArtifactPersistence(options.db),
     inputUploads: createEmployeeInputUploadPersistence(options.db),
     migrationStatus: () => composeDigitalEmployeeWriterCutoverFor(options.db).analyze(),
   })

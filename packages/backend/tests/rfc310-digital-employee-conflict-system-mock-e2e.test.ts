@@ -13,6 +13,7 @@
 // `seed()` 对同名 `provider:projectPath` 直接抛「already seeded」，两个引擎复用同一个
 // projectPath 会让第二遍在第一行就炸（而且第一遍已经把 main 推到了 'target change'）。
 
+import { legacyShapedReactionExecution } from './helpers/legacyShapedReactionExecution'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { afterAll, beforeAll, describe, expect, setDefaultTimeout, test } from 'bun:test'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
@@ -341,7 +342,7 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
           runtime: {
             eventCenter: eventCenter.participant,
             codecs: [developmentEmployeeRuntimeCodec],
-            execution,
+            reactionExecution: legacyShapedReactionExecution(execution),
             platformWorkItems: platform,
           },
         })
@@ -440,6 +441,8 @@ describeEachProvider('RFC-310 Digital Employee 冲突收口 System Mock E2E（�
             if (await runtime.worker.pumpOneDelivery()) progress = true
             if ((await runtime.worker.planOneReaction()) !== null) progress = true
             if ((await runtime.worker.runOneOutbox()) !== 'idle') progress = true
+            // RFC-368：业务工具 round 由派发臂启动；与生产 OS worker 同序，排在 inspect 之前。
+            if ((await runtime.worker.dispatchOneReaction()) !== 'idle') progress = true
             const inspected = await runtime.worker.inspectOneExecution()
             if (inspected !== 'idle' && inspected !== 'pending') progress = true
             if ((await runtime.worker.publishOneChannelResult()) !== 'idle') progress = true

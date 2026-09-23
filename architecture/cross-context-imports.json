@@ -734,6 +734,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#$file",
+      "fromPath": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:01ac7b6ec5c4e60f05f8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "digital-employee",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeReactionArtifacts",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "employeeReactionArtifacts",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/legacyTaskExecutionInjectionResolver.ts",
       "fromSymbol": "$file",
@@ -1715,6 +1732,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkgroupCatalogDetail",
       "toPath": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "toSymbol": "WorkgroupCatalogDetail",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:04edffda0602d0411899",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeReactionExecutionProvider",
+      "toPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "toSymbol": "composeReactionExecutionProvider",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -16238,23 +16272,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "fromPath": "packages/backend/src/server.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:30ffc11e1607f5989753",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file",
-      "toPath": "packages/backend/src/modules/digital-employee/composition.ts",
-      "toSymbol": "createReactionExecutionAdapter",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts",
       "fromSymbol": "$file",
@@ -21253,6 +21270,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:40c0d3aa41b4a2d3b12d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeReactionExecutionProvider",
+      "toPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "toSymbol": "composeReactionExecutionProvider",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookEndpointAdministration.ts#$file",
       "fromPath": "packages/backend/src/modules/integration/infrastructure/webhookEndpointAdministration.ts",
       "fromSymbol": "$file",
@@ -24071,23 +24105,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "committedEvents",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "fromPath": "packages/backend/src/cli/start.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:4933467a8814b2186f51",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file",
-      "toPath": "packages/backend/src/modules/digital-employee/composition.ts",
-      "toSymbol": "createReactionExecutionAdapter",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -30994,23 +31011,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/required-ports.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/composition/required-ports.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:605903b9f774e2a2e200",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E9",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#WorkspaceFailureClass",
-      "toPath": "packages/backend/src/modules/digital-employee/public/types.ts",
-      "toSymbol": "WorkspaceFailureClass",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/autoRepair.ts#$file",
       "fromPath": "packages/backend/src/services/autoRepair.ts",
       "fromSymbol": "$file",
@@ -33693,23 +33693,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "nodeRuns",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/application/adapters/task-execution-adapter.ts#$file",
-      "fromPath": "packages/backend/src/modules/digital-employee/application/adapters/task-execution-adapter.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:69c353915a592ef0375f",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "digital-employee",
-      "removeAfterWave": "W4-E9",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#DigitalEmployeeExecutionParticipant",
-      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toSymbol": "DigitalEmployeeExecutionParticipant",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
     },
     {
       "edgeKind": "value",
@@ -37654,23 +37637,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "*",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "fromPath": "packages/backend/src/cli/start.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:75c0f3aafe04695b7857",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeDigitalEmployeeExecution",
-      "toPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "toSymbol": "composeDigitalEmployeeExecution",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -65213,23 +65179,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:cd743441e423fad6bd54",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E9",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#WorkspaceFailureClass",
-      "toPath": "packages/backend/src/modules/digital-employee/public/types.ts",
-      "toSymbol": "WorkspaceFailureClass",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -68324,23 +68273,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:d64c146dca055bd3dadb",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeDigitalEmployeeExecution",
-      "toPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "toSymbol": "composeDigitalEmployeeExecution",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/operationAuthority.ts#$file",
@@ -70859,6 +70791,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:dcf31ea73348ae69c7ce",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeReactionExecutionProvider",
+      "toPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "toSymbol": "composeReactionExecutionProvider",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/manualQuestionOpenWriter.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/manualQuestionOpenWriter.ts",
       "fromSymbol": "$file",
@@ -72589,23 +72538,6 @@
       "toPath": "packages/backend/src/modules/system-operations/composition.ts",
       "toSymbol": "composeLocalSystemOperations",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:e370edbfcb8855dd635d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E9",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#WorkspaceFailureClass",
-      "toPath": "packages/backend/src/modules/digital-employee/public/types.ts",
-      "toSymbol": "WorkspaceFailureClass",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
     },
     {
       "edgeKind": "type",
@@ -77217,23 +77149,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f15dc89dc6252d6eb481",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file",
-      "toPath": "packages/backend/src/modules/digital-employee/composition.ts",
-      "toSymbol": "createReactionExecutionAdapter",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts",
       "fromSymbol": "$file",
@@ -80139,23 +80054,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "fromPath": "packages/backend/src/server.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:fa5221a720ac91987e72",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeDigitalEmployeeExecution",
-      "toPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "toSymbol": "composeDigitalEmployeeExecution",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
@@ -81806,10 +81704,10 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4812,
+    "architectureExceptions": 4806,
     "implementationSccs": 0,
-    "observedEdges": 5413,
-    "requiredPorts": 34,
+    "observedEdges": 5407,
+    "requiredPorts": 33,
     "targetEdges": 66
   },
   "finalCriterion": "Observed imports, offered/required/authority target edges and required-port liveness remain exact, referentially complete and role-preserving.",
@@ -82375,6 +82273,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/postgresqlSchema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlSchema.ts#PostgresqlSchemaPlan"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "digital-employee",
+      "fromFile": "packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#$file",
+      "id": "import:01ac7b6ec5c4e60f05f8",
+      "owner": "digital-employee",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "employeeReactionArtifacts",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeReactionArtifacts"
     },
     {
       "edgeKind": "value",
@@ -83383,6 +83297,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#WorkgroupCatalogDetail"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:04edffda0602d0411899",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/digitalEmployeeExecution",
+      "syntax": "static-import",
+      "targetSymbol": "composeReactionExecutionProvider",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeReactionExecutionProvider"
     },
     {
       "edgeKind": "value",
@@ -98714,22 +98644,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/server.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "id": "import:30ffc11e1607f5989753",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/digital-employee/composition",
-      "syntax": "static-import",
-      "targetSymbol": "createReactionExecutionAdapter",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/composition.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentConfigPersistence.ts#$file",
@@ -104026,6 +103940,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:40c0d3aa41b4a2d3b12d",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/digitalEmployeeExecution",
+      "syntax": "static-import",
+      "targetSymbol": "composeReactionExecutionProvider",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeReactionExecutionProvider"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/webhookEndpointAdministration.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/webhookEndpointAdministration.ts#$file",
@@ -107031,22 +106961,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#committedEvents"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/start.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "id": "import:4933467a8814b2186f51",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/digital-employee/composition",
-      "syntax": "static-import",
-      "targetSymbol": "createReactionExecutionAdapter",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/composition.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -114458,22 +114372,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/composition/required-ports.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/required-ports.ts#$file",
-      "id": "import:605903b9f774e2a2e200",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E9",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/digital-employee/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "WorkspaceFailureClass",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#WorkspaceFailureClass"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/autoRepair.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/autoRepair.ts#$file",
@@ -117543,22 +117441,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "digital-employee",
-      "fromFile": "packages/backend/src/modules/digital-employee/application/adapters/task-execution-adapter.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/application/adapters/task-execution-adapter.ts#$file",
-      "id": "import:69c353915a592ef0375f",
-      "owner": "digital-employee",
-      "removeAfterWave": "W4-E9",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/task-execution/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "DigitalEmployeeExecutionParticipant",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#DigitalEmployeeExecutionParticipant"
     },
     {
       "edgeKind": "value",
@@ -121687,22 +121569,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#$file"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/start.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "id": "import:75c0f3aafe04695b7857",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/composition/digitalEmployeeExecution",
-      "syntax": "static-import",
-      "targetSymbol": "composeDigitalEmployeeExecution",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeDigitalEmployeeExecution"
     },
     {
       "edgeKind": "value",
@@ -150954,22 +150820,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#$file",
-      "id": "import:cd743441e423fad6bd54",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E9",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/digital-employee/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "WorkspaceFailureClass",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#WorkspaceFailureClass"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/application/adapters/event-center-adapter.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/adapters/event-center-adapter.ts#$file",
@@ -154201,22 +154051,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionRuntime.ts#$file"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:d64c146dca055bd3dadb",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/composition/digitalEmployeeExecution",
-      "syntax": "static-import",
-      "targetSymbol": "composeDigitalEmployeeExecution",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeDigitalEmployeeExecution"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/operationAuthority.ts",
@@ -156890,6 +156724,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:dcf31ea73348ae69c7ce",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/composition/digitalEmployeeExecution",
+      "syntax": "static-import",
+      "targetSymbol": "composeReactionExecutionProvider",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeReactionExecutionProvider"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/childExecutionLaunchOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childExecutionLaunchOperations.ts#$file",
@@ -158743,22 +158593,6 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#composeLocalSystemOperations"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
-      "id": "import:e370edbfcb8855dd635d",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E9",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/digital-employee/public/types",
-      "syntax": "static-import",
-      "targetSymbol": "WorkspaceFailureClass",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/public/types.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/public/types.ts#WorkspaceFailureClass"
     },
     {
       "edgeKind": "type",
@@ -163530,22 +163364,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:f15dc89dc6252d6eb481",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/digital-employee/composition",
-      "syntax": "static-import",
-      "targetSymbol": "createReactionExecutionAdapter",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/composition.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#$file",
@@ -166649,22 +166467,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/server.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "id": "import:fa5221a720ac91987e72",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/task-execution/composition/digitalEmployeeExecution",
-      "syntax": "static-import",
-      "targetSymbol": "composeDigitalEmployeeExecution",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeDigitalEmployeeExecution"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/platform/background/maintenanceWorker.ts",
@@ -168618,9 +168420,14 @@
       "symbol": "ProgramArtifactPort"
     },
     {
-      "compositionFiles": [],
-      "compositionOwnerEntryIds": [],
+      "compositionFiles": [
+        "packages/backend/src/modules/digital-employee/composition.ts"
+      ],
+      "compositionOwnerEntryIds": [
+        "owner:packages/backend/src/modules/digital-employee/composition.ts#$file"
+      ],
       "consumerOwnerEntryIds": [
+        "owner:packages/backend/src/modules/digital-employee/composition.ts#$file",
         "owner:packages/backend/src/modules/digital-employee/infrastructure/runtimeStore.ts#$file"
       ],
       "context": "digital-employee",
@@ -168640,8 +168447,8 @@
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-admission-adapter.ts#$file"
         }
       ],
-      "removeAfterWave": "W4-E9",
-      "status": "declared-debt",
+      "removeAfterWave": null,
+      "status": "active",
       "symbol": "ReactionExecutionAdmissionParticipantV1"
     },
     {
@@ -168652,23 +168459,8 @@
         "owner:packages/backend/src/modules/digital-employee/composition.ts#$file"
       ],
       "consumerOwnerEntryIds": [
-        "owner:packages/backend/src/modules/digital-employee/application/adapters/task-execution-adapter.ts#$file",
         "owner:packages/backend/src/modules/digital-employee/application/runtimeService.ts#$file",
         "owner:packages/backend/src/modules/digital-employee/composition.ts#$file"
-      ],
-      "context": "digital-employee",
-      "id": "required:digital-employee:ReactionExecutionPort",
-      "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionPort",
-      "providerAdapters": [],
-      "removeAfterWave": "W4-E9",
-      "status": "declared-debt",
-      "symbol": "ReactionExecutionPort"
-    },
-    {
-      "compositionFiles": [],
-      "compositionOwnerEntryIds": [],
-      "consumerOwnerEntryIds": [
-        "owner:packages/backend/src/modules/digital-employee/application/runtimeService.ts#$file"
       ],
       "context": "digital-employee",
       "id": "required:digital-employee:ReactionExecutionPortV1",
@@ -168681,8 +168473,8 @@
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/adapters/reaction-execution-adapter.ts#$file"
         }
       ],
-      "removeAfterWave": "W4-E9",
-      "status": "declared-debt",
+      "removeAfterWave": null,
+      "status": "active",
       "symbol": "ReactionExecutionPortV1"
     },
     {
@@ -169150,7 +168942,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:31c749fac44ace1668b5a7b7f4fd9fc8d32419e5b19c26ee79aaae362be0183c",
+  "sourceDigest": "sha256:df6b4ef07776aac8c420fa3bebce39c3f2dd3d857e1e017d1547fa86c78b4711",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

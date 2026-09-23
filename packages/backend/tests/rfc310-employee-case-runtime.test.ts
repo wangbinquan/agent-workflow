@@ -1,4 +1,8 @@
 import { afterEach, describe, expect, test } from 'bun:test'
+import {
+  legacyShapedReactionWiring,
+  legacyShapedReactionExecution,
+} from './helpers/legacyShapedReactionExecution'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -41,6 +45,23 @@ import {
 } from '@/modules/digital-employee/domain/runtimeModel'
 import { composeEventCenter } from '@/modules/event-center/composition'
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
+
+/**
+ * RFC-368：业务工具 round 不再经 outbox 启动，而是由派发臂（`dispatchOneReaction`）领取。
+ * 旧测试里「排空 outbox」的循环同时承担了「把 agent 启动起来」这件事，这里两件一起做：
+ * 排空 outbox → 派发一次，直到两者都空闲。
+ */
+async function drainWorker(worker: {
+  runOneOutbox(): Promise<string>
+  dispatchOneReaction(): Promise<string>
+}): Promise<void> {
+  for (;;) {
+    let progressed = false
+    while ((await worker.runOneOutbox()) !== 'idle') progressed = true
+    if ((await worker.dispatchOneReaction()) !== 'idle') progressed = true
+    if (!progressed) return
+  }
+}
 
 const roots: string[] = []
 
@@ -119,7 +140,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       ReturnType<RuntimeDependencies['store']['listRunningRounds']>
     >[number]
     type SettleRoundInput = Parameters<RuntimeDependencies['store']['settleRound']>[0]
-    type ExecutionRef = Parameters<RuntimeDependencies['execution']['inspect']>[0]
+    type ExecutionRef = string
 
     const runningRound = (id: string, executionRef: string, updatedAt: number): RunningRound => ({
       id,
@@ -186,7 +207,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
           }
         },
       },
-      execution: {
+      reactionExecution: legacyShapedReactionWiring({
         async inspect(executionRef: ExecutionRef) {
           inspected.push(executionRef)
           if (executionRef === 'execution-pending') {
@@ -201,7 +222,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
             metering: { sourceRef: executionRef, durationMs: 0, totalTokens: 0 },
           }
         },
-      },
+      }),
       runtimeCodecs: [],
       currentTypeRefs: [],
       now: () => 3,
@@ -256,7 +277,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
           settlement = input
         },
       },
-      execution: {
+      reactionExecution: legacyShapedReactionWiring({
         async inspect(executionRef: string) {
           return {
             kind: 'failed' as const,
@@ -267,7 +288,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
             metering: { sourceRef: executionRef, durationMs: 10, totalTokens: 100 },
           }
         },
-      },
+      }),
       runtimeCodecs: [],
       currentTypeRefs: [],
       now: () => 2,
@@ -434,7 +455,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
               throw new Error('planning isolation does not execute platform work')
             },
           },
-          execution: {
+          reactionExecution: legacyShapedReactionExecution({
             async launch() {
               throw new Error('planning isolation does not launch business work')
             },
@@ -442,7 +463,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
               return { kind: 'pending' as const, executionRef: 'unused' }
             },
             async cancel() {},
-          },
+          }),
         },
       })
       const typeRef = { typeId: 'development', revision: 10 }
@@ -1007,7 +1028,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
               })
             },
           },
-          execution: {
+          reactionExecution: legacyShapedReactionExecution({
             async launch(plan, attempt) {
               launchedPlans.push(plan)
               launchedAttempts.push({ ordinal: attempt.ordinal, mode: attempt.mode })
@@ -1045,7 +1066,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
               }
             },
             async cancel() {},
-          },
+          }),
         },
       })
       const runtime = module.runtime!
@@ -1536,9 +1557,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
 
       const analyzeRound = await runtime.worker.planOneReaction()
       expect(analyzeRound).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Lifecycle publication can precede the Agent launch outbox.
-      }
+      await drainWorker(runtime.worker)
       expect(launchedPlans).toHaveLength(1)
       expect(launchedPlans[0]).toMatchObject({
         roundRef: analyzeRound,
@@ -1551,9 +1570,10 @@ describe('RFC-310 stateful employee Case runtime', () => {
       const retryDelays = [2_000, 4_000, 8_000]
       for (const retryDelay of retryDelays) {
         expect(await runtime.worker.inspectOneExecution()).toBe('retried')
-        expect(await runtime.worker.runOneOutbox()).toBe('idle')
+        // RFC-368：业务工具的重试由派发臂按退避时刻领取，不再是 outbox 行。
+        expect(await runtime.worker.dispatchOneReaction()).toBe('idle')
         now += retryDelay
-        expect(await runtime.worker.runOneOutbox()).toBe('completed')
+        expect(await runtime.worker.dispatchOneReaction()).toBe('launched')
       }
       expect(launchedAttempts.slice(0, 4)).toEqual([
         { ordinal: 0, mode: 'initial' },
@@ -1572,9 +1592,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       expect(projection.attention).toEqual([])
 
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Attention cleanup may precede the deterministic platform work item.
-      }
+      await drainWorker(runtime.worker)
       expect(
         JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson).case
           .currentWorkItemRef,
@@ -1599,9 +1617,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         ),
       ).toHaveLength(4)
 
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Activate every MR attention binding before exercising collaboration.
-      }
+      await drainWorker(runtime.worker)
       const parentRow = (await db
         .select()
         .from(employeeCases)
@@ -1661,9 +1677,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       expect(
         collaborationCases.items.find((candidate) => candidate.id === childCaseId),
       ).toMatchObject({ openChannelCount: 0 })
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Activate the collaboration result subscription and settle child ingress outbox.
-      }
+      await drainWorker(runtime.worker)
       await runtime.commands.terminate(childCaseId, 'completed')
       expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
       for (let index = 0; index < 8; index += 1) {
@@ -1729,9 +1743,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         state: 'desired',
         eventSubscriptionId: pipelineSubscriptionId,
       })
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Activate the replacement Attention while its superseded cleanup stays delayed.
-      }
+      await drainWorker(runtime.worker)
       const activePipelineAttention = (await db
         .select()
         .from(employeeAttentionBindings)
@@ -1742,9 +1754,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         eventSubscriptionId: pipelineSubscriptionId,
       })
       now = delayedUnsubscribeAt
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // A superseded unsubscribe is completed as a guarded no-op.
-      }
+      await drainWorker(runtime.worker)
       expect(
         await db
           .select({ state: eventSubscriptions.state })
@@ -1819,9 +1829,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         artifactRefs: [],
         workSubject: { typeId: 'work-request', subjectRef: 'REQ-QUORUM' },
       })
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Publish the quorum parent launch before forcing its collaboration node.
-      }
+      await drainWorker(runtime.worker)
       const quorumParentRow = (await db
         .select()
         .from(employeeCases)
@@ -1838,9 +1846,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         .where(eq(employeeCases.id, quorumLaunched.caseRef.id))
         .run()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Create all three durable invocation channels and child Cases.
-      }
+      await drainWorker(runtime.worker)
       let quorumProjection = JSON.parse(
         (await runtime.queries.getCase(quorumLaunched.caseRef.id)).projectionJson,
       )
@@ -1861,17 +1867,13 @@ describe('RFC-310 stateful employee Case runtime', () => {
       const quorumPrimaryCaseId = quorumChildCaseId(childEmployeeRef.id)
       const quorumSecondaryCaseId = quorumChildCaseId(secondChildEmployeeRef.id)
       const quorumLateCaseId = quorumChildCaseId(thirdChildEmployeeRef.id)
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Activate all three exact invocation-result subscriptions.
-      }
+      await drainWorker(runtime.worker)
 
       await runtime.commands.terminate(quorumPrimaryCaseId, 'quorum-primary-completed')
       expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
       for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Settle the first result; quorum must still be waiting.
-      }
+      await drainWorker(runtime.worker)
       quorumProjection = JSON.parse(
         (await runtime.queries.getCase(quorumLaunched.caseRef.id)).projectionJson,
       )
@@ -1889,9 +1891,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
       for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // The second result satisfies 2/3 and durably detaches the final channel.
-      }
+      await drainWorker(runtime.worker)
       quorumProjection = JSON.parse(
         (await runtime.queries.getCase(quorumLaunched.caseRef.id)).projectionJson,
       )
@@ -1943,9 +1943,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         artifactRefs: [],
         workSubject: { typeId: 'work-request', subjectRef: 'REQ-ALL' },
       })
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Publish the all-join parent launch.
-      }
+      await drainWorker(runtime.worker)
       const allParentRow = (await db
         .select()
         .from(employeeCases)
@@ -1962,9 +1960,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         .where(eq(employeeCases.id, allLaunched.caseRef.id))
         .run()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Create both durable all-join child Cases and subscriptions.
-      }
+      await drainWorker(runtime.worker)
       let allProjection = JSON.parse(
         (await runtime.queries.getCase(allLaunched.caseRef.id)).projectionJson,
       )
@@ -1972,17 +1968,13 @@ describe('RFC-310 stateful employee Case runtime', () => {
       const allChildCaseIds = (allProjection.channels as Array<{ childCaseId: string }>).map(
         (channel) => channel.childCaseId,
       )
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Activate both exact invocation-result subscriptions.
-      }
+      await drainWorker(runtime.worker)
 
       await runtime.commands.terminate(allChildCaseIds[0]!, 'all-primary-completed')
       expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
       for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // One satisfied member cannot complete an all join.
-      }
+      await drainWorker(runtime.worker)
       allProjection = JSON.parse(
         (await runtime.queries.getCase(allLaunched.caseRef.id)).projectionJson,
       )
@@ -2000,9 +1992,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
       for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // The second member satisfies the exact all join.
-      }
+      await drainWorker(runtime.worker)
       allProjection = JSON.parse(
         (await runtime.queries.getCase(allLaunched.caseRef.id)).projectionJson,
       )
@@ -2037,9 +2027,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         artifactRefs: [],
         workSubject: { typeId: 'work-request', subjectRef: 'REQ-PARTIAL' },
       })
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Publish the partial-result parent launch.
-      }
+      await drainWorker(runtime.worker)
       const partialParentRow = (await db
         .select()
         .from(employeeCases)
@@ -2056,9 +2044,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         .where(eq(employeeCases.id, partialLaunched.caseRef.id))
         .run()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Create the three quorum channels used by the partial-result branch.
-      }
+      await drainWorker(runtime.worker)
       let partialProjection = JSON.parse(
         (await runtime.queries.getCase(partialLaunched.caseRef.id)).projectionJson,
       )
@@ -2066,18 +2052,14 @@ describe('RFC-310 stateful employee Case runtime', () => {
         partialProjection.channels as Array<{ childCaseId: string }>
       ).map((channel) => channel.childCaseId)
       expect(partialChildCaseIds).toHaveLength(3)
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Activate every invocation-result subscription.
-      }
+      await drainWorker(runtime.worker)
 
       for (const [index, terminalKind] of (['completed', 'execution-failed'] as const).entries()) {
         await runtime.commands.terminate(partialChildCaseIds[index]!, terminalKind)
         expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
         for (let pump = 0; pump < 8; pump += 1) await runtime.worker.pumpOneDelivery()
         expect(await runtime.worker.planOneReaction()).not.toBeNull()
-        while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-          // One success plus one failure still leaves quorum(2/3) reachable.
-        }
+        await drainWorker(runtime.worker)
       }
       partialProjection = JSON.parse(
         (await runtime.queries.getCase(partialLaunched.caseRef.id)).projectionJson,
@@ -2101,9 +2083,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
       for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // A second failed member makes quorum impossible and blocks exactly once.
-      }
+      await drainWorker(runtime.worker)
       partialProjection = JSON.parse(
         (await runtime.queries.getCase(partialLaunched.caseRef.id)).projectionJson,
       )
@@ -2135,9 +2115,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         .where(eq(employeeCases.id, launched.caseRef.id))
         .run()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Prior attention cleanup may precede the new multi-member invocation outbox.
-      }
+      await drainWorker(runtime.worker)
       projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
       const timedOutChannels = projection.channels.filter(
         (channel: { state: string }) => channel.state === 'open',
@@ -2146,17 +2124,13 @@ describe('RFC-310 stateful employee Case runtime', () => {
       const timedOutChildCaseIds = timedOutChannels.map(
         (channel: { childCaseId: string }) => channel.childCaseId,
       )
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Activate the exact invocation-result attention before its deadline fires.
-      }
+      await drainWorker(runtime.worker)
       now += (await module.queries.getExecutionPolicy()).content.externalWaitDeadlineMs + 1
       expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
       expect(await runtime.worker.publishOneChannelResult()).toBe('completed')
       for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Drain every durable timeout settlement before reading the projection.
-      }
+      await drainWorker(runtime.worker)
       projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
       for (const timedOutChildCaseId of timedOutChildCaseIds) {
         expect(
@@ -2245,21 +2219,15 @@ describe('RFC-310 stateful employee Case runtime', () => {
         workItemRef: 'observe-mr',
         ruleId: 'handle-review',
       })
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Attention cleanup can precede the authoritative MR refresh.
-      }
+      await drainWorker(runtime.worker)
       projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
       expect(projection.case.currentWorkItemRef).toBe('classify-feedback')
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // The platform classifier freezes the complete review thread tree.
-      }
+      await drainWorker(runtime.worker)
       projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
       expect(projection.case.currentWorkItemRef).toBe('acknowledge-feedback')
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Platform acknowledgement settles without launching an Agent execution.
-      }
+      await drainWorker(runtime.worker)
       projection = JSON.parse((await runtime.queries.getCase(launched.caseRef.id)).projectionJson)
       expect(projection.case.currentWorkItemRef).toBe('repair-feedback')
 
@@ -2298,9 +2266,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
           'development.review-resolution',
         ]),
       )
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Drain the lifecycle preemption settlement.
-      }
+      await drainWorker(runtime.worker)
 
       retryLimits = { defaultNodeRetries: 5, sessionRestartBudget: 2 }
       const updatedPolicy = await module.queries.getExecutionPolicy()
@@ -2354,9 +2320,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
       await observeMrEvent('development.lifecycle-updated', 'lifecycle-merged-terminal-race')
       for (let index = 0; index < 8; index += 1) await runtime.worker.pumpOneDelivery()
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // The authoritative MR refresh settles the Case as terminal.
-      }
+      await drainWorker(runtime.worker)
       expect(await runtime.queries.getCase(launched.caseRef.id)).toMatchObject({
         state: 'terminal',
       })
@@ -2371,9 +2335,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         eventSubscriptionId: terminalPipelineSubscriptionId,
       })
       now = terminalUnsubscribeAt
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Finish the cancellation that was already authoritative at terminal settlement.
-      }
+      await drainWorker(runtime.worker)
       expect(
         await db
           .select({ state: eventSubscriptions.state })
@@ -2409,22 +2371,16 @@ describe('RFC-310 stateful employee Case runtime', () => {
         artifactRefs: [],
         workSubject: { typeId: 'work-request', subjectRef: 'REQ-43' },
       })
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Drain initial attention before executing the terminal failure fixture.
-      }
+      await drainWorker(runtime.worker)
       expect(await runtime.worker.pumpOneDelivery()).toBe(false)
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Body input bypasses external-material acquisition and advances to implementation.
-      }
+      await drainWorker(runtime.worker)
       expect(
         JSON.parse((await runtime.queries.getCase(terminalOnFailure.caseRef.id)).projectionJson)
           .case.currentWorkItemRef,
       ).toBe('analyze-implement')
       expect(await runtime.worker.planOneReaction()).not.toBeNull()
-      while ((await runtime.worker.runOneOutbox()) !== 'idle') {
-        // Launch the implementation Agent after the platform-only intake step.
-      }
+      await drainWorker(runtime.worker)
       expect(await runtime.worker.inspectOneExecution()).toBe('failed')
       expect(
         JSON.parse((await runtime.queries.getCase(terminalOnFailure.caseRef.id)).projectionJson)

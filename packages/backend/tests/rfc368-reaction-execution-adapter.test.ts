@@ -29,7 +29,6 @@ import {
   composeDatabaseDigitalEmployeeExecutionPorts,
   composeDigitalEmployeeExecutionCore,
   inspectDigitalEmployeeHumanReviewSnapshot,
-  inspectDigitalEmployeeHumanReviewState,
   type DigitalEmployeeExecutionDependencies,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { prepareReactionExecution } from '@/modules/digital-employee/domain/reactionExecutionRequest'
@@ -211,6 +210,19 @@ describe('RFC-368 T7 —— ReactionExecutionPortV1 适配器', () => {
       )
     })
 
+    // RFC-368 刀 3（用户 2026-09-23 裁决）：切换前由旧路径启动、仍在跑的 round 从没 admission
+    // 过——日志里查不到这一行时按 executionRef 直接放行，让它们照常结算。
+    test('日志里没有这个 operation（切换前已在跑）⇒ 按 executionRef 直接查', async () => {
+      const request = prepared()
+      const core = fakeCore()
+      core.snapshot = { kind: 'pending' }
+      const { port: p } = port(core)
+      expect(
+        await p.inspect({ operation: request.request.operation, executionRef: 'exec-legacy' }),
+      ).toEqual({ kind: 'pending' })
+      expect(core.canceled).toEqual([])
+    })
+
     test('failed 只回 diagnostics ref，正文交给 sink', async () => {
       const request = prepared()
       await admit(request, 'exec-failed')
@@ -348,7 +360,7 @@ describe('RFC-368 T7 —— 核心的 stopped 判据与人审六态（真库）'
       expect(await core().executionExists('task-absent')).toBe(false)
     })
 
-    test('人审：执行行不在 ⇒ unknown；没有闸门键 ⇒ not-applicable；旧接口两者都折成 null', async () => {
+    test('人审：执行行不在 ⇒ unknown；没有闸门键 ⇒ not-applicable', async () => {
       await seed({ id: 'task-no-gate', status: 'running', errorSummary: null, inputs: '{}' })
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(harness.db, 'task-missing')).toBe(
         'unknown',
@@ -356,8 +368,6 @@ describe('RFC-368 T7 —— 核心的 stopped 判据与人审六态（真库）'
       expect(await inspectDigitalEmployeeHumanReviewSnapshot(harness.db, 'task-no-gate')).toBe(
         'not-applicable',
       )
-      expect(await inspectDigitalEmployeeHumanReviewState(harness.db, 'task-missing')).toBeNull()
-      expect(await inspectDigitalEmployeeHumanReviewState(harness.db, 'task-no-gate')).toBeNull()
     })
   })
 })
@@ -374,7 +384,7 @@ describe('RFC-368 T7 —— 预分配 taskId 的接线（源码层兜底，端�
     expect(kernel).toContain('const taskId = input.internal?.preallocatedTaskId ?? nextId()')
   })
 
-  test('typed 核心把预分配 id 交给内核；旧字符串路径不传（行为不变）', () => {
+  test('typed 核心把预分配 id 交给内核；不再按 round 反查去重', () => {
     const composition = readFileSync(
       resolve(
         ROOT,
@@ -382,10 +392,10 @@ describe('RFC-368 T7 —— 预分配 taskId 的接线（源码层兜底，端�
       ),
       'utf8',
     )
-    expect(composition).toContain(
-      '...(options.taskId === undefined ? {} : { preallocatedTaskId: options.taskId })',
-    )
-    expect(composition).toMatch(/dedupeByRound: true,?\s*\}\)/)
-    expect(composition).toMatch(/dedupeByRound: false,\s*taskId: input\.taskId/)
+    expect(composition).toContain('preallocatedTaskId: taskId,')
+    // 执行身份在 admission 事务里预分配、重放按 id 命中；旧路径那套按 round 推断活性的
+    // 兜底（E9-C 前置小修）随旧合同删除，不得回来。
+    expect(composition).not.toContain('dedupeByRound')
+    expect(composition).not.toContain('findByRound')
   })
 })

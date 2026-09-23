@@ -23,7 +23,6 @@ import {
   scriptedPort,
   seedReaction,
 } from './helpers/rfc368ReactionFixture'
-import { DigitalEmployeeRuntimeService } from '@/modules/digital-employee/application/runtimeService'
 import { createRuntimePersistence } from '@/modules/digital-employee/infrastructure/runtimeStore'
 import { composeReactionExecutionAdmissionParticipantInTx } from '@/modules/task-execution/application/adapters/reaction-admission-adapter'
 import { createReactionAdmissionStore } from '@/modules/task-execution/infrastructure/reactionExecutionAdmissions'
@@ -173,20 +172,13 @@ describe('RFC-368 T8 —— Reaction 派发臂', () => {
       })
     })
 
-    test('未到期不派发；没装配新合同时整条臂是空操作', async () => {
+    test('未到期不派发', async () => {
       reset()
       await seedReaction(harness.db, { nextAttemptAt: clock + 1 })
       const port = scriptedPort()
       expect(await reactionService(harness.db, { port, now, mint }).dispatchOneReaction()).toBe(
         'idle',
       )
-      const legacy = new DigitalEmployeeRuntimeService({
-        store: createRuntimePersistence(harness.db),
-        runtimeCodecs: [],
-        currentTypeRefs: [],
-      } as unknown as ConstructorParameters<typeof DigitalEmployeeRuntimeService>[0])
-      clock += 1
-      expect(await legacy.dispatchOneReaction()).toBe('idle')
       expect(port.launches).toEqual([])
       expect((await reactionRows(harness.db)).dispatch.dispatchAttempts).toBe(0)
     })

@@ -34,7 +34,6 @@ export interface EmployeeOutboxRecord {
     | 'event-subscribe'
     | 'event-unsubscribe'
     | 'event-publish'
-    | 'execution-launch'
     | 'platform-work-item-execute'
     | 'invocation-create'
   readonly payloadJson: string
@@ -294,13 +293,17 @@ export interface RuntimeCaseStorePort {
     readonly round: ReactionRoundRecord
     readonly plan: ReactionExecutionPlan
     readonly launchOutbox: EmployeeOutboxRecord | null
-    /**
-     * RFC-368：Reaction 执行走派发侧表而不是 `execution-launch` outbox 时，同事务插一行派发
-     * 状态。与 `launchOutbox` 互斥。
-     */
-    readonly reactionDispatch?: { readonly nextAttemptAt: number } | null
+    /** RFC-368：业务工具 round 同事务插一行派发状态，由 `dispatchOneReaction` 领取。 */
+    readonly reactionDispatch: { readonly nextAttemptAt: number } | null
   }): boolean
   markRoundRunning(roundId: string, executionRef: string, now: number): void
+  /**
+   * RFC-368 T5b —— 一次性收编切换前留下的在途 `execution-launch` outbox 行（pending / claimed）：
+   * 搬成派发行（到期时刻 / 尝试次数 / 上次错误原样平移），`previousError` 裁剪后存成重试反馈，
+   * payload 里预算收敛过的 plan 写回 round，然后删掉 outbox 行。幂等：没有这类行时是空操作。
+   * 返回收编了几行。
+   */
+  adoptLegacyReactionLaunches(input: { readonly now: number }): number
   /**
    * RFC-368 T8 —— 选一个到期的 `planned` round 并占派发租约。判据（design §4.1）：
    * `next_attempt_at <= now` 且租约为空（从没派发过）或已过期（上一次派发中途崩了——
@@ -341,18 +344,17 @@ export interface RuntimeCaseStorePort {
     readonly expectedExecutionRef: string
     readonly attemptOrdinal: number
     readonly errorJson: string
-    /** 旧路径：插一条 `execution-launch` outbox。与 `reactionDispatch` 互斥。 */
-    readonly launchOutbox: EmployeeOutboxRecord | null
     /**
-     * RFC-368 T10 —— 新路径：把派发侧表重置成「下一个 ordinal 待派发」（尝试次数清零、租约与
-     * operation 清空、挂上反馈 ref），并把**预算收敛后的 plan 写回 round**——请求 hash 只对
-     * round 上冻结的 plan 算，写回之后同一 ordinal 的重放才稳定（设计门 P1-4）。
+     * RFC-368 T10 —— 把派发侧表重置成「下一个 ordinal 待派发」（尝试次数清零、租约与 operation
+     * 清空、挂上反馈 ref），并把**预算收敛后的 plan 写回 round**——请求 hash 只对 round 上冻结的
+     * plan 算，写回之后同一 ordinal 的重放才稳定（设计门 P1-4）。切换前由旧路径启动的 round
+     * 没有派发行，这里顺手补建。
      */
-    readonly reactionDispatch?: {
+    readonly reactionDispatch: {
       readonly plan: ReactionExecutionPlan
       readonly retryFeedbackRef: string | null
       readonly lastDispatchError: string | null
-    } | null
+    }
     readonly nextAttemptAt: number
     readonly now: number
   }): void

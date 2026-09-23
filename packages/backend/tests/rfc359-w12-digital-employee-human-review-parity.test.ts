@@ -1,7 +1,7 @@
 // RFC-359 —— 数字员工「计划人审」闸门：同一个 executionRef，两个引擎给出同一个状态。
 //
 // 为什么这条测试存在：`inspectHumanReview` 此前是**同步**端口，只有 SQLite 那侧的 composition
-// 提供——`composeDigitalEmployeeExecution` 根本没有实现它。于是在 PostgreSQL 上闸门状态
+// 提供——旧的 `composeDigitalEmployeeExecution` 根本没有实现它。于是在 PostgreSQL 上闸门状态
 // 只能退回按 round 状态推断（`planning` / `approved` / `failed`），**永远报不出 `waiting`**：
 // 同一个案子在 SQLite 上显示「等待人审」、在 PG 上显示「规划中」。那是用户可见的行为分叉，
 // 也正是本 RFC 要消灭的形态。
@@ -9,7 +9,7 @@
 // 修法是把判定收成一份 **async 的中立实现**（查的是 `tasks` + `nodeRuns`，本来就没有方言），
 // 两侧 composition 都装它——SQLite 侧直接拿 db 调，PG 侧按 `humanReview` 端口接进来。
 // 本文件锁两件事：
-//   ① 五个状态在两个引擎上逐字相同（planning / waiting / approved / failed / null）；
+//   ① 六个状态在两个引擎上逐字相同（planning / waiting / approved / failed / unknown / not-applicable）；
 //   ② **两侧 composition 都必须交出 `inspectHumanReview`**——这是那条分叉的源头，
 //      少了任何一侧，PG 上的闸门就又会退回推断。
 
@@ -20,8 +20,8 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, tasks, workflows } from '@/db/schema'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
-  composeDigitalEmployeeExecution,
-  inspectDigitalEmployeeHumanReviewState,
+  composeDigitalEmployeeExecutionCore,
+  inspectDigitalEmployeeHumanReviewSnapshot,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import {
   DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY,
@@ -75,31 +75,33 @@ async function seedReviewRun(
 }
 
 describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致', (harness) => {
-  test('查无此任务 ⇒ null；没有计划 prompt 的任务也 ⇒ null（不是数字员工执行）', async () => {
+  // RFC-368：两种「无闸门信号」分开——查无此任务是 `unknown`（投影端回落 round 状态），
+  // 没有计划 prompt 才是 `not-applicable`（没配闸门，投影成 skipped）。
+  test('查无此任务 ⇒ unknown；没有计划 prompt 的任务 ⇒ not-applicable', async () => {
     const db = harness.db
-    expect(await inspectDigitalEmployeeHumanReviewState(db, `missing_${ulid()}`)).toBeNull()
+    expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, `missing_${ulid()}`)).toBe('unknown')
     const plain = await seedExecution(db, { planPrompt: false })
-    expect(await inspectDigitalEmployeeHumanReviewState(db, plain)).toBeNull()
+    expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, plain)).toBe('not-applicable')
   })
 
   test('有计划 prompt、还没有评审 run ⇒ planning', async () => {
     const db = harness.db
     const taskId = await seedExecution(db, { planPrompt: true })
-    expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('planning')
+    expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('planning')
   })
 
   test('评审 run 停在 awaiting_review ⇒ waiting（PG 上此前根本报不出这一格）', async () => {
     const db = harness.db
     const taskId = await seedExecution(db, { planPrompt: true })
     await seedReviewRun(db, taskId, 'awaiting_review')
-    expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
+    expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('waiting')
   })
 
   test('评审 run done ⇒ approved', async () => {
     const db = harness.db
     const taskId = await seedExecution(db, { planPrompt: true })
     await seedReviewRun(db, taskId, 'done')
-    expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('approved')
+    expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('approved')
   })
 
   test.each(['failed', 'canceled', 'interrupted', 'skipped', 'exhausted'])(
@@ -108,7 +110,7 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
       const db = harness.db
       const taskId = await seedExecution(db, { planPrompt: true })
       await seedReviewRun(db, taskId, status)
-      expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('failed')
+      expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('failed')
     },
   )
 
@@ -122,7 +124,7 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
     // 种成 `waiting` 那一格——正是 PG 侧此前报不出来的那一格。桩会答不出它。
     await seedReviewRun(db, taskId, 'awaiting_review')
     const ports = composeDatabaseDigitalEmployeeExecutionPorts(db)
-    const execution = composeDigitalEmployeeExecution({
+    const execution = composeDigitalEmployeeExecutionCore({
       // 只看端口在不在 / 通不通——别的依赖一个都不碰，所以全给 never。
       appHome: '/tmp/rfc359-human-review',
       resolveActor: null as never,
@@ -134,15 +136,15 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
       executionContracts: null as never,
     })
     expect(typeof execution.inspectHumanReview).toBe('function')
-    expect(await execution.inspectHumanReview!(taskId)).toBe(
-      await inspectDigitalEmployeeHumanReviewState(db, taskId),
+    expect(await execution.inspectHumanReview(taskId)).toBe(
+      await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId),
     )
-    expect(await execution.inspectHumanReview!(taskId)).toBe('waiting')
+    expect(await execution.inspectHumanReview(taskId)).toBe('waiting')
   })
 
   test('端口确实被转交（装什么就读到什么）', async () => {
     const calls: string[] = []
-    const execution = composeDigitalEmployeeExecution({
+    const execution = composeDigitalEmployeeExecutionCore({
       appHome: '/tmp/rfc359-human-review',
       resolveActor: null as never,
       resourceAuthorityFor: null as never,
@@ -162,7 +164,7 @@ describeEachProvider('RFC-359 —— 计划人审闸门状态两个引擎一致'
       },
       executionContracts: null as never,
     })
-    expect(await execution.inspectHumanReview!('exec-ref')).toBe('waiting')
+    expect(await execution.inspectHumanReview('exec-ref')).toBe('waiting')
     expect(calls).toEqual(['exec-ref'])
   })
 })

@@ -29,7 +29,7 @@ import { createExecutionContractResourceAdapter } from '@/modules/resource-catal
 import { executionContractGuideSchema } from '@/modules/execution-contract/domain/model'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
-  composeDigitalEmployeeExecution,
+  composeDigitalEmployeeExecutionCore,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import type { DigitalEmployeeWorkspacePort } from '@/modules/task-execution/composition/required-ports'
 import {
@@ -38,7 +38,7 @@ import {
   DIGITAL_EMPLOYEE_RESULT_PORT,
 } from '@/modules/task-execution/domain/digitalEmployeeHost'
 import type { TaskDriveRuntimeOptions } from '@/modules/task-execution/application/ports/taskExecutionTopology'
-import type { DigitalEmployeeExecutionResult } from '@/modules/task-execution/public/participants'
+import type { DigitalEmployeeExecutionCoreSnapshot } from '@/modules/task-execution/application/ports/digitalEmployeeExecutionCore'
 import { runGit } from '@/util/git'
 import { describeEachProvider } from './helpers/eachProvider'
 import { createEachProviderTaskExecution } from './helpers/eachProviderTaskExecution'
@@ -207,7 +207,7 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
         })
         // RFC-361: resource and fixture providers are identical for both database bindings.
         const compose = () =>
-          composeDigitalEmployeeExecution({
+          composeDigitalEmployeeExecutionCore({
             appHome,
             resolveActor: async () => actor,
             resourceAuthorityFor: () => launchResources,
@@ -307,7 +307,12 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
         const attempt = JSON.stringify({ ordinal: 0, mode: 'initial', previousError: null })
         expect(await harness.db.select({ id: tasks.id }).from(tasks)).toEqual([])
         const participant = compose()
-        const launched = await participant.launch(JSON.stringify(plan), attempt)
+        // RFC-368：执行身份由调用方（admission 事务）预分配，内核拿它当 taskId。
+        const launched = await participant.launch({
+          plan,
+          attempt: JSON.parse(attempt) as { ordinal: 0; mode: 'initial'; previousError: null },
+          taskId: `de-w12-${kind}-${Date.now()}`,
+        })
         const [task] = await harness.db
           .select()
           .from(tasks)
@@ -364,14 +369,13 @@ describeEachProvider('RFC-359 W12 Digital Employee real execution', (harness) =>
         ).toEqual([{ kind: 'launch', state: 'completed' }])
         const expected = {
           kind: 'completed',
-          executionRef: launched.executionRef,
           outputJson: output,
           metering: {
             sourceRef: `task:${launched.executionRef}`,
             durationMs: task!.runningMs,
             totalTokens: runs.reduce((sum, run) => sum + (run.tokTotal ?? 0), 0),
           },
-        } satisfies DigitalEmployeeExecutionResult
+        } satisfies DigitalEmployeeExecutionCoreSnapshot
         expect(await participant.inspect(launched.executionRef)).toEqual(expected)
         expect(await compose().inspect(launched.executionRef)).toEqual(expected)
         expect(prepared).toHaveLength(1)

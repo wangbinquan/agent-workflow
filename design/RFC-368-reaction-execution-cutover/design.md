@@ -45,6 +45,9 @@
 | D10 | 启动 liveness gate（两个 port 各恰一个 adapter、方法全实现） | **不做**启动门，只有源码层计数（AC-2） | 属启动期自检，与本 RFC 功能面无关；留给 W9 |
 | D11 | 合同类型名为 `ReactionExecutionAdmissionParticipantInTxV1`（§3.5 与 RFC-294 N1 的 `REQUIRED_CONTEXT_EDGES` 均用此名） | **改名为 `ReactionExecutionAdmissionParticipantV1`，并去掉 `__brand`**；同批改 `REQUIRED_CONTEXT_EDGES` 那一行 | 实施期实测：本仓把名字以 `…InTx`/`…Authority`/`…Token` 结尾的类型当**能力令牌**，`rfc294-architecture-preflight` 强制「只能由**声明它的 context** 里的 `create*` 工厂铸造、且该类型须声明在 `public/`」。而这是「DE 声明、TE 实现」的 required port，按 RFC-294 就该待在 `composition/required-ports.ts`，铸造权也必然在实现方。占着该后缀会让守卫要求结构上不可能满足的东西——先报「在 owner factory 之外构造」，包一层 DE 工厂后又报「factory is outside capability owner」。**函数名 `composeReactionExecutionAdmissionParticipantInTx` 保持不变**（守卫只看类型名），「同事务」的语义由它的签名与文档承载 |
 
+| D12 | 在途 `execution-launch` 行的迁移写成 SQL 迁移（本文件 §5.2 初稿） | **启动后第一次派发时一次性收编**（代码回填，两个引擎共用一份）（用户 2026-09-23 裁决） | PG 的迁移序列只支持新表 / 新索引 / 放宽 CHECK，表达不了数据迁移；仓内先例是 RFC-354 的 `runFrameBackfillOnBoot`。见 §5.2 |
+| D13 | `access` 必须能在 TE 的 admission 日志里查到对应行（T7 初版：查不到即拒绝） | **查不到时按 executionRef 直接放行**，只有「查到了但对不上」才拒绝（用户 2026-09-23 裁决） | 切换那一刻由旧路径启动、仍在跑的 round 从没 admission 过；不放宽它们就永远结算不了。备选「启动时补建 admission 行」要给 TE 新增一个收编已有执行的跨模块合同方法，面更大。这些 round 之后若重试，`retryRound` 顺手补建派发行 |
+
 **不再偏离的两项**（r1 之前曾偏离，现已按上游做）：
 - admission receipt 的 `execution` 必填、在事务内预分配（用户 2026-09-22 裁决）。
 - snapshot 的 `stopped` 态（用户裁决顺带修，见 G7）。
@@ -357,20 +360,34 @@ CREATE TABLE employee_reaction_artifacts (
 `dispatching` 同步项一并消失）。崩溃重放的判据也更直接：**租约过期就重选**——正是
 `claimOutbox` 的旧语义（`state='claimed' AND claim_expires_at <= now`）平移过来。
 
-### 5.2 在途数据迁移（刀 3 / T5b，**不在刀 1**）
+### 5.2 在途数据收编（刀 3 / T5b，**不在刀 1**）
 
-对每条 `state IN ('pending','claimed')` 的 `execution-launch` outbox 行：
-- `payload.attempt.previousError` 非空 ⇒ 按 §6 裁剪后写入 `employee_reaction_artifacts`，
-  digest 挂到该 round 的 `retry_feedback_ref`（**不能丢**，否则这次重试的理由消失）；
-- `next_attempt_at` / `dispatch_attempts` / `last_dispatch_error` ← 行上的
-  `next_attempt_at` / `attempt_count` / `last_error`；
-- `mode` 不入库，派发时按 `attempt_ordinal % (policy.sameSceneAttempts + 1)` 重算
-  （`domain/retrySchedule.ts` 的 `attemptModeForOrdinal`）；
-- 迁移后删除这些行。`completed`/`failed` 的历史行原样保留（`claimOutbox` 不会选中它们）；
+**机制（D12，用户 2026-09-23 裁决）**：不是 SQL 迁移，而是**启动后第一次派发时的一次性回填**——
+`DigitalEmployeeRuntimeService.dispatchOneReaction` 每个进程第一次调用前执行一次
+`store.adoptLegacyReactionLaunches`（幂等；没有这类行时是空操作），两个引擎共用这一份代码。
+同时 `claimOutbox` 排除 `kind = 'execution-launch'`：worker 循环里 `runOneOutbox` 排在派发之前，
+不排除的话遗留行会先被已删的旧臂领走、报「未实现」直到终结。
+
+对每条 `state IN ('pending','claimed')` 的 `execution-launch` outbox 行，在同一个事务里：
+- round 仍是 `planned`：
+  - `payload.attempt.previousError` 非空 ⇒ 按 §6 裁剪后写入 `employee_reaction_artifacts`，
+    digest 挂到派发行的 `retry_feedback_ref`（**不能丢**，否则这次重试的理由消失，C2-4）；
+  - 派发行的 `next_attempt_at` / `dispatch_attempts` / `last_dispatch_error` ← outbox 行的
+    `next_attempt_at` / `attempt_count` / `last_error`；
+  - payload 里预算收敛过的 plan 写回 `round.planJson`，`attempt.ordinal` 写回 `attempt_ordinal`；
+  - `mode` 不入库，派发时按 `attemptModeForOrdinal` 重算；
+- round 已不在 `planned`（已结算）或 payload 读不懂：不建派发行；
+- 两种情况都删除这条 outbox 行。`completed`/`failed` 的历史行原样保留。
   `kind` 列两个引擎都**没有** CHECK 约束（SQLite `0192_…:460`、PG baseline `:1244` 都是裸
-  `TEXT NOT NULL`），所以无约束可改——初稿写的「去掉 CHECK」是个空动作，已删。
+  `TEXT NOT NULL`），无约束可改。
 
-**为什么必须在刀 3**：行迁走、而派发臂还没接管时，那些 round 会当场停摆。这不是「零行为变更」。
+**已知的一次性窗口**：升级时若恰有一条 `claimed` 行（上一个进程在旧臂 `launch` 中途崩溃），
+收编后它按新合同重新派发、预分配新的执行身份；旧进程可能已建出的那个任务不会被新合同认出。
+这只在「崩溃恰好落在升级前那一刻」时发生，且旧路径那套按 round 反查的兜底已随旧合同删除——
+接受为一次性残余，不为它保留旧兜底。
+
+**切换前已在跑的 round**（D13）：它们没有 admission 行、也没有派发行。inspect 由 TE 放宽核对照常
+进行；失败重试时 `retryRound` 补建派发行（epoch 从 0 起）。
 
 ## 6. 反馈裁剪（proposal §4 C1 的实现）
 

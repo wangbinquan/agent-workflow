@@ -478,7 +478,7 @@ describeEachProvider('RFC-359 W4-D7b —— Digital Employee 运行时案件持�
     const launch = {
       id: `launch_${id}`,
       caseId: id,
-      kind: 'execution-launch' as const,
+      kind: 'invocation-create' as const,
       payloadJson: '{}',
       dedupeKey: `launch:${id}`,
       attemptCount: 0,
@@ -491,6 +491,7 @@ describeEachProvider('RFC-359 W4-D7b —— Digital Employee 运行时案件持�
         inboxId: round.inboxId,
         expectedCaseRevision: 9,
         launchOutbox: launch,
+        reactionDispatch: null,
       }),
     ).toBe(false)
     expect(
@@ -500,6 +501,7 @@ describeEachProvider('RFC-359 W4-D7b —— Digital Employee 运行时案件持�
         inboxId: round.inboxId,
         expectedCaseRevision: 1,
         launchOutbox: launch,
+        reactionDispatch: null,
       }),
     ).toBe(true)
     expect(await store.getCase(id)).toMatchObject({ activeRoundId: round.id, revision: 2 })
@@ -514,6 +516,7 @@ describeEachProvider('RFC-359 W4-D7b —— Digital Employee 运行时案件持�
         inboxId: null,
         expectedCaseRevision: 2,
         launchOutbox: null,
+        reactionDispatch: null,
       }),
     ).toBe(false)
 
@@ -527,7 +530,7 @@ describeEachProvider('RFC-359 W4-D7b —— Digital Employee 运行时案件持�
           errorJson: '{}',
           attemptOrdinal: 1,
           nextAttemptAt: NOW + 5,
-          launchOutbox: { ...launch, id: `retry_${id}`, dedupeKey: `retry:${id}` },
+          reactionDispatch: { plan: {} as never, retryFeedbackRef: null, lastDispatchError: null },
           now: NOW + 5,
         }),
       ),
@@ -538,7 +541,7 @@ describeEachProvider('RFC-359 W4-D7b —— Digital Employee 运行时案件持�
       errorJson: '{"error":"boom"}',
       attemptOrdinal: 1,
       nextAttemptAt: NOW + 5,
-      launchOutbox: { ...launch, id: `retry_${id}`, dedupeKey: `retry:${id}` },
+      reactionDispatch: { plan: {} as never, retryFeedbackRef: null, lastDispatchError: null },
       now: NOW + 5,
     })
     expect((await store.listRounds(id))[0]).toMatchObject({

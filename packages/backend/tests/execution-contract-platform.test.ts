@@ -44,8 +44,8 @@ import {
   buildDigitalEmployeeFixedPrompt,
   buildDigitalEmployeePlanPrompt,
   composeDatabaseDigitalEmployeeExecutionPorts,
-  composeDigitalEmployeeExecution,
-  inspectDigitalEmployeeHumanReviewState,
+  composeDigitalEmployeeExecutionCore,
+  inspectDigitalEmployeeHumanReviewSnapshot,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { createAgent, updateAgent } from '@/services/agent'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -646,12 +646,14 @@ describeEachProvider('平台执行合同（双引擎）', (harness) => {
         startedAt: 1,
       })
 
-      expect(await inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBeNull()
+      expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, 'review-projection-task')).toBe(
+        'not-applicable',
+      )
       await db
         .update(tasks)
         .set({ inputs: JSON.stringify({ [DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]: 'frozen prompt' }) })
         .where(eq(tasks.id, 'review-projection-task'))
-      expect(await inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe(
+      expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, 'review-projection-task')).toBe(
         'planning',
       )
 
@@ -664,21 +666,21 @@ describeEachProvider('平台执行合同（双引擎）', (harness) => {
         reviewIteration: 0,
         status: 'awaiting_review',
       })
-      expect(await inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe(
+      expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, 'review-projection-task')).toBe(
         'waiting',
       )
       await db
         .update(nodeRuns)
         .set({ status: 'done' })
         .where(eq(nodeRuns.id, 'review-projection-run'))
-      expect(await inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe(
+      expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, 'review-projection-task')).toBe(
         'approved',
       )
       await db
         .update(nodeRuns)
         .set({ status: 'failed' })
         .where(eq(nodeRuns.id, 'review-projection-run'))
-      expect(await inspectDigitalEmployeeHumanReviewState(db, 'review-projection-task')).toBe(
+      expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, 'review-projection-task')).toBe(
         'failed',
       )
     })
@@ -1072,7 +1074,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
       errorMessage: 'invalid prompt template ref: malformed-local-ref',
       failedNodeId: '__de_agent__',
     })
-    const execution = composeDigitalEmployeeExecution({
+    const execution = composeDigitalEmployeeExecutionCore({
       // RFC-359 AC-1（plan §5hl）：两份 composer 合成一份，库读收成端口。
       // 这条用例只走 `inspect`，所以启动面给 never、库内端口取缺省实现
       // （生产的两个 SQLite 组合根用的是同一个 `composeDatabaseDigitalEmployeeExecutionPorts`）。
@@ -1088,9 +1090,9 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
 
     expect(await execution.inspect(taskId)).toEqual({
       kind: 'failed',
-      executionRef: taskId,
       errorClass: 'infrastructure',
       errorCode: 'execution-failed',
+      workspaceRoot: '/tmp/reviewed-execution-failure',
       errorDetail: 'invalid prompt template ref: malformed-local-ref',
       metering: { sourceRef: `task:${taskId}`, durationMs: 0, totalTokens: 0 },
     })
@@ -1121,7 +1123,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
       errorMessage: 'daemon restarted while this task was running; please resume',
       autoRecoverySuspended: false,
     })
-    const execution = composeDigitalEmployeeExecution({
+    const execution = composeDigitalEmployeeExecutionCore({
       // RFC-359 AC-1（plan §5hl）：两份 composer 合成一份，库读收成端口。
       // 这条用例只走 `inspect`，所以启动面给 never、库内端口取缺省实现
       // （生产的两个 SQLite 组合根用的是同一个 `composeDatabaseDigitalEmployeeExecutionPorts`）。
@@ -1135,10 +1137,7 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
       executionContracts: null as never,
     })
 
-    expect(await execution.inspect(taskId)).toEqual({
-      kind: 'pending',
-      executionRef: taskId,
-    })
+    expect(await execution.inspect(taskId)).toEqual({ kind: 'pending' })
 
     // `.run()` 在 SQLite 上是同步的、在 PostgreSQL 上返回 Promise——漏了 await，这次写入
     // 就可能还没落库，下面那次 inspect 读到的仍是 `autoRecoverySuspended: false`，于是
@@ -1146,9 +1145,9 @@ describeEachProvider('platform execution contracts — 数字员工执行端口'
     await db.update(tasks).set({ autoRecoverySuspended: true }).where(eq(tasks.id, taskId)).run()
     expect(await execution.inspect(taskId)).toEqual({
       kind: 'failed',
-      executionRef: taskId,
       errorClass: 'infrastructure',
       errorCode: 'execution-interrupted',
+      workspaceRoot: '/tmp/recovering-employee-execution',
       errorDetail: 'daemon restarted while this task was running; please resume',
       metering: { sourceRef: `task:${taskId}`, durationMs: 0, totalTokens: 0 },
     })

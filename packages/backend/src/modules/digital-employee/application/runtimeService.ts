@@ -46,7 +46,6 @@ import type {
   EmployeeInputArtifactPort,
   PlatformWorkItemExecutionPort,
   ReactionExecutionMetering,
-  ReactionExecutionPort,
   ReactionExecutionPortV1,
 } from '../composition/required-ports'
 import {
@@ -345,7 +344,6 @@ export interface DigitalEmployeeRuntimeServiceDependencies {
   readonly store: RuntimeCasePersistence
   readonly authoringStore: DigitalEmployeeAuthoringPersistence
   readonly eventCenter: EventCenterParticipant
-  readonly execution: ReactionExecutionPort
   readonly platformWorkItems: PlatformWorkItemExecutionPort
   readonly inputUploads: EmployeeInputUploadPersistence
   readonly inputArtifacts: EmployeeInputArtifactPort
@@ -361,10 +359,10 @@ export interface DigitalEmployeeRuntimeServiceDependencies {
   readonly workerId?: string
   readonly outboxLeaseMs?: number
   /**
-   * RFC-368 刀 2 —— 新执行合同的装配。缺席 ⇒ 仍走 `execution-launch` outbox（旧路径）。
-   * 刀 3 切完三个根的绑定后，本字段转必选、旧路径与 `execution` 字段一起删除（plan T17/T18）。
+   * RFC-368 —— Reaction 执行合同（`ReactionExecutionPortV1` + 产物存档）。同事务的 admission
+   * 参与者不在这里：它绑定在 store 的事务上（`createRuntimePersistence` 的 `reactionAdmission`）。
    */
-  readonly reactionExecution?: DigitalEmployeeReactionExecutionWiring
+  readonly reactionExecution: DigitalEmployeeReactionExecutionWiring
 }
 
 export interface DigitalEmployeeReactionExecutionWiring {
@@ -524,7 +522,6 @@ export class DigitalEmployeeRuntimeService {
   readonly #store: RuntimeCasePersistence
   readonly #authoringStore: DigitalEmployeeAuthoringPersistence
   readonly #eventCenter: EventCenterParticipant
-  readonly #execution: ReactionExecutionPort
   readonly #platformWorkItems: PlatformWorkItemExecutionPort
   readonly #inputUploads: EmployeeInputUploadPersistence
   readonly #inputArtifacts: EmployeeInputArtifactPort
@@ -541,13 +538,13 @@ export class DigitalEmployeeRuntimeService {
   readonly #id: () => string
   readonly #workerId: string
   readonly #outboxLeaseMs: number
-  readonly #reactionExecution: DigitalEmployeeReactionExecutionWiring | undefined
+  readonly #reactionExecution: DigitalEmployeeReactionExecutionWiring
+  #legacyLaunchesAdopted: Promise<unknown> | null = null
 
   constructor(deps: DigitalEmployeeRuntimeServiceDependencies) {
     this.#store = deps.store
     this.#authoringStore = deps.authoringStore
     this.#eventCenter = deps.eventCenter
-    this.#execution = deps.execution
     this.#reactionExecution = deps.reactionExecution
     this.#platformWorkItems = deps.platformWorkItems
     this.#inputUploads = deps.inputUploads
@@ -2607,24 +2604,6 @@ export class DigitalEmployeeRuntimeService {
         }
         await this.#eventCenter.unsubscribe(payload.subscriptionId)
         await this.#store.cancelAttention(payload.bindingId, now)
-      } else if (outbox.kind === 'execution-launch') {
-        const payload = z
-          .object({
-            roundId: z.string().min(1),
-            plan: reactionExecutionPlanSchema,
-            attempt: z
-              .object({
-                ordinal: z.number().int().nonnegative(),
-                mode: z.enum(['initial', 'same-scene', 'fresh-scene']),
-                previousError: z.string().max(4_000).nullable(),
-              })
-              .strict()
-              .default({ ordinal: 0, mode: 'initial', previousError: null }),
-          })
-          .strict()
-          .parse(JSON.parse(outbox.payloadJson) as unknown)
-        const receipt = await this.#execution.launch(payload.plan, payload.attempt)
-        await this.#store.markRoundRunning(payload.roundId, receipt.executionRef, now)
       } else if (outbox.kind === 'platform-work-item-execute') {
         const payload = z
           .object({ roundId: z.string().min(1), plan: reactionExecutionPlanSchema })
@@ -2768,7 +2747,10 @@ export class DigitalEmployeeRuntimeService {
    */
   async dispatchOneReaction(): Promise<'launched' | 'retried' | 'settled' | 'idle'> {
     const wiring = this.#reactionExecution
-    if (wiring === undefined) return 'idle'
+    // RFC-368 T5b —— 每个进程第一次派发前收编一次切换前留下的在途 `execution-launch` 行
+    // （启动时的一次性回填，与 RFC-354 的 frame backfill 同一种做法；两个引擎共用这一份）。
+    this.#legacyLaunchesAdopted ??= this.#store.adoptLegacyReactionLaunches({ now: this.#now() })
+    await this.#legacyLaunchesAdopted
     const claimed = await this.#store.claimReactionDispatch({
       workerId: this.#workerId,
       now: this.#now(),
@@ -3294,36 +3276,18 @@ export class DigitalEmployeeRuntimeService {
           updatedAt: now,
           settledAt: null,
         }
-        // RFC-368：装配了新执行合同时，业务工具 round 不再写 `execution-launch` outbox，改在
-        // 派发侧表上插一行、由 `dispatchOneReaction` 领取（design §4.1）。
-        const reactionDispatched =
-          this.#reactionExecution !== undefined &&
-          item.nodeKind === 'business-tool' &&
-          !platformSelected
+        // RFC-368：业务工具 round 不写 outbox，在派发侧表上插一行、由 `dispatchOneReaction`
+        // 领取（design §4.1）。平台工作项与协作调用仍走各自的 outbox 类。
+        const reactionDispatched = item.nodeKind === 'business-tool' && !platformSelected
+        const platformWork = item.nodeKind === 'system' || platformSelected
         const launchOutbox: EmployeeOutboxRecord = {
           id: this.#id(),
           caseId: caseRecord.id,
-          kind:
-            item.nodeKind === 'business-tool' && !platformSelected
-              ? 'execution-launch'
-              : item.nodeKind === 'system' || platformSelected
-                ? 'platform-work-item-execute'
-                : 'invocation-create',
-          payloadJson: JSON.stringify(
-            item.nodeKind === 'business-tool' && !platformSelected
-              ? {
-                  roundId,
-                  plan,
-                  attempt: { ordinal: 0, mode: 'initial', previousError: null },
-                }
-              : { roundId, plan },
-          ),
-          dedupeKey:
-            item.nodeKind === 'business-tool' && !platformSelected
-              ? `execution-launch:${roundId}:0`
-              : item.nodeKind === 'system' || platformSelected
-                ? `platform-work-item-execute:${roundId}`
-                : `invocation-create:${roundId}`,
+          kind: platformWork ? 'platform-work-item-execute' : 'invocation-create',
+          payloadJson: JSON.stringify({ roundId, plan }),
+          dedupeKey: platformWork
+            ? `platform-work-item-execute:${roundId}`
+            : `invocation-create:${roundId}`,
           attemptCount: 0,
         }
         if (
@@ -3376,7 +3340,6 @@ export class DigitalEmployeeRuntimeService {
       errorDetail: errorDetail.slice(0, 4_000),
     })
     if (decision.retry) {
-      const nextOrdinal = decision.nextOrdinal
       const frozenPlan = reactionExecutionPlanSchema.parse(JSON.parse(round.planJson) as unknown)
       const caseRecord = await this.getCase(round.caseId)
       const remainingDurationMs =
@@ -3396,58 +3359,29 @@ export class DigitalEmployeeRuntimeService {
         maxTotalTokens: remainingTotalTokens === null ? null : Math.max(1, remainingTotalTokens),
       })
       const now = this.#now()
-      const wiring = this.#reactionExecution
-      if (wiring !== undefined) {
-        // RFC-368 T10：纠错反馈裁剪后按内容地址存档，派发时只带 ref。写失败降级成不带反馈，
-        // 不阻塞重试（偏离 D8——今天的 previousError 也不是必需品），并把原因记在派发行上。
-        let retryFeedbackRef: string | null = null
-        let lastDispatchError: string | null = null
-        try {
-          retryFeedbackRef = await wiring.artifacts.put(
-            'retry-feedback',
-            sanitizeReactionText({ errorCode, errorDetail, workspaceRoot: null }),
-            now,
-          )
-        } catch (error) {
-          lastDispatchError =
-            `retry-feedback-unavailable: ${error instanceof Error ? error.message : String(error)}`.slice(
-              0,
-              2_000,
-            )
-        }
-        await this.#store.retryRound({
-          roundId: round.id,
-          expectedExecutionRef: round.executionRef,
-          attemptOrdinal: nextOrdinal,
-          errorJson,
-          launchOutbox: null,
-          reactionDispatch: { plan, retryFeedbackRef, lastDispatchError },
-          nextAttemptAt: now + decision.delayMs,
+      // RFC-368 T10：纠错反馈裁剪后按内容地址存档，派发时只带 ref。写失败降级成不带反馈，
+      // 不阻塞重试（偏离 D8——今天的 previousError 也不是必需品），并把原因记在派发行上。
+      let retryFeedbackRef: string | null = null
+      let lastDispatchError: string | null = null
+      try {
+        retryFeedbackRef = await this.#reactionExecution.artifacts.put(
+          'retry-feedback',
+          sanitizeReactionText({ errorCode, errorDetail, workspaceRoot: null }),
           now,
-        })
-        return 'retried'
+        )
+      } catch (error) {
+        lastDispatchError =
+          `retry-feedback-unavailable: ${error instanceof Error ? error.message : String(error)}`.slice(
+            0,
+            2_000,
+          )
       }
       await this.#store.retryRound({
         roundId: round.id,
         expectedExecutionRef: round.executionRef,
-        attemptOrdinal: nextOrdinal,
+        attemptOrdinal: decision.nextOrdinal,
         errorJson,
-        launchOutbox: {
-          id: this.#id(),
-          caseId: round.caseId,
-          kind: 'execution-launch',
-          payloadJson: JSON.stringify({
-            roundId: round.id,
-            plan,
-            attempt: {
-              ordinal: nextOrdinal,
-              mode: decision.mode,
-              previousError: `${errorCode}: ${errorDetail}`.slice(0, 4_000),
-            },
-          }),
-          dedupeKey: `execution-launch:${round.id}:${nextOrdinal}`,
-          attemptCount: 0,
-        },
+        reactionDispatch: { plan, retryFeedbackRef, lastDispatchError },
         nextAttemptAt: now + decision.delayMs,
         now,
       })
@@ -3555,7 +3489,6 @@ export class DigitalEmployeeRuntimeService {
     | { readonly kind: 'stopped'; readonly metering: ReactionExecutionMetering }
   > {
     const wiring = this.#reactionExecution
-    if (wiring === undefined) return await this.#execution.inspect(executionRef)
     const snapshot = await wiring.port.inspect({
       operation: reactionOperationRef(round.id, round.attemptOrdinal),
       executionRef,
@@ -3594,9 +3527,6 @@ export class DigitalEmployeeRuntimeService {
     executionRef: string,
   ): Promise<'not-applicable' | 'planning' | 'waiting' | 'approved' | 'failed' | null> {
     const wiring = this.#reactionExecution
-    if (wiring === undefined) {
-      return (await this.#execution.inspectHumanReview?.(executionRef)) ?? null
-    }
     const snapshot = await wiring.port.inspectHumanReview({
       operation: reactionOperationRef(round.id, round.attemptOrdinal),
       executionRef,
@@ -3632,19 +3562,16 @@ export class DigitalEmployeeRuntimeService {
     // RFC-368 G7 —— 终止案例时停掉还在跑的 agent（今天不停，agent 跑到自然结束、继续吃预算）。
     // 取消是尽力而为：案例已经终止成功，停不掉也不该把终止本身报成失败；那一轮随后由
     // inspect 按快照结算（停掉了就是 stopped，没停掉就等它自然结束）。
-    const wiring = this.#reactionExecution
-    if (wiring !== undefined) {
-      const running = (await this.#store.listRounds(caseId)).find(
-        (round) => round.state === 'running' && round.executionRef !== null,
-      )
-      if (running?.executionRef !== undefined && running.executionRef !== null) {
-        await wiring.port
-          .cancel({
-            operation: reactionOperationRef(running.id, running.attemptOrdinal),
-            executionRef: running.executionRef,
-          })
-          .catch(() => undefined)
-      }
+    const running = (await this.#store.listRounds(caseId)).find(
+      (round) => round.state === 'running' && round.executionRef !== null,
+    )
+    if (running?.executionRef !== undefined && running.executionRef !== null) {
+      await this.#reactionExecution.port
+        .cancel({
+          operation: reactionOperationRef(running.id, running.attemptOrdinal),
+          executionRef: running.executionRef,
+        })
+        .catch(() => undefined)
     }
     return terminated
   }

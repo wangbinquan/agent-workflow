@@ -1,6 +1,5 @@
 // RFC-303 — the only cross-context task-control surface.
 // It deliberately accepts a source binding, never caller-selected task ids.
-import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import type {
   CodeHostEffectObserverHandle,
   DurableCodeHostEffectObserver,
@@ -338,41 +337,6 @@ export interface TaskWorkspaceCommitParticipant {
     branch: string
   }): Promise<TaskWorkspaceCommitPublishResult>
   release(input: { ref: string }): Promise<{ ok: true } | { ok: false; error: string }>
-}
-
-export type DigitalEmployeeExecutionResult =
-  | { readonly kind: 'pending'; readonly executionRef: string }
-  | {
-      readonly kind: 'completed'
-      readonly executionRef: string
-      readonly outputJson: string
-      readonly metering: DigitalEmployeeExecutionMetering
-    }
-  | {
-      readonly kind: 'failed'
-      readonly executionRef: string
-      /** RFC-317 T31（DE-03）—— 决定 OS 的重试落在同场景还是新场景。 */
-      readonly errorClass: WorkspaceFailureClass
-      readonly errorCode: string
-      readonly errorDetail: string
-      readonly metering: DigitalEmployeeExecutionMetering
-    }
-
-export interface DigitalEmployeeExecutionMetering {
-  readonly sourceRef: string
-  readonly durationMs: number
-  readonly totalTokens: number
-}
-
-export type DigitalEmployeeHumanReviewState = 'planning' | 'waiting' | 'approved' | 'failed'
-
-/** Exact TaskEngine lane used by the Digital Employee OS. */
-export interface DigitalEmployeeExecutionParticipant {
-  launch(planJson: string, attemptJson: string): Promise<{ readonly executionRef: string }>
-  inspect(executionRef: string): Promise<DigitalEmployeeExecutionResult>
-  /** RFC-359：两侧 composition 都必须提供——PG 侧此前缺席，闸门在 PG 上报不出 `waiting`。 */
-  inspectHumanReview?(executionRef: string): Promise<DigitalEmployeeHumanReviewState | null>
-  cancel(executionRef: string): Promise<void>
 }
 
 /**

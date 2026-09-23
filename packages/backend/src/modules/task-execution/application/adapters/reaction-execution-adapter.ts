@@ -13,7 +13,8 @@
 //     canceled，但它们仍按失败走重试（判据在核心里，见 `composeDigitalEmployeeExecutionCore`）。
 //
 // `access` 只有 `{operation, executionRef}`（设计 D6）：回执在事务外重建不出来，于是由这里
-// 查 TaskExecution 自己的 admission 日志核对两者对得上，不回读数字员工任何东西。
+// 查 TaskExecution 自己的 admission 日志核对两者对得上，不回读数字员工任何东西。日志里查不到
+// 该 operation（切换前已在跑的 round）时按 executionRef 直接放行。
 //
 // 文件路径是 `application/adapters/*-adapter.ts`：账本据此把对数字员工合同类型的引用判成
 // `required-implementation`。核心与日志都经本模块的应用层端口注入，不直接依赖 composition /
@@ -59,7 +60,11 @@ export function composeReactionExecutionPortV1(deps: {
 }): ReactionExecutionPortV1 {
   async function verified(access: ReactionExecutionAccessV1): Promise<string> {
     const row = await deps.admissions.find(access.operation)
-    if (row === null || row.executionRef !== access.executionRef) {
+    // 日志里没有这一行：RFC-368 切换前由旧路径启动、仍在跑的 round（它们从没 admission 过）。
+    // 按 executionRef 直接查，让它们照常结算（用户 2026-09-23 裁决：放宽核对，不为迁移补建
+    // admission 行、不新增跨模块合同）。只有「查到了但对不上」才是过期 access。
+    if (row === null) return access.executionRef
+    if (row.executionRef !== access.executionRef) {
       throw new ConflictError(
         'employee-reaction-access-mismatch',
         `reaction execution ${access.executionRef} is not the one admitted for ${access.operation}`,

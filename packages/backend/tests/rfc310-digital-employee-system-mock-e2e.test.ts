@@ -19,6 +19,7 @@ import { exampleProgramFixture } from './helpers/executionContractFixture'
 // 的整套复位：code-hosts / pipeline / approval / faults / 请求流水）并**另开一个 `root`**，
 // 让两遍看到的外部世界与第一遍完全同形——判据一条都不放宽。
 
+import { legacyShapedReactionExecution } from './helpers/legacyShapedReactionExecution'
 import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/composition'
 import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
 import {
@@ -956,7 +957,7 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
         runtime: {
           eventCenter: eventCenter.participant,
           codecs: [developmentEmployeeRuntimeCodec],
-          execution,
+          reactionExecution: legacyShapedReactionExecution(execution),
           platformWorkItems: platform,
         },
       })
@@ -1332,6 +1333,8 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
           // incorrectly call a live Case idle.
           const outbox = await runtime.worker.runOneOutbox()
           if (outbox !== 'idle') progress = true
+          // RFC-368：业务工具 round 由派发臂启动；与生产 OS worker 同序，排在 inspect 之前。
+          if ((await runtime.worker.dispatchOneReaction()) !== 'idle') progress = true
           const inspected = await runtime.worker.inspectOneExecution()
           if (inspected !== 'idle' && inspected !== 'pending') progress = true
           if ((await runtime.worker.publishOneChannelResult()) !== 'idle') progress = true

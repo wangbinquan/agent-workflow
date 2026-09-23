@@ -418,12 +418,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
   {
-    from: 'packages/backend/src/modules/digital-employee/application/adapters/task-execution-adapter.ts',
-    to: 'task-execution',
-    why: 'digital-employee adapter 直接 import task-execution `DigitalEmployeeExecutionParticipant`；design §3.1 已记为双向 contract debt，W4-E9 以 DE-owned `ReactionExecutionPortV1`/admission participant 收口后删除。',
-    removeAfterWave: 'W4-E9',
-  },
-  {
     from: 'packages/backend/src/modules/intent/composition/platformInventory.ts',
     to: 'development-automation',
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
@@ -508,12 +502,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     removeAfterWave: 'W4-E9',
   },
   {
-    from: 'packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts',
-    to: 'digital-employee',
-    why: 'task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。',
-    removeAfterWave: 'W4-E9',
-  },
-  {
     from: 'packages/backend/src/modules/task-execution/composition/humanGate.ts',
     to: 'collaboration',
     why: 'task-execution 的 human-gate 命令/参与者引用 collaboration public 的 `PreparedHumanGateRef`/`HumanGateIdentity`；design §3.1 只画 COL→TE，required `HumanGateOpenParticipantInTx` 的输入类型应归 task-execution 所有、由 collaboration 实现。W4 collaboration public cutover 时归位后删除。',
@@ -530,12 +518,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     to: 'collaboration',
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/composition/required-ports.ts',
-    to: 'digital-employee',
-    why: 'task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。',
-    removeAfterWave: 'W4-E9',
   },
   {
     from: 'packages/backend/src/modules/task-execution/composition/gateContinuationPreDrive.ts',
@@ -584,12 +566,6 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     to: 'memory',
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
-  },
-  {
-    from: 'packages/backend/src/modules/task-execution/public/participants.ts',
-    to: 'digital-employee',
-    why: 'task-execution 消费 digital-employee public 的 `WorkspaceFailureClass`/platform tool catalog participant；design §3.1 记为双向 contract/type debt，W4-E9 改为两套 DE-owned required SPI 后删除。',
-    removeAfterWave: 'W4-E9',
   },
 ]
 

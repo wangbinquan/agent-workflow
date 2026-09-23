@@ -144,13 +144,12 @@ import {
   createDigitalEmployeeResourceCatalogAclProviders,
   createEmployeeInputArtifactStore,
   createEmployeeReactionRoundQueries,
-  createReactionExecutionAdapter,
 } from '@/modules/digital-employee/composition'
 import { composeDigitalEmployeeBuiltinToolCatalog } from '@/modules/task-execution/composition/digitalEmployeeBuiltinToolCatalog'
 import { ensureDigitalEmployeeHostWorkflow } from '@/modules/task-execution/composition/actionExecutionRunners'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
-  composeDigitalEmployeeExecution,
+  composeReactionExecutionProvider,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import { composePostgresqlResourceLimitOperations } from '@/modules/system-operations/composition/resourceLimits'
 import {
@@ -1459,7 +1458,9 @@ export async function composePostgresqlApplication(
     cancelTask: (taskId) =>
       taskExecutionProvider.cancellation.cancel({ taskId, cause: { kind: 'user' } }),
   })
-  const employeeExecution = composeDigitalEmployeeExecution({
+  // RFC-368 T17 —— Reaction 执行走 `ReactionExecutionPortV1` + 同事务 admission 参与者。
+  const employeeExecution = composeReactionExecutionProvider({
+    db: input.db,
     appHome: input.appHome,
     resolveActor: async () => systemActor,
     resourceAuthorityFor: (actor) => ({
@@ -1533,7 +1534,7 @@ export async function composePostgresqlApplication(
           createDevelopmentEmployeeCaseWorkspaceDetailReader(input.db),
         ),
       ],
-      execution: createReactionExecutionAdapter(employeeExecution),
+      reactionExecution: employeeExecution,
       platformWorkItems: employeePlatformWorkItems,
     },
   })

@@ -91,44 +91,10 @@ export interface EmployeeInputArtifactPort {
   copyBlobTo(blobRef: string, absoluteTargetPath: string): void
 }
 
-export type ReactionExecutionSnapshot =
-  | { readonly kind: 'pending'; readonly executionRef: string }
-  | {
-      readonly kind: 'completed'
-      readonly executionRef: string
-      readonly outputJson: string
-      readonly metering: ReactionExecutionMetering
-    }
-  | {
-      readonly kind: 'failed'
-      readonly executionRef: string
-      /** RFC-317 T31（DE-03）—— 决定重试落在同场景还是新场景，见 WorkspaceFailureClass。 */
-      readonly errorClass: WorkspaceFailureClass
-      readonly errorCode: string
-      readonly errorDetail: string
-      readonly metering: ReactionExecutionMetering
-    }
-
 export interface ReactionExecutionMetering {
   readonly sourceRef: string
   readonly durationMs: number
   readonly totalTokens: number
-}
-
-export interface ReactionExecutionPort {
-  launch(
-    plan: ReactionExecutionPlan,
-    attempt: {
-      readonly ordinal: number
-      readonly mode: 'initial' | 'same-scene' | 'fresh-scene'
-      readonly previousError: string | null
-    },
-  ): Promise<{ readonly executionRef: string }>
-  inspect(executionRef: string): Promise<ReactionExecutionSnapshot>
-  inspectHumanReview?(
-    executionRef: string,
-  ): Promise<'planning' | 'waiting' | 'approved' | 'failed' | null>
-  cancel(executionRef: string): Promise<void>
 }
 
 /**
@@ -150,7 +116,8 @@ export interface PlatformWorkItemExecutionPort {
 // ---------------------------------------------------------------------------
 // RFC-368 T4 —— Reaction 执行的 V1 合同（DE 拥有，TaskExecution 实现）。
 //
-// 与上面那个 `ReactionExecutionPort` 的区别，逐条都是设计门 r1 或用户裁决的产物：
+// 与它取代的旧字符串合同 `ReactionExecutionPort`（RFC-368 刀 3 删除）的区别，逐条都是
+// 设计门 r1 或用户裁决的产物：
 //   · 四个执行方法**全必选**——`inspectHumanReview?` 是 optional 时，PostgreSQL 侧曾整个缺席，
 //     人审闸门在 PG 上永远报不出 `waiting`，而编译器一声不吭。
 //   · `launch` 收 factory-built 的 `PreparedReactionExecutionV1` + admission 回执，

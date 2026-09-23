@@ -1,6 +1,5 @@
 import { and, desc, eq } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
-import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve, sep } from 'node:path'
 import { z } from 'zod'
@@ -15,11 +14,6 @@ import {
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRuns, tasks } from '@/db/schema'
-import type {
-  DigitalEmployeeExecutionMetering,
-  DigitalEmployeeExecutionParticipant,
-  DigitalEmployeeHumanReviewState,
-} from '../public/participants'
 import {
   executionContractAgentImplementationSchema,
   executionContractImplementationSchema,
@@ -53,8 +47,13 @@ import type { DigitalEmployeeWorkspacePort } from './required-ports'
 import type {
   DigitalEmployeeExecutionCore,
   DigitalEmployeeExecutionCoreSnapshot,
+  DigitalEmployeeExecutionMeteringV1,
   DigitalEmployeeHumanReviewCoreSnapshot,
+  TaskExecutionFailureClass,
 } from '../application/ports/digitalEmployeeExecutionCore'
+import { composeReactionExecutionAdmissionParticipantInTx } from '../application/adapters/reaction-admission-adapter'
+import { composeReactionExecutionPortV1 } from '../application/adapters/reaction-execution-adapter'
+import { createReactionAdmissionStore } from '../infrastructure/reactionExecutionAdmissions'
 import type {
   RootTaskLaunchKernel,
   RootTaskLaunchSubject,
@@ -151,20 +150,20 @@ const attemptSchema = z
   .strict()
 
 function resultFailure(
-  executionRef: string,
-  // RFC-317 T31（DE-03）—— 类别是必传的第二个参数而不是可选项：新增一条失败路径时，
+  // RFC-317 T31（DE-03）—— 类别是必传的第一个参数而不是可选项：新增一条失败路径时，
   // 作者必须当场说清它属于哪一类，而不是默认落进「不升级」。
-  errorClass: WorkspaceFailureClass,
+  errorClass: TaskExecutionFailureClass,
   errorCode: string,
   errorDetail: string,
-  metering: DigitalEmployeeExecutionMetering,
-) {
+  metering: DigitalEmployeeExecutionMeteringV1,
+  workspaceRoot: string | null,
+): DigitalEmployeeExecutionCoreSnapshot {
   return {
-    kind: 'failed' as const,
-    executionRef,
+    kind: 'failed',
     errorClass,
     errorCode,
     errorDetail: errorDetail.slice(0, 2_000),
+    workspaceRoot,
     metering,
   }
 }
@@ -298,30 +297,15 @@ export async function inspectDigitalEmployeeHumanReviewSnapshot(
   return 'planning'
 }
 
-/** 旧接口：三种「无闸门信号」一律折成 `null`。旧 participant 与既有测试仍用它，行为逐字不变。 */
-export async function inspectDigitalEmployeeHumanReviewState(
-  db: ProviderNeutralDatabase,
-  executionRef: string,
-): Promise<'planning' | 'waiting' | 'approved' | 'failed' | null> {
-  return legacyHumanReviewState(await inspectDigitalEmployeeHumanReviewSnapshot(db, executionRef))
-}
-
-function legacyHumanReviewState(
-  snapshot: DigitalEmployeeHumanReviewCoreSnapshot,
-): DigitalEmployeeHumanReviewState | null {
-  return snapshot === 'unknown' || snapshot === 'not-applicable' ? null : snapshot
-}
-
 /**
- * 「这个执行还活着吗」的**唯一判据**。
- *
- * 两个调用点必须共用它，否则会各自漂开：
- *   - `inspect`：活着 ⇒ 报 `pending`，数字员工继续等；
- *   - `launch`：这个 ReactionRound 已经有一个活着的执行 ⇒ 复用它，不再建第二个任务。
+ * 「这个执行还活着吗」的**唯一判据**：活着 ⇒ `inspect` 报 `pending`，数字员工继续等。
  *
  * 注意 `interrupted` **是**终态（`shared/lifecycle.ts` 的 `TERMINAL_TASK_STATUSES` 含它），
- * 但「daemon 重启打断、自动恢复还没被停用」那一种是**要回来的**，必须算活着。这恰恰是崩溃
- * 窗口里那个孤儿的状态：只看 `isTerminalTaskStatus` 会把它判成死的，于是又起一个新任务。
+ * 但「daemon 重启打断、自动恢复还没被停用」那一种是**要回来的**，必须算活着——否则会被当成
+ * 失败、白烧一次重试预算再起一轮。
+ *
+ * RFC-368：它曾同时是 `launch` 按 round 反查去重的判据（E9-C 前置小修 `56bb82b50`）。新合同下
+ * 执行身份在 admission 事务里预分配、重放按 id 命中，那套按 round 推断活性的兜底随旧路径删除。
  */
 export function digitalEmployeeExecutionIsLive(input: {
   readonly status: TaskStatus
@@ -392,28 +376,15 @@ export interface DigitalEmployeeExecutionDependencies {
       readonly roundRef: string | null
       readonly autoRecoverySuspended: boolean
     } | null>
-    /**
-     * 按 ReactionRound 反查已经起过的执行（`tasks.digital_employee_round_id`，
-     * 索引 `idx_tasks_digital_employee_round`）。`launch` 的幂等判据靠它。
-     */
-    findByRound(roundRef: string): Promise<
-      readonly {
-        readonly taskId: string
-        readonly status: TaskStatus
-        readonly errorSummary: string | null
-        readonly autoRecoverySuspended: boolean
-        readonly startedAt: number
-      }[]
-    >
   }>
   /**
    * RFC-359：计划人审闸门的状态读。SQLite 侧的 composition 直接拿 db 算，PG 侧这份 deps 不带 db，
-   * 所以按端口接进来——装配处把同一个中立实现 `inspectDigitalEmployeeHumanReviewState` 绑到
+   * 所以按端口接进来——装配处把同一个中立实现 `inspectDigitalEmployeeHumanReviewSnapshot` 绑到
    * PG 客户端上。此前这个方法在 PG 侧**根本不存在**，闸门只能按 round 状态推断、永远报不出
    * `waiting`。
    */
   readonly humanReview: Readonly<{
-    /** RFC-368：六态快照（`unknown` 与 `not-applicable` 分开）；旧 participant 自己折回 null。 */
+    /** RFC-368：六态快照（`unknown` 与 `not-applicable` 分开）。 */
     inspect(executionRef: string): Promise<DigitalEmployeeHumanReviewCoreSnapshot>
   }>
   readonly workspace?: DigitalEmployeeWorkspacePort
@@ -455,51 +426,22 @@ function parsedPlanOutputPath(planPrompt: string): string | null {
  * 内核在两个引擎上都真启动过（`rfc359-w5-kernel-launch-provider-parity`），
  * 库内缺省端口见下面的 `composeDatabaseDigitalEmployeeExecutionPorts`。
  */
-function buildDigitalEmployeeExecution(deps: DigitalEmployeeExecutionDependencies): {
-  readonly participant: DigitalEmployeeExecutionParticipant
-  readonly core: DigitalEmployeeExecutionCore
-} {
+function buildDigitalEmployeeExecution(
+  deps: DigitalEmployeeExecutionDependencies,
+): DigitalEmployeeExecutionCore {
   /**
-   * RFC-368 T7 —— 启动的 **typed 核心**。plan / attempt 收对象而不是 JSON 字符串；
-   * 旧的字符串 participant（刀 3 之前仍是生产装配）只是先 parse 再调这里，行为逐字不变。
-   *
-   *   · `dedupeByRound`：旧路径保留 `56bb82b50` 的活性反查（它是那条缺陷唯一的兜底）；
-   *     新路径不需要——执行身份在 admission 事务里预分配，重放按 id 命中，不再推断活性。
-   *   · `taskId`：新路径传 admission 预分配的执行身份，内核拿它当 taskId。
+   * RFC-368 T7 —— 启动的 **typed 核心**：plan / attempt 收对象而不是 JSON 字符串；`taskId` 是
+   * admission 事务里预分配的执行身份，内核拿它当 taskId。重放由调用方先经 `executionExists`
+   * 判断，这里不再按 round 推断活性（旧路径那套兜底随 RFC-368 刀 3 删除）。
    */
   async function launchCore(
     planInput: unknown,
     attemptInput: unknown,
-    options: { readonly dedupeByRound: boolean; readonly taskId?: string },
+    taskId: string,
   ): Promise<{ readonly executionRef: string }> {
     const plan = planSchema.parse(planInput)
     const attempt = attemptSchema.parse(attemptInput)
     const attemptJson = JSON.stringify(attempt)
-    // RFC-294 E9-C 前置小修 —— **launch 对同一个 ReactionRound 幂等**。
-    //
-    // 数字员工侧的调用序列是「`launch()` 建任务 → `markRoundRunning()` 记下 executionRef」
-    // （`digital-employee/application/runtimeService.ts:2587-2588`），两步之间没有事务；
-    // 而「这一轮归谁做」只靠 outbox 行 60s 的租约兜着。daemon 在这中间重启，重启后那行
-    // 租约已过期会被重新领走，于是同一个 round 起出第二个任务：第一个从此无人 inspect /
-    // cancel（round 只记得住第二个），却继续吃 Case 的时长与 token 预算，并且和新任务
-    // **写同一个 worktree**（同一个 round 解析出同一个 scene）。
-    //
-    // 反查落在这里而不是数字员工侧，是因为知识在这边：每次启动都会把 round 写进任务行
-    // （`services/task.ts:2441` 的 `digitalEmployeeRoundId`），还带着索引；数字员工那边
-    // 在 `markRoundRunning` 之前手上什么都没有。
-    //
-    // 重试路径天然不受影响：重试只在 `inspect` 判出终态失败之后发生，那时旧任务已经不活了。
-    const launchedForRound = options.dedupeByRound
-      ? await deps.executionMetadata.findByRound(plan.roundRef)
-      : []
-    const live = [...launchedForRound]
-      .filter((candidate) => digitalEmployeeExecutionIsLive(candidate))
-      .sort(
-        (left, right) =>
-          left.startedAt - right.startedAt || left.taskId.localeCompare(right.taskId),
-      )
-      .at(0)
-    if (live !== undefined) return { executionRef: live.taskId }
     const implementation = executionContractImplementationSchema.parse(
       JSON.parse(plan.implementationJson) as unknown,
     )
@@ -696,7 +638,7 @@ function buildDigitalEmployeeExecution(deps: DigitalEmployeeExecutionDependencie
       subject,
       internal: {
         catalogVisibility: 'internal',
-        ...(options.taskId === undefined ? {} : { preallocatedTaskId: options.taskId }),
+        preallocatedTaskId: taskId,
         digitalEmployeeLaunch: {
           actionRunId: plan.roundRef,
           caseId: plan.caseRef.id,
@@ -715,132 +657,115 @@ function buildDigitalEmployeeExecution(deps: DigitalEmployeeExecutionDependencie
     return { executionRef: launched.id }
   }
 
-  const participant: DigitalEmployeeExecutionParticipant = {
-    async launch(planJson: string, attemptJson: string) {
-      return await launchCore(JSON.parse(planJson) as unknown, JSON.parse(attemptJson) as unknown, {
-        dedupeByRound: true,
+  /** 按任务行判执行结果；`stopped` 由调用方在它之前判（见 `core.inspect`）。 */
+  async function inspectTask(executionRef: string): Promise<DigitalEmployeeExecutionCoreSnapshot> {
+    const task = await deps.tasks.get(executionRef)
+    if (task === null) {
+      return resultFailure(
+        'infrastructure',
+        'execution-not-found',
+        'TaskEngine execution is missing',
+        { sourceRef: `task:${executionRef}`, durationMs: 0, totalTokens: 0 },
+        null,
+      )
+    }
+    const executionMetadata = await deps.executionMetadata.load(executionRef)
+    if (
+      digitalEmployeeExecutionIsLive({
+        status: task.status,
+        errorSummary: task.errorSummary,
+        autoRecoverySuspended: executionMetadata?.autoRecoverySuspended === true,
       })
-    },
-
-    async inspect(executionRef: string) {
-      const task = await deps.tasks.get(executionRef)
-      if (task === null) {
-        return resultFailure(
-          executionRef,
-          'infrastructure',
-          'execution-not-found',
-          'TaskEngine execution is missing',
-          { sourceRef: `task:${executionRef}`, durationMs: 0, totalTokens: 0 },
-        )
-      }
-      const executionMetadata = await deps.executionMetadata.load(executionRef)
-      if (
-        digitalEmployeeExecutionIsLive({
-          status: task.status,
-          errorSummary: task.errorSummary,
-          autoRecoverySuspended: executionMetadata?.autoRecoverySuspended === true,
-        })
-      ) {
-        return { kind: 'pending', executionRef }
-      }
-      const usage = (await deps.resourceUsage.read(executionRef)) ?? {
-        effectiveRunningMs: 0,
-        totalTokens: 0,
-      }
-      const metering: DigitalEmployeeExecutionMetering = {
-        sourceRef: `task:${executionRef}`,
-        durationMs: usage.effectiveRunningMs,
-        totalTokens: usage.totalTokens,
-      }
-      const outcome = await deps.readModels.executionOutcome.find(executionRef)
-      if (outcome === null) {
-        return resultFailure(
-          executionRef,
-          'infrastructure',
-          'execution-outcome-missing',
-          'TaskEngine execution outcome is missing',
-          metering,
-        )
-      }
-      if (task.status !== 'done') {
-        return resultFailure(
-          executionRef,
-          'infrastructure',
-          `execution-${task.status}`,
-          outcome.task.errorMessage ?? outcome.task.errorSummary ?? `task ended as ${task.status}`,
-          metering,
-        )
-      }
-      const output =
-        outcome.outputs.find(
-          (candidate) => candidate.active && candidate.portName === DIGITAL_EMPLOYEE_RESULT_PORT,
-        )?.content ?? null
-      const planPrompt = task.inputs[DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]
-      if (typeof planPrompt === 'string') {
-        const expectedPath = parsedPlanOutputPath(planPrompt)
-        const planRunIds = new Set(
-          outcome.runs
-            .filter(
-              (run) => run.nodeId === DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID && run.status === 'done',
-            )
-            .map((run) => run.id),
-        )
-        const planOutput = [...outcome.outputs]
-          .reverse()
-          .find(
-            (candidate) =>
-              candidate.active &&
-              candidate.portName === 'analysis-plan' &&
-              planRunIds.has(candidate.nodeRunId),
+    ) {
+      return { kind: 'pending' }
+    }
+    const usage = (await deps.resourceUsage.read(executionRef)) ?? {
+      effectiveRunningMs: 0,
+      totalTokens: 0,
+    }
+    const metering: DigitalEmployeeExecutionMeteringV1 = {
+      sourceRef: `task:${executionRef}`,
+      durationMs: usage.effectiveRunningMs,
+      totalTokens: usage.totalTokens,
+    }
+    const outcome = await deps.readModels.executionOutcome.find(executionRef)
+    if (outcome === null) {
+      return resultFailure(
+        'infrastructure',
+        'execution-outcome-missing',
+        'TaskEngine execution outcome is missing',
+        metering,
+        task.worktreePath,
+      )
+    }
+    if (task.status !== 'done') {
+      return resultFailure(
+        'infrastructure',
+        `execution-${task.status}`,
+        outcome.task.errorMessage ?? outcome.task.errorSummary ?? `task ended as ${task.status}`,
+        metering,
+        task.worktreePath,
+      )
+    }
+    const output =
+      outcome.outputs.find(
+        (candidate) => candidate.active && candidate.portName === DIGITAL_EMPLOYEE_RESULT_PORT,
+      )?.content ?? null
+    const planPrompt = task.inputs[DIGITAL_EMPLOYEE_PLAN_PROMPT_KEY]
+    if (typeof planPrompt === 'string') {
+      const expectedPath = parsedPlanOutputPath(planPrompt)
+      const planRunIds = new Set(
+        outcome.runs
+          .filter(
+            (run) => run.nodeId === DIGITAL_EMPLOYEE_PLAN_AGENT_NODE_ID && run.status === 'done',
           )
-        if (expectedPath === null || planOutput?.content.trim() !== expectedPath) {
-          return resultFailure(
-            executionRef,
-            'semantic',
-            'implementation-plan-path-mismatch',
-            `analysis-plan must publish the exact platform path ${expectedPath ?? '<missing>'}`,
-            metering,
-          )
-        }
-      }
-      const roundRef = executionMetadata?.roundRef ?? null
-      if (deps.workspace !== undefined && roundRef !== null) {
-        const validation = await deps.workspace.validate({
-          roundRef,
-          taskStatus: task.status,
-          outputJson: output,
-        })
-        if (!validation.ok) {
-          return resultFailure(
-            executionRef,
-            validation.errorClass,
-            validation.errorCode,
-            validation.errorDetail,
-            metering,
-          )
-        }
-      }
-      if (output === null) {
+          .map((run) => run.id),
+      )
+      const planOutput = [...outcome.outputs]
+        .reverse()
+        .find(
+          (candidate) =>
+            candidate.active &&
+            candidate.portName === 'analysis-plan' &&
+            planRunIds.has(candidate.nodeRunId),
+        )
+      if (expectedPath === null || planOutput?.content.trim() !== expectedPath) {
         return resultFailure(
-          executionRef,
           'semantic',
-          'execution-output-missing',
-          `task did not publish ${DIGITAL_EMPLOYEE_RESULT_PORT}`,
+          'implementation-plan-path-mismatch',
+          `analysis-plan must publish the exact platform path ${expectedPath ?? '<missing>'}`,
           metering,
+          task.worktreePath,
         )
       }
-      return { kind: 'completed', executionRef, outputJson: output, metering }
-    },
-
-    async inspectHumanReview(executionRef) {
-      return legacyHumanReviewState(await deps.humanReview.inspect(executionRef))
-    },
-
-    async cancel(executionRef: string) {
-      const task = await deps.tasks.get(executionRef)
-      if (task === null || isTerminalTaskStatus(task.status)) return
-      await deps.tasks.cancel(executionRef)
-    },
+    }
+    const roundRef = executionMetadata?.roundRef ?? null
+    if (deps.workspace !== undefined && roundRef !== null) {
+      const validation = await deps.workspace.validate({
+        roundRef,
+        taskStatus: task.status,
+        outputJson: output,
+      })
+      if (!validation.ok) {
+        return resultFailure(
+          validation.errorClass,
+          validation.errorCode,
+          validation.errorDetail,
+          metering,
+          task.worktreePath,
+        )
+      }
+    }
+    if (output === null) {
+      return resultFailure(
+        'semantic',
+        'execution-output-missing',
+        `task did not publish ${DIGITAL_EMPLOYEE_RESULT_PORT}`,
+        metering,
+        task.worktreePath,
+      )
+    }
+    return { kind: 'completed', outputJson: output, metering }
   }
 
   // 「用户取消」的判据取自单一事实源（`domain/sourceTermination.ts`），不硬编码字符串。
@@ -850,10 +775,7 @@ function buildDigitalEmployeeExecution(deps: DigitalEmployeeExecutionDependencie
 
   const core: DigitalEmployeeExecutionCore = {
     async launch(input) {
-      return await launchCore(input.plan, input.attempt, {
-        dedupeByRound: false,
-        taskId: input.taskId,
-      })
+      return await launchCore(input.plan, input.attempt, input.taskId)
     },
 
     async executionExists(executionRef: string) {
@@ -876,19 +798,7 @@ function buildDigitalEmployeeExecution(deps: DigitalEmployeeExecutionDependencie
           },
         }
       }
-      const result = await participant.inspect(executionRef)
-      if (result.kind === 'pending') return { kind: 'pending' }
-      if (result.kind === 'completed') {
-        return { kind: 'completed', outputJson: result.outputJson, metering: result.metering }
-      }
-      return {
-        kind: 'failed',
-        errorClass: result.errorClass,
-        errorCode: result.errorCode,
-        errorDetail: result.errorDetail,
-        workspaceRoot: task?.worktreePath ?? null,
-        metering: result.metering,
-      }
+      return await inspectTask(executionRef)
     },
 
     async inspectHumanReview(executionRef: string) {
@@ -896,24 +806,57 @@ function buildDigitalEmployeeExecution(deps: DigitalEmployeeExecutionDependencie
     },
 
     async cancel(executionRef: string) {
-      await participant.cancel(executionRef)
+      const task = await deps.tasks.get(executionRef)
+      if (task === null || isTerminalTaskStatus(task.status)) return
+      await deps.tasks.cancel(executionRef)
     },
   }
 
-  return { participant: Object.freeze(participant), core: Object.freeze(core) }
-}
-
-export function composeDigitalEmployeeExecution(
-  deps: DigitalEmployeeExecutionDependencies,
-): DigitalEmployeeExecutionParticipant {
-  return buildDigitalEmployeeExecution(deps).participant
+  return Object.freeze(core)
 }
 
 /** RFC-368 T7 —— typed 核心，供 `ReactionExecutionPortV1` 适配器经端口注入。 */
 export function composeDigitalEmployeeExecutionCore(
   deps: DigitalEmployeeExecutionDependencies,
 ): DigitalEmployeeExecutionCore {
-  return buildDigitalEmployeeExecution(deps).core
+  return buildDigitalEmployeeExecution(deps)
+}
+
+type ReactionExecutionPortDependencies = Parameters<typeof composeReactionExecutionPortV1>[0]
+
+/**
+ * RFC-368 T17 —— 三个组合根装配数字员工 Reaction 执行时用的**唯一**入口。
+ *
+ * 数字员工的 runtime 需要两样东西，且都要来自 TaskExecution：
+ *   · `admission(tx)`：绑定到**数字员工 claim 事务**的 admission 参与者（`InTx` 定式，
+ *     数字员工 store 在自己的 `session.transaction` 里取用）；
+ *   · `port(artifacts)`：执行 port。它要消费数字员工持有的反馈 reader 与诊断 sink，而那两样
+ *     由数字员工的 composition 产出——所以交出一个工厂，由数字员工把自己的产物视图交进来，
+ *     根上不必先后拼两次、也不形成装配环。
+ */
+export function composeReactionExecutionProvider(
+  deps: DigitalEmployeeExecutionDependencies & {
+    readonly db: ProviderNeutralDatabase
+    readonly now?: () => number
+  },
+) {
+  const now = deps.now ?? Date.now
+  const core = buildDigitalEmployeeExecution(deps)
+  return Object.freeze({
+    admission: (tx: ProviderNeutralDatabase) =>
+      composeReactionExecutionAdmissionParticipantInTx(createReactionAdmissionStore(tx), { now }),
+    port: (artifacts: {
+      readonly retryFeedback: ReactionExecutionPortDependencies['retryFeedback']
+      readonly diagnosticsSink: ReactionExecutionPortDependencies['diagnostics']
+    }) =>
+      composeReactionExecutionPortV1({
+        core,
+        admissions: createReactionAdmissionStore(deps.db),
+        retryFeedback: artifacts.retryFeedback,
+        diagnostics: artifacts.diagnosticsSink,
+        now,
+      }),
+  })
 }
 
 /**
@@ -957,19 +900,6 @@ export function composeDatabaseDigitalEmployeeExecutionPorts(
           .where(eq(tasks.id, taskId))
           .get()
         return row ?? null
-      },
-      async findByRound(roundRef: string) {
-        return await db
-          .select({
-            taskId: tasks.id,
-            status: tasks.status,
-            errorSummary: tasks.errorSummary,
-            autoRecoverySuspended: tasks.autoRecoverySuspended,
-            startedAt: tasks.startedAt,
-          })
-          .from(tasks)
-          .where(eq(tasks.digitalEmployeeRoundId, roundRef))
-          .all()
       },
     },
     humanReview: {

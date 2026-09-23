@@ -71,6 +71,11 @@ export async function seedReaction(
     readonly terminalKind?: string | null
     readonly nextAttemptAt?: number
     readonly maxTotalTokens?: number | null
+    /** 切换前由旧路径建出的 round 没有派发行。 */
+    readonly withDispatch?: boolean
+    readonly roundState?: 'planned' | 'running'
+    readonly executionRef?: string | null
+    readonly attemptOrdinal?: number
   } = {},
 ): Promise<void> {
   await db
@@ -113,14 +118,15 @@ export async function seedReaction(
       executionPolicyRevision: 1,
       inputContextRefsJson: '[]',
       planJson: reactionPlanJson({ maxTotalTokens: input.maxTotalTokens ?? null }),
-      state: 'planned',
-      executionRef: null,
+      state: input.roundState ?? 'planned',
+      executionRef: input.executionRef ?? null,
       outputJson: null,
-      attemptOrdinal: 0,
+      attemptOrdinal: input.attemptOrdinal ?? 0,
       createdAt: 1,
       updatedAt: 1,
     })
     .run()
+  if (input.withDispatch === false) return
   await db
     .insert(employeeReactionDispatch)
     .values({
@@ -217,7 +223,6 @@ export function reactionService(
       getCurrentExecutionPolicy: async () => policy,
     },
     eventCenter: {},
-    execution: {},
     platformWorkItems: {},
     inputUploads: {},
     inputArtifacts: {},

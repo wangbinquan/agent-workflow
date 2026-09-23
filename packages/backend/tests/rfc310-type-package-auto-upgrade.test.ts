@@ -5,6 +5,7 @@
  * "Upgrade to current version" button, so these tests intentionally start from
  * a real v1 tool -> job -> employee closure and then restart on v2.
  */
+import { legacyShapedReactionExecution } from './helpers/legacyShapedReactionExecution'
 import { expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -1395,7 +1396,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
                 throw new Error('invocation upgrade fixture does not execute platform work')
               },
             },
-            execution: {
+            reactionExecution: legacyShapedReactionExecution({
               async launch() {
                 throw new Error('invocation upgrade fixture does not launch business work')
               },
@@ -1403,7 +1404,7 @@ describeEachProvider('RFC-310 Type Package automatic compatible upgrades', (harn
                 return { kind: 'pending' as const, executionRef: 'unused' }
               },
               async cancel() {},
-            },
+            }),
           },
         })
 

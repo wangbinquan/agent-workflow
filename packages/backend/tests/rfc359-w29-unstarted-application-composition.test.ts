@@ -624,7 +624,13 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // `composeDatabaseDigitalEmployeeExecutionPorts(input.db).humanReview`（端口升级成六态，
       // 区分 `unknown` 与 `not-applicable`，判据在 `tests/rfc368-reaction-execution-adapter.test.ts`）。
       // 装配图变的只有这一格，方向是收敛。
-      '5928a4cbbbb86fd2ab7b30f4a1558bfdc3899cd2eb455cfdd88f7431100b1735',
+      // 2026-09-23（RFC-368 T17 切绑定）：数字员工 Reaction 执行从旧字符串 participant
+      // （`createReactionExecutionAdapter(composeDigitalEmployeeExecution(...))`）换成
+      // `composeReactionExecutionProvider({ db, ... })`——同一份 deps 多交一个 `db`（给 TE 的
+      // admission 日志），交给 `composeDigitalEmployee` 的字段从 `execution` 改名
+      // `reactionExecution`。**是有意的装配变化**：旧合同与旧路径随 T18 删除，判据在
+      // `tests/rfc368-*.test.ts` 与 `tests/rfc294-e9c-reaction-launch-crash-window.test.ts`。
+      '37b0d4e9fca56feb7496ca94270ebe2e74311847fb3250461a4f874dbd21c3f5',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -822,7 +828,11 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // delegated-context 工厂与 durable work-intent store；旧 union target seam 与 root
       // callback 已删除。**装配图确实变了，是有意的**，判据在
       // `tests/rfc365-event-automation-target-providers.test.ts`。
-      '05eb79fb2b216aabd40b9f09fb6792208a2bb97a8bf3db0248ddc7294e9ef429',
+      // 2026-09-23（RFC-368 T17 切绑定）：SQLite 根同上——Reaction 执行改由
+      // `composeReactionExecutionProvider({ db: deps.db, ... })` 装配、以 `reactionExecution`
+      // 交给数字员工；旧字符串 participant 与适配器删除。装配图的变化是有意的，
+      // 判据在 `tests/rfc368-*.test.ts`。
+      'abebd1601738bd5708cc621c5adc0b209d8c9bd79a07544883679cc42d13e5f5',
     )
     expect(
       namedCalls(

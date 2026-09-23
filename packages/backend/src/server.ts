@@ -296,7 +296,6 @@ import {
   composeDigitalEmployeeWriterCutoverFor,
   createEmployeeAutomationWorkStartProvider,
   createEmployeeInputArtifactStore,
-  createReactionExecutionAdapter,
 } from '@/modules/digital-employee/composition'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { taskExecutionResourceDependencies } from '@/services/execution/taskExecutionResourceDependencies'
@@ -343,7 +342,7 @@ import {
 } from '@/modules/event-center/composition'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
-  composeDigitalEmployeeExecution,
+  composeReactionExecutionProvider,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import {
   composeTaskClarifyDirectiveRouteOperations,
@@ -2815,96 +2814,96 @@ function composeSqliteApiRouteMounts(
         deps.digitalEmployeeCaseDetailProjection === undefined
           ? []
           : [deps.digitalEmployeeCaseDetailProjection],
-      execution: createReactionExecutionAdapter(
-        composeDigitalEmployeeExecution({
-          // RFC-359 AC-1（plan §5hl）：数字员工执行合成一份——端口 + 启动内核，
-          // 与 PostgreSQL daemon 同一条路。此前这一侧在 composer 函数体里直接读库、
-          // 用 `startTask` + `preCreatedWorktree` 启动（按定义只服务 SQLite）。
-          appHome,
-          resolveActor: async () => {
-            const identity = await admitDaemonIdentity(identityAccess)
-            if (identity === null) throw new Error('digital-employee-host-identity-not-admitted')
-            return actorOfDirectAuthority(identity)
-          },
-          resourceAuthorityFor: (actor) => ({
-            actor,
-            authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
-            resources: identityAccess.taskExecutionResources,
-          }),
-          launch: composeHostTaskLaunchKernel({
-            sourceContexts: identityAccess.taskPreparationContext,
-            repositoryPreparation: composeRepositoryPreparation({
-              db: deps.db,
-              appHome: appHome,
-              secretBox: deps.secretBox,
-            }),
-            db: deps.db,
-            appHome,
-            secretBox: deps.secretBox,
-            gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
-            coordinator: createTaskDriveCoordinator({
-              // 同下面那台路由协调器：`runtimeConfigOpts(deps)` 读的十七个旋钮必须从配置漏斗取，
-              // 否则数字员工执行这条路也在用编译期缺省跑（RFC-359 AC-1，plan §5hn 批次二 ①②）。
-              deps: {
-                db: deps.db,
-                schedulerDriver,
-                configPath: deps.configPath,
-                ...resolveLaunchRuntimeConfig(deps.configPath),
-              },
-              // 2026-09-19：同上——长驻协调器每次 drive 现读配置。
-              refreshLaunchConfig: () => resolveLaunchRuntimeConfig(deps.configPath),
-              appHome,
-              engineFailureMessage: 'digital employee execution task drive threw',
-              failureReporter: {
-                async report({ taskId, error, execution }) {
-                  const now = Date.now()
-                  await taskExecutionPersistence.runtimeLifecycle.trySet({
-                    taskId,
-                    to: 'failed',
-                    allowedFrom: ['pending', 'running'],
-                    extra: {
-                      finishedAt: now,
-                      errorSummary: 'task drive failed',
-                      errorMessage: error instanceof Error ? error.message : String(error),
-                    },
-                    executionContext: execution,
-                    now,
-                    reason: 'task-drive',
-                  })
-                  await taskExecutionPersistence.intentTerminalization.terminalize({
-                    taskId,
-                    state: 'failed',
-                    failureCode: 'task-drive-failed',
-                    now,
-                    claimedOwnerEpoch: execution.token.epoch,
-                  })
-                },
-              },
-            }),
-          }),
-          ...composeDatabaseDigitalEmployeeExecutionPorts(deps.db),
-          tasks: taskRouteOperations,
-          readModels: deps.taskExecutionReadModels,
-          agents: {
-            get: async (id) => {
-              const identity = await admitDaemonIdentity(identityAccess)
-              if (identity === null)
-                throw new Error('digital-employee-catalog-authority-not-admitted')
-              return agentCatalog.queries.get(identity.actor, { id })
-            },
-          },
-          workflows: {
-            get: async (id) => {
-              const identity = await admitDaemonIdentity(identityAccess)
-              if (identity === null)
-                throw new Error('digital-employee-catalog-authority-not-admitted')
-              return workflowCatalog.queries.get(identity.actor, { id })
-            },
-          },
-          workspace: developmentWorkspace,
-          executionContracts,
+      // RFC-368 T17 —— Reaction 执行走 `ReactionExecutionPortV1` + 同事务 admission 参与者。
+      reactionExecution: composeReactionExecutionProvider({
+        db: deps.db,
+        // RFC-359 AC-1（plan §5hl）：数字员工执行合成一份——端口 + 启动内核，
+        // 与 PostgreSQL daemon 同一条路。此前这一侧在 composer 函数体里直接读库、
+        // 用 `startTask` + `preCreatedWorktree` 启动（按定义只服务 SQLite）。
+        appHome,
+        resolveActor: async () => {
+          const identity = await admitDaemonIdentity(identityAccess)
+          if (identity === null) throw new Error('digital-employee-host-identity-not-admitted')
+          return actorOfDirectAuthority(identity)
+        },
+        resourceAuthorityFor: (actor) => ({
+          actor,
+          authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
+          resources: identityAccess.taskExecutionResources,
         }),
-      ),
+        launch: composeHostTaskLaunchKernel({
+          sourceContexts: identityAccess.taskPreparationContext,
+          repositoryPreparation: composeRepositoryPreparation({
+            db: deps.db,
+            appHome: appHome,
+            secretBox: deps.secretBox,
+          }),
+          db: deps.db,
+          appHome,
+          secretBox: deps.secretBox,
+          gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
+          coordinator: createTaskDriveCoordinator({
+            // 同下面那台路由协调器：`runtimeConfigOpts(deps)` 读的十七个旋钮必须从配置漏斗取，
+            // 否则数字员工执行这条路也在用编译期缺省跑（RFC-359 AC-1，plan §5hn 批次二 ①②）。
+            deps: {
+              db: deps.db,
+              schedulerDriver,
+              configPath: deps.configPath,
+              ...resolveLaunchRuntimeConfig(deps.configPath),
+            },
+            // 2026-09-19：同上——长驻协调器每次 drive 现读配置。
+            refreshLaunchConfig: () => resolveLaunchRuntimeConfig(deps.configPath),
+            appHome,
+            engineFailureMessage: 'digital employee execution task drive threw',
+            failureReporter: {
+              async report({ taskId, error, execution }) {
+                const now = Date.now()
+                await taskExecutionPersistence.runtimeLifecycle.trySet({
+                  taskId,
+                  to: 'failed',
+                  allowedFrom: ['pending', 'running'],
+                  extra: {
+                    finishedAt: now,
+                    errorSummary: 'task drive failed',
+                    errorMessage: error instanceof Error ? error.message : String(error),
+                  },
+                  executionContext: execution,
+                  now,
+                  reason: 'task-drive',
+                })
+                await taskExecutionPersistence.intentTerminalization.terminalize({
+                  taskId,
+                  state: 'failed',
+                  failureCode: 'task-drive-failed',
+                  now,
+                  claimedOwnerEpoch: execution.token.epoch,
+                })
+              },
+            },
+          }),
+        }),
+        ...composeDatabaseDigitalEmployeeExecutionPorts(deps.db),
+        tasks: taskRouteOperations,
+        readModels: deps.taskExecutionReadModels,
+        agents: {
+          get: async (id) => {
+            const identity = await admitDaemonIdentity(identityAccess)
+            if (identity === null)
+              throw new Error('digital-employee-catalog-authority-not-admitted')
+            return agentCatalog.queries.get(identity.actor, { id })
+          },
+        },
+        workflows: {
+          get: async (id) => {
+            const identity = await admitDaemonIdentity(identityAccess)
+            if (identity === null)
+              throw new Error('digital-employee-catalog-authority-not-admitted')
+            return workflowCatalog.queries.get(identity.actor, { id })
+          },
+        },
+        workspace: developmentWorkspace,
+        executionContracts,
+      }),
       platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
         reactionRounds: createEmployeeReactionRoundQueries(deps.db),
         db: deps.db,

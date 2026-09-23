@@ -102,10 +102,14 @@ export async function createProductionPerformanceApplication(
         pendingDeliveries: unusedRuntimeCapability,
         acceptDelivery: unusedRuntimeCapability,
       },
-      execution: {
-        launch: unusedRuntimeCapability,
-        inspect: unusedRuntimeCapability,
-        cancel: unusedRuntimeCapability,
+      reactionExecution: {
+        admission: unusedRuntimeCapability,
+        port: () => ({
+          launch: unusedRuntimeCapability,
+          inspect: unusedRuntimeCapability,
+          inspectHumanReview: unusedRuntimeCapability,
+          cancel: unusedRuntimeCapability,
+        }),
       },
       platformWorkItems: { execute: unusedRuntimeCapability },
     },

@@ -24,6 +24,7 @@ import {
   type SQL,
 } from 'drizzle-orm'
 import { EMPLOYEE_TERMINAL_CATALOG_CANCELED_KINDS } from '@agent-workflow/shared'
+import { z } from 'zod'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
@@ -47,6 +48,7 @@ import {
   employeeInputUploads,
   employeeInvocations,
   employeeOsOutbox,
+  employeeReactionArtifacts,
   employeeReactionDispatch,
   employeeReactionRounds,
 } from '@/db/schema'
@@ -71,6 +73,8 @@ import type {
   ReactionRoundRecord,
 } from '../domain/runtimeModel'
 import { employeeCaseLifecycleObservation } from '../public/events'
+import { reactionArtifactRef, sanitizeReactionText } from '../domain/reactionArtifacts'
+import { reactionExecutionPlanSchema } from '../domain/runtimeModel'
 
 async function enqueueCaseLifecycleEventTx(
   tx: DatabaseTransaction,
@@ -214,7 +218,41 @@ function roundRecord(row: typeof employeeReactionRounds.$inferSelect): ReactionR
   }
 }
 
+/**
+ * RFC-368 T5b —— 切换前 `execution-launch` outbox 行的 kind 与 payload 形状。只剩一次性收编
+ * （`adoptLegacyReactionLaunches`）还认得它；新代码不再写这一类。
+ */
+const LEGACY_EXECUTION_LAUNCH_KIND = 'execution-launch'
+
+const legacyExecutionLaunchPayloadSchema = z
+  .object({
+    roundId: z.string().min(1),
+    plan: reactionExecutionPlanSchema,
+    attempt: z
+      .object({
+        ordinal: z.number().int().nonnegative(),
+        mode: z.enum(['initial', 'same-scene', 'fresh-scene']),
+        previousError: z.string().nullable(),
+      })
+      .strict()
+      .default({ ordinal: 0, mode: 'initial', previousError: null }),
+  })
+  .strict()
+
+function parseJsonOrNull(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown
+  } catch {
+    return null
+  }
+}
+
 function outboxRecord(row: typeof employeeOsOutbox.$inferSelect): EmployeeOutboxRecord {
+  // `claimOutbox` 不会选中遗留的 `execution-launch` 行（它们只由 `adoptLegacyReactionLaunches`
+  // 收编）；万一读到，说明判据漂了，直接报出来而不是交给一个不认识它的执行臂。
+  if (row.kind === LEGACY_EXECUTION_LAUNCH_KIND) {
+    throw new Error(`legacy execution-launch outbox row must be adopted, not claimed: ${row.id}`)
+  }
   return {
     id: row.id,
     caseId: row.caseId,
@@ -1162,6 +1200,8 @@ export function createRuntimePersistence(
               ),
             ),
             lte(employeeOsOutbox.nextAttemptAt, input.now),
+            // RFC-368：遗留的 `execution-launch` 行只由派发臂的一次性收编处理。
+            ne(employeeOsOutbox.kind, LEGACY_EXECUTION_LAUNCH_KIND),
           ),
         )
         .orderBy(asc(employeeOsOutbox.createdAt), asc(employeeOsOutbox.id))
@@ -1456,6 +1496,84 @@ export function createRuntimePersistence(
         .run()
     },
 
+    async adoptLegacyReactionLaunches(input) {
+      return await session.transaction(async (tx) => {
+        const rows = await tx
+          .select()
+          .from(employeeOsOutbox)
+          .where(
+            and(
+              eq(employeeOsOutbox.kind, LEGACY_EXECUTION_LAUNCH_KIND),
+              inArray(employeeOsOutbox.state, ['pending', 'claimed']),
+            ),
+          )
+          .all()
+        for (const row of rows) {
+          const payload = legacyExecutionLaunchPayloadSchema.safeParse(
+            parseJsonOrNull(row.payloadJson),
+          )
+          const round = payload.success
+            ? await tx
+                .select()
+                .from(employeeReactionRounds)
+                .where(eq(employeeReactionRounds.id, payload.data.roundId))
+                .get()
+            : undefined
+          if (payload.success && round !== undefined && round.state === 'planned') {
+            const previousError = payload.data.attempt.previousError
+            let retryFeedbackRef: string | null = null
+            if (previousError !== null && previousError.length > 0) {
+              const separator = /^([a-z0-9][a-z0-9._-]*): /.exec(previousError)
+              const text = sanitizeReactionText({
+                errorCode: separator?.[1] ?? 'previous-error',
+                errorDetail:
+                  separator === null ? previousError : previousError.slice(separator[0].length),
+                workspaceRoot: null,
+              })
+              await tx
+                .insert(employeeReactionArtifacts)
+                .values({
+                  digest: text.digest,
+                  kind: 'retry-feedback',
+                  body: text.body,
+                  bytes: Buffer.byteLength(text.body, 'utf8'),
+                  createdAt: input.now,
+                })
+                .onConflictDoNothing({ target: employeeReactionArtifacts.digest })
+                .run()
+              retryFeedbackRef = reactionArtifactRef('retry-feedback', text.digest)
+            }
+            await tx
+              .update(employeeReactionRounds)
+              .set({
+                planJson: JSON.stringify(payload.data.plan),
+                attemptOrdinal: payload.data.attempt.ordinal,
+                updatedAt: input.now,
+              })
+              .where(eq(employeeReactionRounds.id, round.id))
+              .run()
+            await tx
+              .insert(employeeReactionDispatch)
+              .values({
+                roundRef: round.id,
+                caseId: round.caseId,
+                nextAttemptAt: row.nextAttemptAt,
+                dispatchAttempts: row.attemptCount,
+                lastDispatchError: row.lastError,
+                retryFeedbackRef,
+                createdAt: input.now,
+                updatedAt: input.now,
+              })
+              .onConflictDoNothing({ target: employeeReactionDispatch.roundRef })
+              .run()
+          }
+          // 行本身删掉：round 已不在 planned（结算过了）或 payload 读不懂的，也没有派发的意义了。
+          await tx.delete(employeeOsOutbox).where(eq(employeeOsOutbox.id, row.id)).run()
+        }
+        return rows.length
+      })
+    },
+
     async claimReactionDispatch(input) {
       const candidate = await db
         .select({ dispatch: employeeReactionDispatch, round: employeeReactionRounds })
@@ -1640,7 +1758,7 @@ export function createRuntimePersistence(
             `reaction round cannot be retried: ${input.roundId}`,
           )
         }
-        const dispatch = input.reactionDispatch ?? null
+        const dispatch = input.reactionDispatch
         await tx
           .update(employeeReactionRounds)
           .set({
@@ -1648,7 +1766,7 @@ export function createRuntimePersistence(
             executionRef: null,
             outputJson: input.errorJson,
             attemptOrdinal: input.attemptOrdinal,
-            ...(dispatch === null ? {} : { planJson: JSON.stringify(dispatch.plan) }),
+            planJson: JSON.stringify(dispatch.plan),
             updatedAt: input.now,
           })
           .where(
@@ -1659,44 +1777,32 @@ export function createRuntimePersistence(
             ),
           )
           .run()
-        if (dispatch !== null) {
-          const reset = affectedRows(
-            await tx
-              .update(employeeReactionDispatch)
-              .set({
-                nextAttemptAt: input.nextAttemptAt,
-                dispatchAttempts: 0,
-                dispatchClaimedBy: null,
-                dispatchLeaseExpiresAt: null,
-                operationRef: null,
-                retryFeedbackRef: dispatch.retryFeedbackRef,
-                lastDispatchError: dispatch.lastDispatchError,
-                updatedAt: input.now,
-              })
-              .where(eq(employeeReactionDispatch.roundRef, input.roundId))
-              .run(),
-          )
-          if (reset !== 1) {
-            throw new NotFoundError(
-              'employee-reaction-dispatch-not-found',
-              `reaction dispatch row missing: ${input.roundId}`,
-            )
-          }
+        const reset = {
+          nextAttemptAt: input.nextAttemptAt,
+          dispatchAttempts: 0,
+          dispatchClaimedBy: null,
+          dispatchLeaseExpiresAt: null,
+          operationRef: null,
+          retryFeedbackRef: dispatch.retryFeedbackRef,
+          lastDispatchError: dispatch.lastDispatchError,
+          updatedAt: input.now,
         }
-        if (input.launchOutbox !== null) {
+        const updated = affectedRows(
           await tx
-            .insert(employeeOsOutbox)
+            .update(employeeReactionDispatch)
+            .set(reset)
+            .where(eq(employeeReactionDispatch.roundRef, input.roundId))
+            .run(),
+        )
+        // 切换前由旧路径启动的 round 没有派发行：这里补建，epoch 从 0 起（它从没 admission 过）。
+        if (updated === 0) {
+          await tx
+            .insert(employeeReactionDispatch)
             .values({
-              id: input.launchOutbox.id,
-              caseId: input.launchOutbox.caseId,
-              kind: input.launchOutbox.kind,
-              payloadJson: input.launchOutbox.payloadJson,
-              dedupeKey: input.launchOutbox.dedupeKey,
-              state: 'pending',
-              attemptCount: 0,
-              nextAttemptAt: input.nextAttemptAt,
+              roundRef: input.roundId,
+              caseId: round.caseId,
+              ...reset,
               createdAt: input.now,
-              updatedAt: input.now,
             })
             .run()
         }

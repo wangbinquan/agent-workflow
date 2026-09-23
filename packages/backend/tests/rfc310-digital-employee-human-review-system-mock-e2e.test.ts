@@ -29,8 +29,8 @@ import {
 import { ExecutionContractService } from '@/modules/execution-contract/application/executionContractService'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
-  composeDigitalEmployeeExecution,
-  inspectDigitalEmployeeHumanReviewState,
+  composeDigitalEmployeeExecutionCore,
+  inspectDigitalEmployeeHumanReviewSnapshot,
 } from '@/modules/task-execution/composition/digitalEmployeeExecution'
 import {
   DIGITAL_EMPLOYEE_AGENT_NODE_ID,
@@ -282,7 +282,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       const admitted = await admitDaemonIdentity(identityAccess)
       if (admitted === null) throw new Error('human-review e2e daemon identity unavailable')
       const actor = actorOfDirectAuthority(admitted)
-      const execution = composeDigitalEmployeeExecution({
+      const execution = composeDigitalEmployeeExecutionCore({
         appHome,
         resolveActor: async () => actor,
         resourceAuthorityFor: () => ({
@@ -332,14 +332,16 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
         allowedEffectKinds: [],
         roundBudgetMs: 30_000,
       }
-      const receipt = await execution.launch(
-        JSON.stringify(plan),
-        JSON.stringify({ ordinal: 0, mode: 'initial', previousError: null }),
-      )
+      // RFC-368：执行身份由调用方（admission 事务）预分配，内核拿它当 taskId。
+      const receipt = await execution.launch({
+        plan,
+        attempt: { ordinal: 0, mode: 'initial', previousError: null },
+        taskId: `human-review-e2e-${taskIds.length + 1}-${Date.now()}`,
+      })
       const taskId = receipt.executionRef
       taskIds.push(taskId)
 
-      expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
+      expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('waiting')
       expect(db.select().from(tasks).where(eq(tasks.id, taskId)).get()).toMatchObject({
         status: 'awaiting_review',
         catalogVisibility: 'internal',
@@ -401,7 +403,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       })
       await wakeHumanGateContinuation(rejected.taskId, rejected.continuationRef, startDeps)
 
-      expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
+      expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('waiting')
       expect(readFileSync(processMock.planningCountPath, 'utf8')).toBe('2')
       expect(readFileSync(processMock.implementationPromptPath, 'utf8')).toBe('')
       expect(
@@ -453,7 +455,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       })
       await wakeHumanGateContinuation(iterated.taskId, iterated.continuationRef, startDeps)
 
-      expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('waiting')
+      expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('waiting')
       expect(readFileSync(processMock.planningCountPath, 'utf8')).toBe('3')
       expect(readFileSync(processMock.implementationPromptPath, 'utf8')).toBe('')
       expect(
@@ -502,7 +504,7 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
           )
         ).map((item) => item.id),
       ).not.toContain(taskId)
-      expect(await inspectDigitalEmployeeHumanReviewState(db, taskId)).toBe('approved')
+      expect(await inspectDigitalEmployeeHumanReviewSnapshot(db, taskId)).toBe('approved')
       expect(
         db
           .select()
@@ -551,7 +553,10 @@ describe('RFC-310 human-reviewed digital employee TaskEngine system mock E2E', (
       ).toBe(true)
 
       const settled = await execution.inspect(taskId)
-      expect(settled).toMatchObject({ kind: 'completed', executionRef: taskId })
+      expect(settled).toMatchObject({
+        kind: 'completed',
+        metering: { sourceRef: `task:${taskId}` },
+      })
       if (settled.kind !== 'completed') throw new Error('reviewed execution did not complete')
       expect(JSON.parse(settled.outputJson)).toMatchObject({
         schemaVersion: 1,

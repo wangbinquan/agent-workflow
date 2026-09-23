@@ -58,10 +58,14 @@ const runtime: NonNullable<DigitalEmployeeCompositionOptions['runtime']> = {
     pendingDeliveries: async () => [],
     acceptDelivery: unexpectedExecution,
   },
-  execution: {
-    launch: unexpectedExecution,
-    inspect: unexpectedExecution,
-    cancel: unexpectedExecution,
+  reactionExecution: {
+    admission: unexpectedExecution,
+    port: () => ({
+      launch: unexpectedExecution,
+      inspect: unexpectedExecution,
+      inspectHumanReview: unexpectedExecution,
+      cancel: unexpectedExecution,
+    }),
   },
   codecs: [],
 }

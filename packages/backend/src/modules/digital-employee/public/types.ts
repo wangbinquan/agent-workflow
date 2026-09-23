@@ -268,8 +268,8 @@ export {
  *
  * 两个方法各封一处泄漏：
  *   · `frozenPlan` —— 隐藏表与列。**遗留债**：返回的仍是 `planJson` 原文，消费方
- *     用自己那份 zod 视图去 parse。文档本身的形状契约与 `ReactionExecutionPort.launch`
- *     携带的是同一份，但这里没有把它声明成 DTO；收敛它需要 OS 侧提供运行期
+ *     用自己那份 zod 视图去 parse。文档本身的形状契约与 `ReactionExecutionPortV1.launch`
+ *     携带的 plan 是同一份，但这里没有把它声明成 DTO；收敛它需要 OS 侧提供运行期
  *     schema，留给 RFC-317 B7 的生命周期批次。
  *   · `lastSettledRound` —— 隐藏**状态机枚举**。调用方说的是「最近一次已结算的轮次」，
  *     而不是 `state === 'completed'`；OS 将来把结算态拆成多个值时，改一处即可。
