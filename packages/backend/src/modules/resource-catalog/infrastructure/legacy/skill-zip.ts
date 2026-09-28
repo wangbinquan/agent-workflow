@@ -6,7 +6,7 @@
 // commitSkillZip:  applies a decision map and writes accepted candidates to
 //                  ~/.agent-workflow/skills/{id}/files/.
 
-import { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve, sep } from 'node:path'
 import { Unzip, UnzipInflate, unzipSync, type UnzipFileInfo } from 'fflate'
 import { eq, inArray } from 'drizzle-orm'
@@ -41,7 +41,10 @@ import {
   encodeSkillToken,
   skillTokenMatches,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
-import { commitSkillVersion } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
+import {
+  commitSkillVersion,
+  type SkillVersionFsOptions,
+} from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import {
   canEditResource,
   canViewResource,
@@ -59,10 +62,7 @@ const log = createLogger('skill-zip')
 // frontend cannot drift from them.
 export const ZIP_LIMITS = SKILL_ZIP_LIMITS
 
-export interface SkillZipFsOptions {
-  /** App home dir; managed skills live under `${appHome}/skills/{id}/files/`. */
-  appHome: string
-}
+export type SkillZipFsOptions = SkillVersionFsOptions
 
 // --- decodeZip ---------------------------------------------------------------
 
@@ -663,11 +663,10 @@ export async function commitSkillZipBuffer(
           db,
           opts,
           overwriteTarget.id,
-          (staging) => {
-            // Full replace: drop the funnel's live-seeded staging, lay down the ZIP tree.
-            for (const e of readdirSync(staging))
-              rmSync(join(staging, e), { recursive: true, force: true })
-            writeCandidateFiles(staging, candidate, targetName)
+          {
+            kind: 'replace-files',
+            files: candidate.files.map((file) => ({ path: file.relPath, content: file.bytes })),
+            mainContent: candidateMainContent(candidate, targetName),
           },
           {
             source: 'editor',
@@ -723,6 +722,17 @@ export async function commitSkillZipBuffer(
   return outcome
 }
 
+function candidateMainContent(candidate: SkillCandidate, targetName: string): string {
+  return stringifyFrontmatter({
+    data: {
+      name: targetName,
+      description: candidate.description,
+      ...candidate.frontmatterExtra,
+    },
+    body: candidate.bodyMd,
+  })
+}
+
 /**
  * Lay a ZIP candidate's tree (support files + the generated SKILL.md) into an
  * arbitrary target dir — a live `files/` for a fresh create, OR an op-scoped
@@ -746,14 +756,7 @@ function writeCandidateFiles(
     writeFileSync(dst, file.bytes)
   }
 
-  const skillMd = stringifyFrontmatter({
-    data: {
-      name: targetName,
-      description: candidate.description,
-      ...candidate.frontmatterExtra,
-    },
-    body: candidate.bodyMd,
-  })
+  const skillMd = candidateMainContent(candidate, targetName)
   writeFileSync(join(targetDir, 'SKILL.md'), skillMd, 'utf-8')
 
   // Sanity: directory must actually exist after write.

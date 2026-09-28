@@ -1,5 +1,6 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createSkillZipImportParticipant as createParticipant } from '../application/skills/skillZipImport'
+import type { SkillVersionContentStore } from '../application/skills/versionContentStore'
 import type { SkillZipImportPort } from '../application/skills/ports'
 import type { SkillZipImportParticipant } from '../public/participants'
 import { commitSkillZipBuffer, parseSkillZipBuffer } from './legacy/skill-zip'
@@ -8,6 +9,7 @@ import { commitSkillZipBuffer, parseSkillZipBuffer } from './legacy/skill-zip'
 export function createSkillZipImportParticipant(input: {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
+  readonly versionContent?: SkillVersionContentStore
 }): SkillZipImportParticipant {
   const port: SkillZipImportPort = {
     async parse(authority, archive) {
@@ -15,9 +17,15 @@ export function createSkillZipImportParticipant(input: {
       return parsed.response
     },
     commit: (authority, archive, decisions) =>
-      commitSkillZipBuffer(input.db, { appHome: input.appHome }, archive, decisions, {
-        actor: authority,
-      }),
+      commitSkillZipBuffer(
+        input.db,
+        { appHome: input.appHome, versionContent: input.versionContent },
+        archive,
+        decisions,
+        {
+          actor: authority,
+        },
+      ),
   }
   return createParticipant(Object.freeze(port))
 }

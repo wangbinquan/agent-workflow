@@ -200,3 +200,11 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - H1 设计勘误：当前 `start` 已以前台运行，托管缺口是配置／安装元数据／控制文件和生命周期装配；复用现 `serveDaemon`，不另造 HTTP listener 或以消除 fork 作为本次成果。
 
 - 本批只做目标文件 Prettier／ESLint、diff 检查与源码派生 census，未运行本地测试；文件树遍历函数与迁移前逐字一致。实际账本新增一个只读工厂入口、九个 owner 项和三条净 util 引用／exception，均逐项记录一次性增长；不改扫描范围或判断规则。正式功能验证交给本批 GitHub CI。
+
+
+- 技能读取切面 `583820430aa05d1563a310d981c6fe411838679c` 已上库且远端同步；CI `36380693407` 被后继文档修复 `83ac30718` 取消，不能记成功。并行作者已修复 RFC-371 的本机 demo 链接，包含提交的 CI `36380839265` 尚待终态。
+- A-T2/H6 版本内容续批：新增 `SkillVersionContentStore`，版本存储按 plan／stage／capture／publish／abort／discard 接线，现存 DB 四阶段状态机继续拥有版本号、操作日志、空写决定和提交。正文／文件增删、版本恢复、初始归档及 ZIP 覆盖改用平台中立的声明式变更；file adapter 保留原复制／指纹／快照／发布效果，旧 callback 仅由本地兼容 API 消费。catalog 与 ZIP composition 共用所选 store，没有 CS DTO。
+- 本批测试补双 provider 真库的阶段等待、持久快照失败后补偿等待与补偿失败留待恢复、提交后发布失败再放行且不重复版本、空写等待和真实文件 adapter 异步增删／恢复／二进制替换。旧技能与导入／版本／崩溃回归继续走 local adapter；本地仅跑目标格式／lint 和源码 census，不跑功能测试。
+- 边界仍明确：`StagedSkillVersion` 的旧持久 journal 词汇保持兼容，物理引用在版本漏斗内交 adapter 解释；启动 recovery handler、初始树准备／删除、history／ZIP create／统一资源导入及 legacy backfill 仍有本地依赖，后续必须按同一持久存储接线。不能仅注入本批 store 就开启 hosted 编辑或宣告 H6 完成。
+
+- 候选源码复核确认 `commitSkillVersionInTx` 与前批逐字一致，未改 DB 提交或既有业务判定；目标格式／lint 通过，census 记录实际入口 +2、owner +11、净 util 引用／exception +1 并替换前批已消费的增长说明。后继 CI `36380839265` 的 Ubuntu shard 2 为文档提交后一次性 allowGrowth 过期（本批以实际新增长重新登记）；macOS shard 4 的唯一失败为既有全仓源码扫描超出 5s，本批不改扫描判据或预算，等待新候选正式验证。

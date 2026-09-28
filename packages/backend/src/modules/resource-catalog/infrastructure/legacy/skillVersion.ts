@@ -33,7 +33,7 @@ import {
   statSync,
   type Dirent,
 } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
+import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { skills, skillVersions } from '@/db/schema'
@@ -46,11 +46,6 @@ import {
 type SkillVersionDb = ProviderNeutralDatabase
 import { realpathInside } from '@/util/safePath'
 import {
-  cleanupOpDirs,
-  opStagedDir,
-  swapInStaged,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillFsPublish'
-import {
   abandonOperation,
   advancePhase,
   beginOperation,
@@ -61,16 +56,26 @@ import { createLogger } from '@/util/log'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
 import { parseFrontmatter } from '@/util/frontmatter'
 import {
-  realDirectoryChainState,
   skillFilesAbs,
   skillRootAbs,
   skillVersionAbs,
   skillVersionRelPath,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 
+import type {
+  SkillVersionContentChange,
+  SkillVersionContentStore,
+  SkillVersionPublication,
+} from '../../application/skills/versionContentStore'
+import {
+  abortFileSkillVersionPublication,
+  createFileSkillVersionContentStore,
+} from '../local/fileSkillVersionContentStore'
+
 export interface SkillVersionFsOptions {
   /** App home dir; managed skills live under `${appHome}/skills/{id}/...`. */
   appHome: string
+  versionContent?: SkillVersionContentStore
 }
 
 type SkillRow = typeof skills.$inferSelect
@@ -494,11 +499,22 @@ export interface StagedSkillVersion {
   noop: SkillVersionRow | null
 }
 
+function publicationOf(staged: StagedSkillVersion): SkillVersionPublication {
+  return {
+    skillId: staged.skillId,
+    version: staged.newVersion,
+    publicationId: staged.publishId,
+    liveRef: staged.filesDir,
+    versionRef: staged.versionDir,
+    stagingRef: staged.stagingDir,
+  }
+}
+
 export async function stageSkillVersion(
   db: SkillVersionDb,
   opts: SkillVersionFsOptions,
   skillId: string,
-  produce: (stagingDir: string) => void,
+  produce: SkillVersionContentChange | ((stagingDir: string) => void),
   commit: SkillVersionCommitOpts,
 ): Promise<StagedSkillVersion> {
   const skill = await loadSkillRow(db, skillId)
@@ -519,12 +535,18 @@ export async function stageSkillVersion(
   }
 
   const newVersion = maxIndex === 0 ? 1 : maxIndex + 1
-  const filesDir = skillFilesAbs(opts.appHome, skillId)
-  const versionDir = skillVersionAbs(opts.appHome, skillId, newVersion)
-  // RFC-170 §6a/§13: build into an op-scoped staged dir so the live publish is an
-  // ATOMIC rename-swap (swapInStaged). publishId scopes the sibling names.
+  // Old callback callers are explicitly local. Neutral storage never receives one.
+  if (typeof produce === 'function' && opts.versionContent !== undefined) {
+    throw new Error('legacy skill producer requires the local file content store')
+  }
+  const content =
+    opts.versionContent ??
+    createFileSkillVersionContentStore(
+      opts.appHome,
+      typeof produce === 'function' ? produce : undefined,
+    )
   const publishId = ulid()
-  const staging = opStagedDir(filesDir, publishId)
+  const publication = content.plan({ skillId, version: newVersion, publicationId: publishId })
 
   // RFC-170 §6a/T7②: open a version-write op (serialising lease + crash recovery)
   // UNLESS the caller already holds the skill's op lock (skipOp — reserve/create).
@@ -538,8 +560,8 @@ export async function stageSkillVersion(
             skillId: cur.id,
             kind: 'version-write',
             targetVersion: newVersion,
-            stagingPath: relative(opts.appHome, staging),
-            candidatePath: relative(opts.appHome, versionDir),
+            stagingPath: publication.stagingJournalRef,
+            candidatePath: publication.versionJournalRef,
             preconditionJson: JSON.stringify({ skillId }),
           }),
       )
@@ -551,30 +573,25 @@ export async function stageSkillVersion(
     publishId,
     newVersion,
     newHash: '',
-    filesDir,
-    versionDir,
-    stagingDir: staging,
+    filesDir: publication.liveRef,
+    versionDir: publication.versionRef,
+    stagingDir: publication.stagingRef,
     noop: null,
   }
   try {
-    rmSync(staging, { recursive: true, force: true })
-    mkdirSync(staging, { recursive: true })
-    if (existsSync(filesDir)) cpSync(filesDir, staging, { recursive: true })
-    produce(staging)
-
-    staged.newHash = hashRegularFileTree(staging)
-    // Empty-write short-circuit: an editor Save with no real change must not
-    // inflate the history. (Initial / fusion / restore always commit.)
-    if (
-      commit.source === 'editor' &&
-      maxIndex > 0 &&
-      staged.newHash === hashRegularFileTree(filesDir)
-    ) {
+    const result = await content.stage(
+      publication,
+      typeof produce === 'function' ? { kind: 'retain' } : produce,
+      commit.source === 'editor' && maxIndex > 0,
+    )
+    staged.newHash = result.contentHash
+    // The existing no-op decision still belongs to AW, after storage comparison.
+    if (commit.source === 'editor' && maxIndex > 0 && result.matchesLive) {
       const latest = existing.find((r) => r.versionIndex === maxIndex)
       if (latest) {
         // 空写：丢掉 staging，但**保留 op**（若有）—— 它仍要在事务里重验那四道
         // token，只是不写版本、不发布。整条跳过会破坏整包基线。
-        rmSync(staging, { recursive: true, force: true })
+        await content.discardStage(publication)
         staged.noop = latest
         return staged
       }
@@ -584,10 +601,7 @@ export async function stageSkillVersion(
         async (tx) => await advancePhase(tx, opId, 'fs-staged'),
       )
 
-    rmSync(versionDir, { recursive: true, force: true })
-    mkdirSync(dirname(versionDir), { recursive: true })
-    cpSync(staging, versionDir, { recursive: true })
-    assertRegularFileTree(versionDir)
+    await content.captureVersion(publication)
     if (opId)
       await databaseSessionFor(db).transaction(
         async (tx) => await advancePhase(tx, opId, 'fs-versioned'),
@@ -595,7 +609,7 @@ export async function stageSkillVersion(
     return staged
   } catch (err) {
     // 暂存段自身失败：这里还没有任何 DB 可见物，直接补偿。
-    await abortStagedSkillVersion(db, staged, commit)
+    await abortStagedSkillVersion(db, staged, commit, content)
     throw err
   }
 }
@@ -666,19 +680,9 @@ export async function publishStagedSkillVersion(
   staged: StagedSkillVersion,
 ): Promise<void> {
   if (staged.noop !== null) return
-  const { filesDir, publishId, opId } = staged
-  mkdirSync(dirname(filesDir), { recursive: true })
-  swapInStaged(filesDir, publishId)
-  const root = skillRootAbs(opts.appHome, staged.skillId)
-  if (realDirectoryChainState(root, filesDir) !== 'real-directory') {
-    throw new Error(`skill version ${staged.newVersion} live publish is not a real directory`)
-  }
-  if (hashRegularFileTree(filesDir) !== staged.newHash) {
-    throw new Error(
-      `skill version ${staged.newVersion} live publish does not match committed content hash`,
-    )
-  }
-  cleanupOpDirs(filesDir, publishId)
+  const { opId } = staged
+  const content = opts.versionContent ?? createFileSkillVersionContentStore(opts.appHome)
+  await content.publish(publicationOf(staged), staged.newHash)
   if (opId) {
     const session = databaseSessionFor(db)
     await session.transaction(async (tx) => await advancePhase(tx, opId, 'fs-published'))
@@ -697,12 +701,13 @@ export async function abortStagedSkillVersion(
   db: SkillVersionDb,
   staged: StagedSkillVersion,
   commit?: Pick<SkillVersionCommitOpts, '__beforeRollbackCleanupForTest'>,
+  content?: SkillVersionContentStore,
 ): Promise<void> {
   if (staged.opId === null) return
   try {
     commit?.__beforeRollbackCleanupForTest?.()
-    cleanupOpDirs(staged.filesDir, staged.publishId)
-    rmSync(staged.versionDir, { recursive: true, force: true })
+    if (content) await content.abort(publicationOf(staged))
+    else abortFileSkillVersionPublication(publicationOf(staged))
     const opId = staged.opId
     await databaseSessionFor(db).transaction(async (tx) => await abandonOperation(tx, opId))
   } catch {
@@ -718,7 +723,7 @@ export async function commitSkillVersion(
   db: SkillVersionDb,
   opts: SkillVersionFsOptions,
   skillId: string,
-  produce: (stagingDir: string) => void,
+  produce: SkillVersionContentChange | ((stagingDir: string) => void),
   commit: SkillVersionCommitOpts,
 ): Promise<SkillVersion> {
   const staged = await stageSkillVersion(db, opts, skillId, produce, commit)
@@ -740,7 +745,7 @@ export async function commitSkillVersion(
   } catch (err) {
     // Post-db-committed: the version is durable, but the two-rename live publish
     // may be incomplete. Preserve the active op + lock as recovery evidence.
-    if (!committed) await abortStagedSkillVersion(db, staged, commit)
+    if (!committed) await abortStagedSkillVersion(db, staged, commit, opts.versionContent)
     throw err
   }
 }
@@ -905,18 +910,12 @@ export async function restoreSkillVersion(
       'malformed precondition token; reload and retry',
     )
   }
-  const targetDir = skillVersionAbs(opts.appHome, skillId, target)
   let unfusedMemoryIds: string[] = []
   const version = await commitSkillVersion(
     db,
     opts,
     skillId,
-    (staging) => {
-      // full replace: clear pre-seeded copy, then lay down the target snapshot
-      for (const e of readdirSync(staging))
-        rmSync(join(staging, e), { recursive: true, force: true })
-      if (existsSync(targetDir)) cpSync(targetDir, staging, { recursive: true })
-    },
+    { kind: 'restore-version', version: target },
     {
       source: 'restore',
       restoredFromVersion: target,

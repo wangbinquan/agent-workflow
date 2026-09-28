@@ -1,6 +1,6 @@
 # RFC-370 阶段 A 切面核对
 
-2026-09-28。已发布基线 `3db623de22bd94c9fab82b5106d1e07a132191f1`；当前追加 H6 技能内容读取切面。此表记录已沿源码确认的部分，不替代[全入口候选清单](./seam-inventory.md)，完整 CI 和独立 A-G 尚未通过。
+2026-09-28。已发布基线 `583820430aa05d1563a310d981c6fe411838679c`；当前追加 H6 版本写入与发布切面。此表记录已沿源码确认的部分，不替代[全入口候选清单](./seam-inventory.md)，完整 CI 和独立 A-G 尚未通过。
 
 | 切面            | 已有可复用合同／机制                                                                                                                                                                                                              | 已确认的缺口与下一步                                                                                                                                                                          | 状态                                       |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
@@ -79,3 +79,10 @@ Intent 入站九处轮次入口改为等待注入配置查询，保持各入口�
 `resource-catalog/application/skills/contentReader.ts` 定义按不可变 skill id／contentVersion 读取正文、文件树及单文件的物理效果合同。原 DB availability、frontmatter、description fallback 与复合 token 投影仍归 AW；读取完成后再读原 metadata 快照，保持原消失行错误。目录和快照选择、旧 live fallback、原文件错误与树信息归 `infrastructure/local/fileSkillContentReader`。catalog composition 显式选择 reader；旧直接调用保留 file 默认实现，read-only 调用可仅提供 reader 而不提供 appHome。
 
 这是一项读取切面，**写入、版本提交／恢复、ZIP 导入导出和启动校验仍依赖本地 appHome**；不可将其当作 H6 完成或直接配一个远程 reader 就开放托管编辑。M0 开放的每种资源必须先实现同一持久存储的完整读写闭环及重建回读，adapter 不能搬走原版本业务状态机。
+
+
+## H6 技能版本写入与发布续批
+
+`application/skills/versionContentStore.ts` 定义版本存储效果及声明式内容变更；`infrastructure/local/fileSkillVersionContentStore` 保留原本地实现。editor／restore／ZIP overwrite 的调用者传递内容／相对文件名／逻辑版本，不再拿暂存目录执行闭包。原版本机器等待 stage、snapshot、publish 和补偿完成后才推进对应操作阶段；空写仍由 AW 决定且走原 DB 校验，不复制业务状态机。
+
+`composeSkillCatalog` 为仓库与 ZIP adapter 注入同一 store。旧 `stageSkillVersion`／`commitSkillVersion` 的本地 callback 兼容入口及旧持久 journal 形状保留；不同存储不能消费旧物理目录 callback。后续必须继续迁移初始化、删除、历史查询、startup recovery、统一资源包和其他直接物理效果；尤其恢复必须从当前安装选择同一个 adapter，不能对远程引用调用文件恢复函数。这些工作完成前不开放 hosted 技能读写，不把本批计为 H6 全量完成。

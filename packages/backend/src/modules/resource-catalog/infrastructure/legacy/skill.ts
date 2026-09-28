@@ -19,21 +19,15 @@ import type {
 } from '@agent-workflow/shared'
 import { isProtectedSkillMainFile } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  realpathSync,
-  rmSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs'
-import { dirname, join } from 'node:path'
+import { existsSync, mkdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, skills } from '@/db/schema'
-import { commitSkillVersion } from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
+import {
+  commitSkillVersion,
+  type SkillVersionFsOptions,
+} from '@/modules/resource-catalog/infrastructure/legacy/skillVersion'
 import { isSkillAvailableThisBoot } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
 import { skillFromPersistenceRow } from '@/modules/resource-catalog/infrastructure/skillPersistence'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
@@ -48,7 +42,7 @@ import {
   finishOperation,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import { parseFrontmatter, stringifyFrontmatter } from '@/util/frontmatter'
-import { realpathWriteInside, safeJoin } from '@/util/safePath'
+import { safeJoin } from '@/util/safePath'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import {
   assertInitialResourceOwner,
@@ -78,10 +72,8 @@ import {
 
 type SkillRow = typeof skills.$inferSelect
 
-export interface SkillFsOptions {
-  /** App home dir; managed skills live under `${appHome}/skills/{id}/files/`. */
-  appHome: string
-  /** Selected content adapter; writes and version publication still use appHome. */
+export interface SkillFsOptions extends SkillVersionFsOptions {
+  /** Selected reader; initial tree creation and legacy recovery still use appHome. */
   content?: SkillContentReader
 }
 
@@ -280,11 +272,17 @@ export async function createManagedSkillWithFiles(
     // ③ fs-published: archive the tree as v1 + atomically publish (RFC-101/170).
     // skipOp: reserve already holds this skill's op lock — commitSkillVersion must
     // NOT open its own version-write op (it would self-conflict on the same lock).
-    await commitSkillVersion(db, opts, id, () => {}, {
-      source: 'initial',
-      authorUserId: ownerUserId,
-      skipOp: true,
-    })
+    await commitSkillVersion(
+      db,
+      opts,
+      id,
+      { kind: 'retain' },
+      {
+        source: 'initial',
+        authorUserId: ownerUserId,
+        skipOp: true,
+      },
+    )
     await databaseSessionFor(db).transaction(
       async (tx) => await advancePhase(tx, opId, 'fs-published'),
     )
@@ -399,11 +397,17 @@ export async function stageManagedSkill(
     await databaseSessionFor(db).transaction(
       async (tx) => await advancePhase(tx, opId, 'fs-staged'),
     )
-    await commitSkillVersion(db, opts, id, () => {}, {
-      source: 'initial',
-      authorUserId: ownerUserId,
-      skipOp: true,
-    })
+    await commitSkillVersion(
+      db,
+      opts,
+      id,
+      { kind: 'retain' },
+      {
+        source: 'initial',
+        authorUserId: ownerUserId,
+        skipOp: true,
+      },
+    )
     await databaseSessionFor(db).transaction(
       async (tx) => await advancePhase(tx, opId, 'fs-published'),
     )
@@ -688,15 +692,7 @@ export async function writeSkillContent(
     db,
     opts,
     skillId,
-    (staging) => {
-      // RFC-170 impl-gate (Codex 2026-07-22): commitSkillVersion cpSync-copies
-      // the prior files/ into `staging` WITHOUT dereferencing links, so a live
-      // `SKILL.md` that is a symlink lands here as a symlink and a raw
-      // writeFileSync would FOLLOW it to overwrite the host target. Route through
-      // the same no-follow containment guard the file-tree writer uses (~L694).
-      const target = realpathWriteInside(staging, join(staging, 'SKILL.md'))
-      writeFileSync(target, md, 'utf-8')
-    },
+    { kind: 'write-main', content: md },
     {
       source: 'editor',
       authorUserId: authorUserId ?? null,
@@ -839,18 +835,7 @@ export async function writeSkillFile(
     db,
     opts,
     skillId,
-    (staging) => {
-      const abs = safeJoin(staging, relPath)
-      // RFC-170 G3-1 parity with the read path: safeJoin is lexical, but
-      // writeFileSync FOLLOWS symlinks. A symlinked path component (or leaf)
-      // copied into staging would otherwise let this write escape the skill root
-      // — as the daemon uid, often root. Refuse an escaping ancestor BEFORE
-      // mkdir (which also follows links), then an escaping leaf symlink.
-      // See design/test-guard-audit-2026-07-21 gap B5-security-8.
-      const target = realpathWriteInside(staging, abs)
-      mkdirSync(dirname(target), { recursive: true })
-      writeFileSync(target, content, 'utf-8')
-    },
+    { kind: 'write-file', path: relPath, content },
     {
       source: 'editor',
       authorUserId: authorUserId ?? null,
@@ -896,22 +881,7 @@ export async function deleteSkillFile(
     db,
     opts,
     skillId,
-    (staging) => {
-      const abs = safeJoin(staging, relPath)
-      if (!existsSync(abs)) return
-      // A symlink at the leaf: remove the LINK, never its target. lstat (no
-      // follow) decides link-ness; realpathWriteInside refuses an escaping
-      // ancestor and verifies an escaping leaf link before we touch it.
-      const target = realpathWriteInside(staging, abs)
-      if (lstatSync(target).isSymbolicLink()) {
-        unlinkSync(target) // removes the symlink itself, not what it points to
-        return
-      }
-      // statSync (follows) is safe now: the ancestor chain is verified contained
-      // and the leaf is not a symlink.
-      if (statSync(target).isDirectory()) rmSync(target, { recursive: true })
-      else unlinkSync(target)
-    },
+    { kind: 'delete-file', path: relPath },
     {
       source: 'editor',
       authorUserId: authorUserId ?? null,
