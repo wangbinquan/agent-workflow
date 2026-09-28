@@ -301,10 +301,7 @@
       "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
       "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
       "baseline": 395,
-      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。",
-      "allowGrowth": {
-        "why": "RFC-371：三个人民币运行时价格配置端点沿用既有运行时设置入口，逐叶登记列表、历史与版本保存；392 → 395，不覆盖观测查询。"
-      }
+      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
     },
     {
       "id": "rfc345-resource-acl-facade-compatibility",
@@ -923,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9a591ff3a50a64c01eaa2c0929b216fc8018b08b",
-    "contentDigest": "sha256:a9787d06af94355d248e9963637cf3b00c8a76d3897511427e988c2d3d2aeca4",
+    "currentSnapshotSha": "93f360deca473eb27a0cc73c2e38c7d91d32d3ab",
+    "contentDigest": "sha256:d1853778c811dc5ce6df59b29d2c9f936454c6b60ca068f7296d240c9d52f6f2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
