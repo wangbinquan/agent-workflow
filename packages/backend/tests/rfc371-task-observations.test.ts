@@ -444,6 +444,20 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     expect(value.metrics.cost.reasons).toContain('native-capture-unobserved')
     expect(value.nativeCaptures).toMatchObject([{ state: 'unobserved', proof: null }])
   })
+  test('native coverage depends on the accepted contract even when runtime metadata is absent', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.accept('legacy-unknown', {
+      nativeCaptureContract: undefined,
+      authority: { kind: 'local', runtime: null },
+    })
+    await f.usage('legacy-unknown', buckets('10'))
+    const value = (await f.queries.detail(admin, 'task'))!
+    expect(value.metrics.tokens).toMatchObject({ totalKnown: '10', complete: false })
+    expect(value.nativeCaptures).toMatchObject([
+      { invocationId: 'legacy-unknown', state: 'unobserved', proof: null },
+    ])
+  })
   test('task, state, workflow and secondary repository filters select one consistent cohort before aggregation', async () => {
     const f = await fixture()
     await f.task('task', {

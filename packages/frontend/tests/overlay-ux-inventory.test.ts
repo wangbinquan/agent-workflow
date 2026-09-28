@@ -108,6 +108,9 @@ const OVERLAY_CALLSITES = {
   'components/observability/PriceEditor.tsx': { family: 'access-and-settings', count: 1 },
   'components/observability/PriceHistory.tsx': { family: 'access-and-settings', count: 1 },
   'components/observability/RuntimePricing.tsx': { family: 'access-and-settings', count: 1 },
+  // RFC-371: native revision details use the shared Dialog; the rendered flow is
+  // covered by rfc371-run-observability, including close and trigger focus return.
+  'components/observability/ObservationNativeCapture.tsx': { family: 'task-execution', count: 1 },
   // RFC-371: attempt inspection and focus restoration are rendered in rfc371-run-observability.
   'components/observability/RunObservability.tsx': { family: 'task-execution', count: 1 },
   // RFC-321 — connection rebind and deletion can revoke personal credentials;

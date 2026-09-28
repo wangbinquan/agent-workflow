@@ -18,7 +18,7 @@ import {
 } from '@/platform/persistence/schemaContract'
 
 describe('RFC-349 PostgreSQL schema projection', () => {
-  test('projects the exact 197-table active parity set', () => {
+  test('projects the exact active parity set', () => {
     const contract = buildLogicalSchemaContract()
     const plan = buildPostgresqlSchemaPlan(contract)
     const tables = plan.statements.filter((statement) => statement.kind === 'table')

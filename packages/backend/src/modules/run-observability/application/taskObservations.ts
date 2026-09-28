@@ -25,7 +25,6 @@ type Invocation = AcceptedObservationInvocation
 type PlatformUsage = Extract<PlatformObservation, { kind: 'usage' }>
 type PlatformValue = Extract<PlatformObservation, { kind: 'valuation' }>
 type Contribution = UsageContributionEvidence & {
-  readonly localAdapter?: string
   readonly observedAt: number
   readonly localModel: { readonly provider: string | null; readonly id: string } | null
   readonly platformUsage?: PlatformUsage
@@ -182,7 +181,6 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
           local.push({
             ...record,
             localModel: m.model,
-            localAdapter: m.adapterVersion,
             observedAt: m.observedAt,
           })
       }
@@ -222,12 +220,9 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
     const binding = sourceIdentity(invocation),
       reasons: string[] = []
     let records = local.filter((r) => r.measurement.invocationId === invocation.invocationId)
-    if (
-      invocation.authority.kind === 'local' &&
-      (invocation.nativeCaptureContract ||
-        invocation.authority.runtime?.protocol === 'opencode' ||
-        records.some((r) => r.localAdapter?.startsWith('opencode-')))
-    ) {
+    // Completeness follows the accepted capability and its durable proof. A
+    // runtime name or a root-only adapter cannot prove descendant coverage.
+    if (invocation.authority.kind === 'local') {
       const capture = captures.get(invocation.invocationId)
       const currentIssues =
         capture?.capture.issues.filter(
