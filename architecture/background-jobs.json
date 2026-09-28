@@ -5619,74 +5619,6 @@
     },
     {
       "dependencies": [],
-      "file": "packages/backend/src/config/index.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/config/index.ts#invalidateReadConfigCache",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/config/index.ts#invalidateReadConfigCache",
-      "phase": "unknown",
-      "symbol": "invalidateReadConfigCache",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [
-        "config",
-        "runtime"
-      ],
-      "file": "packages/backend/src/config/index.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/config/index.ts#migrateDeprecatedRuntimeHardeningConfig",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": true,
-        "start": false,
-        "state": true,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/config/index.ts#migrateDeprecatedRuntimeHardeningConfig",
-      "phase": "unknown",
-      "symbol": "migrateDeprecatedRuntimeHardeningConfig",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [
-        "config"
-      ],
-      "file": "packages/backend/src/config/index.ts",
-      "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/config/index.ts#readConfigCache",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/config/index.ts#readConfigCache",
-      "phase": "unknown",
-      "symbol": "readConfigCache",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [],
       "file": "packages/backend/src/db/schema.ts",
       "finalCriterion": "owner lifecycle",
       "id": "background:packages/backend/src/db/schema.ts#recoveryEvents",
@@ -9920,6 +9852,74 @@
       "targetContext": "platform"
     },
     {
+      "dependencies": [],
+      "file": "packages/backend/src/platform/configuration/fileConfiguration.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/configuration/fileConfiguration.ts#invalidateReadConfigCache",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/configuration/fileConfiguration.ts#invalidateReadConfigCache",
+      "phase": "unknown",
+      "symbol": "invalidateReadConfigCache",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [
+        "config",
+        "runtime"
+      ],
+      "file": "packages/backend/src/platform/configuration/fileConfiguration.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/configuration/fileConfiguration.ts#migrateDeprecatedRuntimeHardeningConfig",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/configuration/fileConfiguration.ts#migrateDeprecatedRuntimeHardeningConfig",
+      "phase": "unknown",
+      "symbol": "migrateDeprecatedRuntimeHardeningConfig",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [
+        "config"
+      ],
+      "file": "packages/backend/src/platform/configuration/fileConfiguration.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/configuration/fileConfiguration.ts#readConfigCache",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/configuration/fileConfiguration.ts#readConfigCache",
+      "phase": "unknown",
+      "symbol": "readConfigCache",
+      "targetContext": "platform"
+    },
+    {
       "dependencies": [
         "timer"
       ],
@@ -12777,5 +12777,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e4242bff2ec721664a4616ee6f1e138c06da2bbcf580ca5b2807ffa4c8345286"
+  "sourceDigest": "sha256:e782d777919ce9cab0890e7f414a588853345562385ec5d4815075007dd9d105"
 }

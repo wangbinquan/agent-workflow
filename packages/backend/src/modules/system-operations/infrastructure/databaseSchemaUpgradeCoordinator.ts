@@ -2,7 +2,7 @@
 // application graph. Historical copies finish with their original contracts;
 // schema DDL and the generation pointer never stand in for copied business rows.
 
-import type { DatabaseConfig } from '@agent-workflow/shared'
+import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
 import type { OpenDbOptions } from '@/db/client'
 import {
   prepareDatabaseProviderRuntime,
@@ -35,8 +35,8 @@ export interface DatabaseSchemaUpgradeOptions extends ResolveDatabaseProviderRun
   readonly lockPath: string
   /** Daemon start already owns this lock before pending restore. */
   readonly lock?: Lock
-  readonly readConfig: () => DatabaseConfig
-  readonly writeConfig: (config: DatabaseConfig) => void | Promise<void>
+  readonly readConfig: DatabaseConfigurationPort['read']
+  readonly writeConfig: DatabaseConfigurationPort['write']
   readonly history?: PostgresqlMigrationHistory
   /** File-commit fault seams; production keeps the durable writer defaults. */
   readonly beforePointerReplaceForTest?: () => void
@@ -174,7 +174,7 @@ export async function prepareDatabaseSchemaUpgrade(
             'migration requires an explicit resume before schema upgrade',
           )
         }
-        config = options.readConfig()
+        config = await options.readConfig()
         candidate = readCandidate()
       }
     }

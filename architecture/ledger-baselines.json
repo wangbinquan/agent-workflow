@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1727,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1728,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2 introduces the database configuration port and its local adapter, moves the unchanged file mechanism into platform, and records their actual owner/import/write surfaces. This grows the observable denominator without adding architecture exceptions."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5414,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5416,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2 introduces the database configuration port and its local adapter, moves the unchanged file mechanism into platform, and records their actual owner/import/write surfaces. This grows the observable denominator without adding architecture exceptions."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -860,8 +866,11 @@
       "id": "rfc294-required-port-liveness",
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
-      "baseline": 33,
-      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
+      "baseline": 34,
+      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2 introduces the database configuration port and its local adapter, moves the unchanged file mechanism into platform, and records their actual owner/import/write surfaces. This grows the observable denominator without adding architecture exceptions."
+      }
     },
     {
       "id": "rfc294-architecture-exceptions",
@@ -902,12 +911,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 24989,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 24994,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2 introduces the database configuration port and its local adapter, moves the unchanged file mechanism into platform, and records their actual owner/import/write surfaces. This grows the observable denominator without adding architecture exceptions."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:e4242bff2ec721664a4616ee6f1e138c06da2bbcf580ca5b2807ffa4c8345286",
+    "sourceDigest": "sha256:e782d777919ce9cab0890e7f414a588853345562385ec5d4815075007dd9d105",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +932,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "05127289fd36b6b9b8862b35c045d266d8d0feb6",
-    "contentDigest": "sha256:69d1872a7f738508341b60e1c00a128ed12ebe5dcafbb9fc85f19ff766f0b59e",
+    "currentSnapshotSha": "a53425b87bc6fa124d74829c278f52059ca04c93",
+    "contentDigest": "sha256:d80741467593d9b268b1f0fbb7dc09df63b4578f74d1b757adfb4d47ad89e306",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

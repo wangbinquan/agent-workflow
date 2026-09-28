@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:e4242bff2ec721664a4616ee6f1e138c06da2bbcf580ca5b2807ffa4c8345286`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:e782d777919ce9cab0890e7f414a588853345562385ec5d4815075007dd9d105`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1836 |
+| backend production TS 文件 | 1839 |
 | `services/` 文件 | 291 |
-| `modules/**` 文件 / 非空 context | 1289 / 17 |
+| `modules/**` 文件 / 非空 context | 1291 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -32,11 +32,11 @@
 | `ambientWiring` | 494 |
 | `architectureExceptions` | 4811 |
 | `backgroundJobs` | 332 |
-| `crossContextImports` | 5414 |
+| `crossContextImports` | 5416 |
 | `facades` | 291 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24989 |
-| `mutationEntrypoints` | 1727 |
+| `moduleSymbolOwners` | 24994 |
+| `mutationEntrypoints` | 1728 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1012 |
 | `transactionExternalEffects` | 257 |
@@ -66,19 +66,19 @@
 | integration / application | 20 |
 | source-control / infrastructure | 20 |
 | task-execution / engine | 20 |
+| system-operations / infrastructure | 19 |
 | integration / composition | 18 |
 | intent / domain | 18 |
-| system-operations / infrastructure | 18 |
 | source-control / application | 16 |
 | code-capability / infrastructure | 15 |
 | collaboration / domain | 14 |
 | development-automation / composition | 14 |
 | digital-employee / application | 14 |
 | runtime-management / application | 13 |
+| system-operations / application | 12 |
 | code-capability / domain | 11 |
 | memory / application | 11 |
 | resource-catalog / domain | 11 |
-| system-operations / application | 11 |
 | digital-employee / infrastructure | 9 |
 | identity-access / infrastructure | 9 |
 | memory / domain | 9 |
@@ -141,7 +141,7 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| platform | 180 |
+| platform | 181 |
 | task-execution | 74 |
 | resource-catalog | 51 |
 | runtime-management | 41 |
@@ -208,7 +208,7 @@
 | temporary-internal-debt | 91 |
 | off-dag-offered | 83 |
 | authority-type-only | 76 |
-| required-implementation | 63 |
+| required-implementation | 65 |
 | external-layer-debt | 4 |
 | provider-mirror | 2 |
 
@@ -288,7 +288,7 @@
 
 | status | 数量 |
 | --- | --- |
-| declared-debt | 19 |
+| declared-debt | 20 |
 | active | 14 |
 
 ### 7.2 provider=0 且 consumer=0 的 required port（合计 8）

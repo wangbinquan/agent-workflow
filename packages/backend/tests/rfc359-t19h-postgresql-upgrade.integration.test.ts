@@ -18,6 +18,7 @@ import { createFileDatabaseMigrationArtifactStore } from '@/modules/system-opera
 import { createFileDatabaseMigrationStore } from '@/modules/system-operations/infrastructure/fileDatabaseMigrationStore'
 import { createPostgresqlProviderBackup } from '@/modules/system-operations/infrastructure/postgresqlProviderBackup'
 import { prepareDatabaseSchemaUpgrade } from '@/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator'
+import { prepareDatabaseProviderForBoot } from '@/modules/system-operations/composition'
 import { createSqliteMigrationSafetyBackup } from '@/modules/system-operations/infrastructure/sqliteMigrationSafetyBackup'
 import {
   readDatabaseGeneration,
@@ -245,7 +246,10 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
         )
         expect(chunks.length).toBeGreaterThan(0)
         let savedConfig: DatabaseConfig = { provider: 'sqlite' }
-        const prepared = await prepareDatabaseSchemaUpgrade({
+        let configurationReads = 0
+        // RFC-370: exercise bootstrap composition with an asynchronous port,
+        // including recovery's read-after-activation against the real PG copy.
+        const prepared = await prepareDatabaseProviderForBoot({
           config: savedConfig,
           sqlitePath: fixture.sourcePath,
           generationPointerPath: pointerPath,
@@ -253,9 +257,14 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
           contract: history.head.contract,
           sqliteOptions: { migrationsFolder: MIGRATIONS },
           lockPath: join(fixture.appHome, 'schema-upgrade.lock'),
-          readConfig: () => savedConfig,
-          writeConfig: (next) => {
-            savedConfig = next
+          configuration: {
+            async read() {
+              configurationReads += 1
+              return savedConfig
+            },
+            async write(next) {
+              savedConfig = next
+            },
           },
         })
         try {
@@ -267,6 +276,7 @@ describe('RFC-359 T19h published schema upgrade mechanisms', () => {
             contractDigest: history.head.contract.digest,
           })
           expect<DatabaseConfig['provider']>(savedConfig.provider).toBe('postgresql')
+          expect(configurationReads).toBeGreaterThan(0)
           expect(controlPlane.get(operationId).phase).toBe('accepting-writes')
           expect(controlPlane.readManifest(operationId).payload.source.schemaDigest).toBe(
             history.root.contract.digest,

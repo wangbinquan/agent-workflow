@@ -2,8 +2,9 @@
 
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { join } from 'node:path'
+import type { DatabaseConfigurationPort } from './application/ports/databaseConfiguration'
+import { createFileDatabaseConfiguration } from './infrastructure/local/fileDatabaseConfiguration'
 import { createSecretBox, type SecretBox } from '@/auth/secretBox'
-import { applyConfigPatch, loadConfig } from '@/config'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { composeSqliteFusionPersistence } from '@/modules/knowledge-evolution/composition/fusion'
@@ -81,17 +82,19 @@ import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-
 
 /** Boot/manual-command preparation; the returned provider owns the prepared mechanism. */
 export async function prepareDatabaseProviderForBoot(
-  input: Omit<DatabaseSchemaUpgradeOptions, 'readConfig' | 'writeConfig'> & {
-    readonly configPath?: string
-  },
+  input: Omit<DatabaseSchemaUpgradeOptions, 'readConfig' | 'writeConfig'> &
+    (
+      | { readonly configuration: DatabaseConfigurationPort; readonly configPath?: never }
+      | { readonly configuration?: never; readonly configPath?: string }
+    ),
 ) {
-  const { configPath = Paths.config, ...options } = input
+  const { configuration, configPath, ...options } = input
+  const configurationPort =
+    configuration ?? createFileDatabaseConfiguration(configPath ?? Paths.config)
   return await prepareDatabaseSchemaUpgrade({
     ...options,
-    readConfig: () => loadConfig(configPath).database,
-    writeConfig: (database) => {
-      applyConfigPatch(configPath, { database })
-    },
+    readConfig: () => configurationPort.read(),
+    writeConfig: (database) => configurationPort.write(database),
   })
 }
 
@@ -381,7 +384,7 @@ export function composeLocalSystemOperations(
   } = {},
 ): LocalSystemOperations {
   const appHome = Paths.root
-  const databaseConfig = deps.databaseConfig ?? loadConfig(Paths.config).database
+  const databaseConfig = deps.databaseConfig ?? createFileDatabaseConfiguration(Paths.config).read()
   const contract = buildLogicalSchemaContract()
   const provider =
     deps.providerRuntime ??

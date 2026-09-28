@@ -8070,7 +8070,7 @@
       "owner": "system-operations",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#saveConfigRaw",
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file",
       "toPath": "packages/backend/src/config/index.ts",
       "toSymbol": "saveConfigRaw",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -10824,7 +10824,7 @@
       "owner": "resource-catalog",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig",
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file",
       "toPath": "packages/backend/src/config/index.ts",
       "toSymbol": "loadConfig",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -12677,7 +12677,7 @@
       "owner": "runtime-management",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig",
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file",
       "toPath": "packages/backend/src/config/index.ts",
       "toSymbol": "loadConfig",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -17190,6 +17190,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:336a26063391d6dcdb98",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/configuration/fileConfiguration.ts#loadConfig",
+      "toPath": "packages/backend/src/platform/configuration/fileConfiguration.ts",
+      "toSymbol": "loadConfig",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/application/commands/submitMissionAnswers.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/application/commands/submitMissionAnswers.ts",
       "fromSymbol": "$file",
@@ -20947,23 +20964,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/composition.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:3f534b6b164df17f821e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#applyConfigPatch",
-      "toPath": "packages/backend/src/config/index.ts",
-      "toSymbol": "applyConfigPatch",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
       "fromSymbol": "$file",
@@ -22540,23 +22540,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/sessionEventSink.ts#SystemAgentEventSinkV1",
       "toPath": "packages/backend/src/services/sessionEventSink.ts",
       "toSymbol": "SystemAgentEventSinkV1",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/composition.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:44ba78f5caa1595552aa",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig",
-      "toPath": "packages/backend/src/config/index.ts",
-      "toSymbol": "loadConfig",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -45164,7 +45147,7 @@
       "owner": "intent",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig",
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file",
       "toPath": "packages/backend/src/config/index.ts",
       "toSymbol": "loadConfig",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -46473,7 +46456,7 @@
       "owner": "intent",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig",
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file",
       "toPath": "packages/backend/src/config/index.ts",
       "toSymbol": "loadConfig",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -46766,6 +46749,23 @@
       "toPath": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
       "toSymbol": "composeDevelopmentEmployeeCaseDetailProjection",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:94172cacefdb53577003",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/configuration/fileConfiguration.ts#applyConfigPatch",
+      "toPath": "packages/backend/src/platform/configuration/fileConfiguration.ts",
+      "toSymbol": "applyConfigPatch",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -59954,7 +59954,7 @@
       "owner": "integration",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig",
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file",
       "toPath": "packages/backend/src/config/index.ts",
       "toSymbol": "loadConfig",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -62402,7 +62402,7 @@
       "owner": "task-execution",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig",
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file",
       "toPath": "packages/backend/src/config/index.ts",
       "toSymbol": "loadConfig",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -79300,7 +79300,7 @@
       "owner": "system-operations",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#applyConfigPatch",
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file",
       "toPath": "packages/backend/src/config/index.ts",
       "toSymbol": "applyConfigPatch",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -81791,8 +81791,8 @@
   "denominator": {
     "architectureExceptions": 4811,
     "implementationSccs": 0,
-    "observedEdges": 5414,
-    "requiredPorts": 33,
+    "observedEdges": 5416,
+    "requiredPorts": 34,
     "targetEdges": 66
   },
   "finalCriterion": "Observed imports, offered/required/authority target edges and required-port liveness remain exact, referentially complete and role-preserving.",
@@ -90069,7 +90069,7 @@
       "targetSymbol": "saveConfigRaw",
       "toContext": "legacy",
       "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#saveConfigRaw"
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -93045,7 +93045,7 @@
       "targetSymbol": "loadConfig",
       "toContext": "legacy",
       "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig"
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -95109,7 +95109,7 @@
       "targetSymbol": "loadConfig",
       "toContext": "legacy",
       "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig"
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -99641,6 +99641,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts#$file",
+      "id": "import:336a26063391d6dcdb98",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/configuration/fileConfiguration",
+      "syntax": "static-import",
+      "targetSymbol": "loadConfig",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/configuration/fileConfiguration.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/configuration/fileConfiguration.ts#loadConfig"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/workgroupTaskRoomClarifyParticipant.ts#$file",
@@ -103657,22 +103673,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/composition.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
-      "id": "import:3f534b6b164df17f821e",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/config",
-      "syntax": "static-import",
-      "targetSymbol": "applyConfigPatch",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#applyConfigPatch"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "digital-employee",
       "fromFile": "packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/infrastructure/writerCutoverPersistence.ts#$file",
@@ -105366,22 +105366,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/sessionEventSink.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/sessionEventSink.ts#SystemAgentEventSinkV1"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/composition.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
-      "id": "import:44ba78f5caa1595552aa",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/config",
-      "syntax": "static-import",
-      "targetSymbol": "loadConfig",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig"
     },
     {
       "edgeKind": "value",
@@ -121976,6 +121960,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts#$file",
+      "id": "import:769f09ac0775bd9b8574",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../../application/ports/databaseConfiguration",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseConfigurationPort",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/databaseConfiguration.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseConfiguration.ts#DatabaseConfigurationPort"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/domain/canonicalJson.ts",
@@ -126776,6 +126776,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/auth/secretBox.ts#SecretBox"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
+      "id": "import:854549dc34d241e02efa",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../application/ports/databaseConfiguration",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseConfigurationPort",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/databaseConfiguration.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseConfiguration.ts#DatabaseConfigurationPort"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts",
@@ -129573,7 +129589,7 @@
       "targetSymbol": "loadConfig",
       "toContext": "legacy",
       "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig"
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -131077,7 +131093,7 @@
       "targetSymbol": "loadConfig",
       "toContext": "legacy",
       "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig"
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -131398,6 +131414,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeCaseDetailProjection.ts#composeDevelopmentEmployeeCaseDetailProjection"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts#$file",
+      "id": "import:94172cacefdb53577003",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/configuration/fileConfiguration",
+      "syntax": "static-import",
+      "targetSymbol": "applyConfigPatch",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/configuration/fileConfiguration.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/configuration/fileConfiguration.ts#applyConfigPatch"
     },
     {
       "edgeKind": "value",
@@ -145493,7 +145525,7 @@
       "targetSymbol": "loadConfig",
       "toContext": "legacy",
       "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig"
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -148037,7 +148069,7 @@
       "targetSymbol": "loadConfig",
       "toContext": "legacy",
       "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#loadConfig"
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -165781,7 +165813,7 @@
       "targetSymbol": "applyConfigPatch",
       "toContext": "legacy",
       "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#applyConfigPatch"
+      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -169002,6 +169034,35 @@
       "symbol": "AdminRestoreCoordinatorPort"
     },
     {
+      "compositionFiles": [
+        "packages/backend/src/modules/system-operations/composition.ts"
+      ],
+      "compositionOwnerEntryIds": [
+        "owner:packages/backend/src/modules/system-operations/composition.ts#$file"
+      ],
+      "consumerOwnerEntryIds": [],
+      "context": "system-operations",
+      "id": "required:system-operations:DatabaseConfigurationPort",
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseConfiguration.ts#DatabaseConfigurationPort",
+      "providerAdapters": [
+        {
+          "context": "system-operations",
+          "edgeId": "import:769f09ac0775bd9b8574",
+          "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts#$file"
+        },
+        {
+          "context": "system-operations",
+          "edgeId": "import:854549dc34d241e02efa",
+          "file": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file"
+        }
+      ],
+      "removeAfterWave": "W4-E7",
+      "status": "declared-debt",
+      "symbol": "DatabaseConfigurationPort"
+    },
+    {
       "compositionFiles": [],
       "compositionOwnerEntryIds": [],
       "consumerOwnerEntryIds": [
@@ -169139,7 +169200,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e4242bff2ec721664a4616ee6f1e138c06da2bbcf580ca5b2807ffa4c8345286",
+  "sourceDigest": "sha256:e782d777919ce9cab0890e7f414a588853345562385ec5d4815075007dd9d105",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -41,7 +41,7 @@ function activeFiles(): ActiveFile[] {
   return files
 }
 
-const RETIRED_CONFIG_READER = 'packages/backend/src/config/index.ts'
+const RETIRED_CONFIG_READER = 'packages/backend/src/platform/configuration/fileConfiguration.ts'
 
 describe('RFC-276 runtime hardening deprecation', () => {
   test('active product code has no retired launcher, identity, store, or sandbox surface', () => {

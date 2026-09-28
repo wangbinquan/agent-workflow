@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1727,
+    "entries": 1728,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -1131,79 +1131,6 @@
       "symbol": "runUserCommand",
       "targetContext": "identity-access",
       "targetLayer": "inbound"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/config/index.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/config/index.ts#applyConfigPatch",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/config/index.ts#applyConfigPatch",
-      "symbol": "applyConfigPatch",
-      "targetContext": "platform",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/config/index.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/config/index.ts#saveConfigRaw",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/config/index.ts#saveConfigRaw",
-      "symbol": "saveConfigRaw",
-      "targetContext": "platform",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/config/index.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/config/index.ts#saveConfigValueAtomic",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/config/index.ts#saveConfigValueAtomic",
-      "symbol": "saveConfigValueAtomic",
-      "targetContext": "platform",
-      "targetLayer": "application"
     },
     {
       "controls": {
@@ -23086,6 +23013,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts#createFileDatabaseConfiguration",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts#createFileDatabaseConfiguration",
+      "symbol": "createFileDatabaseConfiguration",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -30717,6 +30669,79 @@
       "symbol": "startWalCheckpointLoop",
       "targetContext": "platform",
       "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/configuration/fileConfiguration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/configuration/fileConfiguration.ts#applyConfigPatch",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/configuration/fileConfiguration.ts#applyConfigPatch",
+      "symbol": "applyConfigPatch",
+      "targetContext": "platform",
+      "targetLayer": "configuration"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/configuration/fileConfiguration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/configuration/fileConfiguration.ts#saveConfigRaw",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/configuration/fileConfiguration.ts#saveConfigRaw",
+      "symbol": "saveConfigRaw",
+      "targetContext": "platform",
+      "targetLayer": "configuration"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/configuration/fileConfiguration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/configuration/fileConfiguration.ts#saveConfigValueAtomic",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/configuration/fileConfiguration.ts#saveConfigValueAtomic",
+      "symbol": "saveConfigValueAtomic",
+      "targetContext": "platform",
+      "targetLayer": "configuration"
     },
     {
       "controls": {
@@ -41271,7 +41296,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e4242bff2ec721664a4616ee6f1e138c06da2bbcf580ca5b2807ffa4c8345286",
+  "sourceDigest": "sha256:e782d777919ce9cab0890e7f414a588853345562385ec5d4815075007dd9d105",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
