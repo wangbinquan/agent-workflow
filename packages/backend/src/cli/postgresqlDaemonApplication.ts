@@ -1855,7 +1855,7 @@ export async function composePostgresqlApplication(
     activity: intentApplyOperations,
   })
   const intentRoutes: PostgresqlAppCompositionInput['intent'] = Object.freeze({
-    configPath: input.configPath,
+    configuration,
     events: intentSessionEvents,
     identityAccess,
     directAuthority: identityAccess.directAuthority,

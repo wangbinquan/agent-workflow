@@ -13,7 +13,7 @@ import {
   admitDurableWorkOwner,
   type DirectAuthorityAdmissionRuntime,
 } from '@/auth/session'
-import type { loadConfig } from '@/config'
+import type { Config } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
 import type { IntentSessionEventPublisher } from '../ports/intentSessionEvents'
 import {
@@ -33,7 +33,7 @@ export interface IntentDispatchDeps {
    *  `admitDurableWorkOwner`. */
   identityAccess: DirectAuthorityAdmissionRuntime
   appHome: string
-  configSnapshot: ReturnType<typeof loadConfig>
+  configSnapshot: Config
   runtimeResolver: IntentTurnRuntimeResolver
   dumpAuxiliary: IntentDumpAuxiliaryQueries
   /** RFC-358 —— 工作流图校验端口（resource-catalog public 合同）。 */

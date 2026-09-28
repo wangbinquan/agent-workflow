@@ -1,17 +1,17 @@
 # RFC-370 阶段 A 切面核对
 
-2026-09-28。基线 `68ecb2664a644982bf62a8b5bdce0828b3c5caf2`，generation 与 provider artifact 启动入口已发布，安装准备应用层／本地 adapter 分离为本批候选。此表记录已沿源码确认的部分，不替代[全入口候选清单](./seam-inventory.md)，也不声明 A-G 已通过。
+2026-09-28。已发布基线 `f518f037323b3c18e3ef2acc058720bd4d5ff2c5`；当前追加 Intent 配置消费者接线。此表记录已沿源码确认的部分，不替代[全入口候选清单](./seam-inventory.md)，完整 CI 和独立 A-G 尚未通过。
 
 | 切面            | 已有可复用合同／机制                                                                                                                                                                                                              | 已确认的缺口与下一步                                                                                                                                                                          | 状态                                       |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| H1 配置／启动   | `system-operations/application/ports/databaseConfiguration.ts`；现 PG provider；`auth/secretBox.ts:createSecretBoxFromKey` 已允许提供密钥字节，不能重复造一套加解密                                                               | 全量配置仍有文件调用者；generation 验证与文件 IO 本批分离，迁移写入／安装元数据尚需 owner 端口；托管新安装还不能直接绕过当前 PG 必须有迁移 manifest 的规则                                    | 配置／generation 已发布，启动接线候选待 CI |
-| H2 身份         | `identity-access/public/participants.ts` 的 direct authority；`auth/application/authRuntime.ts` 的 session／PAT 查验；HTTP／WS 使用同一身份 owner                                                                                 | `auth/session.ts:multiAuth` 固定 Bearer 提取；`ws/server.ts:tryUpgrade` 固定 query token 和本地 credential 指纹。应分离凭据适配与已有 Actor／业务权限，不能另造 ACL                           | 待抽入站适配；已有 authority 复用          |
+| H1 配置／启动 | 配置读写、generation 文档、安装准备已有中立端口及 local adapter；现 PG provider 与主密钥字节工厂继续复用 | Intent、后台、执行与 CLI 仍须逐入口收口；托管新安装和前台生命周期待实现，不能绕过当前 PG generation 规则 | 多批切面已发布；全调用者未完成 |
+| H2 身份 | `HttpAuthenticationParticipant`、`WebSocketAuthenticationParticipant`、原 direct authority 与本地 session／PAT 验证 | HTTP 与 WS upgrade／open／重验／到期已接选定 adapter；外部身份映射、首个管理员和浏览器模式在 B/M0 | 中立入站切面已发布，等待完整 CI |
 | H3 工作区       | `source-control/application/ports/repositoryPreparationEffects.ts`；`source-control/application/ports/workspaceMaintenance.ts`；Task 的 `workspaceLaunch.ts` 读取端口                                                             | 准备效果已有可替换边界；维护仍有同步 exists 和物理 path，Git／merge／读取各路径须逐项确认远程引用语义，不能仅按目录改名认为完成                                                               | 部分可复用；调用链待收口                   |
 | H4 执行         | `task-execution/application/ports/taskEngine.ts`、各 NodeExecutor 的执行合同；本地 `managedProcess` 生命周期                                                                                                                      | `services/runner.ts`、`systemAgentRun.ts`、`runtimeSmoke.ts` 使用 `runAgentProcess`；脚本、依赖安装、插件安装和 observer 也能启动进程。cmd／cwd／env／PID 混入当前收据，尚无完整中立效果端口  | 待重构关键切面                             |
 | H5 Runtime      | `runtime-management/application/ports/runtimeManagement.ts` 的 driver management／model discovery／config 合同；两种 RuntimeDriver                                                                                                | 管理端口仍以本地 binary 为输入，执行 driver 的 buildSpawn 和材料物化交织。需将协议解析／能力需求与物理执行目标分开；平台 profile 映射归后续 B                                                 | 管理合同复用，执行材料待分离               |
-| H6 内容         | `resource-catalog/application/skills/ports.ts:SkillRepository` 已统一技能 CRUD／版本／文件；`application/skills/skillCatalogBootParticipant.ts` 有启动 adapter；`application/plugins/ports.ts:PluginInstallerPort` 已分离安装效果 | `infrastructure/skillRepository.ts` 背后的 legacy skill 状态机仍以本地文件为事实；需要抽物理内容／发布效果并复用原版本状态机。插件 cachedPath、执行物化、归档和下载也需覆盖，不能只改创建页面 | 已有业务端口复用；耐久内容机制未完成       |
+| H6 内容 | SkillRepository／PluginInstallerPort 保留业务边界；collaboration 已支持异步 artifact receipt 与中立内容 reader | Skills、plugin 版本、执行物化、归档和下载仍须抽物理内容效果；评审文稿切面不等于全量 ContentStore 完成 | 评审内容切面已发布；其余耐久内容待完成 |
 | H7 执行权／恢复 | Task 已有 ownership、effect intent 和终止／恢复合同；bootstrap 管单实例与后台 worker 生命周期                                                                                                                                     | 不能只给 node dispatch 增加 lease。`cli/start.ts` 的 observer、schedule、GC、蒸馏和恢复入口均需受同一宿主执行权接线；本地恢复行为必须保持                                                     | 全效果入口待收口                           |
-| H8 事件         | `integration/application/ports/verifiedWebhookDeliveryPersistence.ts`；`acceptVerifiedWebhookDelivery.ts`；既有 provider 归一化和 EC observations                                                                                 | 需要分离原始 HTTP 信封与统一受理事务。CS transport 的永久 receipt 与原业务重放不是同一去重边界；CS adapter 在 B 阶段编写                                                                      | 受理合同复用；transport 切面待补           |
+| H8 事件 | `VerifiedWebhookIngressCommands` 复用持久受理事务、Event Center observation 与既有 provider 归一化 | 原始 HTTP 与应用受理已分离；CS transport receipt／ACK、订阅绑定和业务重放对账在 B/M3 | 中立受理切面已发布；CS adapter 未实现 |
 
 ## 本批 generation 的边界
 
@@ -42,9 +42,9 @@
 
 - H2 HTTP 完成态装配新增 `HttpAuthenticationParticipant`；两个 provider root 选择 local adapter，公共 transport 不固定凭据方案。原 HTTP 与 WS 凭据算法已归 identity-access 本地 infrastructure，legacy facade 委托同一实现；WS 握手提取、credential DTO 与重验装配仍需继续收口。CS 身份映射、首个管理员及前端登录在 B/M0 实现。
 
-## H2 后续 WS 闭环核对（当前源码）
+## H2 WS 迁移前核对（历史快照：465987a33）
 
-HTTP participant 不能替代 WS 全链路。后续 A-T3 须一起迁移下面这些机制，才能在 B/M0 选择同一外部身份来源；不能仅让握手接受新身份、重验仍去本地 session/PAT 表查询。当前仍为 local 行为，不声称以下缺口已经实现。
+以下为 WS 续批前的源码定位，用于核对迁移完整性，不是当前待办状态。五处接线已经在 `51fed92c1` 迁移，见下一节；原定位中的 runtime-management 身份实现文件已删除。真实 CS 身份仍留 B/M0。
 
 | 调用点 | 当前依赖 | 后续切面要求 |
 | --- | --- | --- |
@@ -54,12 +54,17 @@ HTTP participant 不能替代 WS 全链路。后续 A-T3 须一起迁移下面�
 | `ws/registry.ts:1085` | 通过本地凭据 kind 与 expiresAt 判断帧发送时过期 | 暴露中立到期事实，保持同步帧路径和原过期关闭时机，不因远程身份引入每帧 IO |
 | `ws/server.ts:413` | 打开时再次调用同一 credential resolver | 升级与 open 之间的既有 revalidation epoch 行为必须随端口保留，不能只替换第一次解析 |
 
-本轮只记录源码定位。后续用既有 WS 多 token、provider、去重及重验行为用例固定原结果，再增加替换 adapter 的升级／open／广播过期／主动重验闭环用例；真实 CS token／网关／重新连接在 B/M0 验收。
+已有 WS 多 token、provider、去重及重验行为用例继续固定原结果，替换 adapter 的升级／open／广播过期／主动重验用例已补充；正式结果见精确 SHA CI，真实 CS token／网关／重新连接在 B/M0 验收。
 
-## H2 WS 续批实现（待本批 CI）
+## H2 WS 续批实现（已发布，完整 CI 待确认）
 
 上述五处接线现统一消费 identity-access 的 `WebSocketAuthenticationParticipant`：升级传递 URL／header 事实，连接持有 adapter-owned object，合流键与同步到期事实经所选 participant 获取，open／主动重验返回同一 IA authority 投影。本地原 token 解析位于 `infrastructure/local/webSocketAuthentication.ts`，runtime-management composition 只收已选 participant，不再构造身份机制。H2 的外部身份映射／首个管理员／浏览器模式仍留阶段 B；本批只能作为 A 的切面证据，不能替代完整阶段 A 验收。
 
-## H6 评审文稿切面（待本批 CI）
+## H6 评审文稿切面（已发布，完整 CI 待确认）
 
 collaboration 保留原 operation／artifact 状态机，所有写效果支持并等待异步 receipt；`ReviewArtifactContentPort` 按日志中的逻辑 key 读取字节，DB reader 继续拥有当前读／staged fallback 与摘要判定。`commandContext` 可注入成对的 store／content，无 appHome 也能完成装配。已有 local helper 与测试显式选择文件 reader；这不表示 Skills／plugin 版本发布或全量 ContentStore 已完成，亦不代表 hosted PG 内容已实现。
+
+
+## H1 Intent 请求配置续批
+
+Intent 入站九处轮次入口改为等待注入配置查询，保持各入口原读取位置；创建／预留前读取，取消入口仍先取消再读取后继配置；两 provider 复用现有 file query。dispatcher 仅持 Config 值，解除对文件 reader 的类型依赖。Intent 启动恢复／runtime inventory 和其余后台、执行配置读取仍待接线，不记 H1 完成。

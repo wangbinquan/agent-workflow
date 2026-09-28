@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1739,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2/H6：新增 collaboration 本地文稿内容 adapter 工厂 createFileReviewArtifactContent，原文件读取机制从 DB reader 独立，计数1738→1739；业务状态机与写点不增。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -849,7 +846,7 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5479,
+      "baseline": 5477,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
@@ -870,7 +867,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4870,
+      "baseline": 4868,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -906,14 +903,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25051,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2/H6：新增 ReviewArtifactContentPort 及 file adapter 两个文件／声明，删除 DB reader 内旧 absolutePath helper，净25048→25051；全部归 collaboration owner，无未归属符号或公共合同新增。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:9b1d5a58ebc2a26918c901402e592ea266b65e287c4f6f164711db2dc6c42d11",
+    "sourceDigest": "sha256:39db36064611f9c9ad3e751c0643cb100dd1d6e62d113552684757075a111fda",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -926,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "51fed92c17735d570df994ae1a3320d9b8339011",
-    "contentDigest": "sha256:97b41f03c75c4741aef1ff8b97509e1630efc12fd26f2f698da708f55f9dc6d9",
+    "currentSnapshotSha": "f518f037323b3c18e3ef2acc058720bd4d5ff2c5",
+    "contentDigest": "sha256:a2edecf49fdd737f6d71e46ba497e66f2369a41d39878c5f7e3fe97fac5aa436",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

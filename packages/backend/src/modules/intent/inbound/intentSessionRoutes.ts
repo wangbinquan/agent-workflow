@@ -37,7 +37,7 @@ import {
 import { z } from 'zod'
 import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import { loadConfig } from '@/config'
+import type { Config } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 import type { IntentSessionEventPublisher } from '@/modules/intent/ports/intentSessionEvents'
@@ -112,7 +112,7 @@ function encodeIntentListCursor(row: { updatedAt: number; id: string }): string 
 }
 
 export interface IntentSessionRouteDependencies {
-  readonly configPath: string
+  readonly configuration: { read(): Config | Promise<Config> }
   readonly identityAccess: IntentDispatchDeps['identityAccess']
   readonly directAuthority: DirectAuthorityBinding
   readonly intentApply: IntentApplyOperations
@@ -134,7 +134,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
   function fireTurn(
     sessionId: string,
     actor: Actor,
-    configSnapshot: ReturnType<typeof loadConfig>,
+    configSnapshot: Config,
     reservation: ReservedIntentTurn,
   ): Promise<void> {
     return dispatchIntentTurn(
@@ -154,8 +154,8 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
     )
   }
 
-  function loadIntentTurnConfigSnapshot(): ReturnType<typeof loadConfig> {
-    return loadConfig(deps.configPath)
+  async function loadIntentTurnConfigSnapshot(): Promise<Config> {
+    return await deps.configuration.read()
   }
 
   function emitSessionUpdated(sessionId: string, ownerUserId: string): void {
@@ -181,7 +181,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
         })
       }
       const actor = actorOf(c)
-      const config = loadIntentTurnConfigSnapshot()
+      const config = await loadIntentTurnConfigSnapshot()
       const { session, reservation } = await createIntentSessionAndReserveTurn(
         deps.intentPersistence,
         intentResourceVisibility(deps.resourceCatalogFor(actor)),
@@ -311,7 +311,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
       }
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
-      const config = loadIntentTurnConfigSnapshot()
+      const config = await loadIntentTurnConfigSnapshot()
       const { turnId, reservation } = await insertUserTurnAndReserve(
         deps.intentPersistence,
         actor,
@@ -345,7 +345,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
       }
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
-      const config = loadIntentTurnConfigSnapshot()
+      const config = await loadIntentTurnConfigSnapshot()
       const { turnId, reservation } = await insertUserTurnAndReserve(
         deps.intentPersistence,
         actor,
@@ -379,7 +379,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
       }
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
-      const config = loadIntentTurnConfigSnapshot()
+      const config = await loadIntentTurnConfigSnapshot()
       const generated = await reserveIntentIteration(
         deps.intentPersistence,
         actor,
@@ -415,7 +415,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
       }
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
-      const config = loadIntentTurnConfigSnapshot()
+      const config = await loadIntentTurnConfigSnapshot()
       const generated = await reserveIntentCurrentAction(
         deps.intentPersistence,
         intentResourceVisibility(deps.resourceCatalogFor(actor)),
@@ -537,7 +537,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
       }
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
-      const config = loadIntentTurnConfigSnapshot()
+      const config = await loadIntentTurnConfigSnapshot()
       const visibility = intentResourceVisibility(deps.resourceCatalogFor(actor))
       const submitted = await submitIntentWorkingSetChange(
         deps.intentPersistence,
@@ -607,7 +607,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
     async (c) => {
       const actor = actorOf(c)
       const sessionId = c.req.param('id')
-      const config = loadIntentTurnConfigSnapshot()
+      const config = await loadIntentTurnConfigSnapshot()
       const result = await retryIntentWorkingSetChange(
         deps.intentPersistence,
         intentResourceVisibility(deps.resourceCatalogFor(actor)),
@@ -670,7 +670,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
           issues: parsed.error.issues,
         })
       }
-      const config = loadIntentTurnConfigSnapshot()
+      const config = await loadIntentTurnConfigSnapshot()
       const generated = await reserveExactIntentRetry(
         deps.intentPersistence,
         actor,
@@ -708,7 +708,7 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
       }
       const aborted = await cancelIntentTurn(deps.intentPersistence, actor, session.id)
       if (aborted) {
-        const config = loadIntentTurnConfigSnapshot()
+        const config = await loadIntentTurnConfigSnapshot()
         const next = await activateIntentWorkingSetChange(
           deps.intentPersistence,
           intentResourceVisibility(deps.resourceCatalogFor(actor)),

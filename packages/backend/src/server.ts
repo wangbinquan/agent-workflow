@@ -3287,7 +3287,7 @@ function composeSqliteApiRouteMounts(
     }),
   })
   const intentSessionRoutes = Object.freeze({
-    configPath: deps.configPath,
+    configuration,
     events: createIntentSessionWsPublisher(),
     identityAccess,
     directAuthority: identityAccess.directAuthority,

@@ -187,3 +187,6 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 新增双 provider 真库回归：异步 stage 完成前仍 preparing／declared、finalize 完成前仍 committed／consumed 且 staged 可读、cleanup 完成前不清声明；无本机 home 的内容 reader 覆盖异步等待、staged→final、摘要失配、缺失、旧文稿与读取失败。原 finalize 失败重试用例增加异步拒绝。生产和测试的既有本地读取入口显式选择 file adapter，没有新 PG 内容表或 CS adapter；Skills／plugins／其他产物与全量存储机制仍待后续，不记 H6 完成。
 
 - WS 续批 CI `36377661392` 检出 fixture 的 `Object.freeze` 对象未推导两个 credential 参数类型，以及 RFC-305 精确 import 清单漏记 server 中第二条 IA participant 类型导入。本批显式标注 `RealtimeCredential`，补齐实际导入条目；不修改扫描判据。原失败作业不记成功，正式验证交给本批精确 SHA CI。
+
+- H6 评审文稿切面及 WS CI 修复 `f518f037323b3c18e3ef2acc058720bd4d5ff2c5` 已发布，推送后 main／origin/main 精确同步。CI `36378565660` 已启动，未取得整体终态；不记 A-G 或部署通过。
+- H1 Intent 请求配置续批：九处轮次入口等待注入配置 query，保持各入口原读取位置；创建／预留前读取，取消入口仍先执行原取消再读取后继配置；dispatcher 的配置快照直接使用 Config 值。两 provider 根复用现有 live file reader，W29 仅重采这两处绑定摘要，装配语句数量及其余摘要不变。新增双 provider 真库用例验证异步读取失败不创建会话／轮次、非法 payload 优先拒绝，以及每次消息读取新预算且预算不足不预留轮次。其他后台、执行和 Intent 启动恢复读取仍未完成。

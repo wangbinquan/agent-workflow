@@ -639,7 +639,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 取消（`cause: { kind: 'resource-reaped', ...reason }`），状态与原因同一次写入落下；此前
       // 按 `user` 取消、事后改写原因，中间几秒数字员工会把超时误判成用户取消。装配图变的是这两格，
       // 判据在 `tests/rfc368-implementation-gate.test.ts`。
-      '0a78f0352c9b92e3eb0a2c1afad3b2b5f59965f684fa53efc94d25d5c00146e6',
+      // RFC-370: Intent routes receive the same live configuration query as other HTTP routes.
+      '83a961dd89a91814e954f66615209131fac350867ea4ce5940a6c7dea1c89357',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -845,7 +846,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // `composeReactionExecutionProvider({ db: deps.db, ... })` 装配、以 `reactionExecution`
       // 交给数字员工；旧字符串 participant 与适配器删除。装配图的变化是有意的，
       // 判据在 `tests/rfc368-*.test.ts`。
-      'bb55c7674535b1878bff3a9db90671598a0f26d7ccc3d867998bcd3c65ebfe89',
+      // RFC-370: only the Intent configuration binding changes; route order and lifetime stay fixed.
+      '20de91f3458999901d7feb29634fa1876de7b6b35093b1871199ebd760bc9084',
     )
     expect(
       namedCalls(
