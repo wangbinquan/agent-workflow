@@ -639,7 +639,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 取消（`cause: { kind: 'resource-reaped', ...reason }`），状态与原因同一次写入落下；此前
       // 按 `user` 取消、事后改写原因，中间几秒数字员工会把超时误判成用户取消。装配图变的是这两格，
       // 判据在 `tests/rfc368-implementation-gate.test.ts`。
-      '1783edbf137d9404b8a5f735bf30c8a2a8574bd3dac9de3ba9c253dc6b8d0c4e',
+      '3b515a04d5e644e9ca1473275ad49255e5a305568e2fb4ecac661851b9ab4d97',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -704,7 +704,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
       // RFC-365: the SQLite root explicitly wires the two target providers, the event-only
       // delegated-context factory and the durable work-intent store.
-      'a9417c174818200e13b3af2f428cb8e0dd7e67aabc8c91379244c529218609e6',
+      '96d877196744aba091c498d99f5daa96ccefe2698990a2bf99e8ea24eaa3acb0',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。

@@ -2239,7 +2239,7 @@ export function composeSqliteApplicationDeps(
         return mcpCatalog.queries.get(identity.actor, { id: mcpId })
       },
       loadRuntime: (name) => effectiveDeps.runtimeRegistry.getRuntime(name),
-      configPath: effectiveDeps.configPath,
+      configuration: composeFileApplicationConfigurationQueries(effectiveDeps.configPath),
       appHome: effectiveDeps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
       ...(effectiveDeps.mcpRuntimeTestDependencies?.runFn === undefined
         ? {}

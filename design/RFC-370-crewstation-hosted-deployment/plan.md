@@ -151,3 +151,8 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 
 - 基线 `784c083ac` 的 CI `36373395839` macOS shard 3 检出 RuntimeProfileConfigurationCommands 没有生产 consumer：Settings 应用抽取后实际方法仍被调用，但 composition 只标了应用自有依赖形状。修复由 system-operations composition 显式绑定 runtime-management public 命令合同到 required port；保留依赖反转和原行为，不新增未消费合同豁免或业务层跨域绑定。原失败 run 不记成功。
 - H8 首批目标 TypeScript 格式／lint 通过，架构按实际 application/public/root 接线计数，未改扫描器和未消费合同规则；无本地功能测试，最终以本批 GitHub CI 为准。
+
+- H8 第一批 `065add7015056323f4f14dcfd49b1f16aa410e5a` 已发布并验证 main／origin/main 同步；精确 SHA CI `36374140357` 已排队，正式测试尚未终态。前序 `784c083ac` 的 public consumer 失败由该批修复，不将失败 run 记成功。仍无 CS adapter 生产实现或 M0 部署证据。
+
+- A-T2/H1 配置消费者续批：MCP diagnostics adapter 不再持有 configPath／直接 loadConfig，改接只读、可异步的 runtime 配置投影。SQLite／PG 应用与 daemon 根明确装配既有 file query，测试台选型／默认 binary／profile 覆盖及快照逻辑不变。已有服务与真实 runtime 用例继续使用真实 file adapter，新增无路径异步 reader 的等待、热读、默认值／覆盖优先级和失败传播用例；工作区／本地进程效果仍待 H3～H5 收口，不宣称 MCP 已可在 CS 执行。
+- 本批目标 TypeScript Prettier／ESLint 通过，W29 两个 composition 内容摘要随唯一配置绑定变化更新；未改其扫描／断言规则。架构 ledger 分母无增长：一个配置 legacy 直连移为 bootstrap file query 装配边；删除 H8 前批已消费的五项 allowGrowth。正式功能测试以发布后的精确 SHA CI 为准，不运行本地测试。

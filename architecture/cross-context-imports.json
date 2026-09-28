@@ -10917,23 +10917,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:20adb34548e97c22baa0",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file",
-      "toPath": "packages/backend/src/config/index.ts",
-      "toSymbol": "loadConfig",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/application/digitalEmployeeToolContractProjectionV2.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/application/digitalEmployeeToolContractProjectionV2.ts",
       "fromSymbol": "$file",
@@ -81501,6 +81484,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:fd3fac2b188edf57ab65",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#composeFileApplicationConfigurationQueries",
+      "toPath": "packages/backend/src/modules/system-operations/composition.ts",
+      "toSymbol": "composeFileApplicationConfigurationQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts",
       "fromSymbol": "$file",
@@ -93720,22 +93720,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#repositoryEmployeeAssignments"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#$file",
-      "id": "import:20adb34548e97c22baa0",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/config",
-      "syntax": "static-import",
-      "targetSymbol": "loadConfig",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -168699,6 +168683,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:fd3fac2b188edf57ab65",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/composition",
+      "syntax": "static-import",
+      "targetSymbol": "composeFileApplicationConfigurationQueries",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#composeFileApplicationConfigurationQueries"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentPersistenceSemantics.ts#$file",
@@ -170422,7 +170422,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fa785b92ed6813ab3285262c054f978f974c63d7d0f39283b4bcad6239c66787",
+  "sourceDigest": "sha256:446ef7ced94b51a52393538e4afbf8959051e7d0c6eaebd637af9e3361e0842e",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

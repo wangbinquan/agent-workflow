@@ -644,7 +644,7 @@ export async function composePostgresqlApplication(
       return await mcpCatalog.queries.get(identity.actor, { id: mcpId })
     },
     loadRuntime: (name) => core.runtimeRegistry.getRuntime(name),
-    configPath: input.configPath,
+    configuration: composeFileApplicationConfigurationQueries(input.configPath),
     appHome: input.appHome,
     // RFC-359 AC-6：与 `server.ts` 同形的条件展开（生产不传，取服务自己的默认）。
     ...(input.mcpRuntimeTestDependencies?.runFn === undefined

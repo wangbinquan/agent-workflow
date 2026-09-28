@@ -37,3 +37,5 @@
 - Runtime Management 管理配置支持按需异步读取，file adapter 独立落位并保留原探针队列；registry boot 的原始旧配置文本读取已抽为 owner port，双 provider 启动显式装配 file adapter。原默认值迁移判定仍归应用，无 configPath 输入；这不替代远程 runtime driver／执行材料适配。
 
 - H8 直连 transport 的 verified 投递已通过 integration public command 接应用受理／Event Center 发布。共同命令保留原持久化、MR 效果、重复重发与失败语义；provider 验签／normalize 仍由各入站 adapter 负责，人工业务 replay 保留原独立路径。CS 运输 receipt／ACK及事件适配在 B 阶段实现，不混为业务重放。
+
+- MCP diagnostics 的配置读取改接窄 runtime 配置 query，支持异步／按次热读；SQLite／PG／daemon 显式注入原文件 reader。该测试台仍有 scratch／本地执行效果，配置切面完成不代表 H4／H5 或 CS MCP 能力完成。

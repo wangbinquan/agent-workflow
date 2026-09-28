@@ -1,3 +1,4 @@
+import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { afterEach, expect, test } from 'bun:test'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
@@ -92,7 +93,7 @@ function runtimeTestDependencies(
     isRuntimeEligible: isRuntimeMcpTestEligible,
     loadMcp: (mcpId) => getMcpById(mcp, mcpId),
     loadRuntime: (name) => runtimeRegistry.getRuntime(name),
-    configPath: join(root, 'config.json'),
+    configuration: composeFileApplicationConfigurationQueries(join(root, 'config.json')),
     appHome: root,
   }
 }

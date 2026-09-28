@@ -1,3 +1,4 @@
+import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
@@ -2421,7 +2422,7 @@ async function composeSqliteProviderSession(
       return mcpCatalog.queries.get(identity.actor, { id: mcpId })
     },
     loadRuntime: (name) => runtimeRegistry.getRuntime(name),
-    configPath: Paths.config,
+    configuration: composeFileApplicationConfigurationQueries(Paths.config),
     appHome: Paths.root,
   })
   const mcpProbeStore = composeMcpProbeStore(db)

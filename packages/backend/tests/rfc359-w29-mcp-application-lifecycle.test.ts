@@ -114,7 +114,7 @@ function fixture(overrides: Partial<McpRuntimeTestPersistence> = {}) {
     loadMcp: unexpected,
     loadRuntime: unexpected,
     isRuntimeEligible: unexpected,
-    configPath: '/unused/w29-mcp.yml',
+    configuration: { read: unexpected },
     appHome: '/unused/w29-mcp-home',
     runFn: unexpected,
     now: () => 100,

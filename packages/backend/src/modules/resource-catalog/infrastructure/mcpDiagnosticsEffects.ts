@@ -1,8 +1,11 @@
 import { existsSync, rmSync } from 'node:fs'
 import { rm } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
-import { DEFAULT_CONFIG_DIR_PROFILE, type StartupVerificationResult } from '@agent-workflow/shared'
-import { loadConfig } from '@/config'
+import {
+  DEFAULT_CONFIG_DIR_PROFILE,
+  type Config,
+  type StartupVerificationResult,
+} from '@agent-workflow/shared'
 import { getRuntimeDriver } from '@/services/runtime'
 import type { AgentSpawnContext, AgentSpawnPlan, SpawnPlan } from '@/services/runtime/types'
 import {
@@ -38,7 +41,11 @@ import type {
   McpRuntimeTestTurnRecord,
 } from '../application/mcps/runtimeTestPersistence'
 export interface McpDiagnosticsEffectDependencies {
-  readonly configPath: string
+  readonly configuration: {
+    read():
+      | Pick<Config, 'defaultRuntime' | 'opencodePath' | 'claudeCodePath'>
+      | Promise<Pick<Config, 'defaultRuntime' | 'opencodePath' | 'claudeCodePath'>>
+  }
   readonly appHome: string
   readonly loadRuntime: (name: string) => Promise<McpDiagnosticRuntime | null>
   readonly isRuntimeEligible: (runtime: McpDiagnosticRuntime) => boolean
@@ -103,7 +110,7 @@ export function createMcpDiagnosticsEffects(
       getRuntimeDriver(runtime.row.protocol).createMcpTestNativeSessionId?.() ?? null,
     reap: deps.killStaleRunProcessTree ?? productionKillStaleRunProcessTree,
     async resolveRuntime(name): Promise<ResolvedTestRuntime> {
-      const config = loadConfig(deps.configPath)
+      const config = await deps.configuration.read()
       const selected = name ?? config.defaultRuntime ?? 'opencode'
       const row = await deps.loadRuntime(selected)
       if (row === null) {

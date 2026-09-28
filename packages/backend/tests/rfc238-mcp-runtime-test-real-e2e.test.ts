@@ -1,3 +1,4 @@
+import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { afterEach, expect, test } from 'bun:test'
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, rmSync } from 'node:fs'
@@ -205,7 +206,7 @@ describeEachProvider('RFC-238 真实进程多轮夹具（双引擎）', (harness
           isRuntimeEligible: isRuntimeMcpTestEligible,
           loadMcp: (mcpId) => getMcpById(mcpBinding, mcpId),
           loadRuntime: (name) => runtimeRegistry.getRuntime(name),
-          configPath: join(root, 'config.json'),
+          configuration: composeFileApplicationConfigurationQueries(join(root, 'config.json')),
           appHome: root,
         })
 
