@@ -191,17 +191,21 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
       },
       input,
     )
-    // Attach the rejection assertion before releasing asynchronous cleanup.
-    const rejected = expect(pending).rejects.toBe(failure)
+    // Bun's rejects matcher waits while evaluating the assertion. Observe with
+    // a plain Promise first so this test can still release the cleanup barrier.
+    const outcome = pending.then(
+      () => null,
+      (error: unknown) => error,
+    )
     try {
-      await reach(cleaning, pending)
+      await reach(cleaning, outcome)
       expect(await row()).toMatchObject({ reservationState: 'reserving' })
       expect(await reserve()).toMatchObject({ phase: 'intent', active: 1 })
       expect(await locks()).toHaveLength(1)
     } finally {
       cleanupReady.release()
     }
-    await rejected
+    expect(await outcome).toBe(failure)
     expect(await harness.db.select().from(skills)).toEqual([])
     expect(await reserve()).toMatchObject({ active: 0 })
     expect(await locks()).toEqual([])

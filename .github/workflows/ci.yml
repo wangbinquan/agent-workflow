@@ -82,6 +82,11 @@ jobs:
     # **本轮 AC-6 正在把大批用例迁成双引擎，Ubuntu 侧每迁一个就多跑一遍**——就是下面那条注释
     # 说的「provider workload grows」，处置照旧：加 runner，不动预算、不改单条用例的超时。
     #
+    # 2026-09-28 run 36404992960: Ubuntu 5/12 kept completing tests until
+    # the 15-minute job limit (13m56s test step plus setup). Split Ubuntu into
+    # 16 runners, keeping every test and the existing job/test timeout budgets.
+    # Separate RFC-370 barrier hangs are repaired in their test, not by sharding.
+    #
     # RFC-359 W57：macOS 从四片加到**六片**。实测三轮 exact SHA 的四片耗时分别是
     # 11.7 / 7.0 / 11.5 / 13.3、12.4 / 12.8 / 6.0 / 11.6、15.3 / 6.5 / 7.1 / 11.2 分钟
     # ——预算 15 分钟，最长的一片已经贴到 88~102%，第三轮的 shard 1/4 直接被超时杀掉
@@ -100,8 +105,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest]
-        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
-        shards: [12]
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+        shards: [16]
         include:
           - os: macos-latest
             shard: 1
