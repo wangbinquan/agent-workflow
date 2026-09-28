@@ -29,3 +29,5 @@
 - `platform/configuration/configurationValues` 提供无 IO 的存储值解析、patch 校验与合并规则；本地文件 adapter 和后续托管存储共用。RFC-276 文件迁移、缓存及原子替换仍由文件 adapter 负责；不能把纯值规则抽取等同于配置全调用者迁移完成。
 
 - 六组 HTTP 消费方（maintenance、plantuml、cached-repos、repoGroups、tasks、taskArchive）的配置读取已改接 `ApplicationConfigurationQueries`，两 provider composition 提供 live file reader；保留错误／fallback 和每次调用读取行为。public origin／身份入口及后台、执行配置仍存在本地调用，不记全覆盖。
+
+- 文档／发现、OIDC public origin、PAT 创建与 MCP transport 现接按需配置 query；完成态 HTTP 装配也以 query 代替 configPath。保留原地址优先级／读取失败回退与开关语义；身份认证本身仍为原实现，不据此关闭 H2。启动、后台、执行和 intent 的配置路径仍待迁移。

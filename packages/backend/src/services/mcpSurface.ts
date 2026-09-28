@@ -12,14 +12,14 @@
 // implicated. Killing a specific token is `DELETE /api/auth/pats/:id`; killing
 // all of a user's is disabling the account.
 
-import { loadConfig } from '@/config'
+import type { Config } from '@agent-workflow/shared'
 
 /** Default-on: see the schema comment on `mcpSurfaceEnabled`. */
-export function isMcpSurfaceEnabled(configPath: string): boolean {
-  return loadConfig(configPath).mcpSurfaceEnabled ?? true
+export function isMcpSurfaceEnabled(config: Pick<Config, 'mcpSurfaceEnabled'>): boolean {
+  return config.mcpSurfaceEnabled ?? true
 }
 
 /** RFC-247 D16 — audit retention in days. */
-export function tokenAuditRetentionDays(configPath: string): number {
-  return loadConfig(configPath).tokenAuditRetentionDays ?? 90
+export function tokenAuditRetentionDays(config: Pick<Config, 'tokenAuditRetentionDays'>): number {
+  return config.tokenAuditRetentionDays ?? 90
 }

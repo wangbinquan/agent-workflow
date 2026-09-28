@@ -170,7 +170,10 @@ export async function createProductionPerformanceApplication(
           identityAccess.diagnostics,
           healthDatabase,
         ),
-      wellKnown: (app) => mountWellKnownRoutes(app, { configPath }),
+      wellKnown: (app) =>
+        mountWellKnownRoutes(app, {
+          configuration: composeFileApplicationConfigurationQueries(configPath),
+        }),
       webhookIngress: (app) => mountWebhookIngressRoutes(app, { webhookIngressPersistence }),
     },
     mountApi(app) {

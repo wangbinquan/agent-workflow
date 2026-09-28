@@ -1,3 +1,4 @@
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import {
   composeFileApplicationConfiguration,
   composeFileApplicationConfigurationQueries,
@@ -1133,7 +1134,7 @@ export type SelectedDaemonProviderCore<
  */
 export interface ComposedAppDeps<TCore extends AppHttpProviderCore = AppHttpProviderCore> {
   readonly token: string
-  readonly configPath: string
+  readonly configuration: ApplicationConfigurationQueries
   readonly core: TCore
   readonly publicRoutes: AppPublicRouteMounts
   readonly apiRoutes: AppApiRouteMounts
@@ -1335,7 +1336,7 @@ export interface ProviderAppCompositionInput<
   TProvider extends DaemonProviderCore['provider'] = DaemonProviderCore['provider'],
 > {
   readonly token: string
-  readonly configPath: string
+  readonly configuration: ApplicationConfigurationQueries
   readonly core: SelectedDaemonProviderCore<TProvider>
   readonly public: ProviderPublicRouteComposition
   readonly platform: ProviderPlatformRouteComposition
@@ -1361,7 +1362,7 @@ function freezeComposedAppDeps<TCore extends AppHttpProviderCore>(
 ): ComposedAppDeps<TCore> {
   return Object.freeze({
     token: input.token,
-    configPath: input.configPath,
+    configuration: input.configuration,
     core: Object.freeze({ ...input.core }),
     publicRoutes: Object.freeze({ ...input.publicRoutes }),
     apiRoutes: Object.freeze({ ...input.apiRoutes }),
@@ -1530,7 +1531,7 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
 
   return freezeComposedAppDeps({
     token: input.token,
-    configPath: input.configPath,
+    configuration: input.configuration,
     core: input.core,
     publicRoutes,
     apiRoutes,
@@ -2361,6 +2362,7 @@ export function composeSqliteApplicationDeps(
     auth: effectiveDeps.authRuntime,
     afterDisabled: async () => userRuntimeTests.reconcileDurableIntents(),
   })
+  const configuration = composeFileApplicationConfigurationQueries(effectiveDeps.configPath)
   const apiComposition = composeSqliteApiRouteMounts(
     effectiveDeps,
     identityAccess,
@@ -2381,11 +2383,12 @@ export function composeSqliteApplicationDeps(
     intentApply,
     taskExecutionPersistence,
     eventAutomation,
+    configuration,
     unstarted,
   )
   const application = freezeComposedAppDeps({
     token: effectiveDeps.token,
-    configPath: effectiveDeps.configPath,
+    configuration,
     core:
       effectiveDeps.providerCore === undefined
         ? Object.freeze({
@@ -2400,7 +2403,7 @@ export function composeSqliteApplicationDeps(
     publicRoutes: Object.freeze({
       health: (app: Hono) =>
         mountHealthRoutes(app, effectiveDeps, identityAccess.diagnostics, healthDatabase),
-      wellKnown: (app: Hono) => mountWellKnownRoutes(app, effectiveDeps),
+      wellKnown: (app: Hono) => mountWellKnownRoutes(app, { configuration }),
       webhookIngress: (app: Hono) => mountWebhookIngressRoutes(app, effectiveDeps),
     }),
     apiRoutes: apiComposition.apiRoutes,
@@ -2616,6 +2619,7 @@ function composeSqliteApiRouteMounts(
   intentApply: IntentApplyOperations,
   taskExecutionPersistence: ReturnType<typeof createTaskExecutionPersistence>,
   eventAutomation: EventCenterAutomationCapability,
+  configuration: ApplicationConfigurationQueries,
   unstarted?: UnstartedApplicationScope,
 ): SqliteApiRouteComposition {
   const appHome = deps.appHome ?? Paths.root
@@ -2720,7 +2724,6 @@ function composeSqliteApiRouteMounts(
     },
     appHome,
   })
-  const configuration = composeFileApplicationConfigurationQueries(deps.configPath)
   const routeDeps = {
     ...deps,
     configuration,
@@ -3591,7 +3594,7 @@ function composeSqliteApiRouteMounts(
     memoryDistillJobs: (app) => mountMemoryDistillJobRoutes(app, routeDeps),
     taskFeedback: (app) => mountTaskFeedbackRoutes(app, deps),
     auth: (app) =>
-      mountAuthRoutes(app, { configPath: deps.configPath }, identityAccess, {
+      mountAuthRoutes(app, { configuration }, identityAccess, {
         auth: deps.authRuntime,
         listIdentitiesForUser: (userId) => oidcIdentities.listIdentitiesForUser(userId),
         listTokenAuditForUser: (userId) => listTokenAuditForUser(deps.db, userId),
@@ -3599,7 +3602,7 @@ function composeSqliteApiRouteMounts(
     oidcAuth: (app) =>
       mountOidcAuthRoutes(
         app,
-        { configPath: deps.configPath },
+        { configuration },
         {
           auth: deps.authRuntime,
           providers: oidcProviders,
@@ -3617,7 +3620,7 @@ function composeSqliteApiRouteMounts(
           operations: identityUserOperations,
         },
       ),
-    docs: (app) => mountDocsRoutes(app, deps),
+    docs: (app) => mountDocsRoutes(app, { configuration }),
   } satisfies AppApiRouteMounts)
   return Object.freeze({
     apiRoutes,
@@ -3814,7 +3817,7 @@ export function createComposedApp(deps: ComposedAppDeps): Hono {
       mountApiRoutes(app, deps)
       mountMcpTransport(app, {
         tokenCallAudit: deps.core.tokenCallAudit,
-        configPath: deps.configPath,
+        configuration: deps.configuration,
         operationInvokerFor: (actor) =>
           createBoundOperationInvoker(
             app,

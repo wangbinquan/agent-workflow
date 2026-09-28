@@ -598,7 +598,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`）。装配图变的是这一格，
     // 方向同样是补齐：此前这条路上「设为默认」对新任务不生效。
     // RFC-370: Settings wiring uses the storage-neutral application, and six route
-    // bundles share one live configuration query. Existing runtime handles stay identical.
+    // bundles share one live configuration query, including docs/OIDC/MCP. SQLite
+    // constructs this reader in its outer root. Existing runtime handles stay identical.
     expect(digest(restored, pg)).toBe(
       // 2026-09-19（第二次重采）：三条被合一丢掉的装配步骤补回来——长驻协调器的运行期配置改成
       // 每次 drive 现读（`refreshLaunchConfig` / `currentRunConfig()` getter）、仓库准备重试把
@@ -637,7 +638,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 取消（`cause: { kind: 'resource-reaped', ...reason }`），状态与原因同一次写入落下；此前
       // 按 `user` 取消、事后改写原因，中间几秒数字员工会把超时误判成用户取消。装配图变的是这两格，
       // 判据在 `tests/rfc368-implementation-gate.test.ts`。
-      '54c554a9dc3305f641462d0d712ad3ce255714c3d069f8c0c8e9c4da377e7df3',
+      'b9bf31c35815b6e02d460fc5023c2177578358dce26c7338655979c2dd5c6e00',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -702,7 +703,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
       // RFC-365: the SQLite root explicitly wires the two target providers, the event-only
       // delegated-context factory and the durable work-intent store.
-      '10594d5141bf9d43426d5b00056ca2296bedfdea4b7db71749bca8eb66a21b02',
+      '2dd3d75494ed77d96496fdc3d99d77a107a80eb15c1dfc188dbc86152a700538',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -807,7 +808,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // **装配出来的东西不变**：复活仍是同一条进程级单例认领 + 同一个收尾器，静态校验门仍指向
     // 同一份 `composeAgentLaunchResourceOperations`。
     // RFC-370: Settings wiring uses the storage-neutral application, and six route
-    // bundles share one live configuration query. Existing runtime handles stay identical.
+    // bundles share one live configuration query, including docs/OIDC/MCP. SQLite
+    // constructs this reader in its outer root. Existing runtime handles stay identical.
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
       // 2026-09-19（第二次重采）：三条被合一丢掉的装配步骤补回来——长驻协调器的运行期配置改成
       // 每次 drive 现读（`refreshLaunchConfig` / `currentRunConfig()` getter）、仓库准备重试把
@@ -841,7 +843,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // `composeReactionExecutionProvider({ db: deps.db, ... })` 装配、以 `reactionExecution`
       // 交给数字员工；旧字符串 participant 与适配器删除。装配图的变化是有意的，
       // 判据在 `tests/rfc368-*.test.ts`。
-      'c79ec8ab5b083d1e2f2834d69b15ab0bec4c1f6c8d2298c54fb9a73ff482adb9',
+      '5efcb90cddf86281a1877b7b7b6c6fafa0eb77ffefdc31166e12333560e5c19c',
     )
     expect(
       namedCalls(
@@ -871,8 +873,10 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   })
 
   test('uses the unchanged complete mounts once and forwards original workflow runtime and health values', () => {
+    // RFC-370: completed HTTP/MCP composition receives the selected configuration
+    // query instead of a file path; route order and runtime handles are unchanged.
     const expected = {
-      composeProviderAppDeps: 'bda8a20e8e4f382e244eb75252ff390d066b680fcc82a99ff0b7bfb1f77da8cb',
+      composeProviderAppDeps: '8d0ce7f4b6dde1ca96c31fe7a0d6ed068dc3a9f7694f37a52f6d1fda2de4d4ad',
       composePostgresqlAppDeps: '2ebbeeef1bc8fecbda4f4c93cf8603afc3eec78fe6d4739403d407c2fb185c5b',
       // gitleaks:allow —— 这是被测装配的 sha256 内容摘要，不是凭据。
       // 2026-09-19 重采：`taskArchive` 的挂载点移到 `tasks` 之前——Hono 的 `*` 能匹配零个段，
@@ -880,7 +884,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 并把它变成 404（只对非管理员，见 server.ts 该处注释与
       // tests/rfc311-task-archive-route-reachability.test.ts）。摘要随之变。
       mountApiRoutes: 'ad3aabd891e51458a246b8162514c0bb1bc645ede3922272d6e77292b5029a05', // gitleaks:allow
-      createComposedApp: 'a632acc2c6534ecb769e1bd0e64e4f4d8c423d1be8aee049101837c9847b9e62',
+      createComposedApp: 'ed2f30c5368592797679524f9ca8edb5eb5ec12290270511ba2af6b127d818c1',
       createApp: '628edbc2da66884bfba5d159423fa972ea9a8d4aca3ecb37ed8e3ed98e18aefa',
     }
     for (const [name, hash] of Object.entries(expected)) {

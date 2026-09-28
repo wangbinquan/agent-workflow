@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 904,
+    "consumers": 910,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
     "methods": 1075,
@@ -135721,7 +135721,13 @@
         "import:091b082ddd09f7089081",
         "import:1994e0db7f238976000a",
         "import:28fdc25abb181339bb7f",
+        "import:885617536657ec3e3029",
         "import:895a17e9e2d5e8cbe05a",
+        "import:8af559537e34d29da303",
+        "import:a4f4590d8176bddfb8de",
+        "import:bf9232dca3b26fd2bff4",
+        "import:c678160f4a66661ac419",
+        "import:c8df23c62f146ffc951b",
         "import:cb1a68456feac0d06b64",
         "import:e50d1b1b10cfd8bc7215"
       ],
@@ -135753,6 +135759,11 @@
             "import:1994e0db7f238976000a",
             "import:28fdc25abb181339bb7f",
             "import:895a17e9e2d5e8cbe05a",
+            "import:8af559537e34d29da303",
+            "import:a4f4590d8176bddfb8de",
+            "import:bf9232dca3b26fd2bff4",
+            "import:c678160f4a66661ac419",
+            "import:c8df23c62f146ffc951b",
             "import:cb1a68456feac0d06b64",
             "import:e50d1b1b10cfd8bc7215"
           ],
@@ -135782,9 +135793,45 @@
         },
         {
           "context": "legacy",
+          "edgeId": "import:885617536657ec3e3029",
+          "file": "packages/backend/src/routes/oidc-auth.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/oidc-auth.ts#$file"
+        },
+        {
+          "context": "legacy",
           "edgeId": "import:895a17e9e2d5e8cbe05a",
           "file": "packages/backend/src/routes/tasks.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:8af559537e34d29da303",
+          "file": "packages/backend/src/mcp/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/mcp/server.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:a4f4590d8176bddfb8de",
+          "file": "packages/backend/src/routes/publicOrigin.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/publicOrigin.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:bf9232dca3b26fd2bff4",
+          "file": "packages/backend/src/routes/auth.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/auth.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:c678160f4a66661ac419",
+          "file": "packages/backend/src/routes/docs.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/docs.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:c8df23c62f146ffc951b",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
         },
         {
           "context": "legacy",
@@ -165585,7 +165632,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e0d712df0ff7866b3146251ef9dd32a1729b469ff123a977e33b87f809391416",
+  "sourceDigest": "sha256:7a13be972e8ec5d7e6329744de9c582511f55dc5497032310288fe08a0996a71",
   "targetContexts": [
     "collaboration",
     "development-automation",

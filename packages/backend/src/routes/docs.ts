@@ -20,6 +20,7 @@
 // (RFC-247 impl-gate P2).
 
 import type { Hono } from 'hono'
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { actorOf } from '@/auth/actor'
 import { publicOriginOf } from '@/routes/publicOrigin'
 import { registerRoute } from '@/routes/registry'
@@ -27,7 +28,7 @@ import { buildApiDocs, clientSnippets, wellKnownMcp } from '@/services/apiDocs'
 import { isMcpSurfaceEnabled } from '@/services/mcpSurface'
 
 export interface DocumentationRouteDependencies {
-  readonly configPath: string
+  readonly configuration: ApplicationConfigurationQueries
 }
 
 export function mountDocsRoutes(app: Hono, deps: DocumentationRouteDependencies): void {
@@ -42,11 +43,11 @@ export function mountDocsRoutes(app: Hono, deps: DocumentationRouteDependencies)
       tokenAccess: 'allow',
       summary: 'Generated REST + MCP documentation for the current effective permissions',
     },
-    (c) => {
+    async (c) => {
       const actor = actorOf(c)
       return c.json({
         ...buildApiDocs(actor.user.role, actor.permissions),
-        snippets: clientSnippets(publicOriginOf(c, deps.configPath)),
+        snippets: clientSnippets(await publicOriginOf(c, deps.configuration)),
       })
     },
   )
@@ -70,10 +71,10 @@ export function mountWellKnownRoutes(app: Hono, deps: DocumentationRouteDependen
       tokenAccess: 'allow',
       summary: 'MCP endpoint discovery',
     },
-    (c) =>
+    async (c) =>
       c.json(
-        wellKnownMcp(publicOriginOf(c, deps.configPath), {
-          enabled: isMcpSurfaceEnabled(deps.configPath),
+        wellKnownMcp(await publicOriginOf(c, deps.configuration), {
+          enabled: isMcpSurfaceEnabled(await deps.configuration.read()),
         }),
       ),
   )

@@ -1888,7 +1888,7 @@ export async function composePostgresqlApplication(
       identityAccess: identityAccess.diagnostics,
       database: core.healthDatabase,
     }),
-    documentation: Object.freeze({ configPath: input.configPath }),
+    documentation: Object.freeze({ configuration }),
     webhookIngress: Object.freeze({
       webhookIngressPersistence: composeWebhookIngressPersistenceFor(input.db),
       secretBox: input.secretBox,
@@ -2100,7 +2100,7 @@ export async function composePostgresqlApplication(
 
   const identityRoutes: PostgresqlAppCompositionInput['identity'] = Object.freeze({
     auth: Object.freeze({
-      deps: Object.freeze({ configPath: input.configPath }),
+      deps: Object.freeze({ configuration }),
       identityAccess,
       bindings: Object.freeze({
         auth: core.authRuntime,
@@ -2109,7 +2109,7 @@ export async function composePostgresqlApplication(
       }),
     }),
     oidcAuth: Object.freeze({
-      deps: Object.freeze({ configPath: input.configPath }),
+      deps: Object.freeze({ configuration }),
       bindings: Object.freeze({
         auth: core.authRuntime,
         providers: oidcProviders,
@@ -2142,7 +2142,7 @@ export async function composePostgresqlApplication(
 
   const composition: PostgresqlAppCompositionInput = Object.freeze({
     token: input.token,
-    configPath: input.configPath,
+    configuration,
     core,
     public: publicRoutes,
     platform: platformRoutes,

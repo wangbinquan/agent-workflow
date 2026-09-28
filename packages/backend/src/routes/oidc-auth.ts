@@ -1,3 +1,4 @@
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 // RFC-036 — public OIDC login flow:
 //   GET  /api/auth/oidc/providers              public list of enabled IdPs
 //   POST /api/auth/oidc/:slug/login/start      mints PKCE/state + redirect URL
@@ -90,7 +91,7 @@ export interface OidcAuthRouteBindings {
 
 export function mountOidcAuthRoutes(
   app: Hono,
-  deps: { readonly configPath: string },
+  deps: { readonly configuration: ApplicationConfigurationQueries },
   bindings: OidcAuthRouteBindings,
 ): void {
   const { auth, identities, providers } = bindings
@@ -131,7 +132,7 @@ export function mountOidcAuthRoutes(
       const body = (await safeJsonOrEmpty(c.req.raw)) as Record<string, unknown>
       const postLoginRedirect =
         typeof body.postLoginRedirect === 'string' ? body.postLoginRedirect : undefined
-      const redirectUri = resolveRedirectUri(c, provider.slug, deps)
+      const redirectUri = await resolveRedirectUri(c, provider.slug, deps)
       // RFC-220 — discovery merged over manual fallbacks; a failure used to
       // escape as an unhandled 500 here (behavior change #1).
       const eff = await resolveEndpoints(provider)
@@ -374,11 +375,11 @@ function isDomainCode(err: unknown, code: string): boolean {
   return err instanceof DomainError && err.code === code
 }
 
-function resolveRedirectUri(
+async function resolveRedirectUri(
   c: Context,
   slug: string,
-  deps: { readonly configPath: string },
-): string {
+  deps: { readonly configuration: ApplicationConfigurationQueries },
+): Promise<string> {
   // RFC-036 — explicit publicBaseUrl in config.json takes precedence so dev
   // setups behind a proxy that doesn't forward X-Forwarded-* (e.g. vite)
   // still issue redirects that land back on the user-facing origin.
@@ -389,7 +390,7 @@ function resolveRedirectUri(
   // → Host → request URL); the one difference is that a request carrying no
   // Host header at all now falls back to the request URL instead of producing
   // the literal `http://undefined/...` this used to emit.
-  return `${publicOriginOf(c, deps.configPath)}/api/auth/oidc/${slug}/callback`
+  return `${await publicOriginOf(c, deps.configuration)}/api/auth/oidc/${slug}/callback`
 }
 
 function buildAuthorizeUrl(

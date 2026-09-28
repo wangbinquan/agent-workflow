@@ -1,3 +1,4 @@
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 // RFC-036 — user-scoped auth endpoints (login / logout / me / change-password
 // / sessions / pats / identities). All but login require an active session
 // + the `account:self` permission (granted to both roles).
@@ -68,7 +69,7 @@ export interface TokenAuditView {
 
 export function mountAuthRoutes(
   app: Hono,
-  deps: { readonly configPath: string },
+  deps: { readonly configuration: ApplicationConfigurationQueries },
   identityAccess: AuthRouteIdentityAccess,
   bindings: AuthRouteBindings,
 ): void {
@@ -400,7 +401,7 @@ export function mountAuthRoutes(
       // delete, and an empty scope list silently meant "everything the owner
       // has". RFC-247 fixed both, which is what makes issuing safe again.
       const actor = actorOf(c)
-      if (!isMcpSurfaceEnabled(deps.configPath)) {
+      if (!isMcpSurfaceEnabled(await deps.configuration.read())) {
         throw new ForbiddenError(
           'token-issuance-disabled',
           'the administrator has disabled the API token surface',

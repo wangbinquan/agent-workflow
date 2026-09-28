@@ -30,7 +30,7 @@
 // because a service reaching for request headers is the coupling W4 removes.
 
 import type { Context } from 'hono'
-import { loadConfig } from '@/config'
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 
 export interface PublicOriginInputs {
   /** `publicBaseUrl` from config.json, when the operator has set one. */
@@ -94,10 +94,13 @@ export function derivePublicOrigin(inputs: PublicOriginInputs): string {
 }
 
 /** Request-bound wrapper: reads config (best-effort) and the forwarded headers. */
-export function publicOriginOf(c: Context, configPath: string): string {
+export async function publicOriginOf(
+  c: Context,
+  configuration: ApplicationConfigurationQueries,
+): Promise<string> {
   let configuredBaseUrl: string | undefined
   try {
-    const value = loadConfig(configPath).publicBaseUrl
+    const value = (await configuration.read()).publicBaseUrl
     if (typeof value === 'string') configuredBaseUrl = value
   } catch {
     // A broken/absent config must not take down a documentation endpoint —

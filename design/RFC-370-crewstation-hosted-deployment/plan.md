@@ -122,3 +122,9 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 类型修复 `93a84cd1d277fa4a4cecd5d2e1458c8506039fcb` 已发布，精确 SHA CI `36370857680` 进行中。
 - A-T2 第七批候选：新增配置查询 public 合同，维护状态、PlantUML、仓库缓存／组、任务详情和归档六组 HTTP 路由移除配置文件读取，支持异步按需查询。SQLite／PG bootstrap 分别装配一个原文件 reader，保持热读取及原回退；任务深度配置的读取失败仍回到默认 timeout，维护状态存在时仍不读 fallback。原双 provider HTTP 回归保留，补异步路由读、连续请求读新值、归档预览等待配置及维护状态优先回归。其余 public origin／登录入口、启动、后台任务和执行配置调用者仍待迁移，H1/H6 不关闭。
 - 第七批候选仅运行格式／lint 和源码摘要／架构账本生成，未跑本地测试。W29 两个根各新增一个配置 reader 装配（PG165→166，SQLite API65→66），SQLite 总装配摘要不变；原 source guard 随深度配置函数的参数切面更新。架构计入8条接线、1个public合同及2个owner符号，不扩大 provider-specific 例外。
+
+- 第七批 `943a08ad377216696da5a6e05590735da65ca85f` 已发布，精确 SHA CI `36371425603` 进行中；前序 `93a84cd1d` 的类型检查 job 已通过，整体 CI 当时尚未终态。共享 STATE 因并行 RFC-371 尚未发布链接而保留在工作树，不剥离其他输出。
+- A-T2 第八批候选：文档／发现、OIDC public origin、PAT 创建和 MCP transport 的配置读取统一接按需查询；MCP 开关规则改读已加载配置值，原默认值和判断顺序不变。完成态 `ComposedAppDeps` 及 provider HTTP 装配边界只持配置 query，不再把 configPath 交给 transport；SQLite 将原 reader 上移到外层，与 API／公开路由／MCP 共用，PG 复用既有 reader。配置地址读取失败仍走原请求头回退，OIDC 登录、PAT 与 MCP 业务规则未改；后台／执行／启动与 intent 的文件读取仍待关闭。
+- 第八批补异步发现文档新值与 MCP 开关、public origin 读取失败回退用例；保留原双 provider OIDC／MCP／文档 HTTP 回归。仅格式／lint、源码摘要和架构生成，不本地运行测试。W29 记录 SQLite reader 上移（外层46→47、API66→65）、PG166不变及完成态装配改传 query；mountApiRoutes／createApp 摘要不变。架构仅六条 legacy→public 类型接线增长，无新增公共合同、owner 或运行效果。
+
+- 第七批 CI `36371425603` 的类型检查发现异步路由测试夹具的 Hono actor 上下文未声明、taskArchive 缺少必填 maxTreesPerSweep。第八批修复为独立 MiddlewareHandler 注入和完整归档配置；不改变生产行为，原失败 run 不记成功，等待后继精确 SHA CI。

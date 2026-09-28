@@ -1,3 +1,4 @@
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 // RFC-247 §4.1 — the MCP endpoint.
 //
 // `POST /api/mcp`, stateless Streamable HTTP. Every request carries its own
@@ -159,7 +160,7 @@ function toolError(err: unknown): {
 
 export interface McpTransportDeps {
   readonly tokenCallAudit: Pick<TokenCallAuditParticipant, 'record'>
-  readonly configPath: string
+  readonly configuration: ApplicationConfigurationQueries
   readonly operationInvokerFor: (actor: Actor) => OperationInvoker
 }
 
@@ -177,7 +178,7 @@ export function mountMcpTransport(app: Hono, deps: McpTransportDeps): void {
   const handler: MiddlewareHandler = async (c) => {
     const actor = actorOf(c)
     // D10 — one switch closes both the MCP endpoint and token minting.
-    if (!isMcpSurfaceEnabled(deps.configPath)) {
+    if (!isMcpSurfaceEnabled(await deps.configuration.read())) {
       throw new ForbiddenError('mcp-surface-disabled', 'the MCP surface is disabled')
     }
     // Only PATs. A session cookie reaching this endpoint would mean a browser
