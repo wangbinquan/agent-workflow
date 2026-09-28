@@ -211,8 +211,8 @@ export function RuntimePricing({ open, onClose }: { open: boolean; onClose: () =
             </table>
           </TableViewport>
           <p className="obs-caption">
-            CrewStation 托管模式设计：平台价格与用量作为同一笔消耗来源，AW
-            按任务/Agent归因，不再次累加估算。平台未返回价格时显示未定价；此联动尚未接入。
+            CrewStation 托管模式由平台计价并回传授权费用，AW 按任务和 Agent 归因。
+            部署与数据来源页演示平台同步、离线和费用可见状态；本弹窗维护独立 AW 的单价。
           </p>
           <p className="obs-caption">
             价格变更仅影响生效后新受理的执行，不触发模型测试或运行时重启。演示修改保留在当前页面会话，刷新恢复示例。

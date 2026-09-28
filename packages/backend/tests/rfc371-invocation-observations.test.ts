@@ -77,7 +77,10 @@ const usage = (
   },
   ...patch,
 })
-const valuation = (): Extract<PlatformObservation, { kind: 'valuation' }> => ({
+const valuation = (): Extract<
+  PlatformObservation,
+  { kind: 'valuation'; availability: 'priced' }
+> => ({
   kind: 'valuation',
   identity,
   sourceId: 'runner-source',

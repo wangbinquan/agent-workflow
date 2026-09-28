@@ -37,6 +37,12 @@ import {
 } from './fixture'
 
 import { RuntimePricing } from './RuntimePricing'
+import {
+  DeploymentModes,
+  platformScenes,
+  type DeploymentMode,
+  type PlatformScene,
+} from './DeploymentModes'
 
 void i18n.changeLanguage('zh-CN')
 const tabDefs = [
@@ -45,6 +51,7 @@ const tabDefs = [
   { key: 'agents', label: 'Agent 分析' },
   { key: 'usage', label: 'Token 与成本' },
   { key: 'performance', label: '性能与异常' },
+  { key: 'deployment', label: '部署与数据来源' },
 ]
 const categories = [
   { key: 'input', label: '非缓存输入' },
@@ -1416,6 +1423,12 @@ function App() {
     [bucket, setBucket] = useState<{ tasks: Task[]; title: string } | null>(null),
     [definitions, setDefinitions] = useState(false)
   const [pricing, setPricing] = useState(params.get('settings') === 'runtime-pricing')
+  const [deployment, setDeployment] = useState<DeploymentMode>(
+    params.get('deployment') === 'crewstation' ? 'crewstation' : 'standalone',
+  )
+  const [platformScene, setPlatformScene] = useState<PlatformScene>(
+    platformScenes.find((s) => s.value === params.get('platform'))?.value ?? 'ready',
+  )
   const [dark, setDark] = useState(false),
     [notice, setNotice] = useState(''),
     [menu, setMenu] = useState(false)
@@ -1446,13 +1459,17 @@ function App() {
   useEffect(() => {
     const p = new URLSearchParams({ tab, repo, range })
     if (pricing) p.set('settings', 'runtime-pricing')
+    if (tab === 'deployment') {
+      p.set('deployment', deployment)
+      p.set('platform', platformScene)
+    }
     if (tab === 'traces' && task) p.set('task', task.id)
     if (source !== 'all') p.set('source', source)
     if (query) p.set('query', query)
     if (sort !== 'recent') p.set('sort', sort)
     if (tab === 'agents' && agent) p.set('agent', agent)
     history.replaceState(null, '', `?${p}`)
-  }, [tab, repo, range, task, source, query, sort, agent, pricing])
+  }, [tab, repo, range, task, source, query, sort, agent, pricing, deployment, platformScene])
   const pickTask = (t: Task) => {
     setTask(t)
     setTab('traces')
@@ -1639,44 +1656,48 @@ function App() {
               >
                 指标口径
               </button>
-              <Button onClick={exportCsv}>
-                {tab === 'traces' && task ? '导出此任务 CSV' : '导出任务 CSV'}
-              </Button>
+              {tab !== 'deployment' && (
+                <Button onClick={exportCsv}>
+                  {tab === 'traces' && task ? '导出此任务 CSV' : '导出任务 CSV'}
+                </Button>
+              )}
             </div>
           </div>
-          <div className="obs-filterbar">
-            <div className="obs-inline obs-filter-fields">
-              <Select
-                ariaLabel="时间范围"
-                value={range}
-                onChange={changeFilter(setRange)}
-                options={[
-                  { value: '24', label: '最近 24 小时' },
-                  { value: '168', label: '最近 7 天' },
-                ]}
-              />
-              <Select
-                ariaLabel="仓库范围"
-                value={repo}
-                onChange={changeFilter(setRepo)}
-                options={[
-                  { value: 'all', label: '全部仓库' },
-                  { value: 'agent-workflow', label: 'agent-workflow' },
-                  { value: 'CrewStation', label: 'CrewStation' },
-                ]}
-              />
-              <Select
-                ariaLabel="任务来源"
-                value={source}
-                onChange={changeFilter(setSource)}
-                options={[
-                  { value: 'all', label: '全部任务来源' },
-                  ...['单 Agent', '工作流', '工作组'].map((v) => ({ value: v, label: v })),
-                ]}
-              />
+          {tab !== 'deployment' && (
+            <div className="obs-filterbar">
+              <div className="obs-inline obs-filter-fields">
+                <Select
+                  ariaLabel="时间范围"
+                  value={range}
+                  onChange={changeFilter(setRange)}
+                  options={[
+                    { value: '24', label: '最近 24 小时' },
+                    { value: '168', label: '最近 7 天' },
+                  ]}
+                />
+                <Select
+                  ariaLabel="仓库范围"
+                  value={repo}
+                  onChange={changeFilter(setRepo)}
+                  options={[
+                    { value: 'all', label: '全部仓库' },
+                    { value: 'agent-workflow', label: 'agent-workflow' },
+                    { value: 'CrewStation', label: 'CrewStation' },
+                  ]}
+                />
+                <Select
+                  ariaLabel="任务来源"
+                  value={source}
+                  onChange={changeFilter(setSource)}
+                  options={[
+                    { value: 'all', label: '全部任务来源' },
+                    ...['单 Agent', '工作流', '工作组'].map((v) => ({ value: v, label: v })),
+                  ]}
+                />
+              </div>
+              <span className="obs-small obs-muted">我的可见任务 · UTC+08:00 · 生命周期口径</span>
             </div>
-            <span className="obs-small obs-muted">我的可见任务 · UTC+08:00 · 生命周期口径</span>
-          </div>
+          )}
           <TabBar
             tabs={tabDefs}
             active={tab}
@@ -1757,10 +1778,20 @@ function App() {
             {tab === 'performance' && (
               <Performance ts={filtered} onPick={pickTask} onBucket={bucketOpen} />
             )}
+            {tab === 'deployment' && (
+              <DeploymentModes
+                mode={deployment}
+                onMode={setDeployment}
+                scene={platformScene}
+                onScene={setPlatformScene}
+                onPricing={() => setPricing(true)}
+                onTimeline={() => pickTask(mainTask)}
+              />
+            )}
           </div>
           <footer className="obs-footer">
             <span>合成演示数据 · 未接入真实运行 · 示例价格不代表账单</span>
-            <span>RFC-371 · 全景设计 / Draft</span>
+            <span>RFC-371 · 交互原型 / 实施中</span>
           </footer>
           <div className="obs-announcement" role="status" aria-live="polite">
             {notice}

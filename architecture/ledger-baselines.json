@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1766,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-371：补齐冻结安装身份及双部署调用归因分页查询，rfc294-mutation-entrypoints 1765 → 1766，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -906,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25336,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371：补齐冻结安装身份及双部署调用归因分页查询，rfc294-module-symbol-owners 25326 → 25336，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -926,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "8d2e5ba5eb27ffc05d4cf1f83a95611b120ad03c",
-    "contentDigest": "sha256:a32c76978e5da6186ccd3052f92e9765861bd7057aa0b89e1e9e0d7d6fd49d57",
+    "currentSnapshotSha": "dbdff49c29e6db7db91668f12cda426cf1867614",
+    "contentDigest": "sha256:de8f2038634a0f7ff7c449d5a253296c6948b427610f9683cd40e6ec9e995b7d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
