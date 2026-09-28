@@ -193,3 +193,10 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 
 - Intent 请求配置续批 `345275ada20d9da042206da47494ac8480d8dda9` 已发布且远端同步；CI `36379106536` 的 check 作业已通过，整体仍在运行。前批 `f518f0373` CI `36378565660` 被后继发布取消，不作为完整通过证据；由包含它的后继 SHA 验证。
 - H1/H8 Webhook 配置续批：integration-owned WebhookConfigurationQuery 支持异步值，端点 URL 展示及触发器保存验证移除 configPath／文件读取。两 provider 根复用原 live file query；端点写入仍先持久化再补响应 URL，列表逐项读取且保持顺序，读取失败仍返回原 null／默认 runtime 回退。新增双 provider 真库用例覆盖等待、公开地址热更新、各写响应与轮换以及读取失败；CS EventDelivery／receipt／ACK 仍留 B/M3。
+
+
+- Webhook 配置续批 `3db623de22bd94c9fab82b5106d1e07a132191f1` 已发布并同步远端。CI `36379849533` 被后继 `640e4f4fb` 取消，不能记完整通过；包含提交的 CI `36379958665` 当前 Markdown 失败位于并行 RFC-371 demo 的本机地址链接，其余作业尚待终态，未改动该任务文件。
+- A-T2/H6 技能读取续批：抽出 resource-catalog-owned `SkillContentReader` 和独立 file adapter，技能正文／文件树／单文件读取支持异步替换；catalog 显式装配，原直接调用保留 file 默认实现。版本选择、availability、正文解析和 metadata／token 仍由 AW 控制；原快照优先、旧 live fallback、文件错误和树元数据保持。补双 provider 的真实目录／catalog 替换、异步期间 metadata 更新、无 home 读取、失败与消失行回归。写入、版本发布／恢复和导入导出仍待抽取，不关闭 H6，也不开放 CS 编辑。
+- H1 设计勘误：当前 `start` 已以前台运行，托管缺口是配置／安装元数据／控制文件和生命周期装配；复用现 `serveDaemon`，不另造 HTTP listener 或以消除 fork 作为本次成果。
+
+- 本批只做目标文件 Prettier／ESLint、diff 检查与源码派生 census，未运行本地测试；文件树遍历函数与迁移前逐字一致。实际账本新增一个只读工厂入口、九个 owner 项和三条净 util 引用／exception，均逐项记录一次性增长；不改扫描范围或判断规则。正式功能验证交给本批 GitHub CI。

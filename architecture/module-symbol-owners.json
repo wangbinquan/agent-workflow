@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1858,
+    "backendFiles": 1860,
     "frontendFiles": 622,
     "legacyFiles": 550,
-    "moduleFiles": 1308,
-    "productionFiles": 2635,
+    "moduleFiles": 1310,
+    "productionFiles": 2637,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25053
+    "symbolsIncludingFileRoots": 25062
   },
   "entries": [
     {
@@ -79231,6 +79231,42 @@
       "currentContext": "resource-catalog",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/contentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/contentReader.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/contentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/contentReader.ts#SkillContentReader",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillContentReader",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/contentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/contentReader.ts#SkillContentReference",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillContentReference",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/application/skills/ports.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/ports.ts#$file",
       "removeAfterWave": null,
@@ -91734,6 +91770,30 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts#contentReaderFor",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "contentReaderFor",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts#contentReferenceOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "contentReferenceOf",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts#createManagedSkill",
@@ -91904,6 +91964,18 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts#SkillContentReadOptions",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillContentReadOptions",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts#SkillDeleteHooks",
       "removeAfterWave": null,
       "status": "current-module",
@@ -91968,18 +92040,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "stageManagedSkill",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts#walkDir",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "walkDir",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -96264,6 +96324,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "WorkgroupWritePrincipal",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillContentReader.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillContentReader.ts#createFileSkillContentReader",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileSkillContentReader",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillContentReader.ts#resolveFileSkillReadRoot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "resolveFileSkillReadRoot",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillContentReader.ts#walkDir",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "walkDir",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -301361,5 +301469,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9004a8966d9388b3b7cdc04a891ba1210487fac6d26a1f00aa177731abc3f861"
+  "sourceDigest": "sha256:3e42b0f472f76f54886ec0f929ae092611033ff1ff089b7e05e9129e81484e37"
 }

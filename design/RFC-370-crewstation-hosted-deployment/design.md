@@ -94,7 +94,7 @@ deploy/crewstation/                   # 仓库根目录：镜像、Manifest、�
 
 ## 2. H1：服务部署、配置与数据库
 
-拟新增显式配置 `deployment.mode = standalone | crewstation`，默认 standalone。CS 必需值缺失时启动报错，不按发现环境变量自动切换模式。拟新增无 fork 的前台服务启动入口，复用现 daemon provider session 与领域装配；保留 standalone CLI 行为。
+拟新增显式配置 `deployment.mode = standalone | crewstation`，默认 standalone。CS 必需值缺失时启动报错，不按发现环境变量自动切换模式。现有 `agent-workflow start` 已是前台启动（`main.ts` 命令说明及 `cli/start.ts` 的 `startCommand`／`serveDaemon`）；本 RFC 抽取的是宿主配置、安装元数据、控制文件与生命周期依赖，并增加托管启动装配，复用现有监听与 daemon provider session，不重复实现 HTTP 服务；保留 standalone CLI 行为。
 
 托管入口读取 CS 的 PORT、CS_DATABASE_URL、CS_PLATFORM_API_URL、CS_JWKS_URL、CS_PROJECT、CS_SERVICE、CS_ENVIRONMENT；业务配置／Secret 的 definition UUID 由安装工具解析并写入 Manifest。CS_SLOT 仅作展示，不作为执行授权。
 

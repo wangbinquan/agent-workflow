@@ -23,8 +23,6 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
-  readFileSync,
-  readdirSync,
   realpathSync,
   rmSync,
   statSync,
@@ -50,7 +48,7 @@ import {
   finishOperation,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import { parseFrontmatter, stringifyFrontmatter } from '@/util/frontmatter'
-import { realpathInside, realpathWriteInside, safeJoin } from '@/util/safePath'
+import { realpathWriteInside, safeJoin } from '@/util/safePath'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import {
   assertInitialResourceOwner,
@@ -61,7 +59,6 @@ import type { Actor } from '@/auth/actor'
 import {
   skillFilesAbs,
   skillFilesRel,
-  skillVersionAbs,
   skillRootAbs,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 import {
@@ -70,12 +67,36 @@ import {
 } from '@/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
 import { findAgentsReferencingIdInJsonColumn } from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
 import { isOwnerNameUniqueViolation, ownerScopedNameWhere } from '@/services/ownerScopedName'
+import type {
+  SkillContentReader,
+  SkillContentReference,
+} from '../../application/skills/contentReader'
+import {
+  createFileSkillContentReader,
+  resolveFileSkillReadRoot,
+} from '../local/fileSkillContentReader'
 
 type SkillRow = typeof skills.$inferSelect
 
 export interface SkillFsOptions {
   /** App home dir; managed skills live under `${appHome}/skills/{id}/files/`. */
   appHome: string
+  /** Selected content adapter; writes and version publication still use appHome. */
+  content?: SkillContentReader
+}
+
+export interface SkillContentReadOptions {
+  readonly content: SkillContentReader
+}
+
+function contentReaderFor(opts: SkillFsOptions | SkillContentReadOptions): SkillContentReader {
+  return 'appHome' in opts
+    ? (opts.content ?? createFileSkillContentReader(opts.appHome))
+    : opts.content
+}
+
+function contentReferenceOf(skill: Skill): SkillContentReference {
+  return { id: skill.id, name: skill.name, contentVersion: skill.contentVersion }
 }
 
 export interface SkillDeleteHooks {
@@ -126,9 +147,7 @@ export function skillRoot(skill: Skill, opts: SkillFsOptions): string {
  * with no snapshot yet.
  */
 export function skillReadRoot(skill: Skill, opts: SkillFsOptions): string {
-  const live = skillRoot(skill, opts)
-  const snapshot = skillVersionAbs(opts.appHome, skill.id, skill.contentVersion)
-  return existsSync(snapshot) ? snapshot : live
+  return resolveFileSkillReadRoot(opts.appHome, skill)
 }
 
 /**
@@ -531,7 +550,7 @@ export async function deleteSkill(
 
 export async function readSkillContent(
   db: ProviderNeutralDatabase,
-  opts: SkillFsOptions,
+  opts: SkillFsOptions | SkillContentReadOptions,
   skillId: string,
 ): Promise<SkillContent> {
   const skill = await getSkillById(db, skillId)
@@ -539,15 +558,7 @@ export async function readSkillContent(
   // RFC-170 (G1-1): read the SKILL.md body + sign the token from the AUTHORITATIVE
   // version snapshot, not live — so the returned content always matches the token's
   // contentVersion and a torn live dir can't corrupt the read.
-  const root = skillReadRoot(skill, opts)
-  const skillMdPath = join(root, 'SKILL.md')
-  if (!existsSync(skillMdPath)) {
-    throw new NotFoundError('skill-md-missing', `SKILL.md not found at ${skillMdPath}`)
-  }
-  // RFC-170 G3-1 (security): SKILL.md may be a symlink; contain it so a
-  // `SKILL.md -> ~/.ssh/id_rsa` link can't leak host files to a shared skill's
-  // readers (same fix as readSkillFile).
-  const raw = readFileSync(realpathInside(root, skillMdPath), 'utf-8')
+  const raw = await contentReaderFor(opts).readMain(contentReferenceOf(skill))
   const parsed = parseFrontmatter(raw)
   const { name: _ignoredName, description: descRaw, ...rest } = parsed.data
   // RFC-170 §2/T3 + re-review-3: emit the composite precondition token AND the DB
@@ -774,68 +785,26 @@ export async function saveSkillWithToken(
 
 export async function listSkillFiles(
   db: ProviderNeutralDatabase,
-  opts: SkillFsOptions,
+  opts: SkillFsOptions | SkillContentReadOptions,
   skillId: string,
 ): Promise<FileNode[]> {
   const skill = await getSkillById(db, skillId)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-170 (G1-1): the file tree reflects the AUTHORITATIVE snapshot, not live —
   // consistent with readSkillContent/readSkillFile.
-  const root = skillReadRoot(skill, opts)
-  if (!existsSync(root)) return []
-  return walkDir(root, '')
-}
-
-function walkDir(absRoot: string, relRoot: string): FileNode[] {
-  const out: FileNode[] = []
-  const entries = readdirSync(join(absRoot, relRoot), { withFileTypes: true })
-  for (const entry of entries) {
-    const childRel = relRoot ? `${relRoot}/${entry.name}` : entry.name
-    const abs = join(absRoot, childRel)
-    if (entry.isDirectory()) {
-      out.push({ path: childRel, type: 'dir' })
-      out.push(...walkDir(absRoot, childRel))
-    } else if (entry.isFile()) {
-      const st = statSync(abs)
-      out.push({
-        path: childRel,
-        type: 'file',
-        size: st.size,
-        modifiedAt: Math.floor(st.mtimeMs),
-      })
-    }
-    // Symlinks intentionally skipped in v1.
-  }
-  return out
+  return await contentReaderFor(opts).listFiles(contentReferenceOf(skill))
 }
 
 export async function readSkillFile(
   db: ProviderNeutralDatabase,
-  opts: SkillFsOptions,
+  opts: SkillFsOptions | SkillContentReadOptions,
   skillId: string,
   relPath: string,
 ): Promise<string> {
   const skill = await getSkillById(db, skillId)
   if (skill === null) throw new NotFoundError('skill-not-found', `skill '${skillId}' not found`)
   // RFC-170 (G1-1): read from the AUTHORITATIVE snapshot, not live.
-  const root = skillReadRoot(skill, opts)
-  const abs = safeJoin(root, relPath)
-  if (!existsSync(abs)) {
-    throw new NotFoundError(
-      'skill-file-not-found',
-      `file '${relPath}' not found in skill '${skill.name}'`,
-    )
-  }
-  // RFC-170 G3-1 (security): safeJoin does NOT resolve symlinks, but readFileSync
-  // follows them — a skill dir can hold a symlink pointing outside root (e.g.
-  // `secret -> ~/.ssh/id_rsa`), so a SHARED skill would leak host files to any
-  // authorized/public reader. realpathInside resolves + verifies containment,
-  // throwing path-traversal on an escaping link (internal symlinks still resolve).
-  const real = realpathInside(root, abs)
-  if (statSync(real).isDirectory()) {
-    throw new ValidationError('skill-file-is-dir', `'${relPath}' is a directory`)
-  }
-  return readFileSync(real, 'utf-8')
+  return await contentReaderFor(opts).readFile(contentReferenceOf(skill), relPath)
 }
 
 export async function writeSkillFile(

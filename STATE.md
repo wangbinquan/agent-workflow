@@ -8,7 +8,7 @@
 
 ## 2026-09-28 RFC-370 CrewStation 完整托管部署 —— In Progress
 
-用户已批准实现、部署和提交上库到远端。[RFC三件套](design/RFC-370-crewstation-hosted-deployment/proposal.md)按两阶段推进：A先补平台中立端口／local adapter并经AC00独立验收；B先M0必要能力实际部署，再M1任务闭环、M2/M3逐项接入执行／事件／恢复，M4完整收口。当前A-T1入口普查和A-T2配置／generation切面重构进行中：新增system-operations数据库配置端口及本地文件adapter，启动composition支持注入，原迁移恢复流程复用；generation验证已与文件adapter分离并发布；artifact运行时入口已发布；安装准备application及local adapter已发布；设置配置持久端口及HTTP应用编排已发布；无IO配置值规则已发布；六组HTTP路由查询已发布；本批继续文档／OIDC地址／MCP开关与完成态HTTP装配的配置查询接线，两provider共用原文件reader，回退／热读语义保持；具体检查／发布证据见plan实施日志。H1/H6尚未完成，其余切面待逐项收口；尚无CS adapter或aw部署。独立设计门工具不可用，未记PASS，不提前通过A-G。保留standalone及完整能力目标，B1～B4按实际能力增量闭合。
+用户已批准实现、部署和提交上库到远端。[RFC 三件套](design/RFC-370-crewstation-hosted-deployment/proposal.md)按两阶段推进：A 先补平台中立端口／local adapter并经 AC00 独立验收；B 先 M0 必要能力实际部署，再 M1 任务闭环、M2/M3 逐项接入执行／事件／恢复，M4 完整收口。已发布配置／generation／安装准备、HTTP／WS 身份、webhook 中立受理与配置、异步评审文稿等切面；本批继续 H6 技能正文／文件树／单文件异步读取与独立 file adapter，保留 AW metadata／token 和快照语义。写入／版本恢复／导入导出、H3～H7 全调用者及启动生命周期尚待收口；当前 start 已是前台运行，托管须替换的是宿主依赖。详细源码与发布记录见 RFC plan／seam-assessment。独立门工具不可用，未记 PASS；完整 CI 尚待通过，不提前通过 A-G。尚无 CS adapter 或 aw 在 CS 的实际部署，完整能力目标保持。
 
 ## 2026-09-23 RFC-369 node_run 旧代作废改由读侧推导 —— ✅ Done
 
