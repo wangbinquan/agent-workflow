@@ -13076,6 +13076,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/webhooks.ts#$file",
+      "fromPath": "packages/backend/src/routes/webhooks.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2709a2cc3d3ac3de16fa",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "integration",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/public/commands.ts#VerifiedWebhookIngressCommands",
+      "toPath": "packages/backend/src/modules/integration/public/commands.ts",
+      "toSymbol": "VerifiedWebhookIngressCommands",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/dispatcher.ts#$file",
       "fromPath": "packages/backend/src/modules/intent/application/dispatcher.ts",
       "fromSymbol": "$file",
@@ -24976,23 +24993,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/routes/webhooks.ts#$file",
-      "fromPath": "packages/backend/src/routes/webhooks.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:4c364070736149fa42f2",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "integration",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/public/events.ts#codeHostEventObservations",
-      "toPath": "packages/backend/src/modules/integration/public/events.ts",
-      "toSymbol": "codeHostEventObservations",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts",
       "fromSymbol": "$file",
@@ -25175,6 +25175,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#clarifyRounds",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "clarifyRounds",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts#$file",
+      "fromPath": "packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4d09d3b1b5ce5d32245e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "integration",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger",
+      "toPath": "packages/backend/src/util/log.ts",
+      "toSymbol": "createLogger",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -29953,6 +29970,23 @@
       "toPath": "packages/backend/src/services/maintenanceTicker.ts",
       "toSymbol": "MaintenanceTickerHandle",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/composition.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5c3514c0abdae3fa51f4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9-D",
+      "rule": "off-dag-offered",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/commands.ts#RuntimeProfileConfigurationCommands",
+      "toPath": "packages/backend/src/modules/runtime-management/public/commands.ts",
+      "toSymbol": "RuntimeProfileConfigurationCommands",
+      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
     },
     {
       "edgeKind": "type",
@@ -40446,23 +40480,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/routes/webhooks.ts#$file",
-      "fromPath": "packages/backend/src/routes/webhooks.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:7dab937fd3f997b7ab33",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "integration",
-      "removeAfterWave": "W4-B",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/public/mrTerminalControl.ts#MrTerminalControl",
-      "toPath": "packages/backend/src/modules/integration/public/mrTerminalControl.ts",
-      "toSymbol": "MrTerminalControl",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/inbound/directTaskInitiator.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/inbound/directTaskInitiator.ts",
       "fromSymbol": "$file",
@@ -41564,6 +41581,23 @@
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "NotFoundError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8103064784f25051afc4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookIngressTransport",
+      "toPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "toSymbol": "composeWebhookIngressTransport",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -50474,23 +50508,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/routes/webhooks.ts#$file",
-      "fromPath": "packages/backend/src/routes/webhooks.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:9de68c3177f179741095",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "integration",
-      "removeAfterWave": "W4-E9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition.ts#EventCenterModule",
-      "toPath": "packages/backend/src/modules/event-center/composition.ts",
-      "toSymbol": "EventCenterModule",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#$file",
@@ -57934,6 +57951,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts#developmentExecutionContractRegistrations",
       "toPath": "packages/backend/src/modules/development-automation/composition/employeeTypePackage.ts",
       "toSymbol": "developmentExecutionContractRegistrations",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b66bf354837960eb66bb",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookIngressTransport",
+      "toPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "toSymbol": "composeWebhookIngressTransport",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -69363,6 +69397,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#$file",
+      "fromPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d7c142454fa3eeec0a7e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "integration",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/webhook/dispatcherTypes.ts#WebhookDispatcher",
+      "toPath": "packages/backend/src/services/webhook/dispatcherTypes.ts",
+      "toSymbol": "WebhookDispatcher",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file",
       "fromPath": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "fromSymbol": "$file",
@@ -72385,6 +72436,23 @@
       "toPath": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
       "toSymbol": "createMcpTransactionLifecycle",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#$file",
+      "fromPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e0f1df263d0fa9c69524",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "integration",
+      "removeAfterWave": "W4-B",
+      "rule": "temporary-internal-debt",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition.ts#EventCenterModule",
+      "toPath": "packages/backend/src/modules/event-center/composition.ts",
+      "toSymbol": "EventCenterModule",
+      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
       "edgeKind": "type",
@@ -81261,6 +81329,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#$file",
+      "fromPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:fc9777c91a57be781d33",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "integration",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/secretBox.ts#SecretBox",
+      "toPath": "packages/backend/src/auth/secretBox.ts",
+      "toSymbol": "SecretBox",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -81994,6 +82079,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#$file",
+      "fromPath": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ff4294d0b41790d6db63",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "integration",
+      "removeAfterWave": "W4-B",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/webhook/dispatcherTypes.ts#supportsEventCenterCodeHostDelivery",
+      "toPath": "packages/backend/src/services/webhook/dispatcherTypes.ts",
+      "toSymbol": "supportsEventCenterCodeHostDelivery",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
@@ -82265,9 +82367,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4839,
+    "architectureExceptions": 4845,
     "implementationSccs": 0,
-    "observedEdges": 5446,
+    "observedEdges": 5453,
     "requiredPorts": 36,
     "targetEdges": 66
   },
@@ -96037,6 +96139,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/routes/webhooks.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/webhooks.ts#$file",
+      "id": "import:2709a2cc3d3ac3de16fa",
+      "owner": "integration",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/public/commands",
+      "syntax": "static-import",
+      "targetSymbol": "VerifiedWebhookIngressCommands",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/public/commands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/public/commands.ts#VerifiedWebhookIngressCommands"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "intent",
       "fromFile": "packages/backend/src/modules/intent/application/dispatcher.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/dispatcher.ts#$file",
@@ -108453,22 +108571,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/routes/webhooks.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/routes/webhooks.ts#$file",
-      "id": "import:4c364070736149fa42f2",
-      "owner": "integration",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/public/events",
-      "syntax": "static-import",
-      "targetSymbol": "codeHostEventObservations",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/public/events.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/public/events.ts#codeHostEventObservations"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sourceTerminationTarget.ts#$file",
@@ -108658,6 +108760,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#clarifyRounds"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "integration",
+      "fromFile": "packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts#$file",
+      "id": "import:4d09d3b1b5ce5d32245e",
+      "owner": "integration",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/log",
+      "syntax": "static-import",
+      "targetSymbol": "createLogger",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/log.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger"
     },
     {
       "edgeKind": "type",
@@ -113778,6 +113896,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/maintenanceTicker.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/maintenanceTicker.ts#MaintenanceTickerHandle"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/composition.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
+      "id": "import:5c3514c0abdae3fa51f4",
+      "owner": "system-operations",
+      "removeAfterWave": "W9-D",
+      "role": "off-dag-offered",
+      "specifier": "@/modules/runtime-management/public/commands",
+      "syntax": "static-import",
+      "targetSymbol": "RuntimeProfileConfigurationCommands",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/commands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/commands.ts#RuntimeProfileConfigurationCommands"
     },
     {
       "edgeKind": "type",
@@ -125093,22 +125227,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/routes/webhooks.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/routes/webhooks.ts#$file",
-      "id": "import:7dab937fd3f997b7ab33",
-      "owner": "integration",
-      "removeAfterWave": "W4-B",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/integration/public/mrTerminalControl",
-      "syntax": "static-import",
-      "targetSymbol": "MrTerminalControl",
-      "toContext": "integration",
-      "toFile": "packages/backend/src/modules/integration/public/mrTerminalControl.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/public/mrTerminalControl.ts#MrTerminalControl"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "digital-employee",
       "fromFile": "packages/backend/src/modules/digital-employee/application/runtimeService.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/application/runtimeService.ts#$file",
@@ -126210,6 +126328,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:8103064784f25051afc4",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/webhookIngress",
+      "syntax": "static-import",
+      "targetSymbol": "composeWebhookIngressTransport",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookIngressTransport"
     },
     {
       "edgeKind": "type",
@@ -135812,22 +135946,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#intentProvenance"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/routes/webhooks.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/routes/webhooks.ts#$file",
-      "id": "import:9de68c3177f179741095",
-      "owner": "integration",
-      "removeAfterWave": "W4-E9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/event-center/composition",
-      "syntax": "static-import",
-      "targetSymbol": "EventCenterModule",
-      "toContext": "event-center",
-      "toFile": "packages/backend/src/modules/event-center/composition.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition.ts#EventCenterModule"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts",
@@ -141844,6 +141962,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "integration",
+      "fromFile": "packages/backend/src/modules/integration/application/ports/verifiedWebhookIngress.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/application/ports/verifiedWebhookIngress.ts#$file",
+      "id": "import:b047b4cf8a2d37de6156",
+      "owner": "integration",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/event-center/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "EventObservationInput",
+      "toContext": "event-center",
+      "toFile": "packages/backend/src/modules/event-center/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/public/types.ts#EventObservationInput"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/workflowValidation.ts",
@@ -144002,6 +144136,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:b66bf354837960eb66bb",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/integration/composition/webhookIngress",
+      "syntax": "static-import",
+      "targetSymbol": "composeWebhookIngressTransport",
+      "toContext": "integration",
+      "toFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookIngressTransport"
     },
     {
       "edgeKind": "value",
@@ -155765,6 +155915,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "integration",
+      "fromFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#$file",
+      "id": "import:d7c142454fa3eeec0a7e",
+      "owner": "integration",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-outbound",
+      "specifier": "@/services/webhook/dispatcherTypes",
+      "syntax": "static-import",
+      "targetSymbol": "WebhookDispatcher",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/webhook/dispatcherTypes.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/webhook/dispatcherTypes.ts#WebhookDispatcher"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file",
@@ -159042,6 +159208,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "integration",
+      "fromFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#$file",
+      "id": "import:e0f1df263d0fa9c69524",
+      "owner": "integration",
+      "removeAfterWave": "W4-B",
+      "role": "temporary-internal-debt",
+      "specifier": "@/modules/event-center/composition",
+      "syntax": "static-import",
+      "targetSymbol": "EventCenterModule",
+      "toContext": "event-center",
+      "toFile": "packages/backend/src/modules/event-center/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition.ts#EventCenterModule"
     },
     {
       "edgeKind": "value",
@@ -168324,6 +168506,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "integration",
+      "fromFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#$file",
+      "id": "import:fc9777c91a57be781d33",
+      "owner": "integration",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/secretBox",
+      "syntax": "static-import",
+      "targetSymbol": "SecretBox",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/secretBox.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/secretBox.ts#SecretBox"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
@@ -169122,6 +169320,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "integration",
+      "fromFile": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#$file",
+      "id": "import:ff4294d0b41790d6db63",
+      "owner": "integration",
+      "removeAfterWave": "W4-B",
+      "role": "legacy-outbound",
+      "specifier": "@/services/webhook/dispatcherTypes",
+      "syntax": "static-import",
+      "targetSymbol": "supportsEventCenterCodeHostDelivery",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/webhook/dispatcherTypes.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/webhook/dispatcherTypes.ts#supportsEventCenterCodeHostDelivery"
     },
     {
       "edgeKind": "value",
@@ -170208,7 +170422,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6a4bb78757e69eec0a64682a8826a44c600378843813ec65a20eb974dde5a0f6",
+  "sourceDigest": "sha256:fa785b92ed6813ab3285262c054f978f974c63d7d0f39283b4bcad6239c66787",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

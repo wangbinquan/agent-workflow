@@ -1,3 +1,4 @@
+import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 // RFC-259 — GitHub 全链路端到端（proposal AC-13，镜像 rfc257-webhook-e2e）：
 // mock GitHub 的 HMAC 签名 POST 打进真 app（真三段式路由 + 真
 // createWebhookDispatcher），只在 launch 处注入 fake（落真 tasks 行）。
@@ -135,12 +136,15 @@ async function seedFixture(providerHarness: ProviderHarness) {
     deliveryConsumers: [createCodeHostWebhookDeliveryConsumer(db, dispatcher)],
   })
   const app = new Hono()
-  mountWebhookIngressRoutes(app, {
-    webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
-    secretBox: box,
-    digitalEmployeeEventCenter: eventCenter,
-    webhookDispatcher: dispatcher,
-  })
+  mountWebhookIngressRoutes(
+    app,
+    composeWebhookIngressTransport({
+      webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
+      secretBox: box,
+      digitalEmployeeEventCenter: eventCenter,
+      webhookDispatcher: dispatcher,
+    }),
+  )
   return { db, app, canceled, ownerId: owner.id }
 }
 

@@ -143,3 +143,11 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 
 - 第十批 `e62fe79be9fd0539549088d6351b4ae5cf25fb98` 已发布且远端同步，精确 SHA CI `36373218652` 已排队。同 SHA 自动 maintenance-soak `36373218651` 为单独工作流，不替代功能 CI。
 - 第九批 CI `36372660023` 类型检查发现测试的闭包写入不被 TypeScript 控制流识别，初值 sqlite 被错误用于后续 PostgreSQL 断言类型。修复为带 DatabaseConfig 类型的可变状态容器，保留真实双向持久化和切换时序断言；不改生产行为，原失败 run 不记成功。
+
+- 第九批测试类型修复 `784c083acba8c919cf27a1a3da932276e37e1415` 已发布，main／origin/main 同步；精确 SHA CI `36373395839` 已排队。该提交包含第十批 runtime 切面，正式功能结果仍待终态；未部署 CS、未通过 A-G。
+
+- A-T3／H8 第一批候选：直连 webhook 完成 provider 验签／归一化后，调用 integration-owned VerifiedWebhookIngressCommands；事务受理、终态唤醒、Event Center observation 发布、路由审计与重复投递修复从 HTTP 路由移入同一 application。SQLite／PG bootstrap 显式装配，缺失 dispatcher／secret／Event Center 时仍不挂载原入口；HTTP 层保留 body／provider／endpoint 解析及原状态码。没有 CS DTO 或生产 CS adapter。
+- H8 回归保留 GitLab／GitHub 双 provider HTTP 到业务链路，并增加无 HTTP 的应用测试：持久受理前不能发布、重复重发稳定 observation、插入后发布失败释放原 UUID、重复失败不覆盖历史、无规则与终态效果审计分支。W29 只重采两处入口 composition 摘要，原路由顺序和运行句柄保持；既有 observer nudge 的 void-promise 条目随源码迁移，未改变计数／判据。业务人工 replay 仍有单独语义，CS receipt／ACK和transport迁移留阶段 B，不将此批当 H8 完成。
+
+- 基线 `784c083ac` 的 CI `36373395839` macOS shard 3 检出 RuntimeProfileConfigurationCommands 没有生产 consumer：Settings 应用抽取后实际方法仍被调用，但 composition 只标了应用自有依赖形状。修复由 system-operations composition 显式绑定 runtime-management public 命令合同到 required port；保留依赖反转和原行为，不新增未消费合同豁免或业务层跨域绑定。原失败 run 不记成功。
+- H8 首批目标 TypeScript 格式／lint 通过，架构按实际 application/public/root 接线计数，未改扫描器和未消费合同规则；无本地功能测试，最终以本批 GitHub CI 为准。

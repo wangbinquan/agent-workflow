@@ -600,6 +600,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-370: Settings wiring uses the storage-neutral application, and six route
     // bundles share one live configuration query, including docs/OIDC/MCP. SQLite
     // constructs this reader in its outer root. Existing runtime handles stay identical.
+    // RFC-370 H8: webhook ingress now binds its verified application command in bootstrap.
     expect(digest(restored, pg)).toBe(
       // 2026-09-19（第二次重采）：三条被合一丢掉的装配步骤补回来——长驻协调器的运行期配置改成
       // 每次 drive 现读（`refreshLaunchConfig` / `currentRunConfig()` getter）、仓库准备重试把
@@ -638,7 +639,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 取消（`cause: { kind: 'resource-reaped', ...reason }`），状态与原因同一次写入落下；此前
       // 按 `user` 取消、事后改写原因，中间几秒数字员工会把超时误判成用户取消。装配图变的是这两格，
       // 判据在 `tests/rfc368-implementation-gate.test.ts`。
-      'b9bf31c35815b6e02d460fc5023c2177578358dce26c7338655979c2dd5c6e00',
+      '1783edbf137d9404b8a5f735bf30c8a2a8574bd3dac9de3ba9c253dc6b8d0c4e',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -703,7 +704,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
       // RFC-365: the SQLite root explicitly wires the two target providers, the event-only
       // delegated-context factory and the durable work-intent store.
-      '2dd3d75494ed77d96496fdc3d99d77a107a80eb15c1dfc188dbc86152a700538',
+      'a9417c174818200e13b3af2f428cb8e0dd7e67aabc8c91379244c529218609e6',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -810,6 +811,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-370: Settings wiring uses the storage-neutral application, and six route
     // bundles share one live configuration query, including docs/OIDC/MCP. SQLite
     // constructs this reader in its outer root. Existing runtime handles stay identical.
+    // RFC-370 H8: webhook ingress now binds its verified application command in bootstrap.
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
       // 2026-09-19（第二次重采）：三条被合一丢掉的装配步骤补回来——长驻协调器的运行期配置改成
       // 每次 drive 现读（`refreshLaunchConfig` / `currentRunConfig()` getter）、仓库准备重试把

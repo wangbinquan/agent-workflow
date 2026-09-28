@@ -1,3 +1,4 @@
+import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import { exampleProgramFixture } from './helpers/executionContractFixture'
 // RFC-310 Digital Employee OS system-mock journey.
 //
@@ -359,12 +360,15 @@ describeEachProvider('RFC-310 Digital Employee OS System Mock E2E（双引擎）
         },
       })
       const webhookApp = new Hono()
-      mountWebhookIngressRoutes(webhookApp, {
-        webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
-        secretBox: webhookSecretBox,
-        webhookDispatcher,
-        digitalEmployeeEventCenter: eventCenter,
-      })
+      mountWebhookIngressRoutes(
+        webhookApp,
+        composeWebhookIngressTransport({
+          webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
+          secretBox: webhookSecretBox,
+          webhookDispatcher,
+          digitalEmployeeEventCenter: eventCenter,
+        }),
+      )
       const adapterStore = createDevelopmentAdapterStore(db)
       const adapterIdentity = await createDevelopmentAdapter(
         adapterStore,

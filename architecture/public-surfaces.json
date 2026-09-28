@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 910,
+    "consumers": 912,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
-    "methods": 1075,
+    "methods": 1076,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20921,
-    "symbols": 1016
+    "recursiveFields": 20937,
+    "symbols": 1017
   },
   "entries": [
     {
@@ -32807,6 +32807,7 @@
         "import:1ee7bd03fabec51fdd22",
         "import:672a4e3d7be3a9592ba1",
         "import:7db2493a31e56d0426ba",
+        "import:b047b4cf8a2d37de6156",
         "import:c64e5a4e25ac3e23398c"
       ],
       "context": "event-center",
@@ -32968,6 +32969,12 @@
           "edgeId": "import:7db2493a31e56d0426ba",
           "file": "packages/backend/src/modules/digital-employee/application/runtimeService.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/digital-employee/application/runtimeService.ts#$file"
+        },
+        {
+          "context": "integration",
+          "edgeId": "import:b047b4cf8a2d37de6156",
+          "file": "packages/backend/src/modules/integration/application/ports/verifiedWebhookIngress.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/integration/application/ports/verifiedWebhookIngress.ts#$file"
         },
         {
           "context": "task-execution",
@@ -51730,6 +51737,155 @@
       "version": 1
     },
     {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:2709a2cc3d3ac3de16fa"
+      ],
+      "context": "integration",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:2709a2cc3d3ac3de16fa"
+          ],
+          "fieldPath": "$method:receive.$parameter:input.endpointId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2709a2cc3d3ac3de16fa"
+          ],
+          "fieldPath": "$method:receive.$parameter:input.event",
+          "type": "z.infer<typeof CodeHostEventSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:receive.$parameter:input.eventHeader.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:receive.$parameter:input.eventHeader.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:receive.$parameter:input.objectKind.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:receive.$parameter:input.objectKind.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2709a2cc3d3ac3de16fa"
+          ],
+          "fieldPath": "$method:receive.$parameter:input.rawBodyBytes",
+          "type": "Uint8Array"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2709a2cc3d3ac3de16fa"
+          ],
+          "fieldPath": "$method:receive.$parameter:input.rawBodyText",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:receive.$parameter:input.replay.rootDeliveryId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:receive.$parameter:input.replay.terminalRootRevision.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:receive.$parameter:input.replay.terminalRootRevision.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2709a2cc3d3ac3de16fa"
+          ],
+          "fieldPath": "$method:receive.$return.$variant:0.deliveryId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2709a2cc3d3ac3de16fa"
+          ],
+          "fieldPath": "$method:receive.$return.$variant:0.status",
+          "type": "'received'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:receive.$return.$variant:1.attemptCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2709a2cc3d3ac3de16fa"
+          ],
+          "fieldPath": "$method:receive.$return.$variant:1.deliveryId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2709a2cc3d3ac3de16fa"
+          ],
+          "fieldPath": "$method:receive.$return.$variant:1.status",
+          "type": "'duplicate'"
+        }
+      ],
+      "file": "packages/backend/src/modules/integration/public/commands.ts",
+      "id": "public:integration:commands:VerifiedWebhookIngressCommands",
+      "members": [
+        "receive"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:2709a2cc3d3ac3de16fa"
+          ],
+          "name": "receive",
+          "signatureDigest": "sha256:7ffa2b674ca1513b7cdb027470fa8e8642f1491aaf9b6531ac5985eca289ff90"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/public/commands.ts#VerifiedWebhookIngressCommands",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:2709a2cc3d3ac3de16fa",
+          "file": "packages/backend/src/routes/webhooks.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/webhooks.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:88f243f8a1f6753cb4a19786ea6e89c3ea4e519a823b7bb15aa7e4cc1f406a87",
+      "status": "target-context-current-surface",
+      "symbol": "VerifiedWebhookIngressCommands",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [
+        "Uint8Array",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
       "authority": "none",
       "budget": {
         "maxMethods": 5,
@@ -52135,7 +52291,6 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:4c364070736149fa42f2",
         "import:8cfbff791954b26fe76b"
       ],
       "context": "integration",
@@ -52145,7 +52300,6 @@
       "fields": [
         {
           "consumerEdgeIds": [
-            "import:4c364070736149fa42f2",
             "import:8cfbff791954b26fe76b"
           ],
           "fieldPath": "$call.$parameter:input.deliveryId",
@@ -52153,7 +52307,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:4c364070736149fa42f2",
             "import:8cfbff791954b26fe76b"
           ],
           "fieldPath": "$call.$parameter:input.endpointId",
@@ -52161,7 +52314,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:4c364070736149fa42f2",
             "import:8cfbff791954b26fe76b"
           ],
           "fieldPath": "$call.$parameter:input.event",
@@ -52169,7 +52321,6 @@
         },
         {
           "consumerEdgeIds": [
-            "import:4c364070736149fa42f2",
             "import:8cfbff791954b26fe76b"
           ],
           "fieldPath": "$call.$parameter:input.occurredAt",
@@ -52193,12 +52344,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/public/events.ts#codeHostEventObservations",
       "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:4c364070736149fa42f2",
-          "file": "packages/backend/src/routes/webhooks.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/webhooks.ts#$file"
-        },
         {
           "context": "legacy",
           "edgeId": "import:8cfbff791954b26fe76b",
@@ -118247,7 +118392,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:5c3514c0abdae3fa51f4"
+      ],
       "context": "runtime-management",
       "dataClass": "metadata",
       "direction": "offered",
@@ -118308,7 +118455,14 @@
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/commands.ts#RuntimeProfileConfigurationCommands",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "system-operations",
+          "edgeId": "import:5c3514c0abdae3fa51f4",
+          "file": "packages/backend/src/modules/system-operations/composition.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
@@ -165632,7 +165786,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6a4bb78757e69eec0a64682a8826a44c600378843813ec65a20eb974dde5a0f6",
+  "sourceDigest": "sha256:fa785b92ed6813ab3285262c054f978f974c63d7d0f39283b4bcad6239c66787",
   "targetContexts": [
     "collaboration",
     "development-automation",

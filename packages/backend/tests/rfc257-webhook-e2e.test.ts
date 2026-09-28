@@ -1,3 +1,4 @@
+import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 // RFC-257/RFC-310 全链路端到端：HTTP POST → EventRecord → per-rule Delivery
 // → source-neutral WorkStart → 真 dispatcher，只在最终 launch 处注入 fake。
 //
@@ -191,13 +192,16 @@ async function seedFixture(providerHarness: ProviderHarness) {
     deliveryConsumers: [createCodeHostWebhookDeliveryConsumer(db, dispatcher)],
   })
   const app = new Hono()
-  mountWebhookIngressRoutes(app, {
-    webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
-    secretBox: box,
-    digitalEmployeeEventCenter: eventCenter,
-    webhookDispatcher: dispatcher,
-    webhookTerminalControl: terminalControl,
-  })
+  mountWebhookIngressRoutes(
+    app,
+    composeWebhookIngressTransport({
+      webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
+      secretBox: box,
+      digitalEmployeeEventCenter: eventCenter,
+      webhookDispatcher: dispatcher,
+      webhookTerminalControl: terminalControl,
+    }),
+  )
   return { db, app, canceled, ownerId: owner.id, terminalControl, failLaunchNames, workflowId }
 }
 

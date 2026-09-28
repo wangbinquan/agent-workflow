@@ -1,3 +1,4 @@
+import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import {
   composeFileApplicationConfiguration,
@@ -2404,7 +2405,8 @@ export function composeSqliteApplicationDeps(
       health: (app: Hono) =>
         mountHealthRoutes(app, effectiveDeps, identityAccess.diagnostics, healthDatabase),
       wellKnown: (app: Hono) => mountWellKnownRoutes(app, { configuration }),
-      webhookIngress: (app: Hono) => mountWebhookIngressRoutes(app, effectiveDeps),
+      webhookIngress: (app: Hono) =>
+        mountWebhookIngressRoutes(app, composeWebhookIngressTransport(effectiveDeps)),
     }),
     apiRoutes: apiComposition.apiRoutes,
   })

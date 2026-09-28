@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1849,
+    "backendFiles": 1851,
     "frontendFiles": 622,
     "legacyFiles": 550,
-    "moduleFiles": 1299,
-    "productionFiles": 2626,
+    "moduleFiles": 1301,
+    "productionFiles": 2628,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25034
+    "symbolsIncludingFileRoots": 25041
   },
   "entries": [
     {
@@ -57867,6 +57867,30 @@
       "currentContext": "integration",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/integration/application/ports/verifiedWebhookIngress.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/ports/verifiedWebhookIngress.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/integration/application/ports/verifiedWebhookIngress.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/ports/verifiedWebhookIngress.ts#VerifiedWebhookIngressDependencies",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "VerifiedWebhookIngressDependencies",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/integration/application/ports/webhookDeliveryPersistence.ts",
       "id": "owner:packages/backend/src/modules/integration/application/ports/webhookDeliveryPersistence.ts#$file",
       "removeAfterWave": null,
@@ -58340,6 +58364,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "RepositoryEndpointFetch",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts#createVerifiedWebhookIngress",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createVerifiedWebhookIngress",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts#log",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "log",
       "targetContext": "integration",
       "targetLayer": "application"
     },
@@ -59408,6 +59468,18 @@
       "removeAfterWave": "W4-B",
       "status": "current-module",
       "symbol": "composeWebhookIngressPersistenceFor",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/integration/composition/webhookIngress.ts",
+      "id": "owner:packages/backend/src/modules/integration/composition/webhookIngress.ts#composeWebhookIngressTransport",
+      "removeAfterWave": "W4-B",
+      "status": "current-module",
+      "symbol": "composeWebhookIngressTransport",
       "targetContext": "integration",
       "targetLayer": "application"
     },
@@ -61425,6 +61497,19 @@
       "signatureDigest": "sha256:dffb1e4f541bc031d6b2e28dcacda0bae33820f9e2286172af32237490690394",
       "status": "current-module",
       "symbol": "IntegrationMaintenanceCommands",
+      "targetContext": "integration",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/integration/public/commands.ts",
+      "id": "owner:packages/backend/src/modules/integration/public/commands.ts#VerifiedWebhookIngressCommands",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:88f243f8a1f6753cb4a19786ea6e89c3ea4e519a823b7bb15aa7e4cc1f406a87",
+      "status": "current-module",
+      "symbol": "VerifiedWebhookIngressCommands",
       "targetContext": "integration",
       "targetLayer": "public"
     },
@@ -301131,5 +301216,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6a4bb78757e69eec0a64682a8826a44c600378843813ec65a20eb974dde5a0f6"
+  "sourceDigest": "sha256:fa785b92ed6813ab3285262c054f978f974c63d7d0f39283b4bcad6239c66787"
 }

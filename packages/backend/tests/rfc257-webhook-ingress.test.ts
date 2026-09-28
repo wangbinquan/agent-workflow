@@ -1,3 +1,4 @@
+import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 // RFC-257 T5 — 入站端点集成锁：状态码语义矩阵逐行（design §3.3 / AC-1..5）+
 // 三段式（响应先于分发完成返回）+ 去重（AC-3 含 rejected 后重投可落地）+
 // 限流 fake clock + 未认证可达（本文件所有请求都不带任何平台凭据——路由在
@@ -101,12 +102,15 @@ async function harness(opts?: {
         : [createCodeHostWebhookDeliveryConsumer(db, dispatcher)],
     }))
   const app = new Hono()
-  mountWebhookIngressRoutes(app, {
-    webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
-    secretBox: box,
-    digitalEmployeeEventCenter: eventCenter,
-    ...(opts?.omitDispatcher ? {} : { webhookDispatcher: dispatcher }),
-  })
+  mountWebhookIngressRoutes(
+    app,
+    composeWebhookIngressTransport({
+      webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
+      secretBox: box,
+      digitalEmployeeEventCenter: eventCenter,
+      ...(opts?.omitDispatcher ? {} : { webhookDispatcher: dispatcher }),
+    }),
+  )
   return { db, app, calls: fake.calls }
 }
 
@@ -433,7 +437,7 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
         const app = new Hono()
         mountWebhookIngressRoutes(
           app,
-          {
+          composeWebhookIngressTransport({
             webhookIngressPersistence: composeWebhookIngressPersistenceFor(db),
             secretBox: box,
             webhookDispatcher: fake.dispatcher,
@@ -459,7 +463,7 @@ describeEachProvider('RFC-257 T5 · webhook 入站（双引擎）', (providerHar
                 },
               },
             } as unknown as EventCenterModule,
-          },
+          }),
           { limiters },
         )
         for (let i = 0; i < 300; i++) {

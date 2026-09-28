@@ -1,3 +1,4 @@
+import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import {
   composeFileApplicationConfiguration,
   composeFileApplicationConfigurationQueries,
@@ -1889,7 +1890,7 @@ export async function composePostgresqlApplication(
       database: core.healthDatabase,
     }),
     documentation: Object.freeze({ configuration }),
-    webhookIngress: Object.freeze({
+    webhookIngress: composeWebhookIngressTransport({
       webhookIngressPersistence: composeWebhookIngressPersistenceFor(input.db),
       secretBox: input.secretBox,
       digitalEmployeeEventCenter: eventCenter,

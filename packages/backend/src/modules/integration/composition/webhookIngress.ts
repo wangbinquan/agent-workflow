@@ -1,3 +1,11 @@
+import type { SecretBox } from '@/auth/secretBox'
+import type { EventCenterModule } from '@/modules/event-center/composition'
+import type { MrTerminalControl } from '../public/mrTerminalControl'
+import {
+  supportsEventCenterCodeHostDelivery,
+  type WebhookDispatcher,
+} from '@/services/webhook/dispatcherTypes'
+import { createVerifiedWebhookIngress } from '../application/verifiedWebhookIngress'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   AcceptedVerifiedDelivery,
@@ -47,5 +55,42 @@ export function composeWebhookDeliveryRuntimeFor(
   return Object.freeze({
     ...ingress,
     queries: createWebhookDeliveryQueries(db),
+  })
+}
+
+/** Bootstrap binds the existing transport availability gate and downstream workers. */
+export function composeWebhookIngressTransport(input: {
+  readonly webhookIngressPersistence: WebhookIngressPersistence
+  readonly secretBox?: SecretBox
+  readonly digitalEmployeeEventCenter?: EventCenterModule
+  readonly webhookDispatcher?: WebhookDispatcher
+  readonly webhookTerminalControl?: MrTerminalControl
+}) {
+  const eventCenter = input.digitalEmployeeEventCenter
+  const enabled =
+    !!input.secretBox &&
+    !!input.webhookDispatcher &&
+    supportsEventCenterCodeHostDelivery(input.webhookDispatcher) &&
+    eventCenter !== undefined
+  return Object.freeze({
+    webhookIngressPersistence: input.webhookIngressPersistence,
+    secretBox: input.secretBox,
+    verifiedIngress:
+      !enabled || eventCenter === undefined
+        ? undefined
+        : createVerifiedWebhookIngress({
+            persistence: {
+              accept: (command) => input.webhookIngressPersistence.acceptVerifiedDelivery(command),
+            },
+            audit: input.webhookIngressPersistence.deliveries,
+            events: {
+              observe: async (observation) => await eventCenter.commands.observe(observation),
+              notify: (deliveryId) => eventCenter.worker.runOneNotification(deliveryId),
+              nudge: () =>
+                eventCenter.observerControl.nudgeSource({ id: 'code-host.activity', revision: 1 }),
+            },
+            wakeTerminalControl: (effectId) => input.webhookTerminalControl?.wake(effectId),
+            now: () => Date.now(),
+          }),
   })
 }

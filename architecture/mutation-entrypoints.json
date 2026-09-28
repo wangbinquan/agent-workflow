@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1735,
+    "entries": 1736,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -10498,6 +10498,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/integration/application/repositoryEndpointDiscovery.ts#createRepositoryEndpointDiscovery",
       "symbol": "createRepositoryEndpointDiscovery",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts#createVerifiedWebhookIngress",
+      "missingControls": [
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/integration/application/verifiedWebhookIngress.ts#createVerifiedWebhookIngress",
+      "symbol": "createVerifiedWebhookIngress",
       "targetContext": "integration",
       "targetLayer": "application"
     },
@@ -41466,7 +41489,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6a4bb78757e69eec0a64682a8826a44c600378843813ec65a20eb974dde5a0f6",
+  "sourceDigest": "sha256:fa785b92ed6813ab3285262c054f978f974c63d7d0f39283b4bcad6239c66787",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

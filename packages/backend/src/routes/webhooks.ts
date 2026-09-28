@@ -17,24 +17,13 @@
 import type { Hono } from 'hono'
 
 import type { SecretBox } from '@/auth/secretBox'
-import type { EventCenterModule } from '@/modules/event-center/composition'
-import type { MrTerminalControl } from '@/modules/integration/public/mrTerminalControl'
 import { registerRoute } from '@/routes/registry'
 import { CODE_HOST_ADAPTERS, type HeaderBag } from '@/services/webhook/codeHostAdapter'
-import {
-  insertDelivery,
-  markDelivery,
-  touchEndpointLastDelivery,
-  type InsertDeliveryInput,
-} from '@/services/webhook/deliveryStore'
+import { insertDelivery, type InsertDeliveryInput } from '@/services/webhook/deliveryStore'
 import { streamKeyOf } from '@/services/webhook/matching'
 import { createWebhookRateLimiters, type WebhookRateLimiters } from '@/services/webhook/rateLimiter'
 import { createLogger } from '@/util/log'
-import { codeHostEventObservations } from '@/modules/integration/public/events'
-import {
-  supportsEventCenterCodeHostDelivery,
-  type WebhookDispatcher,
-} from '@/services/webhook/dispatcherTypes'
+import type { VerifiedWebhookIngressCommands } from '@/modules/integration/public/commands'
 import type { WebhookIngressPersistence } from '@/modules/integration/composition/webhookIngress'
 
 const log = createLogger('webhook-ingress')
@@ -75,20 +64,13 @@ export function mountWebhookIngressRoutes(
   deps: {
     readonly webhookIngressPersistence: WebhookIngressPersistence
     readonly secretBox?: SecretBox
-    readonly digitalEmployeeEventCenter?: EventCenterModule
-    readonly webhookDispatcher?: WebhookDispatcher
-    readonly webhookTerminalControl?: MrTerminalControl
+    readonly verifiedIngress?: VerifiedWebhookIngressCommands
   },
   opts?: { limiters?: WebhookRateLimiters },
 ): void {
   const secretBox = deps.secretBox
-  const eventCenter = deps.digitalEmployeeEventCenter
-  if (
-    !secretBox ||
-    !deps.webhookDispatcher ||
-    !supportsEventCenterCodeHostDelivery(deps.webhookDispatcher) ||
-    eventCenter === undefined
-  ) {
+  const ingress = deps.verifiedIngress
+  if (!secretBox || ingress === undefined) {
     // 对齐 OIDC 的自我跳过惯例（server.ts:330）：装配缺件时不挂载入站面，
     // 管理面（批次二）会以显式错误提示，而不是留一个必 500 的公开路由。
     return
@@ -215,7 +197,7 @@ export function mountWebhookIngressRoutes(
         return c.json({ deliveryId: insert.deliveryId, status: 'ignored' })
       }
 
-      const insert = await persistence.acceptVerifiedDelivery({
+      const receipt = await ingress.receive({
         endpointId: endpoint.id,
         event,
         rawBodyBytes: rawBody.bytes,
@@ -223,91 +205,7 @@ export function mountWebhookIngressRoutes(
         eventHeader: baseRow.gitlabEventHeader ?? null,
         objectKind: objectKind || null,
       })
-      const deliveryId = insert.deliveryId
-      deps.webhookTerminalControl?.wake(insert.effectId)
-      // The verified adapter is now only a publisher. Both exact Digital
-      // Employee Attention and filtered start rules are materialized by the
-      // Event Center; ingress never calls a task launcher directly.
-      let published: { deliveryCount: number; deliveryIds: readonly string[] }
-      try {
-        const occurredAt = Date.now()
-        const receipts = await Promise.all(
-          codeHostEventObservations({
-            endpointId: endpoint.id,
-            deliveryId,
-            event,
-            occurredAt,
-          }).map((observation) => eventCenter.commands.observe(observation)),
-        )
-        published = {
-          deliveryCount: receipts.reduce((total, receipt) => total + receipt.deliveryCount, 0),
-          deliveryIds: receipts.flatMap((receipt) => receipt.deliveryIds),
-        }
-      } catch (error) {
-        // Failed/rejected rows do not occupy the provider UUID dedupe index.
-        // Therefore a code-host resend can repair a publish failure instead of
-        // being acknowledged as a duplicate that never reached Event Center.
-        if (insert.kind === 'inserted') {
-          await markDelivery(persistence.deliveries, deliveryId, 'failed', 'internal-error').catch(
-            () => {},
-          )
-        }
-        throw error
-      }
-      for (const eventDeliveryId of published.deliveryIds) {
-        void eventCenter.worker.runOneNotification(eventDeliveryId).catch((error: unknown) => {
-          log.error('event notification delivery failed', {
-            deliveryId,
-            eventDeliveryId,
-            error: String(error),
-          })
-        })
-      }
-      if (published.deliveryCount > 0) {
-        // The legacy webhook row is now only an ingress/routing audit. Per-rule
-        // success, retry, and dead-letter state belongs to independent Event
-        // Deliveries and must never overwrite this shared row.
-        await markDelivery(persistence.deliveries, deliveryId, 'matched')
-      } else if (insert.effectId !== null) {
-        await markDelivery(
-          persistence.deliveries,
-          deliveryId,
-          'matched',
-          'terminal-control-accepted',
-        )
-      } else {
-        await markDelivery(persistence.deliveries, deliveryId, 'ignored', 'no-trigger-matched')
-      }
-      if (insert.kind === 'duplicate') {
-        // Re-publish is idempotent by provider UUID and also nudges any durable
-        // Event Delivery left pending by a response loss or process restart.
-        // Re-applying the routing audit repairs a prior response/status-write
-        // failure without changing per-subscriber delivery state.
-        return c.json({
-          deliveryId,
-          status: 'duplicate',
-          attemptCount: insert.attemptCount,
-        })
-      }
-      // Transitional authoritative-state observers retain a nudge: this does
-      // not dispatch the Webhook; it merely advances a subscribed active source.
-      if (event.mrIid !== undefined) {
-        try {
-          void deps.digitalEmployeeEventCenter?.observerControl.nudgeSource({
-            id: 'code-host.activity',
-            revision: 1,
-          })
-        } catch (err) {
-          log.warn('digital employee event observer nudge failed', {
-            deliveryId,
-            error: String(err),
-          })
-        }
-      }
-      void touchEndpointLastDelivery(persistence.deliveries, endpoint.id, Date.now()).catch(
-        () => {},
-      )
-      return c.json({ deliveryId, status: 'received' })
+      return c.json(receipt)
     },
   )
 }

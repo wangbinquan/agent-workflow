@@ -1,3 +1,4 @@
+import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 // RFC-359 AC11: the original HTTP transport around the real measured owner graph.
@@ -174,7 +175,11 @@ export async function createProductionPerformanceApplication(
         mountWellKnownRoutes(app, {
           configuration: composeFileApplicationConfigurationQueries(configPath),
         }),
-      webhookIngress: (app) => mountWebhookIngressRoutes(app, { webhookIngressPersistence }),
+      webhookIngress: (app) =>
+        mountWebhookIngressRoutes(
+          app,
+          composeWebhookIngressTransport({ webhookIngressPersistence }),
+        ),
     },
     mountApi(app) {
       // This is the relative order in server.mountApiRoutes.
