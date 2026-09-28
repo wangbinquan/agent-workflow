@@ -126,3 +126,8 @@
 - 独立复核发现首条 invalid-final 或基线超限证据可能成为后续缺失桶的继承来源，导致未知被记为零或错误已知量。首次诊断现仅保留身份，四桶可复用量均为 null；已有合法量仍保留。对应 CS 反例先红后绿，AW 增加同类领域回归及 SQLite/PostgreSQL 重开 store、倒序交付对拍，独立静态功能复核 PASS。
 - 05b6b8dac 的 hosted CI 指出 RunTaskOptions 子任务继承清单漏了必填 observationInvocations、commit/merge 旧源码锁的 2,000 字符窗口截断了仍存在的 signal，以及 RFC-294 设计 DAG 未同步公开参与者依赖。分别登记为 dropped-registered（bootstrap 重新注入）、按完整 AST 调用检查信号和补齐 TE → RO，未缩小原功能断言。
 - 本地仅执行本批文件格式与 lint、canonical artifacts 生成；未运行 AW 测试或服务。上一批 CI 尚未整体通过，Static scans 不在本任务检查范围，未读取其日志。真实用量摄取、CS 同步、正式查询/页面和双部署验收继续实施。
+
+
+### 批次 7 的 canonical provenance 补正
+
+6aeb271f6 的 hosted CI 中，Lint/Typecheck 与已结束的架构 exact-projection 断言通过；macOS 6/6 分片指出四份治理产物沿用了生成前的 contentDigest。现仅按现有 withArtifactProvenance 重新生成四份内容摘要，并将对照祖先设为 6aeb271f6。后续 canonical 生成必须同时传 `--write --snapshot-sha HEAD`，不能只更新投影而保留旧摘要。没有修改业务代码或放宽测试，AW 本地仍未运行测试。
