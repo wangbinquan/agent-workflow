@@ -846,8 +846,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5432,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5440,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2：六组 HTTP 路由改消费 system-operations 的 ApplicationConfigurationQueries，SQLite／PG bootstrap 各新增一个查询装配引用；5432→5440，全部为 exact public／composition 边。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +870,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4825,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4833,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2：六组 legacy HTTP 路由消费配置 public query，两个 legacy bootstrap 引用文件查询 composition，按现 census 的 legacy-inbound 判据逐边登记；4825→4833。应用层无新 off-dag offered 依赖；不改变扫描器或 W9 完成判据。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -881,8 +887,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1015,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1016,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2：新增按需配置读取合同 ApplicationConfigurationQueries，1015→1016；六组路由实际消费，SQLite／PG bootstrap 接回现文件持久 adapter。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -902,12 +911,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25027,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25029,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2：配置查询 public 合同和文件查询 composition 各新增一个符号；25027→25029，无新增文件级运行机制。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2f53ceec8aef480f544f632daaad236305deb24e60d68f162ec3f0d8cf436034",
+    "sourceDigest": "sha256:e0d712df0ff7866b3146251ef9dd32a1729b469ff123a977e33b87f809391416",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +932,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d725f7bda26627e944ea7de82308d968f6d5cbab",
-    "contentDigest": "sha256:04a51fd1380d82804e86b7fe22e4078ab606ade4078f8cde37cb8f74fec15890",
+    "currentSnapshotSha": "93a84cd1d277fa4a4cecd5d2e1458c8506039fcb",
+    "contentDigest": "sha256:52f0a917b17b752c3eee4ea6b689ab3f3dd333f110d23d9105d137e607d793a1",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

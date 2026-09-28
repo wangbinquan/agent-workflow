@@ -1,4 +1,7 @@
-import { composeFileApplicationConfiguration } from '@/modules/system-operations/composition'
+import {
+  composeFileApplicationConfiguration,
+  composeFileApplicationConfigurationQueries,
+} from '@/modules/system-operations/composition'
 import type { ConfigConcurrencyHotApplyInput } from '@/modules/system-operations/public/commands'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
@@ -1112,8 +1115,9 @@ export async function composePostgresqlApplication(
 
   const codeWorkspace = composeLegacyCodeReadProviders(input.db).workspace
   const collaborationTaskAccess = createPostgresqlCollaborationTaskAccessPort(input.db)
+  const configuration = composeFileApplicationConfigurationQueries(input.configPath)
   const taskRoutes = Object.freeze({
-    configPath: input.configPath,
+    configuration,
     operations: taskExecutionProvider.routes.tasks,
     workspaceQueries: composeTaskWorkspaceQueries({
       load: taskExecutionProvider.routes.tasks.get,
@@ -1936,12 +1940,12 @@ export async function composePostgresqlApplication(
       }),
     }),
     maintenance: Object.freeze({
-      configPath: input.configPath,
+      configuration,
       maintenanceStatus: input.maintenanceStatus,
       databaseTelemetry: input.provider.telemetry,
     }),
     daemon: Object.freeze({ daemonInfoPath: input.daemonInfoPath }),
-    plantuml: Object.freeze({ configPath: input.configPath }),
+    plantuml: Object.freeze({ configuration }),
     runtime: runtimeManagement.models,
     runtimes: runtimeManagement.runtimes,
     overview: Object.freeze({
@@ -1977,11 +1981,11 @@ export async function composePostgresqlApplication(
     repositories: Object.freeze({
       store: core.repositoryWorkspaceStore,
       cached: Object.freeze({
-        configPath: input.configPath,
+        configuration,
         appHome: input.appHome,
         secretBox: input.secretBox,
       }),
-      groups: Object.freeze({ configPath: input.configPath }),
+      groups: Object.freeze({ configuration }),
     }),
     workflows: Object.freeze({
       runtime:
@@ -2017,7 +2021,7 @@ export async function composePostgresqlApplication(
     tasks: taskRoutes,
     catalog: taskCatalog,
     archive: Object.freeze({
-      configPath: input.configPath,
+      configuration,
       taskArchiveMaintenance: taskExecutionProvider.archive,
     }),
     portArtifacts: Object.freeze({

@@ -18,7 +18,7 @@ import {
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
-import { loadConfig } from '@/config'
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { registerRoute } from '@/routes/registry'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
@@ -35,7 +35,7 @@ import { ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
 
 export interface RepoGroupRouteDependencies {
-  readonly configPath: string
+  readonly configuration: ApplicationConfigurationQueries
 }
 
 function assertNoRetiredMembers(raw: unknown): void {
@@ -58,8 +58,8 @@ export function mountRepoGroupRoutes(
   store: RepositoryWorkspaceStore,
 ): void {
   /** 建组 / 改组共用：URL→id 的现场导入要走缓存服务，超时沿用 git clone 配置。 */
-  const cacheDeps = () => {
-    const cfg = loadConfig(deps.configPath)
+  const cacheDeps = async () => {
+    const cfg = await deps.configuration.read()
     return {
       store,
       ...(cfg.gitCloneTimeoutMs ? { cloneTimeoutMs: cfg.gitCloneTimeoutMs } : {}),
@@ -97,7 +97,11 @@ export function mountRepoGroupRoutes(
         })
       }
       const actor = actorOf(c)
-      const group = await createRepoGroup({ store, cache: cacheDeps() }, parsed.data, actor.user.id)
+      const group = await createRepoGroup(
+        { store, cache: await cacheDeps() },
+        parsed.data,
+        actor.user.id,
+      )
       return c.json(group, 201)
     },
   )
@@ -178,7 +182,7 @@ export function mountRepoGroupRoutes(
       // 服务层那道 409 永远不会触发（实现门 P1）。
       const { expectedVersion, ...body } = parsed.data
       const group = await updateRepoGroup(
-        { store, cache: cacheDeps() },
+        { store, cache: await cacheDeps() },
         c.req.param('id'),
         body,
         expectedVersion,

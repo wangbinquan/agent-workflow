@@ -17,13 +17,13 @@
 //                              `error` reachable on the browser)
 
 import type { Hono } from 'hono'
-import { loadConfig } from '@/config'
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { registerRoute } from '@/routes/registry'
 import { PLANTUML_SOURCE_MAX, hostOf, renderPlantuml } from '@/services/plantuml'
 import { DomainError } from '@/util/errors'
 
 export interface PlantumlRouteDependencies {
-  readonly configPath: string
+  readonly configuration: ApplicationConfigurationQueries
 }
 
 export function mountPlantumlRoutes(app: Hono, deps: PlantumlRouteDependencies): void {
@@ -61,7 +61,7 @@ export function mountPlantumlRoutes(app: Hono, deps: PlantumlRouteDependencies):
           413,
         )
       }
-      const cfg = loadConfig(deps.configPath)
+      const cfg = await deps.configuration.read()
       const endpoint = (cfg.plantumlEndpoint ?? '').trim()
       if (endpoint.length === 0) {
         return c.json({ unconfigured: true })

@@ -406,7 +406,9 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     const tasksRoute = SRC('routes/tasks.ts')
     const fusionsRoute = SRC('modules/knowledge-evolution/inbound/fusionRoutes.ts')
     expect(tasksRoute).not.toContain('resolveOpencodeCmd')
-    expect(tasksRoute).toContain('resolveStructuralDeepConfig(configPath: string)')
+    expect(tasksRoute).toMatch(
+      /resolveStructuralDeepConfig\(\s*configuration: ApplicationConfigurationQueries,/,
+    )
     expect(fusionsRoute).not.toContain('resolveOpencodeCmd')
     expect(fusionsRoute).toContain('configPath: deps.configPath')
     for (const f of ['clarify', 'taskQuestions', 'reviews']) {

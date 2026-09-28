@@ -6,7 +6,7 @@
     "moduleFiles": 1297,
     "productionFiles": 2624,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25027
+    "symbolsIncludingFileRoots": 25029
   },
   "entries": [
     {
@@ -112309,6 +112309,18 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/system-operations/composition.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition.ts#composeFileApplicationConfigurationQueries",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeFileApplicationConfigurationQueries",
+      "targetContext": "system-operations",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition.ts",
       "id": "owner:packages/backend/src/modules/system-operations/composition.ts#composeLocalSystemOperations",
       "removeAfterWave": null,
       "status": "current-module",
@@ -115364,6 +115376,19 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/queries.ts#ApplicationConfigurationQueries",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:4e3cd815b4980755f9f87c0ab4aacf2f157195375a8442f2d9a2a528d0063fe1",
+      "status": "current-module",
+      "symbol": "ApplicationConfigurationQueries",
       "targetContext": "system-operations",
       "targetLayer": "public"
     },
@@ -301046,5 +301071,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2f53ceec8aef480f544f632daaad236305deb24e60d68f162ec3f0d8cf436034"
+  "sourceDigest": "sha256:e0d712df0ff7866b3146251ef9dd32a1729b469ff123a977e33b87f809391416"
 }

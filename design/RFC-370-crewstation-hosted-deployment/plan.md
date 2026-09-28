@@ -118,3 +118,7 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 第六批候选检查：原 merge helper 段（仅两个导出标记）、原子写入段及 RFC-276 文件迁移段与第五批逐字核对一致；目标格式／lint 通过，未本地跑测试。架构仅 owner 分母 +4，其余本批无增长，移除第五批已消费增长声明。
 
 - 第六批 `d725f7bda26627e944ea7de82308d968f6d5cbab` 已发布，精确 SHA CI `36370688213` 已排队。前一批 CI `36370237803` 的 typecheck 检出 shared 未导出 `RuntimeKind`；修复为消费现有 `RuntimeStatusEntry['protocol']`，不新增协议枚举或跨域依赖。此修复仅类型引用，退役第六批已消费的 owner 增长声明；等待后继精确 SHA CI，不将原失败记成功。
+
+- 类型修复 `93a84cd1d277fa4a4cecd5d2e1458c8506039fcb` 已发布，精确 SHA CI `36370857680` 进行中。
+- A-T2 第七批候选：新增配置查询 public 合同，维护状态、PlantUML、仓库缓存／组、任务详情和归档六组 HTTP 路由移除配置文件读取，支持异步按需查询。SQLite／PG bootstrap 分别装配一个原文件 reader，保持热读取及原回退；任务深度配置的读取失败仍回到默认 timeout，维护状态存在时仍不读 fallback。原双 provider HTTP 回归保留，补异步路由读、连续请求读新值、归档预览等待配置及维护状态优先回归。其余 public origin／登录入口、启动、后台任务和执行配置调用者仍待迁移，H1/H6 不关闭。
+- 第七批候选仅运行格式／lint 和源码摘要／架构账本生成，未跑本地测试。W29 两个根各新增一个配置 reader 装配（PG165→166，SQLite API65→66），SQLite 总装配摘要不变；原 source guard 随深度配置函数的参数切面更新。架构计入8条接线、1个public合同及2个owner符号，不扩大 provider-specific 例外。

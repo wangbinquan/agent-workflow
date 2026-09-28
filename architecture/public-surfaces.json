@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 898,
+    "consumers": 904,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
-    "methods": 1074,
+    "methods": 1075,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20919,
-    "symbols": 1015
+    "recursiveFields": 20921,
+    "symbols": 1016
   },
   "entries": [
     {
@@ -61931,6 +61931,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:662812a352f1de0f84f0",
             "import:a1a49dee8c1f4b59cfc7"
           ],
           "name": "load",
@@ -135717,6 +135718,108 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:091b082ddd09f7089081",
+        "import:1994e0db7f238976000a",
+        "import:28fdc25abb181339bb7f",
+        "import:895a17e9e2d5e8cbe05a",
+        "import:cb1a68456feac0d06b64",
+        "import:e50d1b1b10cfd8bc7215"
+      ],
+      "context": "system-operations",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:read.$return.$variant:0",
+          "type": "z.infer<typeof ConfigSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:read.$return.$variant:1",
+          "type": "z.infer<typeof ConfigSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "id": "public:system-operations:queries:ApplicationConfigurationQueries",
+      "members": [
+        "read"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:091b082ddd09f7089081",
+            "import:1994e0db7f238976000a",
+            "import:28fdc25abb181339bb7f",
+            "import:895a17e9e2d5e8cbe05a",
+            "import:cb1a68456feac0d06b64",
+            "import:e50d1b1b10cfd8bc7215"
+          ],
+          "name": "read",
+          "signatureDigest": "sha256:f3f1912f56e30f22123a2fabef0b3fc07db9e1602c1dea034d2df48139bde84e"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#ApplicationConfigurationQueries",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:091b082ddd09f7089081",
+          "file": "packages/backend/src/routes/taskArchive.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/taskArchive.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:1994e0db7f238976000a",
+          "file": "packages/backend/src/routes/repoGroups.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/repoGroups.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:28fdc25abb181339bb7f",
+          "file": "packages/backend/src/routes/cached-repos.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/cached-repos.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:895a17e9e2d5e8cbe05a",
+          "file": "packages/backend/src/routes/tasks.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/tasks.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:cb1a68456feac0d06b64",
+          "file": "packages/backend/src/routes/plantuml.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/plantuml.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:e50d1b1b10cfd8bc7215",
+          "file": "packages/backend/src/routes/maintenance.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/maintenance.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:4e3cd815b4980755f9f87c0ab4aacf2f157195375a8442f2d9a2a528d0063fe1",
+      "status": "target-context-current-surface",
+      "symbol": "ApplicationConfigurationQueries",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:1e30537d24be7bb6e73c"
       ],
       "context": "system-operations",
@@ -165482,7 +165585,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2f53ceec8aef480f544f632daaad236305deb24e60d68f162ec3f0d8cf436034",
+  "sourceDigest": "sha256:e0d712df0ff7866b3146251ef9dd32a1729b469ff123a977e33b87f809391416",
   "targetContexts": [
     "collaboration",
     "development-automation",

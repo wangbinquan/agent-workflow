@@ -16,7 +16,7 @@ import { z } from 'zod'
 import { SETTINGS_NUMERIC_BOUNDS } from '@agent-workflow/shared'
 
 import { actorOf } from '@/auth/actor'
-import { loadConfig } from '@/config'
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { registerRoute } from '@/routes/registry'
 import type { TaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { ValidationError } from '@/util/errors'
@@ -37,7 +37,7 @@ const ArchiveRequestSchema = z.object({
 })
 
 export interface TaskArchiveRouteDependencies {
-  readonly configPath: string
+  readonly configuration: ApplicationConfigurationQueries
   readonly taskArchiveMaintenance: TaskArchiveMaintenanceCommand
 }
 
@@ -59,7 +59,7 @@ export function mountTaskArchiveRoutes(app: Hono, deps: TaskArchiveRouteDependen
         })
       }
       const body = parsed.data
-      const configured = loadConfig(deps.configPath).taskArchive
+      const configured = (await deps.configuration.read()).taskArchive
       const retentionDays = body.retentionDays ?? configured?.retentionDays ?? 0
       const maxTrees = body.maxTrees ?? 50
       // 未配置保留期(0 = 不归档)时手动入口也不猜一个默认值:0 天会把**刚刚结束**

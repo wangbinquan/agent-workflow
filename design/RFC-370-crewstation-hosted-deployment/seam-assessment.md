@@ -27,3 +27,5 @@
 - Settings HTTP 的配置 read/update 现消费 system-operations public 合同；`ApplicationConfigurationPersistencePort` 支持异步存储，`fileApplicationConfiguration` 保持原文件 schema／patch 行为。两 provider 的 bootstrap 共用配置 application，已持久提交后才通知和热更新。托管存储与其他文件读取调用者仍未接齐。
 
 - `platform/configuration/configurationValues` 提供无 IO 的存储值解析、patch 校验与合并规则；本地文件 adapter 和后续托管存储共用。RFC-276 文件迁移、缓存及原子替换仍由文件 adapter 负责；不能把纯值规则抽取等同于配置全调用者迁移完成。
+
+- 六组 HTTP 消费方（maintenance、plantuml、cached-repos、repoGroups、tasks、taskArchive）的配置读取已改接 `ApplicationConfigurationQueries`，两 provider composition 提供 live file reader；保留错误／fallback 和每次调用读取行为。public origin／身份入口及后台、执行配置仍存在本地调用，不记全覆盖。

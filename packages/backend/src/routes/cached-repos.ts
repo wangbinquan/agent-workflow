@@ -18,7 +18,7 @@ import { registerRoute } from '@/routes/registry'
 import { actorOf } from '@/auth/actor'
 import { assertTokenDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
-import { loadConfig } from '@/config'
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import {
   CachedRepoHasReferencesError,
   deleteCachedRepo,
@@ -31,7 +31,7 @@ import { NotFoundError, ValidationError } from '@/util/errors'
 import { parseBoolQuery } from '@/util/http'
 
 export interface CachedRepoRouteDependencies {
-  readonly configPath: string
+  readonly configuration: ApplicationConfigurationQueries
   readonly appHome?: string
   readonly secretBox?: SecretBox
 }
@@ -99,7 +99,7 @@ export function mountCachedRepoRoutes(
       // nothing ever passed it to `cloneTimeoutMs`, so an operator tightening the
       // window had no effect. Manual refresh shells out to `git fetch` against a
       // remote host, which is exactly the call that needs a bound.
-      const cfg = loadConfig(deps.configPath)
+      const cfg = await deps.configuration.read()
       const r = await refreshCachedRepo(
         {
           store,
@@ -179,7 +179,7 @@ export function mountCachedRepoRoutes(
           issues: parsed.error.issues,
         })
       }
-      const cfg = loadConfig(deps.configPath)
+      const cfg = await deps.configuration.read()
       const result = startBatchImport(
         {
           store,

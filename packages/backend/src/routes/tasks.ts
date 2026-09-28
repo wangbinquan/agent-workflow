@@ -18,7 +18,7 @@ import {
 } from '@agent-workflow/shared'
 import type { Hono } from 'hono'
 import { actorOf } from '@/auth/actor'
-import { loadConfig } from '@/config'
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { registerRoute, registerRouteMiddleware } from '@/routes/registry'
 import { captureDeleteSnapshot } from '@/services/tokenAudit'
 import { assertDeleteConfirm, readDeleteBody } from '@/services/deleteConfirm'
@@ -59,9 +59,11 @@ import type {
 
 /** RFC-083: resolve deep-mode indexer path overrides + timeout from settings.
  *  Unreadable config → PATH lookup + default timeout. */
-function resolveStructuralDeepConfig(configPath: string): ResolvedDeepConfig {
+async function resolveStructuralDeepConfig(
+  configuration: ApplicationConfigurationQueries,
+): Promise<ResolvedDeepConfig> {
   try {
-    const cfg = loadConfig(configPath)
+    const cfg = await configuration.read()
     return {
       overrides: cfg.structuralDeepIndexers,
       timeoutMs: cfg.structuralDeepTimeoutMs ?? 120_000,
@@ -80,7 +82,7 @@ function broadcastLifecycleAlertResolved(taskId: string): void {
 
 export interface TaskRouteDependencies {
   readonly workspaceQueries: TaskWorkspaceQueries
-  readonly configPath: string
+  readonly configuration: ApplicationConfigurationQueries
   readonly operations: TaskRouteOperations
   readonly taskExecutionReadModels: TaskExecutionReadModels
   readonly taskRecoveryOperations: TaskRecoveryOperations
@@ -475,7 +477,8 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       return c.json(
         await getTaskStructuralDiff(codeWorkspace, c.req.param('id'), scope, nodeRunId, {
           mode,
-          deepCfg: mode === 'deep' ? resolveStructuralDeepConfig(deps.configPath) : undefined,
+          deepCfg:
+            mode === 'deep' ? await resolveStructuralDeepConfig(deps.configuration) : undefined,
         }),
       )
     },
@@ -528,7 +531,7 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
       if (task === null) {
         throw new NotFoundError('task-not-found', `task '${id}' not found`)
       }
-      const narrativeCfg = loadConfig(deps.configPath)
+      const narrativeCfg = await deps.configuration.read()
       const state = await triggerChangeNarrative(
         {
           workspace: codeWorkspace,

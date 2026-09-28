@@ -1,4 +1,7 @@
-import { composeFileApplicationConfiguration } from '@/modules/system-operations/composition'
+import {
+  composeFileApplicationConfiguration,
+  composeFileApplicationConfigurationQueries,
+} from '@/modules/system-operations/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
@@ -2717,8 +2720,10 @@ function composeSqliteApiRouteMounts(
     },
     appHome,
   })
+  const configuration = composeFileApplicationConfigurationQueries(deps.configPath)
   const routeDeps = {
     ...deps,
+    configuration,
     identityAccess,
     repositoryPublicationTransport,
     schedulerDriver,
@@ -3375,9 +3380,14 @@ function composeSqliteApiRouteMounts(
           concurrencyHotApply: deps.configConcurrencyHotApply,
         }),
       }),
-    maintenance: (app) => mountMaintenanceRoutes(app, deps),
+    maintenance: (app) =>
+      mountMaintenanceRoutes(app, {
+        configuration,
+        maintenanceStatus: deps.maintenanceStatus,
+        databaseTelemetry: deps.databaseTelemetry,
+      }),
     daemon: (app) => mountDaemonRoutes(app, deps),
-    plantuml: (app) => mountPlantumlRoutes(app, deps),
+    plantuml: (app) => mountPlantumlRoutes(app, { configuration }),
     runtime: (app) => mountRuntimeRoutes(app, runtimeManagement.models),
     runtimes: (app) => mountRuntimesRoutes(app, runtimeManagement.runtimes),
     overview: (app) =>
@@ -3430,8 +3440,13 @@ function composeSqliteApiRouteMounts(
         authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
       }),
     repos: (app) => mountRepoRoutes(app, repositoryWorkspaceStore),
-    cachedRepos: (app) => mountCachedRepoRoutes(app, deps, repositoryWorkspaceStore),
-    repoGroups: (app) => mountRepoGroupRoutes(app, deps, repositoryWorkspaceStore),
+    cachedRepos: (app) =>
+      mountCachedRepoRoutes(
+        app,
+        { configuration, appHome: deps.appHome, secretBox: deps.secretBox },
+        repositoryWorkspaceStore,
+      ),
+    repoGroups: (app) => mountRepoGroupRoutes(app, { configuration }, repositoryWorkspaceStore),
     workflows: (app) =>
       mountWorkflowRoutes(app, deps, {
         queries: workflowCatalog.queries,
@@ -3468,7 +3483,7 @@ function composeSqliteApiRouteMounts(
     taskCatalog: (app) => mountTaskCatalogRoutes(app, taskCatalog),
     taskArchive: (app) =>
       mountTaskArchiveRoutes(app, {
-        configPath: deps.configPath,
+        configuration,
         taskArchiveMaintenance: createDrizzleTaskArchiveMaintenanceCommand(deps.db),
       }),
     maintenanceDisk: (app) => mountMaintenanceDiskRoutes(app, deps.maintenanceDisk),

@@ -1,3 +1,4 @@
+import type { ApplicationConfigurationQueries } from './public/queries'
 // RFC-370: bootstrap-only settings composition; the application has no paths.
 import { createApplicationConfiguration } from './application/applicationConfiguration'
 import type {
@@ -494,4 +495,12 @@ export function composeFileApplicationConfiguration(
       setLogLevel: (level) => configureLogger({ level }),
     },
   })
+}
+
+/** Standalone configuration reads retain the file adapter's live-read semantics. */
+export function composeFileApplicationConfigurationQueries(
+  configPath: string,
+): ApplicationConfigurationQueries {
+  const persistence = createFileApplicationConfiguration(configPath)
+  return Object.freeze({ read: () => persistence.load() })
 }

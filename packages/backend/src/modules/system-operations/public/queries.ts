@@ -1,4 +1,4 @@
-import type { OverviewResponse } from '@agent-workflow/shared'
+import type { Config, OverviewResponse } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type {
   DatabaseMigrationArtifactInput,
@@ -80,4 +80,9 @@ export interface DatabaseMigrationQueries {
       input: DatabaseMigrationLegacyChunkInput,
     ): Promise<DatabaseMigrationArtifactView>
   }
+}
+
+/** Current configuration, read on demand through the selected storage adapter. */
+export interface ApplicationConfigurationQueries {
+  read(): Config | Promise<Config>
 }

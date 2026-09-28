@@ -17,7 +17,6 @@ import { MCP_OPERATIONS } from '@/mcp/operationBindings'
 import type { RepositoryWorkspaceStore } from '@/modules/source-control/public/operations'
 import { allRouteMeta, resetRouteMetaRegistry } from '@/routes/registry'
 import { mountCachedRepoRoutes } from '@/routes/cached-repos'
-import type { AppDeps } from '@/server'
 import { ConflictError } from '@/util/errors'
 import {
   recordingOperationHandles,
@@ -55,7 +54,13 @@ describe('RFC-329 AC-1 — repos has no single-repo read, and the table no longe
     resetRouteMetaRegistry()
     mountCachedRepoRoutes(
       new Hono(),
-      { db: {} as AppDeps['db'], configPath: '' } as AppDeps,
+      {
+        configuration: {
+          read() {
+            throw new Error('metadata collection does not read config')
+          },
+        },
+      },
       {} as RepositoryWorkspaceStore,
     )
     const mounted = allRouteMeta().map((m) => `${m.method} ${m.path}`)
@@ -79,7 +84,13 @@ describe('RFC-329 AC-1 — repos has no single-repo read, and the table no longe
     resetRouteMetaRegistry()
     mountCachedRepoRoutes(
       new Hono(),
-      { db: {} as AppDeps['db'], configPath: '' } as AppDeps,
+      {
+        configuration: {
+          read() {
+            throw new Error('metadata collection does not read config')
+          },
+        },
+      },
       {} as RepositoryWorkspaceStore,
     )
     const mounted = new Set(allRouteMeta().map((m) => `${m.method} ${m.path}`))

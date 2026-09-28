@@ -1,3 +1,4 @@
+import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 // RFC-359 AC11: the original HTTP transport around the real measured owner graph.
 // Construction completes before callers time app.request and consume its response.
@@ -175,7 +176,11 @@ export async function createProductionPerformanceApplication(
     mountApi(app) {
       // This is the relative order in server.mountApiRoutes.
       mountOverviewRoutes(app, { directAuthority: identityAccess.directAuthority }, overview)
-      mountCachedRepoRoutes(app, { configPath, appHome }, repositoryStore)
+      mountCachedRepoRoutes(
+        app,
+        { configuration: composeFileApplicationConfigurationQueries(configPath), appHome },
+        repositoryStore,
+      )
       mountWorkgroupTaskRoutes(app, {
         module: workgroupTaskRoom,
         authorityFor: (actor) => directOperationAuthority(identityAccess.directAuthority, actor),
