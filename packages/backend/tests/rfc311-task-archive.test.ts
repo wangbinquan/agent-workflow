@@ -241,6 +241,16 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     })
     await addRunWithEvents(db, 'root', 'run-root', 3)
     await addRunWithEvents(db, 'child', 'run-child', 2)
+    // RFC-371: both pending and consumed numeric source evidence survives task archival.
+    const sourceEvidence = JSON.stringify({
+      invocationId: 'invocation',
+      measurements: [],
+      diagnostics: ['missing-native-session'],
+    })
+    await db.insert(schema.taskExecutionObservationSources).values([
+      { taskId: 'root', nodeRunId: 'run-root', evidenceJson: sourceEvidence, pending: true },
+      { taskId: 'child', nodeRunId: 'run-child', evidenceJson: sourceEvidence, pending: false },
+    ])
     await db.insert(schema.reviewNodeReviewers).values({
       taskId: 'root',
       reviewNodeId: 'review-node',
@@ -255,7 +265,13 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
       writeFileSync(join(dirs.logsDir, id, 'x.jsonl'), '{}\n', 'utf-8')
     }
 
-    const result = await archiveTaskTree(db, 'root', { ...dirs, now: NOW })
+    // Exercise the active provider-neutral pipeline, not the retired service implementation.
+    const archived = await createDrizzleTaskArchiveMaintenanceCommand(db).runSweep(
+      { enabled: true, retentionDays: 90 },
+      { ...dirs, now: NOW },
+    )
+    expect(archived.archived).toHaveLength(1)
+    const result = archived.archived[0]!
 
     // 库里清空。
     expect(await taskCount(db)).toBe(0)
@@ -281,6 +297,18 @@ describeEachProvider('RFC-311 T19 — task archive', (harness) => {
     expect(manifest.rows.tasks).toBe(2)
     expect(manifest.rows.node_runs).toBe(2)
     expect(manifest.rows.node_run_events).toBe(5)
+    expect(manifest.rows.task_execution_observation_sources).toBe(2)
+    const sourceRows = readFileSync(
+      join(dir, 'db', 'task_execution_observation_sources.jsonl'),
+      'utf-8',
+    )
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { taskId: string; evidenceJson: string; pending: boolean })
+    expect(sourceRows.map((row) => row.taskId).sort()).toEqual(['child', 'root'])
+    expect(sourceRows.map((row) => row.pending).sort()).toEqual([false, true])
+    expect(sourceRows.every((row) => row.evidenceJson === sourceEvidence)).toBe(true)
+    expect(await db.select().from(schema.taskExecutionObservationSources)).toEqual([])
     expect(manifest.rows.task_repos).toBe(2)
     expect(manifest.rows.review_node_reviewers).toBe(1)
     expect(manifest.rows.task_execution_owners).toBe(0)

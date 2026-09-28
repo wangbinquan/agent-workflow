@@ -22,6 +22,8 @@ describe('RFC-284 T22 — DAEMON_CADENCE 数值锁', () => {
       worktreeGc: 3_600_000,
       fusionReconcile: 60_000,
       resourceLimits: 1_000,
+      // RFC-371: numeric evidence is projected after source commit, once per second.
+      observationUsage: 1_000,
       intentScratchGc: 3_600_000,
       tokenAuditGc: 3_600_000,
       // RFC-310 PR-3 新增（非调参）：mission wake sweep 30s、上传 TTL 回收 1h。

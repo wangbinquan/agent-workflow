@@ -65,9 +65,19 @@ test('all standalone bootstraps explicitly bind local accounting', () => {
     let count = 0
     const walk = (node: ts.Node) => {
       if (ts.isPropertyAssignment(node) && node.name.getText() === 'observationInvocations') {
-        expect(node.initializer.getText()).toBe(
-          `composeLocalInvocationObservations(${database}, composeObservationUsageSource(${database}))`,
-        )
+        // Assert the call tree, so formatting cannot invalidate an otherwise exact binding.
+        const binding = node.initializer
+        expect(ts.isCallExpression(binding)).toBe(true)
+        if (!ts.isCallExpression(binding)) throw new Error('accounting must be a composed call')
+        expect(binding.expression.getText()).toBe('composeLocalInvocationObservations')
+        expect(binding.arguments).toHaveLength(2)
+        expect(binding.arguments[0]?.getText()).toBe(database)
+        const participant = binding.arguments[1]!
+        expect(ts.isCallExpression(participant)).toBe(true)
+        if (!ts.isCallExpression(participant))
+          throw new Error('source must be an explicit participant')
+        expect(participant.expression.getText()).toBe('composeObservationUsageSource')
+        expect(participant.arguments.map((argument) => argument.getText())).toEqual([database])
         count++
       }
       ts.forEachChild(node, walk)

@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1759,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-371：接入根 stdout 持久数字源、节点轮转恢复及双 provider 崩溃重放回归，rfc294-mutation-entrypoints 1756 → 1759，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -849,10 +846,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5529,
+      "baseline": 5530,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-371：接入根 stdout 持久数字源、节点轮转恢复及双 provider 崩溃重放回归，rfc294-cross-context-observed-imports 5520 → 5529，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：补齐数值来源任务归档与 CI 接线守卫，rfc294-cross-context-observed-imports 5529 → 5530，按新增功能如实登记本批归属与公开合同。"
       }
     },
     {
@@ -873,10 +870,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4910,
+      "baseline": 4911,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-371：接入根 stdout 持久数字源、节点轮转恢复及双 provider 崩溃重放回归，rfc294-architecture-exceptions 4903 → 4910，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：补齐数值来源任务归档与 CI 接线守卫，rfc294-architecture-exceptions 4910 → 4911，按新增功能如实登记本批归属与公开合同。"
       }
     },
     {
@@ -891,10 +888,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1025,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-371：接入根 stdout 持久数字源、节点轮转恢复及双 provider 崩溃重放回归，rfc294-public-surfaces 1024 → 1025，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -915,14 +909,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25271,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371：接入根 stdout 持久数字源、节点轮转恢复及双 provider 崩溃重放回归，rfc294-module-symbol-owners 25259 → 25271，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:3474af98c75b37c56bec606c24cb576a508fe25b1c4d82959cb5ef9cdc54d897",
+    "sourceDigest": "sha256:12b09ad47cb594f1e93dae8e36f2c9e70cdf1f0205e247c7cb2af4883ed0b881",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -935,8 +926,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "8a509ffbc1ddd7693e7e788d3dd84653a9d982ec",
-    "contentDigest": "sha256:7d9f892fa4ad21fca7b3fd0fb6140f727f10f3cbce10deb153d3af8b2c90ed81",
+    "currentSnapshotSha": "74b00a2565319970f61c8fb4e21e843668b74d9e",
+    "contentDigest": "sha256:28788eebb338212d1a7516b70aed33351fc0027bf50321fd2036c2bf8827d50d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

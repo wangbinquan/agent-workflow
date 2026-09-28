@@ -70145,6 +70145,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d7ad6b617bceb5d4a55e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionObservationSources",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "taskExecutionObservationSources",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentResourceInventory.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/agentResourceInventory.ts",
       "fromSymbol": "$file",
@@ -83472,9 +83489,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4910,
+    "architectureExceptions": 4911,
     "implementationSccs": 0,
-    "observedEdges": 5529,
+    "observedEdges": 5530,
     "requiredPorts": 36,
     "targetEdges": 69
   },
@@ -157852,6 +157869,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts#$file",
+      "id": "import:d7ad6b617bceb5d4a55e",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "taskExecutionObservationSources",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionObservationSources"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/agentResourceInventory.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentResourceInventory.ts#$file",
@@ -172743,7 +172776,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3474af98c75b37c56bec606c24cb576a508fe25b1c4d82959cb5ef9cdc54d897",
+  "sourceDigest": "sha256:12b09ad47cb594f1e93dae8e36f2c9e70cdf1f0205e247c7cb2af4883ed0b881",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

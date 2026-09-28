@@ -42033,7 +42033,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3474af98c75b37c56bec606c24cb576a508fe25b1c4d82959cb5ef9cdc54d897",
+  "sourceDigest": "sha256:12b09ad47cb594f1e93dae8e36f2c9e70cdf1f0205e247c7cb2af4883ed0b881",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -43407,8 +43407,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts#464:tasks",
-        "line": 464,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts#473:tasks",
+        "line": 473,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts#finalizeDatabase",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",

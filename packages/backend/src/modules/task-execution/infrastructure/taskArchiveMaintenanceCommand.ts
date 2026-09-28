@@ -60,6 +60,7 @@ import {
   taskExecutionMaintenanceClaims,
   taskExecutionMaintenanceMembers,
   taskExecutionOwners,
+  taskExecutionObservationSources,
   taskFeedback,
   taskNodeClarifyDirectives,
   taskQuestions,
@@ -373,6 +374,13 @@ async function loadArchiveRows(
       async (ids) =>
         await db.select().from(nodeRunEvents).where(inArray(nodeRunEvents.nodeRunId, ids)),
     ),
+    task_execution_observation_sources: await byTask(
+      async (ids) =>
+        await db
+          .select()
+          .from(taskExecutionObservationSources)
+          .where(inArray(taskExecutionObservationSources.taskId, ids)),
+    ),
     task_execution_owners: await byTask(
       async (ids) =>
         await db.select().from(taskExecutionOwners).where(inArray(taskExecutionOwners.taskId, ids)),
@@ -424,6 +432,7 @@ export const ARCHIVED_TABLES: readonly string[] = [
   'node_runs',
   'node_run_outputs',
   'node_run_events',
+  'task_execution_observation_sources',
   'task_execution_owners',
   'task_execution_intents',
   'task_execution_effects',

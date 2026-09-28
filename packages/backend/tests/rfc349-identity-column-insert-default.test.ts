@@ -90,6 +90,7 @@ describe('RFC-349 identity columns render DEFAULT on PostgreSQL', () => {
       'mcp_runtime_test_events',
       'memory_distill_events',
       'node_run_events',
+      'task_execution_observation_sources',
     ])
   })
 
