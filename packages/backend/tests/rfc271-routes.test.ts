@@ -36,7 +36,15 @@ const OPERATIONS = readFileSync(
   ),
   'utf8',
 )
-const SESSION = readFileSync(resolve(import.meta.dir, '..', 'src', 'auth', 'session.ts'), 'utf8')
+const SESSION = readFileSync(
+  resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules/identity-access/infrastructure/local/httpAuthentication.ts',
+  ),
+  'utf8',
+)
 
 const EXPORT_PATHS = [
   '/api/agents/:id/export-package',

@@ -1,3 +1,9 @@
+import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
+import type { HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'
+import {
+  composeLocalHttpAuthentication,
+  composeHttpAuthenticationMiddleware,
+} from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import {
@@ -42,7 +48,7 @@ import {
   type DatabaseSourceWriteWindow,
 } from '@/auth/application/authPersistence'
 import type { SecretBox } from '@/auth/secretBox'
-import { actorOfDirectAuthority, admitDaemonIdentity, multiAuth } from '@/auth/session'
+import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import { composeHostTaskLaunchKernel } from '@/modules/task-execution/composition/hostTaskLaunch'
 import { composeTaskCancellation } from '@/modules/task-execution/composition/taskCancellation'
 import { createTaskDriveCoordinator, retryRepositoryPreparation } from '@/services/task'
@@ -1136,6 +1142,7 @@ export type SelectedDaemonProviderCore<
 export interface ComposedAppDeps<TCore extends AppHttpProviderCore = AppHttpProviderCore> {
   readonly token: string
   readonly configuration: ApplicationConfigurationQueries
+  readonly authentication: HttpAuthenticationParticipant
   readonly core: TCore
   readonly publicRoutes: AppPublicRouteMounts
   readonly apiRoutes: AppApiRouteMounts
@@ -1338,6 +1345,7 @@ export interface ProviderAppCompositionInput<
 > {
   readonly token: string
   readonly configuration: ApplicationConfigurationQueries
+  readonly authentication: HttpAuthenticationParticipant
   readonly core: SelectedDaemonProviderCore<TProvider>
   readonly public: ProviderPublicRouteComposition
   readonly platform: ProviderPlatformRouteComposition
@@ -1364,6 +1372,7 @@ function freezeComposedAppDeps<TCore extends AppHttpProviderCore>(
   return Object.freeze({
     token: input.token,
     configuration: input.configuration,
+    authentication: input.authentication,
     core: Object.freeze({ ...input.core }),
     publicRoutes: Object.freeze({ ...input.publicRoutes }),
     apiRoutes: Object.freeze({ ...input.apiRoutes }),
@@ -1533,6 +1542,7 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
   return freezeComposedAppDeps({
     token: input.token,
     configuration: input.configuration,
+    authentication: input.authentication,
     core: input.core,
     publicRoutes,
     apiRoutes,
@@ -2390,6 +2400,11 @@ export function composeSqliteApplicationDeps(
   const application = freezeComposedAppDeps({
     token: effectiveDeps.token,
     configuration,
+    authentication: composeLocalHttpAuthentication({
+      auth: authRuntime,
+      daemonToken: effectiveDeps.token,
+      identityAccess,
+    }),
     core:
       effectiveDeps.providerCore === undefined
         ? Object.freeze({
@@ -3379,7 +3394,8 @@ function composeSqliteApiRouteMounts(
       mountConfigRoutes(app, {
         configuration: composeFileApplicationConfiguration({
           configPath: deps.configPath,
-          runtimeRegistry: runtimeManagement.configuration,
+          runtimeRegistry:
+            runtimeManagement.configuration satisfies RuntimeProfileConfigurationCommands,
           withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(deps.configPath),
           runtimeTests: mcpRuntimeTests.reconciliation,
           concurrencyHotApply: deps.configConcurrencyHotApply,
@@ -3708,7 +3724,7 @@ export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
 
 /** Shared request transport; callers supply already-composed route bindings. */
 export interface HttpRequestAppDeps {
-  readonly token: ComposedAppDeps['token']
+  readonly authentication: HttpAuthenticationParticipant
   readonly core: ComposedAppDeps['core']
   readonly publicRoutes: ComposedAppDeps['publicRoutes']
   readonly mountApi: AppRouteMount
@@ -3729,14 +3745,7 @@ export function createHttpRequestApp(deps: HttpRequestAppDeps): Hono {
   deps.publicRoutes.wellKnown(app)
   deps.publicRoutes.webhookIngress(app)
 
-  app.use(
-    '/api/*',
-    multiAuth({
-      auth: deps.core.authRuntime,
-      daemonToken: deps.token,
-      identityAccess: deps.core.identityAccess,
-    }),
-  )
+  app.use('/api/*', composeHttpAuthenticationMiddleware(deps.authentication))
   app.use('/api/*', async (c, next) => {
     await next()
     const actor = tryActorOf(c)
@@ -3812,7 +3821,7 @@ export function createHttpRequestApp(deps: HttpRequestAppDeps): Hono {
 /** Build the HTTP/MCP application from already-selected provider ports. */
 export function createComposedApp(deps: ComposedAppDeps): Hono {
   return createHttpRequestApp({
-    token: deps.token,
+    authentication: deps.authentication,
     core: deps.core,
     publicRoutes: deps.publicRoutes,
     mountApi(app) {

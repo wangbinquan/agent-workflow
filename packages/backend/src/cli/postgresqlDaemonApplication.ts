@@ -1,3 +1,5 @@
+import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
+import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import {
   composeFileApplicationConfiguration,
@@ -1924,7 +1926,8 @@ export async function composePostgresqlApplication(
     config: Object.freeze({
       configuration: composeFileApplicationConfiguration({
         configPath: input.configPath,
-        runtimeRegistry: runtimeManagement.configuration,
+        runtimeRegistry:
+          runtimeManagement.configuration satisfies RuntimeProfileConfigurationCommands,
         withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(input.configPath),
         runtimeTests: mcpRuntimeTests.reconciliation,
         concurrencyHotApply: Object.freeze({
@@ -2144,6 +2147,11 @@ export async function composePostgresqlApplication(
   const composition: PostgresqlAppCompositionInput = Object.freeze({
     token: input.token,
     configuration,
+    authentication: composeLocalHttpAuthentication({
+      auth: core.authRuntime,
+      daemonToken: input.token,
+      identityAccess,
+    }),
     core,
     public: publicRoutes,
     platform: platformRoutes,

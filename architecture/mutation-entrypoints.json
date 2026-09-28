@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1736,
+    "entries": 1738,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -436,128 +436,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/auth/secretBox.ts#createSecretBoxFromKey",
       "symbol": "createSecretBoxFromKey",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/session.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/session.ts#admitDaemonIdentity",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/session.ts#admitDaemonIdentity",
-      "symbol": "admitDaemonIdentity",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/session.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/session.ts#admitDurableWorkOwner",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/session.ts#admitDurableWorkOwner",
-      "symbol": "admitDurableWorkOwner",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/session.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/session.ts#ADMITTED_DAEMON_CREDENTIAL",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/session.ts#ADMITTED_DAEMON_CREDENTIAL",
-      "symbol": "ADMITTED_DAEMON_CREDENTIAL",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/session.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/session.ts#admittedPatCredential",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/session.ts#admittedPatCredential",
-      "symbol": "admittedPatCredential",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/auth/session.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/auth/session.ts#admittedSessionCredential",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/auth/session.ts#admittedSessionCredential",
-      "symbol": "admittedSessionCredential",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -9832,6 +9710,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/inbound/http/authentication.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/inbound/http/authentication.ts#createHttpAuthenticationMiddleware",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/inbound/http/authentication.ts#createHttpAuthenticationMiddleware",
+      "symbol": "createHttpAuthenticationMiddleware",
+      "targetContext": "identity-access",
+      "targetLayer": "inbound"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -9968,6 +9871,150 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/legacyUserService.ts#patchUser",
       "symbol": "patchUser",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#createLocalHttpAuthentication",
+      "missingControls": [
+        "audit",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#createLocalHttpAuthentication",
+      "symbol": "createLocalHttpAuthentication",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#admitDaemonIdentity",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#admitDaemonIdentity",
+      "symbol": "admitDaemonIdentity",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#admitDurableWorkOwner",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#admitDurableWorkOwner",
+      "symbol": "admitDurableWorkOwner",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#ADMITTED_DAEMON_CREDENTIAL",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#ADMITTED_DAEMON_CREDENTIAL",
+      "symbol": "ADMITTED_DAEMON_CREDENTIAL",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#admittedPatCredential",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#admittedPatCredential",
+      "symbol": "admittedPatCredential",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#admittedSessionCredential",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#admittedSessionCredential",
+      "symbol": "admittedSessionCredential",
       "targetContext": "identity-access",
       "targetLayer": "infrastructure"
     },
@@ -41489,7 +41536,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:446ef7ced94b51a52393538e4afbf8959051e7d0c6eaebd637af9e3361e0842e",
+  "sourceDigest": "sha256:ca11bb17ab9e4fb408c0e3236abe37e3e8baff0e07770c4d33412489d78ead9b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

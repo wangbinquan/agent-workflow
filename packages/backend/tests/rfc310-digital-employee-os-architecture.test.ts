@@ -332,9 +332,22 @@ describe('RFC-310 Digital Employee OS architecture manifest', () => {
       'utf8',
     )
 
-    for (const route of [ingress, replay]) {
-      expect(route).toContain('commands.observe(')
-      expect(route).not.toMatch(/webhookDispatcher\s*\.\s*dispatch\s*\(/)
+    // RFC-370: verified ingress publication moved behind the integration command.
+    // Keep the publisher-only rule across the entire selected path.
+    const ingressApplication = readFileSync(
+      join(BACKEND_SRC, 'modules/integration/application/verifiedWebhookIngress.ts'),
+      'utf8',
+    )
+    const ingressComposition = readFileSync(
+      join(BACKEND_SRC, 'modules/integration/composition/webhookIngress.ts'),
+      'utf8',
+    )
+    expect(ingress).toContain('await ingress.receive(')
+    expect(ingressApplication).toContain('deps.events.observe(observation)')
+    expect(ingressComposition).toContain('eventCenter.commands.observe(observation)')
+    expect(replay).toContain('commands.observe(')
+    for (const source of [ingress, ingressApplication, ingressComposition, replay]) {
+      expect(source).not.toMatch(/webhookDispatcher\s*\.\s*dispatch\s*\(/)
     }
     expect(integrationComposition).toContain('dispatcher: EventCenterCodeHostDeliveryDispatcher')
     expect(dispatcherTypes).toContain(

@@ -1,3 +1,4 @@
+import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
@@ -161,7 +162,11 @@ export async function createProductionPerformanceApplication(
   const healthDatabase = createHealthDatabaseReadModel(db)
   const webhookIngressPersistence = composeWebhookIngressPersistenceFor(db)
   return createHttpRequestApp({
-    token: input.daemonToken,
+    authentication: composeLocalHttpAuthentication({
+      auth: core.authRuntime,
+      daemonToken: input.daemonToken,
+      identityAccess,
+    }),
     core,
     publicRoutes: {
       health: (app) =>

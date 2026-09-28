@@ -392,6 +392,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:00b6f71cea135d6cdc2b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/application/authRuntime.ts#AuthRuntime",
+      "toPath": "packages/backend/src/auth/application/authRuntime.ts",
+      "toSymbol": "AuthRuntime",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
@@ -6495,6 +6512,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1364ac6796d0df0640e7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "resolveActor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition.ts#$file",
@@ -10116,6 +10150,23 @@
       "why": "RFC-332 retains this exact compatibility dependency in composition until its declared owner cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1e26d61f1314263a4e9a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "composeHttpAuthenticationMiddleware",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
@@ -12120,6 +12171,23 @@
       "toPath": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
       "toSymbol": "composeLegacyIntentSkillArtifactCompat",
       "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:23c93a9661bdcf64622c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ForbiddenError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ForbiddenError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -14666,7 +14734,7 @@
       "owner": "intent",
       "removeAfterWave": "W9-D",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#admitDurableWorkOwner",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
       "toPath": "packages/backend/src/auth/session.ts",
       "toSymbol": "admitDurableWorkOwner",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -15486,23 +15554,6 @@
       "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toSymbol": "engineOf",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "fromPath": "packages/backend/src/auth/session.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:2e1c4c96856299535a61",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W9-D",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#AdmittedDaemonCredential",
-      "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toSymbol": "AdmittedDaemonCredential",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -16641,6 +16692,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcps",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "mcps",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:31cc635b0535dd922d2b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/application/authRuntime.ts#hashAuthToken",
+      "toPath": "packages/backend/src/auth/application/authRuntime.ts",
+      "toSymbol": "hashAuthToken",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -19145,6 +19213,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:39aa1e12db0ed2a9f70c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "describeCredential",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
       "fromSymbol": "$file",
@@ -20195,6 +20280,23 @@
       "toPath": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
       "toSymbol": "DeleteRecoveryResult",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:3d20dbf72de97c8ef74a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/application/authRuntime.ts#hashAuthToken",
+      "toPath": "packages/backend/src/auth/application/authRuntime.ts",
+      "toSymbol": "hashAuthToken",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -25673,6 +25775,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4ee40ef7ed7bca3a8bc9",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/infrastructure/compatibleAuthRuntime.ts#compatibleAuthRuntimeOf",
+      "toPath": "packages/backend/src/auth/infrastructure/compatibleAuthRuntime.ts",
+      "toSymbol": "compatibleAuthRuntimeOf",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts",
       "fromSymbol": "$file",
@@ -25958,6 +26077,23 @@
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4faf04f22bc52ff5acd5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "parseLocalBearerHeader",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -27645,6 +27781,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:55b2b1018e9ae40ddc1b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/inFlight.ts#createInFlightCoalescer",
+      "toPath": "packages/backend/src/util/inFlight.ts",
+      "toSymbol": "createInFlightCoalescer",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
       "fromSymbol": "$file",
@@ -28028,7 +28181,7 @@
       "owner": "intent",
       "removeAfterWave": "W9-D",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#actorOfDirectAuthority",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
       "toPath": "packages/backend/src/auth/session.ts",
       "toSymbol": "actorOfDirectAuthority",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -28648,6 +28801,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:59210a85bb616179e709",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#UnauthorizedError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "UnauthorizedError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjection.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjection.ts",
       "fromSymbol": "$file",
@@ -29105,6 +29275,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5a5757231754d836e095",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "reresolveActor",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/background/maintenanceJobRunner.ts#$file",
@@ -29493,6 +29680,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#realpathInside",
       "toPath": "packages/backend/src/util/safePath.ts",
       "toSymbol": "realpathInside",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5b28a37dc2f25e16b002",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor",
+      "toPath": "packages/backend/src/auth/actor.ts",
+      "toSymbol": "Actor",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -29953,23 +30157,6 @@
       "toPath": "packages/backend/src/services/maintenanceTicker.ts",
       "toSymbol": "MaintenanceTickerHandle",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/composition.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:5c3514c0abdae3fa51f4",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9-D",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/commands.ts#RuntimeProfileConfigurationCommands",
-      "toPath": "packages/backend/src/modules/runtime-management/public/commands.ts",
-      "toSymbol": "RuntimeProfileConfigurationCommands",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
     },
     {
       "edgeKind": "type",
@@ -31215,6 +31402,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6038683efe6c1f732cf0",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "composeLocalHttpAuthentication",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/repositoryCommit.ts#$file",
       "fromPath": "packages/backend/src/modules/source-control/application/repositoryCommit.ts",
       "fromSymbol": "$file",
@@ -32261,7 +32465,7 @@
       "owner": "runtime-management",
       "removeAfterWave": "W9-D",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#resolveActorWithWsCredential",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
       "toPath": "packages/backend/src/auth/session.ts",
       "toSymbol": "resolveActorWithWsCredential",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -32796,6 +33000,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:655bdea16b1df5e31dff",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "admitDaemonIdentity",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/resourceLimitPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/system-operations/infrastructure/resourceLimitPersistence.ts",
       "fromSymbol": "$file",
@@ -33199,6 +33420,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#prepareDatabaseProviderForBoot",
       "toPath": "packages/backend/src/modules/system-operations/composition.ts",
       "toSymbol": "prepareDatabaseProviderForBoot",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:66ff2ef2feb613f19d8c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "WsCredentialWithExpiry",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -33659,6 +33897,23 @@
       "toPath": "packages/backend/src/util/git.ts",
       "toSymbol": "WorktreeLifecycleHookEvent",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:69154c626ca0cf495dfa",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "resolveIdentity",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -42333,23 +42588,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "fromPath": "packages/backend/src/auth/session.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:83ff57c4dc57028fa602",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W9-D",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthorityAdmission",
-      "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toSymbol": "DirectAuthorityAdmission",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts",
       "fromSymbol": "$file",
@@ -43314,6 +43552,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/dynamicWorkflowPersistence.ts#composeDynamicWorkflowPersistence",
       "toPath": "packages/backend/src/modules/task-execution/composition/dynamicWorkflowPersistence.ts",
       "toSymbol": "composeDynamicWorkflowPersistence",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:87286904000bae4cfb1a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/commands.ts#RuntimeProfileConfigurationCommands",
+      "toPath": "packages/backend/src/modules/runtime-management/public/commands.ts",
+      "toSymbol": "RuntimeProfileConfigurationCommands",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -45283,10 +45538,27 @@
       "owner": "runtime-management",
       "removeAfterWave": "W9-D",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#reresolveIdentity",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
       "toPath": "packages/backend/src/auth/session.ts",
       "toSymbol": "reresolveIdentity",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8d0a8c41456471d6fc38",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "composeLocalHttpAuthentication",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -45593,23 +45865,6 @@
       "toPath": "packages/backend/src/services/nodeRollback.ts",
       "toSymbol": "loadRollbackTarget",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "fromPath": "packages/backend/src/auth/session.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:8e5be5e87b0dc1596aeb",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W9-D",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#AdmittedSessionCredential",
-      "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toSymbol": "AdmittedSessionCredential",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -52839,23 +53094,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "fromPath": "packages/backend/src/auth/session.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:a4da224408f5e2978e32",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W9-D",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthorityIdentity",
-      "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toSymbol": "DirectAuthorityIdentity",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/publicOrigin.ts#$file",
       "fromPath": "packages/backend/src/routes/publicOrigin.ts",
       "fromSymbol": "$file",
@@ -52937,6 +53175,40 @@
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "ConflictError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a58ccef1459d41062f35",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "actorOfDirectAuthority",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a58e8d699a96e777f93e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "resolveActorWithWsCredential",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -55593,6 +55865,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:aed720ff68f92a38a72c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "DirectAuthorityAdmissionRuntime",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/public/commands.ts",
       "fromSymbol": "$file",
@@ -55877,6 +56166,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts#composeAgentRunDistillObserver",
       "toPath": "packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts",
       "toSymbol": "composeAgentRunDistillObserver",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b0217a71cc9e6128f0ab",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/commands.ts#RuntimeProfileConfigurationCommands",
+      "toPath": "packages/backend/src/modules/runtime-management/public/commands.ts",
+      "toSymbol": "RuntimeProfileConfigurationCommands",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -60098,6 +60404,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bc6b85c608cbbf4dfd56",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "DirectAuthorityAdmissionRuntime",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts",
       "fromSymbol": "$file",
@@ -60315,6 +60638,23 @@
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bd26a892f26e6277b980",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "WsCredentialFingerprint",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -63328,6 +63668,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c65cf01f2120e7e92543",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "ResolvedUpgradeIdentity",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/docs.ts#$file",
       "fromPath": "packages/backend/src/routes/docs.ts",
       "fromSymbol": "$file",
@@ -66082,6 +66439,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ced5173b5f8def7f6e47",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "admitDurableWorkOwner",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -66111,6 +66485,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file",
       "toPath": "packages/backend/src/modules/digital-employee/composition.ts",
       "toSymbol": "createDigitalEmployeeResourceCatalogAclProviders",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:cf08eaee7c8b3cd96091",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "reresolveIdentity",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -72219,6 +72610,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e02eaf9d94299d6f001e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#HttpAuthenticationParticipant",
+      "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "toSymbol": "HttpAuthenticationParticipant",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/portableDatabaseRestore.ts#$file",
       "fromPath": "packages/backend/src/modules/system-operations/infrastructure/portableDatabaseRestore.ts",
       "fromSymbol": "$file",
@@ -72741,6 +73149,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#renderWebhookLaunch",
       "toPath": "packages/backend/src/services/webhook/webhookDispatch.ts",
       "toSymbol": "renderWebhookLaunch",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e2543d3fe53143babf25",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/infrastructure/compatibleAuthRuntime.ts#CompatibleAuthRuntimeInput",
+      "toPath": "packages/backend/src/auth/infrastructure/compatibleAuthRuntime.ts",
+      "toSymbol": "CompatibleAuthRuntimeInput",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -75381,23 +75806,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "fromPath": "packages/backend/src/auth/session.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:ea45982c33df8a8ef213",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W9-D",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectRequestAuthority",
-      "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toSymbol": "DirectRequestAuthority",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
       "fromPath": "packages/backend/src/ws/registry.ts",
       "fromSymbol": "$file",
@@ -76965,6 +77373,23 @@
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
+      "id": "exception:import:ef075ef7117c4b92a7f9",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "composeLocalHttpAuthentication",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
       "id": "exception:import:ef4f6ad46b4bb214b8b7",
       "introducedByRFC": "pre-RFC-294-current-debt",
       "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
@@ -77145,6 +77570,23 @@
       "toPath": "packages/backend/src/modules/resource-catalog/composition/executionContractResource.ts",
       "toSymbol": "createExecutionContractResourceAdapter",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#$file",
+      "fromPath": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:efc376b4e633b129b179",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/application/authRuntime.ts#AuthRuntime",
+      "toPath": "packages/backend/src/auth/application/authRuntime.ts",
+      "toSymbol": "AuthRuntime",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -78862,23 +79304,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "workgroups",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "fromPath": "packages/backend/src/auth/session.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f4853d1d9242be9a3ac2",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "identity-access",
-      "removeAfterWave": "W9-D",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#AdmittedPatCredential",
-      "toPath": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toSymbol": "AdmittedPatCredential",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -81703,6 +82128,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "fromPath": "packages/backend/src/auth/session.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:fdcbe01976aa3c4d87bf",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file",
+      "toPath": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toSymbol": "composeHttpAuthenticationMiddleware",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/packageResourceRows.ts#$file",
@@ -81748,7 +82190,7 @@
       "owner": "intent",
       "removeAfterWave": "W9-D",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#DirectAuthorityAdmissionRuntime",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
       "toPath": "packages/backend/src/auth/session.ts",
       "toSymbol": "DirectAuthorityAdmissionRuntime",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -82367,9 +82809,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4845,
+    "architectureExceptions": 4871,
     "implementationSccs": 0,
-    "observedEdges": 5453,
+    "observedEdges": 5479,
     "requiredPorts": 36,
     "targetEdges": 66
   },
@@ -82616,6 +83058,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workgroups"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#$file",
+      "id": "import:00b6f71cea135d6cdc2b",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/application/authRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "AuthRuntime",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/application/authRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/application/authRuntime.ts#AuthRuntime"
     },
     {
       "edgeKind": "value",
@@ -88938,6 +89396,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#PackageResourceRef"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:1364ac6796d0df0640e7",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "resolveActor",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "event-center",
       "fromFile": "packages/backend/src/modules/event-center/composition.ts",
@@ -92810,6 +93284,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#inspectReadonlyRepos"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:1e26d61f1314263a4e9a",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "static-import",
+      "targetSymbol": "composeHttpAuthenticationMiddleware",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
@@ -95032,6 +95522,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#composeLegacyIntentSkillArtifactCompat"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#$file",
+      "id": "import:23c93a9661bdcf64622c",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ForbiddenError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ForbiddenError"
     },
     {
       "edgeKind": "value",
@@ -97767,7 +98273,7 @@
       "targetSymbol": "admitDurableWorkOwner",
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/session.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#admitDurableWorkOwner"
+      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -98552,22 +99058,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#engineOf"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/auth/session.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "id": "import:2e1c4c96856299535a61",
-      "owner": "identity-access",
-      "removeAfterWave": "W9-D",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/identity-access/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "AdmittedDaemonCredential",
-      "toContext": "identity-access",
-      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#AdmittedDaemonCredential"
     },
     {
       "edgeKind": "type",
@@ -99736,6 +100226,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcps"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#$file",
+      "id": "import:31cc635b0535dd922d2b",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/application/authRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "hashAuthToken",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/application/authRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/application/authRuntime.ts#hashAuthToken"
     },
     {
       "edgeKind": "value",
@@ -102410,6 +102916,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:39aa1e12db0ed2a9f70c",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "describeCredential",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/application/package/packageApplication.ts",
@@ -103512,6 +104034,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#DeleteRecoveryResult"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#$file",
+      "id": "import:3d20dbf72de97c8ef74a",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/application/authRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "hashAuthToken",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/application/authRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/application/authRuntime.ts#hashAuthToken"
     },
     {
       "edgeKind": "type",
@@ -109307,6 +109845,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#$file",
+      "id": "import:4ee40ef7ed7bca3a8bc9",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/infrastructure/compatibleAuthRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "compatibleAuthRuntimeOf",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/infrastructure/compatibleAuthRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/infrastructure/compatibleAuthRuntime.ts#compatibleAuthRuntimeOf"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts#$file",
@@ -109608,6 +110162,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:4faf04f22bc52ff5acd5",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "static-import",
+      "targetSymbol": "parseLocalBearerHeader",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -111403,6 +111973,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#$file",
+      "id": "import:55b2b1018e9ae40ddc1b",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/inFlight",
+      "syntax": "static-import",
+      "targetSymbol": "createInFlightCoalescer",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/inFlight.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/inFlight.ts#createInFlightCoalescer"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#$file",
@@ -111879,7 +112465,7 @@
       "targetSymbol": "actorOfDirectAuthority",
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/session.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#actorOfDirectAuthority"
+      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -112587,6 +113173,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#$file",
+      "id": "import:59210a85bb616179e709",
+      "owner": "identity-access",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "UnauthorizedError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#UnauthorizedError"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjection.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWsProjection.ts#$file",
@@ -113050,6 +113652,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#resolveDatabaseProviderRuntime"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:5a5757231754d836e095",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "reresolveActor",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/platform/background/maintenanceJobRunner.ts",
@@ -113416,6 +114034,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/safePath.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#realpathInside"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#$file",
+      "id": "import:5b28a37dc2f25e16b002",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/actor",
+      "syntax": "static-import",
+      "targetSymbol": "Actor",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/actor.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
     },
     {
       "edgeKind": "value",
@@ -113880,22 +114514,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/maintenanceTicker.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/maintenanceTicker.ts#MaintenanceTickerHandle"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/composition.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
-      "id": "import:5c3514c0abdae3fa51f4",
-      "owner": "system-operations",
-      "removeAfterWave": "W9-D",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/runtime-management/public/commands",
-      "syntax": "static-import",
-      "targetSymbol": "RuntimeProfileConfigurationCommands",
-      "toContext": "runtime-management",
-      "toFile": "packages/backend/src/modules/runtime-management/public/commands.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/commands.ts#RuntimeProfileConfigurationCommands"
     },
     {
       "edgeKind": "type",
@@ -115275,6 +115893,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:6038683efe6c1f732cf0",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "static-import",
+      "targetSymbol": "composeLocalHttpAuthentication",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "source-control",
       "fromFile": "packages/backend/src/modules/source-control/application/repositoryCommit.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/repositoryCommit.ts#$file",
@@ -116439,7 +117073,7 @@
       "targetSymbol": "resolveActorWithWsCredential",
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/session.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#resolveActorWithWsCredential"
+      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -117067,6 +117701,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:655bdea16b1df5e31dff",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "admitDaemonIdentity",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/infrastructure/resourceLimitPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/resourceLimitPersistence.ts#$file",
@@ -117528,6 +118178,22 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#prepareDatabaseProviderForBoot"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:66ff2ef2feb613f19d8c",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "WsCredentialWithExpiry",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -118104,6 +118770,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/git.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#WorktreeLifecycleHookEvent"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:69154c626ca0cf495dfa",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "resolveIdentity",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -127195,22 +127877,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/auth/session.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "id": "import:83ff57c4dc57028fa602",
-      "owner": "identity-access",
-      "removeAfterWave": "W9-D",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/identity-access/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "DirectAuthorityAdmission",
-      "toContext": "identity-access",
-      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthorityAdmission"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/importRefs.ts#$file",
@@ -128184,6 +128850,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/composition/dynamicWorkflowPersistence.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/dynamicWorkflowPersistence.ts#composeDynamicWorkflowPersistence"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:87286904000bae4cfb1a",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/runtime-management/public/commands",
+      "syntax": "static-import",
+      "targetSymbol": "RuntimeProfileConfigurationCommands",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/commands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/commands.ts#RuntimeProfileConfigurationCommands"
     },
     {
       "edgeKind": "type",
@@ -130311,7 +130993,23 @@
       "targetSymbol": "reresolveIdentity",
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/session.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#reresolveIdentity"
+      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:8d0a8c41456471d6fc38",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "static-import",
+      "targetSymbol": "composeLocalHttpAuthentication",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -130648,22 +131346,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/nodeRollback.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/nodeRollback.ts#loadRollbackTarget"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/auth/session.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "id": "import:8e5be5e87b0dc1596aeb",
-      "owner": "identity-access",
-      "removeAfterWave": "W9-D",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/identity-access/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "AdmittedSessionCredential",
-      "toContext": "identity-access",
-      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#AdmittedSessionCredential"
     },
     {
       "edgeKind": "value",
@@ -138475,22 +139157,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/auth/session.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "id": "import:a4da224408f5e2978e32",
-      "owner": "identity-access",
-      "removeAfterWave": "W9-D",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/identity-access/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "DirectAuthorityIdentity",
-      "toContext": "identity-access",
-      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthorityIdentity"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteWorkspaceParticipant.ts#$file",
@@ -138632,6 +139298,38 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:a58ccef1459d41062f35",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "actorOfDirectAuthority",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:a58e8d699a96e777f93e",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "resolveActorWithWsCredential",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -141595,6 +142293,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:aed720ff68f92a38a72c",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "static-import",
+      "targetSymbol": "DirectAuthorityAdmissionRuntime",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/public/commands.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
@@ -141912,6 +142626,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/agentRunDistillObserver.ts#composeAgentRunDistillObserver"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:b0217a71cc9e6128f0ab",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/runtime-management/public/commands",
+      "syntax": "static-import",
+      "targetSymbol": "RuntimeProfileConfigurationCommands",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/commands.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/commands.ts#RuntimeProfileConfigurationCommands"
     },
     {
       "edgeKind": "value",
@@ -146267,6 +146997,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:bc6b85c608cbbf4dfd56",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "DirectAuthorityAdmissionRuntime",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/developmentDeliveryProvider.ts#$file",
@@ -146488,6 +147234,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:bd26a892f26e6277b980",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "WsCredentialFingerprint",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -149644,6 +150406,22 @@
     {
       "edgeKind": "type",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:c65cf01f2120e7e92543",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "ResolvedUpgradeIdentity",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/docs.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/docs.ts#$file",
       "id": "import:c678160f4a66661ac419",
@@ -152476,6 +153254,22 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:ced5173b5f8def7f6e47",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "admitDurableWorkOwner",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "id": "import:cef9e22ee748c2bfcf00",
@@ -152504,6 +153298,22 @@
       "toContext": "digital-employee",
       "toFile": "packages/backend/src/modules/digital-employee/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:cf08eaee7c8b3cd96091",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "export",
+      "targetSymbol": "reresolveIdentity",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -158971,6 +159781,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:e02eaf9d94299d6f001e",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "HttpAuthenticationParticipant",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#HttpAuthenticationParticipant"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/infrastructure/portableDatabaseRestore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/portableDatabaseRestore.ts#$file",
@@ -159528,6 +160354,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/webhook/webhookDispatch.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#renderWebhookLaunch"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#$file",
+      "id": "import:e2543d3fe53143babf25",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/infrastructure/compatibleAuthRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "CompatibleAuthRuntimeInput",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/infrastructure/compatibleAuthRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/infrastructure/compatibleAuthRuntime.ts#CompatibleAuthRuntimeInput"
     },
     {
       "edgeKind": "value",
@@ -162332,22 +163174,6 @@
     {
       "edgeKind": "type",
       "fromContext": "legacy",
-      "fromFile": "packages/backend/src/auth/session.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "id": "import:ea45982c33df8a8ef213",
-      "owner": "identity-access",
-      "removeAfterWave": "W9-D",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/identity-access/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "DirectRequestAuthority",
-      "toContext": "identity-access",
-      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectRequestAuthority"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
       "fromFile": "packages/backend/src/ws/registry.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/ws/registry.ts#$file",
       "id": "import:ea5db569962c0ff91687",
@@ -163902,6 +164728,22 @@
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:ef075ef7117c4b92a7f9",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "static-import",
+      "targetSymbol": "composeLocalHttpAuthentication",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "id": "import:ef4f6ad46b4bb214b8b7",
       "owner": "bootstrap",
       "removeAfterWave": "W5",
@@ -164088,6 +164930,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/composition/executionContractResource.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/executionContractResource.ts#createExecutionContractResourceAdapter"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "identity-access",
+      "fromFile": "packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts#$file",
+      "id": "import:efc376b4e633b129b179",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/application/authRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "AuthRuntime",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/application/authRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/application/authRuntime.ts#AuthRuntime"
     },
     {
       "edgeKind": "value",
@@ -165880,22 +166738,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workgroups"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/auth/session.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
-      "id": "import:f4853d1d9242be9a3ac2",
-      "owner": "identity-access",
-      "removeAfterWave": "W9-D",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/identity-access/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "AdmittedPatCredential",
-      "toContext": "identity-access",
-      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#AdmittedPatCredential"
     },
     {
       "edgeKind": "value",
@@ -168938,6 +169780,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#resourceGrants"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/auth/session.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
+      "id": "import:fdcbe01976aa3c4d87bf",
+      "owner": "identity-access",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/identity-access/composition/authentication",
+      "syntax": "static-import",
+      "targetSymbol": "composeHttpAuthenticationMiddleware",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/composition/authentication.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/composition/authentication.ts#$file"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/packageResourceRows.ts",
@@ -168983,7 +169841,7 @@
       "targetSymbol": "DirectAuthorityAdmissionRuntime",
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/session.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#DirectAuthorityAdmissionRuntime"
+      "toOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -170422,7 +171280,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:446ef7ced94b51a52393538e4afbf8959051e7d0c6eaebd637af9e3361e0842e",
+  "sourceDigest": "sha256:ca11bb17ab9e4fb408c0e3236abe37e3e8baff0e07770c4d33412489d78ead9b",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -62,13 +62,14 @@
         "modules/digital-employee/public/events.ts -> public/types",
         "modules/identity-access/application/adapters/event-automation-adapter.ts -> composition/required-ports",
         "modules/integration/application/adapters/event-center-adapter.ts -> composition/required-ports",
+        "modules/integration/application/ports/verifiedWebhookIngress.ts -> public/types",
+        "modules/integration/composition/webhookIngress.ts -> composition",
         "modules/integration/public/events.ts -> public/types",
         "modules/task-execution/application/adapters/event-automation-adapter.ts -> composition/required-ports",
         "modules/task-execution/application/taskLifecycleConsumers.ts -> public/participants",
         "modules/task-execution/public/events.ts -> public/types",
         "routes/eventCenter.ts -> composition",
         "routes/webhookDeliveries.ts -> composition",
-        "routes/webhooks.ts -> composition",
         "server.ts -> composition"
       ]
     },

@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1736,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1738,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T3/H2：新增本地 HTTP 认证 adapter 与中立 HTTP middleware 两个 create 工厂，1736→1738；原凭据算法迁移到 owner，未新增账号或业务写行为。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5453,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5479,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T3/H2：将原 auth/session 凭据实现移入 identity-access local adapter；legacy facade 保持所有既有入口、两个 bootstrap 根和公共 HTTP 层显式消费新装配／participant；净5453→5479。没有 CS 运行依赖或新跨业务域边。 其中 Settings runtime public 显式绑定由模块 composition 移至两个 bootstrap，净增一条合法根接线。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +873,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4845,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4871,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T3/H2：原全局 auth/session 内部调用变为 owner adapter 对既有 auth persistence／错误／coalescer 的精确 legacy 边，并登记旧 facade／bootstrap 到 owner composition 的兼容边；净4845→4871。WS 传输及剩余 legacy 身份调用者后续逐项收口，不扩大例外规则。 同时删除 Settings DAG 外模块边，按既有规则登记两个 bootstrap 绑定；未添加 off-DAG 豁免。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -881,8 +890,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1017,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1018,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T3/H2：新增 HttpAuthenticationParticipant（1017→1018），server HTTP 真实消费，SQLite／PG 显式注入；只交换请求方法／路径／header reader 与现有 registered identity，不暴露 CS DTO。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -902,12 +914,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25041,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25050,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T3/H2：四个 identity-access adapter／inbound／composition 文件，原凭据函数归位及 HTTP participant／工厂／本地依赖／parser，净25041→25050。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:446ef7ced94b51a52393538e4afbf8959051e7d0c6eaebd637af9e3361e0842e",
+    "sourceDigest": "sha256:ca11bb17ab9e4fb408c0e3236abe37e3e8baff0e07770c4d33412489d78ead9b",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +935,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "065add7015056323f4f14dcfd49b1f16aa410e5a",
-    "contentDigest": "sha256:bc696fcb0f1673f0484701f9cdec8ee2d1ebced10f64fa0233016f57b430c5e1",
+    "currentSnapshotSha": "b1258161ef173cb219578a653f58cdcd75a52d3b",
+    "contentDigest": "sha256:4ecca052343e58c7da259f32646ff65acf4f274af16c94558c578d687774e4cc",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

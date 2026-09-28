@@ -639,7 +639,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 取消（`cause: { kind: 'resource-reaped', ...reason }`），状态与原因同一次写入落下；此前
       // 按 `user` 取消、事后改写原因，中间几秒数字员工会把超时误判成用户取消。装配图变的是这两格，
       // 判据在 `tests/rfc368-implementation-gate.test.ts`。
-      '3b515a04d5e644e9ca1473275ad49255e5a305568e2fb4ecac661851b9ab4d97',
+      '1026d7707ca44f46bb563d25651bef4530b565176417876c55f4fe1a5a0a3cae',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -704,7 +704,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
       // RFC-365: the SQLite root explicitly wires the two target providers, the event-only
       // delegated-context factory and the durable work-intent store.
-      '96d877196744aba091c498d99f5daa96ccefe2698990a2bf99e8ea24eaa3acb0',
+      '0ec0cc049dd960b6f7dc33cd9f8931aefd2275aef1149cb0fd0859c7a7b8e3b0',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -845,7 +845,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // `composeReactionExecutionProvider({ db: deps.db, ... })` 装配、以 `reactionExecution`
       // 交给数字员工；旧字符串 participant 与适配器删除。装配图的变化是有意的，
       // 判据在 `tests/rfc368-*.test.ts`。
-      '5efcb90cddf86281a1877b7b7b6c6fafa0eb77ffefdc31166e12333560e5c19c',
+      'bb55c7674535b1878bff3a9db90671598a0f26d7ccc3d867998bcd3c65ebfe89',
     )
     expect(
       namedCalls(
@@ -878,7 +878,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-370: completed HTTP/MCP composition receives the selected configuration
     // query instead of a file path; route order and runtime handles are unchanged.
     const expected = {
-      composeProviderAppDeps: '8d0ce7f4b6dde1ca96c31fe7a0d6ed068dc3a9f7694f37a52f6d1fda2de4d4ad',
+      composeProviderAppDeps: '38237539617e87707ebea031feac7b943a17c5ca6cf7717360be72dae120f200',
       composePostgresqlAppDeps: '2ebbeeef1bc8fecbda4f4c93cf8603afc3eec78fe6d4739403d407c2fb185c5b',
       // gitleaks:allow —— 这是被测装配的 sha256 内容摘要，不是凭据。
       // 2026-09-19 重采：`taskArchive` 的挂载点移到 `tasks` 之前——Hono 的 `*` 能匹配零个段，
@@ -886,7 +886,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 并把它变成 404（只对非管理员，见 server.ts 该处注释与
       // tests/rfc311-task-archive-route-reachability.test.ts）。摘要随之变。
       mountApiRoutes: 'ad3aabd891e51458a246b8162514c0bb1bc645ede3922272d6e77292b5029a05', // gitleaks:allow
-      createComposedApp: 'ed2f30c5368592797679524f9ca8edb5eb5ec12290270511ba2af6b127d818c1',
+      createComposedApp: 'c0a8d5ef48393cfb625a9bd8da82d9fc645a935ef0c2f5d6038c4e21c0b08c6d',
       createApp: '628edbc2da66884bfba5d159423fa972ea9a8d4aca3ecb37ed8e3ed98e18aefa',
     }
     for (const [name, hash] of Object.entries(expected)) {

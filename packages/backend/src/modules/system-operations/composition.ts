@@ -1,4 +1,3 @@
-import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import type { ApplicationConfigurationQueries } from './public/queries'
 // RFC-370: bootstrap-only settings composition; the application has no paths.
 import { createApplicationConfiguration } from './application/applicationConfiguration'
@@ -476,11 +475,7 @@ function composeSystemOperationsWithArtifacts(deps: {
   })
 }
 
-export function composeApplicationConfiguration(
-  deps: ApplicationConfigurationDependencies & {
-    readonly runtimeRegistry: RuntimeProfileConfigurationCommands
-  },
-) {
+export function composeApplicationConfiguration(deps: ApplicationConfigurationDependencies) {
   return createApplicationConfiguration(deps)
 }
 

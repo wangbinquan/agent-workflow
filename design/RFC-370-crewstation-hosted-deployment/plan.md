@@ -156,3 +156,18 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 
 - A-T2/H1 配置消费者续批：MCP diagnostics adapter 不再持有 configPath／直接 loadConfig，改接只读、可异步的 runtime 配置投影。SQLite／PG 应用与 daemon 根明确装配既有 file query，测试台选型／默认 binary／profile 覆盖及快照逻辑不变。已有服务与真实 runtime 用例继续使用真实 file adapter，新增无路径异步 reader 的等待、热读、默认值／覆盖优先级和失败传播用例；工作区／本地进程效果仍待 H3～H5 收口，不宣称 MCP 已可在 CS 执行。
 - 本批目标 TypeScript Prettier／ESLint 通过，W29 两个 composition 内容摘要随唯一配置绑定变化更新；未改其扫描／断言规则。架构 ledger 分母无增长：一个配置 legacy 直连移为 bootstrap file query 装配边；删除 H8 前批已消费的五项 allowGrowth。正式功能测试以发布后的精确 SHA CI 为准，不运行本地测试。
+
+- MCP 配置续批 `b1258161ef173cb219578a653f58cdcd75a52d3b` 已发布，推送后 main／origin/main 精确同步；CI `36374739146` 已排队。前批 `065add701` 的 check 已通过，完整 CI 尚未取得终态，不能替代本批验收。未通过 A-G，尚无 CS adapter 或 M0 部署。
+
+- A-T3/H2 HTTP 首批：新增 identity-access public `HttpAuthenticationParticipant`，共享 HTTP transport 只接 request facts／已准入 identity；SQLite／PG 组合根显式选择 local adapter，完成态装配允许替换认证机制。原 session／PAT／daemon 解析、WS credential 解析与重验函数迁至 `identity-access/infrastructure/local/localCredentialAdmission`，`auth/session` 保留兼容委托；13 个迁移函数体经只读 AST 比较与迁移前相同。HTTP 原公开路径、Bearer 语法、bootstrap 阻止及重叠请求合流归 local adapter。
+- 新增真实双 provider fixture 覆盖无本地 Bearer 的异步替换 adapter 接线、原 local overlap 合流／完成后重新读取及公开登录路径；原 auth-session、PAT、bootstrap、WS dedup／revalidation 用例继续通过兼容入口执行。原路径文本断言随公开路径规则迁到 local adapter，未变更判据。WS query 凭据提取／完整生命周期切面仍待后续，H2 不记完成；无 hosted identity 或 CS adapter。
+
+- 前批 `b1258161e` CI `36374739146` 的 Ubuntu shard 4／macOS shard 2 暴露 H8 迁移后的旧 source／manifest 断言，以及 Settings 的 runtime public 绑定被放在 system-operations composition 而不在 bootstrap。修复将显式 `RuntimeProfileConfigurationCommands` 绑定放回两个 provider root，system-operations 仅消费 required shape，删除该 DAG 外边，不加例外；RFC-310 精确 manifest 随真实 H8 路径更新，publisher-only 断言覆盖 route→application→composition 整链，禁止 endpoint-wide dispatcher 的原规则保持。原失败 run 不记成功。
+
+- H2 首批与上述 CI 修复的目标 TypeScript Prettier／ESLint 通过，W29 五处摘要按实际装配更新。架构重采记录迁移后的实际 owner／legacy facade 边及1个已被消费的 HTTP participant；不修改扫描器、DAG 和未消费合同豁免。新 HTTP 测试包含实际 `createHttpRequestApp` 的异步 adapter 入口，正式功能结果等待本批发布后的 GitHub CI。
+
+- 发布阻塞：本批精确暂存调用被自动审批服务拒绝执行，原因是 Codex 使用额度耗尽、审核无法完成（工具明确不是安全性否决）。尚未执行 git add／commit／push；复核共享 index 为空，HEAD 仍为 `b1258161ef173cb219578a653f58cdcd75a52d3b`。实现与修复全部保留在主工作区，已准备精确30路径 allowlist／commit message；等待额度恢复后重新 fetch、核对候选内容与共享 index，再按原授权发布，不绕过审批。
+
+- 审批恢复核对：账户工具报告 ordinaryUsageAllowed，原审批流程下 git fetch 已成功；候选30路径摘要与封存一致，共享 index 仍为空。继续原授权的精确暂存／提交／发布，不改变审批方式。
+
+- 前批 CI `36374739146` 已终态 failure：除上述架构定位外，已启用的真实 PG 迁移用例暴露完成后重复 start 仍先要求 SQLite 的原缺陷。本批在已校验 generation 绑定的成功迁移上返回原 operation；不同 target 仍拒绝，未完成／失败操作保留原显式恢复路径。回归继续保留真实迁移、异步持久配置和回滚，并补相同 canonical 请求的新调用 key、不同 target 拒绝及无重复 admission 效果断言。不删除用例或将失败当成功。

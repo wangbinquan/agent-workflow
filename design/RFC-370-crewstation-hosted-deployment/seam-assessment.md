@@ -39,3 +39,19 @@
 - H8 直连 transport 的 verified 投递已通过 integration public command 接应用受理／Event Center 发布。共同命令保留原持久化、MR 效果、重复重发与失败语义；provider 验签／normalize 仍由各入站 adapter 负责，人工业务 replay 保留原独立路径。CS 运输 receipt／ACK及事件适配在 B 阶段实现，不混为业务重放。
 
 - MCP diagnostics 的配置读取改接窄 runtime 配置 query，支持异步／按次热读；SQLite／PG／daemon 显式注入原文件 reader。该测试台仍有 scratch／本地执行效果，配置切面完成不代表 H4／H5 或 CS MCP 能力完成。
+
+- H2 HTTP 完成态装配新增 `HttpAuthenticationParticipant`；两个 provider root 选择 local adapter，公共 transport 不固定凭据方案。原 HTTP 与 WS 凭据算法已归 identity-access 本地 infrastructure，legacy facade 委托同一实现；WS 握手提取、credential DTO 与重验装配仍需继续收口。CS 身份映射、首个管理员及前端登录在 B/M0 实现。
+
+## H2 后续 WS 闭环核对（当前源码）
+
+HTTP participant 不能替代 WS 全链路。后续 A-T3 须一起迁移下面这些机制，才能在 B/M0 选择同一外部身份来源；不能仅让握手接受新身份、重验仍去本地 session/PAT 表查询。当前仍为 local 行为，不声称以下缺口已经实现。
+
+| 调用点 | 当前依赖 | 后续切面要求 |
+| --- | --- | --- |
+| `ws/server.ts:217`、`:292` | daemon token Buffer 与 query token，调用 realtime credentials.resolveUpgrade | 请求凭据提取／解析由 identity-access 所选 adapter 完成；WS 保留升级生命周期与通道准入 |
+| `modules/runtime-management/application/realtimeCredentialAccess.ts:14`、`:23` | 固定转调本地 resolveActorWithWsCredential／reresolveIdentity | 凭据机制归 identity-access；runtime-management 继续拥有实时通道数据，不再选择身份机制 |
+| `ws/connections.ts:73`、`:183` | 按 daemon／session／PAT hash 构造重验合并键，再查原 credential store | adapter 提供连接凭据引用／稳定合并标识与重验行为；同一 adapter 内同凭据仅查一次，连接各自完成刷新 |
+| `ws/registry.ts:1085` | 通过本地凭据 kind 与 expiresAt 判断帧发送时过期 | 暴露中立到期事实，保持同步帧路径和原过期关闭时机，不因远程身份引入每帧 IO |
+| `ws/server.ts:413` | 打开时再次调用同一 credential resolver | 升级与 open 之间的既有 revalidation epoch 行为必须随端口保留，不能只替换第一次解析 |
+
+本轮只记录源码定位。后续用既有 WS 多 token、provider、去重及重验行为用例固定原结果，再增加替换 adapter 的升级／open／广播过期／主动重验闭环用例；真实 CS token／网关／重新连接在 B/M0 验收。

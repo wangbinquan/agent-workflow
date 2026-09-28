@@ -1,6 +1,8 @@
 // Uses the shared provider selection and a disposable PostgreSQL test database.
 // RFC349_DATABASE_URL remains supported for an explicit standalone evidence run. This covers the production coordinator used by CLI/Settings,
 // including durable config activation, idempotent replay and instant rollback.
+// RFC-370 CI 36374739146 exposed replay incorrectly requiring the old SQLite
+// provider after a successful cutover. Replays must be read-only and target-bound.
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
@@ -264,7 +266,15 @@ describe('RFC-349 production database migration coordinator', () => {
         operationId: migrated.operationId,
         phase: 'accepting-writes',
       })
+      // Canonical identity comes from source + target, not the caller's key.
+      expect(
+        await coordinator.start({ ...input, idempotencyKey: 'rfc370-repeated-start' }),
+      ).toMatchObject({ operationId: migrated.operationId, phase: 'accepting-writes' })
+      await expect(
+        coordinator.start({ ...input, target: { ...input.target, poolMax: 2 } }),
+      ).rejects.toMatchObject({ code: 'database-migration-target-config-mismatch' })
       expect(await coordinator.list()).toHaveLength(1)
+      expect(admissions).toEqual(['freeze', 'postgresql', 'open'])
       const rollingBack = coordinator.rollback({ operationId: migrated.operationId })
       try {
         await Promise.race([

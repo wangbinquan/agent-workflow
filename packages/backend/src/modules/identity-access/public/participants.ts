@@ -116,6 +116,19 @@ export interface DirectAuthorityIdentity {
   readonly actor: DirectAuthenticatedAuthority
 }
 
+/** Deployment-selected credential admission. The shared HTTP transport binds
+ * request facts without selecting a credential scheme or persistence store. */
+export interface HttpAuthenticationParticipant {
+  authenticate(request: {
+    readonly method: string
+    readonly path: string
+    readonly header: (name: string) => string | null
+  }): Promise<
+    | { readonly kind: 'public' }
+    | { readonly kind: 'authenticated'; readonly identity: DirectAuthorityIdentity }
+  >
+}
+
 /** Credential adapters may supply only the admitted credential facts.  The
  * runtime re-resolves current account state and mints the handle/projection as
  * one indivisible result. */

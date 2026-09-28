@@ -310,8 +310,7 @@ export function createDatabaseMigrationCoordinator(
       expectedSchemaDigest: contract.digest,
     })
 
-  const assertSqliteSource = (): string => {
-    const generation = liveGeneration().payload
+  const assertSqliteSource = (generation = liveGeneration().payload): string => {
     // RFC-359 AC-10：问能力（这一代能不能当迁移的**源**端），不问品牌名。同文件 :719 / :729
     // 早已用 `migrationRole === 'target'` 抛同一个错误码，这里是最后一处手写的孪生。
     if (databaseProviderTraits(generation.provider).migrationRole !== 'source') {
@@ -654,7 +653,31 @@ export function createDatabaseMigrationCoordinator(
     },
 
     async start(input: StartDatabaseMigrationInput) {
-      const sourceGenerationId = assertSqliteSource()
+      const generation = liveGeneration().payload
+      // A successful cutover changes the live provider. Replay the operation
+      // bound to that verified generation before requiring a SQLite source;
+      // never re-open the retained source or start another migration here.
+      if (
+        databaseProviderTraits(generation.provider).migrationRole === 'target' &&
+        generation.operationId !== null
+      ) {
+        const operation = controlPlane.readManifest(generation.operationId).payload
+        if (!sameTarget(operation.target, input.target)) {
+          throw new DatabaseMigrationCoordinatorError(
+            'database-migration-target-config-mismatch',
+            'idempotent migration start reused an operation with a different target config',
+          )
+        }
+        if (
+          operation.failure === null &&
+          operation.rolledBackAt === null &&
+          operation.cancelledAt === null &&
+          (operation.phase === 'accepting-writes' || operation.phase === 'finalized')
+        ) {
+          return controlPlane.get(generation.operationId)
+        }
+      }
+      const sourceGenerationId = assertSqliteSource(generation)
       const sourceSnapshot = await inspectSqliteSource()
       const status = controlPlane.start({
         idempotencyKey: input.idempotencyKey,
