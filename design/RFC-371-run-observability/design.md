@@ -254,3 +254,12 @@ CS 托管 invocation 不使用本地 reader 或价格；本批仍不代替 CS �
 金额可见性变更（包括空增量页）先停止返回旧金额，再重新请求完整快照；重新开放时也须完成新快照才展示金额。平台不可达保留上次数据、游标和明确失败状态，访问不可用则隐藏旧金额并要求重取快照，均不调用 AW 价目表。查询通过数据库的一致快照读取状态、数据和估值依赖，跨页游标绑定当前代次及状态修订，视图变动需要重启分页。
 
 本批提供持久 source 应用与 SQLite/PostgreSQL 实现；AW invocation 映射查询、RFC370 托管启动根、同步后台生命周期及正式页面仍须继续接入。
+
+
+## 18. 调用归因查询与平台安装身份
+
+新受理的托管 invocation 必须冻结 `authority.sourceId`，它是平台安装身份，不是可变 URL。唯一执行键由安装来源、项目、执行资源与代次组成；任务和子任务仍属于不可变受理内容。历史缺少安装身份的已接受文档读取为 `sourceId=null`，查询返回 `legacy-unbound`，不根据当前平台配置补写归属。独立调用的原受理合同和人民币价目表快照不变。
+
+调用查询只按已接受的 authority 选择数据源。本地页精确匹配 invocation/task/node/agent；托管页读取冻结 source/project/task 绑定，再按 subtask/execution/generation 过滤。返回原始 canonical 用量投影、独立估值与平台同步状态，不再扣 native baseline，也不把金额记录当第二笔 Token。CS 的 modelRef 保持不透明引用，不猜 provider 或模型名称；迟到、隐藏、未知与真实零金额沿用平台读面语义。
+
+每轮最多读取 500 条源记录，过滤后可以返回空 items 与有效 nextCursor；调用方必须继续分页，不能把空页视为零用量。游标绑定 invocation 和不可变 authority，平台游标同时绑定代次和修订。本地页明确声明 live-page，不声称多页汇总具有同一快照；正式统计必须另接一致快照汇总。该端口是内部读接口，后续 HTTP 入口须先调用 TaskExecution 的任务可见性查询。当前没有托管 bootstrap、统计 HTTP 或页面接线完成的声明。

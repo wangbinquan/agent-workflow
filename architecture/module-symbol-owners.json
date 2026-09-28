@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1904,
+    "backendFiles": 1906,
     "frontendFiles": 628,
     "legacyFiles": 554,
-    "moduleFiles": 1350,
-    "productionFiles": 2690,
+    "moduleFiles": 1352,
+    "productionFiles": 2692,
     "sharedFiles": 158,
-    "symbolsIncludingFileRoots": 25326
+    "symbolsIncludingFileRoots": 25336
   },
   "entries": [
     {
@@ -105055,6 +105055,54 @@
       "currentContext": "run-observability",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/run-observability/application/invocationObservations.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/invocationObservations.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/application/invocationObservations.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/invocationObservations.ts#continuation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "continuation",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/application/invocationObservations.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/invocationObservations.ts#createInvocationObservationQuery",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createInvocationObservationQuery",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/application/invocationObservations.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/invocationObservations.ts#cursorScope",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "cursorScope",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/run-observability/application/invocationValuation.ts",
       "id": "owner:packages/backend/src/modules/run-observability/application/invocationValuation.ts#$file",
       "removeAfterWave": null,
@@ -106502,6 +106550,54 @@
       "symbol": "scope",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "ports",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/ports/invocationObservations.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/ports/invocationObservations.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "ports"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "ports",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/ports/invocationObservations.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/ports/invocationObservations.ts#InvocationObservationPage",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "InvocationObservationPage",
+      "targetContext": "run-observability",
+      "targetLayer": "ports"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "ports",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/ports/invocationObservations.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/ports/invocationObservations.ts#InvocationObservationQuery",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "InvocationObservationQuery",
+      "targetContext": "run-observability",
+      "targetLayer": "ports"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "ports",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/ports/invocationObservations.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/ports/invocationObservations.ts#Page",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Page",
+      "targetContext": "run-observability",
+      "targetLayer": "ports"
     },
     {
       "currentContext": "run-observability",
@@ -283317,12 +283413,36 @@
     {
       "currentContext": "shared",
       "currentLayer": "contracts",
+      "exported": false,
+      "file": "packages/shared/src/schemas/observationInvocation.ts",
+      "id": "owner:packages/shared/src/schemas/observationInvocation.ts#localAuthority",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "localAuthority",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
       "exported": true,
       "file": "packages/shared/src/schemas/observationInvocation.ts",
       "id": "owner:packages/shared/src/schemas/observationInvocation.ts#ObservationExecutionAuthoritySchema",
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "ObservationExecutionAuthoritySchema",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": false,
+      "file": "packages/shared/src/schemas/observationInvocation.ts",
+      "id": "owner:packages/shared/src/schemas/observationInvocation.ts#platformAuthority",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "platformAuthority",
       "targetContext": "shared-contracts",
       "targetLayer": "contracts"
     },
@@ -304642,5 +304762,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fde7100f1a1d0a955225f9f4d8496b50af46ca05db7f9c4fe2603b3ea1122c6d"
+  "sourceDigest": "sha256:a261b998740125880776cb3d2202e2b54a18ea5ca838604dd2fd57c68d607829"
 }

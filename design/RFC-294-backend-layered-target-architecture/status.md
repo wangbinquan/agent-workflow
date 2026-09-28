@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:fde7100f1a1d0a955225f9f4d8496b50af46ca05db7f9c4fe2603b3ea1122c6d`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:a261b998740125880776cb3d2202e2b54a18ea5ca838604dd2fd57c68d607829`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1904 |
+| backend production TS 文件 | 1906 |
 | `services/` 文件 | 295 |
-| `modules/**` 文件 / 非空 context | 1350 / 18 |
+| `modules/**` 文件 / 非空 context | 1352 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -35,8 +35,8 @@
 | `crossContextImports` | 5538 |
 | `facades` | 295 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25326 |
-| `mutationEntrypoints` | 1765 |
+| `moduleSymbolOwners` | 25336 |
+| `mutationEntrypoints` | 1766 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1025 |
 | `transactionExternalEffects` | 261 |
@@ -89,16 +89,17 @@
 | event-center / application | 8 |
 | intent / infrastructure | 8 |
 | knowledge-evolution / domain | 8 |
+| run-observability / ports | 8 |
 | development-automation / engine | 7 |
 | intent / composition | 7 |
 | memory / infrastructure | 7 |
-| run-observability / ports | 7 |
 | task-execution / public | 7 |
 | digital-employee / composition | 6 |
 | digital-employee / domain | 6 |
 | identity-access / composition | 6 |
 | identity-access / public | 6 |
 | memory / public | 6 |
+| run-observability / application | 6 |
 | run-observability / infrastructure | 6 |
 | collaboration / public | 5 |
 | digital-employee / public | 5 |
@@ -106,7 +107,6 @@
 | event-center / public | 5 |
 | integration / public | 5 |
 | resource-catalog / public | 5 |
-| run-observability / application | 5 |
 | runtime-management / composition | 5 |
 | source-control / public | 5 |
 | system-operations / composition | 5 |

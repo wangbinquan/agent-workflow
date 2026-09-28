@@ -17,7 +17,7 @@ function canonicalExecution(input: AcceptObservationInvocation): string {
     JSON.stringify(
       a.kind === 'local'
         ? ['local', input.invocationId]
-        : ['crewstation', a.projectId, a.executionResourceId, a.executionGeneration],
+        : ['crewstation', a.sourceId, a.projectId, a.executionResourceId, a.executionGeneration],
     ),
   )
 }

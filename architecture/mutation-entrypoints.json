@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1765,
+    "entries": 1766,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20495,6 +20495,28 @@
       "symbol": "UpdateWorkgroupCatalogReceipt",
       "targetContext": "resource-catalog",
       "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/application/invocationObservations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/invocationObservations.ts#createInvocationObservationQuery",
+      "missingControls": [
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/invocationObservations.ts#createInvocationObservationQuery",
+      "symbol": "createInvocationObservationQuery",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
     },
     {
       "controls": {
@@ -42173,7 +42195,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:fde7100f1a1d0a955225f9f4d8496b50af46ca05db7f9c4fe2603b3ea1122c6d",
+  "sourceDigest": "sha256:a261b998740125880776cb3d2202e2b54a18ea5ca838604dd2fd57c68d607829",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -9,19 +9,23 @@ const runtime = z
     protocol: z.enum(['opencode', 'claude-code']),
   })
   .strict()
+const localAuthority = z.object({ kind: z.literal('local'), runtime: runtime.nullable() }).strict()
+const platformAuthority = z
+  .object({
+    kind: z.literal('crewstation'),
+    /** Immutable installation identity, not a mutable URL or runtime name. */
+    sourceId: key,
+    projectId: key,
+    taskId: key,
+    subtaskId: key,
+    executionResourceId: key,
+    executionGeneration: revision.positive(),
+  })
+  .strict()
 /** Explicit owner selection: network availability never changes this authority. */
 export const ObservationExecutionAuthoritySchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('local'), runtime: runtime.nullable() }).strict(),
-  z
-    .object({
-      kind: z.literal('crewstation'),
-      projectId: key,
-      taskId: key,
-      subtaskId: key,
-      executionResourceId: key,
-      executionGeneration: revision.positive(),
-    })
-    .strict(),
+  localAuthority,
+  platformAuthority,
 ])
 export const AcceptObservationInvocationSchema = z
   .object({
@@ -35,6 +39,12 @@ export const AcceptObservationInvocationSchema = z
   })
   .strict()
 export const AcceptedObservationInvocationSchema = AcceptObservationInvocationSchema.extend({
+  authority: z.discriminatedUnion('kind', [
+    localAuthority,
+    // Older accepted documents lack installation identity. They remain readable,
+    // but cannot be rebound to the currently configured platform implicitly.
+    platformAuthority.extend({ sourceId: key.nullable().default(null) }),
+  ]),
   acceptedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   /** Zero is an explicitly empty local catalogue; null means local pricing is inapplicable. */
   priceBookRevision: revision.nullable(),

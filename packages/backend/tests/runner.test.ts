@@ -487,6 +487,7 @@ describeEachProvider('runNode', (harness) => {
                 ...input,
                 authority: {
                   kind: 'crewstation',
+                  sourceId: 'cs-installation',
                   projectId: 'project',
                   taskId: 'platform-task',
                   subtaskId: 'subtask',

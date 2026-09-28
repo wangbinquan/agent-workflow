@@ -811,10 +811,10 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1765,
+      "baseline": 1766,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
-        "why": "RFC-371：实现平台观测的持久代次、独立投影修订与原子游标同步，rfc294-mutation-entrypoints 1762 → 1765，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：补齐冻结安装身份及双部署调用归因分页查询，rfc294-mutation-entrypoints 1765 → 1766，按新增功能如实登记本批归属与公开合同。"
       }
     },
     {
@@ -829,10 +829,7 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 261,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-371：实现平台观测的持久代次、独立投影修订与原子游标同步，rfc294-transaction-callbacks 260 → 261，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
@@ -853,10 +850,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5538,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-371：实现平台观测的持久代次、独立投影修订与原子游标同步，rfc294-cross-context-observed-imports 5530 → 5538，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -877,10 +871,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4918,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-371：实现平台观测的持久代次、独立投影修订与原子游标同步，rfc294-architecture-exceptions 4911 → 4918，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -914,15 +905,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25326,
+      "baseline": 25336,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-371：实现平台观测的持久代次、独立投影修订与原子游标同步，rfc294-module-symbol-owners 25300 → 25326，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：补齐冻结安装身份及双部署调用归因分页查询，rfc294-module-symbol-owners 25326 → 25336，按新增功能如实登记本批归属与公开合同。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:fde7100f1a1d0a955225f9f4d8496b50af46ca05db7f9c4fe2603b3ea1122c6d",
+    "sourceDigest": "sha256:a261b998740125880776cb3d2202e2b54a18ea5ca838604dd2fd57c68d607829",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -935,8 +926,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a5f312a141ab62117aeb779d3133d786972ecf40",
-    "contentDigest": "sha256:a4abb4186313f8adb46c8c3acd0455ec8535606eef22a52c51b5d8f64ea82125",
+    "currentSnapshotSha": "8d2e5ba5eb27ffc05d4cf1f83a95611b120ad03c",
+    "contentDigest": "sha256:a32c76978e5da6186ccd3052f92e9765861bd7057aa0b89e1e9e0d7d6fd49d57",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

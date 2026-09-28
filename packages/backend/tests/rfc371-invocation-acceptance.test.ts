@@ -41,6 +41,7 @@ const inputPrice = (patch: Partial<SaveObservationPrice> = {}): SaveObservationP
 })
 const platform = {
   kind: 'crewstation' as const,
+  sourceId: 'cs-installation',
   projectId: 'cs-project',
   taskId: 'cs-task',
   subtaskId: 'cs-subtask',
@@ -201,6 +202,16 @@ describeEachProvider('RFC-371 accepted invocation authority and price catalogue'
         authority: { ...platform, executionGeneration: 2 },
       }),
     ).toMatchObject({ priceBookRevision: null })
+    expect(
+      await f.invocations.accept({
+        ...input,
+        invocationId: 'other-installation',
+        authority: { ...platform, sourceId: 'different-installation' },
+      }),
+    ).toMatchObject({ authority: { sourceId: 'different-installation' } })
+    await expect(
+      f.invocations.accept({ ...input, authority: { ...platform, sourceId: 'changed' } }),
+    ).rejects.toMatchObject({ code: 'invocation-conflict' })
   })
   test('unknown registration stays unknown; explicit zero price and partial usage retain different meanings', async () => {
     const f = fixture()
@@ -273,4 +284,18 @@ test('accepted contract never represents a local price catalogue for CS executio
       authority: { kind: 'unknown' },
     }).success,
   ).toBe(false)
+  const { sourceId: _source, ...legacyAuthority } = platform
+  expect(
+    AcceptObservationInvocationSchema.safeParse({
+      ...acceptance('new'),
+      authority: legacyAuthority,
+    }).success,
+  ).toBe(false)
+  expect(
+    AcceptedObservationInvocationSchema.parse({
+      ...raw,
+      authority: legacyAuthority,
+      priceBookRevision: null,
+    }).authority,
+  ).toMatchObject({ kind: 'crewstation', sourceId: null })
 })

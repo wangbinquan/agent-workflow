@@ -65,6 +65,7 @@ describeEachProvider('RFC-371 committed numeric source projection', (harness) =>
         authority: hosted
           ? {
               kind: 'crewstation',
+              sourceId: 'cs-installation',
               projectId: 'project',
               taskId: 'cs-task',
               subtaskId: nodeRunId,
