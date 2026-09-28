@@ -65,6 +65,7 @@ interface ProviderBackgroundRuntime {
   readonly recovery: TaskRecoveryOperations
   readonly taskHasDriver: (taskId: string) => boolean
   readonly buildScheduleLaunch: BuildScheduleLaunch
+  readonly reconcileObservationUsage?: () => Promise<number>
 }
 
 /**
@@ -251,7 +252,19 @@ function createProviderLoops(
     },
   })
 
-  return Object.freeze([autoRepair, heartbeatKill, orphanReconcile, scheduled])
+  const observations =
+    runtime.reconcileObservationUsage === undefined
+      ? []
+      : [
+          createRestartableLoop({
+            name: 'observation-usage',
+            delayMs: () => DAEMON_CADENCE.observationUsage,
+            run: async () => {
+              await runtime.reconcileObservationUsage!()
+            },
+          }),
+        ]
+  return Object.freeze([autoRepair, heartbeatKill, orphanReconcile, scheduled, ...observations])
 }
 
 /**

@@ -183,6 +183,7 @@ export const RFC349_SOURCE_TABLES = [
   'task_execution_lineage_operation_records',
   'task_execution_maintenance_claims',
   'task_execution_maintenance_members',
+  'task_execution_observation_sources',
   'task_execution_owners',
   'task_feedback',
   'task_node_clarify_directives',

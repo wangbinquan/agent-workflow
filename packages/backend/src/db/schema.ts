@@ -3434,6 +3434,27 @@ export const nodeRunEvents = sqliteTable(
 )
 
 // -----------------------------------------------------------------------------
+// RFC-371: the execution owner commits numeric evidence with the raw event batch.
+export const taskExecutionObservationSources = sqliteTable(
+  'task_execution_observation_sources',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    taskId: text('task_id')
+      .notNull()
+      .references(() => tasks.id, { onDelete: 'cascade' }),
+    nodeRunId: text('node_run_id')
+      .notNull()
+      .references(() => nodeRuns.id, { onDelete: 'cascade' }),
+    evidenceJson: text('evidence_json').notNull(),
+    pending: integer('pending', { mode: 'boolean' }).notNull().default(true),
+  },
+  (t) => ({
+    pendingIdx: index('idx_task_observation_pending').on(t.pending, t.nodeRunId, t.id),
+    nodeIdx: index('idx_task_observation_node').on(t.nodeRunId, t.id),
+  }),
+)
+
+// -----------------------------------------------------------------------------
 // RFC-058 clarify_rounds — unified replacement for the RFC-023 self-clarify
 // and RFC-056 cross-clarify legacy tables (both dropped by migration 0107,
 // RFC-217 T8). The `kind` discriminator decides

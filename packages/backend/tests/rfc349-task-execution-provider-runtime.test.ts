@@ -45,7 +45,13 @@ describe('RFC-349 TaskExecution selected-provider runtime', () => {
     expect(provider).toContain('createPostgresqlReviewRepairParticipant(db)')
     expect(provider).toContain('composeTaskExecutionProviderBackground({')
 
-    for (const loop of ['auto-repair', 'heartbeat-kill', 'orphan-reconcile', 'scheduled-task']) {
+    for (const loop of [
+      'auto-repair',
+      'heartbeat-kill',
+      'orphan-reconcile',
+      'scheduled-task',
+      'observation-usage',
+    ]) {
       expect(background).toContain(`name: '${loop}'`)
     }
     expect(background).toContain('await Promise.all(loops.map((loop) => loop.pause()))')

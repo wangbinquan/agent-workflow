@@ -343,6 +343,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
   })
   const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)
   const background = composeTaskExecutionProviderBackground({
+    reconcileObservationUsage: dependencies.runtime.observationInvocations.reconcile,
     module: taskExecutionModule,
     lifecycleRepair,
     autoResume,
@@ -544,6 +545,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   })
   const buildScheduleLaunch = createBuildScheduleLaunch(taskExecutions)
   const background = composeTaskExecutionProviderBackground({
+    reconcileObservationUsage: dependencies.runtime.observationInvocations.reconcile,
     module: executionModule,
     lifecycleRepair,
     autoResume,

@@ -1,3 +1,4 @@
+import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 // RFC-359 AC-1 / AC-6 —— 任务执行读模型**只有一份实现**，两个引擎跑同一组判据。
@@ -218,7 +219,10 @@ describe('RFC-359 任务执行读模型的装配身份（SQLite 组合根）', (
         collaborationRuntime: createCollaborationRuntimeMechanics(sqlite),
         persistence: createTaskExecutionPersistence(sqlite),
         runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
-        observationInvocations: composeLocalInvocationObservations(sqlite),
+        observationInvocations: composeLocalInvocationObservations(
+          sqlite,
+          composeObservationUsageSource(sqlite),
+        ),
         runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
         nodeRunRuntime: composeNodeRunRuntimePersistence(sqlite),
         workgroupTurns: composeTestWorkgroupTurns(sqlite),

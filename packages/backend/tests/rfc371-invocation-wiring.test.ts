@@ -65,7 +65,9 @@ test('all standalone bootstraps explicitly bind local accounting', () => {
     let count = 0
     const walk = (node: ts.Node) => {
       if (ts.isPropertyAssignment(node) && node.name.getText() === 'observationInvocations') {
-        expect(node.initializer.getText()).toBe(`composeLocalInvocationObservations(${database})`)
+        expect(node.initializer.getText()).toBe(
+          `composeLocalInvocationObservations(${database}, composeObservationUsageSource(${database}))`,
+        )
         count++
       }
       ts.forEachChild(node, walk)
@@ -73,4 +75,18 @@ test('all standalone bootstraps explicitly bind local accounting', () => {
     walk(source(path!))
     expect(count).toBe(1)
   }
+})
+
+test('usage capture receives the effective resume identity used by the process', () => {
+  const file = source('services/runner.ts')
+  let resumed: ts.Expression | undefined
+  const walk = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && node.expression.getText() === 'createInvocationUsageCapture') {
+      const input = node.arguments[0]!
+      if (ts.isObjectLiteralExpression(input)) resumed = properties(input).get('resumeSessionId')
+    }
+    ts.forEachChild(node, walk)
+  }
+  walk(file)
+  expect(resumed?.getText()).toBe('effectiveResumeSessionId')
 })

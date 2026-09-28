@@ -1,3 +1,4 @@
+import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
@@ -1913,7 +1914,10 @@ async function composeSqliteProviderSession(
   const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
     composeSqliteTaskExecutionProviderRuntime(db, {
       runtime: {
-        observationInvocations: composeLocalInvocationObservations(db),
+        observationInvocations: composeLocalInvocationObservations(
+          db,
+          composeObservationUsageSource(db),
+        ),
         memoryInjectionQueries,
         collaborationRuntime: createCollaborationRuntimeMechanics(db),
         workgroupTurns: composeWorkgroupTurnsOperations(

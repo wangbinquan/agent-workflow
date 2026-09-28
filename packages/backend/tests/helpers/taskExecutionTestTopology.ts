@@ -1,3 +1,4 @@
+import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeNodeRunRuntimePersistence } from './nodeRunRuntime'
 import type { DbClient } from '../../src/db/client'
@@ -129,7 +130,10 @@ export function composeTaskExecutionTestRuntime(
       ...singleProcessDeploymentPorts(db),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db),
       identityAccess: identity.resources,
-      observationInvocations: composeLocalInvocationObservations(db),
+      observationInvocations: composeLocalInvocationObservations(
+        db,
+        composeObservationUsageSource(db),
+      ),
       memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
       collaborationRuntime: createCollaborationRuntimeMechanics(db),
       persistence,
@@ -248,7 +252,8 @@ export function runTaskWithRealTestTopology(
   const memoryInjectionQueries =
     options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(options.db)
   const observationInvocations =
-    options.observationInvocations ?? composeLocalInvocationObservations(options.db)
+    options.observationInvocations ??
+    composeLocalInvocationObservations(options.db, composeObservationUsageSource(options.db))
   const persistence = options.persistence ?? createTaskExecutionPersistence(options.db)
   const runtimeSessionLeases =
     options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(options.db)

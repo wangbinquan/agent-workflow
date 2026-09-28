@@ -1,3 +1,4 @@
+import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
@@ -963,7 +964,10 @@ export async function composePostgresqlApplication(
     })
   const taskExecutionProvider = composePostgresqlTaskExecutionProviderRuntime(input.db, {
     runtime: {
-      observationInvocations: composeLocalInvocationObservations(input.db),
+      observationInvocations: composeLocalInvocationObservations(
+        input.db,
+        composeObservationUsageSource(input.db),
+      ),
       runtimeRegistry: core.runtimeRegistry,
       nodeRunRuntime: composeNodeRunRuntimePersistence(
         input.db,

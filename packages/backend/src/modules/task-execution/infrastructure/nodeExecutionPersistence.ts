@@ -3,11 +3,21 @@
 
 import { and, asc, count, eq, inArray, isNotNull, isNull, not, notLike, sql } from 'drizzle-orm'
 
-import { nodeRunEvents, nodeRunOutputs, nodeRuns } from '@/db/schema'
+import {
+  nodeRunEvents,
+  nodeRunOutputs,
+  nodeRuns,
+  taskExecutionObservationSources,
+} from '@/db/schema'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { insertInBatches, lastPerKey } from '@/platform/persistence/batchInsert'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
-import { MERGE_STATES, RerunCauseSchema, type MergeStateOrNull } from '@agent-workflow/shared'
+import {
+  MERGE_STATES,
+  RerunCauseSchema,
+  ObservationCapturedUsageSchema,
+  type MergeStateOrNull,
+} from '@agent-workflow/shared'
 import type {
   NodeExecutionPersistence,
   NodeExecutionQuery,
@@ -265,6 +275,25 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
             .insert(nodeRunEvents)
             .values([...batch])
             .run(),
+      )
+      const sources = input.events.flatMap((event) =>
+        event.observation === undefined
+          ? []
+          : [
+              {
+                taskId,
+                nodeRunId: input.nodeRunId,
+                evidenceJson: JSON.stringify(
+                  ObservationCapturedUsageSchema.parse(event.observation),
+                ),
+              },
+            ],
+      )
+      await insertInBatches(tx, taskExecutionObservationSources, sources, (batch) =>
+        tx
+          .insert(taskExecutionObservationSources)
+          .values([...batch])
+          .run(),
       )
     })
   }

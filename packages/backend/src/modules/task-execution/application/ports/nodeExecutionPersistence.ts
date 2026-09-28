@@ -1,4 +1,9 @@
-import type { MergeStateOrNull, NodeRunStatus, RerunCause } from '@agent-workflow/shared'
+import type {
+  MergeStateOrNull,
+  NodeRunStatus,
+  RerunCause,
+  ObservationCapturedUsage,
+} from '@agent-workflow/shared'
 
 import type { TaskExecutionContextRef } from './taskExecutionTopology'
 
@@ -107,6 +112,7 @@ export type NodeExecutionEventWrite = Omit<
 > & {
   readonly sessionId?: string | null
   readonly parentSessionId?: string | null
+  readonly observation?: ObservationCapturedUsage
 }
 
 export interface NodeExecutionQuery {

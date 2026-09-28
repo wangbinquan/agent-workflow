@@ -71,3 +71,13 @@ export const ObservationIngestSchema = z
 export type ObservationTokenUsage = z.infer<typeof ObservationTokenUsageSchema>
 export type ObservationMeasurement = z.infer<typeof ObservationMeasurementSchema>
 export type ObservationIngest = z.infer<typeof ObservationIngestSchema>
+
+/** Numeric evidence attached to the owner's durable runtime event, before projection. */
+export const ObservationCapturedUsageSchema = z
+  .object({
+    invocationId: identity,
+    measurements: z.array(ObservationMeasurementSchema).max(500),
+    diagnostics: z.array(z.string().min(1).max(200)).max(100),
+  })
+  .strict()
+export type ObservationCapturedUsage = z.infer<typeof ObservationCapturedUsageSchema>

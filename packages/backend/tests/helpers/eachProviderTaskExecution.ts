@@ -1,3 +1,4 @@
+import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { composeNodeRunRuntimePersistence } from './nodeRunRuntime'
@@ -219,7 +220,10 @@ export async function createEachProviderTaskExecution(
           workgroupTurns,
           dynamicWorkflow,
           runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
-          observationInvocations: composeLocalInvocationObservations(sqlite),
+          observationInvocations: composeLocalInvocationObservations(
+            sqlite,
+            composeObservationUsageSource(sqlite),
+          ),
           runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
           nodeRunRuntime: composeNodeRunRuntimePersistence(sqlite),
           repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
@@ -347,7 +351,10 @@ export async function createEachProviderTaskExecution(
   const provider: SelectedPostgresqlTaskExecutionProviderRuntime =
     composePostgresqlTaskExecutionProviderRuntime(postgresql, {
       runtime: {
-        observationInvocations: composeLocalInvocationObservations(db),
+        observationInvocations: composeLocalInvocationObservations(
+          db,
+          composeObservationUsageSource(db),
+        ),
         runtimeRegistry: composeRuntimeRegistryOperations(db),
         nodeRunRuntime: composeNodeRunRuntimePersistence(db),
         persistence,

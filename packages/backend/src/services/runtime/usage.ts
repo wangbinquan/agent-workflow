@@ -3,6 +3,8 @@ import {
   ObservationTokenUsageSchema,
   type ObservationMeasurement,
   type ObservationTokenUsage,
+  ObservationCapturedUsageSchema,
+  type ObservationCapturedUsage,
 } from '@agent-workflow/shared'
 export const TOKEN_BUCKETS = ['input', 'cacheRead', 'cacheWrite', 'output'] as const
 
@@ -116,4 +118,70 @@ export function normalizeUsageFrame(
     else diagnostics.push('invalid-measurement-identity')
   }
   return { measurements, diagnostics }
+}
+
+/** Freeze source sequence and invocation attribution before the runtime event commits. */
+export function createInvocationUsageCapture(input: {
+  readonly normalize?: (raw: unknown, context: RuntimeUsageContext) => RuntimeUsageFrame
+  readonly invocationId: string
+  readonly taskId: string
+  readonly nodeRunId: string
+  readonly agentId: string | null
+  readonly resumeSessionId?: string
+}) {
+  let revision = 0
+  return (
+    line: string,
+    sessionId: string | null,
+    observedAt: number,
+  ): ObservationCapturedUsage | undefined => {
+    if (!input.normalize) return undefined
+    let raw: unknown
+    try {
+      raw = JSON.parse(line)
+    } catch {
+      return undefined
+    }
+    if (!object(raw)) return undefined
+    if (!sessionId)
+      return {
+        invocationId: input.invocationId,
+        measurements: [],
+        diagnostics: ['native-session-unavailable'],
+      }
+    try {
+      const result = input.normalize(raw, {
+        invocationId: input.invocationId,
+        taskId: input.taskId,
+        nodeRunId: input.nodeRunId,
+        agentId: input.agentId,
+        revision: ++revision,
+        observedAt,
+        rootSessionId: sessionId,
+        sessionId,
+        parentSessionId: null,
+        ancestors: [],
+        turnId: input.invocationId,
+        turnIndex: 0,
+        sessionStartTurn: 0,
+        // Actual model/provider evidence may arrive later from the native transcript.
+        // Configured defaults never stand in for a runtime report.
+        provider: null,
+        actualModel: null,
+        cumulative: {
+          kind: input.resumeSessionId ? 'native-session' : 'invocation',
+          lineageKey: sessionId,
+          modelBaselines: null,
+        },
+      })
+      if (!result.measurements.length && !result.diagnostics.length) return undefined
+      return ObservationCapturedUsageSchema.parse({ invocationId: input.invocationId, ...result })
+    } catch {
+      return {
+        invocationId: input.invocationId,
+        measurements: [],
+        diagnostics: ['usage-normalization-failed'],
+      }
+    }
+  }
 }

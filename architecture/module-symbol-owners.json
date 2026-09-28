@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1893,
+    "backendFiles": 1896,
     "frontendFiles": 628,
     "legacyFiles": 553,
-    "moduleFiles": 1340,
-    "productionFiles": 2679,
+    "moduleFiles": 1343,
+    "productionFiles": 2682,
     "sharedFiles": 158,
-    "symbolsIncludingFileRoots": 25259
+    "symbolsIncludingFileRoots": 25271
   },
   "entries": [
     {
@@ -7519,6 +7519,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "taskExecutionMaintenanceMembers",
+      "targetContext": "platform",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/schema.ts",
+      "id": "owner:packages/backend/src/db/schema.ts#taskExecutionObservationSources",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "taskExecutionObservationSources",
       "targetContext": "platform",
       "targetLayer": "domain"
     },
@@ -105137,6 +105149,42 @@
     },
     {
       "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/application/usageSourceProjection.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/usageSourceProjection.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/application/usageSourceProjection.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/usageSourceProjection.ts#createUsageSourceProjection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createUsageSourceProjection",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/application/usageSourceProjection.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/usageSourceProjection.ts#cursorId",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "cursorId",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
       "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/run-observability/composition/localInvocations.ts",
@@ -106114,7 +106162,7 @@
       "file": "packages/backend/src/modules/run-observability/public/participants.ts",
       "id": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationInvocationParticipant",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:681a15419f2748fb3ed6c4ce40367a74ac539e95ab779ee965cdcdc97668cb4f",
+      "signatureDigest": "sha256:310205ee8e3f0a97e526d7c4f6c4955017741fc24bf42384ebaba453a717d185",
       "status": "current-module",
       "symbol": "ObservationInvocationParticipant",
       "targetContext": "run-observability",
@@ -106130,6 +106178,19 @@
       "signatureDigest": "sha256:f5bfdd911f6496cccdc43aaffaa20b0b6b5de3dcb3ab6a92f82f8595e333c2d4",
       "status": "current-module",
       "symbol": "ObservationInvocationStart",
+      "targetContext": "run-observability",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationUsageSource",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:4d7271cab5c5ddcd8d5a40026090db8b208e29c8a252c0b9eea15b2dc6bd9980",
+      "status": "current-module",
+      "symbol": "ObservationUsageSource",
       "targetContext": "run-observability",
       "targetLayer": "public"
     },
@@ -126465,6 +126526,30 @@
       "currentContext": "task-execution",
       "currentLayer": "composition",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/observationUsageSource.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/observationUsageSource.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/observationUsageSource.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/observationUsageSource.ts#composeObservationUsageSource",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "composeObservationUsageSource",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/composition/ownedTaskMutation.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/ownedTaskMutation.ts#$file",
       "removeAfterWave": "W4-E1",
@@ -135734,6 +135819,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "structurallySupersededCondition",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/observationUsageSource.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/observationUsageSource.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/observationUsageSource.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/observationUsageSource.ts#createObservationUsageSource",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createObservationUsageSource",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -186182,6 +186291,18 @@
       "removeAfterWave": "W9-D",
       "status": "legacy-target",
       "symbol": "common",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/runtime/usage.ts",
+      "id": "owner:packages/backend/src/services/runtime/usage.ts#createInvocationUsageCapture",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "createInvocationUsageCapture",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -282766,6 +282887,30 @@
       "currentLayer": "contracts",
       "exported": true,
       "file": "packages/shared/src/schemas/observationUsage.ts",
+      "id": "owner:packages/shared/src/schemas/observationUsage.ts#ObservationCapturedUsage",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "ObservationCapturedUsage",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/schemas/observationUsage.ts",
+      "id": "owner:packages/shared/src/schemas/observationUsage.ts#ObservationCapturedUsageSchema",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "ObservationCapturedUsageSchema",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/schemas/observationUsage.ts",
       "id": "owner:packages/shared/src/schemas/observationUsage.ts#ObservationIngest",
       "removeAfterWave": null,
       "status": "cross-package-contract",
@@ -303837,5 +303982,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:be68e2be0c8a2edb44cde7c22c592b2fe47deafcf4607e2120a68e4caa1b17ee"
+  "sourceDigest": "sha256:3474af98c75b37c56bec606c24cb576a508fe25b1c4d82959cb5ef9cdc54d897"
 }

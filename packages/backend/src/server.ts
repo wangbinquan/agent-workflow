@@ -1,3 +1,4 @@
+import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
@@ -2020,7 +2021,10 @@ export function composeSqliteApplicationDeps(
       : composeTaskExecutionRuntime({
           participants: createTaskExecutionRuntimeParticipants({
             db: deps.db,
-            observationInvocations: composeLocalInvocationObservations(deps.db),
+            observationInvocations: composeLocalInvocationObservations(
+              deps.db,
+              composeObservationUsageSource(deps.db),
+            ),
             workgroupTurns: composeWorkgroupTurnsOperations(
               deps.db,
               composeWorkgroupHostLedgerParticipantFactory({

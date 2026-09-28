@@ -4149,6 +4149,7 @@
         "RuntimeUsageFrame",
         "TOKEN_BUCKETS",
         "common",
+        "createInvocationUsageCapture",
         "model",
         "nativeId",
         "normalizeUsageFrame",
@@ -6270,5 +6271,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:be68e2be0c8a2edb44cde7c22c592b2fe47deafcf4607e2120a68e4caa1b17ee"
+  "sourceDigest": "sha256:3474af98c75b37c56bec606c24cb576a508fe25b1c4d82959cb5ef9cdc54d897"
 }

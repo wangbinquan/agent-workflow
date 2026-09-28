@@ -45,6 +45,7 @@ import {
 import { randomBytes } from 'node:crypto'
 import { ulid } from 'ulid'
 import type { ObservationInvocationParticipant } from '@/modules/run-observability/public/participants'
+import { createInvocationUsageCapture } from './runtime/usage'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -1333,6 +1334,15 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     }
     const stdoutEvents = makeEventBuffer('node-run-event/stdout')
     const stderrEvents = makeEventBuffer('node-run-event/stderr')
+    let localObservationAccepted = false
+    const captureUsage = createInvocationUsageCapture({
+      ...(driver.normalizeUsage ? { normalize: driver.normalizeUsage } : {}),
+      invocationId,
+      taskId: opts.taskId,
+      nodeRunId: opts.nodeRunId,
+      agentId: opts.agent.id,
+      resumeSessionId: effectiveResumeSessionId,
+    })
     /** 抛错前把已缓冲的取证事件写下去——它们恰恰在失败时最重要。冲刷本身再失败也不能
      *  盖住原始错误（那才是这次运行失败的原因）。 */
     const flushEventsBeforeThrow = async (): Promise<void> => {
@@ -1596,6 +1606,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // stdout 行都解析不出它，而 `node_run_events.kind` 的 enum 里也没有它。
         // 读进局部常量是必要的：`kind` 是可变属性，窄化跨不进下面的延迟回调。
         const persistedKind: PersistedEventKind = ev.kind === 'startup_inventory' ? 'text' : ev.kind
+        const observation = localObservationAccepted
+          ? captureUsage(ev.rawLine, evtSessionId, Date.now())
+          : undefined
         stdoutEvents.push({
           nodeRunId: opts.nodeRunId,
           ts,
@@ -1603,6 +1616,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           payload: ev.rawLine,
           sessionId: evtSessionId,
           parentSessionId: null,
+          ...(observation ? { observation } : {}),
         })
         broadcastParentRunning()
       } else {
@@ -1729,7 +1743,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       ...(plan.stdin?.mode === 'pipe' ? { stdin: plan.stdin } : {}),
       beforeSpawn: async () => {
         await activeProcessEffect?.beforeSpawn()
-        await opts.observationInvocations.accept({
+        const accepted = await opts.observationInvocations.accept({
           invocationId,
           taskId: opts.taskId,
           nodeRunId: opts.nodeRunId,
@@ -1740,6 +1754,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             ? { ...opts.runtimeObservationIdentity, protocol: runtime }
             : null,
         })
+        localObservationAccepted = accepted.authority.kind === 'local'
       },
       requireSpawnReceipt: true,
       onSpawned: async (receipt: {

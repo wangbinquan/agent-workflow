@@ -144,3 +144,13 @@
 ### CI 证据引用补正
 
 93f360dec 的 CI 36408910757 中，macOS 3/6 功能分片报两项登记错误：RFC349 功能证据索引的用例名仍含 186，已发布 9a591ff3a 的 Ubuntu 16 分片配置仍被严格的旧 12 分片断言拦截。本批同步为现有 192 表用例和 16 分片，未删除任何断言，未运行 AW 本地测试。完整 CI 尚未终态，不把其他已成功作业当作全绿。
+
+
+## 15. 实施批次 8：根进程数字源与可恢复投影
+
+- 上批 8a509ffbc1ddd7693e7e788d3dd84653a9d982ec 的精确 CI 36411046837 终态 success，50 项全部通过；这是此前批次的证据，不代替本批运行验证。
+- 新增 TaskExecution-owned numeric outbox，与 stdout 原始事件共享 owner fence、nodeRun 行锁和事务；既有 raw event 表不改列。SQLite 0234、PostgreSQL 0010 与 schema 合同已生成，193 active / 6 archive-only。
+- 生产根 stdout 经 driver 归一后保存 immutable invocation/sequence/time 证据。账本/cursor 同事务，源确认随后执行；确认丢失、重复页、多个消费者及重启可收敛。投影错误保持源 pending，进程结果不受影响；stdout pump 不等待统计投影，provider 生命周期管理后台恢复。
+- 独立复核发现空 resume ID 被误判为恢复，已让 capture 消费实际有效 resume ID，并覆盖 fresh 空字符串。复核也发现定时退避可能轮流饿死健康节点；已改按节点标识公平轮转，新增五个坏节点各 100 行、健康节点连续两轮可推进的反例。最终独立功能门 PASS。
+- 新增双 provider 原子回滚、源提交后重开、ledger commit 后 ack 丢失、并发、身份不匹配、CS 排除与真实 mock runner 回归；AW 本地未运行测试/服务，执行交给本批 exact-SHA hosted CI。
+- 实际 provider/model 后补、原生子会话、CS 平台 usage/valuation 同步、正式观测页、双部署及 CS 本机部署验收仍未完成。本批不把 unknown 模型归因伪装成已定价，不把 CS 被排除于本地采集当作 hosted 路径完成。

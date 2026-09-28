@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1756,
+    "entries": 1759,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20590,6 +20590,27 @@
     },
     {
       "controls": {
+        "audit": true,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/application/usageSourceProjection.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/usageSourceProjection.ts#createUsageSourceProjection",
+      "missingControls": [
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/usageSourceProjection.ts#createUsageSourceProjection",
+      "symbol": "createUsageSourceProjection",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
@@ -28158,6 +28179,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#createNodeRunMintParticipantInTx",
       "symbol": "createNodeRunMintParticipantInTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/observationUsageSource.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/observationUsageSource.ts#createObservationUsageSource",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/observationUsageSource.ts#createObservationUsageSource",
+      "symbol": "createObservationUsageSource",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -38618,6 +38663,30 @@
       },
       "file": "packages/backend/src/services/runtime/usage.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/runtime/usage.ts#createInvocationUsageCapture",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/runtime/usage.ts#createInvocationUsageCapture",
+      "symbol": "createInvocationUsageCapture",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/runtime/usage.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/services/runtime/usage.ts#RuntimeUsageContext",
       "missingControls": [
         "audit",
@@ -41964,7 +42033,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:be68e2be0c8a2edb44cde7c22c592b2fe47deafcf4607e2120a68e4caa1b17ee",
+  "sourceDigest": "sha256:3474af98c75b37c56bec606c24cb576a508fe25b1c4d82959cb5ef9cdc54d897",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -42810,8 +42879,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#146:nodeRuns",
-        "line": 146,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#156:nodeRuns",
+        "line": 156,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -42826,8 +42895,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#183:nodeRunOutputs",
-        "line": 183,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#193:nodeRunOutputs",
+        "line": 193,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -42842,8 +42911,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#211:nodeRunOutputs",
-        "line": 211,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#221:nodeRunOutputs",
+        "line": 221,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -42858,8 +42927,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#213:nodeRunOutputs",
-        "line": 213,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#223:nodeRunOutputs",
+        "line": 223,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -42874,8 +42943,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#264:nodeRunEvents",
-        "line": 264,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#274:nodeRunEvents",
+        "line": 274,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -42890,8 +42959,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#284:nodeRunEvents",
-        "line": 284,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#313:nodeRunEvents",
+        "line": 313,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -42906,8 +42975,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#295:nodeRunEvents",
-        "line": 295,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#324:nodeRunEvents",
+        "line": 324,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

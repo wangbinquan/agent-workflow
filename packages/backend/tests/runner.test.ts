@@ -1,3 +1,5 @@
+import { createUsageLedgerStore } from '@/modules/run-observability/infrastructure/usageLedgerPersistence'
+import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 // Integration tests for the opencode runner (P-1-13b).
 //
 // Strategy: opencode is replaced with a Bun-script mock fixture that the
@@ -14,7 +16,14 @@ import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
-import { nodeRunEvents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
+import {
+  nodeRunEvents,
+  nodeRunOutputs,
+  nodeRuns,
+  tasks,
+  workflows,
+  taskExecutionObservationSources,
+} from '../src/db/schema'
 import { runNode } from './helpers/runner'
 import type { Logger } from '../src/util/log'
 import { createObservationInvocationStore } from '../src/modules/run-observability/infrastructure/invocationPersistence'
@@ -188,7 +197,10 @@ describeEachProvider('runNode', (harness) => {
   test('persists frozen invocation facts before spawning and gives each process its own ID', async () => {
     const agent = makeAgent()
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
-    const participant = composeLocalInvocationObservations(h.db)
+    const participant = composeLocalInvocationObservations(
+      h.db,
+      composeObservationUsageSource(h.db),
+    )
     const store = createObservationInvocationStore(h.db)
     const receipts: string[] = []
     const observationInvocations: ObservationInvocationParticipant = {
@@ -274,12 +286,79 @@ describeEachProvider('runNode', (harness) => {
     ).toBeNull()
   })
 
+  test('commits runtime usage without waiting for the independently replayable projection', async () => {
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const source = composeObservationUsageSource(h.db)
+    const local = composeLocalInvocationObservations(h.db, source)
+    let projectionCalls = 0
+    const step = {
+      type: 'step_finish',
+      sessionID: 'usage-native',
+      part: { id: 'step', tokens: { input: 100, output: 10, cache: { read: 20, write: 0 } } },
+    }
+    const result = await withEnv(
+      {
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'observed' }),
+        MOCK_OPENCODE_EVENTS: JSON.stringify([step, step]),
+      },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'node1',
+          agent: makeAgent(),
+          inputs: {},
+          worktreePath: h.worktreePath,
+          skills: [],
+          appHome: h.appHome,
+          db: h.db,
+          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+          observationInvocations: {
+            ...local,
+            reconcile: async () => {
+              projectionCalls++
+              throw new Error('runner must not await the background projector')
+            },
+          },
+        }),
+    )
+    expect(result.status).toBe('done')
+    expect(projectionCalls).toBe(0)
+    expect((await source.pending({ limit: 100 })).length).toBeGreaterThan(0)
+    const store = createUsageLedgerStore(h.db)
+    expect((await store.records(h.taskId, { limit: 10 })).items).toEqual([])
+    await local.reconcile!()
+    expect(await source.pending({ limit: 100 })).toEqual([])
+    const rows = (await store.records(h.taskId, { limit: 10 })).items
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.contribution).toEqual({
+      input: '100',
+      output: '10',
+      cacheRead: '20',
+      cacheWrite: '0',
+    })
+    expect(rows[0]?.measurement.model).toBeNull()
+  })
+
   test('an injected CS participant retains platform authority through the real runner', async () => {
     const nodeRunId = await insertNodeRun(h.db, h.taskId)
     const store = createObservationInvocationStore(h.db)
     let receiptId = ''
     const result = await withEnv(
-      { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'hosted' }) },
+      {
+        MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'hosted' }),
+        MOCK_OPENCODE_EVENTS: JSON.stringify([
+          {
+            type: 'step_finish',
+            sessionID: 'platform-native',
+            part: {
+              id: 'duplicate',
+              tokens: { input: 500, output: 10, cache: { read: 0, write: 0 } },
+            },
+          },
+        ]),
+      },
       () =>
         runNode({
           taskId: h.taskId,
@@ -317,6 +396,8 @@ describeEachProvider('runNode', (harness) => {
       priceBookRevision: null,
       authority: { kind: 'crewstation', executionResourceId: 'execution', executionGeneration: 1 },
     })
+    expect(await h.db.select().from(taskExecutionObservationSources)).toEqual([])
+    expect((await createUsageLedgerStore(h.db).records(h.taskId, { limit: 10 })).items).toEqual([])
   })
 
   test('happy path: parses envelope, persists outputs, status=done', async () => {

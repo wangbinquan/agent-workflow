@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 916,
+    "consumers": 917,
     "exactEntrypointFiles": 68,
     "governedFieldSurfaces": 5,
-    "methods": 1087,
+    "methods": 1090,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21019,
-    "symbols": 1024
+    "recursiveFields": 21027,
+    "symbols": 1025
   },
   "entries": [
     {
@@ -117631,12 +117631,23 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:accept.$return",
           "type": "z.infer<typeof AcceptedObservationInvocationSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reconcile.$parameter:nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reconcile.$return",
+          "type": "number"
         }
       ],
       "file": "packages/backend/src/modules/run-observability/public/participants.ts",
       "id": "public:run-observability:participants:ObservationInvocationParticipant",
       "members": [
-        "accept"
+        "accept",
+        "reconcile"
       ],
       "methods": [
         {
@@ -117645,6 +117656,11 @@
           ],
           "name": "accept",
           "signatureDigest": "sha256:51f1122fb98bcd3720f825076e03d5fbb85cc5869c62dba69c0f6316871bc355"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "reconcile",
+          "signatureDigest": "sha256:57b2bffa5fdbe8e6f5e37849477ced82da80914122b563577ac59ef42d0b7b14"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationInvocationParticipant",
@@ -117671,7 +117687,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:681a15419f2748fb3ed6c4ce40367a74ac539e95ab779ee965cdcdc97668cb4f",
+      "signatureDigest": "sha256:310205ee8e3f0a97e526d7c4f6c4955017741fc24bf42384ebaba453a717d185",
       "status": "target-context-current-surface",
       "symbol": "ObservationInvocationParticipant",
       "transaction": "caller-tx",
@@ -117724,6 +117740,100 @@
       "unresolvedTypeRefs": [
         "Omit"
       ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:cb3f33c8bd86f7d491a3"
+      ],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:acknowledge.$parameter:ids",
+          "type": "readonly number[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:acknowledge.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "fieldPath": "$method:pending.$parameter:input.afterNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "fieldPath": "$method:pending.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "fieldPath": "$method:pending.$parameter:input.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:pending.$return",
+          "type": "readonly {\n      readonly id: number\n      readonly taskId: string\n      readonly nodeRunId: string\n      readonly evidence: ObservationCapturedUsage\n    }[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "public:run-observability:participants:ObservationUsageSource",
+      "members": [
+        "acknowledge",
+        "pending"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "name": "acknowledge",
+          "signatureDigest": "sha256:b63a6273aa3e2c224eaa55620b7e93ac39821ab3b9472209c934bf2f115ae4c3"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "name": "pending",
+          "signatureDigest": "sha256:c9bc98e5fb3c53203dc9a5e4cc7fff10315936c0f7f8ea73c3ae50cfd06017a1"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationUsageSource",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:cb3f33c8bd86f7d491a3",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/observationUsageSource.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/observationUsageSource.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:4d7271cab5c5ddcd8d5a40026090db8b208e29c8a252c0b9eea15b2dc6bd9980",
+      "status": "target-context-current-surface",
+      "symbol": "ObservationUsageSource",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -166555,7 +166665,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:be68e2be0c8a2edb44cde7c22c592b2fe47deafcf4607e2120a68e4caa1b17ee",
+  "sourceDigest": "sha256:3474af98c75b37c56bec606c24cb576a508fe25b1c4d82959cb5ef9cdc54d897",
   "targetContexts": [
     "collaboration",
     "development-automation",

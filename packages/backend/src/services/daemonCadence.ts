@@ -27,6 +27,8 @@ export const MINUTE_MS = 60_000
 export const HOUR_MS = 60 * 60 * 1000
 
 export const DAEMON_CADENCE = {
+  /** Replay committed usage after interrupted delivery, inside the selected provider lifetime. */
+  observationUsage: 1_000,
   /** autoKill 扫描（services/autoKill.ts；DEFAULT OFF 的自动闭环之一）。 */
   autoKill: 5 * MINUTE_MS,
   /** autoRepair 扫描（services/autoRepair.ts）。 */
