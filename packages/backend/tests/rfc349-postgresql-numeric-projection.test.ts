@@ -56,6 +56,11 @@ const DECODED_BY_CALLER: Record<string, Record<string, string>> = {
       '**等 services/task.ts 迁离同步事务面时必须同时换成能力矩阵的 greatest**，否则当场 42883。',
   },
   // RFC-359 W7：两份 provider 实现合一后按领域命名，仍按类型可达性落进 PG 语料。
+  'modules/task-execution/infrastructure/taskObservationFacts.ts': {
+    pendingRecords:
+      'sourceBacklog 在返回每个任务前用 engineOf(db).numericFromRawRow(row.pendingRecords, pendingRecords) 解码；' +
+      'rfc371-task-observations.test.ts 在 SQLite/PG 对 retained=2、pending=1 及确认后 pending=0 做数值对账。',
+  },
   'modules/system-operations/infrastructure/resourceLimitPersistence.ts': {
     total: 'decodeResourceLimitTokenTotal() 显式接受 string / bigint / number 三种形态',
   },

@@ -506,7 +506,8 @@ test('collection status exposes pending evidence, unknown observation time and p
   const card = within(heading.closest('.card') as HTMLElement)
   expect(card.getAllByText('7')).toHaveLength(2)
   expect(card.getAllByText('2')).toHaveLength(2)
-  expect(card.getAllByText('—').length).toBeGreaterThan(0)
+  // Null collection times use the explicit unknown label for both bounds and the task row.
+  expect(card.getAllByText('未观测')).toHaveLength(3)
   expect(screen.getByText('同步失败')).toBeTruthy()
   expect(screen.getByText('存在缺口')).toBeTruthy()
   const failedRow = screen.getByText('平台任务 failed-platform-task').closest('tr')!
