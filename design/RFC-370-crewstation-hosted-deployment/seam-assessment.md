@@ -31,3 +31,5 @@
 - 六组 HTTP 消费方（maintenance、plantuml、cached-repos、repoGroups、tasks、taskArchive）的配置读取已改接 `ApplicationConfigurationQueries`，两 provider composition 提供 live file reader；保留错误／fallback 和每次调用读取行为。public origin／身份入口及后台、执行配置仍存在本地调用，不记全覆盖。
 
 - 文档／发现、OIDC public origin、PAT 创建与 MCP transport 现接按需配置 query；完成态 HTTP 装配也以 query 代替 configPath。保留原地址优先级／读取失败回退与开关语义；身份认证本身仍为原实现，不据此关闭 H2。启动、后台、执行和 intent 的配置路径仍待迁移。
+
+- Settings／CLI 数据库迁移 composition 与启动准备复用 DatabaseConfigurationPort；默认仍装配 file adapter，目标切换与源回退等待配置写入完成后才进入原 admission。该接线仅解除配置存储绑定，迁移元数据和复制机制仍为本地实现。

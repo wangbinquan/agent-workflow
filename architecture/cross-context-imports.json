@@ -79748,23 +79748,6 @@
       "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/databaseMigration.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/composition/databaseMigration.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f7fd8c5e3829851bb865",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file",
-      "toPath": "packages/backend/src/config/index.ts",
-      "toSymbol": "applyConfigPatch",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationCommittedEvents.ts#$file",
@@ -82265,9 +82248,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4839,
+    "architectureExceptions": 4838,
     "implementationSccs": 0,
-    "observedEdges": 5446,
+    "observedEdges": 5445,
     "requiredPorts": 36,
     "targetEdges": 66
   },
@@ -166740,22 +166723,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#createTaskDagCollaborationOperations"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/composition/databaseMigration.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/databaseMigration.ts#$file",
-      "id": "import:f7fd8c5e3829851bb865",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/config",
-      "syntax": "static-import",
-      "targetSymbol": "applyConfigPatch",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/collaborationCommittedEvents.ts",
@@ -170208,7 +170175,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7a13be972e8ec5d7e6329744de9c582511f55dc5497032310288fe08a0996a71",
+  "sourceDigest": "sha256:9f3293f8520d752db06c08e90f3cd5e5ca00dba119cf4fc6864e62e10d4641cd",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

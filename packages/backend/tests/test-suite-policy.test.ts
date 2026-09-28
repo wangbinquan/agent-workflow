@@ -89,9 +89,10 @@ const ALLOWED_SKIP_COUNTS: Record<string, number> = {
   'packages/backend/tests/rfc205-mirror-origin-sanitize.test.ts#skipIf': 1,
   'packages/backend/tests/claude-skill-injection-2026-08-09.test.ts#skipIf': 1,
   'packages/backend/tests/claude-dependency-injection-2026-08-09.test.ts#skipIf': 5,
-  // RFC-349 real PostgreSQL integration requires an explicitly supplied,
-  // disposable PG17 target and is otherwise covered by provider fakes.
+  // RFC-370: coordinator migration runs in the shared PostgreSQL CI selection;
+  // only an explicitly SQLite-only lane skips it. Missing selected PG URL fails.
   'packages/backend/tests/rfc349-database-migration-coordinator.integration.test.ts#skip': 1,
+  // Remaining RFC-349 standalone evidence requires an explicit disposable PG target.
   'packages/backend/tests/rfc349-postgresql-logical-migration.integration.test.ts#skip': 1,
   'packages/backend/tests/rfc349-postgresql-target-faults.integration.test.ts#skip': 1,
   // 写矩阵要一台一次性外置 PostgreSQL（postgresql-evidence 提供），普通跑批跳过。

@@ -846,11 +846,8 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5446,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2：docs／publicOrigin／auth／oidc-auth／MCP transport 及 server 的完成态装配消费现有 ApplicationConfigurationQueries；5440→5446，六条 exact public type 引用。"
-      }
+      "baseline": 5445,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -870,11 +867,8 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4839,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2：五个 legacy transport 和 server 完成态装配依赖配置 public query，按现 census 的 legacy-inbound 逐边登记，4833→4839。无新 off-dag offered 依赖或运行效果，不扩大 provider-specific 例外，不领取 W9 完成信用。"
-      }
+      "baseline": 4838,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -913,7 +907,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:7a13be972e8ec5d7e6329744de9c582511f55dc5497032310288fe08a0996a71",
+    "sourceDigest": "sha256:9f3293f8520d752db06c08e90f3cd5e5ca00dba119cf4fc6864e62e10d4641cd",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -926,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "943a08ad377216696da5a6e05590735da65ca85f",
-    "contentDigest": "sha256:f367744ab63776785f286182526ae37c23aed286eb8ef2cc34c32cd4a1bf9262",
+    "currentSnapshotSha": "7859e770a328f949981256255cb16c169590c2d7",
+    "contentDigest": "sha256:f229c9cc43862150ac8da73ee1e2a52810d3f6944b9cb74b1eb8fe6b79d32da8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

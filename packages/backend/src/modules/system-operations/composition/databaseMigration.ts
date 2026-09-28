@@ -1,7 +1,8 @@
 // RFC-349 — bootstrap-only composition for the database migration application.
 
-import { applyConfigPatch } from '@/config'
 import { Paths } from '@/util/paths'
+import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
+import { createFileDatabaseConfiguration } from '../infrastructure/local/fileDatabaseConfiguration'
 import { createDatabaseMigrationApplication } from '../application/databaseMigrationApplication'
 import type { DatabaseMigrationAdmissionPort } from '../application/databaseMigrationRunner'
 import { createDatabaseMigrationCoordinator } from '../infrastructure/databaseMigrationCoordinator'
@@ -14,18 +15,24 @@ export interface DatabaseMigrationModule {
   readonly coordinator: ReturnType<typeof createDatabaseMigrationCoordinator>
 }
 
-export function composeDatabaseMigrationModule(input: {
-  readonly admission: DatabaseMigrationAdmissionPort
-  readonly sqlitePath?: string
-  readonly operationsRoot?: string
-  readonly generationPointerPath?: string
-  readonly configPath?: string
-  readonly executionMode?: 'inline' | 'background'
-  readonly onBackgroundFailure?: (input: {
-    readonly operationId: string
-    readonly error: unknown
-  }) => void
-}): DatabaseMigrationModule {
+export function composeDatabaseMigrationModule(
+  input: {
+    readonly admission: DatabaseMigrationAdmissionPort
+    readonly sqlitePath?: string
+    readonly operationsRoot?: string
+    readonly generationPointerPath?: string
+    readonly executionMode?: 'inline' | 'background'
+    readonly onBackgroundFailure?: (input: {
+      readonly operationId: string
+      readonly error: unknown
+    }) => void
+  } & (
+    | { readonly configuration: DatabaseConfigurationPort; readonly configPath?: never }
+    | { readonly configuration?: never; readonly configPath?: string }
+  ),
+): DatabaseMigrationModule {
+  const configuration =
+    input.configuration ?? createFileDatabaseConfiguration(input.configPath ?? Paths.config)
   const coordinator = createDatabaseMigrationCoordinator({
     sqlitePath: input.sqlitePath ?? Paths.db,
     operationsRoot: input.operationsRoot ?? Paths.databaseMigrationsDir,
@@ -33,12 +40,8 @@ export function composeDatabaseMigrationModule(input: {
     admission: input.admission,
     executionMode: input.executionMode,
     onBackgroundFailure: input.onBackgroundFailure,
-    activateTargetConfig(target) {
-      applyConfigPatch(input.configPath ?? Paths.config, { database: target })
-    },
-    activateSourceConfig() {
-      applyConfigPatch(input.configPath ?? Paths.config, { database: { provider: 'sqlite' } })
-    },
+    activateTargetConfig: (target) => configuration.write(target),
+    activateSourceConfig: () => configuration.write({ provider: 'sqlite' }),
   })
   const application = createDatabaseMigrationApplication(coordinator)
   return Object.freeze({

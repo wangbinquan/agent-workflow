@@ -1,15 +1,19 @@
-// Run with RFC349_DATABASE_URL pointed at an empty disposable PostgreSQL 15+
-// database. This covers the production coordinator used by CLI/Settings,
+// Uses the shared provider selection and a disposable PostgreSQL test database.
+// RFC349_DATABASE_URL remains supported for an explicit standalone evidence run. This covers the production coordinator used by CLI/Settings,
 // including durable config activation, idempotent replay and instant rollback.
 
 import { afterEach, describe, expect, test } from 'bun:test'
 import type { Database } from 'bun:sqlite'
+import type { DatabaseConfig } from '@agent-workflow/shared'
+import { composeDatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createInMemoryDb } from '@/db/client'
 import { createDatabaseMigrationCoordinator } from '@/modules/system-operations/infrastructure/databaseMigrationCoordinator'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { createPostgresqlDatabaseRuntime } from '@/platform/persistence/postgresqlRuntime'
+import { resolvePostgresqlTestUrlEnv, resolveTestProviders } from './helpers/eachProvider'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const roots: string[] = []
@@ -18,7 +22,7 @@ afterEach(() => {
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 
-const realTest = process.env.RFC349_DATABASE_URL === undefined ? test.skip : test
+const realTest = resolveTestProviders(process.env).includes('postgresql') ? test : test.skip
 
 describe('RFC-349 production database migration coordinator', () => {
   test('missing target environment is an actionable validation error instead of HTTP 500', async () => {
@@ -122,10 +126,37 @@ describe('RFC-349 production database migration coordinator', () => {
       writeFileSync(sqlitePath, sqlite.serialize())
       sqlite.close()
 
+      const urlEnv = process.env.RFC349_DATABASE_URL
+        ? 'RFC349_DATABASE_URL'
+        : resolvePostgresqlTestUrlEnv(process.env)
+      if (urlEnv === undefined)
+        throw new Error('selected PostgreSQL migration requires a disposable test URL')
+      const contract = buildLogicalSchemaContract()
       const admissions: string[] = []
       let activatedTarget: unknown
       let sourceActivations = 0
-      const coordinator = createDatabaseMigrationCoordinator({
+      let targetWriteStarted!: () => void
+      const targetWriteEntered = new Promise<void>((resolve) => {
+        targetWriteStarted = resolve
+      })
+      let releaseTargetWrite!: () => void
+      const targetWriteAllowed = new Promise<void>((resolve) => {
+        releaseTargetWrite = resolve
+      })
+      let sourceWriteStarted!: () => void
+      const sourceWriteEntered = new Promise<void>((resolve) => {
+        sourceWriteStarted = resolve
+      })
+      let releaseSourceWrite!: () => void
+      const sourceWriteAllowed = new Promise<void>((resolve) => {
+        releaseSourceWrite = resolve
+      })
+      let configured: DatabaseConfig = { provider: 'sqlite' }
+      let failBackground!: (error: unknown) => void
+      const backgroundFailure = new Promise<never>((_resolve, reject) => {
+        failBackground = reject
+      })
+      const { coordinator } = composeDatabaseMigrationModule({
         sqlitePath,
         operationsRoot: join(root, 'database-migrations'),
         generationPointerPath: join(root, 'database-generation.json'),
@@ -143,19 +174,31 @@ describe('RFC-349 production database migration coordinator', () => {
             admissions.push('open')
           },
         },
-        activateTargetConfig(target) {
-          activatedTarget = target
-        },
-        activateSourceConfig() {
-          sourceActivations += 1
+        configuration: {
+          async read() {
+            return configured
+          },
+          async write(database) {
+            if (database.provider === 'postgresql') {
+              targetWriteStarted()
+              await targetWriteAllowed
+              activatedTarget = database
+            } else {
+              sourceWriteStarted()
+              await sourceWriteAllowed
+              sourceActivations += 1
+            }
+            configured = database
+          },
         },
         executionMode: 'background',
+        onBackgroundFailure: ({ error }) => failBackground(error),
       })
       const input = {
         idempotencyKey: 'rfc349-production-coordinator-01',
         target: {
           provider: 'postgresql' as const,
-          urlEnv: 'RFC349_DATABASE_URL',
+          urlEnv,
           // A logical target holds one operation-scoped session after
           // preflight. The production coordinator must sequence preflight
           // before that reservation so the supported minimum pool remains 1.
@@ -165,12 +208,40 @@ describe('RFC-349 production database migration coordinator', () => {
           idleTimeoutMs: 30_000,
         },
       }
+      // The shared CI database is reused serially by isolated test files.
+      // Reset only the disposable target's application schemas, as in the
+      // existing historical-copy suite, before asking migration to create them.
+      const targetRuntime = createPostgresqlDatabaseRuntime({
+        config: input.target,
+        generationId: 'dbg_rfc370_config_fixture',
+      })
+      try {
+        await targetRuntime.providerPool().unsafe('DROP SCHEMA IF EXISTS agent_workflow CASCADE')
+        await targetRuntime
+          .providerPool()
+          .unsafe('DROP SCHEMA IF EXISTS agent_workflow_meta CASCADE')
+      } finally {
+        await targetRuntime.close()
+      }
       const migrated = await coordinator.start(input)
       expect(migrated).toMatchObject({
         phase: 'planned',
-        tableCounts: { source: 184, active: 178, archiveOnly: 6 },
-        progress: { tablesCompleted: 0, tablesTotal: 184 },
+        tableCounts: {
+          source: contract.sourceTableCount,
+          active: contract.activeTableCount,
+          archiveOnly: contract.archiveOnlyTableCount,
+        },
+        progress: { tablesCompleted: 0, tablesTotal: contract.sourceTableCount },
       })
+      // RFC-370: the production composition must await an asynchronous durable
+      // configuration adapter before activating the next provider's admission.
+      try {
+        await Promise.race([targetWriteEntered, backgroundFailure])
+        expect(admissions).toEqual(['freeze'])
+        expect(configured).toEqual({ provider: 'sqlite' })
+      } finally {
+        releaseTargetWrite()
+      }
       let completed = await coordinator.get({ operationId: migrated.operationId })
       const deadline = Date.now() + 30_000
       while (completed.phase !== 'accepting-writes' && completed.failure === null) {
@@ -180,7 +251,10 @@ describe('RFC-349 production database migration coordinator', () => {
       }
       expect(completed).toMatchObject({
         phase: 'accepting-writes',
-        progress: { tablesCompleted: 184, tablesTotal: 184 },
+        progress: {
+          tablesCompleted: contract.sourceTableCount,
+          tablesTotal: contract.sourceTableCount,
+        },
         failure: null,
       })
       expect(admissions).toEqual(['freeze', 'postgresql', 'open'])
@@ -191,13 +265,27 @@ describe('RFC-349 production database migration coordinator', () => {
         phase: 'accepting-writes',
       })
       expect(await coordinator.list()).toHaveLength(1)
-      const rolledBack = await coordinator.rollback({ operationId: migrated.operationId })
+      const rollingBack = coordinator.rollback({ operationId: migrated.operationId })
+      try {
+        await Promise.race([
+          sourceWriteEntered,
+          rollingBack.then(() => {
+            throw new Error('rollback completed before persisting source configuration')
+          }),
+        ])
+        expect(admissions).toEqual(['freeze', 'postgresql', 'open', 'freeze'])
+        expect(configured).toEqual(input.target)
+      } finally {
+        releaseSourceWrite()
+      }
+      const rolledBack = await rollingBack
       expect(rolledBack).toMatchObject({
         phase: 'accepting-writes',
         rolledBackAt: expect.any(Number),
         rollback: { eligible: false, reason: 'operation-rolled-back' },
       })
       expect(sourceActivations).toBe(1)
+      expect(configured).toEqual({ provider: 'sqlite' })
       expect(admissions.slice(-2)).toEqual(['freeze', 'sqlite'])
       await expect(coordinator.finalize({ operationId: migrated.operationId })).rejects.toThrow(
         'rolled-back database migration',

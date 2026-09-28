@@ -128,3 +128,9 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 第八批补异步发现文档新值与 MCP 开关、public origin 读取失败回退用例；保留原双 provider OIDC／MCP／文档 HTTP 回归。仅格式／lint、源码摘要和架构生成，不本地运行测试。W29 记录 SQLite reader 上移（外层46→47、API66→65）、PG166不变及完成态装配改传 query；mountApiRoutes／createApp 摘要不变。架构仅六条 legacy→public 类型接线增长，无新增公共合同、owner 或运行效果。
 
 - 第七批 CI `36371425603` 的类型检查发现异步路由测试夹具的 Hono actor 上下文未声明、taskArchive 缺少必填 maxTreesPerSweep。第八批修复为独立 MiddlewareHandler 注入和完整归档配置；不改变生产行为，原失败 run 不记成功，等待后继精确 SHA CI。
+
+- 第八批 `7859e770a328f949981256255cb16c169590c2d7` 已发布，推送后 main／origin/main 精确同步；CI `36372241796` 已排队，未取得终态。共享 STATE／索引与并行 RFC-371 工作完整保留。下一步继续启动、内容存储和剩余配置消费者切面，尚无 CS adapter 生产实现或 M0 部署证据。
+
+- A-T2 第九批候选：Settings／CLI 数据库迁移 composition 改为注入既有 DatabaseConfigurationPort，默认复用原文件 adapter；迁移及回退的配置写入 Promise 返回原 coordinator，由原 admission 顺序等待完成。启动准备与手工迁移不再各自直写配置。安装 metadata／内容／前台启动等切面仍待收口。
+- 第九批验证补齐原真实 PG coordinator 用例的异步目标／源配置写入屏障，验证写入前不开放下一个 provider。核对发现该旧用例未被普通 CI 的专用变量选中，现复用 resolveTestProviders／resolvePostgresqlTestUrlEnv，Ubuntu 双库通道实际执行；仅显式 SQLite 通道 skip，选中 PG 缺 URL 则失败。以既有真库用例相同方式清理 disposable 目标 schema，迁移进度断言跟随当前 schema contract，保留幂等重放和首次写入前回退检查。正式结果待本批精确 SHA CI。
+- 第九批目标格式／lint 通过，仅运行源码账本生成；无本地功能测试。架构跨边与例外各减少一条，移除第八批已消费增长声明，没有新增长豁免。第八批 CI `36372241796` 当前已完成9项，尚无失败，仍未终态。
