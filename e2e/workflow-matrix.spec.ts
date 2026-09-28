@@ -1188,7 +1188,15 @@ test('mixed wrappers + humans: clarified decision survives review rejection befo
       row.status === 'failed',
   )
   const afterRejectRuns = await nodeRuns(task.id)
-  expect(afterReject.status).toBe('awaiting_review')
+  expect(
+    afterReject.status,
+    JSON.stringify({
+      task: afterReject,
+      failedRuns: afterRejectRuns.runs
+        .filter((run) => run.status === 'failed')
+        .map(({ nodeId, failureCode, errorMessage }) => ({ nodeId, failureCode, errorMessage })),
+    }),
+  ).toBe('awaiting_review')
   const secondReview = await waitForReview(task.id, firstReview.reviewIteration + 1)
   const revised = afterRejectRuns
   const writerRuns = runsFor(revised, 'mixed_writer').sort((a, b) => a.id.localeCompare(b.id))

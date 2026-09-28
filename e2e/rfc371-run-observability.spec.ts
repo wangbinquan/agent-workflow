@@ -386,8 +386,9 @@ test('attention preview is bounded, explains causes and opens the canonical task
   await list.getByRole('link').first().focus()
   await page.keyboard.press('Enter')
   await expect(page).toHaveURL(new RegExp(`/tasks/${task.id}`))
+  // The canonical task heading includes its status chip in the accessible name.
   await expect(
-    page.getByRole('heading', { name: 'Observed parallel task', exact: true }),
+    page.getByRole('heading', { name: 'Observed parallel task Done', exact: true }),
   ).toBeVisible()
 })
 
