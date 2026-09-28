@@ -208,3 +208,5 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 边界仍明确：`StagedSkillVersion` 的旧持久 journal 词汇保持兼容，物理引用在版本漏斗内交 adapter 解释；启动 recovery handler、初始树准备／删除、history／ZIP create／统一资源导入及 legacy backfill 仍有本地依赖，后续必须按同一持久存储接线。不能仅注入本批 store 就开启 hosted 编辑或宣告 H6 完成。
 
 - 候选源码复核确认 `commitSkillVersionInTx` 与前批逐字一致，未改 DB 提交或既有业务判定；目标格式／lint 通过，census 记录实际入口 +2、owner +11、净 util 引用／exception +1 并替换前批已消费的增长说明。后继 CI `36380839265` 的 Ubuntu shard 2 为文档提交后一次性 allowGrowth 过期（本批以实际新增长重新登记）；macOS shard 4 的唯一失败为既有全仓源码扫描超出 5s，本批不改扫描判据或预算，等待新候选正式验证。
+
+- 版本内容切面 `9dec01277ac429240b91796e5cc16e83eebc45ec` 已上库并与远端同步，CI `36381850501` 已创建。发布后补查旧源码锁发现 `skill-version-atomic-publish` 仍把 swap 固定在 legacy 文件；续修同时锁定 AW→所选 store 的等待接线和 local adapter 的原子 swap，并在两处禁止非原子发布，不放宽原判据。此续修仅测试／记录和已消费增长声明退役，无生产变更。

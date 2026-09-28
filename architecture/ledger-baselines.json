@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1742,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：新增独立 file 版本内容 store 工厂与兼容 abort 效果入口，1740→1742；原版本 DB 状态机未复制，方法均被生产阶段编排消费。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -850,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5480,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：realpathWriteInside 从 legacy/skill 迁入 fileSkillVersionContentStore，新增该 adapter 对仍由调用方预检使用的 safeJoin 引用，净5479→5480。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -874,10 +868,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4871,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：fileSkillVersionContentStore 使用既有 util/safePath 的两条精确 legacy-outbound 边，同时销账旧 realpathWriteInside，净4870→4871；通用 helper 归属待 W9。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -912,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25073,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：版本存储端口／变更与引用类型、local adapter、旧 journal 引用映射及 ZIP 正文值构造 helper，owner 分母25062→25073；中立端口已由生产版本漏斗与 composition 消费。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -932,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "83ac30718059e59510adab9936e50fe5ee650dd7",
-    "contentDigest": "sha256:370c908e380e4c750f11faa393b8f397bd36bc66838b954c9b8ff40b60631828",
+    "currentSnapshotSha": "9dec01277ac429240b91796e5cc16e83eebc45ec",
+    "contentDigest": "sha256:dee1bfe5060891a1e55db767aeec37b90bf70634848f95d4f6f78938a8d278e6",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

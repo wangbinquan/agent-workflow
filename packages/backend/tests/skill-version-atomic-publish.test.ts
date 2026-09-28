@@ -75,7 +75,25 @@ test('source uses swapInStaged, not the old non-atomic cpSync(staging → filesD
     ),
     'utf-8',
   )
-  expect(src).toContain('swapInStaged(filesDir, publishId)')
-  // The old non-atomic publish pattern must not come back.
-  expect(src).not.toMatch(/cpSync\(\s*staging\s*,\s*filesDir/)
+  // RFC-370: the state machine awaits its selected store; atomic filesystem
+  // publication is now owned by the local adapter.
+  expect(src).toContain('await content.publish(publicationOf(staged), staged.newHash)')
+  const local = readFileSync(
+    resolve(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'resource-catalog',
+      'infrastructure',
+      'local',
+      'fileSkillVersionContentStore.ts',
+    ),
+    'utf-8',
+  )
+  expect(local).toContain('swapInStaged(liveRef, publicationId)')
+  // Check both sites: extracting an adapter must not hide a non-atomic copy.
+  for (const source of [src, local]) {
+    expect(source).not.toMatch(/cpSync\(\s*(?:staging|stagingRef)\s*,\s*(?:filesDir|liveRef)/)
+  }
 })
