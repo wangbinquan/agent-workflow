@@ -902,12 +902,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25499,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25504,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371：正式关注摘要显示真实原因和处理入口，最多五条并保留统计范围，rfc294-module-symbol-owners 25499 → 25504，按新增功能如实登记本批归属与公开合同。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:7e589ec72293f394d33ff7cfa8c037bec528bd0a4a4cfa6876e2e9b64394f76d",
+    "sourceDigest": "sha256:df007e87033e8b8417bb7b4fbce130beb8edc81ad9001ba0eead5b6c7e83f586",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +923,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "907c52dee69670666cf2019fbc022cd645c7988b",
-    "contentDigest": "sha256:e91a365cfad68e9c5d5d86bdfa5638bf81c18d49e4e763af899d1490c3d0e298",
+    "currentSnapshotSha": "3ee5668eac730bd7dbbfa565bd225d677535f936",
+    "contentDigest": "sha256:08db16bdc1cd243edaa7c0e9fb62dcf1981840a65d8dc482f009cfbb3a9e37b0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

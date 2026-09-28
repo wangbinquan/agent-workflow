@@ -1,7 +1,7 @@
 // Real daemon/API/browser flow. The basic runtime emits no usage: missing values must stay unknown.
 import { expect, test, type Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
-import type { ObservationTaskDetail } from '@agent-workflow/shared'
+import type { ObservationOverview, ObservationTaskDetail } from '@agent-workflow/shared'
 import { startDaemon, type DaemonHandle } from './harness'
 
 let daemon: DaemonHandle
@@ -291,6 +291,97 @@ test('task, agents and attempt drill-down use real observations and standard car
   await page.getByRole('button', { name: 'Back to task usage', exact: true }).click()
   await expect(
     page.getByRole('button', { name: 'Observed parallel task', exact: true }),
+  ).toBeVisible()
+})
+
+test('attention preview is bounded, explains causes and opens the canonical task page by keyboard', async ({
+  page,
+}, testInfo) => {
+  const { task } = await seedTask()
+  // Read-only display fixture: business state remains unchanged. The selected row
+  // uses a real task ID so the handling link also exercises the canonical route.
+  await page.route('**/api/observability/overview?*', async (route) => {
+    const response = await route.fetch()
+    const data = (await response.json()) as ObservationOverview
+    const observed = data.tasks.find((row) => row.task.id === task.id)!
+    const statuses = [
+      'failed',
+      'interrupted',
+      'awaiting_review',
+      'failed',
+      'failed',
+      'failed',
+      'awaiting_human',
+      'failed',
+      'awaiting_human',
+    ]
+    await route.fulfill({
+      response,
+      json: {
+        ...data,
+        tasks: statuses.map((status, i) => ({
+          ...observed,
+          task: {
+            ...observed.task,
+            id: i === 8 ? task.id : `attention-fixture-${i}`,
+            name: `Attention ${i}: ${'A long but readable task name '.repeat(8)}`,
+            status,
+            startedAt: observed.task.startedAt + i,
+            errorSummary: status === 'failed' ? 'Result persistence failed: '.repeat(30) : null,
+          },
+        })),
+      },
+    })
+  })
+  await prime(page)
+  await page.goto(`${daemon.baseUrl}/observability`)
+  const card = page.getByRole('region', { name: 'Tasks needing attention' })
+  const list = card.getByRole('list')
+  await expect(list.getByRole('listitem')).toHaveCount(5)
+  await expect(list.getByRole('link').first()).toContainText('Waiting for more information')
+  await expect(list.getByRole('link').nth(2)).toContainText('human review')
+  await expect(list.getByRole('link').nth(3)).toContainText('Result persistence failed')
+  await expect(card).toContainText('9 in the loaded scope; showing 5')
+  const all = card.getByRole('link', { name: 'View all in task center' })
+  const destination = new URL((await all.getAttribute('href'))!, daemon.baseUrl)
+  expect(destination.searchParams.get('statuses')!.split(',').sort()).toEqual([
+    'awaiting_human',
+    'awaiting_review',
+    'failed',
+    'interrupted',
+  ])
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 })
+    await expectAnalysisSpacing(page)
+    const geometry = await list.evaluate((element) => {
+      const box = element.getBoundingClientRect()
+      return {
+        width: box.width,
+        height: box.height,
+        overflow: element.scrollWidth - element.clientWidth,
+        rows: Array.from(element.querySelectorAll('a')).map((row) => {
+          const rect = row.getBoundingClientRect()
+          return { left: rect.left, right: rect.right }
+        }),
+      }
+    })
+    expect(geometry.overflow).toBeLessThanOrEqual(1)
+    expect(geometry.height).toBeLessThan(width === 390 ? 900 : 620)
+    for (const row of geometry.rows) {
+      expect(row.left).toBeGreaterThanOrEqual(0)
+      expect(row.right).toBeLessThanOrEqual(width)
+    }
+    const last = list.getByRole('link').last()
+    await last.focus()
+    await expect(last).toBeFocused()
+    await expect(last).toBeInViewport()
+    await card.screenshot({ path: testInfo.outputPath(`attention-summary-${width}.png`) })
+  }
+  await list.getByRole('link').first().focus()
+  await page.keyboard.press('Enter')
+  await expect(page).toHaveURL(new RegExp(`/tasks/${task.id}`))
+  await expect(
+    page.getByRole('heading', { name: 'Observed parallel task', exact: true }),
   ).toBeVisible()
 })
 

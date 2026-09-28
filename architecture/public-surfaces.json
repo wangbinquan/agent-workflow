@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1101,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21264,
+    "recursiveFields": 21268,
     "symbols": 1030
   },
   "entries": [
@@ -117841,8 +117841,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 154,
-        "maxUnionVariants": 54
+        "maxTransitiveLeafFields": 156,
+        "maxUnionVariants": 56
       },
       "consumerEdgeIds": [
         "import:44a2cc15a17a1d4359b4",
@@ -118111,6 +118111,16 @@
           ],
           "fieldPath": "$method:detail.$return.$variant:0.sources",
           "type": "readonly {\n    readonly sourceId: string\n    readonly platformProjectId: string | null\n    readonly platformTaskId: string | null\n    readonly status: 'initial' | 'syncing' | 'ready' | 'failed' | 'legacy-unbound'\n    readonly asOf: string | null\n    readonly error: string | null\n    readonly costsVisible: boolean\n    readonly hasGaps: boolean\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:detail.$return.$variant:0.task.errorSummary.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:detail.$return.$variant:0.task.errorSummary.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -162377,8 +162387,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 57,
-        "maxUnionVariants": 30
+        "maxTransitiveLeafFields": 59,
+        "maxUnionVariants": 32
       },
       "consumerEdgeIds": [
         "import:0f0f0c7c9b99f8905c51",
@@ -162505,6 +162515,16 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:get.$parameter:taskId",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$return.$variant:0.errorSummary.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:get.$return.$variant:0.errorSummary.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -168263,7 +168283,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7e589ec72293f394d33ff7cfa8c037bec528bd0a4a4cfa6876e2e9b64394f76d",
+  "sourceDigest": "sha256:df007e87033e8b8417bb7b4fbce130beb8edc81ad9001ba0eead5b6c7e83f586",
   "targetContexts": [
     "collaboration",
     "development-automation",

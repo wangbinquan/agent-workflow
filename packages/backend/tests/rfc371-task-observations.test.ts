@@ -458,6 +458,25 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
       { invocationId: 'legacy-unknown', state: 'unobserved', proof: null },
     ])
   })
+  test('task-owned failure reasons survive list, overview and detail snapshots without guessing an interruption cause', async () => {
+    const f = await fixture()
+    await f.task('failed', { status: 'failed', errorSummary: 'daemon-restart' })
+    await f.task('interrupted', { status: 'interrupted', errorSummary: null })
+    for (const rows of [
+      (await f.queries.list(admin, query)).items,
+      (await f.queries.overview(admin, query)).tasks,
+    ]) {
+      expect(rows.find((row) => row.task.id === 'failed')?.task).toMatchObject({
+        status: 'failed',
+        errorSummary: 'daemon-restart',
+      })
+      expect(rows.find((row) => row.task.id === 'interrupted')?.task).toMatchObject({
+        status: 'interrupted',
+        errorSummary: null,
+      })
+    }
+    expect((await f.queries.detail(admin, 'failed'))?.task.errorSummary).toBe('daemon-restart')
+  })
   test('task, state, workflow and secondary repository filters select one consistent cohort before aggregation', async () => {
     const f = await fixture()
     await f.task('task', {

@@ -495,28 +495,32 @@ test('overview tabs share one server snapshot and agent drill-down restores its 
 })
 // User requested vertical columns matching CS; preserve exact large totals, zero and unknown semantics.
 test('trend columns scale exact large totals and expose focused interval details without treating unknown as zero', async () => {
-  const data = overview()
-  data.trend = ['18014398509481986', '9007199254740993', '0', null].map((total, i) => {
-    const value = metrics()
-    value.tokens = {
-      ...value.tokens,
-      known: { ...value.tokens.known, input: total ?? '0' },
-      totalKnown: total ?? '0',
-      hasKnown: total !== null,
-      complete: i === 0 || i === 2,
-    }
-    value.cost = {
-      ...value.cost,
-      knownAmount: ['0.000000000001', '9007199254740993.9999999', '0', null][i]!,
-      reasons: i === 3 ? ['not-authorized'] : ['pending'],
-    }
-    return {
-      from: search.from + i * 86400000,
-      to: search.from + (i + 1) * 86400000,
-      taskCount: i + 1,
-      metrics: value,
-    }
-  })
+  const data: ObservationOverview = {
+    ...overview(),
+    trend: ['18014398509481986', '9007199254740993', '0', null].map((total, i) => {
+      const value = metrics()
+      return {
+        from: search.from + i * 86400000,
+        to: search.from + (i + 1) * 86400000,
+        taskCount: i + 1,
+        metrics: {
+          ...value,
+          tokens: {
+            ...value.tokens,
+            known: { ...value.tokens.known, input: total ?? '0' },
+            totalKnown: total ?? '0',
+            hasKnown: total !== null,
+            complete: i === 0 || i === 2,
+          },
+          cost: {
+            ...value.cost,
+            knownAmount: ['0.000000000001', '9007199254740993.9999999', '0', null][i]!,
+            reasons: i === 3 ? ['not-authorized'] : ['pending'],
+          },
+        },
+      }
+    }),
+  }
   const f = fixture({ ...search, tab: 'overview' }, { overview: data })
   const chart = await screen.findByRole('list', { name: '任务用量趋势' })
   const columns = within(chart).getAllByRole('button')
@@ -548,6 +552,103 @@ test('trend columns scale exact large totals and expose focused interval details
       tab: 'tasks',
     }),
   )
+})
+test('attention is a five-item action summary with real causes, scope counts and task-center links', async () => {
+  const statuses = [
+    'failed',
+    'running',
+    'awaiting_review',
+    'failed',
+    'interrupted',
+    'failed',
+    'awaiting_human',
+    'failed',
+    'awaiting_human',
+  ]
+  const data: ObservationOverview = {
+    ...overview(),
+    partial: true,
+    tasks: statuses.map((status, i) => ({
+      task: {
+        ...task,
+        id: `attention-${i}`,
+        name: `关注事项 ${i}`,
+        status,
+        startedAt: NOW - (9 - i) * 1000,
+        errorSummary: status === 'failed' ? 'daemon-restart' : null,
+      },
+      metrics: metrics(),
+      wallMs: 10000,
+      runningMs: 5000,
+    })),
+  }
+  const f = fixture({ ...search, tab: 'overview' }, { overview: data })
+  const card = await screen.findByRole('region', { name: '需要关注的任务' })
+  const rows = within(within(card).getByRole('list')).getAllByRole('listitem')
+  expect(rows).toHaveLength(5)
+  expect(rows.map((row) => within(row).getByRole('link').getAttribute('href'))).toEqual([
+    '/tasks/attention-8',
+    '/tasks/attention-6',
+    '/tasks/attention-2',
+    '/tasks/attention-7',
+    '/tasks/attention-5',
+  ])
+  expect(within(rows[0]!).getByText('去回答')).toBeTruthy()
+  expect(within(rows[2]!).getByText('去评审')).toBeTruthy()
+  expect(within(rows[3]!).getByText(i18n.t('tasks.failure.summary.daemonRestart'))).toBeTruthy()
+  expect(within(rows[3]!).getByText('查看失败')).toBeTruthy()
+  expect(card.textContent).toContain('已加载范围内共 8 项，显示前 5 项')
+  const counts = within(card).getByRole('group', { name: '当前已加载范围内的关注任务数' })
+  for (const [status, count] of [
+    ['awaiting_human', 2],
+    ['awaiting_review', 1],
+    ['failed', 4],
+    ['interrupted', 1],
+  ] as const)
+    expect(counts.textContent).toContain(`${i18n.t(`tasks.status.${status}`)} ${count}`)
+  const all = new URL(
+    within(card).getByRole('link', { name: '在任务中心查看全部' }).getAttribute('href')!,
+    'http://localhost',
+  )
+  expect(all.pathname).toBe('/tasks')
+  expect(all.searchParams.get('statuses')!.split(',').sort()).toEqual([
+    'awaiting_human',
+    'awaiting_review',
+    'failed',
+    'interrupted',
+  ])
+  expect(all.searchParams.get('scope')).toBe('all')
+  expect(all.searchParams.has('view')).toBe(false)
+  expect(card.textContent).toContain('任务中心展示所有时间、仓库')
+  expect(screen.getByText('当前为部分统计')).toBeTruthy()
+  expect(f.paths.filter((path) => path.pathname === '/api/observability/overview')).toHaveLength(1)
+  expect(f.paths.some((path) => path.pathname.startsWith('/api/tasks'))).toBe(false)
+})
+test('attention preserves unknown interruption and raw causes, with an explicit loaded-scope empty state', async () => {
+  const data: ObservationOverview = {
+    ...overview(),
+    tasks: ['failed', 'interrupted', 'interrupted'].map((status, i) => ({
+      task: {
+        ...task,
+        id: `cause-${i}`,
+        status,
+        errorSummary: i === 2 ? 'Worker disconnected while saving result' : null,
+      },
+      metrics: metrics(),
+      wallMs: 10000,
+      runningMs: 5000,
+    })),
+  }
+  fixture({ ...search, tab: 'overview' }, { overview: data })
+  const card = await screen.findByRole('region', { name: '需要关注的任务' })
+  expect(within(card).getByText('任务执行失败，原因未记录。')).toBeTruthy()
+  expect(within(card).getByText('执行已中断，原因未记录。')).toBeTruthy()
+  expect(within(card).getByText('Worker disconnected while saving result')).toBeTruthy()
+  cleanup()
+  fixture({ ...search, tab: 'overview' })
+  const empty = await screen.findByRole('region', { name: '需要关注的任务' })
+  expect(within(empty).getByText('已加载任务中暂无待处理项')).toBeTruthy()
+  expect(within(empty).queryByRole('list')).toBeNull()
 })
 test('trend drill-down fixes an exact interval; refresh preserves a custom window', async () => {
   const f = fixture({ ...search, tab: 'overview' })

@@ -45,6 +45,7 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
     id: tasks.id,
     name: tasks.name,
     status: tasks.status,
+    errorSummary: tasks.errorSummary,
     parentTaskId: tasks.parentTaskId,
     startedAt: tasks.startedAt,
     finishedAt: tasks.finishedAt,

@@ -84,6 +84,8 @@ export interface ObservationTaskFacts {
   readonly id: string
   readonly name: string
   readonly status: string
+  /** Task-owned diagnostic; absent for observations served by older versions. */
+  readonly errorSummary?: string | null
   readonly parentTaskId: string | null
   readonly startedAt: number
   readonly finishedAt: number | null

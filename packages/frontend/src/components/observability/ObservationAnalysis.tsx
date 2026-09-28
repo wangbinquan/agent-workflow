@@ -14,6 +14,7 @@ import { Tokens, Cost, Metrics, observationReasonKey } from './ObservationMetric
 import { formatObservationCny } from './formatObservations'
 import './ObservationAnalysis.css'
 import { ObservationCollection } from './ObservationCollection'
+import { ObservationAttention } from './ObservationAttention'
 
 export type ObservationAnalysisTab = 'overview' | 'agents' | 'usage' | 'performance'
 export const observationAgentKey = (agent: ObservationOverview['agents'][number]) =>
@@ -309,16 +310,7 @@ export function ObservationAnalysis({
             <Trend data={data} onBucket={onBucket} />
             <Card title={t('runObservability.agentRanking')}>{ranked(agents.slice(0, 8))}</Card>
           </div>
-          <Card title={t('runObservability.attention')}>
-            <TaskRows
-              rows={data.tasks.filter((row) =>
-                ['failed', 'interrupted', 'awaiting_human', 'awaiting_review'].includes(
-                  row.task.status,
-                ),
-              )}
-              onTask={onTask}
-            />
-          </Card>
+          <ObservationAttention tasks={data.tasks} />
           <Card title={t('runObservability.recent')}>
             <TaskRows rows={data.tasks.slice(0, 8)} onTask={onTask} />
           </Card>
