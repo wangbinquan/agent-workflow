@@ -382,7 +382,11 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-w7-catalog-composition-roots.test.ts: 1',
   'rfc359-w8-logical-source-conformance.test.ts: 1',
   'rfc359-w8-migrator-conformance.test.ts: 1',
+  // RFC-371：原生 OpenCode 固定 SQLite 文件夹具（建库/修改各一处），不属于 AW 持久 provider。
+  'rfc371-native-model.test.ts: 2',
   'runner-subagent-live-capture.test.ts: 6',
+  // RFC-371：runner 本身仍用 describeEachProvider；唯一 new Database 是原生模型证据夹具。
+  'runner.test.ts: 1',
   'scheduler-audit-gap1-limits-resume-startedat.test.ts: 1',
   'scheduler-audit-gap4-loop-exit-out-of-scope-port.test.ts: 1',
   'scheduler-audit-s02-multirepo-retry-rollback-noop.test.ts: 1',

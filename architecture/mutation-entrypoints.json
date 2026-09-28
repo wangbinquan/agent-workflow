@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1761,
+    "entries": 1762,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20608,6 +20608,30 @@
       "symbol": "createUsageSourceProjection",
       "targetContext": "run-observability",
       "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/crewstation/observationSource.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/crewstation/observationSource.ts#createCrewStationObservationSource",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/crewstation/observationSource.ts#createCrewStationObservationSource",
+      "symbol": "createCrewStationObservationSource",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
     },
     {
       "controls": {
@@ -42083,7 +42107,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e205903c07a9e0516e5b386cf5abea63c639d71bd89ae69f86ad4e617f08694e",
+  "sourceDigest": "sha256:3dbfa5c97c6941051668fe7733a41c953d84d335f0c5a8c2b11dca9a5096faec",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

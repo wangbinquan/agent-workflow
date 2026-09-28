@@ -234,3 +234,12 @@ CS 托管 invocation 不使用本地 reader 或价格；本批仍不代替 CS �
 
 
 模型证据使用独立 `modelRevision` 指向原生来源修订。数字下降被拒绝时，只能补全同一身份的未知模型/路由，原数字 revision、贡献、水位与 partial 诊断保持不变；冲突模型和 invalid-final 不补全。这样迟到补模型与预算耗尽不会将较旧数字伪装为新的完整报告。数字修订临时缺失模型时沿用已证明模型及其 modelRevision。模型补证写入失败只记录诊断，保留原持久数值与任务结果，不把已成功运行改成失败。
+
+
+## 16. CS 授权观测源与同步边界
+
+托管 source adapter 调用 CS `/v3/business-tasks/:taskId/observations`，baseUrl 与现有服务身份头由托管装配根显式提供，领域不读宿主环境猜测部署方式。每次请求刷新身份头、限制 1–500 项、携带取消信号与 15 秒网络截止。快照 ID、页游标、committed watermark 均作为不透明值传递。
+
+返回值严格对应 RFC034 executionObservationsV1：用量采用 CS 已归一的 projection.contribution 和 projectionRevision，不能再次减 basis.baseline；数字原生 revision、模型证据 modelRevision、用量投影 revision、valuationRevision 各自保留。人民币估值独立到达并引用 usageRevision，无金额授权、pending 和 unpriced 都是 null，不用 0 或本地价格代替。空页也处理 visibilityRevision。快照续页必须仍属同一快照和冻结水位。
+
+断连、HTTP 状态、协议错误、快照失效各自返回明确结果；404 只能说明来源未找到，不能据此宣布整个 CS 不支持观测。平台不可达不会改写 executionAuthority。后续同步事务须将整页投影、回执和 committed cursor 同时提交；快照先进入暂存代次，全部页到齐后再原子替换，不能在首屏导入时清空历史。可见性变更先撤去旧金额展示，再完整重取授权快照。此接口实现不等于后续持久同步及托管启动根已接通。

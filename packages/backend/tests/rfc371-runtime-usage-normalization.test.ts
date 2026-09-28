@@ -75,7 +75,12 @@ test('recorded OpenCode 1.15.5 retains all four buckets and exact native identit
     } catch {
       return { measurements: [] }
     }
-    return normalizeRuntimeUsage('opencode', raw, context)
+    // The recording has a real session identity; a synthetic root is a mismatch.
+    return normalizeRuntimeUsage('opencode', raw, {
+      ...context,
+      rootSessionId: 'ses_1b6411662ffeR6habAo4ukl1D2',
+      sessionId: 'ses_1b6411662ffeR6habAo4ukl1D2',
+    })
   })
   const measurements = frames.flatMap((frame) => frame.measurements)
   expect(measurements).toHaveLength(1)
