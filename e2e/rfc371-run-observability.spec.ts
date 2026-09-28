@@ -1,6 +1,7 @@
 // Real daemon/API/browser flow. The basic runtime emits no usage: missing values must stay unknown.
 import { expect, test, type Page } from '@playwright/test'
 import { readFile } from 'node:fs/promises'
+import { randomUUID } from 'node:crypto'
 import type { ObservationOverview, ObservationTaskDetail } from '@agent-workflow/shared'
 import { startDaemon, type DaemonHandle } from './harness'
 
@@ -24,10 +25,11 @@ async function api<T>(path: string, body?: unknown, method = 'POST'): Promise<T>
 }
 
 async function seedTask() {
+  const fixtureId = randomUUID()
   const agents = await Promise.all(
     ['left', 'right'].map((side) =>
       api<{ id: string }>('/api/agents', {
-        name: `observation-${side}`,
+        name: `observation-${side}-${fixtureId}`,
         description: 'Observation browser fixture',
         outputs: ['answer'],
         readonly: true,
@@ -36,7 +38,7 @@ async function seedTask() {
     ),
   )
   const workflow = await api<{ id: string }>('/api/workflows', {
-    name: 'observation-parallel',
+    name: `observation-parallel-${fixtureId}`,
     description: 'Two parallel agents with separate attempts',
     definition: {
       $schema_version: 1,
@@ -199,7 +201,8 @@ test('task, agents and attempt drill-down use real observations and standard car
       if (i > 0) expect(track.x).toBeGreaterThan(tracks[i - 1]!.x)
     }
     const last = chart.getByRole('button').last()
-    await last.focus()
+    await chart.getByRole('button').first().focus()
+    for (let index = 1; index < tracks.length; index++) await page.keyboard.press('Tab')
     await expect(last).toBeFocused()
     const visible = await last.boundingBox()
     expect(visible!.x).toBeGreaterThanOrEqual(0)
@@ -372,7 +375,10 @@ test('attention preview is bounded, explains causes and opens the canonical task
       expect(row.right).toBeLessThanOrEqual(width)
     }
     const last = list.getByRole('link').last()
-    await last.focus()
+    // Start from the header on each viewport: focusing an already-focused row
+    // after screenshot scrolling does not trigger browser focus scrolling again.
+    await all.focus()
+    for (let index = 0; index < 5; index++) await page.keyboard.press('Tab')
     await expect(last).toBeFocused()
     await expect(last).toBeInViewport()
     await card.screenshot({ path: testInfo.outputPath(`attention-summary-${width}.png`) })
