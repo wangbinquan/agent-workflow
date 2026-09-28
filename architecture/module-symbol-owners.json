@@ -6,7 +6,7 @@
     "moduleFiles": 1291,
     "productionFiles": 2617,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25004
+    "symbolsIncludingFileRoots": 25007
   },
   "entries": [
     {
@@ -148140,6 +148140,30 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#resolveDatabaseProviderRuntimeFromArtifacts",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "resolveDatabaseProviderRuntimeFromArtifacts",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#ResolveDatabaseProviderRuntimeFromArtifactsOptions",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "ResolveDatabaseProviderRuntimeFromArtifactsOptions",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
       "id": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#ResolveDatabaseProviderRuntimeOptions",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -148168,6 +148192,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "ResolvedDatabaseProviderRuntime",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "id": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#selectDatabaseProviderGeneration",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "selectDatabaseProviderGeneration",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -300767,5 +300803,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f10c8277ae8fb7ddc9c788edb62169d261e9ac3899a6ac9743299eb64282aeb2"
+  "sourceDigest": "sha256:02327cdfd015a4b747dd495ad6a96ee8ea315d7968c59eef0444485860d13246"
 }

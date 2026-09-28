@@ -8,10 +8,13 @@ import { join } from 'node:path'
 import {
   DatabaseProviderRuntimeError,
   resolveDatabaseProviderRuntime,
+  resolveDatabaseProviderRuntimeFromArtifacts,
 } from '@/platform/persistence/databaseProviderRuntime'
 import {
   digestDatabaseArtifact,
+  digestGenerationPayload,
   writeDatabaseGenerationAtomic,
+  type DatabaseGenerationPayload,
 } from '@/platform/persistence/generationStore'
 import type {
   PostgresqlPool,
@@ -89,16 +92,16 @@ describe('RFC-349 database provider runtime resolution', () => {
     ).toThrow(DatabaseProviderRuntimeError)
   })
 
-  test('a verified PostgreSQL generation builds one lazy external runtime', async () => {
-    const paths = fixture()
-    const operationId = 'dbm_provider_runtime_1234'
-    const operationRoot = join(paths.operationsRoot, operationId)
-    mkdirSync(operationRoot, { recursive: true })
-    const manifest = '{}\n'
-    writeFileSync(join(operationRoot, 'manifest.json'), manifest)
-    writeDatabaseGenerationAtomic({
-      pointerPath: paths.generationPointerPath,
-      payload: {
+  // RFC-370: use this same runtime lifecycle oracle for file and injected
+  // artifact sources. The injected arm supplies no local installation paths.
+  test.each(['files', 'artifacts'] as const)(
+    'a verified PostgreSQL generation from %s builds one lazy external runtime',
+    async (source) => {
+      const paths = fixture()
+      const operationId = 'dbm_provider_runtime_1234'
+      const operationRoot = join(paths.operationsRoot, operationId)
+      const manifest = '{}\n'
+      const payload: DatabaseGenerationPayload = {
         version: 1,
         generationId: 'dbg_pg_provider_runtime_1234',
         provider: 'postgresql',
@@ -106,49 +109,67 @@ describe('RFC-349 database provider runtime resolution', () => {
         schemaDigest: contract.digest,
         manifestDigest: digestDatabaseArtifact(manifest),
         activatedAt: 1,
-      },
-    })
-    let closed = 0
-    let reserves = 0
-    const connection: PostgresqlReservedConnection = {
-      unsafe() {
-        return rows()
-      },
-      release() {},
-    }
-    const pool: PostgresqlPool = {
-      async reserve() {
-        reserves += 1
-        return connection
-      },
-      unsafe() {
-        return rows()
-      },
-      async close() {
-        closed += 1
-      },
-    }
-    const resolved = resolveDatabaseProviderRuntime({
-      ...paths,
-      config: {
+      }
+      if (source === 'files') {
+        mkdirSync(operationRoot, { recursive: true })
+        writeFileSync(join(operationRoot, 'manifest.json'), manifest)
+        writeDatabaseGenerationAtomic({ pointerPath: paths.generationPointerPath, payload })
+      }
+      let closed = 0
+      let reserves = 0
+      const connection: PostgresqlReservedConnection = {
+        unsafe() {
+          return rows()
+        },
+        release() {},
+      }
+      const pool: PostgresqlPool = {
+        async reserve() {
+          reserves += 1
+          return connection
+        },
+        unsafe() {
+          return rows()
+        },
+        async close() {
+          closed += 1
+        },
+      }
+      const options = {
+        config: {
+          provider: 'postgresql' as const,
+          urlEnv: 'AW_DATABASE_URL',
+          poolMax: 4,
+          connectTimeoutMs: 1_000,
+          statementTimeoutMs: 1_000,
+          idleTimeoutMs: 1_000,
+        },
+        contract,
+        env: { AW_DATABASE_URL: 'postgresql://fixture.invalid/database' },
+        postgresqlPoolFactory: () => pool,
+      }
+      const resolved =
+        source === 'files'
+          ? resolveDatabaseProviderRuntime({ ...options, ...paths })
+          : resolveDatabaseProviderRuntimeFromArtifacts({
+              ...options,
+              generationArtifacts: {
+                pointerLabel: 'loaded installation',
+                readPointer: () =>
+                  JSON.stringify({ payload, digest: digestGenerationPayload(payload) }),
+                readManifest: (id) => (id === operationId ? Buffer.from(manifest) : null),
+              },
+            })
+      expect(resolved).toMatchObject({
         provider: 'postgresql',
-        urlEnv: 'AW_DATABASE_URL',
-        poolMax: 4,
-        connectTimeoutMs: 1_000,
-        statementTimeoutMs: 1_000,
-        idleTimeoutMs: 1_000,
-      },
-      contract,
-      env: { AW_DATABASE_URL: 'postgresql://fixture.invalid/database' },
-      postgresqlPoolFactory: () => pool,
-    })
-    expect(resolved).toMatchObject({
-      provider: 'postgresql',
-      generation: { payload: { generationId: 'dbg_pg_provider_runtime_1234' } },
-    })
-    expect(reserves).toBe(0)
-    await resolved.close()
-    expect(closed).toBe(1)
-    expect(reserves).toBe(0)
-  })
+        generation: { payload: { generationId: 'dbg_pg_provider_runtime_1234' } },
+      })
+      expect(reserves).toBe(0)
+      if (resolved.provider !== 'postgresql') throw new Error('wrong runtime')
+      expect(resolved.openClient()).toBe(resolved.openClient())
+      await resolved.close()
+      expect(closed).toBe(1)
+      expect(reserves).toBe(0)
+    },
+  )
 })

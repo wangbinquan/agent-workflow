@@ -11,11 +11,13 @@ import {
   createSqliteDatabaseOperationalAdapter,
   type DatabaseOperationalAdapter,
 } from './databaseOperationalAdapter'
+import { createFileDatabaseGenerationArtifacts } from './generationStore'
 import {
-  readDatabaseGeneration,
+  readDatabaseGenerationFromArtifacts,
+  type DatabaseGenerationArtifactReader,
   type ResolvedDatabaseGeneration,
   type DatabaseGenerationBootstrapCandidate,
-} from './generationStore'
+} from './generationValidation'
 import {
   createPostgresqlDatabaseRuntime,
   type InstrumentedPostgresqlDatabaseRuntime,
@@ -33,7 +35,9 @@ import { readDbMigrationIdentity } from './sqlite/systemBackupManifest'
 
 export class DatabaseProviderRuntimeError extends Error {
   constructor(
-    public readonly code: 'database-provider-config-generation-mismatch',
+    public readonly code:
+      | 'database-provider-config-generation-mismatch'
+      | 'database-provider-local-path-missing',
     message: string,
   ) {
     super(message)
@@ -73,15 +77,37 @@ export interface ResolveDatabaseProviderRuntimeOptions {
   readonly postgresqlPoolFactory?: (options: PostgresqlPoolOptions) => PostgresqlPool
 }
 
+/** The host loads generation artifacts before entering this synchronous
+ * mechanism boundary. External providers need no local installation paths. */
+export interface ResolveDatabaseProviderRuntimeFromArtifactsOptions extends Omit<
+  ResolveDatabaseProviderRuntimeOptions,
+  'generationPointerPath' | 'operationsRoot' | 'sqlitePath'
+> {
+  readonly generationArtifacts: DatabaseGenerationArtifactReader
+  readonly sqlitePath?: string
+}
+
 export function resolveDatabaseProviderSelection(options: {
   readonly config: DatabaseConfig
   readonly generationPointerPath: string
   readonly operationsRoot: string
   readonly contract: LogicalSchemaContract
 }): ResolvedDatabaseGeneration {
-  const generation = readDatabaseGeneration({
-    pointerPath: options.generationPointerPath,
-    migrationsDir: options.operationsRoot,
+  return selectDatabaseProviderGeneration({
+    ...options,
+    generationArtifacts: createFileDatabaseGenerationArtifacts({
+      pointerPath: options.generationPointerPath,
+      migrationsDir: options.operationsRoot,
+    }),
+  })
+}
+
+function selectDatabaseProviderGeneration(options: {
+  readonly config: DatabaseConfig
+  readonly contract: LogicalSchemaContract
+  readonly generationArtifacts: DatabaseGenerationArtifactReader
+}): ResolvedDatabaseGeneration {
+  const generation = readDatabaseGenerationFromArtifacts(options.generationArtifacts, {
     expectedSchemaDigest: options.contract.digest,
   })
   if (generation.payload.provider !== options.config.provider) {
@@ -158,21 +184,28 @@ export function requireDatabaseConfig(
 }
 
 function composeSqliteProviderRuntime(
-  options: ResolveDatabaseProviderRuntimeOptions,
+  options: { readonly sqlitePath?: string },
   generation: ResolvedDatabaseGeneration,
   initialClient: DbClient | null,
 ): SqliteDatabaseProviderRuntime {
+  const path = options.sqlitePath
+  if (path === undefined) {
+    throw new DatabaseProviderRuntimeError(
+      'database-provider-local-path-missing',
+      'the verified SQLite generation requires a local database path',
+    )
+  }
   let client = initialClient
   return Object.freeze({
     provider: 'sqlite' as const,
     generation,
     operations: createSqliteDatabaseOperationalAdapter({
-      path: options.sqlitePath,
+      path,
       generationId: generation.payload.generationId,
     }),
     telemetry: () => Object.freeze({ version: 1, provider: 'sqlite', poolWait: null }),
     openClient(input: Omit<OpenDbOptions, 'path'>) {
-      return (client ??= openDb({ ...input, path: options.sqlitePath }))
+      return (client ??= openDb({ ...input, path }))
     },
     async close() {
       client?.$client.close()
@@ -182,7 +215,7 @@ function composeSqliteProviderRuntime(
 }
 
 function composePostgresqlProviderRuntime(
-  options: ResolveDatabaseProviderRuntimeOptions,
+  options: { readonly contract: LogicalSchemaContract },
   generation: ResolvedDatabaseGeneration,
   runtime: InstrumentedPostgresqlDatabaseRuntime,
 ): PostgresqlDatabaseProviderRuntime {
@@ -237,7 +270,21 @@ export function adoptPreparedDatabaseProviderRuntime(
 export function resolveDatabaseProviderRuntime(
   options: ResolveDatabaseProviderRuntimeOptions,
 ): ResolvedDatabaseProviderRuntime {
-  const generation = resolveDatabaseProviderSelection(options)
+  return resolveDatabaseProviderRuntimeFromArtifacts({
+    ...options,
+    generationArtifacts: createFileDatabaseGenerationArtifacts({
+      pointerPath: options.generationPointerPath,
+      migrationsDir: options.operationsRoot,
+    }),
+  })
+}
+
+/** Resolve an already installed generation. Schema preparation still belongs
+ * to the existing migration owner; this entry does not run migrations. */
+export function resolveDatabaseProviderRuntimeFromArtifacts(
+  options: ResolveDatabaseProviderRuntimeFromArtifactsOptions,
+): ResolvedDatabaseProviderRuntime {
+  const generation = selectDatabaseProviderGeneration(options)
   if (generation.payload.provider === 'sqlite') {
     return composeSqliteProviderRuntime(options, generation, null)
   }

@@ -94,3 +94,8 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 当前独立设计／实现门所需工具不可用，已向用户询问是否允许由独立子代理做只读功能评审；回答前不启动子代理，正常实施继续。
 
 - 第二批候选检查：目标 TypeScript／测试文件 Prettier 和 ESLint 通过；确认 generation 原子写入段与已发布版本逐字一致。架构重采记录 owner 分母 +10 与只读工厂被既有 create 前缀规则计入入口 +1，新增两项一次性增长说明；正式测试仍交远端精确 SHA CI，未本地运行测试。
+
+- 第二批已提交并推送 `6d865eb4ccc2918a389c7ca8595c9e82853cff9b`；正式 CI 为 `36367641292`，尚未取得终态。
+- A-T2 第三批候选：provider runtime 提供已加载 artifact source 入口，PostgreSQL 不再要求虚假的本机安装路径；原文件入口委托同一严格校验和运行时创建逻辑。保留 standalone 升级／恢复 owner；新入口只解析已安装 generation，不运行迁移。复用原运行时生命周期用例对拍两种来源，补配置冲突、旧 schema／manifest 错误在创建连接池前失败及 SQLite 路径要求。异步 metadata 载入、迁移 Job 与全新 PG 安装语义仍待实现。
+
+- 第三批候选检查：仅对变更源码／测试运行 Prettier 和 ESLint；以原 RFC-349 连接池生命周期探针对拍 file／artifact 两臂，未新增假 PG runtime 账本条目。架构重采仅 owner 分母 +3，上一批入口增长声明已退役；正式功能结果等待精确 SHA GitHub CI。
