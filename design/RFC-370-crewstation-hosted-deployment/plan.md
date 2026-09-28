@@ -86,3 +86,5 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - A-T1 进行中：生成 [候选效果调用者清单](./seam-inventory.md)，覆盖进程、文件／路径、身份、后台效果和 webhook 的源码候选点。静态匹配不等同于语义闭环验收，各调用者仍须逐项确认 port／adapter 和回归。
 - A-T2 第一批：新增 system-operations-owned `DatabaseConfigurationPort` 和 `infrastructure/local/fileDatabaseConfiguration`；启动 composition 可注入配置端口，现 CLI／daemon 继续用原文件实现；将原 config 文件机制原样迁至 platform/configuration，旧 config/index 仅 re-export，保留单一缓存与 API；恢复协调器等待异步配置读取，配置激活仍复用现迁移协议；真实PG迁移恢复用例改经bootstrap注入异步配置端口。补本地 adapter 的默认创建、配置切换、其他设置保留、读副本及错误传播行为测试。其余配置／generation／密钥／内容切面仍待完成，不将此批记为 H1／H6 完成。
 - 首批检查：仅运行目标文件 Prettier／ESLint 与架构账本生成；正式测试待该批提交的 GitHub CI。尚无 CS adapter 生产实现，M0 尚未开始。
+
+- 首批提交 `b172b1d47ae03cf1f081d09e5851ded1f39816f1` 已推送，CI `36366595075` 的 Markdown 检查发现16个 CS 相邻仓库文件链接在单仓 checkout 中不存在；后续修复改用固定 CS SHA＋源码路径／行号。同步移除首批四项已使用的账本增长声明，不扩大豁免。生产代码测试仍等待包含该提交的后继 CI 终态，不把原 run 记为成功。

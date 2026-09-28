@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1728,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2 introduces the database configuration port and its local adapter, moves the unchanged file mechanism into platform, and records their actual owner/import/write surfaces. This grows the observable denominator without adding architecture exceptions."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -850,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5416,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2 introduces the database configuration port and its local adapter, moves the unchanged file mechanism into platform, and records their actual owner/import/write surfaces. This grows the observable denominator without adding architecture exceptions."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,10 +861,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
       "baseline": 34,
-      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2 introduces the database configuration port and its local adapter, moves the unchanged file mechanism into platform, and records their actual owner/import/write surfaces. This grows the observable denominator without adding architecture exceptions."
-      }
+      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
     },
     {
       "id": "rfc294-architecture-exceptions",
@@ -912,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 24994,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2 introduces the database configuration port and its local adapter, moves the unchanged file mechanism into platform, and records their actual owner/import/write surfaces. This grows the observable denominator without adding architecture exceptions."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -932,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a53425b87bc6fa124d74829c278f52059ca04c93",
-    "contentDigest": "sha256:d80741467593d9b268b1f0fbb7dc09df63b4578f74d1b757adfb4d47ad89e306",
+    "currentSnapshotSha": "b172b1d47ae03cf1f081d09e5851ded1f39816f1",
+    "contentDigest": "sha256:4e2b0819b83661d029d306f11f8217aeb5997de877f356672daf0aab8959cead",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
