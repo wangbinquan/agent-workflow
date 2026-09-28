@@ -1,8 +1,14 @@
 # 当前执行状态
 
+## 2026-09-28 RFC-371 运行观测与统计 —— Draft
+
+追加人民币及AW配置入口：工作台设置→运行时→Token成本；已在原型提供四桶单价、版本、生效时间与草稿保留，费用全部CNY。浏览器完成保存/非法值/嵌套Esc/390px验收，仍只改设计原型；CS托管成本回传为未来合同，不重复计账。未修改生产运行时配置及RFC370并行代码。
+
+用户要求先做全景设计与 demo。[RFC 三件套](design/RFC-371-run-observability/proposal.md)已定义运行与仓库内的独立观测入口、任务 / Agent / 尝试分层统计、Token 与成本口径、执行泳道、异常及采集可靠性；[交互原型](design/RFC-371-run-observability/demo/README.md)复用现有前端原语，以合成样本演示五个视图。本次为设计交付，未注册生产路由、未接入真实采集，生产实施待设计评审。
+
 ## 2026-09-28 RFC-370 CrewStation 完整托管部署 —— In Progress
 
-用户已批准实现、部署和提交上库到远端。[RFC三件套](design/RFC-370-crewstation-hosted-deployment/proposal.md)按两阶段推进：A先补平台中立端口／local adapter并经AC00独立验收；B先M0必要能力实际部署，再M1任务闭环、M2/M3逐项接入执行／事件／恢复，M4完整收口。当前A-T1入口普查和A-T2配置／generation切面重构进行中：新增system-operations数据库配置端口及本地文件adapter，启动composition支持注入，原迁移恢复流程复用；generation验证已与文件adapter分离并发布；artifact运行时入口已发布；安装准备application及local adapter已发布；设置配置持久端口及HTTP应用编排已发布；本批抽无IO的配置默认值／patch共同规则，原文件语义保持；具体检查／发布证据见plan实施日志。H1/H6尚未完成，其余切面待逐项收口；尚无CS adapter或aw部署。独立设计门工具不可用，未记PASS，不提前通过A-G。保留standalone及完整能力目标，B1～B4按实际能力增量闭合。
+用户已批准实现、部署和提交上库到远端。[RFC三件套](design/RFC-370-crewstation-hosted-deployment/proposal.md)按两阶段推进：A先补平台中立端口／local adapter并经AC00独立验收；B先M0必要能力实际部署，再M1任务闭环、M2/M3逐项接入执行／事件／恢复，M4完整收口。当前A-T1入口普查和A-T2配置／generation切面重构进行中：新增system-operations数据库配置端口及本地文件adapter，启动composition支持注入，原迁移恢复流程复用；generation验证已与文件adapter分离并发布；artifact运行时入口已发布；安装准备application及local adapter已发布；设置配置持久端口及HTTP应用编排已发布；无IO配置值规则已发布；六组HTTP路由查询已发布；本批继续文档／OIDC地址／MCP开关与完成态HTTP装配的配置查询接线，两provider共用原文件reader，回退／热读语义保持；具体检查／发布证据见plan实施日志。H1/H6尚未完成，其余切面待逐项收口；尚无CS adapter或aw部署。独立设计门工具不可用，未记PASS，不提前通过A-G。保留standalone及完整能力目标，B1～B4按实际能力增量闭合。
 
 ## 2026-09-23 RFC-369 node_run 旧代作废改由读侧推导 —— ✅ Done
 
