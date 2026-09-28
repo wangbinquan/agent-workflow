@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1748,
+    "entries": 1750,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20544,6 +20544,28 @@
     },
     {
       "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/application/usageIngestion.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/usageIngestion.ts#createUsageIngestion",
+      "missingControls": [
+        "authority",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/usageIngestion.ts#createUsageIngestion",
+      "symbol": "createUsageIngestion",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
@@ -20562,6 +20584,28 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts#createObservationPriceStore",
       "symbol": "createObservationPriceStore",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts#createUsageLedgerStore",
+      "missingControls": [
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts#createUsageLedgerStore",
+      "symbol": "createUsageLedgerStore",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -41776,7 +41820,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d818dbdc105d42fbea4ffa31e2ce633ad6bc3fd1203a801a912ad276c3e69c6d",
+  "sourceDigest": "sha256:22a10e572c7f7a1938364d55659a23374e64e092b9d9bc3660dbf8d152ed52c7",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 497,
-    "architectureExceptions": 4884,
-    "backgroundJobs": 332,
-    "crossContextImports": 5496,
+    "architectureExceptions": 4891,
+    "backgroundJobs": 333,
+    "crossContextImports": 5504,
     "facades": 291,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25169,
-    "mutationEntrypoints": 1748,
+    "moduleSymbolOwners": 25204,
+    "mutationEntrypoints": 1750,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1023,
-    "transactionExternalEffects": 258
+    "publicSurfaces": 1021,
+    "transactionExternalEffects": 259
   },
   "metrics": {
     "ambientWiringEntries": 497,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1878,
+    "backendProductionFiles": 1883,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 332,
+    "backgroundEntries": 333,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -102,7 +102,7 @@
       },
       {
         "context": "run-observability",
-        "files": 12
+        "files": 17
       },
       {
         "context": "runtime-management",
@@ -125,7 +125,7 @@
         "files": 327
       }
     ],
-    "moduleFiles": 1328,
+    "moduleFiles": 1333,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d818dbdc105d42fbea4ffa31e2ce633ad6bc3fd1203a801a912ad276c3e69c6d"
+  "sourceDigest": "sha256:22a10e572c7f7a1938364d55659a23374e64e092b9d9bc3660dbf8d152ed52c7"
 }

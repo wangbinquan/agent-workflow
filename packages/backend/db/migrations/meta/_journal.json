@@ -1618,6 +1618,13 @@
       "when": 1790577006668,
       "tag": "0231_rfc371_observation_prices",
       "breakpoints": true
+    },
+    {
+      "idx": 231,
+      "version": "6",
+      "when": 1790579348109,
+      "tag": "0232_rfc371_usage_ledger",
+      "breakpoints": true
     }
   ]
 }

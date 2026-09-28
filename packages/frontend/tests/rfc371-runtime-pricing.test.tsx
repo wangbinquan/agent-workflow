@@ -103,7 +103,7 @@ function fixture() {
   })
   const other = createRoute({
     getParentRoute: () => root,
-    path: '/other',
+    path: '/agents',
     component: () => <p>Other page</p>,
   })
   const router = createRouter({
@@ -207,7 +207,7 @@ test('a hidden draft still blocks navigation until the user decides', async () =
   fireEvent.keyDown(document, { key: 'Escape' })
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   await act(async () => {
-    void f.router.navigate({ to: '/other' })
+    void f.router.navigate({ to: '/agents' })
   })
   await screen.findByRole('dialog')
   expect(f.router.state.location.pathname).toBe('/pricing')

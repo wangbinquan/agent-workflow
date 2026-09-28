@@ -4,8 +4,8 @@ import { actorOf } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import { DomainError, ValidationError } from '@/util/errors'
 import { ObservationPriceError } from '../../domain/priceError'
-import type { ObservationPricingCommands } from '../../public/commands'
-import type { ObservationPricingQueries } from '../../public/queries'
+import type { ObservationPricingCommands } from '../../ports/pricingCommands'
+import type { ObservationPricingQueries } from '../../ports/pricingQueries'
 
 export interface ObservationRouteDependencies {
   readonly commands: ObservationPricingCommands

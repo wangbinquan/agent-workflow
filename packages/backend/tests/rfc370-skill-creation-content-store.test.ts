@@ -384,7 +384,7 @@ describeEachProvider('RFC-370 skill creation content store', (harness) => {
       'imported/data/raw.bin': bytes,
     })
     const result = await catalog.zipImport.commit(admitted.actor, {
-      archive: { content: Buffer.from(archive).toString('base64') },
+      archive: { encoding: 'base64', content: Buffer.from(archive).toString('base64') },
       decisions: { imported: { action: 'import' } },
     })
     expect(result.failed).toEqual([])

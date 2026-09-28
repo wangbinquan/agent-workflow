@@ -5487,9 +5487,9 @@
   "denominator": {
     "ambientWiring": 497,
     "disabled": 9,
-    "entries": 332,
+    "entries": 333,
     "executionLocal": 41,
-    "longRunning": 76,
+    "longRunning": 77,
     "managed": 11,
     "periodic": 206
   },
@@ -7758,6 +7758,27 @@
       "phase": "unknown",
       "symbol": "resourceCatalogCursorBrand",
       "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/run-observability/domain/usageLedger.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/run-observability/domain/usageLedger.ts#reconcileUsage",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/domain/usageLedger.ts#reconcileUsage",
+      "phase": "unknown",
+      "symbol": "reconcileUsage",
+      "targetContext": "run-observability"
     },
     {
       "dependencies": [
@@ -12812,5 +12833,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d818dbdc105d42fbea4ffa31e2ce633ad6bc3fd1203a801a912ad276c3e69c6d"
+  "sourceDigest": "sha256:22a10e572c7f7a1938364d55659a23374e64e092b9d9bc3660dbf8d152ed52c7"
 }

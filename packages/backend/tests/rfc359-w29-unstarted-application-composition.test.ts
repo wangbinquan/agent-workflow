@@ -370,6 +370,31 @@ function namedCalls(node: ts.Node, source: ts.SourceFile, name: string): ts.Call
 }
 
 describe('RFC-359 W29 complete unstarted application composition', () => {
+  // RFC-371 adds one price application per selected provider, sharing its existing
+  // runtime directory and DB. Only that property and its single HTTP mount change
+  // the whole-body digests below (reviewed against a9fa45ed's parent).
+  test('RFC-371 pricing uses the selected provider and its existing runtime directory once', () => {
+    for (const [source, name, database] of [
+      [pg, 'composePostgresqlApplication', 'input.db'],
+      [server, 'composeSqliteApiRouteMounts', 'deps.db'],
+    ] as const) {
+      const calls = namedCalls(functionBody(source, name), source, 'composeObservationPricing')
+      expect(calls).toHaveLength(1)
+      const argument = calls[0]!.arguments[0]!
+      expect(ts.isObjectLiteralExpression(argument)).toBe(true)
+      if (!ts.isObjectLiteralExpression(argument)) throw new Error('Expected pricing bindings')
+      expect(argument.properties.map((property) => compact(property, source))).toEqual([
+        `db:${database}`,
+        'runtimes:runtimeManagement.observations',
+      ])
+    }
+    expect(
+      namedCalls(functionBody(server, 'mountApiRoutes'), server, 'routes.observability'),
+    ).toHaveLength(1)
+    expect(
+      namedCalls(functionBody(server, 'composeProviderAppDeps'), server, 'mountObservationRoutes'),
+    ).toHaveLength(1)
+  })
   test('RFC-363 URL preparation uses the existing root IA authority context factory', () => {
     for (const [source, expected] of [
       [pg, 1],
@@ -640,7 +665,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 按 `user` 取消、事后改写原因，中间几秒数字员工会把超时误判成用户取消。装配图变的是这两格，
       // 判据在 `tests/rfc368-implementation-gate.test.ts`。
       // RFC-370: Intent and webhook routes receive the same live configuration query.
-      '566da0a2eaa78b91eb71e6bb5a48f46b96cbeaeccaa1994a098071a4903c6a5d',
+      '2484b6518f7f51352968e706058edd5f9e6606e5da6861d593fe1f8854a82ba7',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -847,7 +872,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 交给数字员工；旧字符串 participant 与适配器删除。装配图的变化是有意的，
       // 判据在 `tests/rfc368-*.test.ts`。
       // RFC-370: Intent and webhook configuration bindings change; route order and lifetime stay fixed.
-      '39feae812c6e9b1061d48aef79c5fd48ad81c72bfa29a303741c55c967c6e413',
+      'd3ee60af90a61614f96b54875e7e35ebf6fa3b0c1cf7b2a355966a59cc5c1de9',
     )
     expect(
       namedCalls(
@@ -880,14 +905,14 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-370: completed HTTP/MCP composition receives the selected configuration
     // query instead of a file path; route order and runtime handles are unchanged.
     const expected = {
-      composeProviderAppDeps: '38237539617e87707ebea031feac7b943a17c5ca6cf7717360be72dae120f200',
+      composeProviderAppDeps: '10c0aac04b0af9f201ce37f4ef21102919b27776eb76e624be0e8555d409cfc6',
       composePostgresqlAppDeps: '2ebbeeef1bc8fecbda4f4c93cf8603afc3eec78fe6d4739403d407c2fb185c5b',
       // gitleaks:allow —— 这是被测装配的 sha256 内容摘要，不是凭据。
       // 2026-09-19 重采：`taskArchive` 的挂载点移到 `tasks` 之前——Hono 的 `*` 能匹配零个段，
       // `'/api/tasks/:id/*'` 那道可见性中间件会吞掉兄弟字面路由 `POST /api/tasks/archive`
       // 并把它变成 404（只对非管理员，见 server.ts 该处注释与
       // tests/rfc311-task-archive-route-reachability.test.ts）。摘要随之变。
-      mountApiRoutes: 'ad3aabd891e51458a246b8162514c0bb1bc645ede3922272d6e77292b5029a05', // gitleaks:allow
+      mountApiRoutes: 'e8c86f5329752c02fcb786c858e3cc90b218019eeffb5283a84cc9084f854f31', // gitleaks:allow
       createComposedApp: 'c0a8d5ef48393cfb625a9bd8da82d9fc645a935ef0c2f5d6038c4e21c0b08c6d',
       createApp: '628edbc2da66884bfba5d159423fa972ea9a8d4aca3ecb37ed8e3ed98e18aefa',
     }

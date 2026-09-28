@@ -29,6 +29,7 @@ import {
   McpSchema,
   MaintenanceStatusSchema,
   OverviewResponseSchema,
+  ObservationPriceVersionSchema,
   ScheduledTaskListItemSchema,
   SkillSchema,
   TaskCatalogPageSchema,
@@ -883,6 +884,41 @@ export const ENDPOINTS: EndpointSpec[] = [
   { method: 'DELETE', path: '/api/runtimes/:name' },
   { method: 'POST', path: '/api/runtimes/:name/probe' },
   { method: 'POST', path: '/api/runtimes/:name/enabled' },
+
+  // RFC-371: full save/conflict fixtures also run against both providers in
+  // rfc371-pricing-provider.test.ts; this inventory covers the mounted app.
+  {
+    method: 'GET',
+    path: '/api/observability/pricing/runtimes',
+    happy: {
+      schema: z.object({
+        runtimes: z.array(
+          z.object({
+            registrationId: z.string(),
+            configurationRevision: z.number().int(),
+            name: z.string(),
+            protocol: z.enum(['opencode', 'claude-code']),
+            model: z.string().nullable(),
+            enabled: z.boolean(),
+            pricingRevision: z.number().int(),
+          }),
+        ),
+      }),
+    },
+  },
+  {
+    method: 'GET',
+    path: '/api/observability/pricing/runtimes/:registrationId/versions',
+    happy: {
+      pathParams: { registrationId: 'contract-pricing-empty-history' },
+      schema: z.object({
+        items: z.array(ObservationPriceVersionSchema),
+        revision: z.number().int(),
+        nextBeforeRevision: z.number().int().optional(),
+      }),
+    },
+  },
+  { method: 'POST', path: '/api/observability/pricing/runtimes/:registrationId/versions' },
 
   // ---- RFC-349 database provider + one-click migration ----
   {

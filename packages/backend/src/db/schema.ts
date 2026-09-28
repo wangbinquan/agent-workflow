@@ -49,6 +49,36 @@ import { providerAwareSqliteTable } from './providerSchema'
 
 const sqliteTable = providerAwareSqliteTable(physicalSqliteTable)
 
+// RFC-371: durable usage revisions and their source cursor commit atomically.
+export const observationUsageSources = sqliteTable('observation_usage_sources', {
+  sourceId: text('source_id').primaryKey(),
+  cursor: text('cursor'),
+})
+export const observationUsageCurrent = sqliteTable(
+  'observation_usage_current',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id').notNull(),
+    sourceId: text('source_id').notNull(),
+    document: text('document').notNull(),
+  },
+  (table) => [index('observation_usage_task_idx').on(table.taskId, table.id)],
+)
+export const observationUsageEvents = sqliteTable(
+  'observation_usage_events',
+  {
+    id: text('id').primaryKey(),
+    sourceId: text('source_id').notNull(),
+    eventId: text('event_id').notNull(),
+    recordKey: text('record_key').notNull(),
+    revision: integer('revision').notNull(),
+    fingerprint: text('fingerprint').notNull(),
+    outcome: text('outcome').notNull(),
+    document: text('document').notNull(),
+  },
+  (table) => [index('observation_usage_revision_idx').on(table.recordKey, table.revision)],
+)
+
 // RFC-371: immutable CNY tariffs owned exclusively by run-observability.
 // No runtime FK: deleting and recreating a name must retain separate price histories.
 export const observationPriceHeads = sqliteTable('observation_price_heads', {

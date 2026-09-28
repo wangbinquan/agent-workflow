@@ -2,8 +2,8 @@ import { SaveObservationPriceSchema } from '@agent-workflow/shared'
 import type { SaveObservationPrice, ObservationPriceVersion } from '@agent-workflow/shared'
 import { ObservationPriceError } from '../domain/priceError'
 import type { ObservationPricingDependencies } from '../ports/pricing'
-import type { ObservationPricingCommands } from '../public/commands'
-import type { ObservationPricingQueries } from '../public/queries'
+import type { ObservationPricingCommands } from '../ports/pricingCommands'
+import type { ObservationPricingQueries } from '../ports/pricingQueries'
 
 async function savePrice(
   deps: ObservationPricingDependencies,

@@ -103,6 +103,11 @@ const OVERLAY_CALLSITES = {
   },
   // Runtime edit/add dialog plus RFC-201's shared destructive confirmation.
   'components/RuntimeList.tsx': { family: 'access-and-settings', count: 2 },
+  // RFC-371: price editor/history and draft-switch confirmation; rendered
+  // retry, recovery, focus and dirty-navigation cases live in rfc371-runtime-pricing.
+  'components/observability/PriceEditor.tsx': { family: 'access-and-settings', count: 1 },
+  'components/observability/PriceHistory.tsx': { family: 'access-and-settings', count: 1 },
+  'components/observability/RuntimePricing.tsx': { family: 'access-and-settings', count: 1 },
   // RFC-321 — connection rebind and deletion can revoke personal credentials;
   // rfc269-code-host-settings.test.tsx owns both rendered confirmations.
   'components/settings/CodeHostsSection.tsx': {

@@ -432,7 +432,8 @@ test.describe('RFC-198 global UX browser matrix', () => {
     await primeAuth(page)
 
     const sections = [
-      ['runtime', 1],
+      // RFC-371 adds the immutable CNY token-pricing card beside the runtime registry.
+      ['runtime', 2],
       ['systemAgents', 6],
       ['limits', 3],
       ['recovery', 2],

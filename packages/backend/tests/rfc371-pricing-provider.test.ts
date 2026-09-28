@@ -1,6 +1,6 @@
 // RFC-371: an accepted invocation keeps its CNY tariff through edits, retries and restart.
 import { expect, test } from 'bun:test'
-import { Hono } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
 import type { SaveObservationPrice } from '@agent-workflow/shared'
 import { createObservationPricing } from '../src/modules/run-observability/application/pricing'
 import { createObservationPriceStore } from '../src/modules/run-observability/infrastructure/pricingPersistence'
@@ -197,10 +197,11 @@ describeEachProvider('RFC-371 immutable runtime CNY pricing', (harness) => {
       },
       source: 'session',
     })
-    app.use('*', async (c, next) => {
+    const injectActor: MiddlewareHandler = async (c, next) => {
       c.set('actor', actor)
       await next()
-    })
+    }
+    app.use('*', injectActor)
     app.onError(errorHandler)
     mountObservationRoutes(app, f)
     const path = '/api/observability/pricing/runtimes/' + ID + '/versions'
@@ -227,7 +228,9 @@ describeEachProvider('RFC-371 immutable runtime CNY pricing', (harness) => {
   // Regression: querying the real runtime directory inside the price transaction
   // waited for a second connection, including when poolMax=1 was valid.
   test('real runtime directory and price persistence save with one available pool connection', async () => {
-    const runtimes = createRuntimeObservationQueries(composeRuntimeRegistryOperations(harness.db))
+    const registry = composeRuntimeRegistryOperations(harness.db)
+    await registry.seedBuiltinRuntimes()
+    const runtimes = createRuntimeObservationQueries(registry)
     const runtime = (await runtimes.directory()).runtimes.find(
       (row) => row.protocol === 'opencode',
     )!

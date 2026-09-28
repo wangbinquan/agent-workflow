@@ -79,3 +79,11 @@
 - 本地仅对本批文件做格式／lint 和迁移生成检查，没有运行 AW 本地全量门禁、测试或服务；最终验证以发布 SHA 的 GitHub Actions 为准。
 
 下一批为受理价格快照、持久用量账本、source cursor／checkpoint、协议归一与两种部署的数据适配，再接正式统计页与泳道。CS 联动、性能、浏览器与真实运行验收仍未完成。
+
+## 7. 实施批次 2：可重放用量账本与首批 CI 修复
+
+- 新增 source cursor、原始 measurement 事件和当前投影三表；同事务提交回执、投影与水位。按 source / invocation / record / revision 去重，同修订不同内容整页回滚，游标不倒退。
+- cumulative 保留恢复基线，未知值不当零；无效终态和未解释下降保留已知贡献并标记质量。迟到修订按原始证据的修订顺序重建，覆盖 invalid-final、null、下降、显式 correction 四组正反到达顺序对拍。
+- 账本基础独立功能复审最终 PASS；协议采集、受理冻结、任务汇总、CS 数据读取、正式观测界面仍待接入，本批不宣告端到端完成。
+- a9fa45ed 首轮 hosted CI 暴露价格测试类型、目录 fixture 未播种、路由/弹窗登记、数据库表与迁移计数、schema artifacts、设置卡片数和装配摘要遗漏；本批按实际新增合同更新，内部价格接口移至 ports，未添加无消费者 public 债。继承的 RFC370 ZIP fixture 补齐既有 encoding:base64 合同，未改其并行实现。
+- SQLite / PostgreSQL 账本迁移与 RFC349 schema artifacts 已生成。未在本地运行 AW 测试；本批功能回归及整体状态须由提交后的 exact-SHA CI 验证。
