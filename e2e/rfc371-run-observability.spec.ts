@@ -1,5 +1,6 @@
 // Real daemon/API/browser flow. The basic runtime emits no usage: missing values must stay unknown.
 import { expect, test, type Page } from '@playwright/test'
+import { readFile } from 'node:fs/promises'
 import type { ObservationTaskDetail } from '@agent-workflow/shared'
 import { startDaemon, type DaemonHandle } from './harness'
 
@@ -188,6 +189,20 @@ test('task, agents and attempt drill-down use real observations and standard car
   await expect(
     page.getByRole('heading', { name: 'Agent contributions by task', exact: true }),
   ).toBeVisible()
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: 'Export snapshot CSV', exact: true }).click(),
+  ])
+  expect(await download.failure()).toBeNull()
+  expect(download.suggestedFilename()).toMatch(/^aw-observations-agents-\d+-\d+\.csv$/)
+  const csvPath = await download.path()
+  expect(csvPath).not.toBeNull()
+  const csv = await readFile(csvPath!, 'utf8')
+  expect(csv).toContain('"agent_revision"')
+  expect(csv).toContain('"CNY"')
+  expect(csv).toContain(agents[0]!.id)
+  expect(csv).not.toContain(agents[1]!.id)
+  expect(csv).toContain(task.id)
   await page.getByRole('button', { name: 'Observed parallel task', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Task total', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Back to analysis', exact: true }).click()

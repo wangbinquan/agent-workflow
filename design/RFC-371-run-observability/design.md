@@ -166,17 +166,18 @@ TaskExecution 在现有事务提交链发出最小事实（started/status/attemp
 
 ## 8. 查询接口草案
 
-| 接口                                        | 输出                                                    |
-| ------------------------------------------- | ------------------------------------------------------- |
-| `GET /api/observability/overview`           | 当前授权范围的计数、用量、耗时分布、趋势与覆盖率        |
-| `GET /api/observability/tasks`              | 游标分页；显式 sort / cohort，不全量扫描前端            |
-| `GET /api/observability/tasks/:id`          | direct/subtree 汇总、参与者、时间口径、数据状态         |
-| `GET /api/observability/tasks/:id/timeline` | 按 group / timeRange / parent / cursor 分页片段         |
-| `GET /api/observability/agents`             | 稳定 agentId / revision 汇总与分页                      |
-| `GET /api/observability/agents/:id/tasks`   | 任务贡献，可展开该 Agent 的 attempts                    |
-| `GET /api/observability/usage`              | 受控 groupBy=model/agent/repository/source/time         |
-| `GET /api/observability/health`             | 授权范围内缺失、延迟、对账冲突与采集能力                |
-| `POST /api/observability/exports`           | 大范围异步导出，绑定过滤 / asOf / actor，下载时重新鉴权 |
+| 接口                                        | 输出                                                        |
+| ------------------------------------------- | ----------------------------------------------------------- |
+| `GET /api/observability/overview`           | 当前授权范围的计数、用量、耗时分布、趋势与覆盖率            |
+| `GET /api/observability/tasks`              | 游标分页；显式 sort / cohort，不全量扫描前端                |
+| `GET /api/observability/tasks/:id`          | direct/subtree 汇总、参与者、时间口径、数据状态             |
+| `GET /api/observability/tasks/:id/timeline` | 按 group / timeRange / parent / cursor 分页片段             |
+| `GET /api/observability/agents`             | 稳定 agentId / revision 汇总与分页                          |
+| `GET /api/observability/agents/:id/tasks`   | 任务贡献，可展开该 Agent 的 attempts                        |
+| `GET /api/observability/usage`              | 受控 groupBy=model/agent/repository/source/time             |
+| `GET /api/observability/health`             | 授权范围内缺失、延迟、对账冲突与采集能力                    |
+| `POST /api/observability/exports`           | 大范围异步导出，绑定过滤 / asOf / actor，下载时重新鉴权     |
+| `POST /api/observability/exports/snapshot`  | 重新读取当前授权的有界快照，按任务或 Agent 导出精确 CNY CSV |
 
 `taskId/nodeRunId/agentId/spanId` 可在受控业务分析存储中索引；按 RFC-294 禁止进入 Prometheus 等通用 metrics labels 或 trace baggage。外部 trace attributes 采用 allowlist 和内容分级，不记录 raw prompt/path/secret。
 

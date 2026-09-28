@@ -1,4 +1,9 @@
 export const runObservabilityZh = {
+  exportSnapshot: '导出当前快照 CSV',
+  exporting: '正在生成 CSV…',
+  exportHint: '按当前时间与所选 Agent／质量筛选重新读取，最多 200 个任务；包含其他分页。',
+  exportReady: '已生成 {{count}} 行，数据快照 {{time}}。',
+  exportPartial: '本次读取达到上限或存在读取缺口，CSV 中已标明部分统计。',
   tab_overview: '总览',
   tab_tasks: '任务追踪',
   tab_agents: 'Agent 分析',
@@ -133,6 +138,12 @@ export const runObservabilityZh = {
 }
 export type RunObservabilityMessages = { [K in keyof typeof runObservabilityZh]: string }
 export const runObservabilityEn: RunObservabilityMessages = {
+  exportSnapshot: 'Export snapshot CSV',
+  exporting: 'Generating CSV…',
+  exportHint:
+    'Fresh read for this window and selected agent or quality, up to 200 tasks across pages.',
+  exportReady: '{{count}} rows generated. Snapshot: {{time}}.',
+  exportPartial: 'The read reached a limit or has gaps; the CSV marks this as partial.',
   tab_overview: 'Overview',
   tab_tasks: 'Task traces',
   tab_agents: 'Agent analysis',

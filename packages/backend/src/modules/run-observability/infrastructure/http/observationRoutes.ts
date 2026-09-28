@@ -1,6 +1,7 @@
 import type { Hono } from 'hono'
 import {
   ObservationOverviewQuerySchema,
+  ObservationSnapshotExportQuerySchema,
   ObservationPricePageQuerySchema,
   ObservationTaskPageQuerySchema,
   SaveObservationPriceSchema,
@@ -9,6 +10,7 @@ import { actorOf } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { ObservationPriceError } from '../../domain/priceError'
+import { exportObservationSnapshot } from '../../application/observationExport'
 import type { ObservationPricingCommands } from '../../ports/pricingCommands'
 import type { ObservationPricingQueries } from '../../ports/pricingQueries'
 import type { ObservationTaskQueries } from '../../public/queries'
@@ -30,6 +32,23 @@ async function mapped<T>(operation: () => Promise<T>): Promise<T> {
 }
 export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependencies): void {
   const readGate = { permissions: ['tasks:read'] as const, tokenAccess: 'allow' as const }
+  registerRoute(
+    app,
+    {
+      ...readGate,
+      method: 'POST',
+      path: '/api/observability/exports/snapshot',
+      summary: 'Export a fresh visible bounded task or agent snapshot as CNY CSV',
+    },
+    async (c) => {
+      const query = ObservationSnapshotExportQuerySchema.safeParse(
+        await c.req.json().catch(() => null),
+      )
+      if (!query.success) throw new ValidationError('invalid-query', 'Invalid observation export')
+      const snapshot = await deps.tasks.overview(actorOf(c), query.data.window)
+      return c.json(exportObservationSnapshot(snapshot, query.data))
+    },
+  )
   registerRoute(
     app,
     {

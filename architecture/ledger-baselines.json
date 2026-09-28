@@ -300,8 +300,11 @@
       "id": "rfc329-mcp-surface-exemptions",
       "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
       "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
-      "baseline": 398,
-      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
+      "baseline": 399,
+      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。",
+      "allowGrowth": {
+        "why": "RFC-371：接入当前快照精确 CSV 导出和独立 HTTP 下载合同，rfc329-mcp-surface-exemptions 398 → 399，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc345-resource-acl-facade-compatibility",
@@ -839,8 +842,11 @@
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
-      "baseline": 500,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
+      "baseline": 501,
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
+      "allowGrowth": {
+        "why": "RFC-371：接入当前快照精确 CSV 导出和独立 HTTP 下载合同，rfc294-ambient-wiring 500 → 501，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-cross-context-observed-imports",
@@ -902,12 +908,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25435,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25447,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371：接入当前快照精确 CSV 导出和独立 HTTP 下载合同，rfc294-module-symbol-owners 25435 → 25447，按新增功能如实登记本批归属与公开合同。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:a20da21f503486c56d8f4daf3eb5db5cae4d91fc383e13d9145d7206e637a98a",
+    "sourceDigest": "sha256:8f76abbc1fd46526ee972cf49bfc32aa69474ba18513199848e086bdb981a692",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +929,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "79fdcaa837b54b7e7ddaa42ee82b063217df72b1",
-    "contentDigest": "sha256:4e631201ba7db9159b513a8bbd7e827bda0a53c49b35e1b52e15205b64206be9",
+    "currentSnapshotSha": "213d3b6b2eaabc40ee04dcc1dd0f5d454fed6fcf",
+    "contentDigest": "sha256:30a7170a3f104e92164a7a70a359a8abd92244387c26ae60fb3ea6df1ebcd74d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

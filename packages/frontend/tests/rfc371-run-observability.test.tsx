@@ -177,11 +177,37 @@ function fixture(
   } = {},
 ) {
   const paths: URL[] = [],
+    exports: unknown[] = [],
     changes: ObservationSearch[] = [],
-    state = { error: false, empty: false, detail: detail(), overview: overview(), ...options }
+    state = {
+      error: false,
+      empty: false,
+      exportError: false,
+      detail: detail(),
+      overview: overview(),
+      ...options,
+    }
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (raw, init) => {
     const url = new URL(String(raw))
     paths.push(url)
+    if (url.pathname === '/api/observability/exports/snapshot') {
+      expect(init?.method).toBe('POST')
+      exports.push(JSON.parse(String(init?.body)))
+      return state.exportError
+        ? Response.json(
+            { error: { code: 'unavailable', message: 'Export offline' } },
+            { status: 503 },
+          )
+        : Response.json({
+            filename: `aw-observations-agents-${search.from}-${search.to}.csv`,
+            mediaType: 'text/csv;charset=utf-8',
+            content: '\ufeff"tokens","cost_cny"\r\n"10","0"\r\n',
+            asOf: NOW,
+            rows: 1,
+            partial: true,
+            bounded: true,
+          })
+    }
     expect(init?.method ?? 'GET').toBe('GET')
     if (state.error)
       return Response.json({ error: { code: 'unavailable', message: 'offline' } }, { status: 503 })
@@ -223,8 +249,49 @@ function fixture(
       <RouterProvider router={router as AnyRouter} />
     </QueryClientProvider>,
   )
-  return { paths, changes, state }
+  return { paths, changes, state, exports }
 }
+test('CSV downloads the selected agent revision, resets feedback on view changes and preserves read data on failure', async () => {
+  const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:observation-export')
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+  const downloads: string[] = []
+  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+    this: HTMLAnchorElement,
+  ) {
+    downloads.push(this.download)
+  })
+  const agent = '["agent-1",3,"task"]'
+  const f = fixture({ ...search, tab: 'agents', agent })
+  await screen.findByRole('heading', { name: '该 Agent 的任务贡献' })
+  fireEvent.click(screen.getByRole('button', { name: '导出当前快照 CSV' }))
+  await screen.findByText(/已生成 1 行/)
+  expect(f.exports).toEqual([
+    {
+      window: {
+        from: search.from,
+        to: search.to,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      },
+      view: 'agents',
+      agent,
+    },
+  ])
+  expect(downloads).toEqual([`aw-observations-agents-${search.from}-${search.to}.csv`])
+  expect((create.mock.calls[0]![0] as Blob).type).toBe('text/csv;charset=utf-8')
+  expect(await (create.mock.calls[0]![0] as Blob).text()).toContain('"10","0"')
+  expect(screen.getByText(/CSV 中已标明部分统计/)).toBeTruthy()
+  fireEvent.click(screen.getByRole('tab', { name: '性能与数据质量' }))
+  await screen.findByRole('heading', { name: '用量与估值的数据质量' })
+  expect(screen.queryByText(/已生成 1 行/)).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: '估值待同步 · 1' }))
+  f.state.exportError = true
+  fireEvent.click(screen.getByRole('button', { name: '导出当前快照 CSV' }))
+  await screen.findByRole('button', { name: '重试' })
+  expect(f.exports.at(-1)).toMatchObject({ view: 'tasks', quality: 'pending' })
+  expect(f.exports.at(-1)).not.toHaveProperty('agent')
+  expect(downloads).toHaveLength(1)
+  expect(screen.getByRole('button', { name: '真实任务' })).toBeTruthy()
+})
 test('page → task → attempt → back preserves the original filter and exact-zero CNY', async () => {
   const f = fixture()
   const open = await screen.findByRole('button', { name: '真实任务' })

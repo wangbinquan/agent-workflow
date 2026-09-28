@@ -23,6 +23,7 @@ import { TabBar, tabDomIds } from '@/components/TabBar'
 import { formatDurationMs } from '@/lib/duration'
 import { Tokens, Cost, Source, Metrics } from './ObservationMetrics'
 import { ObservationAnalysis, type ObservationAnalysisTab } from './ObservationAnalysis'
+import { ObservationExport } from './ObservationExport'
 import './RunObservability.css'
 
 export interface ObservationSearch {
@@ -377,6 +378,15 @@ export function RunObservability({
               to: new Date(search.to).toLocaleString(i18n.language),
             })}
           </p>
+          <ObservationExport
+            key={JSON.stringify([search.from, search.to, tab, search.agent, search.quality])}
+            query={{
+              window: { from: search.from, to: search.to, timezone },
+              view: tab === 'agents' ? 'agents' : 'tasks',
+              ...(tab === 'agents' && search.agent ? { agent: search.agent } : {}),
+              ...(tab === 'performance' && search.quality ? { quality: search.quality } : {}),
+            }}
+          />
         </>
       )}
       {current.error && (

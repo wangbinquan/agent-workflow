@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:a20da21f503486c56d8f4daf3eb5db5cae4d91fc383e13d9145d7206e637a98a`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:8f76abbc1fd46526ee972cf49bfc32aa69474ba18513199848e086bdb981a692`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,14 +10,14 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1915 |
+| backend production TS 文件 | 1916 |
 | `services/` 文件 | 295 |
-| `modules/**` 文件 / 非空 context | 1361 / 18 |
+| `modules/**` 文件 / 非空 context | 1362 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
-| production ambient wiring seam | 500 |
+| production ambient wiring seam | 501 |
 | background work entries | 333 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 76 |
@@ -29,13 +29,13 @@
 
 | 账本 | 条目数 |
 | --- | --- |
-| `ambientWiring` | 500 |
+| `ambientWiring` | 501 |
 | `architectureExceptions` | 4941 |
 | `backgroundJobs` | 333 |
 | `crossContextImports` | 5563 |
 | `facades` | 295 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25435 |
+| `moduleSymbolOwners` | 25447 |
 | `mutationEntrypoints` | 1770 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1027 |
@@ -84,13 +84,13 @@
 | runtime-management / infrastructure | 11 |
 | digital-employee / infrastructure | 9 |
 | memory / domain | 9 |
+| run-observability / application | 9 |
 | run-observability / ports | 9 |
 | source-control / domain | 9 |
 | collaboration / composition | 8 |
 | event-center / application | 8 |
 | intent / infrastructure | 8 |
 | knowledge-evolution / domain | 8 |
-| run-observability / application | 8 |
 | development-automation / engine | 7 |
 | intent / composition | 7 |
 | memory / infrastructure | 7 |
