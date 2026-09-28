@@ -305,7 +305,7 @@ describe('RFC-359 T19h actual SQLite generation preparation', () => {
   // its await would admit against the old pointer and release the lock early.
   test('real provider preparation waits for the installation metadata commit', async () => {
     const { paths, options } = fixture()
-    const effects = createFileDatabaseInstallation(options)
+    const effects = createFileDatabaseInstallation({ ...options, history })
     let enterWrite!: () => void
     const writeEntered = new Promise<void>((resolve) => {
       enterWrite = resolve
@@ -324,7 +324,6 @@ describe('RFC-359 T19h actual SQLite generation preparation', () => {
     const pending = prepareDatabaseInstallation({
       config: options.config,
       contract: options.contract,
-      history,
       configuration: { read: options.readConfig, write: options.writeConfig },
       effects,
     })

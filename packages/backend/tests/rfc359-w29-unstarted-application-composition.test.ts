@@ -596,6 +596,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // （设置页改完默认运行时之后新任务必须按新那一行派发，见
     // `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`）。装配图变的是这一格，
     // 方向同样是补齐：此前这条路上「设为默认」对新任务不生效。
+    // RFC-370: only Settings wiring changes to the storage-neutral application;
+    // runtime reconciliation and provider-scoped concurrency handles stay identical.
     expect(digest(restored, pg)).toBe(
       // 2026-09-19（第二次重采）：三条被合一丢掉的装配步骤补回来——长驻协调器的运行期配置改成
       // 每次 drive 现读（`refreshLaunchConfig` / `currentRunConfig()` getter）、仓库准备重试把
@@ -634,7 +636,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 取消（`cause: { kind: 'resource-reaped', ...reason }`），状态与原因同一次写入落下；此前
       // 按 `user` 取消、事后改写原因，中间几秒数字员工会把超时误判成用户取消。装配图变的是这两格，
       // 判据在 `tests/rfc368-implementation-gate.test.ts`。
-      '00cf72c87121ab7fcfbafced2710f27be23679b50148cd1002b22950081b82d8',
+      '09c92574e5f39766e578bd91958a50cf69e5182c247349409aa42992018aef24',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -803,6 +805,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // `resumeRuntimeFor`（与 PostgreSQL 那一支逐字同形）。
     // **装配出来的东西不变**：复活仍是同一条进程级单例认领 + 同一个收尾器，静态校验门仍指向
     // 同一份 `composeAgentLaunchResourceOperations`。
+    // RFC-370: only Settings wiring changes to the storage-neutral application;
+    // runtime reconciliation and provider-scoped concurrency handles stay identical.
     expect(digest(oldPhaseBody(server, 'composeSqliteApiRouteMounts'), server)).toBe(
       // 2026-09-19（第二次重采）：三条被合一丢掉的装配步骤补回来——长驻协调器的运行期配置改成
       // 每次 drive 现读（`refreshLaunchConfig` / `currentRunConfig()` getter）、仓库准备重试把
@@ -836,7 +840,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // `composeReactionExecutionProvider({ db: deps.db, ... })` 装配、以 `reactionExecution`
       // 交给数字员工；旧字符串 participant 与适配器删除。装配图的变化是有意的，
       // 判据在 `tests/rfc368-*.test.ts`。
-      'abebd1601738bd5708cc621c5adc0b209d8c9bd79a07544883679cc42d13e5f5',
+      '26f5e3c6c2826e7563dd0cdcab1fd50c515eb06a465150e49472d4135d2b590c',
     )
     expect(
       namedCalls(

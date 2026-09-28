@@ -146,7 +146,7 @@ describe('RFC-349 runtime registry provider operations', () => {
     const root = source('src/cli/postgresqlDaemonApplication.ts')
     expect(root).toContain('runtimeRegistry: core.runtimeRegistry')
     expect(root).toContain('runtimeRegistry: runtimeManagement.configuration')
-    const config = source('src/routes/config.ts')
+    const config = source('src/modules/system-operations/application/applicationConfiguration.ts')
     expect(config).not.toContain('runtime-disabled')
     expect(config).toContain('deps.runtimeRegistry.validateDefaultChange(')
   })

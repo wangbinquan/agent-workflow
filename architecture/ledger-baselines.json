@@ -811,10 +811,10 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1730,
+      "baseline": 1732,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
-        "why": "RFC-370 A-T2：新增 fileDatabaseInstallation 工厂封装原安装效果，既有 create 前缀入口普查分母 1729→1730；原 generation writer 复用，不增加业务写算法。"
+        "why": "RFC-370 A-T2：设置应用工厂与独立文件 adapter 两个 create 入口纳入原有命名判据，1730→1732；原 HTTP 写入口继续保留。"
       }
     },
     {
@@ -849,10 +849,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5424,
+      "baseline": 5432,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-370 A-T2：安装准备拆成 application port、应用编排和 local adapter，composition 显式接线；中立机制类型及加载函数引用显式展开，observed edge 5416→5424。所有边保留 exact owner 记录。"
+        "why": "RFC-370 A-T2：设置应用／配置持久端口／local adapter／双 provider bootstrap 显式接线，迁移历史解析回到安装 adapter；14 条新边、6 条退役，5424→5432。无新增 off-dag offered 依赖。"
       }
     },
     {
@@ -866,20 +866,20 @@
       "id": "rfc294-required-port-liveness",
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
-      "baseline": 35,
+      "baseline": 36,
       "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。",
       "allowGrowth": {
-        "why": "RFC-370 A-T2：新增 DatabaseInstallationPort，application 消费、fileDatabaseInstallation 提供、system-operations composition 装配；required port 34→35，状态 active。"
+        "why": "RFC-370 A-T2：新增 ApplicationConfigurationPersistencePort，应用消费、文件 adapter 提供、system-operations composition 装配；35→36，生产 liveness active。"
       }
     },
     {
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4818,
+      "baseline": 4825,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-370 A-T2：既有 census 将 module→platform 中立机制引用统一归入 legacy-outbound。安装切面分离新增 6 条类型引用及 1 条 composition 的历史加载引用，4811→4818；未改扫描器、未添加通配绕过，原 generationStore 的三条引用迁到 generationValidation。精确条目及归属保留，不能据此宣称 W9 已关闭。"
+        "why": "RFC-370 A-T2：既有 census 对模块使用 platform／legacy 机制及 transport→模块 public／composition 统一记账。本批新增设置 adapter 文件读写三边、应用 ValidationError、composition 通知及 logger 两边、双 bootstrap composition 两边、transport/public 类型四边及安装 adapter bridge 一边；退役原路由三条跨模块类型和安装应用三条 PG 历史边，净 +7（4818→4825）。逐边保留 owner，不改扫描判据，不新增 off-dag offered 边，不领取 W9 完成信用。"
       }
     },
     {
@@ -893,8 +893,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1012,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1015,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2：设置 ApplicationConfigurationCommands 与从 route 迁入的两个 ConfigConcurrencyHotApply 合同纳入 system-operations exact public，1012→1015。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -914,15 +917,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25013,
+      "baseline": 25023,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-370 A-T2：新增安装端口、应用编排和本地 adapter 三个文件及必要符号，原 coordinator 保留兼容入口；owner 分母 25007→25013。"
+        "why": "RFC-370 A-T2：设置应用、持久端口与本地 adapter 三个文件和必要类型／工厂，配置 composition 同 root 装配；owner 分母25013→25023。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:29a0b45cbc92ef3c099df45935e7554adbf108408f99e7bb03dba7b9a9086ec5",
+    "sourceDigest": "sha256:5adbae7838924061ca8fdbfe1a5f51705b72ce1f4d161670b9d22b9ff407ea54",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -935,8 +938,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "68ecb2664a644982bf62a8b5bdce0828b3c5caf2",
-    "contentDigest": "sha256:409603301c31cc6083a98209ec7eaa1cb89b5074838e10d8159860e84fa1b735",
+    "currentSnapshotSha": "37a0e4978ff2c06211b4853c063ac9de6e86331f",
+    "contentDigest": "sha256:0d0d0659e345284c942fcbc6922605f45b02b5a9d742ee8f9627ed377dd392ab",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -1,3 +1,5 @@
+import { composeFileApplicationConfiguration } from '@/modules/system-operations/composition'
+import type { ConfigConcurrencyHotApplyInput } from '@/modules/system-operations/public/commands'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
@@ -1915,24 +1917,22 @@ export async function composePostgresqlApplication(
   })
   const platformRoutes: PostgresqlAppCompositionInput['platform'] = Object.freeze({
     config: Object.freeze({
-      configPath: input.configPath,
-      runtimeRegistry: runtimeManagement.configuration,
-      withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(input.configPath),
-      runtimeTests: mcpRuntimeTests.reconciliation,
-      concurrencyHotApply: Object.freeze({
-        apply(
-          next: Parameters<
-            PostgresqlAppCompositionInput['platform']['config']['concurrencyHotApply']['apply']
-          >[0],
-        ) {
-          resizeAllNodePools(input.provider.runtime, {
-            agent: next.maxConcurrentNodes,
-            script: next.maxConcurrentScriptNodes,
-            'code-host': next.maxConcurrentCodeHostCalls,
-          })
-          resizeAllTaskFanoutSems(next.multiProcessSubprocessConcurrency)
-          setChildTaskBudgetCapacity(next.maxActiveChildTasks)
-        },
+      configuration: composeFileApplicationConfiguration({
+        configPath: input.configPath,
+        runtimeRegistry: runtimeManagement.configuration,
+        withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(input.configPath),
+        runtimeTests: mcpRuntimeTests.reconciliation,
+        concurrencyHotApply: Object.freeze({
+          apply(next: ConfigConcurrencyHotApplyInput) {
+            resizeAllNodePools(input.provider.runtime, {
+              agent: next.maxConcurrentNodes,
+              script: next.maxConcurrentScriptNodes,
+              'code-host': next.maxConcurrentCodeHostCalls,
+            })
+            resizeAllTaskFanoutSems(next.multiProcessSubprocessConcurrency)
+            setChildTaskBudgetCapacity(next.maxActiveChildTasks)
+          },
+        }),
       }),
     }),
     maintenance: Object.freeze({

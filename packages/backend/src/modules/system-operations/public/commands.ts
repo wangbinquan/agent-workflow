@@ -1,3 +1,4 @@
+import type { Config } from '@agent-workflow/shared'
 import type {
   ActivateLocalRestoreInput,
   CancelStagedRestoreResult,
@@ -84,4 +85,26 @@ export interface DatabaseMigrationCommands {
       input: DatabaseMigrationOperationInput,
     ): Promise<DatabaseMigrationStatusView>
   }
+}
+
+// RFC-370: settings transport consumes the application, not a file path.
+export interface ApplicationConfigurationCommands {
+  read(): Promise<Config>
+  update(patch: unknown): Promise<Config>
+}
+
+export type ConfigConcurrencyHotApplyInput = Pick<
+  Config,
+  | 'maxConcurrentNodes'
+  | 'maxConcurrentScriptNodes'
+  | 'maxConcurrentCodeHostCalls'
+  | 'multiProcessSubprocessConcurrency'
+  | 'maxActiveChildTasks'
+  | 'maxInvocationDepth'
+>
+
+/** Bootstrap-captured daemon concurrency mutation. The implementation owns
+ * the process-pool identity; the HTTP route never receives a provider client. */
+export interface ConfigConcurrencyHotApplyCommand {
+  apply(input: ConfigConcurrencyHotApplyInput): void | Promise<void>
 }

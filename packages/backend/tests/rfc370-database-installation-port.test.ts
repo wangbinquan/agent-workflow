@@ -40,6 +40,9 @@ function fixture(current = false) {
       calls.push('read')
       return candidate
     },
+    async resolveRecoverySource() {
+      throw new Error('no recovery expected')
+    },
     async listMigrations() {
       return []
     },
@@ -70,7 +73,6 @@ function fixture(current = false) {
     prepareDatabaseInstallation({
       config: { provider: 'sqlite' },
       contract: history.head.contract,
-      history,
       configuration: {
         read: () => {
           throw new Error('no copy recovery: retain initial config')

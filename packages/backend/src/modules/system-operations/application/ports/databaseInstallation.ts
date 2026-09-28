@@ -6,7 +6,6 @@ import type {
   DatabaseGenerationPayload,
 } from '@/platform/persistence/generationValidation'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
 import type { DatabaseMigrationManifest } from '../../domain/databaseMigration'
 import type { DatabaseMigrationStatusView } from '../databaseMigrationControlPlane'
 import type { DatabaseMigrationCoordinatorPort } from './databaseMigrationCoordinator'
@@ -14,9 +13,12 @@ import type { DatabaseMigrationCoordinatorPort } from './databaseMigrationCoordi
 export interface DatabaseInstallationPort<TPrepared> {
   readGeneration(input: {
     readonly contract: LogicalSchemaContract
-    readonly history: PostgresqlMigrationHistory
     readonly pendingOperationId?: string
   }): DatabaseGenerationBootstrapCandidate | Promise<DatabaseGenerationBootstrapCandidate>
+  resolveRecoverySource(input: {
+    readonly fromContractDigest: string
+    readonly toContractDigest: string
+  }): LogicalSchemaContract | Promise<LogicalSchemaContract>
   listMigrations():
     | readonly DatabaseMigrationStatusView[]
     | Promise<readonly DatabaseMigrationStatusView[]>
@@ -34,7 +36,6 @@ export interface DatabaseInstallationPort<TPrepared> {
   prepareProvider(input: {
     readonly config: DatabaseConfig
     readonly contract: LogicalSchemaContract
-    readonly history: PostgresqlMigrationHistory
     readonly candidate: DatabaseGenerationBootstrapCandidate
     readonly requireUpgradeLock: () => Promise<void>
     readonly advancePointer: () => Promise<void>

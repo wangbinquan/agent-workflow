@@ -8,10 +8,6 @@ import {
   type DatabaseGenerationBootstrapCandidate,
   type DatabaseGenerationPayload,
 } from '@/platform/persistence/generationValidation'
-import {
-  resolvePostgresqlAdditiveRowBridge,
-  type PostgresqlMigrationHistory,
-} from '@/platform/persistence/postgresqlMigrationSequence'
 import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import { databaseProviderTraits } from '@/platform/persistence/providerTraits'
 import { DatabaseMigrationRunnerError } from './databaseMigrationRunner'
@@ -25,12 +21,11 @@ function candidatePayload(
 export async function prepareDatabaseInstallation<TPrepared>(options: {
   readonly config: DatabaseConfig
   readonly contract: LogicalSchemaContract
-  readonly history: PostgresqlMigrationHistory
   readonly configuration: DatabaseConfigurationPort
   readonly effects: DatabaseInstallationPort<TPrepared>
 }): Promise<TPrepared> {
-  const { history, effects } = options
-  const readCandidate = () => effects.readGeneration({ contract: options.contract, history })
+  const { effects } = options
+  const readCandidate = () => effects.readGeneration({ contract: options.contract })
   let candidate = await readCandidate()
   let config = options.config
   const initialGeneration = candidatePayload(candidate)
@@ -94,7 +89,7 @@ export async function prepareDatabaseInstallation<TPrepared>(options: {
       (historicalCopy || boundTargetOperation || candidate.kind === 'operation-recovery') &&
       pending !== null
     ) {
-      const bridge = resolvePostgresqlAdditiveRowBridge(history, {
+      const recoverySource = await effects.resolveRecoverySource({
         fromContractDigest: pending.payload.source.schemaDigest,
         toContractDigest: options.contract.digest,
       })
@@ -112,12 +107,11 @@ export async function prepareDatabaseInstallation<TPrepared>(options: {
         if (boundTargetOperation) {
           candidate = await effects.readGeneration({
             contract: options.contract,
-            history,
             pendingOperationId: pending.payload.operationId,
           })
         }
         const settled = await effects.resumeMigration({
-          contract: bridge.source,
+          contract: recoverySource,
           operationId: pending.payload.operationId,
           target: pending.payload.target,
         })
@@ -136,7 +130,6 @@ export async function prepareDatabaseInstallation<TPrepared>(options: {
       contract: options.contract,
       config,
       candidate,
-      history,
       requireUpgradeLock,
       advancePointer: () => advancePointer(candidate),
     })

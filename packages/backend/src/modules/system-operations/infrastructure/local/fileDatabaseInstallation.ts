@@ -8,7 +8,10 @@ import {
   type ResolveDatabaseProviderRuntimeOptions,
 } from '@/platform/persistence/databaseProviderRuntime'
 import { writeDatabaseGenerationAtomic } from '@/platform/persistence/generationStore'
-import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
+import {
+  resolvePostgresqlAdditiveRowBridge,
+  type PostgresqlMigrationHistory,
+} from '@/platform/persistence/postgresqlMigrationSequence'
 import { acquireLock, type Lock } from '@/util/lock'
 import { createDatabaseMigrationControlPlane } from '../../application/databaseMigrationControlPlane'
 import {
@@ -32,7 +35,7 @@ export interface DatabaseSchemaUpgradeOptions extends ResolveDatabaseProviderRun
 }
 
 export function createFileDatabaseInstallation(
-  options: DatabaseSchemaUpgradeOptions,
+  options: DatabaseSchemaUpgradeOptions & { readonly history: PostgresqlMigrationHistory },
 ): DatabaseInstallationPort<Awaited<ReturnType<typeof prepareDatabaseProviderRuntime>>> {
   const controlPlane = createDatabaseMigrationControlPlane({
     store: createFileDatabaseMigrationStore({ root: options.operationsRoot }),
@@ -40,6 +43,8 @@ export function createFileDatabaseInstallation(
   let heldLock: Lock | undefined
   return {
     readGeneration: (input) => readDatabaseSchemaUpgradeGeneration({ ...options, ...input }),
+    resolveRecoverySource: (input) =>
+      resolvePostgresqlAdditiveRowBridge(options.history, input).source,
     listMigrations: () => controlPlane.list(),
     readMigration: (operationId) => controlPlane.readManifest(operationId),
     writeGeneration: (payload) =>

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1843,
+    "backendFiles": 1846,
     "frontendFiles": 622,
     "legacyFiles": 549,
-    "moduleFiles": 1294,
-    "productionFiles": 2620,
+    "moduleFiles": 1297,
+    "productionFiles": 2623,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25013
+    "symbolsIncludingFileRoots": 25023
   },
   "entries": [
     {
@@ -111492,6 +111492,30 @@
       "currentContext": "system-operations",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/system-operations/application/applicationConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/applicationConfiguration.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/applicationConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/applicationConfiguration.ts#createApplicationConfiguration",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createApplicationConfiguration",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/system-operations/application/databaseMigrationApplication.ts",
       "id": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationApplication.ts#$file",
       "removeAfterWave": null,
@@ -111845,6 +111869,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "AdminRestoreCoordinatorPort",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/application/ports/applicationConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/applicationConfiguration.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/ports/applicationConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/applicationConfiguration.ts#ApplicationConfigurationDependencies",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ApplicationConfigurationDependencies",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/ports/applicationConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/applicationConfiguration.ts#ApplicationConfigurationPersistencePort",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ApplicationConfigurationPersistencePort",
       "targetContext": "system-operations",
       "targetLayer": "application"
     },
@@ -112211,12 +112271,36 @@
     {
       "currentContext": "system-operations",
       "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition.ts#composeApplicationConfiguration",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeApplicationConfiguration",
+      "targetContext": "system-operations",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
       "exported": false,
       "file": "packages/backend/src/modules/system-operations/composition.ts",
       "id": "owner:packages/backend/src/modules/system-operations/composition.ts#ComposedLocalSystemOperations",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ComposedLocalSystemOperations",
+      "targetContext": "system-operations",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition.ts#composeFileApplicationConfiguration",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeFileApplicationConfiguration",
       "targetContext": "system-operations",
       "targetLayer": "composition"
     },
@@ -113976,6 +114060,30 @@
       "currentContext": "system-operations",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileApplicationConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileApplicationConfiguration.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileApplicationConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileApplicationConfiguration.ts#createFileApplicationConfiguration",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileApplicationConfiguration",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts",
       "id": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts#$file",
       "removeAfterWave": null,
@@ -114974,11 +115082,50 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/system-operations/public/commands.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/commands.ts#ApplicationConfigurationCommands",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:cd635f813a6e19051b4d7b2e0bc789fae117ec1f2dda847f6ad4a43bc136ca25",
+      "status": "current-module",
+      "symbol": "ApplicationConfigurationCommands",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/public/commands.ts",
       "id": "owner:packages/backend/src/modules/system-operations/public/commands.ts#CancelStagedRestoreCommand",
       "removeAfterWave": null,
       "signatureDigest": "sha256:83231d01f6dd844b29e10eb11cdbdbda3357fcb1dfa266cfd63aa0a0f7a41e94",
       "status": "current-module",
       "symbol": "CancelStagedRestoreCommand",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/public/commands.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/commands.ts#ConfigConcurrencyHotApplyCommand",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:14cb022edc82d8a1f7edec2186e3307c508f4b016210aca54b73a06569d2fbca",
+      "status": "current-module",
+      "symbol": "ConfigConcurrencyHotApplyCommand",
+      "targetContext": "system-operations",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/public/commands.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/public/commands.ts#ConfigConcurrencyHotApplyInput",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:6cc2bb98895f3f45990aa118e6ef229dd4c39dd97e12ee6a0a3275cf9f9994aa",
+      "status": "current-module",
+      "symbol": "ConfigConcurrencyHotApplyInput",
       "targetContext": "system-operations",
       "targetLayer": "public"
     },
@@ -158272,30 +158419,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "platform",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "routes",
-      "exported": true,
-      "file": "packages/backend/src/routes/config.ts",
-      "id": "owner:packages/backend/src/routes/config.ts#ConfigConcurrencyHotApplyCommand",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "ConfigConcurrencyHotApplyCommand",
-      "targetContext": "platform",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "routes",
-      "exported": true,
-      "file": "packages/backend/src/routes/config.ts",
-      "id": "owner:packages/backend/src/routes/config.ts#ConfigConcurrencyHotApplyInput",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "ConfigConcurrencyHotApplyInput",
       "targetContext": "platform",
       "targetLayer": "inbound"
     },
@@ -300875,5 +300998,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:29a0b45cbc92ef3c099df45935e7554adbf108408f99e7bb03dba7b9a9086ec5"
+  "sourceDigest": "sha256:5adbae7838924061ca8fdbfe1a5f51705b72ce1f4d161670b9d22b9ff407ea54"
 }

@@ -1,3 +1,4 @@
+import { composeFileApplicationConfiguration } from '@/modules/system-operations/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
@@ -3366,11 +3367,13 @@ function composeSqliteApiRouteMounts(
   const apiRoutes = Object.freeze({
     config: (app) =>
       mountConfigRoutes(app, {
-        configPath: deps.configPath,
-        runtimeRegistry: runtimeManagement.configuration,
-        withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(deps.configPath),
-        runtimeTests: mcpRuntimeTests.reconciliation,
-        concurrencyHotApply: deps.configConcurrencyHotApply,
+        configuration: composeFileApplicationConfiguration({
+          configPath: deps.configPath,
+          runtimeRegistry: runtimeManagement.configuration,
+          withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(deps.configPath),
+          runtimeTests: mcpRuntimeTests.reconciliation,
+          concurrencyHotApply: deps.configConcurrencyHotApply,
+        }),
       }),
     maintenance: (app) => mountMaintenanceRoutes(app, deps),
     daemon: (app) => mountDaemonRoutes(app, deps),

@@ -1,3 +1,13 @@
+// RFC-370: bootstrap-only settings composition; the application has no paths.
+import { createApplicationConfiguration } from './application/applicationConfiguration'
+import type {
+  ApplicationConfigurationDependencies,
+  ApplicationConfigurationPersistencePort,
+} from './application/ports/applicationConfiguration'
+import { createFileApplicationConfiguration } from './infrastructure/local/fileApplicationConfiguration'
+import { notifyConfigApplied } from '@/services/configAppliedListeners'
+import { configureLogger } from '@/util/log'
+
 // RFC-346 — bootstrap-only System Operations composition.
 
 import type { DatabaseConfig } from '@agent-workflow/shared'
@@ -99,13 +109,13 @@ export async function prepareDatabaseProviderForBoot(
     Awaited<ReturnType<typeof prepareDatabaseSchemaUpgrade>>
   > = createFileDatabaseInstallation({
     ...options,
+    history: options.history ?? (await loadPostgresqlMigrationHistory()),
     readConfig: () => configurationPort.read(),
     writeConfig: (database) => configurationPort.write(database),
   })
   return await prepareDatabaseInstallation({
     config: options.config,
     contract: options.contract,
-    history: options.history ?? (await loadPostgresqlMigrationHistory()),
     configuration: configurationPort,
     effects,
   })
@@ -461,5 +471,27 @@ function composeSystemOperationsWithArtifacts(deps: {
     }),
     artifacts: deps.artifacts,
     localContext: Object.freeze({}) as LocalSystemOperationContext,
+  })
+}
+
+export function composeApplicationConfiguration(deps: ApplicationConfigurationDependencies) {
+  return createApplicationConfiguration(deps)
+}
+
+export function composeFileApplicationConfiguration(
+  input: Omit<ApplicationConfigurationDependencies, 'persistence' | 'applied'> & {
+    readonly configPath: string
+  },
+) {
+  const { configPath, ...deps } = input
+  const persistence: ApplicationConfigurationPersistencePort =
+    createFileApplicationConfiguration(configPath)
+  return composeApplicationConfiguration({
+    ...deps,
+    persistence,
+    applied: {
+      notify: (config) => notifyConfigApplied(configPath, config),
+      setLogLevel: (level) => configureLogger({ level }),
+    },
   })
 }

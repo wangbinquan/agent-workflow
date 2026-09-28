@@ -3,9 +3,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:548",
+      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:550",
       "kind": "register-call",
-      "line": 548,
+      "line": 550,
       "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlApplication",
@@ -1411,9 +1411,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/config.ts",
-      "id": "ambient:packages/backend/src/routes/config.ts#registerRoute:41",
+      "id": "ambient:packages/backend/src/routes/config.ts#registerRoute:17",
       "kind": "register-call",
-      "line": 41,
+      "line": 17,
       "ownerEntryId": "owner:packages/backend/src/routes/config.ts#mountConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountConfigRoutes",
@@ -1422,9 +1422,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/routes/config.ts",
-      "id": "ambient:packages/backend/src/routes/config.ts#registerRoute:55",
+      "id": "ambient:packages/backend/src/routes/config.ts#registerRoute:28",
       "kind": "register-call",
-      "line": 55,
+      "line": 28,
       "ownerEntryId": "owner:packages/backend/src/routes/config.ts#mountConfigRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountConfigRoutes",
@@ -5371,9 +5371,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3667",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3670",
       "kind": "register-call",
-      "line": 3667,
+      "line": 3670,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5382,9 +5382,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1427",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1428",
       "kind": "register-call",
-      "line": 1427,
+      "line": 1428,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeProviderAppDeps",
       "removeAfterWave": "W6/W9",
       "symbol": "composeProviderAppDeps",
@@ -5393,9 +5393,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:3449",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:3452",
       "kind": "register-call",
-      "line": 3449,
+      "line": 3452,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5404,9 +5404,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3734",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3737",
       "kind": "register-call",
-      "line": 3734,
+      "line": 3737,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createHttpRequestApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createHttpRequestApp",
@@ -12777,5 +12777,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:29a0b45cbc92ef3c099df45935e7554adbf108408f99e7bb03dba7b9a9086ec5"
+  "sourceDigest": "sha256:5adbae7838924061ca8fdbfe1a5f51705b72ce1f4d161670b9d22b9ff407ea54"
 }

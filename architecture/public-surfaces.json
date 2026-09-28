@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 897,
+    "consumers": 898,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
-    "methods": 1071,
+    "methods": 1074,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 20912,
-    "symbols": 1012
+    "recursiveFields": 20919,
+    "symbols": 1015
   },
   "entries": [
     {
@@ -100041,8 +100041,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:142f338dc3a057d75073",
-        "import:afce3dad676a2269b0c1"
+        "import:142f338dc3a057d75073"
       ],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -100063,8 +100062,7 @@
       "methods": [
         {
           "consumerEdgeIds": [
-            "import:142f338dc3a057d75073",
-            "import:afce3dad676a2269b0c1"
+            "import:142f338dc3a057d75073"
           ],
           "name": "reconcileDurableIntents",
           "signatureDigest": "sha256:04680c4b855d2aecd3ac0d338f4964427b0d4225ac8d410420a06c4a6754249c"
@@ -100077,12 +100075,6 @@
           "edgeId": "import:142f338dc3a057d75073",
           "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:afce3dad676a2269b0c1",
-          "file": "packages/backend/src/routes/config.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/config.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -118254,9 +118246,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:6c603f736d50b0e0ac65"
-      ],
+      "consumerEdgeIds": [],
       "context": "runtime-management",
       "dataClass": "metadata",
       "direction": "offered",
@@ -118273,9 +118263,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:6c603f736d50b0e0ac65"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:validateDefaultChange.$parameter:input.next",
           "type": "string"
         },
@@ -118308,29 +118296,18 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [
-            "import:6c603f736d50b0e0ac65"
-          ],
+          "consumerEdgeIds": [],
           "name": "invalidateInheritedRuntimeProbeReceipts",
           "signatureDigest": "sha256:77d6fa7efc490f56ca1c2c9280d4f8f1131a992ab26222bee5c760a79a0b044a"
         },
         {
-          "consumerEdgeIds": [
-            "import:6c603f736d50b0e0ac65"
-          ],
+          "consumerEdgeIds": [],
           "name": "validateDefaultChange",
           "signatureDigest": "sha256:ca284054f5e8a57a09b33a8263d886e8b0bf09cfbe69743ff81518b419bd40a3"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/commands.ts#RuntimeProfileConfigurationCommands",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:6c603f736d50b0e0ac65",
-          "file": "packages/backend/src/routes/config.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/config.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
@@ -123013,9 +122990,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:65602b3fc4a33f1d9b98"
-      ],
+      "consumerEdgeIds": [],
       "context": "runtime-management",
       "dataClass": "metadata",
       "direction": "offered",
@@ -123037,14 +123012,7 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeProtocol",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:65602b3fc4a33f1d9b98",
-          "file": "packages/backend/src/routes/config.ts",
-          "ownerEntryId": "owner:packages/backend/src/routes/config.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [
         "public:runtime-management:commands:RuntimeProfileCommands",
         "public:runtime-management:queries:RuntimeExecutionQueries",
@@ -130452,6 +130420,81 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": [
+        "import:83a00d4487604b66b087"
+      ],
+      "context": "system-operations",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:read.$return",
+          "type": "z.infer<typeof ConfigSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$parameter:patch",
+          "type": "unknown"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:update.$return",
+          "type": "z.infer<typeof ConfigSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/system-operations/public/commands.ts",
+      "id": "public:system-operations:commands:ApplicationConfigurationCommands",
+      "members": [
+        "read",
+        "update"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:83a00d4487604b66b087"
+          ],
+          "name": "read",
+          "signatureDigest": "sha256:6a58220f9dd7b2fa9ac89f752ad5420b7da811e099378458fde8b7060054a1f1"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:83a00d4487604b66b087"
+          ],
+          "name": "update",
+          "signatureDigest": "sha256:b41922eda87197869fea1b735c7420a9b85bf4719c2c18d7cc7695d6064f2619"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/commands.ts#ApplicationConfigurationCommands",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:83a00d4487604b66b087",
+          "file": "packages/backend/src/routes/config.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/config.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:cd635f813a6e19051b4d7b2e0bc789fae117ec1f2dda847f6ad4a43bc136ca25",
+      "status": "target-context-current-surface",
+      "symbol": "ApplicationConfigurationCommands",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": [],
       "context": "system-operations",
       "dataClass": "metadata",
@@ -130510,6 +130553,127 @@
       "transaction": "own-tx",
       "unresolvedTypeRefs": [
         "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:4ec58a195ec4f6b72a6a"
+      ],
+      "context": "system-operations",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:apply.$parameter:input",
+          "type": "Pick<\n  Config,\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxConcurrentCodeHostCalls'\n  | 'multiProcessSubprocessConcurrency'\n  | 'maxActiveChildTasks'\n  | 'maxInvocationDepth'\n>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:apply.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:apply.$return.$variant:1",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/system-operations/public/commands.ts",
+      "id": "public:system-operations:commands:ConfigConcurrencyHotApplyCommand",
+      "members": [
+        "apply"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "apply",
+          "signatureDigest": "sha256:0212348d91482e88df6a132561904306e66c436490fbc9d6cf34293e7e143cfd"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/commands.ts#ConfigConcurrencyHotApplyCommand",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:4ec58a195ec4f6b72a6a",
+          "file": "packages/backend/src/routes/config.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/config.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:14cb022edc82d8a1f7edec2186e3307c508f4b016210aca54b73a06569d2fbca",
+      "status": "target-context-current-surface",
+      "symbol": "ConfigConcurrencyHotApplyCommand",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [
+        "Pick"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:5ca7292ffefb4374ffff",
+        "import:bd88f0b1f64b0b1b276b"
+      ],
+      "context": "system-operations",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$value",
+          "type": "Pick<\n  Config,\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxConcurrentCodeHostCalls'\n  | 'multiProcessSubprocessConcurrency'\n  | 'maxActiveChildTasks'\n  | 'maxInvocationDepth'\n>"
+        }
+      ],
+      "file": "packages/backend/src/modules/system-operations/public/commands.ts",
+      "id": "public:system-operations:commands:ConfigConcurrencyHotApplyInput",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/public/commands.ts#ConfigConcurrencyHotApplyInput",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:5ca7292ffefb4374ffff",
+          "file": "packages/backend/src/routes/config.ts",
+          "ownerEntryId": "owner:packages/backend/src/routes/config.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:bd88f0b1f64b0b1b276b",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:system-operations:commands:ConfigConcurrencyHotApplyCommand"
+      ],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:6cc2bb98895f3f45990aa118e6ef229dd4c39dd97e12ee6a0a3275cf9f9994aa",
+      "status": "target-context-current-surface",
+      "symbol": "ConfigConcurrencyHotApplyInput",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [
+        "Pick"
       ],
       "version": 1
     },
@@ -165318,7 +165482,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:29a0b45cbc92ef3c099df45935e7554adbf108408f99e7bb03dba7b9a9086ec5",
+  "sourceDigest": "sha256:5adbae7838924061ca8fdbfe1a5f51705b72ce1f4d161670b9d22b9ff407ea54",
   "targetContexts": [
     "collaboration",
     "development-automation",

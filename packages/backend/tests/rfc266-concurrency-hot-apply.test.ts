@@ -204,7 +204,15 @@ describeEachProviderHttpApplication(
       // 把同一 daemon scope 同时交给 scheduler pools 与 hot apply，否则修改会
       // 静默落到另一组 WeakMap 预算上。
       const routesSrc = readFileSync(
-        resolve(import.meta.dir, '..', 'src', 'routes', 'config.ts'),
+        resolve(
+          import.meta.dir,
+          '..',
+          'src',
+          'modules',
+          'system-operations',
+          'application',
+          'applicationConfiguration.ts',
+        ),
         'utf8',
       )
       expect(routesSrc).toContain('await deps.concurrencyHotApply.apply({')

@@ -1,3 +1,4 @@
+import { composeFileApplicationConfiguration } from '@/modules/system-operations/composition'
 import { createRuntimeProfileConfigurationCommands } from '@/modules/runtime-management/application/runtimeConfiguration'
 import { composeRuntimeProbeConfigFence } from '@/modules/runtime-management/composition/runtimeManagement'
 import { afterEach, describe, expect, test } from 'bun:test'
@@ -41,28 +42,30 @@ function harness(): {
     concurrency: [] as ConfigConcurrencyHotApplyInput[],
   }
   const deps: ConfigRouteDependencies = {
-    configPath,
-    withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(configPath),
-    runtimeRegistry: createRuntimeProfileConfigurationCommands({
-      async getRuntime(name) {
-        calls.runtimeNames.push(name)
-        return null
+    configuration: composeFileApplicationConfiguration({
+      configPath,
+      withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(configPath),
+      runtimeRegistry: createRuntimeProfileConfigurationCommands({
+        async getRuntime(name) {
+          calls.runtimeNames.push(name)
+          return null
+        },
+        async invalidateInheritedRuntimeProbeReceipts(protocols) {
+          calls.invalidated.push([...protocols])
+          return protocols.length
+        },
+      }),
+      runtimeTests: {
+        async reconcileDurableIntents() {
+          calls.reconciled += 1
+        },
       },
-      async invalidateInheritedRuntimeProbeReceipts(protocols) {
-        calls.invalidated.push([...protocols])
-        return protocols.length
+      concurrencyHotApply: {
+        async apply(input) {
+          calls.concurrency.push({ ...input })
+        },
       },
     }),
-    runtimeTests: {
-      async reconcileDurableIntents() {
-        calls.reconciled += 1
-      },
-    },
-    concurrencyHotApply: {
-      async apply(input) {
-        calls.concurrency.push({ ...input })
-      },
-    },
   }
   const actor = buildActor({
     user: {
@@ -138,10 +141,24 @@ describe('RFC-349 config route provider boundary', () => {
     expect(source).not.toContain('deps.db')
     expect(source).not.toContain('getMcpRuntimeTestService(')
     expect(source).not.toContain('resizeAllNodePools(')
-    expect(source).toContain('runtimeRegistry.validateDefaultChange(')
-    expect(source).not.toContain('runtimeRegistry.getRuntime(')
-    expect(source).toContain('runtimeRegistry.invalidateInheritedRuntimeProbeReceipts(')
-    expect(source).toContain('runtimeTests.reconcileDurableIntents()')
-    expect(source).toContain('concurrencyHotApply.apply({')
+    expect(source).not.toContain('configPath')
+    expect(source).toContain('deps.configuration.update(body)')
+    const application = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'system-operations',
+        'application',
+        'applicationConfiguration.ts',
+      ),
+      'utf8',
+    )
+    expect(application).toContain('runtimeRegistry.validateDefaultChange(')
+    expect(application).not.toContain('runtimeRegistry.getRuntime(')
+    expect(application).toContain('runtimeRegistry.invalidateInheritedRuntimeProbeReceipts(')
+    expect(application).toContain('runtimeTests.reconcileDurableIntents()')
+    expect(application).toContain('concurrencyHotApply.apply({')
   })
 })

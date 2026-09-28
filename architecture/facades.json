@@ -777,7 +777,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:3214e4262e31300ac0be"
+      ],
       "exportedSymbols": [
         "notifyConfigApplied",
         "registerConfigAppliedListener"
@@ -6214,5 +6216,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:29a0b45cbc92ef3c099df45935e7554adbf108408f99e7bb03dba7b9a9086ec5"
+  "sourceDigest": "sha256:5adbae7838924061ca8fdbfe1a5f51705b72ce1f4d161670b9d22b9ff407ea54"
 }

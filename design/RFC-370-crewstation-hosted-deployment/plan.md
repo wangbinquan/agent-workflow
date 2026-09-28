@@ -105,3 +105,10 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 
 - 第四批补 composition 显式装配，`DatabaseInstallationPort` 的 consumer／provider／composition 均有生产接线；新增真实历史 SQLite 用例验证异步 metadata 提交前不返回 runtime、不释放升级锁。目标文件格式／lint 通过，未运行本地测试。账本中 module→platform 被既有规则记为 legacy-outbound，本次中立类型引用 +6、composition 历史加载 +1，按 exact 条目如实登记，不修改判据或给 W9 完成信用。
 - CI `36368150663` 的 macOS backend shard 3 发现 RFC-349 functional evidence 仍绑定原 `test(...)` 声明，参数化改写导致静态证据失配。修复保留原测试名称，在该测试内部遍历 files／artifacts 两臂，保留功能覆盖及原证据绑定；不将失败 run 记成功。
+
+- 第四批 `37a0e4978ff2c06211b4853c063ac9de6e86331f` 已发布，正式 CI `36368991331` 尚未终态。
+- A-T2 第五批候选：设置 GET／PUT 收敛为 system-operations 公开应用合同，原配置语义校验／probe 失效／持久化／通知／日志／MCP 对账／并发池热更新顺序移入同一 application；新增异步配置持久端口和独立文件 adapter。SQLite／PG bootstrap 均用同一 composition；HTTP 不再接收 configPath 或读取文件。其余后台／启动配置调用者和耐久内容仍待迁移，不宣告 H1/H6 完成。
+- 第五批验证：新增异步内存存储的保存顺序、写入中不可热更新、写入失败无通知、retention／默认 runtime 拒绝用例；保留原真实文件及双 provider HTTP 热更新测试，将原源码接线断言跟随应用层迁移。目标格式／lint 通过，未跑本地测试。W29 仅 PG 装配与 SQLite API 装配的 Settings 单格变化，语句数 165／65 不变，源码生成摘要重采；SQLite 总装配摘要保持原值。正式行为验收仍由精确 SHA CI 给出。
+
+- 第四批 CI `36368991331` 的 Ubuntu backend shard 2 检出安装应用／port 仍直引 PG 迁移历史。第五批同时修复：history 由 composition 传给 local adapter，新增中立 `resolveRecoverySource` 端口返回逻辑 schema，原 bridge 校验留在 adapter；不扩大 provider-specific debt 允许表，既有真实 SQLite／PG 恢复用例继续覆盖。
+- 第五批切面检查：配置持久 port 的 consumer／provider／composition 均 active；运行时校验和 MCP 对账通过应用自有依赖形状注入原命令，无新增 off-dag offered 边。架构账本按真实新增入口、public 合同、owner 和接线登记一次性增长；目标 lint／格式与 diff 检查通过，正式结果待 GitHub CI。
