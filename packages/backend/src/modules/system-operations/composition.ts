@@ -3,6 +3,10 @@
 import type { DatabaseConfig } from '@agent-workflow/shared'
 import { join } from 'node:path'
 import type { DatabaseConfigurationPort } from './application/ports/databaseConfiguration'
+import type { DatabaseInstallationPort } from './application/ports/databaseInstallation'
+import { prepareDatabaseInstallation } from './application/prepareDatabaseInstallation'
+import { createFileDatabaseInstallation } from './infrastructure/local/fileDatabaseInstallation'
+import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { createFileDatabaseConfiguration } from './infrastructure/local/fileDatabaseConfiguration'
 import { createSecretBox, type SecretBox } from '@/auth/secretBox'
 import type { DbClient } from '@/db/client'
@@ -21,9 +25,9 @@ import {
   requireDatabaseConfig,
   requireDatabaseProviderRuntime,
 } from '@/platform/persistence/databaseProviderRuntime'
-import {
+import type {
   prepareDatabaseSchemaUpgrade,
-  type DatabaseSchemaUpgradeOptions,
+  DatabaseSchemaUpgradeOptions,
 } from './infrastructure/databaseSchemaUpgradeCoordinator'
 import {
   buildLogicalSchemaContract,
@@ -91,10 +95,19 @@ export async function prepareDatabaseProviderForBoot(
   const { configuration, configPath, ...options } = input
   const configurationPort =
     configuration ?? createFileDatabaseConfiguration(configPath ?? Paths.config)
-  return await prepareDatabaseSchemaUpgrade({
+  const effects: DatabaseInstallationPort<
+    Awaited<ReturnType<typeof prepareDatabaseSchemaUpgrade>>
+  > = createFileDatabaseInstallation({
     ...options,
     readConfig: () => configurationPort.read(),
     writeConfig: (database) => configurationPort.write(database),
+  })
+  return await prepareDatabaseInstallation({
+    config: options.config,
+    contract: options.contract,
+    history: options.history ?? (await loadPostgresqlMigrationHistory()),
+    configuration: configurationPort,
+    effects,
   })
 }
 

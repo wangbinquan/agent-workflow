@@ -99,3 +99,9 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - A-T2 第三批候选：provider runtime 提供已加载 artifact source 入口，PostgreSQL 不再要求虚假的本机安装路径；原文件入口委托同一严格校验和运行时创建逻辑。保留 standalone 升级／恢复 owner；新入口只解析已安装 generation，不运行迁移。复用原运行时生命周期用例对拍两种来源，补配置冲突、旧 schema／manifest 错误在创建连接池前失败及 SQLite 路径要求。异步 metadata 载入、迁移 Job 与全新 PG 安装语义仍待实现。
 
 - 第三批候选检查：仅对变更源码／测试运行 Prettier 和 ESLint；以原 RFC-349 连接池生命周期探针对拍 file／artifact 两臂，未新增假 PG runtime 账本条目。架构重采仅 owner 分母 +3，上一批入口增长声明已退役；正式功能结果等待精确 SHA GitHub CI。
+
+- 第三批 `68ecb2664a644982bf62a8b5bdce0828b3c5caf2` 已上库；正式 CI `36368150663` 尚待终态，之前被后继取消的运行不记成功。
+- A-T2 第四批候选：安装准备的原有升级／恢复判定收归 system-operations application，新增 `DatabaseInstallationPort`；本地 generation／manifest／锁／复制恢复／provider 准备由 `infrastructure/local/fileDatabaseInstallation` 实现。旧 `prepareDatabaseSchemaUpgrade` 保留兼容接线；SQLite 和 PG 的准备回调等待异步锁与 metadata 提交。新增应用层时序回归，原 RFC-359 真实文件／双数据库恢复用例继续走同一编排。当前仍未实现 hosted metadata 存储、新安装及前台生命周期，不据此关闭 H1。
+
+- 第四批补 composition 显式装配，`DatabaseInstallationPort` 的 consumer／provider／composition 均有生产接线；新增真实历史 SQLite 用例验证异步 metadata 提交前不返回 runtime、不释放升级锁。目标文件格式／lint 通过，未运行本地测试。账本中 module→platform 被既有规则记为 legacy-outbound，本次中立类型引用 +6、composition 历史加载 +1，按 exact 条目如实登记，不修改判据或给 W9 完成信用。
+- CI `36368150663` 的 macOS backend shard 3 发现 RFC-349 functional evidence 仍绑定原 `test(...)` 声明，参数化改写导致静态证据失配。修复保留原测试名称，在该测试内部遍历 files／artifacts 两臂，保留功能覆盖及原证据绑定；不将失败 run 记成功。

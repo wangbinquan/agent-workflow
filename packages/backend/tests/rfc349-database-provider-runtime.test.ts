@@ -94,9 +94,8 @@ describe('RFC-349 database provider runtime resolution', () => {
 
   // RFC-370: use this same runtime lifecycle oracle for file and injected
   // artifact sources. The injected arm supplies no local installation paths.
-  test.each(['files', 'artifacts'] as const)(
-    'a verified PostgreSQL generation from %s builds one lazy external runtime',
-    async (source) => {
+  test('a verified PostgreSQL generation builds one lazy external runtime', async () => {
+    for (const source of ['files', 'artifacts'] as const) {
       const paths = fixture()
       const operationId = 'dbm_provider_runtime_1234'
       const operationRoot = join(paths.operationsRoot, operationId)
@@ -170,6 +169,6 @@ describe('RFC-349 database provider runtime resolution', () => {
       await resolved.close()
       expect(closed).toBe(1)
       expect(reserves).toBe(0)
-    },
-  )
+    }
+  })
 })

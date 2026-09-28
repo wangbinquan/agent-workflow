@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1729,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1730,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2：新增 fileDatabaseInstallation 工厂封装原安装效果，既有 create 前缀入口普查分母 1729→1730；原 generation writer 复用，不增加业务写算法。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5416,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5424,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2：安装准备拆成 application port、应用编排和 local adapter，composition 显式接线；中立机制类型及加载函数引用显式展开，observed edge 5416→5424。所有边保留 exact owner 记录。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -860,15 +866,21 @@
       "id": "rfc294-required-port-liveness",
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
-      "baseline": 34,
-      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
+      "baseline": 35,
+      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2：新增 DatabaseInstallationPort，application 消费、fileDatabaseInstallation 提供、system-operations composition 装配；required port 34→35，状态 active。"
+      }
     },
     {
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4811,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4818,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2：既有 census 将 module→platform 中立机制引用统一归入 legacy-outbound。安装切面分离新增 6 条类型引用及 1 条 composition 的历史加载引用，4811→4818；未改扫描器、未添加通配绕过，原 generationStore 的三条引用迁到 generationValidation。精确条目及归属保留，不能据此宣称 W9 已关闭。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,15 +914,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25007,
+      "baseline": 25013,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-370 A-T2：新增 artifact runtime 输入、来源中立 provider 判定及运行时入口三个顶层符号，现文件入口委托同一实现；owner 分母 25004→25007。未新增数据库 provider、业务 owner 或跨域例外。"
+        "why": "RFC-370 A-T2：新增安装端口、应用编排和本地 adapter 三个文件及必要符号，原 coordinator 保留兼容入口；owner 分母 25007→25013。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:02327cdfd015a4b747dd495ad6a96ee8ea315d7968c59eef0444485860d13246",
+    "sourceDigest": "sha256:29a0b45cbc92ef3c099df45935e7554adbf108408f99e7bb03dba7b9a9086ec5",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -923,8 +935,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "6d865eb4ccc2918a389c7ca8595c9e82853cff9b",
-    "contentDigest": "sha256:5b02bffb4943495c50b30853f4639389494591d271f10be1131687098463b56f",
+    "currentSnapshotSha": "68ecb2664a644982bf62a8b5bdce0828b3c5caf2",
+    "contentDigest": "sha256:409603301c31cc6083a98209ec7eaa1cb89b5074838e10d8159860e84fa1b735",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

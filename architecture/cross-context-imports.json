@@ -394,6 +394,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:00be11dd9948f321d086",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#prepareDatabaseProviderRuntime",
+      "toPath": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "toSymbol": "prepareDatabaseProviderRuntime",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/workspaceMaterializer.ts#$file",
       "fromPath": "packages/backend/src/modules/source-control/infrastructure/workspaceMaterializer.ts",
       "fromSymbol": "$file",
@@ -6344,6 +6361,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:12fa882d31c5b028a227",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationValidation.ts#DatabaseGenerationPayload",
+      "toPath": "packages/backend/src/platform/persistence/generationValidation.ts",
+      "toSymbol": "DatabaseGenerationPayload",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/assignmentStore.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/infrastructure/assignmentStore.ts",
       "fromSymbol": "$file",
@@ -10033,6 +10067,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1e26fc0d7b81df798cf5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#LogicalSchemaContract",
+      "toPath": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toSymbol": "LogicalSchemaContract",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/database.ts#$file",
       "fromPath": "packages/backend/src/cli/database.ts",
       "fromSymbol": "$file",
@@ -13552,23 +13603,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:286e1417e7f302cb5458",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
-      "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toSymbol": "DatabaseGenerationPayload",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file",
       "fromPath": "packages/backend/src/services/isolatedAgentRun.ts",
       "fromSymbol": "$file",
@@ -15641,23 +15675,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:2ed4ef9367caabf02f21",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#writeDatabaseGenerationAtomic",
-      "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toSymbol": "writeDatabaseGenerationAtomic",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/terminalMaintenancePersistence.ts#$file",
@@ -17713,6 +17730,23 @@
       "toPath": "packages/backend/src/modules/resource-catalog/public/queries.ts",
       "toSymbol": "PluginQueries",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:35020531ec1029571ec0",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#writeDatabaseGenerationAtomic",
+      "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
+      "toSymbol": "writeDatabaseGenerationAtomic",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -20894,23 +20928,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:3f3409e267a32bbc56c9",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/lock.ts#Lock",
-      "toPath": "packages/backend/src/util/lock.ts",
-      "toSymbol": "Lock",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
@@ -21351,23 +21368,6 @@
       "toPath": "packages/backend/src/modules/memory/public/participants.ts",
       "toSymbol": "MemoryDistillEnqueuer",
       "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:40f8995530ab06db171b",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#OpenDbOptions",
-      "toPath": "packages/backend/src/db/client.ts",
-      "toSymbol": "OpenDbOptions",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -24568,6 +24568,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4ad42f3c283c8e4701ee",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationValidation.ts#DatabaseGenerationPayload",
+      "toPath": "packages/backend/src/platform/persistence/generationValidation.ts",
+      "toSymbol": "DatabaseGenerationPayload",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "fromSymbol": "$file",
@@ -27492,6 +27509,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5599218a5e91d7ddb7dc",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#PostgresqlMigrationHistory",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "toSymbol": "PostgresqlMigrationHistory",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionInputUploadPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/infrastructure/missionInputUploadPersistence.ts",
       "fromSymbol": "$file",
@@ -28729,6 +28763,23 @@
       "toPath": "packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts",
       "toSymbol": "NodeRunRuntimePersistence",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5998207d434b820992c8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationValidation.ts#digestGenerationPayload",
+      "toPath": "packages/backend/src/platform/persistence/generationValidation.ts",
+      "toSymbol": "digestGenerationPayload",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -30259,6 +30310,23 @@
       "toPath": "packages/backend/src/modules/system-operations/composition.ts",
       "toSymbol": "composeSqlitePostRestoreRecovery",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5ded60f1cd40fe60e20c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/lock.ts#acquireLock",
+      "toPath": "packages/backend/src/util/lock.ts",
+      "toSymbol": "acquireLock",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -34071,23 +34139,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:6b19b0974ca27fb9dbee",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
-      "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toSymbol": "DatabaseGenerationBootstrapCandidate",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/workflows.ts#$file",
       "fromPath": "packages/backend/src/routes/workflows.ts",
       "fromSymbol": "$file",
@@ -35616,23 +35667,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:6e94e1a2e53aba2de532",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#PostgresqlMigrationHistory",
-      "toPath": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
-      "toSymbol": "PostgresqlMigrationHistory",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/reviewTaskAccess.ts#$file",
@@ -36106,23 +36140,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/mergeAgent.ts#buildMergeResolvePrompt",
       "toPath": "packages/backend/src/services/mergeAgent.ts",
       "toSymbol": "buildMergeResolvePrompt",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:70c7bc1b9062a8f9acab",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#prepareDatabaseProviderRuntime",
-      "toPath": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
-      "toSymbol": "prepareDatabaseProviderRuntime",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -39475,6 +39492,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7b0aa4afdcbfdb8e67eb",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#LogicalSchemaContract",
+      "toPath": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toSymbol": "LogicalSchemaContract",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/domain/databaseMigration.ts#$file",
@@ -40102,6 +40136,23 @@
       "toPath": "packages/backend/src/modules/runtime-management/composition/runtimeManagement.ts",
       "toSymbol": "RuntimeDiagnosticDependencies",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7d320af2937e82dd0c35",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#PostgresqlMigrationHistory",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "toSymbol": "PostgresqlMigrationHistory",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -43589,6 +43640,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8874f056f909cedc5b5a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationValidation.ts#DatabaseGenerationBootstrapCandidate",
+      "toPath": "packages/backend/src/platform/persistence/generationValidation.ts",
+      "toSymbol": "DatabaseGenerationBootstrapCandidate",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#$file",
@@ -44402,6 +44470,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workgroupMembers",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "workgroupMembers",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8b2c9d8b166289353e20",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/lock.ts#Lock",
+      "toPath": "packages/backend/src/util/lock.ts",
+      "toSymbol": "Lock",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -45422,6 +45507,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ForbiddenError",
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "ForbiddenError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8ecc987f0c1e653da78d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#ResolveDatabaseProviderRuntimeOptions",
+      "toPath": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "toSymbol": "ResolveDatabaseProviderRuntimeOptions",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -47888,6 +47990,23 @@
       "toPath": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
       "toSymbol": "*",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:977d1a30ad105559d566",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationValidation.ts#DatabaseGenerationBootstrapCandidate",
+      "toPath": "packages/backend/src/platform/persistence/generationValidation.ts",
+      "toSymbol": "DatabaseGenerationBootstrapCandidate",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -54658,23 +54777,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:acb3f9486c9b604ca321",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits",
-      "toPath": "packages/backend/src/platform/persistence/providerTraits.ts",
-      "toSymbol": "databaseProviderTraits",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
       "fromPath": "packages/backend/src/services/humanGateComposition.ts",
       "fromSymbol": "$file",
@@ -60557,23 +60659,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:bf86a23507365993931b",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/lock.ts#acquireLock",
-      "toPath": "packages/backend/src/util/lock.ts",
-      "toSymbol": "acquireLock",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
@@ -61079,6 +61164,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/auth/application/authRuntime.ts#AuthRuntime",
       "toPath": "packages/backend/src/auth/application/authRuntime.ts",
       "toSymbol": "AuthRuntime",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c11da6e908b56e72615d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#resolvePostgresqlAdditiveRowBridge",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "toSymbol": "resolvePostgresqlAdditiveRowBridge",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -64632,23 +64734,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/runner.ts#runNode",
       "toPath": "packages/backend/src/services/runner.ts",
       "toSymbol": "runNode",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:cb9396e78370ad7596f9",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
-      "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toSymbol": "digestGenerationPayload",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -72372,23 +72457,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:e2ac72f818b1b57630a4",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#resolvePostgresqlAdditiveRowBridge",
-      "toPath": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
-      "toSymbol": "resolvePostgresqlAdditiveRowBridge",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/composition/missionOperations.ts",
       "fromSymbol": "$file",
@@ -75755,6 +75823,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ed2cb75bec7c18b1637d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits",
+      "toPath": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "toSymbol": "databaseProviderTraits",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationWorkgroupClarify.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/collaborationWorkgroupClarify.ts",
       "fromSymbol": "$file",
@@ -77215,6 +77300,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f15dc22e37de46fc357f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#PostgresqlMigrationHistory",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "toSymbol": "PostgresqlMigrationHistory",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts#$file",
@@ -78050,6 +78152,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/composition.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f3a833a634c089dfa724",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts#loadPostgresqlMigrationHistory",
+      "toPath": "packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts",
+      "toSymbol": "loadPostgresqlMigrationHistory",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts",
       "fromSymbol": "$file",
@@ -78640,23 +78759,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "nodeRuns",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f571b7bec2b3f04f1efb",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#ResolveDatabaseProviderRuntimeOptions",
-      "toPath": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
-      "toSymbol": "ResolveDatabaseProviderRuntimeOptions",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -80360,6 +80462,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:fb1475e5437bda01654b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#OpenDbOptions",
+      "toPath": "packages/backend/src/db/client.ts",
+      "toSymbol": "OpenDbOptions",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/taskArchive.ts#$file",
@@ -81789,10 +81908,10 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4811,
+    "architectureExceptions": 4818,
     "implementationSccs": 0,
-    "observedEdges": 5416,
-    "requiredPorts": 34,
+    "observedEdges": 5424,
+    "requiredPorts": 35,
     "targetEdges": 66
   },
   "finalCriterion": "Observed imports, offered/required/authority target edges and required-port liveness remain exact, referentially complete and role-preserving.",
@@ -82038,6 +82157,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workgroups"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "id": "import:00be11dd9948f321d086",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseProviderRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "prepareDatabaseProviderRuntime",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#prepareDatabaseProviderRuntime"
     },
     {
       "edgeKind": "value",
@@ -83958,6 +84093,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#engineOf"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "id": "import:061fd0f442f048ee1777",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../../application/ports/databaseInstallation",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseInstallationPort",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts#DatabaseInstallationPort"
     },
     {
       "edgeKind": "value",
@@ -88201,6 +88352,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "id": "import:12fa882d31c5b028a227",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/generationValidation",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseGenerationPayload",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/generationValidation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationValidation.ts#DatabaseGenerationPayload"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/assignmentStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/assignmentStore.ts#$file",
@@ -92137,6 +92304,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "id": "import:1e26fc0d7b81df798cf5",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/schemaContract",
+      "syntax": "static-import",
+      "targetSymbol": "LogicalSchemaContract",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#LogicalSchemaContract"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/database.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/database.ts#$file",
@@ -96009,22 +96192,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:286e1417e7f302cb5458",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/generationStore",
-      "syntax": "static-import",
-      "targetSymbol": "DatabaseGenerationPayload",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/isolatedAgentRun.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file",
@@ -98102,22 +98269,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#databaseSessionFor"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:2ed4ef9367caabf02f21",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/generationStore",
-      "syntax": "static-import",
-      "targetSymbol": "writeDatabaseGenerationAtomic",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#writeDatabaseGenerationAtomic"
     },
     {
       "edgeKind": "type",
@@ -100214,6 +100365,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/queries.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/queries.ts#PluginQueries"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "id": "import:35020531ec1029571ec0",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/generationStore",
+      "syntax": "static-import",
+      "targetSymbol": "writeDatabaseGenerationAtomic",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#writeDatabaseGenerationAtomic"
     },
     {
       "edgeKind": "type",
@@ -103608,22 +103775,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/freshness.ts#parseConsumedJson"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:3f3409e267a32bbc56c9",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/lock",
-      "syntax": "static-import",
-      "targetSymbol": "Lock",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/lock.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/lock.ts#Lock"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/resourceAcl.ts",
@@ -104118,22 +104269,6 @@
       "toContext": "memory",
       "toFile": "packages/backend/src/modules/memory/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/memory/public/participants.ts#MemoryDistillEnqueuer"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:40f8995530ab06db171b",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/db/client",
-      "syntax": "static-import",
-      "targetSymbol": "OpenDbOptions",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/db/client.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#OpenDbOptions"
     },
     {
       "edgeKind": "value",
@@ -107513,6 +107648,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts#$file",
+      "id": "import:4ad42f3c283c8e4701ee",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/generationValidation",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseGenerationPayload",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/generationValidation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationValidation.ts#DatabaseGenerationPayload"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#$file",
@@ -110649,6 +110800,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "id": "import:5599218a5e91d7ddb7dc",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlMigrationSequence",
+      "syntax": "static-import",
+      "targetSymbol": "PostgresqlMigrationHistory",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#PostgresqlMigrationHistory"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/infrastructure/missionInputUploadPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/missionInputUploadPersistence.ts#$file",
@@ -112054,6 +112221,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts#NodeRunRuntimePersistence"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "id": "import:5998207d434b820992c8",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/generationValidation",
+      "syntax": "static-import",
+      "targetSymbol": "digestGenerationPayload",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/generationValidation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationValidation.ts#digestGenerationPayload"
     },
     {
       "edgeKind": "value",
@@ -113670,6 +113853,22 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#composeSqlitePostRestoreRecovery"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "id": "import:5ded60f1cd40fe60e20c",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/lock",
+      "syntax": "static-import",
+      "targetSymbol": "acquireLock",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/lock.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/lock.ts#acquireLock"
     },
     {
       "edgeKind": "type",
@@ -117961,22 +118160,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:6b19b0974ca27fb9dbee",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/generationStore",
-      "syntax": "static-import",
-      "targetSymbol": "DatabaseGenerationBootstrapCandidate",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/workflows.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/workflows.ts#$file",
@@ -119512,22 +119695,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:6e94e1a2e53aba2de532",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/postgresqlMigrationSequence",
-      "syntax": "static-import",
-      "targetSymbol": "PostgresqlMigrationHistory",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#PostgresqlMigrationHistory"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/reviewTaskAccess.ts",
@@ -120054,22 +120221,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/mergeAgent.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/mergeAgent.ts#buildMergeResolvePrompt"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:70c7bc1b9062a8f9acab",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/databaseProviderRuntime",
-      "syntax": "static-import",
-      "targetSymbol": "prepareDatabaseProviderRuntime",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#prepareDatabaseProviderRuntime"
     },
     {
       "edgeKind": "value",
@@ -123512,6 +123663,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/public/commands.ts#IntegrationMaintenanceCommands"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts#$file",
+      "id": "import:7b0aa4afdcbfdb8e67eb",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/schemaContract",
+      "syntax": "static-import",
+      "targetSymbol": "LogicalSchemaContract",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/schemaContract.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/schemaContract.ts#LogicalSchemaContract"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/domain/databaseMigration.ts",
@@ -124217,6 +124384,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "id": "import:7d320af2937e82dd0c35",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlMigrationSequence",
+      "syntax": "static-import",
+      "targetSymbol": "PostgresqlMigrationHistory",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#PostgresqlMigrationHistory"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts#$file",
@@ -124486,6 +124669,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/queries.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/queries.ts#AgentDependencyQueries"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "id": "import:7dcf30c28f5d278807ef",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../../application/ports/databaseConfiguration",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseConfigurationPort",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/databaseConfiguration.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseConfiguration.ts#DatabaseConfigurationPort"
     },
     {
       "edgeKind": "value",
@@ -126776,22 +126975,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/auth/secretBox.ts#SecretBox"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:854549dc34d241e02efa",
-      "owner": "system-operations",
-      "removeAfterWave": null,
-      "role": "required-implementation",
-      "specifier": "../application/ports/databaseConfiguration",
-      "syntax": "static-import",
-      "targetSymbol": "DatabaseConfigurationPort",
-      "toContext": "system-operations",
-      "toFile": "packages/backend/src/modules/system-operations/application/ports/databaseConfiguration.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseConfiguration.ts#DatabaseConfigurationPort"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts",
@@ -127912,6 +128095,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#IdempotentCommandContext"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts#$file",
+      "id": "import:8874f056f909cedc5b5a",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/generationValidation",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseGenerationBootstrapCandidate",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/generationValidation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationValidation.ts#DatabaseGenerationBootstrapCandidate"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
@@ -128790,6 +128989,22 @@
       "toContext": "event-center",
       "toFile": "packages/backend/src/modules/event-center/composition/required-ports.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/required-ports.ts#TaskAutomationTargetV1"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "id": "import:8b2c9d8b166289353e20",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/lock",
+      "syntax": "static-import",
+      "targetSymbol": "Lock",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/lock.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/lock.ts#Lock"
     },
     {
       "edgeKind": "value",
@@ -129894,6 +130109,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ForbiddenError"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "id": "import:8ecc987f0c1e653da78d",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseProviderRuntime",
+      "syntax": "static-import",
+      "targetSymbol": "ResolveDatabaseProviderRuntimeOptions",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#ResolveDatabaseProviderRuntimeOptions"
     },
     {
       "edgeKind": "type",
@@ -132582,6 +132813,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskQuestionDispatch.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "id": "import:977d1a30ad105559d566",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/generationValidation",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseGenerationBootstrapCandidate",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/generationValidation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationValidation.ts#DatabaseGenerationBootstrapCandidate"
     },
     {
       "edgeKind": "value",
@@ -140041,22 +140288,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:acb3f9486c9b604ca321",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/providerTraits",
-      "syntax": "static-import",
-      "targetSymbol": "databaseProviderTraits",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/providerTraits.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/humanGateComposition.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#$file",
@@ -146169,22 +146400,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:bf86a23507365993931b",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/lock",
-      "syntax": "static-import",
-      "targetSymbol": "acquireLock",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/lock.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/lock.ts#acquireLock"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -146710,6 +146925,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/application/authRuntime.ts",
       "toOwnerEntryId": "owner:packages/backend/src/auth/application/authRuntime.ts#AuthRuntime"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "id": "import:c11da6e908b56e72615d",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlMigrationSequence",
+      "syntax": "static-import",
+      "targetSymbol": "resolvePostgresqlAdditiveRowBridge",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#resolvePostgresqlAdditiveRowBridge"
     },
     {
       "edgeKind": "value",
@@ -150406,22 +150637,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/runner.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/runner.ts#runNode"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:cb9396e78370ad7596f9",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/generationStore",
-      "syntax": "static-import",
-      "targetSymbol": "digestGenerationPayload",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -158553,22 +158768,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:e2ac72f818b1b57630a4",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/postgresqlMigrationSequence",
-      "syntax": "static-import",
-      "targetSymbol": "resolvePostgresqlAdditiveRowBridge",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#resolvePostgresqlAdditiveRowBridge"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "development-automation",
       "fromFile": "packages/backend/src/modules/development-automation/composition/missionOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionOperations.ts#$file",
@@ -162105,6 +162304,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "id": "import:ed2cb75bec7c18b1637d",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/providerTraits",
+      "syntax": "static-import",
+      "targetSymbol": "databaseProviderTraits",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/providerTraits.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/providerTraits.ts#databaseProviderTraits"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/collaborationWorkgroupClarify.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationWorkgroupClarify.ts#$file",
@@ -163576,6 +163791,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#TaskLifecycleWriteInput"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts#$file",
+      "id": "import:f15dc22e37de46fc357f",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlMigrationSequence",
+      "syntax": "static-import",
+      "targetSymbol": "PostgresqlMigrationHistory",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationSequence.ts#PostgresqlMigrationHistory"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/application/mcps/mcpApplication.ts",
@@ -164441,6 +164672,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/composition.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#$file",
+      "id": "import:f3a833a634c089dfa724",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/postgresqlMigrationHistory",
+      "syntax": "static-import",
+      "targetSymbol": "loadPostgresqlMigrationHistory",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/postgresqlMigrationHistory.ts#loadPostgresqlMigrationHistory"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts#$file",
@@ -165078,22 +165325,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "system-operations",
-      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file",
-      "id": "import:f571b7bec2b3f04f1efb",
-      "owner": "system-operations",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/persistence/databaseProviderRuntime",
-      "syntax": "static-import",
-      "targetSymbol": "ResolveDatabaseProviderRuntimeOptions",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#ResolveDatabaseProviderRuntimeOptions"
     },
     {
       "edgeKind": "value",
@@ -166934,6 +167165,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "id": "import:fb1475e5437bda01654b",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/client",
+      "syntax": "static-import",
+      "targetSymbol": "OpenDbOptions",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/client.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/client.ts#OpenDbOptions"
     },
     {
       "edgeKind": "value",
@@ -169040,7 +169287,9 @@
       "compositionOwnerEntryIds": [
         "owner:packages/backend/src/modules/system-operations/composition.ts#$file"
       ],
-      "consumerOwnerEntryIds": [],
+      "consumerOwnerEntryIds": [
+        "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file"
+      ],
       "context": "system-operations",
       "id": "required:system-operations:DatabaseConfigurationPort",
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseConfiguration.ts#DatabaseConfigurationPort",
@@ -169053,14 +169302,39 @@
         },
         {
           "context": "system-operations",
-          "edgeId": "import:854549dc34d241e02efa",
-          "file": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#$file"
+          "edgeId": "import:7dcf30c28f5d278807ef",
+          "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file"
         }
       ],
-      "removeAfterWave": "W4-E7",
-      "status": "declared-debt",
+      "removeAfterWave": null,
+      "status": "active",
       "symbol": "DatabaseConfigurationPort"
+    },
+    {
+      "compositionFiles": [
+        "packages/backend/src/modules/system-operations/composition.ts"
+      ],
+      "compositionOwnerEntryIds": [
+        "owner:packages/backend/src/modules/system-operations/composition.ts#$file"
+      ],
+      "consumerOwnerEntryIds": [
+        "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file"
+      ],
+      "context": "system-operations",
+      "id": "required:system-operations:DatabaseInstallationPort",
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts#DatabaseInstallationPort",
+      "providerAdapters": [
+        {
+          "context": "system-operations",
+          "edgeId": "import:061fd0f442f048ee1777",
+          "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file"
+        }
+      ],
+      "removeAfterWave": null,
+      "status": "active",
+      "symbol": "DatabaseInstallationPort"
     },
     {
       "compositionFiles": [],
@@ -169200,7 +169474,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:02327cdfd015a4b747dd495ad6a96ee8ea315d7968c59eef0444485860d13246",
+  "sourceDigest": "sha256:29a0b45cbc92ef3c099df45935e7554adbf108408f99e7bb03dba7b9a9086ec5",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

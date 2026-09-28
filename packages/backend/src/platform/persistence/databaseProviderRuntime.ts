@@ -311,8 +311,8 @@ interface PrepareDatabaseProviderRuntimeOptions extends ResolveDatabaseProviderR
   readonly history: PostgresqlMigrationHistory
   readonly sqliteOptions: Omit<OpenDbOptions, 'path'>
   readonly beforeSqliteOpen?: () => void | Promise<void>
-  readonly requireUpgradeLock: () => void
-  readonly advancePointer: () => void
+  readonly requireUpgradeLock: () => void | Promise<void>
+  readonly advancePointer: () => void | Promise<void>
 }
 
 type PreparedDatabaseProviderSchema =
@@ -388,7 +388,7 @@ export async function prepareDatabaseProviderRuntime(
     (readDbMigrationIdentity(options.sqlitePath)?.lastCreatedAt ?? Infinity) <
       history.head.sqliteMigration.last.folderMillis
   )
-    options.requireUpgradeLock()
+    await options.requireUpgradeLock()
   if (generation.provider !== config.provider) {
     throw new DatabaseProviderRuntimeError(
       'database-provider-config-generation-mismatch',
@@ -401,7 +401,7 @@ export async function prepareDatabaseProviderRuntime(
     await options.beforeSqliteOpen?.()
     const client = openDb({ ...options.sqliteOptions, path: options.sqlitePath })
     try {
-      options.advancePointer()
+      await options.advancePointer()
       return {
         provider: 'sqlite',
         databaseConfig: config,

@@ -54,6 +54,8 @@ import { openSqliteLogicalSource } from '@/platform/persistence/sqliteLogicalSou
 import { openSqliteLogicalSourceWorker } from '@/platform/persistence/sqliteLogicalSourceWorkerSupervisor'
 import { createPortableBackupArchive } from '@/services/portableBackupArchive'
 import { acquireLock } from '@/util/lock'
+import { prepareDatabaseInstallation } from '@/modules/system-operations/application/prepareDatabaseInstallation'
+import { createFileDatabaseInstallation } from '@/modules/system-operations/infrastructure/local/fileDatabaseInstallation'
 
 const MIGRATIONS = join(import.meta.dir, '..', 'db', 'migrations')
 const history = await loadPostgresqlMigrationHistory()
@@ -299,6 +301,62 @@ function completedPointerFixture(
 }
 
 describe('RFC-359 T19h actual SQLite generation preparation', () => {
+  // RFC-370: exercise the real provider, not a fake prepare callback. Removing
+  // its await would admit against the old pointer and release the lock early.
+  test('real provider preparation waits for the installation metadata commit', async () => {
+    const { paths, options } = fixture()
+    const effects = createFileDatabaseInstallation(options)
+    let enterWrite!: () => void
+    const writeEntered = new Promise<void>((resolve) => {
+      enterWrite = resolve
+    })
+    let continueWrite!: () => void
+    const canWrite = new Promise<void>((resolve) => {
+      continueWrite = resolve
+    })
+    const write = effects.writeGeneration
+    effects.writeGeneration = async (payload) => {
+      enterWrite()
+      await canWrite
+      await write(payload)
+    }
+    let settled = false
+    const pending = prepareDatabaseInstallation({
+      config: options.config,
+      contract: options.contract,
+      history,
+      configuration: { read: options.readConfig, write: options.writeConfig },
+      effects,
+    })
+    void pending.then(
+      () => {
+        settled = true
+      },
+      () => {
+        settled = true
+      },
+    )
+    try {
+      await writeEntered
+      await new Promise<void>((resolve) => {
+        setImmediate(resolve)
+      })
+      expect(settled).toBe(false)
+      expect(existsSync(paths.lockPath)).toBe(true)
+      expect(
+        JSON.parse(readFileSync(paths.generationPointerPath, 'utf8')).payload.schemaDigest,
+      ).toBe(history.root.contract.digest)
+    } finally {
+      continueWrite()
+      const prepared = await pending
+      await prepared.runtime.close()
+    }
+    expect(existsSync(paths.lockPath)).toBe(false)
+    expect(JSON.parse(readFileSync(paths.generationPointerPath, 'utf8')).payload.schemaDigest).toBe(
+      history.head.contract.digest,
+    )
+  })
+
   test.each(['root', 'head'] as const)(
     'the real SQLite source Worker roundtrips the complete %s contract',
     async (version) => {

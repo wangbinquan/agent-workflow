@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1840,
+    "backendFiles": 1843,
     "frontendFiles": 622,
     "legacyFiles": 549,
-    "moduleFiles": 1291,
-    "productionFiles": 2617,
+    "moduleFiles": 1294,
+    "productionFiles": 2620,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25007
+    "symbolsIncludingFileRoots": 25013
   },
   "entries": [
     {
@@ -111876,6 +111876,30 @@
       "currentContext": "system-operations",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/databaseInstallation.ts#DatabaseInstallationPort",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DatabaseInstallationPort",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/system-operations/application/ports/databaseMigrationArtifactStore.ts",
       "id": "owner:packages/backend/src/modules/system-operations/application/ports/databaseMigrationArtifactStore.ts#$file",
       "removeAfterWave": null,
@@ -112085,6 +112109,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ResourceLimitTaskClock",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#candidatePayload",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "candidatePayload",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/prepareDatabaseInstallation.ts#prepareDatabaseInstallation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "prepareDatabaseInstallation",
       "targetContext": "system-operations",
       "targetLayer": "application"
     },
@@ -113615,30 +113675,6 @@
     {
       "currentContext": "system-operations",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#candidatePayload",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "candidatePayload",
-      "targetContext": "system-operations",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "system-operations",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
-      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#DatabaseSchemaUpgradeOptions",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "DatabaseSchemaUpgradeOptions",
-      "targetContext": "system-operations",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "system-operations",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts",
       "id": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseSchemaUpgradeCoordinator.ts#prepareDatabaseSchemaUpgrade",
@@ -113957,6 +113993,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createFileDatabaseConfiguration",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#createFileDatabaseInstallation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileDatabaseInstallation",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseInstallation.ts#DatabaseSchemaUpgradeOptions",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DatabaseSchemaUpgradeOptions",
       "targetContext": "system-operations",
       "targetLayer": "infrastructure"
     },
@@ -300803,5 +300875,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:02327cdfd015a4b747dd495ad6a96ee8ea315d7968c59eef0444485860d13246"
+  "sourceDigest": "sha256:29a0b45cbc92ef3c099df45935e7554adbf108408f99e7bb03dba7b9a9086ec5"
 }
