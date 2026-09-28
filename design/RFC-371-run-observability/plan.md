@@ -112,3 +112,10 @@
 - 新增双 provider 回归：并发幂等、重新打开后回执、档位删除、迟到价格/新模型、未知身份、CS 重复映射与代次、零值/部分估算；SQLite 0233 与 PostgreSQL 0009 迁移及 schema artifacts 已生成，未在本地运行 AW 测试。
 - ff924c1 精确 CI 36394863489 最终 40 success / 4 failure / 2 cancelled；功能失败为协议归属与空 public 面账本，已由 4ffa5c160 修复。4ffa5c160 的 Lint/Typecheck 作业指出新增冻结用例缺少 deleteRuntime refs 参数，本批补齐并播种非删除档位；PG 事务内修订对拍改读同一事务句柄，保留修订 +1 与整笔回滚双向断言。Static scans 不在本任务检查范围，整体 CI 未记通过。
 - 受理与估值基础尚未接入生产 runner、CS 同步或正式查询/页面；这一步不记真实调用采集或双部署验收完成。
+
+## 11. 实施批次 6：生产启动前受理接线
+
+- 通过正式 public participant 接通 TaskExecution 与 run-observability，删除临时空 public 面登记。三个 standalone 启动根与双数据库 fixture 显式装配，BoundRunTaskOptions 和 runner 依赖必填，不静默丢观测。
+- 六个 runNode 调用点传递冻结注册身份；每次进程调用生成独立 invocationId，在实际 spawn 前等待持久接受。自动提交、合并处理归 system，普通任务保持 task。
+- 新增双 provider 真实 mock 进程回归：相同 NodeRun 的不同进程有不同调用 ID、受理失败不启动子进程、注入 CS participant 保留平台 authority。AST 断言覆盖六个调用点和三个本地 bootstrap；这条 CS 测试不等于集群托管验收。
+- 上批 389ccb5c0 已推送，exact-SHA CI 36399799590 仍在运行；本批未执行 AW 本地测试，独立静态功能复核 PASS。用量源写入、平台同步、正式查询/页面和部署验收仍待完成。

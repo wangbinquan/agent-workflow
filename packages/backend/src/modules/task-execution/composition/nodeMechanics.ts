@@ -427,6 +427,8 @@ export async function executeWorkgroupHostMechanics(
           runtimeBinary: frozen.binary,
           runtimeParams: frozen.params,
           runtimeConfigDir: frozen.configDir,
+          runtimeObservationIdentity: frozen.observationIdentity,
+          observationInvocations: state.opts.observationInvocations,
           inputs: {},
           worktreePath: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
           gitUserName: task.gitUserName,
@@ -1144,6 +1146,9 @@ export async function resolveMergeConflicts(
       runtimeBinary: frozen.binary,
       runtimeParams: frozen.params,
       runtimeConfigDir: frozen.configDir, // RFC-154: frozen config-dir profile
+      runtimeObservationIdentity: frozen.observationIdentity,
+      observationInvocations: state.opts.observationInvocations,
+      observationPurpose: 'system',
       inputs: {},
       worktreePath: cwd,
       promptTemplate: buildMergeResolvePrompt({ manifest, envelopeNonce }),
@@ -4505,6 +4510,8 @@ export async function runAgentSingleNode(
         runtimeBinary: frozenRuntime.binary,
         runtimeParams: frozenRuntime.params,
         runtimeConfigDir: frozenRuntime.configDir, // RFC-154: frozen config-dir profile
+        runtimeObservationIdentity: frozenRuntime.observationIdentity,
+        observationInvocations: state.opts.observationInvocations,
         inputs: upstreamInputs,
         // RFC-130 D16: the opencode cwd + ALL path-bearing template tokens point
         // at the ISOLATED worktree, not the canonical one — otherwise the agent

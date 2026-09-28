@@ -1,3 +1,4 @@
+import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { composeNodeRunRuntimePersistence } from './nodeRunRuntime'
 // RFC-359 W5-T21b: construct the complete provider runtime, then use its real
@@ -218,6 +219,7 @@ export async function createEachProviderTaskExecution(
           workgroupTurns,
           dynamicWorkflow,
           runtimeSessionLeases: createRuntimeSessionLeaseOperations(sqlite),
+          observationInvocations: composeLocalInvocationObservations(sqlite),
           runtimeRegistry: composeRuntimeRegistryOperations(sqlite),
           nodeRunRuntime: composeNodeRunRuntimePersistence(sqlite),
           repositoryPublicationTransport: createTestRepositoryPublicationTransport(),
@@ -345,6 +347,7 @@ export async function createEachProviderTaskExecution(
   const provider: SelectedPostgresqlTaskExecutionProviderRuntime =
     composePostgresqlTaskExecutionProviderRuntime(postgresql, {
       runtime: {
+        observationInvocations: composeLocalInvocationObservations(db),
         runtimeRegistry: composeRuntimeRegistryOperations(db),
         nodeRunRuntime: composeNodeRunRuntimePersistence(db),
         persistence,

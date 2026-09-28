@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 913,
-    "exactEntrypointFiles": 67,
+    "consumers": 916,
+    "exactEntrypointFiles": 68,
     "governedFieldSurfaces": 5,
-    "methods": 1086,
+    "methods": 1087,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21014,
-    "symbols": 1022
+    "recursiveFields": 21019,
+    "symbols": 1024
   },
   "entries": [
     {
@@ -117596,6 +117596,137 @@
       "version": 1
     },
     {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:198402857a3c440266f9",
+        "import:a7270198332e68bb8ccf",
+        "import:d31343f538211997c46a"
+      ],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:accept.$parameter:input",
+          "type": "Omit<AcceptObservationInvocation, 'authority'>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:198402857a3c440266f9",
+            "import:a7270198332e68bb8ccf",
+            "import:d31343f538211997c46a"
+          ],
+          "fieldPath": "$method:accept.$parameter:input.runtime",
+          "type": "Extract<AcceptObservationInvocation['authority'], { kind: 'local' }>['runtime']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:accept.$return",
+          "type": "z.infer<typeof AcceptedObservationInvocationSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "public:run-observability:participants:ObservationInvocationParticipant",
+      "members": [
+        "accept"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:a7270198332e68bb8ccf"
+          ],
+          "name": "accept",
+          "signatureDigest": "sha256:51f1122fb98bcd3720f825076e03d5fbb85cc5869c62dba69c0f6316871bc355"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationInvocationParticipant",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:198402857a3c440266f9",
+          "file": "packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:a7270198332e68bb8ccf",
+          "file": "packages/backend/src/services/runner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:d31343f538211997c46a",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:681a15419f2748fb3ed6c4ce40367a74ac539e95ab779ee965cdcdc97668cb4f",
+      "status": "target-context-current-surface",
+      "symbol": "ObservationInvocationParticipant",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Omit",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$value",
+          "type": "Omit<AcceptObservationInvocation, 'authority'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "runtime",
+          "type": "Extract<AcceptObservationInvocation['authority'], { kind: 'local' }>['runtime']"
+        }
+      ],
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "public:run-observability:participants:ObservationInvocationStart",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationInvocationStart",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:run-observability:participants:ObservationInvocationParticipant"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:f5bfdd911f6496cccdc43aaffaa20b0b6b5de3dcb3ab6a92f82f8595e333c2d4",
+      "status": "target-context-current-surface",
+      "symbol": "ObservationInvocationStart",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Omit"
+      ],
+      "version": 1
+    },
+    {
       "authority": "request-authority",
       "budget": {
         "maxMethods": 5,
@@ -122128,12 +122259,16 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
           "fieldPath": "$method:resolveAgentRuntime.$return.observationIdentity.configurationRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
           "fieldPath": "$method:resolveAgentRuntime.$return.observationIdentity.registrationId",
           "type": "string"
         },
@@ -122280,12 +122415,16 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
           "fieldPath": "$method:resolveInternalAgentRuntime.$return.observationIdentity.configurationRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
           "fieldPath": "$method:resolveInternalAgentRuntime.$return.observationIdentity.registrationId",
           "type": "string"
         },
@@ -122417,12 +122556,16 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
           "fieldPath": "$method:resolveRuntimeByName.$return.observationIdentity.configurationRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:f8a4030fdfccacbf609e"
+          ],
           "fieldPath": "$method:resolveRuntimeByName.$return.observationIdentity.registrationId",
           "type": "string"
         },
@@ -166412,7 +166555,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0858b77db84fd714741e525a59ff65b1ee86b51e1f27bbd63db504a600d2180f",
+  "sourceDigest": "sha256:4dba9ca1f7266b40f0eaced6f6cdef3a7b08c43a27c4069a824b04f6e2925045",
   "targetContexts": [
     "collaboration",
     "development-automation",

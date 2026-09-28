@@ -17,6 +17,9 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRunOutputs, nodeRuns, tasks, workflows } from '../src/db/schema'
 import { runNode } from './helpers/runner'
 import type { Logger } from '../src/util/log'
+import { createObservationInvocationStore } from '../src/modules/run-observability/infrastructure/invocationPersistence'
+import { composeLocalInvocationObservations } from '../src/modules/run-observability/composition/localInvocations'
+import type { ObservationInvocationParticipant } from '../src/modules/run-observability/public/participants'
 
 const MOCK_OPENCODE = resolve(import.meta.dir, 'fixtures', 'mock-opencode.ts')
 
@@ -179,6 +182,142 @@ describeEachProvider('runNode', (harness) => {
     h = await buildHarness(harness.db)
   })
   afterEach(() => h.cleanup())
+
+  // RFC-371: a process must have durable acceptance before the first spawn;
+  // successive processes sharing a node run must still have separate identities.
+  test('persists frozen invocation facts before spawning and gives each process its own ID', async () => {
+    const agent = makeAgent()
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const participant = composeLocalInvocationObservations(h.db)
+    const store = createObservationInvocationStore(h.db)
+    const receipts: string[] = []
+    const observationInvocations: ObservationInvocationParticipant = {
+      async accept(input) {
+        const receipt = await participant.accept(input)
+        expect(await store.get(receipt.invocationId)).toEqual(receipt)
+        receipts.push(receipt.invocationId)
+        return receipt
+      },
+    }
+    const invoke = () =>
+      runNode({
+        taskId: h.taskId,
+        nodeRunId,
+        nodeId: 'node1',
+        agent,
+        inputs: {},
+        worktreePath: h.worktreePath,
+        skills: [],
+        appHome: h.appHome,
+        db: h.db,
+        templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        observationInvocations,
+        runtimeObservationIdentity: { registrationId: 'frozen-runtime', configurationRevision: 7 },
+        observationPurpose: 'system',
+      })
+    await withEnv({ MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'accepted' }) }, async () => {
+      expect((await invoke()).status).toBe('done')
+      // The owner may dispatch another process against the same durable row.
+      await h.db.update(nodeRuns).set({ status: 'pending' }).where(eq(nodeRuns.id, nodeRunId))
+      expect((await invoke()).status).toBe('done')
+    })
+    expect(receipts).toHaveLength(2)
+    expect(new Set(receipts).size).toBe(2)
+    for (const id of receipts) {
+      expect(await store.get(id)).toMatchObject({
+        taskId: h.taskId,
+        nodeRunId,
+        agentId: agent.id,
+        agentRevision: agent.updatedAt,
+        purpose: 'system',
+        priceBookRevision: 0,
+        authority: {
+          kind: 'local',
+          runtime: {
+            registrationId: 'frozen-runtime',
+            configurationRevision: 7,
+            protocol: 'opencode',
+          },
+        },
+      })
+    }
+  })
+
+  test('acceptance failure prevents the child from starting', async () => {
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const marker = join(h.appHome, 'must-not-spawn.jsonl')
+    const result = await withEnv({ MOCK_OPENCODE_CAPTURE_ENV_TO: marker }, () =>
+      runNode({
+        taskId: h.taskId,
+        nodeRunId,
+        nodeId: 'node1',
+        agent: makeAgent(),
+        inputs: {},
+        worktreePath: h.worktreePath,
+        skills: [],
+        appHome: h.appHome,
+        db: h.db,
+        templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+        binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+        observationInvocations: {
+          accept: async () => {
+            throw new Error('observation-unavailable')
+          },
+        },
+      }),
+    )
+    expect(result.status).toBe('failed')
+    expect(existsSync(marker)).toBe(false)
+    expect(
+      (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get())?.pid,
+    ).toBeNull()
+  })
+
+  test('an injected CS participant retains platform authority through the real runner', async () => {
+    const nodeRunId = await insertNodeRun(h.db, h.taskId)
+    const store = createObservationInvocationStore(h.db)
+    let receiptId = ''
+    const result = await withEnv(
+      { MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'hosted' }) },
+      () =>
+        runNode({
+          taskId: h.taskId,
+          nodeRunId,
+          nodeId: 'node1',
+          agent: makeAgent(),
+          inputs: {},
+          worktreePath: h.worktreePath,
+          skills: [],
+          appHome: h.appHome,
+          db: h.db,
+          templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+          binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+          observationInvocations: {
+            async accept({ runtime: _runtime, ...input }) {
+              const receipt = await store.accept({
+                ...input,
+                authority: {
+                  kind: 'crewstation',
+                  projectId: 'project',
+                  taskId: 'platform-task',
+                  subtaskId: 'subtask',
+                  executionResourceId: 'execution',
+                  executionGeneration: 1,
+                },
+              })
+              receiptId = receipt.invocationId
+              return receipt
+            },
+          },
+        }),
+    )
+    expect(result.status).toBe('done')
+    expect(await store.get(receiptId)).toMatchObject({
+      priceBookRevision: null,
+      authority: { kind: 'crewstation', executionResourceId: 'execution', executionGeneration: 1 },
+    })
+  })
 
   test('happy path: parses envelope, persists outputs, status=done', async () => {
     const agent = makeAgent({ outputs: ['summary', 'findings'] })

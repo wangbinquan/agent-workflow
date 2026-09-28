@@ -1,3 +1,4 @@
+import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import {
   runNode as runNodeWithProvider,
   type RunNodeOptions as ProviderRunNodeOptions,
@@ -16,13 +17,21 @@ export * from '../../src/services/runner'
  */
 export type RunNodeOptions = Omit<
   ProviderRunNodeOptions,
-  'memoryInjectionQueries' | 'runtimeSessionLeases' | 'persistence' | 'runtimeRegistry'
+  | 'memoryInjectionQueries'
+  | 'runtimeSessionLeases'
+  | 'persistence'
+  | 'runtimeRegistry'
+  | 'observationInvocations'
 > &
   Readonly<{ db: ProviderNeutralDatabase }> &
   Partial<
     Pick<
       ProviderRunNodeOptions,
-      'memoryInjectionQueries' | 'runtimeSessionLeases' | 'persistence' | 'runtimeRegistry'
+      | 'memoryInjectionQueries'
+      | 'runtimeSessionLeases'
+      | 'persistence'
+      | 'runtimeRegistry'
+      | 'observationInvocations'
     >
   >
 
@@ -30,6 +39,8 @@ export async function runNode(options: RunNodeOptions) {
   const { db, ...providerOptions } = options
   return await runNodeWithProvider({
     ...providerOptions,
+    observationInvocations:
+      options.observationInvocations ?? composeLocalInvocationObservations(db),
     memoryInjectionQueries: options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(db),
     runtimeSessionLeases: options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(db),
     persistence: options.persistence ?? createTaskExecutionPersistence(db),

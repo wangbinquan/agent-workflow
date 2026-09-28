@@ -1,3 +1,4 @@
+import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 // RFC-359 —— `TaskExecutionRuntimeParticipants` 的双引擎对拍。
 //
@@ -145,6 +146,7 @@ function sharedInput(
     persistence: createTaskExecutionPersistence(db),
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
     memoryInjectionQueries: sqliteMemoryInjectionQueries(db as unknown as DbClient),
+    observationInvocations: composeLocalInvocationObservations(db),
     runtimeRegistry: composeRuntimeRegistryOperations(db),
     nodeRunRuntime: composeNodeRunRuntimePersistence(db),
     collaborationRuntime: createCollaborationRuntimeMechanics(db),

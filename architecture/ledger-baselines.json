@@ -181,7 +181,7 @@
       "id": "rfc317-modules-without-public",
       "file": "packages/backend/tests/architecture/rfc317-module-boundary.test.ts",
       "symbol": "MODULES_WITHOUT_PUBLIC",
-      "baseline": 1,
+      "baseline": 0,
       "why": "RFC-294/317：还没有 public 合同面的模块存量。目标是 0——每个模块都该只经 exact public 被消费。"
     },
     {
@@ -720,8 +720,11 @@
       "id": "rfc287-scheduler-source-lock-files",
       "file": "packages/backend/tests/rfc287-t1-scheduler-source-lock-inventory.test.ts",
       "symbol": "SCHEDULER_SOURCE_LOCK_FILES",
-      "baseline": 31,
-      "why": "RFC-287 T1：把调度器**源码文本**钉死的测试文件清单。每一条都是一处「重构会被文本断言拦住」的耦合，只该随源码锁退役而减少。RFC-359 W7 第二波按判据 C 补入网。"
+      "baseline": 32,
+      "why": "RFC-287 T1：把调度器**源码文本**钉死的测试文件清单。每一条都是一处「重构会被文本断言拦住」的耦合，只该随源码锁退役而减少。RFC-359 W7 第二波按判据 C 补入网。",
+      "allowGrowth": {
+        "why": "RFC-371：以必填公开参与者接通六个生产进程入口和三个独立部署启动根，新增受理失败与不同调用身份回归，退役空 public 面，rfc287-scheduler-source-lock-files 31 → 32，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc199-workflow-writers",
@@ -812,10 +815,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1756,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-371：新增不可变调用受理与已接受价目表上界，固定独立/托管执行 authority 并补齐双引擎表合同和回归，rfc294-mutation-entrypoints 1754 → 1756，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -829,10 +829,7 @@
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
       "baseline": 260,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
-      "allowGrowth": {
-        "why": "RFC-371：新增不可变调用受理与已接受价目表上界，固定独立/托管执行 authority 并补齐双引擎表合同和回归，rfc294-transaction-callbacks 259 → 260，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
     },
     {
       "id": "rfc294-background-jobs",
@@ -852,18 +849,21 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5513,
+      "baseline": 5520,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-371：新增不可变调用受理与已接受价目表上界，固定独立/托管执行 authority 并补齐双引擎表合同和回归，rfc294-cross-context-observed-imports 5507 → 5513，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：以必填公开参与者接通六个生产进程入口和三个独立部署启动根，新增受理失败与不同调用身份回归，退役空 public 面，rfc294-cross-context-observed-imports 5513 → 5520，按新增功能如实登记本批归属与公开合同。"
       }
     },
     {
       "id": "rfc294-target-context-edges",
       "file": "architecture/cross-context-imports.json",
       "symbol": "targetEdges",
-      "baseline": 68,
-      "why": "RFC-294 N1：design §3.1 offered、required implementation 与 IA authority type-only 三类目标边，角色和合同不可折叠。"
+      "baseline": 69,
+      "why": "RFC-294 N1：design §3.1 offered、required implementation 与 IA authority type-only 三类目标边，角色和合同不可折叠。",
+      "allowGrowth": {
+        "why": "RFC-371：以必填公开参与者接通六个生产进程入口和三个独立部署启动根，新增受理失败与不同调用身份回归，退役空 public 面，rfc294-target-context-edges 68 → 69，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-required-port-liveness",
@@ -876,10 +876,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4898,
+      "baseline": 4903,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-371：新增不可变调用受理与已接受价目表上界，固定独立/托管执行 authority 并补齐双引擎表合同和回归，rfc294-architecture-exceptions 4893 → 4898，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：以必填公开参与者接通六个生产进程入口和三个独立部署启动根，新增受理失败与不同调用身份回归，退役空 public 面，rfc294-architecture-exceptions 4898 → 4903，按新增功能如实登记本批归属与公开合同。"
       }
     },
     {
@@ -893,8 +893,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1022,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1024,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-371：以必填公开参与者接通六个生产进程入口和三个独立部署启动根，新增受理失败与不同调用身份回归，退役空 public 面，rfc294-public-surfaces 1022 → 1024，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -914,15 +917,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25254,
+      "baseline": 25259,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-371：新增不可变调用受理与已接受价目表上界，固定独立/托管执行 authority 并补齐双引擎表合同和回归，rfc294-module-symbol-owners 25233 → 25254，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：以必填公开参与者接通六个生产进程入口和三个独立部署启动根，新增受理失败与不同调用身份回归，退役空 public 面，rfc294-module-symbol-owners 25254 → 25259，按新增功能如实登记本批归属与公开合同。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:0858b77db84fd714741e525a59ff65b1ee86b51e1f27bbd63db504a600d2180f",
+    "sourceDigest": "sha256:4dba9ca1f7266b40f0eaced6f6cdef3a7b08c43a27c4069a824b04f6e2925045",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -935,8 +938,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "4ffa5c1609146decc100a2cd0583913005d4ca09",
-    "contentDigest": "sha256:f0ed2bb279584f5e46dca147bb5feff90fe2b28f25ed03e3daacf3ccd5c6019c",
+    "currentSnapshotSha": "389ccb5c0fa272083d2137db16d92cd9f6e0f5c1",
+    "contentDigest": "sha256:40cf26c62d1f847e612de86f37ff333af85ae86217eb9ce504fe70a03809ede7",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

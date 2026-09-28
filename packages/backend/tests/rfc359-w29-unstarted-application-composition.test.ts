@@ -665,7 +665,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 按 `user` 取消、事后改写原因，中间几秒数字员工会把超时误判成用户取消。装配图变的是这两格，
       // 判据在 `tests/rfc368-implementation-gate.test.ts`。
       // RFC-370: Intent and webhook routes receive the same live configuration query.
-      '2484b6518f7f51352968e706058edd5f9e6606e5da6861d593fe1f8854a82ba7',
+      // RFC-371: standalone task execution receives mandatory durable invocation accounting.
+      '397eeccf324af9f907c96ef1d24981c10fd3150be0dfed3e7f88516f77ac496c',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -730,7 +731,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-363 adds the SC preparation binding to Task admission and the existing deferred step; no new worker.
       // RFC-365: the SQLite root explicitly wires the two target providers, the event-only
       // delegated-context factory and the durable work-intent store.
-      '0ec0cc049dd960b6f7dc33cd9f8931aefd2275aef1149cb0fd0859c7a7b8e3b0',
+      // RFC-371: standalone task execution receives mandatory durable invocation accounting.
+      '1cfc4c695d8ccff96569fbb0750396c256fbbf7aa1eefad573e1c1aeecb27a63',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。

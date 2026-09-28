@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1891,
+    "backendFiles": 1893,
     "frontendFiles": 628,
     "legacyFiles": 553,
-    "moduleFiles": 1338,
-    "productionFiles": 2677,
+    "moduleFiles": 1340,
+    "productionFiles": 2679,
     "sharedFiles": 158,
-    "symbolsIncludingFileRoots": 25254
+    "symbolsIncludingFileRoots": 25259
   },
   "entries": [
     {
@@ -105139,6 +105139,30 @@
       "currentContext": "run-observability",
       "currentLayer": "composition",
       "exported": false,
+      "file": "packages/backend/src/modules/run-observability/composition/localInvocations.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/composition/localInvocations.ts#$file",
+      "removeAfterWave": "RFC-371",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/composition/localInvocations.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/composition/localInvocations.ts#composeLocalInvocationObservations",
+      "removeAfterWave": "RFC-371",
+      "status": "current-module",
+      "symbol": "composeLocalInvocationObservations",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "composition",
+      "exported": false,
       "file": "packages/backend/src/modules/run-observability/composition/observationRoutes.ts",
       "id": "owner:packages/backend/src/modules/run-observability/composition/observationRoutes.ts#$file",
       "removeAfterWave": "RFC-371",
@@ -106070,6 +106094,44 @@
       "symbol": "UsageRevisionReceipt",
       "targetContext": "run-observability",
       "targetLayer": "ports"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "public",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationInvocationParticipant",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:681a15419f2748fb3ed6c4ce40367a74ac539e95ab779ee965cdcdc97668cb4f",
+      "status": "current-module",
+      "symbol": "ObservationInvocationParticipant",
+      "targetContext": "run-observability",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationInvocationStart",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:f5bfdd911f6496cccdc43aaffaa20b0b6b5de3dcb3ab6a92f82f8595e333c2d4",
+      "status": "current-module",
+      "symbol": "ObservationInvocationStart",
+      "targetContext": "run-observability",
+      "targetLayer": "public"
     },
     {
       "currentContext": "runtime-management",
@@ -303775,5 +303837,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0858b77db84fd714741e525a59ff65b1ee86b51e1f27bbd63db504a600d2180f"
+  "sourceDigest": "sha256:4dba9ca1f7266b40f0eaced6f6cdef3a7b08c43a27c4069a824b04f6e2925045"
 }

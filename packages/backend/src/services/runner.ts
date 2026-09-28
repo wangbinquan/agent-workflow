@@ -43,6 +43,8 @@ import {
   assertNoPromptSignalRefs,
 } from '@agent-workflow/shared'
 import { randomBytes } from 'node:crypto'
+import { ulid } from 'ulid'
+import type { ObservationInvocationParticipant } from '@/modules/run-observability/public/participants'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 
@@ -408,6 +410,10 @@ export interface RunNodeOptions {
   /** Bootstrap-selected task execution persistence. No provider client crosses
    * the runner boundary. */
   persistence: TaskExecutionPersistence
+  /** Bootstrap-selected durable accounting; no deployment inference in the runner. */
+  observationInvocations: ObservationInvocationParticipant
+  runtimeObservationIdentity?: { registrationId: string; configurationRevision: number }
+  observationPurpose?: 'task' | 'system' | 'playground' | 'memory'
   /** Bootstrap-selected runtime registry operations. */
   runtimeRegistry: Pick<RuntimeExecutionQueries, 'resolveAgentRuntime'>
   /** Bootstrap-selected durable ownership for native runtime conversations. */
@@ -559,6 +565,8 @@ export { pickRuntimeHead } from './runtime/head'
 
 export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   const log = opts.log ?? createLogger('runner')
+  // A resumed/follow-up process is a new invocation even when nodeRunId is reused.
+  const invocationId = ulid()
   const runRoot = join(opts.appHome, 'runs', opts.taskId, opts.nodeRunId)
   // RFC-200: this persisted value is the single source for BOTH prompt emit
   // and stdout parse. Empty means a pre-upgrade in-flight row and preserves
@@ -1719,9 +1727,20 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       termGraceMs: graceMs,
       ...(opts.signal !== undefined ? { abortSignal: opts.signal } : {}),
       ...(plan.stdin?.mode === 'pipe' ? { stdin: plan.stdin } : {}),
-      ...(activeProcessEffect === undefined
-        ? {}
-        : { beforeSpawn: () => activeProcessEffect.beforeSpawn() }),
+      beforeSpawn: async () => {
+        await activeProcessEffect?.beforeSpawn()
+        await opts.observationInvocations.accept({
+          invocationId,
+          taskId: opts.taskId,
+          nodeRunId: opts.nodeRunId,
+          agentId: opts.agent.id,
+          agentRevision: opts.agent.updatedAt,
+          purpose: opts.observationPurpose ?? 'task',
+          runtime: opts.runtimeObservationIdentity
+            ? { ...opts.runtimeObservationIdentity, protocol: runtime }
+            : null,
+        })
+      },
       requireSpawnReceipt: true,
       onSpawned: async (receipt: {
         pid: number

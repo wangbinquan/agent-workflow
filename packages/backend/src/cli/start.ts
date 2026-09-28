@@ -1,3 +1,4 @@
+import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
@@ -1912,6 +1913,7 @@ async function composeSqliteProviderSession(
   const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
     composeSqliteTaskExecutionProviderRuntime(db, {
       runtime: {
+        observationInvocations: composeLocalInvocationObservations(db),
         memoryInjectionQueries,
         collaborationRuntime: createCollaborationRuntimeMechanics(db),
         workgroupTurns: composeWorkgroupTurnsOperations(

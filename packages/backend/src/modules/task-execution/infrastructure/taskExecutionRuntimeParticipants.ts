@@ -1,4 +1,5 @@
 import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
+import type { ObservationInvocationParticipant } from '@/modules/run-observability/public/participants'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type {
   CollaborationRuntimeMechanics,
@@ -59,6 +60,7 @@ import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
  * 那从来不是引擎差异，合并后一律由装配方交。
  */
 export interface TaskExecutionRuntimeParticipantsInput {
+  readonly observationInvocations: ObservationInvocationParticipant
   readonly db: ProviderNeutralDatabase
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
@@ -117,6 +119,7 @@ export function createTaskExecutionRuntimeParticipants(
       await driveTaskEngineApplication(
         {
           ...request,
+          observationInvocations: input.observationInvocations,
           memoryInjectionQueries: input.memoryInjectionQueries,
           persistence: input.persistence,
           runtimeSessionLeases: input.runtimeSessionLeases,

@@ -816,6 +816,8 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
           runtimeBinary: shardRuntime.binary,
           runtimeParams: shardRuntime.params,
           runtimeConfigDir: shardRuntime.configDir, // RFC-154: frozen config-dir profile
+          runtimeObservationIdentity: shardRuntime.observationIdentity,
+          observationInvocations: state.opts.observationInvocations,
           inputs,
           // RFC-130 D16: cwd + path tokens → the shard's isolated worktree.
           worktreePath: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
@@ -1313,6 +1315,8 @@ async function dispatchFanoutAggregatorAttempt(
           runtimeBinary: aggRuntime.binary,
           runtimeParams: aggRuntime.params,
           runtimeConfigDir: aggRuntime.configDir, // RFC-154: frozen config-dir profile
+          runtimeObservationIdentity: aggRuntime.observationIdentity,
+          observationInvocations: state.opts.observationInvocations,
           inputs: aggInputs,
           worktreePath: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
           // RFC-067: per-task Git identity threaded through fanout aggregator dispatch.

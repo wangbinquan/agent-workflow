@@ -64,6 +64,7 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   'rfc339-wrapper-runtime-cutover.test.ts',
   // RFC-345 locks the remaining scheduler facade consumer count during W4-C.
   'rfc345-resource-catalog-contracts.test.ts',
+  'rfc371-invocation-wiring.test.ts',
   // RFC-308: locks task-execution → source-control participant wiring and the
   // absence of a second add/commit/push implementation in code-capability.
   'runner-injected-memories.test.ts',

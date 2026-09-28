@@ -1,3 +1,4 @@
+import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeNodeRunRuntimePersistence } from './nodeRunRuntime'
 import type { DbClient } from '../../src/db/client'
 import { createTaskDagCollaborationOperations } from '../../src/modules/collaboration/infrastructure/taskDagCollaborationOperations'
@@ -128,6 +129,7 @@ export function composeTaskExecutionTestRuntime(
       ...singleProcessDeploymentPorts(db),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db),
       identityAccess: identity.resources,
+      observationInvocations: composeLocalInvocationObservations(db),
       memoryInjectionQueries: sqliteMemoryInjectionQueries(db),
       collaborationRuntime: createCollaborationRuntimeMechanics(db),
       persistence,
@@ -245,6 +247,8 @@ export function runTaskWithRealTestTopology(
   if (identityAccess === undefined) throw new Error('task-execution-test-identity-missing')
   const memoryInjectionQueries =
     options.memoryInjectionQueries ?? sqliteMemoryInjectionQueries(options.db)
+  const observationInvocations =
+    options.observationInvocations ?? composeLocalInvocationObservations(options.db)
   const persistence = options.persistence ?? createTaskExecutionPersistence(options.db)
   const runtimeSessionLeases =
     options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(options.db)
@@ -266,6 +270,7 @@ export function runTaskWithRealTestTopology(
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(options.db),
       identityAccess,
       memoryInjectionQueries,
+      observationInvocations,
       collaborationRuntime: createCollaborationRuntimeMechanics(options.db),
       persistence,
       workgroupTurns: composeWorkgroupTurnsOperations(
@@ -287,6 +292,7 @@ export function runTaskWithRealTestTopology(
       ...options,
       identityAccess,
       memoryInjectionQueries,
+      observationInvocations,
       persistence,
       runtimeSessionLeases,
       runtimeRegistry,

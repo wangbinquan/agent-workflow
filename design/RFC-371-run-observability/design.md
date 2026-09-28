@@ -156,6 +156,8 @@ CS托管adapter只消费平台授权返回的CNY金额、计量范围、完整�
 
 建议表：`observation_invocations`、`observation_spans`、`observation_usage_records`、`observation_usage_revisions`、`observation_checkpoints`、`observation_model_prices`。小时/日 rollup 是可重建投影，不是真实账本。
 
+执行启动通过 `run-observability/public/participants` 的必填调用受理参与者注入；三个独立部署启动根显式选择本地持久层，runner 不按环境推断部署。每次进程启动分配新 invocationId，在 beforeSpawn 中持久化接受时间、冻结身份与价目表修订；受理失败时该进程不启动。普通节点、多 Agent 宿主、fanout/aggregator、自动提交及合并处理共六个入口同样传递冻结身份。内部提交和合并归入 system 用途，保持任务关联。CS 托管启动根必须注入平台执行映射参与者，不能复用独立部署绑定。
+
 TaskExecution 在现有事务提交链发出最小事实（started/status/attempt-finalized）；runtime usage 通过绑定 invocation 的 writer 注入。微批默认 250ms 或 100 条，使用有界队列；关键生命周期与最终用量走 durable 源记录 / outbox，提交失败显式标采集故障并重试。不得让 best-effort WS 承担账本可靠性。
 
 投影 worker 在业务 commit 后消费持久事实，账本幂等写与 checkpoint 同事务；重启从最后已提交 cursor 续跑。先终态后补量、先子后父、事件重复和乱序均可收敛。未提交的 runtime 内存数据可能因硬崩溃丢失，页面保持 partial，不能承诺 exactly-once 源采集。
