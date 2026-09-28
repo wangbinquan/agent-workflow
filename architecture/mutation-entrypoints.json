@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1732,
+    "entries": 1735,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20659,6 +20659,31 @@
       },
       "file": "packages/backend/src/modules/runtime-management/application/ports/runtimeRegistryEffects.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/application/ports/runtimeRegistryEffects.ts#RuntimeLegacyConfigurationPort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/ports/runtimeRegistryEffects.ts#RuntimeLegacyConfigurationPort",
+      "symbol": "RuntimeLegacyConfigurationPort",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/application/ports/runtimeRegistryEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/runtime-management/application/ports/runtimeRegistryEffects.ts#RuntimeRegistryEffects",
       "missingControls": [
         "audit",
@@ -21185,7 +21210,56 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/fileRuntimeLegacyConfiguration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/fileRuntimeLegacyConfiguration.ts#createFileRuntimeLegacyConfiguration",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/fileRuntimeLegacyConfiguration.ts#createFileRuntimeLegacyConfiguration",
+      "symbol": "createFileRuntimeLegacyConfiguration",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/fileRuntimeManagementConfiguration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/fileRuntimeManagementConfiguration.ts#createFileRuntimeManagementConfiguration",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/fileRuntimeManagementConfiguration.ts#createFileRuntimeManagementConfiguration",
+      "symbol": "createFileRuntimeManagementConfiguration",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts",
@@ -21196,6 +21270,7 @@
         "authority",
         "authorization",
         "event",
+        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/runtimeManagementEffects.ts#createRuntimeManagementEffects",
@@ -41391,7 +41466,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9f3293f8520d752db06c08e90f3cd5e5ca00dba119cf4fc6864e62e10d4641cd",
+  "sourceDigest": "sha256:6a4bb78757e69eec0a64682a8826a44c600378843813ec65a20eb974dde5a0f6",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

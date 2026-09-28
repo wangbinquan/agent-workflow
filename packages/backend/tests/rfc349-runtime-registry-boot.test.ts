@@ -1,3 +1,4 @@
+import type { RuntimeLegacyConfigurationPort } from '../src/modules/runtime-management/application/ports/runtimeRegistryEffects'
 // RFC-349 hosted compiled PostgreSQL evidence exposed that daemon boot seeded
 // built-in runtimes only after the SQLite branch had already been selected.
 // This locks one provider-neutral ordered boot contract for every provider.
@@ -17,8 +18,8 @@ function operations(events: string[]) {
     }) {
       events.push(`migrate:${config.opencodePath ?? 'default'}`)
     },
-    async assertConfigDefaultsMigrated(configPath: string) {
-      events.push(`assert:${configPath}`)
+    async assertConfigDefaultsMigrated(configuration: RuntimeLegacyConfigurationPort) {
+      events.push(`assert:${await configuration.readText()}`)
     },
   }
 }
@@ -30,13 +31,17 @@ describe('RFC-349 provider-neutral runtime registry boot', () => {
     await initializeRuntimeRegistryBoot({
       operations: operations(events),
       config: { opencodePath: '/runtime/opencode' },
-      configPath: '/app/config.json',
+      legacyConfiguration: {
+        async readText() {
+          return 'raw-legacy-config'
+        },
+      },
       onRecoverableFailure() {
         events.push('recoverable')
       },
     })
 
-    expect(events).toEqual(['seed', 'migrate:/runtime/opencode', 'assert:/app/config.json'])
+    expect(events).toEqual(['seed', 'migrate:/runtime/opencode', 'assert:raw-legacy-config'])
   })
 
   test('reports seed/backfill failures but never swallows the data-loss guard', async () => {
@@ -48,8 +53,10 @@ describe('RFC-349 provider-neutral runtime registry boot', () => {
       events.push('seed')
       throw seedFailure
     }
-    bootOperations.assertConfigDefaultsMigrated = async (configPath: string) => {
-      events.push(`assert:${configPath}`)
+    bootOperations.assertConfigDefaultsMigrated = async (
+      configuration: RuntimeLegacyConfigurationPort,
+    ) => {
+      events.push(`assert:${await configuration.readText()}`)
       throw guardFailure
     }
 
@@ -57,7 +64,11 @@ describe('RFC-349 provider-neutral runtime registry boot', () => {
       initializeRuntimeRegistryBoot({
         operations: bootOperations,
         config: {},
-        configPath: '/app/config.json',
+        legacyConfiguration: {
+          async readText() {
+            return 'raw-legacy-config'
+          },
+        },
         onRecoverableFailure(error) {
           expect(error).toBe(seedFailure)
           events.push('recoverable')
@@ -65,6 +76,6 @@ describe('RFC-349 provider-neutral runtime registry boot', () => {
       }),
     ).rejects.toBe(guardFailure)
 
-    expect(events).toEqual(['seed', 'recoverable', 'assert:/app/config.json'])
+    expect(events).toEqual(['seed', 'recoverable', 'assert:raw-legacy-config'])
   })
 })

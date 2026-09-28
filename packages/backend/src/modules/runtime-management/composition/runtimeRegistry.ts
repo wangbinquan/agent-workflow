@@ -1,3 +1,4 @@
+export { createFileRuntimeLegacyConfiguration as composeFileRuntimeLegacyConfiguration } from '../infrastructure/local/fileRuntimeLegacyConfiguration'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createRuntimeRegistryApplication } from '../application/runtimeRegistry'
 import { createRuntimeRegistryEffects } from '../infrastructure/runtimeRegistryEffects'

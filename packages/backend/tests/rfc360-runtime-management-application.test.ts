@@ -4,6 +4,7 @@ import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { createRuntimeProfileConfigurationCommands } from '../src/modules/runtime-management/application/runtimeConfiguration'
 import { createRuntimeManagement } from '../src/modules/runtime-management/application/runtimeManagement'
+import { composeRuntimeManagement } from '../src/modules/runtime-management/composition/runtimeManagement'
 import type {
   RuntimeManagementConfig,
   RuntimeManagementDependencies,
@@ -40,7 +41,7 @@ describeEachProvider('RFC-360 runtime management application', (harness) => {
     const dependencies: RuntimeManagementDependencies = {
       registry,
       config: {
-        current: () => currentConfig,
+        current: async () => currentConfig,
         withProbeReceiptFence: (action) => action(),
       },
       drivers: {
@@ -93,6 +94,77 @@ describeEachProvider('RFC-360 runtime management application', (harness) => {
       reconciles: () => reconciles,
     }
   }
+
+  test('composition accepts a live configuration adapter without a file path', async () => {
+    const h = await setup()
+    let current: RuntimeManagementConfig = {
+      defaultRuntime: 'opencode',
+      opencodePath: 'first-binary',
+    }
+    const management = composeRuntimeManagement({
+      runtimeRegistry: h.registry,
+      runtimeTests: { async reconcileDurableIntents() {} },
+      configuration: {
+        async current() {
+          return current
+        },
+        withProbeReceiptFence: (action) => action(),
+      },
+    })
+    const first = await management.runtimes.queries.list()
+    expect(first.runtimes.find((row) => row.name === 'opencode')).toMatchObject({
+      isDefault: true,
+    })
+    current = { defaultRuntime: 'claude-code', opencodePath: 'second-binary' }
+    const second = await management.runtimes.queries.list()
+    expect(second.runtimes.find((row) => row.name === 'opencode')).toMatchObject({
+      isDefault: false,
+    })
+  })
+
+  test('asynchronous configuration resolves before a requested probe starts', async () => {
+    const h = await setup()
+    let release!: (config: RuntimeManagementConfig) => void
+    const ready = new Promise<RuntimeManagementConfig>((resolve) => {
+      release = resolve
+    })
+    let entered!: () => void
+    const reading = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    h.dependencies.config.current = () => {
+      entered()
+      return ready
+    }
+    const creating = h.application.profiles.create({
+      name: 'async-profile',
+      protocol: 'opencode',
+      binaryPath: 'async-binary',
+      probe: true,
+    })
+    try {
+      await reading
+      expect(h.probes).toEqual([])
+      expect(await h.registry.getRuntime('async-profile')).toBeNull()
+    } finally {
+      release({ defaultRuntime: 'async-profile', opencodePath: 'resolved-opencode' })
+    }
+    const created = await creating
+    expect(created.runtime).toMatchObject({ name: 'async-profile', isDefault: true })
+    expect(h.probes[0]?.config.opencodePath).toBe('resolved-opencode')
+  })
+
+  test('rejected configuration does not delete a runtime or reconcile tests', async () => {
+    const h = await setup()
+    await h.registry.createRuntime({ name: 'retained-profile', protocol: 'opencode' })
+    const failure = new Error('configuration unavailable')
+    h.dependencies.config.current = async () => {
+      throw failure
+    }
+    await expect(h.application.profiles.remove('retained-profile')).rejects.toBe(failure)
+    expect(await h.registry.getRuntime('retained-profile')).not.toBeNull()
+    expect(h.reconciles()).toBe(0)
+  })
 
   test('root-injected invalidation failure rolls back the registry update', async () => {
     const participants = composeRuntimeProfileParticipants()

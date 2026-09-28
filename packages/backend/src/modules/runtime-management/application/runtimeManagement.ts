@@ -27,8 +27,8 @@ export function createRuntimeManagement(
     protocol,
     input,
   ) => drivers.assertSpawnCapabilities(protocol, input)
-  const view = (row: RuntimeRow) => {
-    const cfg = config.current()
+  const view = async (row: RuntimeRow) => {
+    const cfg = await config.current()
     return runtimeRowToView(row, cfg.defaultRuntime, drivers.resolveBinary(row, cfg))
   }
   const staleProbe = (name: string): never => {
@@ -46,7 +46,7 @@ export function createRuntimeManagement(
         // The inbound schema has already decoded the protocol; retain validation order before the effect.
         const protocol = input.protocol
         assertRuntimeSpawnCapabilities(protocol, input)
-        const cfg = config.current()
+        const cfg = await config.current()
         smoke = await smokeRuntime({
           protocol,
           binaryPath: input.binaryPath,
@@ -59,7 +59,7 @@ export function createRuntimeManagement(
         })
       }
       let row = await registry.createRuntime({ ...input, binaryPath: input.binaryPath ?? null })
-      const cfg = config.current()
+      const cfg = await config.current()
       if (smoke !== undefined) {
         const target = runtimeProbeTargetOf(row, drivers.resolveBinary(row, cfg))
         await registry.cacheRuntimeProbe(target, smoke)
@@ -74,16 +74,16 @@ export function createRuntimeManagement(
     async update(name, input) {
       const row = await registry.updateRuntime(name, input)
       await tests.reconcile()
-      return { runtime: view(row) }
+      return { runtime: await view(row) }
     },
     async setEnabled(name, enabled) {
-      const cfg = config.current()
+      const cfg = await config.current()
       const row = await registry.setRuntimeEnabled(name, enabled, cfg.defaultRuntime)
       await tests.reconcile()
       return { runtime: runtimeRowToView(row, cfg.defaultRuntime, drivers.resolveBinary(row, cfg)) }
     },
     async remove(name) {
-      const cfg = config.current()
+      const cfg = await config.current()
       await registry.deleteRuntime(name, {
         defaultRuntime: cfg.defaultRuntime,
         memoryDistillRuntime: cfg.memoryDistillRuntime,
@@ -100,7 +100,7 @@ export function createRuntimeManagement(
   const queries: RuntimeProfileQueries = {
     async list() {
       const rows = await registry.listRuntimes()
-      const cfg = config.current()
+      const cfg = await config.current()
       return {
         runtimes: rows.map((row) => ({
           ...runtimeRowToView(row, cfg.defaultRuntime, drivers.resolveBinary(row, cfg)),
@@ -109,7 +109,7 @@ export function createRuntimeManagement(
       }
     },
     async status() {
-      const cfg = config.current()
+      const cfg = await config.current()
       const rows = (await registry.listRuntimes()).filter((row) => row.enabled)
       const configured = cfg.defaultRuntime ?? 'opencode'
       const defaultName = rows.some((row) => row.name === configured) ? configured : 'opencode'
@@ -144,7 +144,7 @@ export function createRuntimeManagement(
     async probe(input) {
       if (input.kind === 'unsaved') {
         assertRuntimeSpawnCapabilities(input.protocol, input)
-        const cfg = config.current()
+        const cfg = await config.current()
         const smoke = await smokeRuntime({
           protocol: input.protocol,
           binaryPath: input.binaryPath,
@@ -160,7 +160,7 @@ export function createRuntimeManagement(
       const { name } = input
       const row = await registry.getRuntime(name)
       if (row === null) throw new NotFoundError('runtime-not-found', `runtime '${name}' not found`)
-      const cfg = config.current()
+      const cfg = await config.current()
       const binaryPath = drivers.resolveBinary(row, cfg)
       const target = runtimeProbeTargetOf(row, binaryPath)
       const extraArgs = parseRuntimeExtraArgs(row.extraArgsJson)
@@ -177,7 +177,7 @@ export function createRuntimeManagement(
         const current = await registry.getRuntime(name)
         if (
           current === null ||
-          drivers.resolveBinary(current, config.current()) !== target.resolvedBinaryPath
+          drivers.resolveBinary(current, await config.current()) !== target.resolvedBinaryPath
         ) {
           staleProbe(name)
         }
@@ -190,7 +190,7 @@ export function createRuntimeManagement(
 
   const models: RuntimeModelQueries = {
     async list(input) {
-      const cfg = config.current()
+      const cfg = await config.current()
       const rtParam = input.runtime
       const resolved =
         rtParam !== undefined && rtParam.length > 0

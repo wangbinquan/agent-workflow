@@ -30,7 +30,10 @@ import type {
   RuntimeRegistryPersistence,
   RuntimeUpdateRecord,
 } from './ports/runtimeRegistry'
-import type { RuntimeRegistryEffects } from './ports/runtimeRegistryEffects'
+import type {
+  RuntimeRegistryEffects,
+  RuntimeLegacyConfigurationPort,
+} from './ports/runtimeRegistryEffects'
 
 /** The only registry application; effects are supplied by composition. */
 export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects) {
@@ -618,11 +621,11 @@ export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects
    */
   async function assertConfigDefaultsMigrated(
     persistence: RuntimeRegistryPersistence,
-    configPath: string,
+    configuration: RuntimeLegacyConfigurationPort,
   ): Promise<void> {
     let raw: Record<string, unknown>
     try {
-      raw = JSON.parse(effects.readConfigText(configPath)) as Record<string, unknown>
+      raw = JSON.parse(await configuration.readText()) as Record<string, unknown>
     } catch {
       return // no / unreadable config = fresh install, nothing to migrate or lose
     }
@@ -710,8 +713,8 @@ export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects
         readonly opencodePath?: string | null
         readonly claudeCodePath?: string | null
       }) => migrateConfigIntoBuiltins(persistence, config),
-      assertConfigDefaultsMigrated: (configPath: string) =>
-        assertConfigDefaultsMigrated(persistence, configPath),
+      assertConfigDefaultsMigrated: (configuration: RuntimeLegacyConfigurationPort) =>
+        assertConfigDefaultsMigrated(persistence, configuration),
     })
   }
   return Object.freeze({

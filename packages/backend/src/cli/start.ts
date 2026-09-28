@@ -348,7 +348,10 @@ import { selectDatabaseSchemaProvider } from '@/db/providerSchema'
 import { isDbSnapshotInProgress } from '@/platform/persistence/sqlite/systemProviderBackup'
 import { openSqliteMaintenanceAdmissionStore } from '@/platform/persistence/sqlite/maintenanceAdmissionStore'
 import { enforceLimits } from '@/services/limits'
-import { initializeRuntimeRegistryBoot } from '@/modules/runtime-management/composition/runtimeRegistry'
+import {
+  initializeRuntimeRegistryBoot,
+  composeFileRuntimeLegacyConfiguration,
+} from '@/modules/runtime-management/composition/runtimeRegistry'
 import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
@@ -528,7 +531,7 @@ async function composePostgresqlProviderSession(
   await initializeRuntimeRegistryBoot({
     operations: application.core.runtimeRegistry,
     config: input.config,
-    configPath: Paths.config,
+    legacyConfiguration: composeFileRuntimeLegacyConfiguration(Paths.config),
     onRecoverableFailure(error) {
       input.log.warn('builtin runtime seed/migration on boot failed', {
         error: error instanceof Error ? error.message : String(error),
@@ -2393,7 +2396,7 @@ async function composeSqliteProviderSession(
   await initializeRuntimeRegistryBoot({
     operations: runtimeRegistry,
     config,
-    configPath: Paths.config,
+    legacyConfiguration: composeFileRuntimeLegacyConfiguration(Paths.config),
     onRecoverableFailure(error) {
       log.warn('builtin runtime seed/migration on boot failed', {
         error: error instanceof Error ? error.message : String(error),

@@ -33,3 +33,5 @@
 - 文档／发现、OIDC public origin、PAT 创建与 MCP transport 现接按需配置 query；完成态 HTTP 装配也以 query 代替 configPath。保留原地址优先级／读取失败回退与开关语义；身份认证本身仍为原实现，不据此关闭 H2。启动、后台、执行和 intent 的配置路径仍待迁移。
 
 - Settings／CLI 数据库迁移 composition 与启动准备复用 DatabaseConfigurationPort；默认仍装配 file adapter，目标切换与源回退等待配置写入完成后才进入原 admission。该接线仅解除配置存储绑定，迁移元数据和复制机制仍为本地实现。
+
+- Runtime Management 管理配置支持按需异步读取，file adapter 独立落位并保留原探针队列；registry boot 的原始旧配置文本读取已抽为 owner port，双 provider 启动显式装配 file adapter。原默认值迁移判定仍归应用，无 configPath 输入；这不替代远程 runtime driver／执行材料适配。

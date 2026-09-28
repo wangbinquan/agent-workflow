@@ -1,3 +1,4 @@
+import { composeFileRuntimeLegacyConfiguration } from '../src/modules/runtime-management/composition/runtimeRegistry'
 // RFC-115 (Codex impl-gate F-high) — assertConfigDefaultsMigrated fail-loud
 // guard for the CONFIG-only skip-upgrade data-loss path.
 //
@@ -40,10 +41,41 @@ describeEachProvider(
     })
     afterEach(() => rmSync(tmp, { recursive: true, force: true }))
 
+    test('asynchronous raw configuration preserves the same legacy-default decision', async () => {
+      const configuration = {
+        async readText() {
+          return JSON.stringify({ defaultClaudeModel: 'legacy-model' })
+        },
+      }
+      await expect(
+        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), configuration),
+      ).rejects.toThrow(/defaultClaudeModel/)
+      await db
+        .update(runtimes)
+        .set({ model: 'legacy-model' })
+        .where(eq(runtimes.name, 'claude-code'))
+      await expect(
+        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), configuration),
+      ).resolves.toBeUndefined()
+    })
+
+    test('unreadable asynchronous legacy configuration retains the original boot fallback', async () => {
+      await expect(
+        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), {
+          async readText() {
+            throw new Error('raw configuration unavailable')
+          },
+        }),
+      ).resolves.toBeUndefined()
+    })
+
     test('legacy defaults on disk + ALL built-in profiles NULL → ABORT (fail-loud)', async () => {
       writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
       await expect(
-        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), cfg),
+        assertConfigDefaultsMigrated(
+          runtimeRegistryPersistence(db),
+          composeFileRuntimeLegacyConfiguration(cfg),
+        ),
       ).rejects.toThrow(/un-migrated generation defaults/)
     })
 
@@ -55,27 +87,39 @@ describeEachProvider(
         .set({ model: 'anthropic/opus' })
         .where(eq(runtimes.name, 'opencode'))
       await expect(
-        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), cfg),
+        assertConfigDefaultsMigrated(
+          runtimeRegistryPersistence(db),
+          composeFileRuntimeLegacyConfiguration(cfg),
+        ),
       ).resolves.toBeUndefined()
     })
 
     test('no legacy defaults in config → passes (normal upgraded / fresh config)', async () => {
       writeFileSync(cfg, JSON.stringify({ $schema_version: 1, opencodePath: '/x' }))
       await expect(
-        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), cfg),
+        assertConfigDefaultsMigrated(
+          runtimeRegistryPersistence(db),
+          composeFileRuntimeLegacyConfiguration(cfg),
+        ),
       ).resolves.toBeUndefined()
     })
 
     test('no config file (fresh install) → passes', async () => {
       await expect(
-        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), join(tmp, 'nonexistent.json')),
+        assertConfigDefaultsMigrated(
+          runtimeRegistryPersistence(db),
+          composeFileRuntimeLegacyConfiguration(join(tmp, 'nonexistent.json')),
+        ),
       ).resolves.toBeUndefined()
     })
 
     test('defaultClaudeModel alone also triggers the guard (names the offending key)', async () => {
       writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultClaudeModel: 'claude-opus' }))
       await expect(
-        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), cfg),
+        assertConfigDefaultsMigrated(
+          runtimeRegistryPersistence(db),
+          composeFileRuntimeLegacyConfiguration(cfg),
+        ),
       ).rejects.toThrow(/defaultClaudeModel/)
     })
 
@@ -88,7 +132,10 @@ describeEachProvider(
       await db.delete(runtimes) // simulate seedBuiltinRuntimes never having run
       writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
       await expect(
-        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), cfg),
+        assertConfigDefaultsMigrated(
+          runtimeRegistryPersistence(db),
+          composeFileRuntimeLegacyConfiguration(cfg),
+        ),
       ).rejects.toThrow(/seed failed|rows are missing or all-NULL/)
     })
 
@@ -106,7 +153,10 @@ describeEachProvider(
       })
       writeFileSync(cfg, JSON.stringify({ $schema_version: 1, defaultModel: 'anthropic/opus' }))
       await expect(
-        assertConfigDefaultsMigrated(runtimeRegistryPersistence(db), cfg),
+        assertConfigDefaultsMigrated(
+          runtimeRegistryPersistence(db),
+          composeFileRuntimeLegacyConfiguration(cfg),
+        ),
       ).rejects.toThrow(/un-migrated generation defaults/)
     })
   },

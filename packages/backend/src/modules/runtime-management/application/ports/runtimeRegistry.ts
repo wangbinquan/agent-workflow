@@ -1,3 +1,4 @@
+import type { RuntimeLegacyConfigurationPort } from './runtimeRegistryEffects'
 import type { RuntimeProtocol, CreateRuntimeInput, UpdateRuntimeInput } from '../../public/types'
 import type {
   RuntimeRow,
@@ -49,7 +50,7 @@ export interface RuntimeRegistryOperations {
     readonly opencodePath?: string | null
     readonly claudeCodePath?: string | null
   }): Promise<void>
-  assertConfigDefaultsMigrated(configPath: string): Promise<void>
+  assertConfigDefaultsMigrated(configuration: RuntimeLegacyConfigurationPort): Promise<void>
 }
 
 export interface RuntimeInsertRecord {

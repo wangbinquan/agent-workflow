@@ -1,3 +1,5 @@
+import type { RuntimeManagementConfigPort } from '../application/ports/runtimeManagement'
+import { createFileRuntimeManagementConfiguration } from '../infrastructure/local/fileRuntimeManagementConfiguration'
 import { createRuntimeProfileConfigurationCommands } from '../application/runtimeConfiguration'
 import { withRuntimeProbeConfigFence } from '../infrastructure/runtimeProbeFence'
 import type { RuntimeRegistryOperations } from '@/modules/runtime-management/application/ports/runtimeRegistry'
@@ -9,13 +11,20 @@ export type { RuntimeDiagnosticDependencies } from '../infrastructure/runtimeMan
 
 /** One management instance supplies both route families; composition only binds effects. */
 export function composeRuntimeManagement(
-  input: Parameters<typeof createRuntimeManagementEffects>[0] & {
+  input: Omit<Parameters<typeof createRuntimeManagementEffects>[0], 'configuration'> & {
     readonly runtimeRegistry: RuntimeRegistryOperations
-  },
+  } & (
+      | { readonly configuration: RuntimeManagementConfigPort; readonly configPath?: never }
+      | { readonly configuration?: never; readonly configPath: string }
+    ),
 ) {
   const application = createRuntimeManagement({
     registry: input.runtimeRegistry,
-    ...createRuntimeManagementEffects(input),
+    ...createRuntimeManagementEffects({
+      ...input,
+      configuration:
+        input.configuration ?? createFileRuntimeManagementConfiguration(input.configPath),
+    }),
   })
   return Object.freeze({
     models: application.models,

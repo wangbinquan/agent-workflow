@@ -134,3 +134,9 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - A-T2 第九批候选：Settings／CLI 数据库迁移 composition 改为注入既有 DatabaseConfigurationPort，默认复用原文件 adapter；迁移及回退的配置写入 Promise 返回原 coordinator，由原 admission 顺序等待完成。启动准备与手工迁移不再各自直写配置。安装 metadata／内容／前台启动等切面仍待收口。
 - 第九批验证补齐原真实 PG coordinator 用例的异步目标／源配置写入屏障，验证写入前不开放下一个 provider。核对发现该旧用例未被普通 CI 的专用变量选中，现复用 resolveTestProviders／resolvePostgresqlTestUrlEnv，Ubuntu 双库通道实际执行；仅显式 SQLite 通道 skip，选中 PG 缺 URL 则失败。以既有真库用例相同方式清理 disposable 目标 schema，迁移进度断言跟随当前 schema contract，保留幂等重放和首次写入前回退检查。正式结果待本批精确 SHA CI。
 - 第九批目标格式／lint 通过，仅运行源码账本生成；无本地功能测试。架构跨边与例外各减少一条，移除第八批已消费增长声明，没有新增长豁免。第八批 CI `36372241796` 当前已完成9项，尚无失败，仍未终态。
+
+- 第九批 `bf71912e8d57db8f191e03985f6d592205331b6b` 已推送且 main／origin/main 同步，精确 SHA CI `36372660023` 已排队，等待终态。下一处已确认缺口：runtime-management 配置 port 的 current() 仍仅支持同步结果，默认效果工厂内直接 loadConfig；registry 启动的 legacy 默认值检查也仍接受 configPath。后续按 owner 分离并保持原探针／热读取和启动迁移语义。
+
+- A-T2／H5 第十批候选：RuntimeManagementConfigPort 支持同步／异步读取，11处使用点等待当前配置；配置投影和既有探针队列收归 runtime-management/infrastructure/local/fileRuntimeManagementConfiguration，composition 可注入独立配置 adapter，默认仍走原文件。registry 启动旧默认值检查改接 RuntimeLegacyConfigurationPort，原始文本在应用中解析／判定，文件读取另有 local adapter；SQLite／PG 启动均显式装配，无业务层 configPath。
+- 第十批回归：原双 provider 管理应用测试改用异步配置，新增无路径 composition、读取未完成前无探针、读取失败不删 profile；旧默认值测试保留真实文件路径覆盖，补异步文本拒绝／已迁移放行／不可读回退，boot 顺序和错误传播继续覆盖。仅目标格式／lint 与架构生成，本地未跑功能测试，等待精确 SHA CI。
+- 第十批架构按既有规则登记2个 adapter 文件／工厂和1个port的owner增长、3个被计数的读端口／工厂入口及1条净新增bootstrap接线；无新增业务效果或平台DTO。启动全生命周期、内容和远程runtime执行材料仍待完成，不据此关闭 H1／H5／H6。

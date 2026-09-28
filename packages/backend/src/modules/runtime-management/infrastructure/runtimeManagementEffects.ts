@@ -1,12 +1,13 @@
-import { loadConfig } from '@/config'
 import { getRuntimeDriver, tryGetRuntimeDriver } from '@/services/runtime'
 import { createRuntimeRegistryApplication } from '../application/runtimeRegistry'
 import { createRuntimeRegistryEffects } from './runtimeRegistryEffects'
-import { withRuntimeProbeConfigFence } from './runtimeProbeFence'
 import { smokeRuntime, type SmokeOptions, type SmokeResult } from '@/services/runtimeSmoke'
 import type { McpRuntimeTestReconciliationParticipant } from '@/modules/resource-catalog/public/participants'
 import { isRuntimeMcpTestEligible } from './mcpTestEligibility'
-import type { RuntimeManagementDependencies } from '../application/ports/runtimeManagement'
+import type {
+  RuntimeManagementDependencies,
+  RuntimeManagementConfigPort,
+} from '../application/ports/runtimeManagement'
 
 export interface RuntimeDiagnosticDependencies {
   smokeRuntime(options: SmokeOptions): Promise<SmokeResult>
@@ -15,7 +16,7 @@ export interface RuntimeDiagnosticDependencies {
 }
 
 export function createRuntimeManagementEffects(input: {
-  readonly configPath: string
+  readonly configuration: RuntimeManagementConfigPort
   readonly runtimeTests: McpRuntimeTestReconciliationParticipant
   readonly runtimeDiagnosticTestDependencies?: Partial<RuntimeDiagnosticDependencies>
 }): Omit<RuntimeManagementDependencies, 'registry'> {
@@ -23,22 +24,7 @@ export function createRuntimeManagementEffects(input: {
     createRuntimeRegistryEffects(),
   )
   return {
-    config: {
-      current() {
-        const cfg = loadConfig(input.configPath)
-        return {
-          defaultRuntime: cfg.defaultRuntime,
-          memoryDistillRuntime: cfg.memoryDistillRuntime,
-          commitPushRuntime: cfg.commitPushRuntime,
-          mergeAgentRuntime: cfg.mergeAgentRuntime,
-          intentBuilderRuntime: cfg.intentBuilderRuntime,
-          changeNarrativeRuntime: cfg.changeNarrativeRuntime,
-          opencodePath: cfg.opencodePath,
-          claudeCodePath: cfg.claudeCodePath,
-        }
-      },
-      withProbeReceiptFence: (action) => withRuntimeProbeConfigFence(input.configPath, action),
-    },
+    config: input.configuration,
     drivers: {
       resolveBinary: (row, config) =>
         row.binaryPath ??

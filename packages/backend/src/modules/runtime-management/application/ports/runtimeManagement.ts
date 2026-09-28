@@ -13,7 +13,7 @@ export interface RuntimeManagementConfig extends RuntimeRefConfig {
 }
 
 export interface RuntimeManagementConfigPort {
-  current(): RuntimeManagementConfig
+  current(): RuntimeManagementConfig | Promise<RuntimeManagementConfig>
   withProbeReceiptFence<T>(action: () => Promise<T>): Promise<T>
 }
 

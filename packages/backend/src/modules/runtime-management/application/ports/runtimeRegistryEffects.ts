@@ -1,6 +1,6 @@
 import type { RuntimeKind } from '../../public/types'
 
-/** Only the capability facts/cache hook and legacy config read used by the existing registry. */
+/** Capability facts and cache hooks used by the existing registry. */
 export interface RuntimeRegistryEffects {
   readonly protocols: readonly RuntimeKind[]
   readonly ownedExtraArgFlags: ReadonlySet<string>
@@ -9,5 +9,9 @@ export interface RuntimeRegistryEffects {
     readonly acceptsSandboxCompatibilityMarker?: boolean
     evictBinaryCaches?(binaryPath: string): void
   }
-  readConfigText(configPath: string): string
+}
+
+/** Original configuration text, before current schema parsing removes legacy keys. */
+export interface RuntimeLegacyConfigurationPort {
+  readText(): string | Promise<string>
 }

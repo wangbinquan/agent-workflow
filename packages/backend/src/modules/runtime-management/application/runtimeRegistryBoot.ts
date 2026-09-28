@@ -1,3 +1,4 @@
+import type { RuntimeLegacyConfigurationPort } from './ports/runtimeRegistryEffects'
 import type { RuntimeRegistryOperations } from './ports/runtimeRegistry'
 
 type RuntimeRegistryBootOperations = Pick<
@@ -11,7 +12,7 @@ export interface RuntimeRegistryBootInput {
     readonly opencodePath?: string | null
     readonly claudeCodePath?: string | null
   }
-  readonly configPath: string
+  readonly legacyConfiguration: RuntimeLegacyConfigurationPort
   readonly onRecoverableFailure: (error: unknown) => void
 }
 
@@ -34,5 +35,5 @@ export async function initializeRuntimeRegistryBoot(
     // catch, exactly as it was in the original SQLite bootstrap.
     input.onRecoverableFailure(error)
   }
-  await input.operations.assertConfigDefaultsMigrated(input.configPath)
+  await input.operations.assertConfigDefaultsMigrated(input.legacyConfiguration)
 }
