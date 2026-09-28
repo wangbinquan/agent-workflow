@@ -1092,6 +1092,22 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
   { leaf: 'DELETE /api/restore/pending', group: '/api/restore', category: 'system-point' },
   { leaf: 'GET /api/restore/pending', group: '/api/restore', category: 'system-point' },
   { leaf: 'POST /api/restore', group: '/api/restore', category: 'system-point' },
+  // RFC-371: runtime price configuration follows the existing settings surface.
+  {
+    leaf: 'GET /api/observability/pricing/runtimes',
+    group: '/api/observability/pricing',
+    category: 'system-point',
+  },
+  {
+    leaf: 'GET /api/observability/pricing/runtimes/:id/versions',
+    group: '/api/observability/pricing',
+    category: 'system-point',
+  },
+  {
+    leaf: 'POST /api/observability/pricing/runtimes/:id/versions',
+    group: '/api/observability/pricing',
+    category: 'system-point',
+  },
   { leaf: 'GET /api/runtime/models', group: '/api/runtime', category: 'system-point' },
   { leaf: 'DELETE /api/runtimes/:id', group: '/api/runtimes', category: 'system-point' },
   { leaf: 'GET /api/runtimes', group: '/api/runtimes', category: 'system-point' },
@@ -1114,6 +1130,8 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
 
 /** 每组一条理由。守卫要求：每个用到的 group 都在这里有非空理由。 */
 export const EXEMPT_REASONS: Readonly<Record<string, string>> = {
+  '/api/observability/pricing':
+    'RFC-371（Codex，2026-09-28）：运行时人民币价格目录、历史版本与改价是设置页的独立配置接口，沿用运行时配置的 settings:write 合同；不新增 Agent MCP 配置工具。此登记仅限三个精确路由，不覆盖后续观测查询。',
   '(infrastructure)':
     '不是产品 API：/health 是存活探针，/.well-known/mcp 是 MCP 客户端接入前读的 discovery 文档——两者都在认证之前、面向运维与客户端而非模型。给它们做工具等于让模型去读它自己所在通道的说明书。',
   '/api/account':
