@@ -11,7 +11,15 @@ bun run design/RFC-371-run-observability/demo/build.ts
 python3 design/RFC-371-run-observability/demo/serve.py
 ```
 
-打开 [运行时人民币单价配置](http://127.0.0.1:48371/?tab=usage&settings=runtime-pricing)、[总览](http://127.0.0.1:48371/) 或 [六 Agent 泳道示例](http://127.0.0.1:48371/?tab=traces&repo=all&range=24&task=RUN-0928-018)。端口仅绑定 loopback；服务器只暴露原型 HTML/CSS/JS 与共享 CSS，其他路径 404，不提供源码目录列表。结束预览可在启动它的终端按 Ctrl+C。
+启动服务器后，在本机浏览器打开以下地址。这些是本地预览地址，远端文档站点不会运行该服务。
+
+```text
+总览：http://127.0.0.1:48371/
+运行时人民币单价：http://127.0.0.1:48371/?tab=usage&settings=runtime-pricing
+六 Agent 泳道：http://127.0.0.1:48371/?tab=traces&repo=all&range=24&task=RUN-0928-018
+```
+
+端口仅绑定 loopback；服务器只暴露原型 HTML/CSS/JS 与共享 CSS，其他路径 404，不提供源码目录列表。结束预览可在启动它的终端按 Ctrl+C。
 
 `build/` 是忽略的可重建输出；源文件在本目录。直接双击 index.html 不是支持的启动方式，需通过上述静态预览。
 
