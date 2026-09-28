@@ -21,3 +21,7 @@ export {
   type WsCredentialFingerprint,
   type WsCredentialWithExpiry,
 } from '../infrastructure/local/localCredentialAdmission'
+export {
+  createLocalWebSocketAuthentication as composeLocalWebSocketAuthentication,
+  extractUpgradeToken,
+} from '../infrastructure/local/webSocketAuthentication'

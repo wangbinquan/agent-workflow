@@ -96,7 +96,7 @@ export async function resolveActorWithWsCredential(
       admittedSessionCredential(resolved.user.id),
     )
     return {
-      actor: (identity?.actor as Actor | undefined) ?? null,
+      actor: identity?.actor ?? null,
       authority: identity?.authority ?? null,
       credential,
     }
@@ -118,7 +118,7 @@ export async function resolveActorWithWsCredential(
       }),
     )
     return {
-      actor: (identity?.actor as Actor | undefined) ?? null,
+      actor: identity?.actor ?? null,
       authority: identity?.authority ?? null,
       credential,
     }
@@ -135,7 +135,7 @@ export async function resolveActorWithWsCredential(
   }
   const identity = await identityAccess.directAuthority.fromDaemon(ADMITTED_DAEMON_CREDENTIAL)
   return {
-    actor: (identity?.actor as Actor | undefined) ?? null,
+    actor: identity?.actor ?? null,
     authority: identity?.authority ?? null,
     credential: { kind: 'daemon' },
   }
@@ -225,16 +225,9 @@ export function admitDurableWorkOwner(
   return identityAccess.directAuthority.fromSession(admittedSessionCredential(ownerUserId))
 }
 
-/**
- * RFC-355 T7：`DirectAuthorityIdentity.actor` 的收窄归 auth 自己做。
- *
- * 拿到手的身份是注册表**铸出来**的，不是调用方拼的；但它的静态类型比 `Actor` 宽，于是每个
- * 消费点原先各写一次 `as unknown as Actor`。收窄散在各处有两个坏处：一是同一个判断复制多份，
- * 二是各 bounded context 里凭空出现「把某个东西断言成 Actor」的语句——RFC-294 的能力伪造
- * 守卫正是在数这种 cast，而它数不到 `auth/` 里的这一处（Actor 本来就归这里）。
- */
+/** The registered Identity Access projection already satisfies Actor's shape. */
 export function actorOfDirectAuthority(identity: DirectAuthorityIdentity): Actor {
-  return identity.actor as Actor
+  return identity.actor
 }
 
 export async function resolveActor(
@@ -299,7 +292,7 @@ export async function reresolveActor(
   now: number = Date.now(),
 ): Promise<Actor | null> {
   const identity = await reresolveIdentity(authOrDb, credential, identityAccess, now)
-  return (identity?.actor as Actor | undefined) ?? null
+  return identity?.actor ?? null
 }
 
 function safeEqual(a: Buffer, b: Buffer): boolean {

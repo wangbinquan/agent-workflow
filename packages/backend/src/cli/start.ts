@@ -1743,6 +1743,7 @@ async function composeSqliteProviderSession(
     redactTaskEventPayload: redactEventPayload,
   })
   const providerCore = composeSqliteDaemonProviderCore({
+    daemonToken: token,
     db,
     sourceWriteWindow: sourceWriteWindow,
     appHome: Paths.root,
@@ -3083,7 +3084,6 @@ async function composeSqliteProviderSession(
   const app = createComposedApp(appComposition)
 
   const ws = buildWebSocketAdapter({
-    daemonToken: token,
     realtime: providerCore.realtime,
     identityAccess,
   })

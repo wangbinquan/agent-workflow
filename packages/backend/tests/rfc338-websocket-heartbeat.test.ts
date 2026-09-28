@@ -15,8 +15,8 @@ describeEachProvider('RFC-338 WebSocket responsiveness control frame', (harness)
     const db = harness.db
     const identityAccess = createIdentityAccessRuntime({ db })
     const adapter = buildWebSocketAdapter({
-      daemonToken: 'd'.repeat(64),
       realtime: composeTestProviderRealtimeRuntime({
+        daemonToken: 'd'.repeat(64),
         binding: harness.applicationBinding,
         neutralDb: db,
         identityAccess,

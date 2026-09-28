@@ -55,3 +55,7 @@ HTTP participant 不能替代 WS 全链路。后续 A-T3 须一起迁移下面�
 | `ws/server.ts:413` | 打开时再次调用同一 credential resolver | 升级与 open 之间的既有 revalidation epoch 行为必须随端口保留，不能只替换第一次解析 |
 
 本轮只记录源码定位。后续用既有 WS 多 token、provider、去重及重验行为用例固定原结果，再增加替换 adapter 的升级／open／广播过期／主动重验闭环用例；真实 CS token／网关／重新连接在 B/M0 验收。
+
+## H2 WS 续批实现（待本批 CI）
+
+上述五处接线现统一消费 identity-access 的 `WebSocketAuthenticationParticipant`：升级传递 URL／header 事实，连接持有 adapter-owned object，合流键与同步到期事实经所选 participant 获取，open／主动重验返回同一 IA authority 投影。本地原 token 解析位于 `infrastructure/local/webSocketAuthentication.ts`，runtime-management composition 只收已选 participant，不再构造身份机制。H2 的外部身份映射／首个管理员／浏览器模式仍留阶段 B；本批只能作为 A 的切面证据，不能替代完整阶段 A 验收。

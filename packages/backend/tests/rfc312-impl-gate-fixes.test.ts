@@ -110,7 +110,7 @@ describe('RFC-312 实现门 —— presence 计数不得因关闭时序泄漏', 
     const identityAccess = composeIdentityAccess(db)
     const { getUserPresence } = identityAccess
     const realtime = composeTestSqliteRealtimeRuntime({ db, identityAccess })
-    const adapter = buildWebSocketAdapter({ daemonToken: 'dt', realtime, identityAccess })
+    const adapter = buildWebSocketAdapter({ realtime, identityAccess })
     const identity = await admitWsIdentity(identityAccess, 'ghost')
     const { ws } = fakeWs(identity.actor, undefined, identity)
 

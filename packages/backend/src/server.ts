@@ -2,6 +2,7 @@ import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-mana
 import type { HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import {
   composeLocalHttpAuthentication,
+  composeLocalWebSocketAuthentication,
   composeHttpAuthenticationMiddleware,
 } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
@@ -561,6 +562,7 @@ type AuthRevalidation = NonNullable<
 export type DaemonCredentialRevocationReason = Parameters<AuthRevalidation>[0]
 
 interface DaemonProviderCoreCommonInput {
+  readonly daemonToken: string
   readonly appHome: string
   readonly secretBox: SecretBox | undefined
   /**
@@ -663,8 +665,11 @@ export function composeSqliteDaemonProviderCore(
     repositoryTransportCredentialRepository,
     realtime: composeRealtimeRuntimeFor({
       db: input.db,
-      auth: authRuntime,
-      directAuthority: identityAccess.directAuthority,
+      credentials: composeLocalWebSocketAuthentication({
+        auth: authRuntime,
+        daemonToken: input.daemonToken,
+        identityAccess,
+      }),
       policy: input.realtimePolicy,
     }),
     systemOperations: composeSystemOperations({
@@ -720,8 +725,11 @@ export function composePostgresqlDaemonProviderCore(
     repositoryTransportCredentialRepository,
     realtime: composeRealtimeRuntimeFor({
       db: input.db,
-      auth: authRuntime,
-      directAuthority: identityAccess.directAuthority,
+      credentials: composeLocalWebSocketAuthentication({
+        auth: authRuntime,
+        daemonToken: input.daemonToken,
+        identityAccess,
+      }),
       policy: input.realtimePolicy,
     }),
     systemOperations: composePostgresqlSystemOperations({

@@ -171,3 +171,12 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 审批恢复核对：账户工具报告 ordinaryUsageAllowed，原审批流程下 git fetch 已成功；候选30路径摘要与封存一致，共享 index 仍为空。继续原授权的精确暂存／提交／发布，不改变审批方式。
 
 - 前批 CI `36374739146` 已终态 failure：除上述架构定位外，已启用的真实 PG 迁移用例暴露完成后重复 start 仍先要求 SQLite 的原缺陷。本批在已校验 generation 绑定的成功迁移上返回原 operation；不同 target 仍拒绝，未完成／失败操作保留原显式恢复路径。回归继续保留真实迁移、异步持久配置和回滚，并补相同 canonical 请求的新调用 key、不同 target 拒绝及无重复 admission 效果断言。不删除用例或将失败当成功。
+
+- H2 HTTP 首批及上述 CI 修复 `465987a332e74f8db29ede7405f2b6b5275fbc15` 已发布，main／origin/main 精确同步；新 CI `36376587910` 已启动，前批失败保持原记录。仍无 CS adapter 或 M0 部署。
+
+- A-T3/H2 WS 续批：身份合同转归 identity-access public participant，本地 adapter 封装 query 提取、session／PAT／daemon、bootstrap 拒绝、重验 key 与到期读取；runtime-management 仅接收 bootstrap 所选身份 participant、继续拥有通道查询。WS 传输持有不透明内存凭据，由同一 adapter 负责 upgrade／open／主动重验及同步帧到期判断；原 epoch、重验合流、presence、通道 gate 与释放顺序保持。两 provider 根明确装配 local，兼容类型别名不再暴露本地 token union。
+- WS 回归继续保留原多 token、provider transition、单次 lookup、presence 和重验行为套件；新增真实双 provider 的替换 adapter 用例，使用非 token query、不同凭据形状，覆盖异步 upgrade、open 重验、同凭据双连接合流和广播过期关闭。旧入口源码锁与实际 owner 迁移同步，不改变 REST 不接受 query 的判据。仅目标静态检查，正式结果以本批 GitHub CI 为准；不据此声称 CS 登录已接入。
+
+- WS 续批静态复核补齐 RFC-305 精确 public／consumer 清单：前批新增 HttpAuthenticationParticipant 与 authentication composition 的条目、本批 WS 两个合同及 credential owner 迁移均逐条对应源码；扫描器和判据保持。架构净 public +2、exception -1、owner -2、import／mutation 数不变，删除前批已消费 allowGrowth，仅保留本批两个已消费 WS 合同的精确增长。W29 只更新 PG composition 内 token 从 WS transport 移到本地身份装配的摘要。
+
+- 前批 `465987a33` CI `36376587910` 已完成 check；运行中的后端作业显示迁移已通过重复 start 和真实回滚，剩余旧断言把 active 表数固定为182（当前合同186）。改为核对回滚前后操作 tableCounts 保持一致，不再把 schema 演进误报为迁移失败。同时更新 runtime registry 接线文本锁以容纳并要求显式 public satisfies 绑定；补记 auth/session 兼容门面的4条精确 R1 边及具名退役阶段。移入 owner 的 Actor 投影直接返回同一对象，删除原兼容层多余类型断言，没有增补检查逻辑或改变认证行为。此批继续由新 SHA CI 验收，不将前批失败作业记成功。

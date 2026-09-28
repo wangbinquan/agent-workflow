@@ -294,6 +294,7 @@ describe('RFC-305 identity-access architecture', () => {
       'DirectQueryContextFactory',
       'DirectRequestAuthority',
       'DirectTransport',
+      'HttpAuthenticationParticipant',
       'IdempotentCommandContext',
       'LegacyActorProjection',
       'PresenceConnectionTracker',
@@ -304,14 +305,18 @@ describe('RFC-305 identity-access architecture', () => {
       'RequestAuthority',
       'UserAccessFenceReader',
       'ValidatedIdempotencyKey',
+      'WebSocketAuthenticationParticipant',
+      'WebSocketCredential',
     ])
   }, 20_000)
 
   test('module composition and public contracts have only the reviewed consumers', () => {
     expect(identityAccessImportsOutsideOwner()).toEqual([
-      'packages/backend/src/auth/session.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/auth/session.ts -> @/modules/identity-access/composition/authentication',
+      'packages/backend/src/auth/session.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/cli/package.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition',
+      'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/ownerIdentityQueries',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/cli/postgresqlDaemonApplication.ts -> @/modules/identity-access/composition/userOperations',
@@ -362,8 +367,8 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/resource-catalog/public/participants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/public/queries.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/runtime-management/application/realtimeChannelAccess.ts -> @/modules/identity-access/public/participants',
-      'packages/backend/src/modules/runtime-management/application/realtimeCredentialAccess.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/runtime-management/composition.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/runtime-management/public/participants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/runtime-management/public/participants.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/source-control/application/repositoryLaunchSnapshot.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/source-control/composition/repositoryPreparation.ts -> @/modules/identity-access/public/participants',
@@ -410,6 +415,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/routes/users.ts -> @/modules/identity-access/public/types',
       'packages/backend/src/routes/webhookTriggers.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition',
+      'packages/backend/src/server.ts -> @/modules/identity-access/composition/authentication',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition/providerOperations',
       'packages/backend/src/server.ts -> @/modules/identity-access/composition/userOperations',
       'packages/backend/src/server.ts -> @/modules/identity-access/public/operations',

@@ -5,37 +5,18 @@ import type { TaskWsMessage } from '@agent-workflow/shared'
 import type { Actor, ActorSource } from '@/auth/actor'
 import type {
   DirectAuthorityAdmission,
-  DirectAuthorityIdentity,
+  WebSocketAuthenticationParticipant,
   DirectRequestAuthority,
   PresenceConnectionTracker,
   PresenceQuery,
   UserAccessFenceReader,
 } from '@/modules/identity-access/public/participants'
 
-export type RealtimeCredential =
-  | Readonly<{
-      kind: 'session' | 'pat'
-      hash: string
-      expiresAt: number | null
-    }>
-  | Readonly<{ kind: 'daemon' }>
-
-interface RealtimeUpgradeIdentity {
-  readonly actor: Actor | null
-  readonly authority: DirectRequestAuthority | null
-  readonly credential: RealtimeCredential
-}
-
-/** Credential persistence is bound by composition; the transport sees no DB client. */
-export interface RealtimeCredentialAccess {
-  readonly allowLegacyDaemonTestAccess: boolean
-  resolveUpgrade(
-    rawToken: string,
-    daemonToken: Uint8Array,
-    now?: number,
-  ): Promise<RealtimeUpgradeIdentity>
-  reresolve(credential: RealtimeCredential, now?: number): Promise<DirectAuthorityIdentity | null>
-}
+// Compatibility names; credential shape and admission are owned by Identity Access.
+export type {
+  WebSocketCredential as RealtimeCredential,
+  WebSocketAuthenticationParticipant as RealtimeCredentialAccess,
+} from '@/modules/identity-access/public/participants'
 
 type RealtimeAclResourceType = 'workflow' | 'workgroup'
 
@@ -99,7 +80,7 @@ export interface RealtimeChannelAccess {
 
 /** Bootstrap-selected runtime. Neither member exposes a provider client. */
 export interface RealtimeRuntime {
-  readonly credentials: RealtimeCredentialAccess
+  readonly credentials: WebSocketAuthenticationParticipant
   readonly channels: RealtimeChannelAccess
 }
 

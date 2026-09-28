@@ -239,13 +239,20 @@ describeEachProvider('multiAuth — no token / malformed header', (harness) => {
     const src = (rel: string): string =>
       readFileSync(resolve(import.meta.dir, '..', 'src', rel), 'utf8')
     expect(src('auth/session.ts')).toContain('export function extractBearerToken')
-    expect(src('auth/session.ts')).toContain('export function extractUpgradeToken')
-    // REST 主链只认 Bearer：query 读取在 session.ts 里只允许出现于 upgrade 入口。
-    const sessionSrc = src('auth/session.ts')
-    const queryReads = sessionSrc.match(/searchParams\.get\('token'\)|req\.query\('token'\)/g) ?? []
-    expect(queryReads.length).toBe(1) // 仅 extractUpgradeToken 内一处
-    expect(src('auth/token.ts')).not.toContain('export function tokenAuth') // 死体不复活（注释可提及）
-    expect(src('ws/server.ts')).toContain('extractUpgradeToken(url)')
+    expect(src('auth/session.ts')).toContain('  extractUpgradeToken,')
+    // RFC-370: query extraction belongs solely to the selected local WS adapter.
+    const queryReader = /searchParams\.get\('token'\)|req\.query\('token'\)/g
+    expect(src('auth/session.ts').match(queryReader) ?? []).toHaveLength(0)
+    const localWs = src('modules/identity-access/infrastructure/local/webSocketAuthentication.ts')
+    expect(localWs.match(queryReader) ?? []).toHaveLength(1)
+    expect(
+      src('modules/identity-access/infrastructure/local/httpAuthentication.ts').match(
+        queryReader,
+      ) ?? [],
+    ).toHaveLength(0)
+    expect(src('auth/token.ts')).not.toContain('export function tokenAuth')
+    expect(src('ws/server.ts')).toContain('deps.realtime.credentials.resolveUpgrade({')
+    expect(src('ws/server.ts')).not.toContain('extractUpgradeToken')
     for (const route of readdirSync(resolve(import.meta.dir, '..', 'src', 'routes'))) {
       if (!route.endsWith('.ts')) continue
       expect(src(join('routes', route)).includes('extractUpgradeToken')).toBe(false)

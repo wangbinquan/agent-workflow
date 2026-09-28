@@ -173,10 +173,7 @@ describe('RFC-338 revalidation load containment', () => {
     const realtime: RealtimeRuntime = Object.freeze({
       channels: composed.channels,
       credentials: Object.freeze({
-        allowLegacyDaemonTestAccess: composed.credentials.allowLegacyDaemonTestAccess,
-        async resolveUpgrade(rawToken: string, daemonToken: Buffer, now?: number) {
-          return await composed.credentials.resolveUpgrade(rawToken, daemonToken, now)
-        },
+        ...composed.credentials,
         async reresolve(credential: WsCredential, now?: number) {
           resolutions += 1
           return await composed.credentials.reresolve(credential, now)

@@ -6,11 +6,10 @@ import { expect, test } from 'bun:test'
 import { ulid } from 'ulid'
 import type { TaskWsMessage } from '@agent-workflow/shared'
 
-import type { AuthRuntime } from '@/auth/application/authRuntime'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { nodeRunEvents, nodeRuns, tasks, workflows } from '@/db/schema'
-import type { DirectAuthorityAdmission } from '@/modules/identity-access/public/participants'
+import type { WebSocketAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import { composeRealtimeRuntimeFor } from '@/modules/runtime-management/composition'
 import type {
   RealtimeCompositionPolicy,
@@ -33,8 +32,7 @@ function unused(): never {
 }
 
 function runtimeFor(harness: ProviderHarness): RealtimeRuntime {
-  const auth = unusedCapability<AuthRuntime>('auth', { allowLegacyDaemonTestAccess: false })
-  const directAuthority = unusedCapability<DirectAuthorityAdmission>('directAuthority')
+  const credentials = unusedCapability<WebSocketAuthenticationParticipant>('credentials')
   const policy: RealtimeCompositionPolicy = {
     resourceVisibility: { canViewResource: unused },
     memoryVisibility: { canViewMemory: unused },
@@ -42,11 +40,10 @@ function runtimeFor(harness: ProviderHarness): RealtimeRuntime {
     redactTaskEventPayload: (payload) => payload,
   }
   return harness.capabilities.isolation === 'exclusive'
-    ? composeRealtimeRuntimeFor({ db: harness.db as DbClient, auth, directAuthority, policy })
+    ? composeRealtimeRuntimeFor({ db: harness.db as DbClient, credentials, policy })
     : composeRealtimeRuntimeFor({
         db: harness.db as PostgresqlDatabaseClient,
-        auth,
-        directAuthority,
+        credentials,
         policy,
       })
 }

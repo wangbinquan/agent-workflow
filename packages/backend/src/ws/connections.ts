@@ -32,7 +32,6 @@ import {
   erasedSpecOf,
   setExpiredCredentialHandler,
   type WsConnectionData,
-  type WsCredential,
 } from './registry'
 
 const live = new Set<ServerWebSocket<WsConnectionData>>()
@@ -68,10 +67,6 @@ export interface RevalidateStats {
   closedAuth: number
   closedGate: number
   refreshed: number
-}
-
-function credentialRevalidationKey(credential: WsCredential): string {
-  return credential.kind === 'daemon' ? 'daemon' : `${credential.kind}\u0000${credential.hash}`
 }
 
 /** Called from `handleOpen`, before the channel subscribes. */
@@ -172,7 +167,7 @@ export async function revalidateAllConnections(
     stats.scanned += 1
     let freshIdentity
     try {
-      const credentialKey = credentialRevalidationKey(ws.data.credential)
+      const credentialKey = ws.data.credentials.revalidationKey(ws.data.credential)
       let identityByCredential = identityByRuntime.get(ws.data.credentials)
       if (identityByCredential === undefined) {
         identityByCredential = new Map()

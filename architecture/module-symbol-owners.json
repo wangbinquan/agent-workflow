@@ -6,7 +6,7 @@
     "moduleFiles": 1305,
     "productionFiles": 2632,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25050
+    "symbolsIncludingFileRoots": 25048
   },
   "entries": [
     {
@@ -2071,18 +2071,6 @@
       "removeAfterWave": "W9-D",
       "status": "legacy-target",
       "symbol": "extractBearerToken",
-      "targetContext": "identity-access",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "auth",
-      "exported": true,
-      "file": "packages/backend/src/auth/session.ts",
-      "id": "owner:packages/backend/src/auth/session.ts#extractUpgradeToken",
-      "removeAfterWave": "W9-D",
-      "status": "legacy-target",
-      "symbol": "extractUpgradeToken",
       "targetContext": "identity-access",
       "targetLayer": "application"
     },
@@ -55274,6 +55262,42 @@
       "currentContext": "identity-access",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/identity-access/infrastructure/local/webSocketAuthentication.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/infrastructure/local/webSocketAuthentication.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/infrastructure/local/webSocketAuthentication.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/infrastructure/local/webSocketAuthentication.ts#createLocalWebSocketAuthentication",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createLocalWebSocketAuthentication",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/infrastructure/local/webSocketAuthentication.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/infrastructure/local/webSocketAuthentication.ts#extractUpgradeToken",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "extractUpgradeToken",
+      "targetContext": "identity-access",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/identity-access/infrastructure/oidcIdentityCrossContext.ts",
       "id": "owner:packages/backend/src/modules/identity-access/infrastructure/oidcIdentityCrossContext.ts#$file",
       "removeAfterWave": null,
@@ -56572,6 +56596,32 @@
       "signatureDigest": "sha256:8985ed7f64dc0d586d8528bedff8c4db4a1921bd1c4a5876e421dc18a173ef31",
       "status": "current-module",
       "symbol": "ValidatedIdempotencyKey",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#WebSocketAuthenticationParticipant",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:85d2521463f88e611d657ba9de111c17a894641b0c483d080f92beb0a3e88c02",
+      "status": "current-module",
+      "symbol": "WebSocketAuthenticationParticipant",
+      "targetContext": "identity-access",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "identity-access",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/identity-access/public/participants.ts#WebSocketCredential",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:14cfeb88f1804896514c419e69786c0e7709490da7c064e45aee3fedc13cfeed",
+      "status": "current-module",
+      "symbol": "WebSocketCredential",
       "targetContext": "identity-access",
       "targetLayer": "public"
     },
@@ -104837,30 +104887,6 @@
       "currentContext": "runtime-management",
       "currentLayer": "application",
       "exported": false,
-      "file": "packages/backend/src/modules/runtime-management/application/realtimeCredentialAccess.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/application/realtimeCredentialAccess.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/runtime-management/application/realtimeCredentialAccess.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/application/realtimeCredentialAccess.ts#createRealtimeCredentialAccess",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createRealtimeCredentialAccess",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "application",
-      "exported": false,
       "file": "packages/backend/src/modules/runtime-management/application/runtimeBinary.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/application/runtimeBinary.ts#$file",
       "removeAfterWave": null,
@@ -105988,32 +106014,6 @@
       "currentLayer": "public",
       "exported": true,
       "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#RealtimeCredential",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:bf979a34ff4947518ba106fd6909946f2dc0f95466529c4c16c823bc5f16fcbc",
-      "status": "current-module",
-      "symbol": "RealtimeCredential",
-      "targetContext": "runtime-management",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#RealtimeCredentialAccess",
-      "removeAfterWave": null,
-      "signatureDigest": "sha256:636ad9f7dfee65a78dd41b35c2a9685e339ac91c60e8a57b6f6f9ca1c6147b92",
-      "status": "current-module",
-      "symbol": "RealtimeCredentialAccess",
-      "targetContext": "runtime-management",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "public",
-      "exported": true,
-      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#RealtimeIdentityAccess",
       "removeAfterWave": null,
       "signatureDigest": "sha256:0097d7ad9a728a6c8207f5c1e8bd0e4ffe542222b21d1d4fb69596e5ac4104e6",
@@ -106077,21 +106077,9 @@
       "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#RealtimeRuntime",
       "removeAfterWave": null,
-      "signatureDigest": "sha256:838b6cecf1f123d60dd80f15a3e3102d9b698d8774cd384fe9079c5291633a2e",
+      "signatureDigest": "sha256:e833df08f2a6547ebbb153033cec291dbbf42305aac155786a627642389aaef3",
       "status": "current-module",
       "symbol": "RealtimeRuntime",
-      "targetContext": "runtime-management",
-      "targetLayer": "public"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "public",
-      "exported": false,
-      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#RealtimeUpgradeIdentity",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "RealtimeUpgradeIdentity",
       "targetContext": "runtime-management",
       "targetLayer": "public"
     },
@@ -200974,18 +200962,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "closeConnection",
-      "targetContext": "platform",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "ws",
-      "exported": false,
-      "file": "packages/backend/src/ws/connections.ts",
-      "id": "owner:packages/backend/src/ws/connections.ts#credentialRevalidationKey",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "credentialRevalidationKey",
       "targetContext": "platform",
       "targetLayer": "inbound"
     },
@@ -301325,5 +301301,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ca11bb17ab9e4fb408c0e3236abe37e3e8baff0e07770c4d33412489d78ead9b"
+  "sourceDigest": "sha256:001366529814adacc69aee42798d8685bcc63d413bbc9211d56873b4e5dfa4c5"
 }

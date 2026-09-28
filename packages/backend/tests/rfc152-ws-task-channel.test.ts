@@ -98,8 +98,8 @@ async function buildHarness(harness: ProviderDatabaseHarness): Promise<Harness> 
 
   const identityAccess = createIdentityAccessRuntime({ db })
   const ws = buildWebSocketAdapter({
-    daemonToken: DAEMON_TOKEN,
     realtime: composeTestProviderRealtimeRuntime({
+      daemonToken: DAEMON_TOKEN,
       binding: harness.applicationBinding,
       neutralDb: db,
       identityAccess,

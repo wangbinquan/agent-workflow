@@ -1,22 +1,19 @@
 // RFC-349 — runtime-management owns provider-selected realtime composition.
 
-import type { AuthRuntime } from '@/auth/application/authRuntime'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type { DirectAuthorityAdmission } from '@/modules/identity-access/public/participants'
+import type { WebSocketAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import { createRealtimeChannelAccess } from './application/realtimeChannelAccess'
-import { createRealtimeCredentialAccess } from './application/realtimeCredentialAccess'
 import { DrizzleRealtimeStore } from './infrastructure/realtimeStore'
 import type { RealtimeCompositionPolicy, RealtimeRuntime } from './public/participants'
 
 export type { RealtimeCompositionPolicy } from './public/participants'
 
 function composeRealtimeRuntime(input: {
-  readonly auth: AuthRuntime
-  readonly directAuthority: DirectAuthorityAdmission
+  readonly credentials: WebSocketAuthenticationParticipant
   readonly channels: ReturnType<typeof createRealtimeChannelAccess>
 }): RealtimeRuntime {
   return Object.freeze({
-    credentials: createRealtimeCredentialAccess(input),
+    credentials: input.credentials,
     channels: input.channels,
   })
 }
@@ -27,13 +24,11 @@ function composeRealtimeRuntime(input: {
  */
 export function composeRealtimeRuntimeFor(input: {
   readonly db: ProviderNeutralDatabase
-  readonly auth: AuthRuntime
-  readonly directAuthority: DirectAuthorityAdmission
+  readonly credentials: WebSocketAuthenticationParticipant
   readonly policy: RealtimeCompositionPolicy
 }): RealtimeRuntime {
   return composeRealtimeRuntime({
-    auth: input.auth,
-    directAuthority: input.directAuthority,
+    credentials: input.credentials,
     channels: createRealtimeChannelAccess(new DrizzleRealtimeStore(input.db), input.policy),
   })
 }

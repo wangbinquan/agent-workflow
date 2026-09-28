@@ -14,6 +14,7 @@ import {
 } from '@/modules/identity-access/composition/authentication'
 
 export {
+  extractUpgradeToken,
   admitDaemonIdentity,
   admitDurableWorkOwner,
   actorOfDirectAuthority,
@@ -51,14 +52,4 @@ export function multiAuth(deps: MultiAuthDeps): MiddlewareHandler {
 /** REST compatibility helper: standalone HTTP continues to read only Bearer. */
 export function extractBearerToken(c: Context): string | null {
   return parseLocalBearerHeader(c.req.header('Authorization'))
-}
-
-/**
- * RFC-285 B4 —— WS 升级面的 token 入口（query 是浏览器 WebSocket 唯一可用的
- * 凭据通道）。**仅 ws/server.ts 消费**；REST 面禁止 import——rfc285-b4 测试
- * 以源码文本锁钉死。
- */
-export function extractUpgradeToken(url: URL): string | null {
-  const token = url.searchParams.get('token')
-  return token === null || token === '' ? null : token
 }

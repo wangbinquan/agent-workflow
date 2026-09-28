@@ -8,7 +8,7 @@ import { liveConnectionCount, resetConnectionsForTest } from '../src/ws/connecti
 import { buildWebSocketAdapter, WS_CLOSE_PROVIDER_TRANSITION } from '../src/ws/server'
 import type { WsConnectionData } from '../src/ws/registry'
 import { stubIdentityAccessWsBinding } from './helpers/identityAccessWs'
-import { STUB_REALTIME_CHANNELS } from './helpers/realtimeRuntime'
+import { STUB_REALTIME_CHANNELS, STUB_REALTIME_CREDENTIALS } from './helpers/realtimeRuntime'
 
 const ACTOR = buildActor({
   user: {
@@ -26,7 +26,7 @@ const AUTHORITY = Object.freeze({}) as DirectRequestAuthority
 const REALTIME: RealtimeRuntime = Object.freeze({
   channels: STUB_REALTIME_CHANNELS,
   credentials: Object.freeze({
-    allowLegacyDaemonTestAccess: true,
+    ...STUB_REALTIME_CREDENTIALS,
     async resolveUpgrade() {
       return {
         actor: ACTOR,
@@ -42,7 +42,6 @@ const REALTIME: RealtimeRuntime = Object.freeze({
 
 function createAdapter() {
   return buildWebSocketAdapter({
-    daemonToken: 'daemon-token',
     realtime: REALTIME,
     identityAccess: stubIdentityAccessWsBinding(),
   })

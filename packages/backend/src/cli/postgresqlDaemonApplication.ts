@@ -516,6 +516,7 @@ export async function composePostgresqlApplication(
     redactTaskEventPayload: redactEventPayload,
   })
   const core = composePostgresqlDaemonProviderCore({
+    daemonToken: input.token,
     db: input.db,
     ...(input.sourceWriteWindow === undefined
       ? {}
@@ -2327,7 +2328,6 @@ export async function composePostgresqlApplication(
     })()
   }
   const webSocket = buildWebSocketAdapter({
-    daemonToken: input.token,
     realtime: core.realtime,
     identityAccess: core.identityAccess,
   })

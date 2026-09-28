@@ -129,6 +129,30 @@ export interface HttpAuthenticationParticipant {
   >
 }
 
+/** An adapter-owned in-memory reference; transports never inspect its shape. */
+export type WebSocketCredential = object
+
+/** Identity mechanism selected once by bootstrap, shared by upgrade, open and
+ * active revalidation. Frame expiry and coalescing remain synchronous. */
+export interface WebSocketAuthenticationParticipant {
+  resolveUpgrade(
+    request: { readonly url: string; readonly header: (name: string) => string | null },
+    now?: number,
+  ): Promise<{
+    readonly actor: AuthenticatedAuthoritySnapshot | null
+    readonly authority: DirectRequestAuthority | null
+    readonly credential: WebSocketCredential
+    readonly rejection?: {
+      readonly code: string
+      readonly message: string
+      readonly status: 401 | 403
+    }
+  }>
+  reresolve(credential: WebSocketCredential, now?: number): Promise<DirectAuthorityIdentity | null>
+  revalidationKey(credential: WebSocketCredential): string
+  expiresAt(credential: WebSocketCredential): number | null
+}
+
 /** Credential adapters may supply only the admitted credential facts.  The
  * runtime re-resolves current account state and mints the handle/projection as
  * one indivisible result. */

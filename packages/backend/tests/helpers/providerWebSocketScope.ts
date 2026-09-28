@@ -74,6 +74,7 @@ export function describeEachProviderWebSocketApplication(
           overrides?.config === undefined ? undefined : { config: overrides.config },
         )
         const realtime = composeTestProviderRealtimeRuntime({
+          daemonToken,
           binding: httpScope.harness.applicationBinding,
           neutralDb: httpScope.harness.db,
           // 用**应用自己装配的那一份** identityAccess，不另建一个——两份实例会让
@@ -87,7 +88,6 @@ export function describeEachProviderWebSocketApplication(
             : { redactTaskEventPayload: overrides.redactTaskEventPayload }),
         })
         const ws = buildWebSocketAdapter({
-          daemonToken,
           realtime,
           identityAccess: opened.identityAccess,
         })

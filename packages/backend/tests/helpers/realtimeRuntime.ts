@@ -1,3 +1,5 @@
+import { composeLocalWebSocketAuthentication } from '../../src/modules/identity-access/composition/authentication'
+import type { WsCredentialWithExpiry } from '../../src/auth/session'
 import type { ActorSource } from '../../src/auth/actor'
 import { createAuthRuntimeFor } from '../../src/auth/composition'
 import type { DbClient } from '../../src/db/client'
@@ -31,7 +33,14 @@ export const STUB_REALTIME_CHANNELS: RealtimeChannelAccess = Object.freeze({
 const STUB_DAEMON_CREDENTIAL: RealtimeCredential = Object.freeze({ kind: 'daemon' })
 
 export const STUB_REALTIME_CREDENTIALS: RealtimeCredentialAccess = Object.freeze({
-  allowLegacyDaemonTestAccess: true,
+  revalidationKey(credential) {
+    const local = credential as WsCredentialWithExpiry
+    return local.kind === 'daemon' ? 'daemon' : `${local.kind}\u0000${local.hash}`
+  },
+  expiresAt(credential) {
+    const local = credential as WsCredentialWithExpiry
+    return local.kind === 'daemon' ? null : local.expiresAt
+  },
   resolveUpgrade: async () => ({
     actor: null,
     authority: null,
@@ -46,6 +55,7 @@ export const STUB_REALTIME_RUNTIME: RealtimeRuntime = Object.freeze({
 })
 
 export function composeTestSqliteRealtimeRuntime(input: {
+  readonly daemonToken?: string
   readonly db: DbClient
   readonly identityAccess: IdentityAccessRuntime
   readonly repoImportOwnerUserId?: (batchId: string) => string | null
@@ -54,8 +64,11 @@ export function composeTestSqliteRealtimeRuntime(input: {
   const resourceCatalog = composeResourceCatalogFor({ db: input.db })
   return composeRealtimeRuntimeFor({
     db: input.db,
-    auth: createAuthRuntimeFor({ db: input.db, onCredentialRevoked: () => {} }),
-    directAuthority: input.identityAccess.directAuthority,
+    credentials: composeLocalWebSocketAuthentication({
+      auth: createAuthRuntimeFor({ db: input.db, onCredentialRevoked: () => {} }),
+      identityAccess: input.identityAccess,
+      daemonToken: input.daemonToken ?? '',
+    }),
     policy: {
       resourceVisibility: resourceCatalog.authorization,
       memoryVisibility: {
@@ -85,6 +98,7 @@ export function composeTestSqliteRealtimeRuntime(input: {
  * 一次测试迁移的副作用。
  */
 export function composeTestProviderRealtimeRuntime(input: {
+  readonly daemonToken?: string
   readonly binding: ProviderApplicationBinding
   readonly neutralDb: ProviderNeutralDatabase
   readonly identityAccess: IdentityAccessRuntime
@@ -102,19 +116,24 @@ export function composeTestProviderRealtimeRuntime(input: {
     repoImportOwnerUserId: input.repoImportOwnerUserId ?? batchOwnerUserId,
     redactTaskEventPayload: input.redactTaskEventPayload ?? redactEventPayload,
   }
-  const directAuthority = input.identityAccess.directAuthority
   if (binding.provider === 'sqlite') {
     return composeRealtimeRuntimeFor({
       db: binding.db,
-      auth: createAuthRuntimeFor({ db: binding.db, onCredentialRevoked: () => {} }),
-      directAuthority,
+      credentials: composeLocalWebSocketAuthentication({
+        auth: createAuthRuntimeFor({ db: binding.db, onCredentialRevoked: () => {} }),
+        identityAccess: input.identityAccess,
+        daemonToken: input.daemonToken ?? '',
+      }),
       policy,
     })
   }
   return composeRealtimeRuntimeFor({
     db: binding.db,
-    auth: createAuthRuntimeFor({ db: binding.db, onCredentialRevoked: () => {} }),
-    directAuthority,
+    credentials: composeLocalWebSocketAuthentication({
+      auth: createAuthRuntimeFor({ db: binding.db, onCredentialRevoked: () => {} }),
+      identityAccess: input.identityAccess,
+      daemonToken: input.daemonToken ?? '',
+    }),
     policy,
   })
 }

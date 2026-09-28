@@ -300,7 +300,7 @@ describe('RFC-349 production database migration coordinator', () => {
       await expect(coordinator.finalize({ operationId: migrated.operationId })).rejects.toThrow(
         'rolled-back database migration',
       )
-      expect(buildLogicalSchemaContract().activeTableCount).toBe(182)
+      expect(rolledBack.tableCounts).toEqual(completed.tableCounts)
     },
     120_000,
   )

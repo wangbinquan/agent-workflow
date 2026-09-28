@@ -639,7 +639,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 取消（`cause: { kind: 'resource-reaped', ...reason }`），状态与原因同一次写入落下；此前
       // 按 `user` 取消、事后改写原因，中间几秒数字员工会把超时误判成用户取消。装配图变的是这两格，
       // 判据在 `tests/rfc368-implementation-gate.test.ts`。
-      '1026d7707ca44f46bb563d25651bef4530b565176417876c55f4fe1a5a0a3cae',
+      '0a78f0352c9b92e3eb0a2c1afad3b2b5f59965f684fa53efc94d25d5c00146e6',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

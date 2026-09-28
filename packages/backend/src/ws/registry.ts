@@ -158,16 +158,7 @@ export type WsOutboundMessage = AnyChannelMessage | WsControlMessage
  * ConnectionData server.ts has always used; server.ts aliases this type once
  * the task channel migrates (PR-4).
  */
-/**
- * RFC-212 — how to re-check this connection's credential WITHOUT keeping the
- * plaintext token around. `hash` feeds `lookupActive{Session,Pat}ByHash`, which
- * run the exact same query the upgrade path ran.
- *
- * Storing the raw token instead would be strictly worse: `util/log.ts`'s
- * `formatVal` JSON.stringifies arbitrary objects with no redaction, so a single
- * `log.debug('…', { data: ws.data })` while debugging would write a long-lived
- * credential into the rotated daemon log.
- */
+/** Adapter-owned reference; the transport never interprets local token kinds. */
 export type WsCredential = RealtimeCredential
 
 export interface WsConnectionData {
@@ -1081,8 +1072,8 @@ export function gatedSubscribe(
     // silently-expired credential would otherwise keep this socket alive past
     // its TTL. Purely local `now > expiresAt` comparison — zero DB, so AC-6 is
     // untouched. onExpiredCredential closes it out-of-band on the next tick.
-    const cred = ws.data.credential
-    if (cred.kind !== 'daemon' && cred.expiresAt !== null && Date.now() > cred.expiresAt) {
+    const expiresAt = ws.data.credentials.expiresAt(ws.data.credential)
+    if (expiresAt !== null && Date.now() > expiresAt) {
       onExpiredCredential?.(ws)
       return
     }

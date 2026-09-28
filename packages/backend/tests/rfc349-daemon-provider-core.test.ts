@@ -137,6 +137,7 @@ describe('RFC-349 daemon provider core', () => {
     roots.push(appHome)
     const db = createInMemoryDb(MIGRATIONS)
     const core = composeSqliteDaemonProviderCore({
+      daemonToken: 'fixture-daemon',
       db,
       appHome,
       dbPath: join(appHome, 'db.sqlite'),
@@ -170,6 +171,7 @@ describe('RFC-349 daemon provider core', () => {
       idleTimeoutMs: 30_000,
     } satisfies Extract<DatabaseConfig, { provider: 'postgresql' }>
     const core = composePostgresqlDaemonProviderCore({
+      daemonToken: 'fixture-daemon',
       db: fake.db,
       runtime: fake.runtime,
       databaseConfig,

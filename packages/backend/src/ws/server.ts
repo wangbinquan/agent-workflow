@@ -28,7 +28,6 @@ import type { ServerWebSocket } from 'bun'
 import { type WsControlMessage, WsClientControlMessageSchema } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { DirectRequestAuthority } from '@/modules/identity-access/public/participants'
-import { extractUpgradeToken } from '@/auth/session'
 import type {
   RealtimeCredential,
   RealtimeIdentityAccess,
@@ -174,14 +173,6 @@ function createWebSocketAdmissionController(): WebSocketAdmissionController {
 }
 
 export interface WebSocketAdapterDeps {
-  /**
-   * Legacy daemon-token value used to bootstrap a daemon before any user
-   * exists. Continues to upgrade WS connections as the `__system__` admin
-   * actor (via the bound realtime credential participant) so the single-user / scripted
-   * daemon mode keeps working alongside the OIDC/PAT paths introduced by
-   * RFC-036.
-   */
-  daemonToken: string
   realtime: RealtimeRuntime
   /** One bootstrap-owned identity-access runtime shared with HTTP and MCP. */
   identityAccess: RealtimeIdentityAccess
@@ -215,10 +206,6 @@ export interface WebSocketAdapter {
 type BunUpgradeFn = (req: Request, opts: { data: ConnectionData }) => boolean
 
 export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdapter {
-  // Pre-allocate the daemon-token Buffer once — `resolveActor` does a
-  // length-check + timing-safe equality, so we avoid Buffer.from() per
-  // upgrade attempt.
-  const daemonTokenBuf = Buffer.from(deps.daemonToken, 'utf-8')
   const admission = createWebSocketAdmissionController()
   const identityAccess: IdentityAccessWsBinding = Object.freeze({
     directAuthority: deps.identityAccess.directAuthority,
@@ -265,19 +252,7 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
       if (channel === null) {
         return wsError('ws-unknown-channel', 'unknown ws channel', 404)
       }
-      // RFC-285 B4：WS 升级是 query token 的唯一保留面（浏览器 WebSocket 发不了
-      // 自定义头），入口收编为 auth/session 的 extractUpgradeToken 显式函数。
-      const queryToken = extractUpgradeToken(url)
-      if (queryToken === null) {
-        return wsError('auth-required', 'invalid or missing token', 401)
-      }
-      // RFC-036 — accept session tokens (aws_s_…), PATs (aws_pat_…) and the
-      // legacy daemon token, the same set the HTTP `multiAuth` middleware
-      // recognises. Previously this branch only ran `timingSafeEquals` against
-      // the static daemon token, so any client that logged in via OIDC and
-      // received a session token failed every WS upgrade with 401 — the
-      // SessionTab fell back to remount-on-tab-switch refetches and looked
-      // "not live" even though the runner was broadcasting correctly.
+      // The selected Identity Access adapter owns credential extraction.
       // RFC-212 impl-gate finding 2: capture the revocation epoch BEFORE resolving
       // the actor, so a revocation that commits during this upgrade (any of the
       // awaits below) is detectable at open time.
@@ -287,9 +262,19 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
       // RFC-312 T0 —— 一次解析同时拿到 actor 与凭据指纹。此前这里解析一遍、下面
       // `buildWsCredential` 对同一个 token 再解析一遍，于是每次升级查 5 次、**写两次**
       // `last_used_at`（rolling renewal 被执行了两遍）。合并后 3 读 1 写，对所有 WS 连接生效。
-      let credential: RealtimeCredential = { kind: 'daemon' }
+      let credential: RealtimeCredential = {}
       try {
-        const resolved = await deps.realtime.credentials.resolveUpgrade(queryToken, daemonTokenBuf)
+        const resolved = await deps.realtime.credentials.resolveUpgrade({
+          url: req.url,
+          header: (name) => req.headers.get(name),
+        })
+        if (resolved.rejection !== undefined) {
+          return wsError(
+            resolved.rejection.code,
+            resolved.rejection.message,
+            resolved.rejection.status,
+          )
+        }
         actor = resolved.actor
         authority = resolved.authority
         credential = resolved.credential
@@ -300,13 +285,6 @@ export function buildWebSocketAdapter(deps: WebSocketAdapterDeps): WebSocketAdap
       }
       if (actor === null || authority === null) {
         return wsError('auth-required', 'invalid or missing token', 401)
-      }
-      if (actor.source === 'daemon' && !deps.realtime.credentials.allowLegacyDaemonTestAccess) {
-        return wsError(
-          'bootstrap-admin-required',
-          'complete first-administrator setup before opening application channels',
-          403,
-        )
       }
       // RFC-247 D2 / §3.5 — the token gates for WebSocket.
       //

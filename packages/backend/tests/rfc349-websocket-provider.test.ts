@@ -1,3 +1,4 @@
+import { STUB_REALTIME_CREDENTIALS } from './helpers/realtimeRuntime'
 // RFC-349 — WebSocket transport consumes one closed realtime contract; the
 // realtime query mechanics stay behind that contract's single adapter.
 //
@@ -55,7 +56,7 @@ describe('RFC-349 WebSocket provider boundary', () => {
         .map((name) => resolve(wsDir, name)),
       resolve(realtimeDir, 'public/participants.ts'),
       resolve(realtimeDir, 'application/realtimeChannelAccess.ts'),
-      resolve(realtimeDir, 'application/realtimeCredentialAccess.ts'),
+      resolve(realtimeDir, '../identity-access/infrastructure/local/webSocketAuthentication.ts'),
       resolve(realtimeDir, 'application/ports/realtimeStore.ts'),
     ]
 
@@ -99,9 +100,9 @@ describe('RFC-349 WebSocket provider boundary', () => {
     })
     const resolvedTokens: string[] = []
     const credentials = Object.freeze({
-      allowLegacyDaemonTestAccess: true,
-      async resolveUpgrade(rawToken) {
-        resolvedTokens.push(rawToken)
+      ...STUB_REALTIME_CREDENTIALS,
+      async resolveUpgrade(request) {
+        resolvedTokens.push(request.header('X-Fixture-Identity') ?? '')
         return {
           actor,
           authority,
@@ -137,13 +138,14 @@ describe('RFC-349 WebSocket provider boundary', () => {
       presenceQuery: { snapshot: () => ['realtime-admin'] },
     } satisfies RealtimeIdentityAccess)
     const adapter = buildWebSocketAdapter({
-      daemonToken: 'd'.repeat(64),
       realtime: { channels, credentials },
       identityAccess,
     })
     let data: WsConnectionData | undefined
     const upgraded = await adapter.tryUpgrade(
-      new Request('http://localhost/ws/presence?token=opaque-session-token'),
+      new Request('http://localhost/ws/presence', {
+        headers: { 'X-Fixture-Identity': 'opaque-session-token' },
+      }),
       {
         upgrade(_request, options) {
           data = options.data
@@ -196,7 +198,7 @@ describe('RFC-349 WebSocket provider boundary', () => {
     })
     let resolutions = 0
     const credentials = Object.freeze({
-      allowLegacyDaemonTestAccess: true,
+      ...STUB_REALTIME_CREDENTIALS,
       async resolveUpgrade() {
         throw new Error('not used')
       },
