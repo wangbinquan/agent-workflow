@@ -3,6 +3,8 @@ import { Link } from '@tanstack/react-router'
 import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
+  ObservationOverviewQuery,
+  TaskStatus,
   ObservationOverview,
   ObservationTaskDetail,
   ObservationTaskPage,
@@ -13,17 +15,16 @@ import { Dialog } from '@/components/Dialog'
 import { EmptyState } from '@/components/EmptyState'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { ExecutionSwimlane } from '@/components/ExecutionSwimlane'
-import { FilterBar, FilterField } from '@/components/FilterBar'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
-import { Select } from '@/components/Select'
 import { TableViewport } from '@/components/TableViewport'
 import { TabBar, tabDomIds } from '@/components/TabBar'
 import { formatDurationMs } from '@/lib/duration'
 import { Tokens, Cost, Source, Metrics } from './ObservationMetrics'
 import { ObservationAnalysis, type ObservationAnalysisTab } from './ObservationAnalysis'
 import { ObservationExport } from './ObservationExport'
+import { ObservationFilters } from './ObservationFilters'
 import './RunObservability.css'
 
 export interface ObservationSearch {
@@ -35,6 +36,10 @@ export interface ObservationSearch {
   readonly tab?: ObservationAnalysisTab | 'tasks'
   readonly agent?: string
   readonly quality?: string
+  readonly q?: string
+  readonly status?: TaskStatus
+  readonly repository?: string
+  readonly workflow?: string
 }
 function TaskDetail({ data }: { data: ObservationTaskDetail }) {
   const { t, i18n } = useTranslation(),
@@ -228,29 +233,30 @@ export function RunObservability({
   const { t, i18n } = useTranslation()
   const tab = search.tab ?? 'tasks'
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const window: ObservationOverviewQuery = {
+    from: search.from,
+    to: search.to,
+    timezone,
+    ...(search.q ? { q: search.q } : {}),
+    ...(search.status ? { status: search.status } : {}),
+    ...(search.repository ? { repository: search.repository } : {}),
+    ...(search.workflow ? { workflow: search.workflow } : {}),
+  }
   const overview = useQuery({
-    queryKey: ['run-observability', 'overview', search.from, search.to, timezone],
+    queryKey: ['run-observability', 'overview', window],
     queryFn: ({ signal }) =>
-      api.get<ObservationOverview>(
-        '/api/observability/overview',
-        {
-          from: search.from,
-          to: search.to,
-          timezone,
-        },
-        signal,
-      ),
+      api.get<ObservationOverview>('/api/observability/overview', window, signal),
     enabled: !search.task && tab !== 'tasks',
     staleTime: 30_000,
     refetchInterval: 30_000,
     refetchIntervalInBackground: false,
   })
   const list = useQuery({
-    queryKey: ['run-observability', 'tasks', search.from, search.to, search.after, timezone],
+    queryKey: ['run-observability', 'tasks', window, search.after],
     queryFn: ({ signal }) =>
       api.get<ObservationTaskPage>(
         '/api/observability/tasks',
-        { from: search.from, to: search.to, timezone, limit: 20, after: search.after },
+        { ...window, limit: 20, after: search.after },
         signal,
       ),
     enabled: !search.task && tab === 'tasks',
@@ -283,6 +289,10 @@ export function RunObservability({
     const to = Date.now() + 1
     onChange({
       period: search.period,
+      ...(search.q ? { q: search.q } : {}),
+      ...(search.status ? { status: search.status } : {}),
+      ...(search.repository ? { repository: search.repository } : {}),
+      ...(search.workflow ? { workflow: search.workflow } : {}),
       ...(search.tab ? { tab: search.tab } : {}),
       ...(search.agent ? { agent: search.agent } : {}),
       ...(search.quality ? { quality: search.quality } : {}),
@@ -343,34 +353,7 @@ export function RunObservability({
       />
       {!search.task && (
         <>
-          <FilterBar ariaLabel={t('runObservability.period')}>
-            <FilterField label={t('runObservability.period')}>
-              <Select
-                value={search.period}
-                ariaLabel={t('runObservability.period')}
-                options={(search.period === 'custom'
-                  ? (['week', 'month', 'all', 'custom'] as const)
-                  : (['week', 'month', 'all'] as const)
-                ).map((value) => ({
-                  value,
-                  label: t(`runObservability.${value}`),
-                }))}
-                onChange={(period) => {
-                  if (period === 'custom') return
-                  const to = Date.now() + 1
-                  onChange({
-                    period,
-                    ...(search.tab ? { tab: search.tab } : {}),
-                    from:
-                      period === 'all'
-                        ? 0
-                        : Math.max(0, to - (period === 'week' ? 7 : 30) * 86400000),
-                    to,
-                  })
-                }}
-              />
-            </FilterField>
-          </FilterBar>
+          <ObservationFilters search={search} onChange={onChange} />
           <p className="muted">{t('runObservability.listHint')}</p>
           <p className="muted">
             {t('runObservability.windowHint', {
@@ -379,9 +362,9 @@ export function RunObservability({
             })}
           </p>
           <ObservationExport
-            key={JSON.stringify([search.from, search.to, tab, search.agent, search.quality])}
+            key={JSON.stringify([window, tab, search.agent, search.quality])}
             query={{
-              window: { from: search.from, to: search.to, timezone },
+              window,
               view: tab === 'agents' ? 'agents' : 'tasks',
               ...(tab === 'agents' && search.agent ? { agent: search.agent } : {}),
               ...(tab === 'performance' && search.quality ? { quality: search.quality } : {}),
@@ -428,7 +411,18 @@ export function RunObservability({
                   onQuality={(quality) => onChange({ ...search, quality })}
                   onAgent={(agent) => onChange({ ...search, tab: 'agents', agent })}
                   onTask={(task) => onChange({ ...search, task })}
-                  onBucket={(from, to) => onChange({ from, to, period: 'custom', tab: 'tasks' })}
+                  onBucket={(from, to) =>
+                    onChange({
+                      ...search,
+                      from,
+                      to,
+                      period: 'custom',
+                      tab: 'tasks',
+                      after: undefined,
+                      agent: undefined,
+                      quality: undefined,
+                    })
+                  }
                 />
               )
             : list.data && (

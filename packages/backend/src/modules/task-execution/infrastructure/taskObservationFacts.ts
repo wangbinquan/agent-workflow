@@ -1,14 +1,23 @@
-import { and, asc, desc, eq, gte, isNull, lt, or } from 'drizzle-orm'
+import { and, asc, desc, eq, exists, gte, isNull, lt, or } from 'drizzle-orm'
 import type { ObservationTaskPageQuery } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, tasks } from '@/db/schema'
+import { nodeRuns, taskRepos, tasks } from '@/db/schema'
+import { engineOf } from '@/platform/persistence/databaseTransaction'
+import { sha256Hex } from '@/util/hash'
 import type { TaskObservationFactsQuery } from '../public/queries'
 
 const canRead = (actor: Actor) =>
   actor.permissions.has('tasks:read:all') || actor.permissions.has('tasks:read:own')
-const scope = (query: ObservationTaskPageQuery) =>
-  JSON.stringify([query.from, query.to, query.timezone])
+const scope = (query: ObservationTaskPageQuery) => {
+  const filters = [query.q, query.status, query.repository, query.workflow]
+  return JSON.stringify([
+    query.from,
+    query.to,
+    query.timezone,
+    ...(filters.some((value) => value !== undefined) ? [sha256Hex(JSON.stringify(filters))] : []),
+  ])
+}
 function continuation(query: ObservationTaskPageQuery): [number, string] | null {
   if (query.after === undefined) return null
   let parsed: unknown
@@ -51,6 +60,8 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
     async list({ actor, query }) {
       const after = continuation(query)
       if (!canRead(actor)) return { items: [], nextCursor: null }
+      const engine = engineOf(db)
+      const search = query.q === undefined ? null : engine.likeEscape(query.q)
       const rows = await db
         .select(taskFields)
         .from(tasks)
@@ -61,6 +72,34 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
             eq(tasks.catalogVisibility, 'public'),
             gte(tasks.startedAt, query.from),
             lt(tasks.startedAt, query.to),
+            query.status === undefined ? undefined : eq(tasks.status, query.status),
+            query.workflow === undefined ? undefined : eq(tasks.workflowId, query.workflow),
+            search === null
+              ? undefined
+              : or(
+                  engine.likeCaseInsensitive(tasks.name, search.pattern, search.escape),
+                  engine.likeCaseInsensitive(tasks.id, search.pattern, search.escape),
+                ),
+            query.repository === undefined
+              ? undefined
+              : or(
+                  eq(tasks.repoPath, query.repository),
+                  eq(tasks.repoUrl, query.repository),
+                  exists(
+                    db
+                      .select({ id: taskRepos.taskId })
+                      .from(taskRepos)
+                      .where(
+                        and(
+                          eq(taskRepos.taskId, tasks.id),
+                          or(
+                            eq(taskRepos.repoPath, query.repository),
+                            eq(taskRepos.repoUrl, query.repository),
+                          ),
+                        ),
+                      ),
+                  ),
+                ),
             after === null
               ? undefined
               : or(

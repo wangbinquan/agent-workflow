@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import type { ObservationTokenUsage } from './observationUsage'
+import { TaskStatusSchema } from './task'
 
 const time = z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 export const ObservationTaskPageQuerySchema = z
@@ -7,6 +8,10 @@ export const ObservationTaskPageQuerySchema = z
     from: time,
     to: time,
     timezone: z.string().min(1).max(100).default('UTC'),
+    q: z.string().trim().min(1).max(200).optional(),
+    status: TaskStatusSchema.optional(),
+    repository: z.string().trim().min(1).max(4096).optional(),
+    workflow: z.string().trim().min(1).max(200).optional(),
     limit: z.coerce.number().int().min(1).max(25).default(20),
     after: z.string().min(1).max(2048).optional(),
   })
@@ -30,7 +35,15 @@ export const ObservationOverviewQuerySchema = ObservationTaskPageQuerySchema.ref
   {
     message: 'Overview does not accept task pagination',
   },
-).transform(({ from, to, timezone }) => ({ from, to, timezone }))
+).transform(({ from, to, timezone, q, status, repository, workflow }) => ({
+  from,
+  to,
+  timezone,
+  ...(q === undefined ? {} : { q }),
+  ...(status === undefined ? {} : { status }),
+  ...(repository === undefined ? {} : { repository }),
+  ...(workflow === undefined ? {} : { workflow }),
+}))
 export type ObservationOverviewQuery = z.infer<typeof ObservationOverviewQuerySchema>
 
 /** A fresh bounded snapshot. Large asynchronous exports have a separate contract. */

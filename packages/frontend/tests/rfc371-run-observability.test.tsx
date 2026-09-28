@@ -334,6 +334,46 @@ test('pagination requests the opaque cursor and disabling next does not erase fi
   fireEvent.click(screen.getByRole('button', { name: '第一页' }))
   expect(f.changes.at(-1)?.after).toBeUndefined()
 })
+test('task filters reach list and analysis queries, survive drill-down and reset pagination', async () => {
+  const f = fixture({ ...search, after: 'old-page' })
+  await screen.findByRole('button', { name: '真实任务' })
+  fireEvent.change(screen.getByRole('textbox', { name: '任务名称或 ID' }), {
+    target: { value: '真实任务' },
+  })
+  await waitFor(() => expect(f.paths.at(-1)?.searchParams.get('q')).toBe('真实任务'))
+  expect(f.paths.at(-1)?.searchParams.has('after')).toBe(false)
+  fireEvent.change(screen.getByRole('textbox', { name: '仓库' }), {
+    target: { value: '/team/repo' },
+  })
+  fireEvent.change(screen.getByRole('textbox', { name: '工作流 ID' }), {
+    target: { value: 'workflow-1' },
+  })
+  fireEvent.click(screen.getByRole('combobox', { name: '执行状态' }))
+  fireEvent.click(await screen.findByRole('option', { name: i18n.t('tasks.status.running') }))
+  await waitFor(() => expect(f.paths.at(-1)?.searchParams.get('status')).toBe('running'))
+  fireEvent.click(screen.getByRole('tab', { name: '总览' }))
+  await screen.findByRole('heading', { name: '任务用量趋势' })
+  expect(f.paths.at(-1)?.pathname).toBe('/api/observability/overview')
+  for (const [key, value] of Object.entries({
+    q: '真实任务',
+    repository: '/team/repo',
+    workflow: 'workflow-1',
+    status: 'running',
+  }))
+    expect(f.paths.at(-1)?.searchParams.get(key)).toBe(value)
+  fireEvent.click(screen.getAllByRole('button', { name: '真实任务' })[0]!)
+  await screen.findByRole('heading', { name: '任务整体' })
+  fireEvent.click(screen.getByRole('button', { name: '返回统计分析' }))
+  await screen.findByRole('heading', { name: '任务用量趋势' })
+  expect((screen.getByRole('textbox', { name: '仓库' }) as HTMLInputElement).value).toBe(
+    '/team/repo',
+  )
+  fireEvent.click(screen.getByRole('button', { name: '清除筛选' }))
+  await waitFor(() => expect(f.paths.at(-1)?.searchParams.has('q')).toBe(false))
+  expect(f.paths.at(-1)?.searchParams.has('repository')).toBe(false)
+  expect(f.paths.at(-1)?.searchParams.has('workflow')).toBe(false)
+  expect(f.paths.at(-1)?.searchParams.has('status')).toBe(false)
+})
 test('overview tabs share one server snapshot and agent drill-down restores its scope', async () => {
   const f = fixture({ ...search, tab: 'overview' })
   await screen.findByRole('heading', { name: '任务用量趋势' })

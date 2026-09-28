@@ -269,3 +269,11 @@
 - 前置提交 `213d3b6b2eaabc40ee04dcc1dd0f5d454fed6fcf` 的 CI `36455449648` 已完整 success，50 作业均成功；本批等待自身发布结果。
 
 本批独立只读功能复核 PASS，文件级格式/lint 通过；正式 Playwright 增加所选 Agent 的真实 CSV 下载、文件内容和 CNY/修订身份断言，随 hosted CI 执行。
+
+## 27. 实施批次 16：一致的任务范围筛选
+
+- 正式观测增加任务名称/ID、执行状态、仓库及工作流筛选；仓库支持主仓与多仓成员的精确 URL/路径匹配，同一任务只计一次。筛选在 TaskExecution owner 的可见任务查询内执行，列表、全部分析维度和导出共享范围。
+- URL、缓存 key 和分页指纹携带全部筛选。改变筛选回第一页；趋势钻取、详情返回和刷新保留范围；CSV 记录筛选元数据。输入和选择全部使用现有 FilterBar/Form/Select。
+- 新增双 provider 字面搜索、多仓去重、统计/金额对账、四筛选游标约束和前端传参与返回回归；正式 Playwright 在筛选后执行窄屏几何及 Agent CSV 下载。只运行本批格式/lint 和静态 canonical 生成，测试交 hosted CI。
+
+本批独立功能复核发现并关闭三项：TextInput 可访问名称使用其真实属性；游标仅绑定固定长度筛选摘要，4096字符仓库仍能 HTTP 续页；搜索复用数据库引擎原文匹配，补非ASCII同字面量双 provider 回归。最终复审 PASS，11个TS/TSX文件格式/lint通过；canonical按本任务候选生成并退役已消耗增长许可，未包含并行 resource-catalog 输出。前置CSV提交的Windows前端分片在依赖安装出现 EBUSY；Linux正式焦点巡检另发现趋势按钮位于视口边缘时焦点圈被裁切。趋势按钮改用公共内描边 token，保留既有全站几何巡检作为回归；旧提交不记通过，本批以自身 exact-SHA CI 为准。

@@ -1,7 +1,15 @@
 export const runObservabilityZh = {
+  filters: '观测筛选',
+  taskQuery: '任务名称或 ID',
+  allStates: '全部状态',
+  repositoryFilter: '仓库',
+  repositoryPlaceholder: '精确仓库地址或路径',
+  workflowFilter: '工作流 ID',
+  clearFilters: '清除筛选',
+
   exportSnapshot: '导出当前快照 CSV',
   exporting: '正在生成 CSV…',
-  exportHint: '按当前时间与所选 Agent／质量筛选重新读取，最多 200 个任务；包含其他分页。',
+  exportHint: '按当前所有筛选重新读取，最多 200 个任务；包含其他分页。',
   exportReady: '已生成 {{count}} 行，数据快照 {{time}}。',
   exportPartial: '本次读取达到上限或存在读取缺口，CSV 中已标明部分统计。',
   tab_overview: '总览',
@@ -138,10 +146,17 @@ export const runObservabilityZh = {
 }
 export type RunObservabilityMessages = { [K in keyof typeof runObservabilityZh]: string }
 export const runObservabilityEn: RunObservabilityMessages = {
+  filters: 'Observation filters',
+  taskQuery: 'Task name or ID',
+  allStates: 'All states',
+  repositoryFilter: 'Repository',
+  repositoryPlaceholder: 'Exact repository URL or path',
+  workflowFilter: 'Workflow ID',
+  clearFilters: 'Clear filters',
+
   exportSnapshot: 'Export snapshot CSV',
   exporting: 'Generating CSV…',
-  exportHint:
-    'Fresh read for this window and selected agent or quality, up to 200 tasks across pages.',
+  exportHint: 'Fresh read with all current filters, up to 200 tasks across pages.',
   exportReady: '{{count}} rows generated. Snapshot: {{time}}.',
   exportPartial: 'The read reached a limit or has gaps; the CSV marks this as partial.',
   tab_overview: 'Overview',

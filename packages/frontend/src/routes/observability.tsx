@@ -1,4 +1,5 @@
 import { createRoute } from '@tanstack/react-router'
+import { TaskStatusSchema } from '@agent-workflow/shared'
 import {
   RunObservability,
   type ObservationSearch,
@@ -13,7 +14,17 @@ export function validateObservationSearch(raw: Record<string, unknown>): Observa
     typeof raw.from === 'number' && Number.isSafeInteger(raw.from) && raw.from >= 0 && raw.from < to
       ? raw.from
       : Math.max(0, to - 7 * 86400000)
+  const status = TaskStatusSchema.safeParse(raw.status)
+  const text = (key: string, max: number) =>
+    typeof raw[key] === 'string' && raw[key].trim() && raw[key].length <= max ? raw[key] : undefined
+  const q = text('q', 200),
+    repository = text('repository', 4096),
+    workflow = text('workflow', 200)
   return {
+    ...(q === undefined ? {} : { q }),
+    ...(repository === undefined ? {} : { repository }),
+    ...(workflow === undefined ? {} : { workflow }),
+    ...(status.success ? { status: status.data } : {}),
     from,
     to,
     period:

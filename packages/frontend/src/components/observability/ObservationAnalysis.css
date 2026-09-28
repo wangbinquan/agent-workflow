@@ -34,6 +34,9 @@
   width: 100%;
   text-align: start;
 }
+.observation-trend .observation-trend__button:focus-visible {
+  outline-offset: var(--focus-ring-offset-inset);
+}
 .observation-trend__label {
   white-space: normal;
 }

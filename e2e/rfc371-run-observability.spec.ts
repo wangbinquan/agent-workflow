@@ -86,7 +86,7 @@ async function seedTask() {
       intervals: [250, 500, 1000],
     })
     .toBe('done')
-  return { task, agents }
+  return { task, agents, workflow }
 }
 
 async function prime(page: Page) {
@@ -164,7 +164,7 @@ async function expectAnalysisSpacing(page: Page) {
 test('task, agents and attempt drill-down use real observations and standard card spacing', async ({
   page,
 }, testInfo) => {
-  const { task, agents } = await seedTask()
+  const { task, agents, workflow } = await seedTask()
   const detail = await api<ObservationTaskDetail>(`/api/observability/tasks/${task.id}`)
   expect(detail.metrics.invocations).toBe(2)
   expect(detail.agents.map((agent) => agent.agentId).sort()).toEqual(agents.map((a) => a.id).sort())
@@ -175,6 +175,12 @@ test('task, agents and attempt drill-down use real observations and standard car
   await prime(page)
   await page.goto(`${daemon.baseUrl}/observability`)
   await expect(page.getByRole('heading', { name: 'Run observability', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Task usage trend', exact: true })).toBeVisible()
+  await page
+    .getByRole('textbox', { name: 'Task name or ID', exact: true })
+    .fill('Observed parallel task')
+  await page.getByRole('textbox', { name: 'Workflow ID', exact: true }).fill(workflow.id)
+  await expect(page).toHaveURL(new RegExp(`workflow=${workflow.id}`))
   await expect(page.getByRole('heading', { name: 'Task usage trend', exact: true })).toBeVisible()
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 })
@@ -203,6 +209,9 @@ test('task, agents and attempt drill-down use real observations and standard car
   expect(csv).toContain(agents[0]!.id)
   expect(csv).not.toContain(agents[1]!.id)
   expect(csv).toContain(task.id)
+  expect(csv).toContain('"workflow_filter"')
+  expect(csv).toContain(workflow.id)
+  expect(csv).toContain('Observed parallel task')
   await page.getByRole('button', { name: 'Observed parallel task', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Task total', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Back to analysis', exact: true }).click()

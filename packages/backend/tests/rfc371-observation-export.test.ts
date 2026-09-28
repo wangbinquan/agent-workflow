@@ -192,4 +192,30 @@ test('export queries reject pagination, invalid windows and contradictory select
     window,
     view: 'tasks',
   })
+  const selected = {
+    ...window,
+    q: ' alpha ',
+    status: 'done',
+    repository: '/repo',
+    workflow: 'workflow',
+  }
+  const parsed = ObservationSnapshotExportQuerySchema.parse({ window: selected, view: 'tasks' })
+  expect(parsed.window).toMatchObject({
+    q: 'alpha',
+    status: 'done',
+    repository: '/repo',
+    workflow: 'workflow',
+  })
+  expect(csv(exportObservationSnapshot(fixture(), parsed).content)[0]).toMatchObject({
+    task_query: 'alpha',
+    status_filter: 'done',
+    repository_filter: '/repo',
+    workflow_filter: 'workflow',
+  })
+  expect(
+    ObservationSnapshotExportQuerySchema.safeParse({
+      window: { ...window, status: 'unknown' },
+      view: 'tasks',
+    }).success,
+  ).toBe(false)
 })

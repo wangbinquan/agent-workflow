@@ -9,7 +9,14 @@ import type {
   ObservationTaskPageQuery,
 } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
-import { nodeRuns, observationInvocations, taskCollaborators, tasks, users } from '../src/db/schema'
+import {
+  nodeRuns,
+  observationInvocations,
+  taskCollaborators,
+  taskRepos,
+  tasks,
+  users,
+} from '../src/db/schema'
 import { composeTaskObservations } from '../src/modules/run-observability/composition/taskObservations'
 import { createTaskObservationFacts } from '../src/modules/task-execution/composition/taskObservationFacts'
 import { createObservationPricing } from '../src/modules/run-observability/application/pricing'
@@ -382,6 +389,120 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     expect(page.items[0]!.metrics).toEqual(result.metrics)
     expect(page.asOf).toBe(result.asOf)
   })
+  test('task, state, workflow and secondary repository filters select one consistent cohort before aggregation', async () => {
+    const f = await fixture()
+    await f.task('task', {
+      name: 'Alpha 100%_done',
+      status: 'done',
+      workflowId: 'selected-workflow',
+    })
+    await f.task('different-state', {
+      name: 'Alpha 100%_done',
+      status: 'running',
+      workflowId: 'selected-workflow',
+    })
+    await f.task('different-workflow', {
+      name: 'Alpha 100%_done',
+      status: 'done',
+      workflowId: 'other-workflow',
+    })
+    await f.task('wildcards-are-literal', {
+      name: 'Alpha 100XXdone',
+      status: 'done',
+      workflowId: 'selected-workflow',
+    })
+    await f.price()
+    await f.accept('filtered')
+    await f.usage('filtered', buckets('1000000'))
+    for (const taskId of [
+      'task',
+      'different-state',
+      'different-workflow',
+      'wildcards-are-literal',
+    ]) {
+      await harness.db
+        .insert(taskRepos)
+        .values(
+          [0, 1].map((repoIndex) => ({
+            taskId,
+            repoIndex,
+            repoPath: `/extra/${repoIndex}`,
+            repoUrl: 'https://example.test/team/secondary.git',
+            branch: 'main',
+            worktreePath: `/work/${taskId}/${repoIndex}`,
+          })),
+        )
+        .run()
+    }
+    const selection = {
+      ...query,
+      q: 'alpha 100%_',
+      status: 'done' as const,
+      workflow: 'selected-workflow',
+      repository: 'https://example.test/team/secondary.git',
+    }
+    const page = await f.queries.list(admin, selection)
+    expect(page.items.map((row) => row.task.id)).toEqual(['task'])
+    const overview = await f.queries.overview(admin, selection)
+    expect(overview.tasks.map((row) => row.task.id)).toEqual(['task'])
+    expect(overview.metrics.tokens.totalKnown).toBe('1000000')
+    expect(overview.metrics.cost.knownAmount).toBe('1')
+    expect(overview.trend.reduce((sum, row) => sum + row.taskCount, 0)).toBe(1)
+    expect(overview.agents[0]?.tasks.map((row) => row.taskId)).toEqual(['task'])
+    expect(overview.filtersEcho).toMatchObject(selection)
+    expect(
+      (await f.queries.list(admin, { ...query, q: 'different-workflow' })).items.map(
+        (row) => row.task.id,
+      ),
+    ).toEqual(['different-workflow'])
+    expect(
+      (await f.queries.list(admin, { ...selection, repository: '/extra/1' })).items,
+    ).toHaveLength(1)
+    expect(
+      (await f.queries.list(admin, { ...selection, repository: '/fixture' })).items,
+    ).toHaveLength(1)
+    expect(
+      (await f.queries.overview(admin, { ...selection, repository: '/extra' })).tasks,
+    ).toHaveLength(0)
+  })
+  test('task search preserves non-ASCII literal names on both providers', async () => {
+    const f = await fixture()
+    await f.task('unicode', { name: 'Ärger 与观测' })
+    await f.task('other', { name: 'Different task' })
+    for (const q of ['Ärger', '观测']) {
+      const result = await f.queries.overview(admin, { ...query, q })
+      expect(result.tasks.map((row) => row.task.id)).toEqual(['unicode'])
+    }
+  })
+  test('continuation is bound to every observation selector and unchanged filters page without repeats', async () => {
+    const f = await fixture()
+    await f.task('a', { name: 'alpha' })
+    await f.task('b', { name: 'alpha' })
+    const selected = {
+      ...query,
+      q: 'alpha',
+      status: 'running' as const,
+      repository: '/fixture',
+      workflow: 'workflow',
+      limit: 1,
+    }
+    const first = await f.queries.list(admin, selected)
+    expect(first.items.map((row) => row.task.id)).toEqual(['b'])
+    const after = first.nextCursor!
+    expect(after).not.toBeNull()
+    expect(
+      (await f.queries.list(admin, { ...selected, after })).items.map((row) => row.task.id),
+    ).toEqual(['a'])
+    for (const patch of [
+      { q: 'beta' },
+      { status: 'done' as const },
+      { repository: '/different' },
+      { workflow: 'different' },
+    ])
+      await expect(f.queries.list(admin, { ...selected, ...patch, after })).rejects.toThrow(
+        'cursor changed window',
+      )
+  })
   test('unobserved and true zero stay different, including a terminal attempt with no end', async () => {
     const f = await fixture()
     await f.task()
@@ -480,6 +601,40 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     result = (await f.queries.detail(admin, 'task'))!
     expect(result.metrics.cost.knownAmount).toBeNull()
     expect(result.metrics.cost.reasons).toContain('not-authorized')
+  })
+  test('HTTP pagination keeps a maximum-length repository selector within the cursor contract', async () => {
+    const f = await fixture()
+    const repository = '/' + 'r'.repeat(4095)
+    await f.task('a', { repoPath: repository })
+    await f.task('b', { repoPath: repository })
+    const app = new Hono()
+    const injectActor: MiddlewareHandler = async (c, next) => {
+      c.set('actor', admin)
+      await next()
+    }
+    app.use('*', injectActor)
+    app.onError(errorHandler)
+    mountObservationRoutes(app, { ...f.pricing, tasks: f.queries })
+    const parameters = new URLSearchParams({
+      from: String(NOW),
+      to: String(NOW + 20000),
+      limit: '1',
+      repository,
+    })
+    const first = await app.request(`/api/observability/tasks?${parameters}`)
+    expect(first.status).toBe(200)
+    const page = (await first.json()) as ObservationTaskPage
+    expect(page.items.map((row) => row.task.id)).toEqual(['b'])
+    expect(page.nextCursor).not.toBeNull()
+    expect(page.nextCursor!.length).toBeLessThan(2048)
+    parameters.set('after', page.nextCursor!)
+    const second = await app.request(`/api/observability/tasks?${parameters}`)
+    expect(second.status).toBe(200)
+    expect(((await second.json()) as ObservationTaskPage).items.map((row) => row.task.id)).toEqual([
+      'a',
+    ])
+    parameters.set('repository', '/different')
+    expect((await app.request(`/api/observability/tasks?${parameters}`)).status).toBe(422)
   })
   test('HTTP query validation and detail preserve the task read contract', async () => {
     const f = await fixture()

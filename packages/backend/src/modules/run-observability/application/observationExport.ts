@@ -129,6 +129,10 @@ export function exportObservationSnapshot(
     'invocation_limit',
     'record_limit',
     'quality_filter',
+    'task_query',
+    'status_filter',
+    'repository_filter',
+    'workflow_filter',
   ]
   const metadata: Cell[] = [
     'CNY',
@@ -144,6 +148,10 @@ export function exportObservationSnapshot(
     snapshot.limits.invocations,
     snapshot.limits.records,
     query.quality ?? null,
+    query.window.q ?? null,
+    query.window.status ?? null,
+    query.window.repository ?? null,
+    query.window.workflow ?? null,
   ]
   const lines = [headers, ...rows.map((row) => [...row, ...metadata])]
   return {

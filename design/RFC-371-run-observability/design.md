@@ -286,3 +286,9 @@ Agent 以 id/revision/purpose 区分；贡献表只显示该 Agent 在该任务�
 性能仅用终态且有有效完成边界的任务计算 nearest-rank P50/P95/最大墙钟时长，显示样本数；零样本为未知。数据质量按当前金额与用量原因列出受影响任务；即使四桶可估值，已选用量来源不完整也必须列入质量原因，不借此宣称采集器健康。分析页签、Agent、质量原因、时间窗口和任务钻取写入 URL，返回恢复原筛选；趋势下钻固定精确半开窗口，刷新不改变自定义窗口。
 
 布局复用 Card、TabBar、TableViewport、NoticeBanner、Dialog 与 stack--md；多列区域仅使用共享 space-4 间距及响应式网格。新增双 provider 对账、读预算、前端导航、axe 和 1280/390 几何回归，执行由 hosted CI 验证。完整采集、子树/usage cohort、导出、关键路径、异常/健康和双部署装配继续按总计划实施。
+
+## 21. 正式统计的任务范围筛选
+
+任务名称/ID 子串、精确状态、工作流 ID、精确仓库 URL/路径均由 TaskExecution 可见任务查询处理；仓库匹配主仓字段及 task_repos 中任一成员，以 EXISTS 保证多仓命中不重复任务。查询在分页和用量聚合之前执行，overview、任务列表及 snapshot CSV 共用同一筛选合同。后续实际模型/来源筛选需明确贡献范围，不能用任务筛选冒充。
+
+分页 continuation 绑定全部筛选，不允许把旧筛选游标用于新范围。任务下钻仍看全程，返回、趋势区间、刷新和 CSV 保留原筛选；修改筛选清除旧分页和 Agent/质量选中。前端复用 FilterBar、FilterField、TextInput 和 Select，无新卡片样式。
