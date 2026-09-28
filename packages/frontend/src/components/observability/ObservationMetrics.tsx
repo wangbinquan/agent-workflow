@@ -62,11 +62,11 @@ export function Tokens({ metrics }: { metrics: ObservationMetrics }) {
     </>
   )
 }
-export function Cost({ metrics }: { metrics: ObservationMetrics }) {
+export function Cost({ metrics, exact = false }: { metrics: ObservationMetrics; exact?: boolean }) {
   const { t } = useTranslation()
   return (
     <>
-      <strong>{formatObservationCny(metrics.cost.knownAmount)}</strong>{' '}
+      <strong>{formatObservationCny(metrics.cost.knownAmount, exact)}</strong>{' '}
       {!metrics.cost.complete && (
         <StatusChip kind="warn" size="sm">
           {t('runObservability.partial')}

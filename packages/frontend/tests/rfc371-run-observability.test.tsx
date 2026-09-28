@@ -493,6 +493,62 @@ test('overview tabs share one server snapshot and agent drill-down restores its 
   expect(screen.getByText('CS 管理的运行时')).toBeTruthy()
   expect(f.paths.filter((path) => path.pathname === '/api/observability/overview')).toHaveLength(1)
 })
+// User requested vertical columns matching CS; preserve exact large totals, zero and unknown semantics.
+test('trend columns scale exact large totals and expose focused interval details without treating unknown as zero', async () => {
+  const data = overview()
+  data.trend = ['18014398509481986', '9007199254740993', '0', null].map((total, i) => {
+    const value = metrics()
+    value.tokens = {
+      ...value.tokens,
+      known: { ...value.tokens.known, input: total ?? '0' },
+      totalKnown: total ?? '0',
+      hasKnown: total !== null,
+      complete: i === 0 || i === 2,
+    }
+    value.cost = {
+      ...value.cost,
+      knownAmount: ['0.000000000001', '9007199254740993.9999999', '0', null][i]!,
+      reasons: i === 3 ? ['not-authorized'] : ['pending'],
+    }
+    return {
+      from: search.from + i * 86400000,
+      to: search.from + (i + 1) * 86400000,
+      taskCount: i + 1,
+      metrics: value,
+    }
+  })
+  const f = fixture({ ...search, tab: 'overview' }, { overview: data })
+  const chart = await screen.findByRole('list', { name: '任务用量趋势' })
+  const columns = within(chart).getAllByRole('button')
+  expect(columns).toHaveLength(4)
+  expect(
+    columns.map(
+      (button) => (button.querySelector('.observation-trend__bar') as HTMLElement).style.height,
+    ),
+  ).toEqual(['100%', '50%', '0%', '0%'])
+  expect(columns[1]!.getAttribute('aria-label')).toContain('9007199254740993 Token · 部分数据')
+  expect(columns[2]!.getAttribute('aria-label')).toContain('0 Token')
+  expect(columns[3]!.getAttribute('aria-label')).toContain('未观测 Token')
+  expect(columns[0]!.title).toContain('¥0.000000000001')
+  expect(columns[1]!.getAttribute('aria-label')).toContain('¥9007199254740993.9999999')
+  expect(columns[3]!.title).not.toContain('部分桶未定价')
+  const detail = screen.getByRole('group', { name: '当前趋势区间' })
+  fireEvent.focus(columns[1]!)
+  expect(within(detail).getByText('9,007,199,254,740,993')).toBeTruthy()
+  expect(detail.textContent).toContain('2 个任务')
+  expect(detail.textContent).toContain('¥9007199254740993.9999999')
+  fireEvent.mouseEnter(columns[3]!)
+  expect(within(detail).getByText('未观测')).toBeTruthy()
+  fireEvent.click(columns[1]!)
+  await waitFor(() =>
+    expect(f.changes.at(-1)).toMatchObject({
+      from: data.trend[1]!.from,
+      to: data.trend[1]!.to,
+      period: 'custom',
+      tab: 'tasks',
+    }),
+  )
+})
 test('trend drill-down fixes an exact interval; refresh preserves a custom window', async () => {
   const f = fixture({ ...search, tab: 'overview' })
   await screen.findByRole('heading', { name: '任务用量趋势' })

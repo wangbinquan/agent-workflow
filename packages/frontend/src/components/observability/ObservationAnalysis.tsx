@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react'
+import { Fragment, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   ObservationMetrics,
@@ -150,10 +150,11 @@ function Trend({
   onBucket: (from: number, to: number) => void
 }) {
   const { t, i18n } = useTranslation()
+  const [activeFrom, setActiveFrom] = useState<number | null>(null)
   const max = data.trend.reduce(
     (m, row) =>
       BigInt(row.metrics.tokens.totalKnown) > m ? BigInt(row.metrics.tokens.totalKnown) : m,
-    1n,
+    0n,
   )
   const date = (at: number) =>
     new Date(at).toLocaleString(i18n.language, {
@@ -163,34 +164,77 @@ function Trend({
       hour: '2-digit',
       minute: '2-digit',
     })
+  const active =
+    data.trend.find((row) => row.from === activeFrom) ??
+    data.trend.find((row) => row.taskCount > 0) ??
+    data.trend[0]
   return (
-    <Card title={t('runObservability.trend')}>
-      <p className="muted">{t('runObservability.trendHint')}</p>
-      <ol className="observation-trend">
-        {data.trend.map((row) => (
-          <li key={row.from}>
-            <button
-              type="button"
-              className="btn btn--sm observation-trend__button"
-              onClick={() => onBucket(row.from, row.to)}
-              aria-label={`${date(row.from)} → ${date(row.to)} · ${t('runObservability.taskCount', { count: row.taskCount })} · ${row.metrics.tokens.hasKnown ? row.metrics.tokens.totalKnown : t('runObservability.unknown')} Token · ${formatObservationCny(row.metrics.cost.knownAmount)}`}
-            >
-              <span className="observation-trend__label">{date(row.from)}</span>
-              <span className="observation-trend__track" aria-hidden="true">
-                <span
-                  className="observation-trend__bar"
-                  style={{
-                    width: `${Number((BigInt(row.metrics.tokens.totalKnown) * 10000n) / max) / 100}%`,
-                  }}
-                />
-              </span>
-              <span>
-                <Tokens metrics={row.metrics} />
-              </span>
-            </button>
-          </li>
-        ))}
-      </ol>
+    <Card title={t('runObservability.trend')} footer={t('runObservability.trendHint')}>
+      <div className="stack--md">
+        <div className="observation-trend__scale muted">
+          <span>{t('runObservability.trendScale')}</span>
+          <span>{max.toLocaleString(i18n.language)}</span>
+        </div>
+        <TableViewport label={t('runObservability.trend')}>
+          <ol className="observation-trend" aria-label={t('runObservability.trend')}>
+            {data.trend.map((row) => {
+              const tokens = row.metrics.tokens
+              const label = `${date(row.from)} → ${date(row.to)} · ${t('runObservability.taskCount', { count: row.taskCount })} · ${tokens.hasKnown ? tokens.totalKnown : t('runObservability.unknown')} Token${tokens.hasKnown && !tokens.complete ? ` · ${t('runObservability.partial')}` : ''} · ${formatObservationCny(row.metrics.cost.knownAmount, true)}${row.metrics.cost.complete ? '' : ` · ${t('runObservability.partial')}`}`
+              return (
+                <li key={row.from}>
+                  <button
+                    type="button"
+                    className="btn btn--ghost observation-trend__button"
+                    onClick={() => onBucket(row.from, row.to)}
+                    onFocus={() => setActiveFrom(row.from)}
+                    onMouseEnter={() => setActiveFrom(row.from)}
+                    aria-label={label}
+                    title={label}
+                  >
+                    <span className="observation-trend__track" aria-hidden="true">
+                      <span
+                        className="observation-trend__bar"
+                        data-partial={!tokens.complete}
+                        data-positive={tokens.hasKnown && BigInt(tokens.totalKnown) > 0n}
+                        style={{
+                          height: `${Number((BigInt(tokens.totalKnown) * 10000n) / (max > 0n ? max : 1n)) / 100}%`,
+                        }}
+                      />
+                      {(!tokens.hasKnown || tokens.totalKnown === '0') && (
+                        <span className="observation-trend__zero">
+                          {tokens.hasKnown ? '0' : '—'}
+                        </span>
+                      )}
+                    </span>
+                    <span className="observation-trend__label" aria-hidden="true">
+                      {new Date(row.from).toLocaleDateString(i18n.language, {
+                        timeZone: data.filtersEcho.timezone,
+                        month: 'numeric',
+                        day: 'numeric',
+                      })}
+                    </span>
+                  </button>
+                </li>
+              )
+            })}
+          </ol>
+        </TableViewport>
+        {active && (
+          <div
+            className="observation-trend__detail"
+            aria-label={t('runObservability.trendInterval')}
+            role="group"
+          >
+            <span className="muted">
+              {date(active.from)} → {date(active.to)}
+            </span>
+            <span>
+              {t('runObservability.taskCount', { count: active.taskCount })} ·{' '}
+              <Tokens metrics={active.metrics} /> Token · <Cost metrics={active.metrics} exact />
+            </span>
+          </div>
+        )}
+      </div>
     </Card>
   )
 }

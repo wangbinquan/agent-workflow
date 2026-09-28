@@ -72,6 +72,8 @@ export const runObservabilityZh = {
   tab_performance: '性能与数据质量',
   loadedTasks: '当前统计任务',
   trend: '任务用量趋势',
+  trendScale: '已知 Token · 条纹表示部分用量',
+  trendInterval: '当前趋势区间',
   trendHint: '按任务开始时间分组，统计任务全程消耗；不是该时段内实际发生量。点击区间进入任务列表。',
   taskCount: '{{count}} 个任务',
   agentRanking: 'Agent 消耗排名',
@@ -272,6 +274,8 @@ export const runObservabilityEn: RunObservabilityMessages = {
   tab_performance: 'Performance and data quality',
   loadedTasks: 'Tasks in this result',
   trend: 'Task usage trend',
+  trendScale: 'Known tokens · stripes indicate partial usage',
+  trendInterval: 'Current trend interval',
   trendHint:
     'Grouped by task start time, showing lifetime usage, not usage incurred during each interval. Select an interval to open its tasks.',
   taskCount: '{{count}} tasks',

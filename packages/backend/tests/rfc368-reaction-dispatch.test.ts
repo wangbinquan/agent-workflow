@@ -67,14 +67,28 @@ describe('RFC-368 T8 —— Reaction 派发臂', () => {
       await seedReaction(harness.db)
       const crashed = scriptedPort()
       // worker-a 的 launch 永不返回：模拟 admission 提交之后、launch 回执之前进程死掉。
-      crashed.launchBehavior = () => new Promise<void>(() => {})
-      void reactionService(harness.db, {
+      let reachedLaunch!: () => void
+      const launched = new Promise<void>((resolve) => {
+        reachedLaunch = resolve
+      })
+      crashed.launchBehavior = () => {
+        reachedLaunch()
+        return new Promise<void>(() => {})
+      }
+      const dispatch = reactionService(harness.db, {
         port: crashed,
         now,
         mint,
         workerId: 'worker-a',
       }).dispatchOneReaction()
-      await Bun.sleep(50)
+      // Loaded CI runners can take longer than 50ms to commit admission. Observe
+      // the actual launch boundary; an early dispatch failure must still fail.
+      await Promise.race([
+        launched,
+        dispatch.then((outcome) => {
+          throw new Error(`Dispatch returned before hanging launch: ${outcome}`)
+        }),
+      ])
       expect(crashed.launches).toHaveLength(1)
       expect((await reactionRows(harness.db)).round.state).toBe('planned')
 

@@ -185,7 +185,46 @@ test('task, agents and attempt drill-down use real observations and standard car
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 })
     await expectAnalysisSpacing(page)
+    const chart = page.getByRole('list', { name: 'Task usage trend' })
+    const tracks = await chart.locator('.observation-trend__track').evaluateAll((elements) =>
+      elements.map((element) => {
+        const box = element.getBoundingClientRect()
+        return { x: box.x, y: box.y, height: box.height }
+      }),
+    )
+    expect(tracks.length).toBeGreaterThan(1)
+    for (const [i, track] of tracks.entries()) {
+      expect(track.height).toBe(176)
+      expect(track.y).toBeCloseTo(tracks[0]!.y, 0)
+      if (i > 0) expect(track.x).toBeGreaterThan(tracks[i - 1]!.x)
+    }
+    const last = chart.getByRole('button').last()
+    await last.focus()
+    await expect(last).toBeFocused()
+    const visible = await last.boundingBox()
+    expect(visible!.x).toBeGreaterThanOrEqual(0)
+    expect(visible!.x + visible!.width).toBeLessThanOrEqual(width)
+    await page.screenshot({
+      path: testInfo.outputPath(`trend-columns-${width}.png`),
+      fullPage: true,
+    })
   }
+  const observedBucket = page
+    .getByRole('list', { name: 'Task usage trend' })
+    .getByRole('button', { name: /1 tasks.*Not observed Token/ })
+  await observedBucket.focus()
+  await expect(page.getByRole('group', { name: 'Current trend interval' })).toContainText(
+    'Not observed',
+  )
+  await page.keyboard.press('Enter')
+  await expect(page.getByRole('tab', { name: 'Task traces', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(page).toHaveURL(/period=custom/)
+  await expect(
+    page.getByRole('button', { name: 'Observed parallel task', exact: true }),
+  ).toBeVisible()
   await page.setViewportSize({ width: 1280, height: 844 })
   await page.getByRole('tab', { name: 'Agent analysis', exact: true }).click()
   await expect(

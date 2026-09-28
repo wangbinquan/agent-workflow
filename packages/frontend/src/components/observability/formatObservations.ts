@@ -1,6 +1,7 @@
 /** Format exact CNY decimals without a floating-point conversion, including tiny nonzero values. */
-export function formatObservationCny(amount: string | null): string {
+export function formatObservationCny(amount: string | null, exact = false): string {
   if (amount === null) return '—'
+  if (exact) return `¥${amount}`
   const [whole = '0', fraction = ''] = amount.split('.')
   const picos = BigInt(whole) * 1_000_000_000_000n + BigInt(fraction.padEnd(12, '0'))
   if (picos > 0n && picos < 1_000_000n) return '<¥0.000001'
