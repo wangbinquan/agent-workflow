@@ -216,3 +216,7 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 新增双 provider 回归覆盖初始化／发布期间不可见、初始化失败等待清理及清理失败、计划失败零预留、post-commit 故障保留、bundle 阶段补偿，以及实际 catalog 普通新建／ZIP 与 live／snapshot 二进制字节。非文件 fixture 仅验证端口，不能替代 CS 持久化或真实部署验收。删除、history、backfill、boot recovery 和所有 bundle 调用者尚未收口，H6／A-G 仍未完成。
 - `954f91f2ee9c5ce7a1b03ad516c389a5c8391e46` 的 CI `36382025085` 已检出三类需修复测试：SkillContentReader 用 plain Actor 传入 DirectAuthenticatedAuthority（本批改为真库用户的正式 admission）；RFC-347 exact 源码锁仍指向旧 auth/session（本批改锁唯一 localCredentialAdmission 与 compatibility composition 的实际入口）；Intent invalid payload 原契约为 422 而新夹具误写 400（本批纠正并增加 intent-invalid code 断言，继续锁零 config IO）。不为这些失败更改生产身份或 HTTP 合同，旧失败 run 不记通过。
 - 本批目标 Prettier／ESLint 和源码 census 检查，未运行本地功能测试；实际 mutation 入口净增 1、owner 项净增 11，逐项声明一次性增长，其余账本按源码重采。正式功能结果仍以新候选精确 SHA 的 GitHub CI 为准。
+
+
+- 2026-09-28 用户要求优先修复 CI，新增适配暂停。创建切面 `a9cba5f7c` 的 CI `36383302845` 类型检查失败于 ZIP 夹具缺少 `encoding: base64`；该遗漏已由后继 `78e3e9cca` 补齐，当前主干 `6aeb271f6` 的检查任务 `108865765242` 已通过类型／lint／格式／shared／system-mocks。完整 CI 尚未结束，不能以此宣告全绿。
+- 当前 run `36403163358` 新失败为四份架构 provenance 摘要及 RFC-371 定价测试的四个历史幂等键误报。摘要由并行观测会话修复，本会话不重采含未完成历史读取重构的源码，也不接管其修改；仅按确切 commit/path/rule/line 登记已核实测试字面量。保留全仓扫描及既有判据，等待包含两项修复的最终 SHA 验证。

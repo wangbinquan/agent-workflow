@@ -79,3 +79,11 @@ c85b252c75e2be3c5fdb04ae0692aeffb279fc31:e2e/rfc319-workgroup-acl.spec.ts:generi
 # 扫全部历史，改当前文件消不掉。（沿用本文件既有纪律：注释里不写出被判命中的完整键值形态。）
 ff67b9eebec3f77c4ce44f881df3b919f92a09c3:packages/backend/tests/rfc359-w29-unstarted-application-composition.test.ts:generic-api-key:269
 67e2cf8c9a756ca3831a083aa4455cc03c2e2287:packages/backend/tests/rfc359-t19h-generation-upgrade.test.ts:generic-api-key:157
+
+# RFC-371 pricing-provider: four published test idempotency-key literals
+# are fixture request identities, not credentials. Scope each exemption to
+# its exact commit/path/rule/line; keep repository and future scans enabled.
+a9fa45ed1f5ad5ecfee49b67023b4971527876db:packages/backend/tests/rfc371-pricing-provider.test.ts:generic-api-key:20
+a9fa45ed1f5ad5ecfee49b67023b4971527876db:packages/backend/tests/rfc371-pricing-provider.test.ts:generic-api-key:68
+a9fa45ed1f5ad5ecfee49b67023b4971527876db:packages/backend/tests/rfc371-pricing-provider.test.ts:generic-api-key:73
+a9fa45ed1f5ad5ecfee49b67023b4971527876db:packages/backend/tests/rfc371-pricing-provider.test.ts:generic-api-key:122
