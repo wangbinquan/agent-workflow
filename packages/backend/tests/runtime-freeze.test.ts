@@ -323,6 +323,7 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
   test('registry edits and deletion do not rewrite resumed or inherited attribution', async () => {
     const { db, id } = await seedRun(harness.db)
     const registry = runtimeRegistryPersistence(db)
+    await seedBuiltinRuntimes(registry)
     await createRuntime(registry, { name: 'priced-runtime', protocol: 'opencode', model: 'before' })
     const row = (await registry.getRuntime('priced-runtime'))!
     const first = await resolveFrozenRuntime(db, id, 'priced-runtime', null)
@@ -333,7 +334,7 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
     expect((await registry.getRuntime('priced-runtime'))?.probeFence).toBeGreaterThan(
       row.probeFence,
     )
-    await deleteRuntime(registry, 'priced-runtime')
+    await deleteRuntime(registry, 'priced-runtime', {})
     expect(
       (await resolveFrozenRuntime(db, id, 'priced-runtime', null)).observationIdentity,
     ).toEqual(identity)
@@ -363,10 +364,13 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
       protocol: 'opencode',
       model: 'before',
     })
+    const original = (await registry.getRuntime('observation-profile'))!
     await expect(
-      databaseSessionFor(db).transaction(async () => {
+      databaseSessionFor(db).transaction(async (tx) => {
         await updateRuntime(registry, 'observation-profile', { model: 'inside' })
-        const row = (await registry.getRuntime('observation-profile'))!
+        // Read the transaction handle, not another PostgreSQL pool connection.
+        const row = (await runtimeRegistryPersistence(tx).getRuntime('observation-profile'))!
+        expect(row.probeFence).toBe(original.probeFence + 1)
         const frozen = await resolveFrozenRuntime(db, id, 'observation-profile', null)
         expect(frozen.observationIdentity).toEqual({
           registrationId: row.id,
@@ -377,6 +381,10 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
       }),
     ).rejects.toThrow('rollback-observation-freeze')
     expect((await frozenCols(db, id)).runtime).toBeNull()
+    expect(await registry.getRuntime('observation-profile')).toMatchObject({
+      model: 'before',
+      probeFence: original.probeFence,
+    })
   })
 
   test('unregistered fallbacks and legacy snapshots never borrow a current registration', async () => {

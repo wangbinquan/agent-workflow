@@ -1,6 +1,6 @@
 # RFC-371 技术与交互设计
 
-状态：Draft。产品全景与验收见 [proposal.md](./proposal.md)。这里定义未来实现合同；原型不是后台实现证明。
+状态：In Progress，用户已批准完整实施。产品全景与验收见 [proposal.md](./proposal.md)；实际交付范围与未完成项逐批记录在 plan.md，原型不替代后台实现证明。
 
 ## 1. 架构落位与能力边界
 

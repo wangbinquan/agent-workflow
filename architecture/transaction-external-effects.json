@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 27,
-    "transactionCallbacks": 259
+    "transactionCallbacks": 260
   },
   "entries": [
     {
@@ -2654,10 +2654,22 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts#transaction:43",
+      "line": 43,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts#createObservationInvocationStore",
+      "status": "clear",
+      "symbol": "createObservationInvocationStore",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts#transaction:112",
-      "line": 112,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts#transaction:119",
+      "line": 119,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts#createObservationPriceStore",
       "status": "clear",
       "symbol": "createObservationPriceStore",
@@ -3172,7 +3184,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2b6028ed32f170fe4686b5f3e7f5bf010eaeecaba0237623e1beb2c28400343b",
+  "sourceDigest": "sha256:0858b77db84fd714741e525a59ff65b1ee86b51e1f27bbd63db504a600d2180f",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

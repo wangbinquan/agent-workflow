@@ -21,6 +21,7 @@ export interface ObservationPriceScope {
     registrationId: string,
     identity: ObservationPriceIdentity,
     acceptedAt?: number,
+    maxRevision?: number,
   ): Promise<ObservationPriceVersion | undefined>
   append(version: ObservationPriceVersion, requestKey: string, fingerprint: string): Promise<void>
 }
@@ -34,6 +35,7 @@ export interface ObservationPriceStore {
     registrationId: string,
     identity: ObservationPriceIdentity,
     acceptedAt: number,
+    maxRevision?: number,
   ): Promise<ObservationPriceVersion | undefined>
   change<T>(registrationId: string, work: (scope: ObservationPriceScope) => Promise<T>): Promise<T>
 }

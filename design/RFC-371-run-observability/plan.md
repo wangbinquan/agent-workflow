@@ -104,3 +104,11 @@
 - 这一步只固定执行使用的注册身份；受理时刻、实际模型证据、价格快照、source 摄取、正式查询/界面与两种部署实机验收仍未完成。
 
 - CI 暴露的协议旁路已改为 RuntimeDriver 可选 normalizeUsage 能力：解析位于各驱动目录，中立校验复用共享计量 schema；未知 driver 保留 unsupported，不退回其他协议。同步 scheduler AST 用例清单与临时空 public 面的历史账本计数。
+
+## 10. 实施批次 5：受理价目表与执行 authority
+
+- observation_invocations 保留不可变受理时间、Agent 归因、独立/托管执行 authority；本地冻结价目表 head，CS 按 project/executionResource/generation 固定唯一调用映射。
+- 本地估值按冻结注册身份、配置修订、实际 provider/model/条件、生效边界和已接受 head 共同选择；空目录 revision=0 保持未定价。CS authority 的本地估值入口只返回平台管理，永不读 AW 价格。平台授权估值导入仍待实现。独立功能复核修正 CS generation=0 合同不一致后 PASS。
+- 新增双 provider 回归：并发幂等、重新打开后回执、档位删除、迟到价格/新模型、未知身份、CS 重复映射与代次、零值/部分估算；SQLite 0233 与 PostgreSQL 0009 迁移及 schema artifacts 已生成，未在本地运行 AW 测试。
+- ff924c1 精确 CI 36394863489 最终 40 success / 4 failure / 2 cancelled；功能失败为协议归属与空 public 面账本，已由 4ffa5c160 修复。4ffa5c160 的 Lint/Typecheck 作业指出新增冻结用例缺少 deleteRuntime refs 参数，本批补齐并播种非删除档位；PG 事务内修订对拍改读同一事务句柄，保留修订 +1 与整笔回滚双向断言。Static scans 不在本任务检查范围，整体 CI 未记通过。
+- 受理与估值基础尚未接入生产 runner、CS 同步或正式查询/页面；这一步不记真实调用采集或双部署验收完成。

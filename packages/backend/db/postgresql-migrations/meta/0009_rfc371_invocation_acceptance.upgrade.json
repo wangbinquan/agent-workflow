@@ -1,0 +1,261 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:799edd05285d773e07ad9d704a90b0756df6604b892df220dd02a3cec8b95fd0', 192, 6)"
+    },
+    "beforeDigest": "sha256:f34971047c7625dc7865f41765bd2f1d938f42433f8d6853a45e40afe60ba5c8"
+  },
+  "digest": "sha256:5bc6704cd5079c1fadef26d0f235570ffaef2dd2d23d62f49e3984fefb1125a7",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "observation_invocations",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_invocations\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"canonical_execution\" TEXT COLLATE \"C\" NOT NULL,\n  \"fingerprint\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_invocations_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_invocations:index:observation_invocation_execution_uq",
+      "sql": "CREATE UNIQUE INDEX \"observation_invocation_execution_uq\" ON \"agent_workflow\".\"observation_invocations\" (\"canonical_execution\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_invocations:index:observation_invocation_task_idx",
+      "sql": "CREATE INDEX \"observation_invocation_task_idx\" ON \"agent_workflow\".\"observation_invocations\" (\"task_id\", \"id\")"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:799edd05285d773e07ad9d704a90b0756df6604b892df220dd02a3cec8b95fd0', active_table_count = 192, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:04d316c1638d8d782a4645b7b21cf9e7cf5db537b9e58d54b21699276ea3c5a1' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:04d316c1638d8d782a4645b7b21cf9e7cf5db537b9e58d54b21699276ea3c5a1",
+    "planDigest": "sha256:acd2fab78308074ca1e0e2cce6be27a8c73866fee101f4fc8d892ebf828da973"
+  },
+  "id": "0009_rfc371_invocation_acceptance",
+  "indexAdditions": [
+    {
+      "position": 128,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_invocations",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_invocations\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"task_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"canonical_execution\" TEXT COLLATE \"C\" NOT NULL,\n  \"fingerprint\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_invocations_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 423,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_invocations:index:observation_invocation_execution_uq",
+        "sql": "CREATE UNIQUE INDEX \"observation_invocation_execution_uq\" ON \"agent_workflow\".\"observation_invocations\" (\"canonical_execution\")"
+      }
+    },
+    {
+      "position": 424,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_invocations:index:observation_invocation_task_idx",
+        "sql": "CREATE INDEX \"observation_invocation_task_idx\" ON \"agent_workflow\".\"observation_invocations\" (\"task_id\", \"id\")"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 124,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "task_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "canonical_execution",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "fingerprint",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "document",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "observation_invocations",
+        "indexes": [
+          {
+            "columns": ["canonical_execution"],
+            "name": "observation_invocation_execution_uq",
+            "unique": true,
+            "where": null
+          },
+          {
+            "columns": ["task_id", "id"],
+            "name": "observation_invocation_task_idx",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "observation_invocations",
+          "sqlite": "observation_invocations"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationInvocations",
+        "sourceTable": "observation_invocations",
+        "unique": [
+          {
+            "columns": ["canonical_execution"],
+            "expression": null,
+            "name": "observation_invocation_execution_uq"
+          }
+        ]
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:1a0f760f4f3b5ef27e5cac166236e489d60bd4a14a7bc0967f4230462d2a1261",
+  "sequence": 9,
+  "sqlDigest": "sha256:639ec57f56a2ac5b93684543935a024713bd628080766f93e0d72aa541d2a3a6",
+  "sqlFile": "0009_rfc371_invocation_acceptance.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1790579348110,
+        "hash": "513fd7a404f018ee8a13cdd587350e5b317d1efe94ab957158548dbee1f7f762",
+        "index": 232,
+        "tag": "0233_rfc371_invocation_acceptance"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:3a72eccc37d9aef925f6aa817ce2a6a85697482834606547745a05abd4beea45",
+      "count": 232,
+      "last": {
+        "folderMillis": 1790579348109,
+        "hash": "1438b4ff7cb48c266bacd1744a209f3b82937d4757b85fde24b3b3c79b801d17",
+        "index": 231,
+        "tag": "0232_rfc371_usage_ledger"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:98d4ff7ae38a3c2b25f055e00e725ca75aafd3d3c4dd72fde6b6d3d5c433e1bc",
+      "count": 233,
+      "last": {
+        "folderMillis": 1790579348110,
+        "hash": "513fd7a404f018ee8a13cdd587350e5b317d1efe94ab957158548dbee1f7f762",
+        "index": 232,
+        "tag": "0233_rfc371_invocation_acceptance"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:799edd05285d773e07ad9d704a90b0756df6604b892df220dd02a3cec8b95fd0",
+    "planDigest": "sha256:f5920a81684824e78b34820b8056055822d79320884c49177d176e1a24271c9d"
+  },
+  "version": 2
+}

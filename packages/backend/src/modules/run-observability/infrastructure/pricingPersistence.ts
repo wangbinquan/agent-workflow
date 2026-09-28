@@ -9,7 +9,12 @@ import type { ObservationPriceScope, ObservationPriceStore } from '../ports/pric
 function decode(document: string): ObservationPriceVersion {
   return ObservationPriceVersionSchema.parse(JSON.parse(document))
 }
-function matching(registrationId: string, identity: ObservationPriceIdentity, acceptedAt?: number) {
+function matching(
+  registrationId: string,
+  identity: ObservationPriceIdentity,
+  acceptedAt?: number,
+  maxRevision?: number,
+) {
   return and(
     eq(prices.registrationId, registrationId),
     eq(prices.configurationRevision, identity.configurationRevision),
@@ -20,6 +25,7 @@ function matching(registrationId: string, identity: ObservationPriceIdentity, ac
       ? isNull(prices.condition)
       : eq(prices.condition, identity.condition),
     acceptedAt === undefined ? undefined : lte(prices.effectiveFrom, acceptedAt),
+    maxRevision === undefined ? undefined : lte(prices.revision, maxRevision),
   )
 }
 function priceScope(db: ProviderNeutralDatabase): ObservationPriceScope {
@@ -40,11 +46,11 @@ function priceScope(db: ProviderNeutralDatabase): ObservationPriceScope {
         .get()
       return row ? { fingerprint: row.fingerprint, version: decode(row.document) } : undefined
     },
-    latest: async (id, identity, at) => {
+    latest: async (id, identity, at, maxRevision) => {
       const row = await db
         .select()
         .from(prices)
-        .where(matching(id, identity, at))
+        .where(matching(id, identity, at, maxRevision))
         .orderBy(desc(prices.effectiveFrom), desc(prices.revision))
         .limit(1)
         .get()
@@ -107,7 +113,8 @@ export function createObservationPriceStore(db: ProviderNeutralDatabase): Observ
           .limit(query.limit)
           .all()
       ).map((row) => decode(row.document)),
-    priceAt: (id, identity, at) => priceScope(db).latest(id, identity, at),
+    priceAt: (id, identity, at, maxRevision) =>
+      priceScope(db).latest(id, identity, at, maxRevision),
     change: (id, work) =>
       databaseSessionFor(db).transaction(async (tx) => {
         await tx

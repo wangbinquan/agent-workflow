@@ -182,10 +182,7 @@
       "file": "packages/backend/tests/architecture/rfc317-module-boundary.test.ts",
       "symbol": "MODULES_WITHOUT_PUBLIC",
       "baseline": 1,
-      "why": "RFC-294/317：还没有 public 合同面的模块存量。目标是 0——每个模块都该只经 exact public 被消费。",
-      "allowGrowth": {
-        "why": "RFC-371：运行时注册身份从同一次选择冻结到执行元数据，覆盖内部提交与合并调用；原生计量解析归属 driver、补登其 owner 与 AST 用例，并如实登记待接入执行源的临时空 public 面，rfc317-modules-without-public 0 → 1，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294/317：还没有 public 合同面的模块存量。目标是 0——每个模块都该只经 exact public 被消费。"
     },
     {
       "id": "rfc317-no-corpus-floor",
@@ -724,10 +721,7 @@
       "file": "packages/backend/tests/rfc287-t1-scheduler-source-lock-inventory.test.ts",
       "symbol": "SCHEDULER_SOURCE_LOCK_FILES",
       "baseline": 31,
-      "why": "RFC-287 T1：把调度器**源码文本**钉死的测试文件清单。每一条都是一处「重构会被文本断言拦住」的耦合，只该随源码锁退役而减少。RFC-359 W7 第二波按判据 C 补入网。",
-      "allowGrowth": {
-        "why": "RFC-371：运行时注册身份从同一次选择冻结到执行元数据，覆盖内部提交与合并调用；原生计量解析归属 driver、补登其 owner 与 AST 用例，并如实登记待接入执行源的临时空 public 面，rfc287-scheduler-source-lock-files 30 → 31，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-287 T1：把调度器**源码文本**钉死的测试文件清单。每一条都是一处「重构会被文本断言拦住」的耦合，只该随源码锁退役而减少。RFC-359 W7 第二波按判据 C 补入网。"
     },
     {
       "id": "rfc199-workflow-writers",
@@ -817,10 +811,10 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1754,
+      "baseline": 1756,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
-        "why": "RFC-371：运行时注册身份从同一次选择冻结到执行元数据，覆盖内部提交与合并调用；原生计量解析归属 driver、补登其 owner 与 AST 用例，并如实登记待接入执行源的临时空 public 面，rfc294-mutation-entrypoints 1753 → 1754，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：新增不可变调用受理与已接受价目表上界，固定独立/托管执行 authority 并补齐双引擎表合同和回归，rfc294-mutation-entrypoints 1754 → 1756，按新增功能如实登记本批归属与公开合同。"
       }
     },
     {
@@ -834,8 +828,11 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 259,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
+      "baseline": 260,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
+      "allowGrowth": {
+        "why": "RFC-371：新增不可变调用受理与已接受价目表上界，固定独立/托管执行 authority 并补齐双引擎表合同和回归，rfc294-transaction-callbacks 259 → 260，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-background-jobs",
@@ -855,10 +852,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5507,
+      "baseline": 5513,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-371：运行时注册身份从同一次选择冻结到执行元数据，覆盖内部提交与合并调用；原生计量解析归属 driver、补登其 owner 与 AST 用例，并如实登记待接入执行源的临时空 public 面，rfc294-cross-context-observed-imports 5505 → 5507，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：新增不可变调用受理与已接受价目表上界，固定独立/托管执行 authority 并补齐双引擎表合同和回归，rfc294-cross-context-observed-imports 5507 → 5513，按新增功能如实登记本批归属与公开合同。"
       }
     },
     {
@@ -879,10 +876,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4893,
+      "baseline": 4898,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-371：运行时注册身份从同一次选择冻结到执行元数据，覆盖内部提交与合并调用；原生计量解析归属 driver、补登其 owner 与 AST 用例，并如实登记待接入执行源的临时空 public 面，rfc294-architecture-exceptions 4892 → 4893，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：新增不可变调用受理与已接受价目表上界，固定独立/托管执行 authority 并补齐双引擎表合同和回归，rfc294-architecture-exceptions 4893 → 4898，按新增功能如实登记本批归属与公开合同。"
       }
     },
     {
@@ -890,20 +887,14 @@
       "file": "architecture/facades.json",
       "symbol": "entries",
       "baseline": 294,
-      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。",
-      "allowGrowth": {
-        "why": "RFC-371：运行时注册身份从同一次选择冻结到执行元数据，覆盖内部提交与合并调用；原生计量解析归属 driver、补登其 owner 与 AST 用例，并如实登记待接入执行源的临时空 public 面，rfc294-facades 291 → 294，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1022,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-371：运行时注册身份从同一次选择冻结到执行元数据，覆盖内部提交与合并调用；原生计量解析归属 driver、补登其 owner 与 AST 用例，并如实登记待接入执行源的临时空 public 面，rfc294-public-surfaces 1021 → 1022，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -923,15 +914,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25233,
+      "baseline": 25254,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-371：运行时注册身份从同一次选择冻结到执行元数据，覆盖内部提交与合并调用；原生计量解析归属 driver、补登其 owner 与 AST 用例，并如实登记待接入执行源的临时空 public 面，rfc294-module-symbol-owners 25225 → 25233，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：新增不可变调用受理与已接受价目表上界，固定独立/托管执行 authority 并补齐双引擎表合同和回归，rfc294-module-symbol-owners 25233 → 25254，按新增功能如实登记本批归属与公开合同。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:2b6028ed32f170fe4686b5f3e7f5bf010eaeecaba0237623e1beb2c28400343b",
+    "sourceDigest": "sha256:0858b77db84fd714741e525a59ff65b1ee86b51e1f27bbd63db504a600d2180f",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -944,8 +935,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ff924c1bf26a87018d6c7c06335a8e762798f385",
-    "contentDigest": "sha256:3c2ad406a4f0964afbc5732d128e2ac104a5a1eec0e9270e53eeaf7afe208f0b",
+    "currentSnapshotSha": "4ffa5c1609146decc100a2cd0583913005d4ca09",
+    "contentDigest": "sha256:f0ed2bb279584f5e46dca147bb5feff90fe2b28f25ed03e3daacf3ccd5c6019c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

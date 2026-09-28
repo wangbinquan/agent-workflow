@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1754,
+    "entries": 1756,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20505,6 +20505,30 @@
         "fenceOrOcc": true,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/run-observability/application/invocationValuation.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/invocationValuation.ts#createInvocationValuation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/invocationValuation.ts#createInvocationValuation",
+      "symbol": "createInvocationValuation",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/run-observability/application/pricing.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/run-observability/application/pricing.ts#createObservationPricing",
@@ -20563,6 +20587,28 @@
       "symbol": "createUsageIngestion",
       "targetContext": "run-observability",
       "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts#createObservationInvocationStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts#createObservationInvocationStore",
+      "symbol": "createObservationInvocationStore",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
     },
     {
       "controls": {
@@ -41918,7 +41964,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2b6028ed32f170fe4686b5f3e7f5bf010eaeecaba0237623e1beb2c28400343b",
+  "sourceDigest": "sha256:0858b77db84fd714741e525a59ff65b1ee86b51e1f27bbd63db504a600d2180f",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

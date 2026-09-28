@@ -49,6 +49,22 @@ import { providerAwareSqliteTable } from './providerSchema'
 
 const sqliteTable = providerAwareSqliteTable(physicalSqliteTable)
 
+// RFC-371: immutable execution authority and local price-book acceptance.
+export const observationInvocations = sqliteTable(
+  'observation_invocations',
+  {
+    id: text('id').primaryKey(),
+    taskId: text('task_id').notNull(),
+    canonicalExecution: text('canonical_execution').notNull(),
+    fingerprint: text('fingerprint').notNull(),
+    document: text('document').notNull(),
+  },
+  (table) => [
+    uniqueIndex('observation_invocation_execution_uq').on(table.canonicalExecution),
+    index('observation_invocation_task_idx').on(table.taskId, table.id),
+  ],
+)
+
 // RFC-371: durable usage revisions and their source cursor commit atomically.
 export const observationUsageSources = sqliteTable('observation_usage_sources', {
   sourceId: text('source_id').primaryKey(),

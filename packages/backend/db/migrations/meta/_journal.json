@@ -1625,6 +1625,13 @@
       "when": 1790579348109,
       "tag": "0232_rfc371_usage_ledger",
       "breakpoints": true
+    },
+    {
+      "idx": 232,
+      "version": "6",
+      "when": 1790579348110,
+      "tag": "0233_rfc371_invocation_acceptance",
+      "breakpoints": true
     }
   ]
 }
