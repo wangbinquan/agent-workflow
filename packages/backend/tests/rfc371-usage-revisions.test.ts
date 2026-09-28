@@ -154,3 +154,109 @@ test('unknown inclusion and a baseline above current usage remain diagnostics', 
       .success,
   ).toBe(true)
 })
+
+test('model identity can be refined without another contribution, but known conflicts remain rejected', () => {
+  const unknown = measurement({ model: null }),
+    identified = measurement({ revision: 2, model: { provider: null, id: 'actual' } }),
+    routed = measurement({ revision: 3, model: { provider: 'native', id: 'actual' } })
+  const first = reconcileUsage('source', unknown).record
+  const next = reconcileUsage('source', identified, first).record
+  const known = reconcileUsage('source', routed, next).record
+  expect(known).toMatchObject({
+    measurement: { model: routed.model },
+    modelRevision: 3,
+    contribution: counts('100'),
+    issues: [],
+  })
+  const outage = reconcileUsage(
+    'source',
+    measurement({ revision: 4, model: null, usage: counts('120') }),
+    known,
+  ).record
+  expect(outage).toMatchObject({
+    measurement: { model: routed.model },
+    modelRevision: 3,
+    contribution: counts('120'),
+    issues: [],
+  })
+  for (const model of [
+    { provider: 'different', id: 'actual' },
+    { provider: 'native', id: 'different' },
+  ]) {
+    const conflict = reconcileUsage(
+      'source',
+      measurement({ revision: 5, model, usage: counts('999') }),
+      outage,
+    ).record
+    expect(conflict).toMatchObject({
+      contribution: counts('120'),
+      issues: ['identity-conflict'],
+      measurement: { model: routed.model },
+      modelRevision: 3,
+    })
+  }
+})
+
+test('model-only refinement preserves accepted numeric revision, coverage and rejected quality', () => {
+  const initial = reconcileUsage(
+    'source',
+    measurement({
+      model: null,
+      scope: {
+        root: 'native',
+        session: 'native',
+        parentSession: null,
+        ancestors: [],
+        turn: 'one',
+        turnIndex: 2,
+        level: 'request',
+      },
+    }),
+  ).record
+  const decreased = reconcileUsage(
+    'source',
+    {
+      ...initial.measurement,
+      revision: 2,
+      usage: counts('90'),
+      model: { provider: 'actual', id: 'model' },
+    },
+    initial,
+  ).record
+  expect(decreased).toMatchObject({
+    measurement: { revision: 1, usage: counts('100') },
+    observedRevision: 2,
+    modelRevision: 2,
+    contribution: initial.contribution,
+    coveredThrough: initial.coveredThrough,
+    complete: false,
+    issues: ['unexplained-decrease'],
+  })
+  const outage = reconcileUsage(
+    'source',
+    {
+      ...decreased.measurement,
+      revision: 3,
+      usage: counts('120'),
+      model: { provider: null, id: 'model' },
+    },
+    decreased,
+  ).record
+  expect(outage).toMatchObject({
+    modelRevision: 2,
+    measurement: { model: { provider: 'actual', id: 'model' } },
+    contribution: counts('120'),
+  })
+  const invalid = reconcileUsage(
+    'source',
+    {
+      ...initial.measurement,
+      revision: 2,
+      validity: 'invalid-final',
+      model: { provider: 'actual', id: 'model' },
+    },
+    initial,
+  ).record
+  expect(invalid.measurement.model).toBeNull()
+  expect(invalid.modelRevision).toBeUndefined()
+})

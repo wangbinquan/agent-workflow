@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1896,
+    "backendFiles": 1897,
     "frontendFiles": 628,
-    "legacyFiles": 553,
+    "legacyFiles": 554,
     "moduleFiles": 1343,
-    "productionFiles": 2682,
+    "productionFiles": 2683,
     "sharedFiles": 158,
-    "symbolsIncludingFileRoots": 25271
+    "symbolsIncludingFileRoots": 25279
   },
   "entries": [
     {
@@ -105596,10 +105596,34 @@
       "currentLayer": "domain",
       "exported": false,
       "file": "packages/backend/src/modules/run-observability/domain/usageLedger.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/usageLedger.ts#compatibleModel",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "compatibleModel",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/domain/usageLedger.ts",
       "id": "owner:packages/backend/src/modules/run-observability/domain/usageLedger.ts#diagnostic",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "diagnostic",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/domain/usageLedger.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/usageLedger.ts#modelEvidence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "modelEvidence",
       "targetContext": "run-observability",
       "targetLayer": "domain"
     },
@@ -105612,6 +105636,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "reconcileUsage",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/domain/usageLedger.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/usageLedger.ts#retainedModel",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "retainedModel",
       "targetContext": "run-observability",
       "targetLayer": "domain"
     },
@@ -184827,6 +184863,66 @@
       "removeAfterWave": "W9-D",
       "status": "legacy-target",
       "symbol": "parseModelsOutput",
+      "targetContext": "runtime-management",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/runtime/opencode/nativeUsage.ts",
+      "id": "owner:packages/backend/src/services/runtime/opencode/nativeUsage.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/runtime/opencode/nativeUsage.ts",
+      "id": "owner:packages/backend/src/services/runtime/opencode/nativeUsage.ts#ActualModel",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "ActualModel",
+      "targetContext": "runtime-management",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/runtime/opencode/nativeUsage.ts",
+      "id": "owner:packages/backend/src/services/runtime/opencode/nativeUsage.ts#createOpencodeUsageNormalizer",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "createOpencodeUsageNormalizer",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/runtime/opencode/nativeUsage.ts",
+      "id": "owner:packages/backend/src/services/runtime/opencode/nativeUsage.ts#opencodeUsageDatabasePath",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "opencodeUsageDatabasePath",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/runtime/opencode/nativeUsage.ts",
+      "id": "owner:packages/backend/src/services/runtime/opencode/nativeUsage.ts#readOpencodeUsageModel",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "readOpencodeUsageModel",
       "targetContext": "runtime-management",
       "targetLayer": "domain"
     },
@@ -303982,5 +304078,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:12b09ad47cb594f1e93dae8e36f2c9e70cdf1f0205e247c7cb2af4883ed0b881"
+  "sourceDigest": "sha256:e205903c07a9e0516e5b386cf5abea63c639d71bd89ae69f86ad4e617f08694e"
 }

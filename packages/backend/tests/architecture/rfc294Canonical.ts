@@ -699,6 +699,7 @@ const LEGACY_BACKEND_FILE_OWNERS: Readonly<Record<string, TargetOwner>> = {
   'packages/backend/src/services/runtime/opencode/subagentLiveCapture.ts': 'runtime-management',
   'packages/backend/src/services/runtime/opencode/util.ts': 'runtime-management',
   'packages/backend/src/services/runtime/opencode/usage.ts': 'runtime-management',
+  'packages/backend/src/services/runtime/opencode/nativeUsage.ts': 'runtime-management',
   'packages/backend/src/services/runtime/opencode/versionRegistry.ts': 'runtime-management',
   'packages/backend/src/services/runtime/selfCheck.ts': 'runtime-management',
   'packages/backend/src/services/runtime/spawnCtx.ts': 'runtime-management',

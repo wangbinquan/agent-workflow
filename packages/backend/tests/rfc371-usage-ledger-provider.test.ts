@@ -40,6 +40,21 @@ function page(patch: Partial<ObservationIngest> = {}): ObservationIngest {
 describeEachProvider('RFC-371 durable usage ledger', (harness) => {
   for (const example of [
     {
+      name: 'late actual model',
+      patch: { model: { provider: 'native', id: 'actual' } },
+      expected: '100',
+      complete: true,
+    },
+    {
+      name: 'actual model with rejected decrease',
+      patch: {
+        model: { provider: 'native', id: 'actual' },
+        usage: { input: '90', output: '10', cacheRead: '0', cacheWrite: '0' },
+      },
+      expected: '100',
+      complete: false,
+    },
+    {
       name: 'invalid final',
       patch: {
         validity: 'invalid-final' as const,
@@ -93,9 +108,16 @@ describeEachProvider('RFC-371 durable usage ledger', (harness) => {
         }
       }
       const rows = (await store.records('task', { limit: 20 })).items
+      expect(
+        (await createUsageLedgerStore(harness.db).records('task', { limit: 20 })).items,
+      ).toEqual(rows)
       const forward = rows.find((row) => row.sourceId === 'forward')!,
         reverse = rows.find((row) => row.sourceId === 'reverse')!
       expect({ ...forward, sourceId: 'same' }).toEqual({ ...reverse, sourceId: 'same' })
+      if (example.patch.model) {
+        expect(reverse.measurement.model).toEqual(example.patch.model)
+        expect(reverse.modelRevision).toBe(2)
+      }
       expect(reverse).toMatchObject({
         contribution: { input: example.expected },
         complete: example.complete,

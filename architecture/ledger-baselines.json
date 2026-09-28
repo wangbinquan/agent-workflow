@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1759,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1761,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-371：接通 OpenCode 实际模型补全及数字来源修订，rfc294-mutation-entrypoints 1759 → 1761，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -874,8 +877,11 @@
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
-      "baseline": 294,
-      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
+      "baseline": 295,
+      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。",
+      "allowGrowth": {
+        "why": "RFC-371：接通 OpenCode 实际模型补全及数字来源修订，rfc294-facades 294 → 295，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-public-surfaces",
@@ -902,12 +908,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25271,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25279,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371：接通 OpenCode 实际模型补全及数字来源修订，rfc294-module-symbol-owners 25271 → 25279，按新增功能如实登记本批归属与公开合同。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:12b09ad47cb594f1e93dae8e36f2c9e70cdf1f0205e247c7cb2af4883ed0b881",
+    "sourceDigest": "sha256:e205903c07a9e0516e5b386cf5abea63c639d71bd89ae69f86ad4e617f08694e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +929,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "74b00a2565319970f61c8fb4e21e843668b74d9e",
-    "contentDigest": "sha256:3d51a9f58774a68e0e76020f7b01a4a2ab21540f5c8d1bfa48c8d4c1fc2b8148",
+    "currentSnapshotSha": "71e5b61d0232bd0a0cf7d642a81296cc7c7655a3",
+    "contentDigest": "sha256:dbcfa6d479b6c9a6061301f348ec25429dc0bcb721940d84570259d02d1d8172",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

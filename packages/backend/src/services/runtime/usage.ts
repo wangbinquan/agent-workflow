@@ -130,7 +130,8 @@ export function createInvocationUsageCapture(input: {
   readonly resumeSessionId?: string
 }) {
   let revision = 0
-  return (
+  const pending = new Map<string, { line: string; sessionId: string }>()
+  const capture = (
     line: string,
     sessionId: string | null,
     observedAt: number,
@@ -175,7 +176,19 @@ export function createInvocationUsageCapture(input: {
         },
       })
       if (!result.measurements.length && !result.diagnostics.length) return undefined
-      return ObservationCapturedUsageSchema.parse({ invocationId: input.invocationId, ...result })
+      const evidence = ObservationCapturedUsageSchema.parse({
+        invocationId: input.invocationId,
+        ...result,
+      })
+      const key = JSON.stringify(evidence.measurements.map((row) => row.recordId))
+      if (
+        evidence.measurements.length &&
+        evidence.diagnostics.includes('native-model-unavailable')
+      ) {
+        if (pending.has(key) || pending.size < 200) pending.set(key, { line, sessionId })
+        else evidence.diagnostics.push('native-model-retry-capacity')
+      } else pending.delete(key)
+      return evidence
     } catch {
       return {
         invocationId: input.invocationId,
@@ -184,4 +197,23 @@ export function createInvocationUsageCapture(input: {
       }
     }
   }
+  return Object.assign(capture, {
+    retryModels(observedAt: number, budgetMs = 50): ObservationCapturedUsage[] {
+      const rows: ObservationCapturedUsage[] = [],
+        deadline = performance.now() + budgetMs
+      for (const { line, sessionId } of [...pending.values()]) {
+        if (performance.now() >= deadline) {
+          rows.push({
+            invocationId: input.invocationId,
+            measurements: [],
+            diagnostics: ['native-model-retry-budget'],
+          })
+          break
+        }
+        const result = capture(line, sessionId, observedAt)
+        if (result && !result.diagnostics.includes('native-model-unavailable')) rows.push(result)
+      }
+      return rows
+    },
+  })
 }

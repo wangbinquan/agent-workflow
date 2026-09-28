@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:12b09ad47cb594f1e93dae8e36f2c9e70cdf1f0205e247c7cb2af4883ed0b881`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:e205903c07a9e0516e5b386cf5abea63c639d71bd89ae69f86ad4e617f08694e`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,8 +10,8 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1896 |
-| `services/` 文件 | 294 |
+| backend production TS 文件 | 1897 |
+| `services/` 文件 | 295 |
 | `modules/**` 文件 / 非空 context | 1343 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
@@ -33,10 +33,10 @@
 | `architectureExceptions` | 4911 |
 | `backgroundJobs` | 333 |
 | `crossContextImports` | 5530 |
-| `facades` | 294 |
+| `facades` | 295 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25271 |
-| `mutationEntrypoints` | 1759 |
+| `moduleSymbolOwners` | 25279 |
+| `mutationEntrypoints` | 1761 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1025 |
 | `transactionExternalEffects` | 260 |
@@ -151,7 +151,7 @@
 | platform | 183 |
 | task-execution | 74 |
 | resource-catalog | 51 |
-| runtime-management | 44 |
+| runtime-management | 45 |
 | identity-access | 38 |
 | collaboration | 31 |
 | workspace-insight | 31 |
@@ -173,8 +173,8 @@
 | targetContext | 数量 |
 | --- | --- |
 | task-execution | 69 |
+| runtime-management | 42 |
 | resource-catalog | 41 |
-| runtime-management | 41 |
 | workspace-insight | 31 |
 | collaboration | 27 |
 | platform | 25 |
@@ -190,7 +190,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9-D | 94 |
+| W9-D | 95 |
 | W4-E1 | 68 |
 | W4-E5 | 31 |
 | W4 | 27 |

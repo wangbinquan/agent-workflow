@@ -166,3 +166,19 @@
 - 后续 `8b1461ae3` / CI `36417065267` 类型检查指出二维数组推断出的 `database` 可能 undefined；固定三条二元组为 const，保留全部 AST 约束并移除 path 的非空断言。定向 lint/format 与独立功能复核 PASS，测试交后续精确 SHA CI。
 
 - `acbd92a58` / CI `36418307629` 的类型检查通过；后端发现归档批次的两条一次性 allowGrowth 在后续提交未退役。当前无新增计数，删除两条已消费许可并刷新本账本 provenance digest，所有 baseline 与生成快照保持不变。
+
+
+## 17. 实施批次 9：OpenCode 实际模型与数字来源修订
+
+- 前置提交 `71e5b61d0232bd0a0cf7d642a81296cc7c7655a3` 的精确 CI `36421453367` 已终态 success，50 项全部通过；不代替本批执行验证。
+- OpenCode 按实际 spawn plan 的 env 定位原生 SQLite，精确关联已观察的 session/part/message 与 assistant 的 providerID/modelID；不采用配置默认模型。显式会话错配不贡献 Token，未知模型保留数字与未定价状态。
+- 最多 200 条待补证据、50ms 排水预算；迟到模型修订同一 record，已证明模型在短暂读取失败后继续随数字修订保留。未知模型/未知 provider 可单向补全，已知模型冲突保留原有效投影。
+- 进程排水后仅 standalone 已受理且已回收进程执行补算。数字修订经 TaskExecution 原有事务独立入来源表，不重新插 stdout。CS 托管不使用本地 reader 或本地价格；CS 用量/估值同步仍属后续未完成范围。
+- 增补实际库定位/关联、迟到与未知、上限预算、会话错配、双 provider 数字修订/重复页/倒序重放，以及生产 env/分支接线回归。按仓库规则不运行本地 AW 测试、类型门禁或服务；测试结果等待发布后的精确 SHA CI。
+- RFC-294 canonical 只由已提交 main 加本批明确候选内容生成，不吸纳并行 resource-catalog 在制品；新原生适配文件归 runtime-management，既有 adapter 区随 W9-D 迁移，不增加跨业务模块依赖。
+- 实际子 Agent、Claude provider、崩溃后长期补采、持久人民币估值查询、CS 授权同步、正式统计页和双部署实机验收均未完成；本批是实现增量，不宣称完整 RFC 交付。
+
+
+本批独立功能复审发现并修正两项问题：模型补证写失败误将成功运行标失败；较小迟到样本替换待补样本后无法保留费用归因。已加入真实 runner 组合的补证成功/写失败回归，以及独立 modelRevision、下降数字保持 partial、零预算、模型缺失和双 provider 倒序/重开验证。模型元数据补全不改变已接受数字质量，后续仍由 hosted CI 执行测试。
+
+最终独立只读功能实现门 PASS；本批 16 个 TS 文件格式及 lint 通过。模型补证失败隔离与迟到数字的独立模型修订均已复核，执行证据仍待本批精确 SHA CI。

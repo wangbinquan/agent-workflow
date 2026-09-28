@@ -231,6 +231,8 @@ export interface NodeExecutionPersistence {
   appendEvents(input: {
     readonly nodeRunId: string
     readonly events: readonly NodeExecutionEventWrite[]
+    /** Numeric-only revisions do not duplicate raw stdout or legacy usage. */
+    readonly observations?: readonly ObservationCapturedUsage[]
     readonly executionContext?: TaskExecutionContextRef
   }): Promise<void>
   /** Collapse native-session reset epochs onto the final logical session id. */

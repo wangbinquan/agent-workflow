@@ -25,6 +25,13 @@ function opencode(
     diagnostics.push('missing-step-identity')
     return []
   }
+  if (
+    (raw.sessionID !== undefined && raw.sessionID !== c.sessionId) ||
+    (part?.sessionID !== undefined && part.sessionID !== c.sessionId)
+  ) {
+    diagnostics.push('step-session-mismatch')
+    return []
+  }
   const cache = object(tokens?.cache)
   const usage = readUsage(
     {

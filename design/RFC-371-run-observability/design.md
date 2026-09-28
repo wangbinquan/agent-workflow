@@ -216,7 +216,6 @@ TaskExecution 在现有事务提交链发出最小事实（started/status/attemp
 
 协议载荷解析归属现有 RuntimeDriver：OpenCode 与 Claude 各自提供可选 normalizeUsage，运行时注册表分发，中立边界只校验统一 measurement。调用方不按协议字面量二选一；未注册或未声明计量能力的 driver 返回 unsupported 覆盖，不调用其他协议的解析器。统计领域仍只处理规范化记录与覆盖关系。
 
-
 ### 实施补充：根 stdout 持久源
 
 根进程在本地 authority 受理后，经已选 driver 的 normalizeUsage 生成数值证据；序号、采集时刻、invocation 和原生根会话绑定在写入前固定。TaskExecution 在既有 owner fence 与 nodeRun 行锁之后，将原始事件和 task_execution_observation_sources 同事务提交。投影源只含数值及诊断，不依赖进程存活或当前运行时目录。
@@ -224,3 +223,14 @@ TaskExecution 在现有事务提交链发出最小事实（started/status/attemp
 每个 nodeRun 是独立有序源，源序号来自事务内生成的 ID。消费者在账本及 cursor 提交后才确认源行，确认中断后可重放；不同节点按稳定身份轮转，每次最多 100 行，失败节点仍推进轮转位置，不推进计量水位。后台恢复循环纳入 provider 的 pause/resume/stop/drain。chunk 只提交持久源，后台消费者独立投影，不在 stdout pump 中等待统计数据库往返；投影故障不改进程结果。
 
 CS authority 不生成本地数字源，消费者也再次排除托管调用，避免和平台回传重复累计。未知 provider/model 保持 null，恢复调用缺少累计基线时保留 unknown，不用配置默认模型或零基线补齐。此批只覆盖根 stdout；原生文件模型补证、子会话采集和 CS usage/valuation 同步继续实施。
+
+## 15. 原生 OpenCode 模型补全
+
+独立部署的 driver 根据最终 spawn env 读取原生 SQLite，仅以已观察 step 的 id/sessionID/messageID 关联 assistant 的 providerID/modelID；配置默认模型不能替代实际模型。支持 OPENCODE_DB 的绝对/相对路径；内存库和无法定位的通道保持未定价。只读查询逐次关闭，不扫描历史数字或把旧 session 总量重新归属本次执行。
+
+数字先入独立持久来源；模型稍后到达时沿用同一 recordId、增加 revision。允许 null→实际模型和同模型的 provider:null→已知 provider，已有非空模型或 provider 相互矛盾仍报告冲突。后续读缺失保留已证实归因。每次 invocation 最多保留 200 条补算候选，进程排水后用 50ms 预算重试，未解析/超限均保留明确缺口。补算只追加数字来源，不复制 stdout、Token 累计或生命周期事件。
+
+CS 托管 invocation 不使用本地 reader 或价格；本批仍不代替 CS 授权源同步。实际子 Agent、Claude 路由、崩溃后的长期模型补采与两种部署实机验收仍需后续证据。
+
+
+模型证据使用独立 `modelRevision` 指向原生来源修订。数字下降被拒绝时，只能补全同一身份的未知模型/路由，原数字 revision、贡献、水位与 partial 诊断保持不变；冲突模型和 invalid-final 不补全。这样迟到补模型与预算耗尽不会将较旧数字伪装为新的完整报告。数字修订临时缺失模型时沿用已证明模型及其 modelRevision。模型补证写入失败只记录诊断，保留原持久数值与任务结果，不把已成功运行改成失败。

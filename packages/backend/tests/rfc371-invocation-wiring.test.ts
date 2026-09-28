@@ -100,3 +100,48 @@ test('usage capture receives the effective resume identity used by the process',
   walk(file)
   expect(resumed?.getText()).toBe('effectiveResumeSessionId')
 })
+
+test('native model preparation uses final spawn env and local numeric retries avoid replaying stdout', () => {
+  const file = source('services/runner.ts')
+  let env: string | undefined,
+    retries = 0
+  const walk = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText() === 'driver.prepareUsageNormalizer'
+    ) {
+      const input = node.arguments[0]!
+      if (ts.isObjectLiteralExpression(input)) env = properties(input).get('env')?.getText()
+    }
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText() === 'opts.persistence.nodeExecution.appendEvents'
+    ) {
+      const input = node.arguments[0]!
+      if (
+        ts.isObjectLiteralExpression(input) &&
+        input.properties.some(ts.isShorthandPropertyAssignment)
+      ) {
+        const fields = properties(input)
+        if (fields.get('events')?.getText() === '[]') {
+          expect(fields.get('nodeRunId')?.getText()).toBe('opts.nodeRunId')
+          expect(
+            input.properties.filter(ts.isShorthandPropertyAssignment).map((p) => p.name.text),
+          ).toEqual(['observations'])
+          let parent: ts.Node | undefined = node.parent
+          while (parent && !ts.isIfStatement(parent)) parent = parent.parent
+          // The innermost check is the non-empty correction batch; the surrounding one is local authority.
+          while (parent?.parent && !ts.isIfStatement(parent.parent)) parent = parent.parent
+          expect(parent?.parent?.getText()).toContain(
+            "localObservationAccepted && runResult.outcome !== 'unreaped'",
+          )
+          retries++
+        }
+      }
+    }
+    ts.forEachChild(node, walk)
+  }
+  walk(file)
+  expect(env).toBe('plan.env')
+  expect(retries).toBe(1)
+})

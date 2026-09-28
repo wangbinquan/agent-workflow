@@ -244,4 +244,28 @@ describeEachProvider('RFC-371 committed numeric source projection', (harness) =>
     expect(await f.source.pending({ limit: 10 })).toEqual([])
     expect((await f.store.records('task', { limit: 10 })).items).toHaveLength(1)
   })
+  test('numeric-only model refinement keeps the original stdout and one projected contribution', async () => {
+    const { writer, write, project, store, source } = await fixture()
+    await write()
+    await project()
+    const corrected = {
+      ...evidence(),
+      measurements: [{ ...measurement('run', 2), model: { provider: 'native', id: 'actual' } }],
+    }
+    await writer.appendEvents({ nodeRunId: 'run', events: [], observations: [corrected] })
+    expect((await harness.db.select().from(nodeRunEvents).all()).length).toBe(1)
+    expect((await source.pending({ limit: 100 })).length).toBe(1)
+    await project()
+    const rows = (await store.records('task', { limit: 20 })).items
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toMatchObject({
+      observedRevision: 2,
+      contribution: { input: '100' },
+      measurement: { model: { provider: 'native', id: 'actual' } },
+      issues: [],
+    })
+    await writer.appendEvents({ nodeRunId: 'run', events: [], observations: [corrected] })
+    await project()
+    expect((await store.records('task', { limit: 20 })).items).toEqual(rows)
+  })
 })

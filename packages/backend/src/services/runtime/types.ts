@@ -751,6 +751,10 @@ export interface RuntimeDriver {
   parseEvent(line: string): NormalizedEvent | null
   /** RFC-371: optional native numeric evidence; absence reports unsupported coverage. */
   normalizeUsage?(raw: unknown, context: RuntimeUsageContext): RuntimeUsageFrame
+  /** Invocation-local native metadata reader; created with the final child environment. */
+  prepareUsageNormalizer?(input: {
+    readonly env: Readonly<Record<string, string | undefined>>
+  }): (raw: unknown, context: RuntimeUsageContext) => RuntimeUsageFrame
   /**
    * RFC-297 T5 — synthetic events to append to the stream once the child has
    * exited. This is how an observation that does NOT arrive on stdout still

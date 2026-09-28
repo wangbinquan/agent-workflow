@@ -14,6 +14,8 @@ export interface UsageLedgerRecord {
   readonly measurement: ObservationMeasurement
   /** Revision used for ordering; may be newer than the last usable measurement. */
   readonly observedRevision: number
+  /** Native revision proving model metadata, independently of accepted numeric counters. */
+  readonly modelRevision?: number
   readonly contribution: TokenUsage
   readonly complete: boolean
   readonly issues: readonly UsageIssue[]
@@ -30,6 +32,36 @@ export type UsageDecision =
 
 const unknown: TokenUsage = { input: null, cacheRead: null, cacheWrite: null, output: null }
 
+function compatibleModel(
+  a: ObservationMeasurement['model'],
+  b: ObservationMeasurement['model'],
+): boolean {
+  return (
+    a === null ||
+    b === null ||
+    (a.id === b.id && (a.provider === null || b.provider === null || a.provider === b.provider))
+  )
+}
+
+function retainedModel(
+  next: ObservationMeasurement['model'],
+  previous?: ObservationMeasurement['model'],
+): ObservationMeasurement['model'] {
+  if (next === null) return previous ?? null
+  return { ...next, provider: next.provider ?? previous?.provider ?? null }
+}
+
+function modelEvidence(next: ObservationMeasurement, previous?: UsageLedgerRecord) {
+  const model = retainedModel(next.model, previous?.measurement.model)
+  const modelRevision =
+    model === null
+      ? undefined
+      : JSON.stringify(model) !== JSON.stringify(previous?.measurement.model ?? null)
+        ? next.revision
+        : (previous?.modelRevision ?? previous?.measurement.revision ?? next.revision)
+  return { model, ...(modelRevision === undefined ? {} : { modelRevision }) }
+}
+
 function sameIdentity(a: ObservationMeasurement, b: ObservationMeasurement): boolean {
   return (
     a.invocationId === b.invocationId &&
@@ -40,7 +72,7 @@ function sameIdentity(a: ObservationMeasurement, b: ObservationMeasurement): boo
     a.reporting === b.reporting &&
     a.inclusion === b.inclusion &&
     JSON.stringify(a.scope) === JSON.stringify(b.scope) &&
-    JSON.stringify(a.model) === JSON.stringify(b.model) &&
+    compatibleModel(a.model, b.model) &&
     JSON.stringify(a.basis) === JSON.stringify(b.basis)
   )
 }
@@ -51,13 +83,23 @@ function diagnostic(
   previous: UsageLedgerRecord | undefined,
   issue: UsageIssue,
 ): UsageDecision {
+  // Actual model evidence is independent of a rejected numeric decrease.
+  // Identity conflicts and invalid finals cannot replace the proven metadata.
+  const evidence =
+    issue === 'unexplained-decrease' && previous ? modelEvidence(next, previous) : undefined
+  const measurement = previous?.measurement ?? { ...next, usage: unknown }
   return {
     outcome: 'diagnostic',
     record: {
       sourceId,
       // Rejected first evidence supplies identity only, never reusable counters.
-      measurement: previous?.measurement ?? { ...next, usage: unknown },
+      measurement: evidence ? { ...measurement, model: evidence.model } : measurement,
       observedRevision: next.revision,
+      ...(evidence?.modelRevision !== undefined
+        ? { modelRevision: evidence.modelRevision }
+        : previous?.modelRevision === undefined
+          ? {}
+          : { modelRevision: previous.modelRevision }),
       contribution: previous?.contribution ?? unknown,
       complete: false,
       issues: [...new Set([...(previous?.issues ?? []), issue])],
@@ -123,12 +165,18 @@ export function reconcileUsage(
         ]),
       ) as Readonly<Record<(typeof TOKEN_BUCKETS)[number], number | null>>)
     : undefined
+  const evidence = modelEvidence(next, previous)
   return {
     outcome: 'applied',
     record: {
       sourceId,
-      measurement: { ...next, usage },
+      measurement: {
+        ...next,
+        model: evidence.model,
+        usage,
+      },
       observedRevision: next.revision,
+      ...(evidence.modelRevision === undefined ? {} : { modelRevision: evidence.modelRevision }),
       contribution,
       ...(coveredThrough ? { coveredThrough } : {}),
       complete:

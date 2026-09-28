@@ -248,13 +248,13 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
   async appendEvents(
     input: Parameters<NodeExecutionPersistence['appendEvents']>[0],
   ): Promise<void> {
-    if (input.events.length === 0) return
+    if (input.events.length === 0 && !input.observations?.length) return
     await withTaskExecutionWrite(this.db, async (tx) => {
       const taskId = await fencedTaskId(
         tx,
         input.nodeRunId,
         input.executionContext,
-        input.events[input.events.length - 1]!.ts,
+        input.events.at(-1)?.ts ?? Date.now(),
       )
       if (taskId === null) return
       // RFC-359 W6-T25 —— 事件按批落库。切批在同一笔事务里，原子性不变；行数上限由能力矩阵
@@ -276,19 +276,17 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
             .values([...batch])
             .run(),
       )
-      const sources = input.events.flatMap((event) =>
-        event.observation === undefined
-          ? []
-          : [
-              {
-                taskId,
-                nodeRunId: input.nodeRunId,
-                evidenceJson: JSON.stringify(
-                  ObservationCapturedUsageSchema.parse(event.observation),
-                ),
-              },
-            ],
-      )
+      const observations = [
+        ...input.events.flatMap((event) =>
+          event.observation === undefined ? [] : [event.observation],
+        ),
+        ...(input.observations ?? []),
+      ]
+      const sources = observations.map((observation) => ({
+        taskId,
+        nodeRunId: input.nodeRunId,
+        evidenceJson: JSON.stringify(ObservationCapturedUsageSchema.parse(observation)),
+      }))
       await insertInBatches(tx, taskExecutionObservationSources, sources, (batch) =>
         tx
           .insert(taskExecutionObservationSources)

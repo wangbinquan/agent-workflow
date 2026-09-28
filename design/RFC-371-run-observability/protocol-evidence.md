@@ -21,3 +21,10 @@ Claude 官方 [cost tracking](https://code.claude.com/docs/en/agent-sdk/cost-tra
 - [ ] SQLite / PostgreSQL、托管 / 独立部署均完成真实合同验收。
 
 不得用原型 fixture、领域单测或文档引用替代以上端到端证据。
+
+
+## OpenCode 实际模型补证
+
+源码依据为 OpenCode v1.15.5 的 `packages/opencode/src/cli/cmd/run.ts:586-647` 与 `packages/opencode/src/session/message-v2.ts`，以及 CS 固定 v1.18.29 的 `packages/core/src/database/database.ts`、`packages/core/src/global.ts`、`packages/core/src/session/sql.ts`。stdout 的 step_finish 不含完整实际模型；原生 message 的 assistant providerID/modelID 可通过 part 的精确 session/message 归属取得。DB 的绝对覆盖路径、相对数据目录路径与 :memory: 分别处理；OPENCODE_TEST_HOME 不能替代 XDG 数据目录。
+
+本批覆盖夹具原生 SQLite、延迟落库、读失败、会话错配和同一计量记录修订。CS 对应实现定向 55 pass / 260 assertions（mock CLI + SQLite 夹具 + 真实 PostgreSQL）；AW 测试交 hosted CI，尚未运行真实 OpenCode 调用，不能据此勾选双部署实机矩阵。Claude provider、实际子会话和进程崩溃后的持久补证另行验收。

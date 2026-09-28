@@ -9,6 +9,8 @@ import { composeObservationUsageSource } from '@/modules/task-execution/composit
 
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, expect, test } from 'bun:test'
+import { Database } from 'bun:sqlite'
+import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { eq, sql } from 'drizzle-orm'
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -340,6 +342,113 @@ describeEachProvider('runNode', (harness) => {
     })
     expect(rows[0]?.measurement.model).toBeNull()
   })
+
+  // RFC-371: model repair failures must not change an already successful process result.
+  for (const rejectCorrection of [false, true])
+    test(
+      'late native model repair preserves process success, write rejected=' + rejectCorrection,
+      async () => {
+        const nodeRunId = await insertNodeRun(h.db, h.taskId)
+        const file = join(h.appHome, 'native-usage.db'),
+          source = composeObservationUsageSource(h.db),
+          local = composeLocalInvocationObservations(h.db, source),
+          persistence = createTaskExecutionPersistence(h.db),
+          { log, warnings } = captureWarnings()
+        const originalAppend = persistence.nodeExecution.appendEvents.bind(
+          persistence.nodeExecution,
+        )
+        let writes = 0
+        persistence.nodeExecution.appendEvents = async (input) => {
+          if (input.observations?.length) {
+            writes++
+            if (rejectCorrection) throw new Error('model-write-unavailable')
+          }
+          await originalAppend(input)
+          if (
+            !existsSync(file) &&
+            input.events.some((event) => event.observation?.measurements.length)
+          ) {
+            const db = new Database(file)
+            db.exec(
+              'CREATE TABLE message(id TEXT PRIMARY KEY, session_id TEXT, data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY, message_id TEXT, session_id TEXT, data TEXT)',
+            )
+            db.query('INSERT INTO message VALUES(?,?,?)').run(
+              'native-message',
+              'usage-native',
+              JSON.stringify({
+                role: 'assistant',
+                providerID: 'native-provider',
+                modelID: 'native-model',
+              }),
+            )
+            db.query('INSERT INTO part VALUES(?,?,?,?)').run(
+              'native-step',
+              'native-message',
+              'usage-native',
+              JSON.stringify({ type: 'step-finish' }),
+            )
+            db.close()
+          }
+        }
+        const result = await withEnv(
+          {
+            OPENCODE_DB: file,
+            MOCK_OPENCODE_OUTPUTS: JSON.stringify({ summary: 'success preserved' }),
+            MOCK_OPENCODE_EVENTS: JSON.stringify([
+              {
+                type: 'step_finish',
+                sessionID: 'usage-native',
+                part: {
+                  id: 'native-step',
+                  sessionID: 'usage-native',
+                  messageID: 'native-message',
+                  tokens: { input: 100, output: 10, cache: { read: 20, write: 0 } },
+                },
+              },
+            ]),
+          },
+          () =>
+            runNode({
+              taskId: h.taskId,
+              nodeRunId,
+              nodeId: 'node1',
+              agent: makeAgent(),
+              inputs: {},
+              worktreePath: h.worktreePath,
+              skills: [],
+              appHome: h.appHome,
+              db: h.db,
+              persistence,
+              log,
+              templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId: h.taskId },
+              binaryOverride: ['bun', 'run', MOCK_OPENCODE],
+              observationInvocations: local,
+            }),
+        )
+        expect(writes).toBe(1)
+        expect(result.status).toBe('done')
+        expect(result.outputs.summary).toBe('success preserved')
+        expect(
+          (await h.db.select().from(nodeRuns).where(eq(nodeRuns.id, nodeRunId)).get())?.status,
+        ).toBe('done')
+        const events = await h.db
+          .select()
+          .from(nodeRunEvents)
+          .where(eq(nodeRunEvents.nodeRunId, nodeRunId))
+          .all()
+        expect(events.filter((event) => event.kind === 'step_finish')).toHaveLength(1)
+        await local.reconcile!()
+        const rows = (await createUsageLedgerStore(h.db).records(h.taskId, { limit: 10 })).items
+        expect(rows).toHaveLength(1)
+        expect(rows[0]?.contribution.input).toBe('100')
+        expect(rows[0]?.measurement.model).toEqual(
+          rejectCorrection ? null : { provider: 'native-provider', id: 'native-model' },
+        )
+        expect(
+          warnings.filter((row) => row.message === 'node-run-observation-model-revision-failed'),
+        ).toHaveLength(rejectCorrection ? 1 : 0)
+      },
+    )
 
   test('an injected CS participant retains platform authority through the real runner', async () => {
     const nodeRunId = await insertNodeRun(h.db, h.taskId)

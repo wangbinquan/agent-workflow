@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1759,
+    "entries": 1761,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -38093,6 +38093,56 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/services/runtime/opencode/nativeUsage.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/runtime/opencode/nativeUsage.ts#createOpencodeUsageNormalizer",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/nativeUsage.ts#createOpencodeUsageNormalizer",
+      "symbol": "createOpencodeUsageNormalizer",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/runtime/opencode/nativeUsage.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/runtime/opencode/nativeUsage.ts#opencodeUsageDatabasePath",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/nativeUsage.ts#opencodeUsageDatabasePath",
+      "symbol": "opencodeUsageDatabasePath",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/services/runtime/opencode/sessionWalk.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/services/runtime/opencode/sessionWalk.ts#OpencodeMessageRow",
@@ -42033,7 +42083,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:12b09ad47cb594f1e93dae8e36f2c9e70cdf1f0205e247c7cb2af4883ed0b881",
+  "sourceDigest": "sha256:e205903c07a9e0516e5b386cf5abea63c639d71bd89ae69f86ad4e617f08694e",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -42959,8 +43009,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#313:nodeRunEvents",
-        "line": 313,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#311:nodeRunEvents",
+        "line": 311,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",
@@ -42975,8 +43025,8 @@
         "controlSubtype": null,
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#324:nodeRunEvents",
-        "line": 324,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#322:nodeRunEvents",
+        "line": 322,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeExecutionPersistence.ts#DrizzleNodeExecutionPersistence",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

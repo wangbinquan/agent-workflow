@@ -1335,8 +1335,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     const stdoutEvents = makeEventBuffer('node-run-event/stdout')
     const stderrEvents = makeEventBuffer('node-run-event/stderr')
     let localObservationAccepted = false
+    const usageNormalizer =
+      driver.prepareUsageNormalizer?.({ env: plan.env }) ?? driver.normalizeUsage
     const captureUsage = createInvocationUsageCapture({
-      ...(driver.normalizeUsage ? { normalize: driver.normalizeUsage } : {}),
+      ...(usageNormalizer ? { normalize: usageNormalizer } : {}),
       invocationId,
       taskId: opts.taskId,
       nodeRunId: opts.nodeRunId,
@@ -1801,6 +1803,26 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // 之前。
     await stdoutEvents.flush()
     await stderrEvents.flush()
+    if (localObservationAccepted && runResult.outcome !== 'unreaped') {
+      try {
+        const observations = captureUsage.retryModels(Date.now())
+        if (observations.length)
+          await persistRunnerWrite('node-run-observation/model-revision', () =>
+            opts.persistence.nodeExecution.appendEvents({
+              nodeRunId: opts.nodeRunId,
+              events: [],
+              observations,
+            }),
+          )
+      } catch (error) {
+        // Original numeric evidence remains durable and unpriced. A metadata
+        // repair failure cannot turn a successful process into a failed task.
+        log.warn('node-run-observation-model-revision-failed', {
+          nodeRunId: opts.nodeRunId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+    }
     let gitMutationViolation: string | undefined
     if (gitControlBefore !== undefined && runResult.outcome !== 'unreaped') {
       const gitControlAfter = await captureGitControlSnapshot(opts.worktreePath)
