@@ -11,6 +11,7 @@ import {
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type {
+  ObservationOverview,
   ObservationMetrics,
   ObservationTaskDetail,
   ObservationTaskPage,
@@ -60,6 +61,53 @@ const task = {
   finishedAt: null,
   runningMs: 2000,
   runningSince: NOW - 3000,
+}
+function overview(): ObservationOverview {
+  const value = metrics(),
+    summary = { task, metrics: value, wallMs: 10000, runningMs: 5000 }
+  return {
+    asOf: NOW,
+    projectionVersion: 1,
+    cohort: 'started',
+    taskScope: 'direct',
+    filtersEcho: { from: search.from, to: search.to, timezone: 'UTC' },
+    partial: false,
+    limits: { tasks: 200, invocations: 10000, records: 20000 },
+    metrics: value,
+    tasks: [summary],
+    statuses: [{ status: 'running', count: 1 }],
+    trend: [{ from: search.from, to: search.to, taskCount: 1, metrics: value }],
+    agents: [
+      {
+        agentId: 'agent-1',
+        agentRevision: 3,
+        purpose: 'task',
+        metrics: value,
+        tasks: [{ taskId: task.id, metrics: value }],
+      },
+    ],
+    models: [
+      {
+        authority: 'crewstation',
+        sourceId: 'cs-installation',
+        provider: null,
+        model: 'platform-ref',
+        metrics: value,
+      },
+    ],
+    runtimes: [
+      {
+        authority: 'crewstation',
+        sourceId: 'cs-installation',
+        registrationId: null,
+        configurationRevision: null,
+        protocol: null,
+        metrics: value,
+      },
+    ],
+    durations: { completedTasks: 0, p50Ms: null, p95Ms: null, maxMs: null },
+    quality: [{ reason: 'pending', taskIds: [task.id] }],
+  }
 }
 function detail(): ObservationTaskDetail {
   return {
@@ -121,11 +169,16 @@ afterEach(() => {
 })
 function fixture(
   initial: ObservationSearch = search,
-  options: { error?: boolean; empty?: boolean; detail?: ObservationTaskDetail } = {},
+  options: {
+    error?: boolean
+    empty?: boolean
+    detail?: ObservationTaskDetail
+    overview?: ObservationOverview
+  } = {},
 ) {
   const paths: URL[] = [],
     changes: ObservationSearch[] = [],
-    state = { error: false, empty: false, detail: detail(), ...options }
+    state = { error: false, empty: false, detail: detail(), overview: overview(), ...options }
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (raw, init) => {
     const url = new URL(String(raw))
     paths.push(url)
@@ -133,6 +186,7 @@ function fixture(
     if (state.error)
       return Response.json({ error: { code: 'unavailable', message: 'offline' } }, { status: 503 })
     if (url.pathname === '/api/observability/tasks/task-1') return Response.json(state.detail)
+    if (url.pathname === '/api/observability/overview') return Response.json(state.overview)
     if (url.pathname !== '/api/observability/tasks')
       throw new Error('Unexpected API: ' + url.pathname)
     const page: ObservationTaskPage = {
@@ -212,6 +266,75 @@ test('pagination requests the opaque cursor and disabling next does not erase fi
   )
   fireEvent.click(screen.getByRole('button', { name: '第一页' }))
   expect(f.changes.at(-1)?.after).toBeUndefined()
+})
+test('overview tabs share one server snapshot and agent drill-down restores its scope', async () => {
+  const f = fixture({ ...search, tab: 'overview' })
+  await screen.findByRole('heading', { name: '任务用量趋势' })
+  expect(f.paths.filter((path) => path.pathname === '/api/observability/overview')).toHaveLength(1)
+  fireEvent.click(screen.getByRole('tab', { name: 'Agent 分析' }))
+  await screen.findByRole('heading', { name: '跨任务 Agent 汇总' })
+  fireEvent.click(screen.getByRole('button', { name: /agent-1/ }))
+  await screen.findByRole('heading', { name: '该 Agent 的任务贡献' })
+  expect(f.changes.at(-1)?.agent).toBe('["agent-1",3,"task"]')
+  fireEvent.click(screen.getByRole('button', { name: '真实任务' }))
+  await screen.findByRole('heading', { name: '任务整体' })
+  fireEvent.click(screen.getByRole('button', { name: '返回统计分析' }))
+  await screen.findByRole('heading', { name: '该 Agent 的任务贡献' })
+  expect(f.changes.at(-1)).toMatchObject({
+    tab: 'agents',
+    agent: '["agent-1",3,"task"]',
+    from: search.from,
+    to: search.to,
+  })
+  fireEvent.click(screen.getByRole('tab', { name: 'Token 与成本' }))
+  await screen.findByRole('heading', { name: '实际模型消耗分布' })
+  expect(screen.getByText('platform-ref')).toBeTruthy()
+  expect(screen.getAllByText('平台来源 cs-installation')).toHaveLength(2)
+  expect(screen.getAllByText('¥0').length).toBeGreaterThan(0)
+  expect(screen.getByText('CS 管理的运行时')).toBeTruthy()
+  expect(f.paths.filter((path) => path.pathname === '/api/observability/overview')).toHaveLength(1)
+})
+test('trend drill-down fixes an exact interval; refresh preserves a custom window', async () => {
+  const f = fixture({ ...search, tab: 'overview' })
+  await screen.findByRole('heading', { name: '任务用量趋势' })
+  fireEvent.click(screen.getByRole('button', { name: /→.*1 个任务/ }))
+  await screen.findByRole('button', { name: '真实任务' })
+  expect(f.changes.at(-1)).toEqual({
+    from: search.from,
+    to: search.to,
+    period: 'custom',
+    tab: 'tasks',
+  })
+  vi.spyOn(Date, 'now').mockReturnValue(NOW + 86400000)
+  const count = f.paths.length
+  fireEvent.click(screen.getByRole('button', { name: '刷新' }))
+  await waitFor(() => expect(f.paths.length).toBeGreaterThan(count))
+  expect(f.paths.at(-1)?.searchParams.get('to')).toBe(String(search.to))
+})
+test('performance distinguishes absent completed samples and quality drill-down from a healthy collector claim', async () => {
+  const f = fixture(
+    { ...search, tab: 'performance' },
+    { overview: { ...overview(), partial: true } },
+  )
+  await screen.findByRole('heading', { name: '用量与估值的数据质量' })
+  expect(screen.getByText('当前为部分统计')).toBeTruthy()
+  const p50 = screen.getByRole('heading', { name: '任务墙钟 P50' }).closest('.card')!
+  expect(within(p50 as HTMLElement).getByText('—')).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '估值待同步 · 1' }))
+  fireEvent.click(await screen.findByRole('button', { name: '真实任务' }))
+  await screen.findByRole('heading', { name: '任务整体' })
+  expect(f.changes.at(-1)).toMatchObject({ tab: 'performance', task: 'task-1', quality: 'pending' })
+  fireEvent.click(screen.getByRole('button', { name: '返回统计分析' }))
+  await screen.findByRole('button', { name: '真实任务' })
+  expect(screen.getByRole('button', { name: '估值待同步 · 1' }).getAttribute('aria-pressed')).toBe(
+    'true',
+  )
+  expect(f.changes.at(-1)).toMatchObject({
+    tab: 'performance',
+    quality: 'pending',
+    from: search.from,
+    to: search.to,
+  })
 })
 test.each(['week', 'all'] as const)(
   'explicit refresh reanchors %s and resets pagination so new tasks enter the cohort',

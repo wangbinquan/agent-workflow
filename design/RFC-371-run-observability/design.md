@@ -232,9 +232,7 @@ CS authority 不生成本地数字源，消费者也再次排除托管调用，�
 
 CS 托管 invocation 不使用本地 reader 或价格；本批仍不代替 CS 授权源同步。实际子 Agent、Claude 路由、崩溃后的长期模型补采与两种部署实机验收仍需后续证据。
 
-
 模型证据使用独立 `modelRevision` 指向原生来源修订。数字下降被拒绝时，只能补全同一身份的未知模型/路由，原数字 revision、贡献、水位与 partial 诊断保持不变；冲突模型和 invalid-final 不补全。这样迟到补模型与预算耗尽不会将较旧数字伪装为新的完整报告。数字修订临时缺失模型时沿用已证明模型及其 modelRevision。模型补证写入失败只记录诊断，保留原持久数值与任务结果，不把已成功运行改成失败。
-
 
 ## 16. CS 授权观测源与同步边界
 
@@ -243,7 +241,6 @@ CS 托管 invocation 不使用本地 reader 或价格；本批仍不代替 CS �
 返回值严格对应 RFC034 executionObservationsV1：用量采用 CS 已归一的 projection.contribution 和 projectionRevision，不能再次减 basis.baseline；数字原生 revision、模型证据 modelRevision、用量投影 revision、valuationRevision 各自保留。人民币估值独立到达并引用 usageRevision，无金额授权、pending 和 unpriced 都是 null，不用 0 或本地价格代替。空页也处理 visibilityRevision。快照续页必须仍属同一快照和冻结水位。
 
 断连、HTTP 状态、协议错误、快照失效各自返回明确结果；404 只能说明来源未找到，不能据此宣布整个 CS 不支持观测。平台不可达不会改写 executionAuthority。后续同步事务须将整页投影、回执和 committed cursor 同时提交；快照先进入暂存代次，全部页到齐后再原子替换，不能在首屏导入时清空历史。可见性变更先撤去旧金额展示，再完整重取授权快照。此接口实现不等于后续持久同步及托管启动根已接通。
-
 
 ## 17. 平台观测的持久同步
 
@@ -255,7 +252,6 @@ CS 托管 invocation 不使用本地 reader 或价格；本批仍不代替 CS �
 
 本批提供持久 source 应用与 SQLite/PostgreSQL 实现；AW invocation 映射查询、RFC370 托管启动根、同步后台生命周期及正式页面仍须继续接入。
 
-
 ## 18. 调用归因查询与平台安装身份
 
 新受理的托管 invocation 必须冻结 `authority.sourceId`，它是平台安装身份，不是可变 URL。唯一执行键由安装来源、项目、执行资源与代次组成；任务和子任务仍属于不可变受理内容。历史缺少安装身份的已接受文档读取为 `sourceId=null`，查询返回 `legacy-unbound`，不根据当前平台配置补写归属。独立调用的原受理合同和人民币价目表快照不变。
@@ -263,7 +259,6 @@ CS 托管 invocation 不使用本地 reader 或价格；本批仍不代替 CS �
 调用查询只按已接受的 authority 选择数据源。本地页精确匹配 invocation/task/node/agent；托管页读取冻结 source/project/task 绑定，再按 subtask/execution/generation 过滤。返回原始 canonical 用量投影、独立估值与平台同步状态，不再扣 native baseline，也不把金额记录当第二笔 Token。CS 的 modelRef 保持不透明引用，不猜 provider 或模型名称；迟到、隐藏、未知与真实零金额沿用平台读面语义。
 
 每轮最多读取 500 条源记录，过滤后可以返回空 items 与有效 nextCursor；调用方必须继续分页，不能把空页视为零用量。游标绑定 invocation 和不可变 authority，平台游标同时绑定代次和修订。本地页明确声明 live-page，不声称多页汇总具有同一快照；正式统计必须另接一致快照汇总。该端口是内部读接口，后续 HTTP 入口须先调用 TaskExecution 的任务可见性查询。当前没有托管 bootstrap、统计 HTTP 或页面接线完成的声明。
-
 
 ## 19. 正式任务观测查询与页面
 
@@ -278,3 +273,15 @@ TaskExecution 提供任务可见性、生命周期与 nodeRun 尝试事实；Run
 共享 ExecutionSwimlane 按共同时间轴绘制 nodeRun 尝试，恢复调用共用一个尝试区间。点击或键盘打开公共 Dialog 展示该尝试贡献与技术重试/工作组轮次/评审轮次；关闭后焦点返回原泳道。中断等无结束时间的区间不延伸到当前时刻。
 
 本批提供正式读取路径与页面，不把它当作 RFC 完整收口：跨任务 Agent 汇总、子树汇总、usage cohort、导出/异常与采集健康页、RFC370 托管启动根及两种部署实机验收仍按总计划推进。
+
+## 20. 正式跨任务分析读面
+
+`GET /api/observability/overview` 使用 TaskExecution 可见任务事实和同一数据库快照，返回总量、任务开始时间分桶、Agent/修订/用途排名及各任务贡献、实际模型、冻结运行时配置和终态任务耗时分布。沿用 started cohort 与 direct task scope；父任务不重复累加子任务，趋势表示该桶开始任务的生命周期消耗，并非桶内实际发生额。`filtersEcho` 和 `asOf` 随同一响应返回，五个正式页签共享该快照。
+
+查询预算为 200 个任务、10,000 个受理调用和 20,000 条用量/估值源记录。超过任务预算或读取预算时明确 partial；被预算中断的整个任务不贡献伪完整小计。结果中每项已有贡献保持真实数值，整体及分布的完整性降级；普通源错误继续失败，不冒充成功的部分结果。窗口可继续缩小，任务追踪仍提供独立游标分页。
+
+Agent 以 id/revision/purpose 区分；贡献表只显示该 Agent 在该任务的贡献，进入任务后才显示整个任务。模型分组可能包含同一调用的多个实际模型，因此相关调用数不具可加性；CS 模型为平台不透明引用，模型及运行时维度均包含不可变安装 sourceId；相同引用在不同安装不合并。运行时显示平台管理，不能猜映射为 AW 注册项。金额只使用冻结本地价格或 CS canonical 估值，未知、部分和实报零继续独立显示。
+
+性能仅用终态且有有效完成边界的任务计算 nearest-rank P50/P95/最大墙钟时长，显示样本数；零样本为未知。数据质量按当前金额与用量原因列出受影响任务；即使四桶可估值，已选用量来源不完整也必须列入质量原因，不借此宣称采集器健康。分析页签、Agent、质量原因、时间窗口和任务钻取写入 URL，返回恢复原筛选；趋势下钻固定精确半开窗口，刷新不改变自定义窗口。
+
+布局复用 Card、TabBar、TableViewport、NoticeBanner、Dialog 与 stack--md；多列区域仅使用共享 space-4 间距及响应式网格。新增双 provider 对账、读预算、前端导航、axe 和 1280/390 几何回归，执行由 hosted CI 验证。完整采集、子树/usage cohort、导出、关键路径、异常/健康和双部署装配继续按总计划实施。

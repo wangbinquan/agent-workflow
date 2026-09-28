@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1769,
+    "entries": 1770,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20539,6 +20539,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/invocationValuation.ts#createInvocationValuation",
       "symbol": "createInvocationValuation",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/application/observationOverview.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/observationOverview.ts#Runtime",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/observationOverview.ts#Runtime",
+      "symbol": "Runtime",
       "targetContext": "run-observability",
       "targetLayer": "application"
     },
@@ -42267,7 +42292,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:877e303a07565590649ba430e868a55a9ee9cf0cd91d94fbc90c6856b7618ca1",
+  "sourceDigest": "sha256:a20da21f503486c56d8f4daf3eb5db5cae4d91fc383e13d9145d7206e637a98a",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

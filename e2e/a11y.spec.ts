@@ -474,7 +474,17 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await page.goto(`${daemon.baseUrl}/observability`)
     const task = page.getByRole('button', { name: 'A11y task observations', exact: true })
     await expect(task).toBeVisible()
-    await expectNoCriticalOrSeriousAxeViolations(page, '/observability (task list)')
+    await expectNoCriticalOrSeriousAxeViolations(page, '/observability (overview)')
+    for (const tab of [
+      'Agent analysis',
+      'Tokens and cost',
+      'Performance and data quality',
+      'Task traces',
+    ]) {
+      await page.getByRole('tab', { name: tab, exact: true }).click()
+      await expect(page.getByRole('tabpanel')).toBeVisible()
+      await expectNoCriticalOrSeriousAxeViolations(page, `/observability (${tab})`)
+    }
     await task.click()
     const attempt = page.getByRole('button', { name: /^Show attempt statistics/ }).first()
     await expect(attempt).toBeVisible()

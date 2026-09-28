@@ -4,6 +4,7 @@ import { Hono, type MiddlewareHandler } from 'hono'
 import type {
   AcceptObservationInvocation,
   ObservationMeasurement,
+  ObservationOverview,
   ObservationTaskPage,
   ObservationTaskPageQuery,
 } from '@agent-workflow/shared'
@@ -256,9 +257,9 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
         }
         await createUsageIngestion(ledger).ingest({
           sourceId: id,
-          expectedCursor: null,
-          nextCursor: '1',
-          events: [{ eventId: 'event', measurement }],
+          expectedCursor: await ledger.cursor(id),
+          nextCursor: String(measurement.revision),
+          events: [{ eventId: 'event-' + measurement.revision, measurement }],
         })
       },
       async price(rate = '1', expectedRevision = 0) {
@@ -285,12 +286,13 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
       async sync(
         items: PlatformObservation[],
         patch: Partial<Pick<PlatformObservationPage, 'costVisibility' | 'visibilityRevision'>> = {},
+        selectedBinding = binding,
       ) {
         const response: PlatformObservationPage = {
           schemaVersion: 1,
           capability: 'executionObservationsV1',
-          projectId: binding.projectId,
-          taskId: binding.taskId,
+          projectId: selectedBinding.projectId,
+          taskId: selectedBinding.taskId,
           mode: 'snapshot',
           items,
           nextCursor: null,
@@ -329,8 +331,8 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
             },
           },
         })
-        await sync(binding)
-        if ((await platform.state(binding)).mode === 'snapshot') await sync(binding)
+        await sync(selectedBinding)
+        if ((await platform.state(selectedBinding)).mode === 'snapshot') await sync(selectedBinding)
       },
       async offline() {
         const sync = createPlatformObservationSync({
@@ -501,6 +503,227 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     expect(response.status).toBe(200)
     const result = (await response.json()) as ObservationTaskPage
     expect(result.items[0]!.metrics.cost.currency).toBe('CNY')
+    const overview = await app.request(`/api/observability/overview?from=${NOW}&to=${NOW + 20000}`)
+    expect(overview.status).toBe(200)
+    expect(
+      ((await overview.json()) as ObservationOverview).tasks.map((row) => row.task.id),
+    ).toEqual(['task'])
+    expect(
+      (await app.request(`/api/observability/overview?from=${NOW}&to=${NOW + 20000}&after=x`))
+        .status,
+    ).toBe(422)
+  })
+
+  test('overview quality preserves partial numeric evidence even when every bucket is priced', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.price()
+    await f.accept('local')
+    await f.usage('local', buckets('100'), { reporting: 'cumulative' })
+    await f.usage('local', buckets('90'), { reporting: 'cumulative', revision: 2 })
+    let result = await f.queries.overview(admin, query)
+    expect(result.metrics.tokens.totalKnown).toBe('100')
+    expect(result.metrics.tokens.complete).toBe(false)
+    expect(result.metrics.cost.knownAmount).toBe('0.0001')
+    expect(result.quality).toContainEqual({ reason: 'usage-partial', taskIds: ['task'] })
+    await f.task('hosted')
+    await f.accept('hosted', { taskId: 'hosted', authority: platformAuthority })
+    const usage = csUsage()
+    await f.sync([
+      csUsage({
+        projection: { ...usage.projection, complete: false, issues: ['unexplained-decrease'] },
+      }),
+      csValue(),
+    ])
+    result = await f.queries.overview(admin, query)
+    const partial = result.quality.find((row) => row.reason === 'usage-partial')!
+    expect([...partial.taskIds].sort()).toEqual(['hosted', 'task'])
+    expect(result.tasks.find((row) => row.task.id === 'hosted')!.metrics.cost.knownAmount).toBe(
+      '7.25',
+    )
+  })
+
+  test('model and runtime dimensions preserve separate CS installation identities', async () => {
+    const f = await fixture()
+    for (const [id, count] of [
+      ['cs-a', '10'],
+      ['cs-b', '20'],
+    ] as const) {
+      await f.task(id)
+      await f.accept(id, { taskId: id, authority: { ...platformAuthority, sourceId: id } })
+      const usage = csUsage()
+      await f.sync(
+        [
+          csUsage({
+            modelRef: 'model-1',
+            projection: { ...usage.projection, contribution: buckets(count) },
+          }),
+        ],
+        {},
+        { ...binding, sourceId: id },
+      )
+    }
+    const result = await f.queries.overview(admin, query)
+    expect(result.metrics.tokens.totalKnown).toBe('30')
+    expect(
+      result.models.map((row) => [row.sourceId, row.model, row.metrics.tokens.totalKnown]).sort(),
+    ).toEqual([
+      ['cs-a', 'model-1', '10'],
+      ['cs-b', 'model-1', '20'],
+    ])
+    expect(
+      result.runtimes.map((row) => [row.sourceId, row.metrics.tokens.totalKnown]).sort(),
+    ).toEqual([
+      ['cs-a', '10'],
+      ['cs-b', '20'],
+    ])
+  })
+
+  test('overview agrees across tasks, agents, models, runtimes and start-time buckets', async () => {
+    const f = await fixture()
+    await f.price()
+    await f.task('first', { status: 'done', finishedAt: NOW + 6000, runningSince: null })
+    await f.task('child', {
+      parentTaskId: 'first',
+      rootTaskId: 'first',
+      startedAt: NOW + 1000,
+      status: 'done',
+      finishedAt: NOW + 9000,
+      runningSince: null,
+    })
+    await f.task('hidden', { ownerUserId: 'other' })
+    await f.task('outside', { startedAt: NOW + 20000 })
+    for (const [id, count] of [
+      ['first', '1000000'],
+      ['child', '2000000'],
+      ['hidden', '9000000'],
+      ['outside', '9000000'],
+    ] as const) {
+      await f.accept(id, { taskId: id, agentId: 'same-agent' })
+      await f.usage(id, buckets(count), { taskId: id })
+    }
+    const actor = { ...admin, permissions: new Set(['tasks:read', 'tasks:read:own'] as const) }
+    const overview = await f.queries.overview(actor, query)
+    expect(overview.partial).toBe(false)
+    expect(overview.tasks.map((row) => row.task.id)).toEqual(['child', 'first'])
+    expect(overview.metrics.tokens.totalKnown).toBe('3000000')
+    expect(overview.metrics.cost.knownAmount).toBe('3')
+    expect(overview.agents).toHaveLength(1)
+    expect(overview.agents[0]!.metrics).toEqual(overview.metrics)
+    expect(
+      overview.agents[0]!.tasks.map((row) => [row.taskId, row.metrics.tokens.totalKnown]),
+    ).toEqual([
+      ['child', '2000000'],
+      ['first', '1000000'],
+    ])
+    expect(overview.models[0]).toMatchObject({
+      authority: 'local',
+      provider: 'gateway',
+      model: 'model',
+      metrics: overview.metrics,
+    })
+    expect(overview.runtimes[0]).toMatchObject({
+      authority: 'local',
+      registrationId: 'runtime',
+      configurationRevision: 0,
+      protocol: 'opencode',
+      metrics: overview.metrics,
+    })
+    expect(overview.trend[0]).toMatchObject({
+      from: NOW,
+      to: NOW + 20000,
+      taskCount: 2,
+      metrics: overview.metrics,
+    })
+    expect(overview.durations).toEqual({ completedTasks: 2, p50Ms: 6000, p95Ms: 8000, maxMs: 8000 })
+    expect(overview.quality).toEqual([])
+    expect(overview.statuses).toEqual([{ status: 'done', count: 2 }])
+  })
+
+  test('overview retains missing and zero costs, actual model identities and running samples', async () => {
+    const f = await fixture()
+    await f.price()
+    await f.task('zero', { startedAt: NOW - 1 })
+    await f.task('unpriced', { startedAt: NOW + 1000 })
+    await f.task('missing', { startedAt: NOW - 1 })
+    await f.accept('zero', { taskId: 'zero', agentId: 'worker', agentRevision: 1 })
+    await f.usage('zero', buckets('0'), { taskId: 'zero' })
+    await f.accept('unpriced', { taskId: 'unpriced', agentId: 'worker', agentRevision: 2 })
+    await f.usage('unpriced', buckets('40'), {
+      taskId: 'unpriced',
+      model: { provider: 'other-provider', id: 'other-model' },
+    })
+    const overview = await f.queries.overview(admin, {
+      ...query,
+      from: NOW - 86400000,
+      to: NOW + 86400000,
+    })
+    expect(overview.tasks).toHaveLength(3)
+    expect(overview.metrics.tokens.totalKnown).toBe('40')
+    expect(overview.metrics.cost.knownAmount).toBe('0')
+    expect(overview.metrics.cost.complete).toBe(false)
+    expect(overview.durations.completedTasks).toBe(0)
+    expect(overview.durations.p50Ms).toBeNull()
+    expect(overview.agents.map((row) => row.agentRevision).sort()).toEqual([1, 2])
+    expect(overview.models).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          model: 'other-model',
+          provider: 'other-provider',
+          metrics: expect.objectContaining({
+            cost: expect.objectContaining({ knownAmount: null }),
+          }),
+        }),
+      ]),
+    )
+    expect(overview.trend.map((row) => row.metrics.tokens.totalKnown)).toEqual(['0', '40'])
+    expect(overview.quality).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ reason: 'not-observed', taskIds: ['missing'] }),
+        expect.objectContaining({ reason: 'unpriced', taskIds: ['unpriced'] }),
+      ]),
+    )
+  })
+
+  test('mixed-deployment overview adds CS canonical contribution once and retains hidden-cost gaps', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.price()
+    await f.accept('local')
+    await f.usage('local')
+    await f.accept('hosted', { authority: platformAuthority })
+    await f.sync([csUsage(), csValue()])
+    let result = await f.queries.overview(admin, query)
+    expect(result.metrics.tokens.totalKnown).toBe('1000030')
+    expect(result.metrics.cost.knownAmount).toBe('8.25')
+    expect(result.models).toHaveLength(2)
+    expect(result.models.find((row) => row.authority === 'crewstation')).toMatchObject({
+      provider: null,
+      model: 'opaque-model-ref',
+      metrics: { tokens: { totalKnown: '30' }, cost: { knownAmount: '7.25' } },
+    })
+    expect(result.runtimes.find((row) => row.authority === 'crewstation')).toMatchObject({
+      registrationId: null,
+      protocol: null,
+      configurationRevision: null,
+    })
+    await f.sync(
+      [
+        csUsage(),
+        {
+          ...csValue(),
+          availability: 'not-authorized',
+          amountDecimal: null,
+          priceVersionRef: null,
+        },
+      ],
+      { costVisibility: 'hidden', visibilityRevision: 1 },
+    )
+    result = await f.queries.overview(admin, query)
+    expect(result.metrics.tokens.totalKnown).toBe('1000030')
+    expect(result.metrics.cost.knownAmount).toBe('1')
+    expect(result.metrics.cost.complete).toBe(false)
+    expect(result.quality).toContainEqual({ reason: 'not-authorized', taskIds: ['task'] })
   })
 
   test('platform parent coverage allocates tokens once and never prorates a whole-record cost', async () => {

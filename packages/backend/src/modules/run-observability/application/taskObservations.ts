@@ -3,6 +3,8 @@ import type {
   ObservationAgentSummary,
   ObservationAttemptFacts,
   ObservationMetrics,
+  ObservationOverview,
+  ObservationOverviewQuery,
   ObservationTaskDetail,
   ObservationTaskFacts,
   ObservationTaskPage,
@@ -17,6 +19,7 @@ import { platformObservationKey, type PlatformSyncState } from '../domain/platfo
 import { summarizeTokenUsage, TOKEN_BUCKETS } from '../domain/tokenUsage'
 import { selectUsageContributions, type UsageContributionEvidence } from '../domain/usageSelection'
 import type { ObservationSnapshot, ObservationSnapshotSources } from '../ports/taskObservations'
+import { readObservationOverview } from './observationOverview'
 
 type Invocation = AcceptedObservationInvocation
 type PlatformUsage = Extract<PlatformObservation, { kind: 'usage' }>
@@ -298,6 +301,9 @@ function metrics(
         ...new Set([
           ...invocations.flatMap((i) => i.reasons),
           ...rows.flatMap((r) => (r.reason === null ? [] : [r.reason])),
+          ...(invocations.some((i) => i.records.length > 0 && !i.complete)
+            ? ['usage-partial']
+            : []),
           ...(observedInvocations < invocations.length || invocations.length === 0
             ? ['not-observed']
             : []),
@@ -336,11 +342,108 @@ function attemptInterval(
   return { start, end: Math.min(end, asOf), open }
 }
 
+function agentSummaries(loaded: Awaited<ReturnType<typeof loadTask>>): ObservationAgentSummary[] {
+  const groups = new Map<string, InvocationSummary[]>()
+  for (const value of loaded.invocations) {
+    const i = value.invocation,
+      key = JSON.stringify([i.agentId, i.agentRevision, i.purpose])
+    const group = groups.get(key) ?? []
+    group.push(value)
+    groups.set(key, group)
+  }
+  return [...groups.values()].map((group) => ({
+    agentId: group[0]!.invocation.agentId,
+    agentRevision: group[0]!.invocation.agentRevision,
+    purpose: group[0]!.invocation.purpose,
+    metrics: metrics(group, loaded.truncated),
+  }))
+}
+
+function usageDimensions(loaded: Awaited<ReturnType<typeof loadTask>>) {
+  type Model = Omit<ObservationOverview['models'][number], 'metrics'>
+  type Runtime = Omit<ObservationOverview['runtimes'][number], 'metrics'>
+  const models = new Map<string, { value: Model; rows: InvocationSummary[] }>()
+  const runtimes = new Map<string, { value: Runtime; rows: InvocationSummary[] }>()
+  for (const row of loaded.invocations) {
+    const authority = row.invocation.authority
+    const runtime = authority.kind === 'local' ? authority.runtime : null
+    const value: Runtime = {
+      authority: authority.kind,
+      sourceId: authority.kind === 'crewstation' ? authority.sourceId : null,
+      registrationId: runtime?.registrationId ?? null,
+      configurationRevision: runtime?.configurationRevision ?? null,
+      protocol: runtime?.protocol ?? null,
+    }
+    const key = JSON.stringify(value),
+      group = runtimes.get(key) ?? { value, rows: [] }
+    group.rows.push(row)
+    runtimes.set(key, group)
+    const perModel = new Map<string, { value: Model; records: ValuedContribution[] }>()
+    for (const record of row.records) {
+      const model: Model = {
+        authority: authority.kind,
+        sourceId: authority.kind === 'crewstation' ? authority.sourceId : null,
+        provider: authority.kind === 'local' ? (record.record.localModel?.provider ?? null) : null,
+        model:
+          authority.kind === 'local'
+            ? (record.record.localModel?.id ?? null)
+            : (record.record.platformUsage?.modelRef ?? null),
+      }
+      const modelKey = JSON.stringify(model),
+        entry = perModel.get(modelKey) ?? { value: model, records: [] }
+      entry.records.push(record)
+      perModel.set(modelKey, entry)
+    }
+    if (perModel.size === 0) {
+      const value: Model = {
+        authority: authority.kind,
+        sourceId: authority.kind === 'crewstation' ? authority.sourceId : null,
+        provider: null,
+        model: null,
+      }
+      perModel.set(JSON.stringify(value), { value, records: [] })
+    }
+    for (const [key, entry] of perModel) {
+      const group = models.get(key) ?? { value: entry.value, rows: [] }
+      group.rows.push({ ...row, records: entry.records })
+      models.set(key, group)
+    }
+  }
+  return {
+    models: [...models.values()].map(({ value, rows }) => ({
+      ...value,
+      metrics: metrics(rows, loaded.truncated),
+    })),
+    runtimes: [...runtimes.values()].map(({ value, rows }) => ({
+      ...value,
+      metrics: metrics(rows, loaded.truncated),
+    })),
+  }
+}
+
 export function createTaskObservationQueries(input: {
   readonly snapshot: ObservationSnapshot
   readonly now: () => number
 }) {
   return {
+    overview: (actor: Actor, query: ObservationOverviewQuery): Promise<ObservationOverview> =>
+      input.snapshot.read(async (sources) => {
+        const asOf = input.now()
+        return readObservationOverview({
+          actor,
+          query,
+          asOf,
+          sources,
+          summarize: async (sources, task) => {
+            const loaded = await loadTask(sources, task.id)
+            return {
+              summary: taskSummary(task, loaded, asOf),
+              agents: agentSummaries(loaded),
+              ...usageDimensions(loaded),
+            }
+          },
+        })
+      }),
     list: (actor: Actor, query: ObservationTaskPageQuery): Promise<ObservationTaskPage> =>
       input.snapshot.read(async (sources) => {
         const asOf = input.now(),
@@ -365,20 +468,7 @@ export function createTaskObservationQueries(input: {
         if (!task) return null
         const loaded = await loadTask(sources, taskId),
           facts = await sources.tasks.attempts(taskId, 1000)
-        const groups = new Map<string, InvocationSummary[]>()
-        for (const value of loaded.invocations) {
-          const i = value.invocation,
-            key = JSON.stringify([i.agentId, i.agentRevision, i.purpose])
-          const group = groups.get(key) ?? []
-          group.push(value)
-          groups.set(key, group)
-        }
-        const agents: ObservationAgentSummary[] = [...groups.values()].map((group) => ({
-          agentId: group[0]!.invocation.agentId,
-          agentRevision: group[0]!.invocation.agentRevision,
-          purpose: group[0]!.invocation.purpose,
-          metrics: metrics(group, loaded.truncated),
-        }))
+        const agents = agentSummaries(loaded)
         const attempts = facts.items.map((attempt) => {
           const group = loaded.invocations.filter((i) => i.invocation.nodeRunId === attempt.id)
           const agents = [

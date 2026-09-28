@@ -119,6 +119,47 @@ async function expectCardSpacing(page: Page) {
   expect(width.scroll).toBeLessThanOrEqual(width.client + 1)
 }
 
+async function expectAnalysisSpacing(page: Page) {
+  const geometry = await page.getByRole('tabpanel').evaluate((panel) => {
+    const gap = Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--space-4'),
+    )
+    const blocks = Array.from(panel.querySelector('.stack--md')!.children).map((el) =>
+      el.getBoundingClientRect(),
+    )
+    const grids = Array.from(
+      panel.querySelectorAll('.observation-summary, .observation-columns'),
+    ).map((grid) => ({
+      gap: Number.parseFloat(getComputedStyle(grid).gap),
+      cards: Array.from(grid.children).map((el) => {
+        const r = el.getBoundingClientRect()
+        return { x: r.x, y: r.y, right: r.right, bottom: r.bottom }
+      }),
+    }))
+    return {
+      gap,
+      gaps: blocks.slice(1).map((b, i) => b.y - blocks[i]!.bottom),
+      grids,
+      overflow: document.documentElement.scrollWidth - innerWidth,
+      width: innerWidth,
+    }
+  })
+  for (const gap of geometry.gaps) expect(gap).toBeCloseTo(geometry.gap, 0)
+  for (const grid of geometry.grids) {
+    expect(grid.gap).toBe(geometry.gap)
+    for (const [i, card] of grid.cards.entries()) {
+      expect(card.x).toBeGreaterThanOrEqual(0)
+      expect(card.right).toBeLessThanOrEqual(geometry.width)
+      const previous = grid.cards[i - 1]
+      if (previous && Math.abs(previous.y - card.y) < 1)
+        expect(card.x - previous.right).toBeCloseTo(geometry.gap, 0)
+      else if (previous && Math.abs(previous.x - card.x) < 1)
+        expect(card.y - previous.bottom).toBeCloseTo(geometry.gap, 0)
+    }
+  }
+  expect(geometry.overflow).toBeLessThanOrEqual(1)
+}
+
 test('task, agents and attempt drill-down use real observations and standard card spacing', async ({
   page,
 }, testInfo) => {
@@ -133,6 +174,35 @@ test('task, agents and attempt drill-down use real observations and standard car
   await prime(page)
   await page.goto(`${daemon.baseUrl}/observability`)
   await expect(page.getByRole('heading', { name: 'Run observability', exact: true })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Task usage trend', exact: true })).toBeVisible()
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 })
+    await expectAnalysisSpacing(page)
+  }
+  await page.setViewportSize({ width: 1280, height: 844 })
+  await page.getByRole('tab', { name: 'Agent analysis', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Agents across tasks', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: new RegExp(agents[0]!.id) }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Agent contributions by task', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Observed parallel task', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Task total', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: 'Back to analysis', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Agent contributions by task', exact: true }),
+  ).toBeVisible()
+  await page.getByRole('tab', { name: 'Tokens and cost', exact: true }).click()
+  await expect(
+    page.getByRole('heading', { name: 'Usage by actual model', exact: true }),
+  ).toBeVisible()
+  await expectAnalysisSpacing(page)
+  await page.getByRole('tab', { name: 'Performance and data quality', exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Task wall time P50', exact: true })).toBeVisible()
+  await expectAnalysisSpacing(page)
+  await page.getByRole('tab', { name: 'Task traces', exact: true }).click()
   await page.getByRole('button', { name: 'Observed parallel task', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Task total', exact: true })).toBeVisible()
   await expectCardSpacing(page)

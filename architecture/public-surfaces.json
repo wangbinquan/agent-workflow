@@ -3,9 +3,9 @@
     "consumers": 921,
     "exactEntrypointFiles": 69,
     "governedFieldSurfaces": 5,
-    "methods": 1095,
+    "methods": 1096,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21169,
+    "recursiveFields": 21227,
     "symbols": 1027
   },
   "entries": [
@@ -117841,8 +117841,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 87,
-        "maxUnionVariants": 32
+        "maxTransitiveLeafFields": 145,
+        "maxUnionVariants": 50
       },
       "consumerEdgeIds": [
         "import:44a2cc15a17a1d4359b4",
@@ -118324,13 +118324,332 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:list.$return.taskScope",
           "type": "'direct'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.source.$variant:0",
+          "type": "'session'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.source.$variant:1",
+          "type": "'pat'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.source.$variant:2",
+          "type": "'daemon'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:overview.$parameter:actor.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:overview.$parameter:actor.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:actor.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:overview.$parameter:actor.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$parameter:query",
+          "type": "z.infer<typeof ObservationOverviewQuerySchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:overview.$return.agents",
+          "type": "readonly (ObservationAgentSummary & {\n    readonly tasks: readonly { readonly taskId: string; readonly metrics: ObservationMetrics }[]\n  })[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.asOf",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.cohort",
+          "type": "'started'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.durations.completedTasks",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.durations.maxMs.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.durations.maxMs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.durations.p50Ms.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.durations.p50Ms.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.durations.p95Ms.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.durations.p95Ms.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.filtersEcho",
+          "type": "z.infer<typeof ObservationOverviewQuerySchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.limits.invocations",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.limits.records",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:overview.$return.limits.tasks",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.authorities",
+          "type": "readonly ('local' | 'crewstation')[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:overview.$return.metrics.cost.complete",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.cost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.cost.knownAmount.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.cost.knownAmount.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.cost.pricedRecords",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.cost.priceVersionIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.cost.reasons",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.invocations",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.observedInvocations",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.records",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:overview.$return.metrics.tokens.complete",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.tokens.hasKnown",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.tokens.known",
+          "type": "Record<keyof ObservationTokenUsage, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.tokens.totalKnown",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.tokens.unknownBuckets",
+          "type": "Record<keyof ObservationTokenUsage, number>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.truncated",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:overview.$return.models",
+          "type": "readonly {\n    readonly authority: 'local' | 'crewstation'\n    readonly sourceId: string | null\n    readonly provider: string | null\n    readonly model: string | null\n    readonly metrics: ObservationMetrics\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.partial",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.projectionVersion",
+          "type": "1"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.quality",
+          "type": "readonly {\n    readonly reason: string\n    readonly taskIds: readonly string[]\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:overview.$return.runtimes",
+          "type": "readonly {\n    readonly authority: 'local' | 'crewstation'\n    readonly sourceId: string | null\n    readonly registrationId: string | null\n    readonly configurationRevision: number | null\n    readonly protocol: string | null\n    readonly metrics: ObservationMetrics\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.statuses",
+          "type": "readonly { readonly status: string; readonly count: number }[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:overview.$return.tasks",
+          "type": "readonly ObservationTaskSummary[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.taskScope",
+          "type": "'direct'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.trend",
+          "type": "readonly {\n    readonly from: number\n    readonly to: number\n    readonly taskCount: number\n    readonly metrics: ObservationMetrics\n  }[]"
         }
       ],
       "file": "packages/backend/src/modules/run-observability/public/queries.ts",
       "id": "public:run-observability:queries:ObservationTaskQueries",
       "members": [
         "detail",
-        "list"
+        "list",
+        "overview"
       ],
       "methods": [
         {
@@ -118346,6 +118665,14 @@
           ],
           "name": "list",
           "signatureDigest": "sha256:3d2b40a09ac2bc1f3876d07660c125c2bf0915807e827105aeccadb560b9b870"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "name": "overview",
+          "signatureDigest": "sha256:91f81feeb8b244adf8fe8b2419fb682da8d08338c272a0eacf698ff4ef5994e7"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/queries.ts#ObservationTaskQueries",
@@ -118366,7 +118693,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:fd96f6e0ea525acc447d9904a18d6f03ccd6f305673c025875cb8adda00aeaa6",
+      "signatureDigest": "sha256:c58b9b6f16a39af2c0741da532e44077496abaad0c4b02ead1220d9c8a35efcb",
       "status": "target-context-current-surface",
       "symbol": "ObservationTaskQueries",
       "transaction": "none",
@@ -167582,7 +167909,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:877e303a07565590649ba430e868a55a9ee9cf0cd91d94fbc90c6856b7618ca1",
+  "sourceDigest": "sha256:a20da21f503486c56d8f4daf3eb5db5cae4d91fc383e13d9145d7206e637a98a",
   "targetContexts": [
     "collaboration",
     "development-automation",

@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { Fragment, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
-  ObservationMetrics,
+  ObservationOverview,
   ObservationTaskDetail,
   ObservationTaskPage,
 } from '@agent-workflow/shared'
@@ -18,126 +18,22 @@ import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { PageHeader } from '@/components/PageHeader'
 import { Select } from '@/components/Select'
-import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
+import { TabBar, tabDomIds } from '@/components/TabBar'
 import { formatDurationMs } from '@/lib/duration'
-import { formatObservationCny } from './formatObservations'
+import { Tokens, Cost, Source, Metrics } from './ObservationMetrics'
+import { ObservationAnalysis, type ObservationAnalysisTab } from './ObservationAnalysis'
 import './RunObservability.css'
 
 export interface ObservationSearch {
   readonly from: number
   readonly to: number
-  readonly period: 'week' | 'month' | 'all'
+  readonly period: 'week' | 'month' | 'all' | 'custom'
   readonly after?: string
   readonly task?: string
-}
-const keys = ['input', 'cacheRead', 'cacheWrite', 'output'] as const
-const reasonKeys: Readonly<Record<string, string>> = {
-  'not-observed': 'unknown',
-  unpriced: 'unpriced',
-  pending: 'pending',
-  'not-authorized': 'hidden',
-  'partial-price': 'pricingPartial',
-  'model-unknown': 'modelUnknown',
-  'registration-unknown': 'registrationUnknown',
-  'partial-allocation': 'allocationPartial',
-  'coverage-partial': 'coveragePartial',
-  'coverage-conflict': 'coverageConflict',
-  'capture-gap': 'sourceGap',
-  initial: 'sourceInitial',
-  syncing: 'sourceSyncing',
-  failed: 'sourceFailed',
-  'legacy-unbound': 'sourceUnbound',
-  truncated: 'limitHint',
-}
-function Tokens({ metrics }: { metrics: ObservationMetrics }) {
-  const { t, i18n } = useTranslation()
-  return (
-    <>
-      <strong>
-        {metrics.tokens.hasKnown
-          ? BigInt(metrics.tokens.totalKnown).toLocaleString(i18n.language)
-          : '—'}
-      </strong>{' '}
-      {!metrics.tokens.complete && (
-        <StatusChip kind="warn" size="sm">
-          {t(`runObservability.${metrics.tokens.hasKnown ? 'partial' : 'unknown'}`)}
-        </StatusChip>
-      )}
-    </>
-  )
-}
-function Cost({ metrics }: { metrics: ObservationMetrics }) {
-  const { t } = useTranslation()
-  return (
-    <>
-      <strong>{formatObservationCny(metrics.cost.knownAmount)}</strong>{' '}
-      {!metrics.cost.complete && (
-        <StatusChip kind="warn" size="sm">
-          {t('runObservability.partial')}
-        </StatusChip>
-      )}
-    </>
-  )
-}
-function Source({ metrics }: { metrics: ObservationMetrics }) {
-  const { t } = useTranslation()
-  return (
-    <>
-      {metrics.authorities.length
-        ? metrics.authorities.map((a) => t(`runObservability.${a}`)).join(' · ')
-        : '—'}
-    </>
-  )
-}
-function Metrics({ value }: { value: ObservationMetrics }) {
-  const { t, i18n } = useTranslation()
-  return (
-    <dl className="detail-grid observation-metrics">
-      <dt>{t('runObservability.tokens')}</dt>
-      <dd>
-        <Tokens metrics={value} />
-      </dd>
-      {keys.map((key) => (
-        <Fragment key={key}>
-          <dt>{t(`runObservability.${key}`)}</dt>
-          <dd>
-            {value.records === 0 || value.tokens.unknownBuckets[key] === value.records
-              ? '—'
-              : BigInt(value.tokens.known[key]).toLocaleString(i18n.language)}
-          </dd>
-        </Fragment>
-      ))}
-      <dt>{t('runObservability.cost')}</dt>
-      <dd>
-        <Cost metrics={value} />
-      </dd>
-      <dt>{t('runObservability.coverage')}</dt>
-      <dd>
-        {value.observedInvocations} / {value.invocations}
-      </dd>
-      <dt>{t('runObservability.source')}</dt>
-      <dd>
-        <Source metrics={value} />
-      </dd>
-      <dt>{t('runObservability.prices')}</dt>
-      <dd>
-        {value.cost.priceVersionIds.length
-          ? value.cost.priceVersionIds.join(' · ')
-          : t('runObservability.noPrices')}
-      </dd>
-      {value.cost.reasons.length > 0 && (
-        <>
-          <dt>{t('runObservability.state')}</dt>
-          <dd>
-            {value.cost.reasons
-              .map((r) => t(`runObservability.${reasonKeys[r] ?? 'partial'}`))
-              .join(' · ')}
-          </dd>
-        </>
-      )}
-    </dl>
-  )
+  readonly tab?: ObservationAnalysisTab | 'tasks'
+  readonly agent?: string
+  readonly quality?: string
 }
 function TaskDetail({ data }: { data: ObservationTaskDetail }) {
   const { t, i18n } = useTranslation(),
@@ -329,7 +225,25 @@ export function RunObservability({
   onChange: (search: ObservationSearch) => void
 }) {
   const { t, i18n } = useTranslation()
+  const tab = search.tab ?? 'tasks'
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
+  const overview = useQuery({
+    queryKey: ['run-observability', 'overview', search.from, search.to, timezone],
+    queryFn: ({ signal }) =>
+      api.get<ObservationOverview>(
+        '/api/observability/overview',
+        {
+          from: search.from,
+          to: search.to,
+          timezone,
+        },
+        signal,
+      ),
+    enabled: !search.task && tab !== 'tasks',
+    staleTime: 30_000,
+    refetchInterval: 30_000,
+    refetchIntervalInBackground: false,
+  })
   const list = useQuery({
     queryKey: ['run-observability', 'tasks', search.from, search.to, search.after, timezone],
     queryFn: ({ signal }) =>
@@ -338,7 +252,7 @@ export function RunObservability({
         { from: search.from, to: search.to, timezone, limit: 20, after: search.after },
         signal,
       ),
-    enabled: !search.task,
+    enabled: !search.task && tab === 'tasks',
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   })
@@ -354,16 +268,23 @@ export function RunObservability({
     refetchInterval: 10_000,
     refetchIntervalInBackground: false,
   })
-  const current = search.task ? detail : list
+  const current = search.task ? detail : tab === 'tasks' ? list : overview
   const refresh = () => {
     if (search.task) {
       void detail.refetch()
+      return
+    }
+    if (search.period === 'custom') {
+      void current.refetch()
       return
     }
     // Explicit refresh starts a new cohort; paging and drill-down retain theirs.
     const to = Date.now() + 1
     onChange({
       period: search.period,
+      ...(search.tab ? { tab: search.tab } : {}),
+      ...(search.agent ? { agent: search.agent } : {}),
+      ...(search.quality ? { quality: search.quality } : {}),
       from:
         search.period === 'all'
           ? 0
@@ -392,7 +313,7 @@ export function RunObservability({
               className="btn btn--sm"
               onClick={() => onChange({ ...search, task: undefined })}
             >
-              {t('runObservability.back')}
+              {t(`runObservability.${tab === 'tasks' ? 'back' : 'backAnalysis'}`)}
             </button>
           )
         }
@@ -426,14 +347,19 @@ export function RunObservability({
               <Select
                 value={search.period}
                 ariaLabel={t('runObservability.period')}
-                options={(['week', 'month', 'all'] as const).map((value) => ({
+                options={(search.period === 'custom'
+                  ? (['week', 'month', 'all', 'custom'] as const)
+                  : (['week', 'month', 'all'] as const)
+                ).map((value) => ({
                   value,
                   label: t(`runObservability.${value}`),
                 }))}
                 onChange={(period) => {
+                  if (period === 'custom') return
                   const to = Date.now() + 1
                   onChange({
                     period,
+                    ...(search.tab ? { tab: search.tab } : {}),
                     from:
                       period === 'all'
                         ? 0
@@ -457,82 +383,119 @@ export function RunObservability({
         <ErrorBanner error={current.error} onRetry={() => void current.refetch()} />
       )}
       {current.isPending && <LoadingState />}
-      {search.task
-        ? detail.data && <TaskDetail key={search.task} data={detail.data} />
-        : list.data && (
-            <>
-              {list.data.items.length === 0 ? (
-                <EmptyState title={t('runObservability.empty')} />
-              ) : (
-                <TableViewport label={t('runObservability.tasks')} minWidth="lg">
-                  <table className="data-table data-table--compact">
-                    <thead>
-                      <tr>
-                        {['task', 'state', 'tokens', 'cost', 'wall', 'coverage', 'source'].map(
-                          (key) => (
-                            <th key={key} scope="col">
-                              {t(`runObservability.${key}`)}
-                            </th>
-                          ),
-                        )}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {list.data.items.map((row) => (
-                        <tr key={row.task.id}>
-                          <th scope="row">
-                            <button
-                              type="button"
-                              className="btn btn--sm"
-                              onClick={() => onChange({ ...search, task: row.task.id })}
-                            >
-                              {row.task.name}
-                            </button>
-                          </th>
-                          <td>
-                            {t(`tasks.status.${row.task.status}`, {
-                              defaultValue: row.task.status,
-                            })}
-                          </td>
-                          <td>
-                            <Tokens metrics={row.metrics} />
-                          </td>
-                          <td>
-                            <Cost metrics={row.metrics} />
-                          </td>
-                          <td>{duration(row.wallMs)}</td>
-                          <td>
-                            {row.metrics.observedInvocations} / {row.metrics.invocations}
-                          </td>
-                          <td>
-                            <Source metrics={row.metrics} />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </TableViewport>
+      {!search.task && (
+        <TabBar
+          idPrefix="run-observation"
+          ariaLabel={t('runObservability.title')}
+          tabs={(['overview', 'tasks', 'agents', 'usage', 'performance'] as const).map((key) => ({
+            key,
+            label: t(`runObservability.tab_${key}`),
+          }))}
+          active={tab}
+          onSelect={(tab) =>
+            onChange({ ...search, tab, after: undefined, agent: undefined, quality: undefined })
+          }
+        />
+      )}
+      <div
+        {...(!search.task
+          ? {
+              role: 'tabpanel',
+              id: tabDomIds('run-observation', tab).panelId,
+              'aria-labelledby': tabDomIds('run-observation', tab).tabId,
+            }
+          : {})}
+      >
+        {search.task
+          ? detail.data && <TaskDetail key={search.task} data={detail.data} />
+          : tab !== 'tasks'
+            ? overview.data && (
+                <ObservationAnalysis
+                  data={overview.data}
+                  tab={tab}
+                  selectedAgent={search.agent}
+                  quality={search.quality}
+                  onQuality={(quality) => onChange({ ...search, quality })}
+                  onAgent={(agent) => onChange({ ...search, tab: 'agents', agent })}
+                  onTask={(task) => onChange({ ...search, task })}
+                  onBucket={(from, to) => onChange({ from, to, period: 'custom', tab: 'tasks' })}
+                />
+              )
+            : list.data && (
+                <>
+                  {list.data.items.length === 0 ? (
+                    <EmptyState title={t('runObservability.empty')} />
+                  ) : (
+                    <TableViewport label={t('runObservability.tasks')} minWidth="lg">
+                      <table className="data-table data-table--compact">
+                        <thead>
+                          <tr>
+                            {['task', 'state', 'tokens', 'cost', 'wall', 'coverage', 'source'].map(
+                              (key) => (
+                                <th key={key} scope="col">
+                                  {t(`runObservability.${key}`)}
+                                </th>
+                              ),
+                            )}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {list.data.items.map((row) => (
+                            <tr key={row.task.id}>
+                              <th scope="row">
+                                <button
+                                  type="button"
+                                  className="btn btn--sm"
+                                  onClick={() => onChange({ ...search, task: row.task.id })}
+                                >
+                                  {row.task.name}
+                                </button>
+                              </th>
+                              <td>
+                                {t(`tasks.status.${row.task.status}`, {
+                                  defaultValue: row.task.status,
+                                })}
+                              </td>
+                              <td>
+                                <Tokens metrics={row.metrics} />
+                              </td>
+                              <td>
+                                <Cost metrics={row.metrics} />
+                              </td>
+                              <td>{duration(row.wallMs)}</td>
+                              <td>
+                                {row.metrics.observedInvocations} / {row.metrics.invocations}
+                              </td>
+                              <td>
+                                <Source metrics={row.metrics} />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </TableViewport>
+                  )}
+                  <div className="page__actions">
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={!search.after}
+                      onClick={() => onChange({ ...search, after: undefined })}
+                    >
+                      {t('runObservability.first')}
+                    </button>
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      disabled={!list.data.nextCursor || list.isFetching}
+                      onClick={() => onChange({ ...search, after: list.data!.nextCursor! })}
+                    >
+                      {t('runObservability.next')}
+                    </button>
+                  </div>
+                </>
               )}
-              <div className="page__actions">
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  disabled={!search.after}
-                  onClick={() => onChange({ ...search, after: undefined })}
-                >
-                  {t('runObservability.first')}
-                </button>
-                <button
-                  type="button"
-                  className="btn btn--sm"
-                  disabled={!list.data.nextCursor || list.isFetching}
-                  onClick={() => onChange({ ...search, after: list.data!.nextCursor! })}
-                >
-                  {t('runObservability.next')}
-                </button>
-              </div>
-            </>
-          )}
+      </div>
     </div>
   )
 }

@@ -1,5 +1,6 @@
 import type { Hono } from 'hono'
 import {
+  ObservationOverviewQuerySchema,
   ObservationPricePageQuerySchema,
   ObservationTaskPageQuerySchema,
   SaveObservationPriceSchema,
@@ -29,6 +30,20 @@ async function mapped<T>(operation: () => Promise<T>): Promise<T> {
 }
 export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependencies): void {
   const readGate = { permissions: ['tasks:read'] as const, tokenAccess: 'allow' as const }
+  registerRoute(
+    app,
+    {
+      ...readGate,
+      method: 'GET',
+      path: '/api/observability/overview',
+      summary: 'Read visible task cohort totals, trends and agent/model/runtime distributions',
+    },
+    async (c) => {
+      const query = ObservationOverviewQuerySchema.safeParse(c.req.query())
+      if (!query.success) throw new ValidationError('invalid-query', 'Invalid observation window')
+      return c.json(await deps.tasks.overview(actorOf(c), query.data))
+    },
+  )
   registerRoute(
     app,
     {

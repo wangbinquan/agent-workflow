@@ -16,9 +16,21 @@ export function validateObservationSearch(raw: Record<string, unknown>): Observa
   return {
     from,
     to,
-    period: raw.period === 'all' || raw.period === 'month' ? raw.period : 'week',
+    period:
+      raw.period === 'all' || raw.period === 'month' || raw.period === 'custom'
+        ? raw.period
+        : 'week',
+    tab:
+      raw.tab === 'tasks' ||
+      raw.tab === 'agents' ||
+      raw.tab === 'usage' ||
+      raw.tab === 'performance'
+        ? raw.tab
+        : 'overview',
     ...(typeof raw.after === 'string' && raw.after ? { after: raw.after } : {}),
     ...(typeof raw.task === 'string' && raw.task ? { task: raw.task } : {}),
+    ...(typeof raw.agent === 'string' && raw.agent ? { agent: raw.agent } : {}),
+    ...(typeof raw.quality === 'string' && raw.quality ? { quality: raw.quality } : {}),
   }
 }
 export const Route = createRoute({

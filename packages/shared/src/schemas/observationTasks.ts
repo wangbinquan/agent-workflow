@@ -25,6 +25,14 @@ export const ObservationTaskPageQuerySchema = z
   )
 export type ObservationTaskPageQuery = z.infer<typeof ObservationTaskPageQuerySchema>
 
+export const ObservationOverviewQuerySchema = ObservationTaskPageQuerySchema.refine(
+  (query) => query.after === undefined && query.limit === 20,
+  {
+    message: 'Overview does not accept task pagination',
+  },
+).transform(({ from, to, timezone }) => ({ from, to, timezone }))
+export type ObservationOverviewQuery = z.infer<typeof ObservationOverviewQuerySchema>
+
 /** Owner facts, not a copy of task snapshots, prompts or outputs. */
 export interface ObservationTaskFacts {
   readonly id: string
@@ -118,5 +126,56 @@ export interface ObservationTaskDetail extends ObservationTaskSummary {
     readonly error: string | null
     readonly costsVisible: boolean
     readonly hasGaps: boolean
+  }[]
+}
+
+export interface ObservationOverview {
+  readonly asOf: number
+  readonly projectionVersion: 1
+  readonly cohort: 'started'
+  readonly taskScope: 'direct'
+  readonly filtersEcho: ObservationOverviewQuery
+  readonly partial: boolean
+  readonly limits: {
+    readonly tasks: number
+    readonly invocations: number
+    readonly records: number
+  }
+  readonly metrics: ObservationMetrics
+  readonly tasks: readonly ObservationTaskSummary[]
+  readonly statuses: readonly { readonly status: string; readonly count: number }[]
+  readonly trend: readonly {
+    readonly from: number
+    readonly to: number
+    readonly taskCount: number
+    readonly metrics: ObservationMetrics
+  }[]
+  readonly agents: readonly (ObservationAgentSummary & {
+    readonly tasks: readonly { readonly taskId: string; readonly metrics: ObservationMetrics }[]
+  })[]
+  readonly models: readonly {
+    readonly authority: 'local' | 'crewstation'
+    readonly sourceId: string | null
+    readonly provider: string | null
+    readonly model: string | null
+    readonly metrics: ObservationMetrics
+  }[]
+  readonly runtimes: readonly {
+    readonly authority: 'local' | 'crewstation'
+    readonly sourceId: string | null
+    readonly registrationId: string | null
+    readonly configurationRevision: number | null
+    readonly protocol: string | null
+    readonly metrics: ObservationMetrics
+  }[]
+  readonly durations: {
+    readonly completedTasks: number
+    readonly p50Ms: number | null
+    readonly p95Ms: number | null
+    readonly maxMs: number | null
+  }
+  readonly quality: readonly {
+    readonly reason: string
+    readonly taskIds: readonly string[]
   }[]
 }
