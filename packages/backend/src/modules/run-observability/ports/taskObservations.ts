@@ -4,6 +4,7 @@ import type {
   ObservationTaskFacts,
   ObservationTaskPageQuery,
   ObservationTokenUsage,
+  ObservationSourceBacklog,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { PlatformObservationStore } from './platformObservationStore'
@@ -16,6 +17,7 @@ export interface ObservationTaskSource {
     readonly nextCursor: string | null
   }>
   get(actor: Actor, taskId: string): Promise<ObservationTaskFacts | null>
+  sourceBacklog(taskIds: readonly string[]): Promise<readonly ObservationSourceBacklog[]>
   attempts(
     taskId: string,
     limit: number,

@@ -75,6 +75,9 @@ function fixture(count: number) {
   }))
   const sources: ObservationSnapshotSources = {
     tasks: {
+      async sourceBacklog(taskIds) {
+        return taskIds.map((taskId) => ({ taskId, retainedRecords: 0, pendingRecords: 0 }))
+      },
       async list({ query }) {
         const start = Number(query.after ?? 0)
         return {
@@ -117,6 +120,7 @@ function fixture(count: number) {
         agents: [],
         models: [],
         runtimes: [],
+        collection: { firstObservedAt: null, lastObservedAt: null, platforms: [] },
       }
     },
   }
@@ -144,6 +148,10 @@ test('ordinary data-source failures propagate instead of masquerading as partial
       },
     }),
   ).rejects.toThrow('database disconnected')
+  f.sources.tasks.sourceBacklog = async () => {
+    throw new Error('source status unavailable')
+  }
+  await expect(readObservationOverview(f)).rejects.toThrow('source status unavailable')
 })
 
 // A budget breach must omit the incomplete task, not return its earlier pages as a full total.

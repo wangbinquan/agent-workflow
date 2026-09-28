@@ -3,9 +3,9 @@
     "consumers": 921,
     "exactEntrypointFiles": 69,
     "governedFieldSurfaces": 5,
-    "methods": 1096,
+    "methods": 1097,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21227,
+    "recursiveFields": 21237,
     "symbols": 1027
   },
   "entries": [
@@ -117841,8 +117841,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 145,
-        "maxUnionVariants": 50
+        "maxTransitiveLeafFields": 153,
+        "maxUnionVariants": 54
       },
       "consumerEdgeIds": [
         "import:44a2cc15a17a1d4359b4",
@@ -118105,7 +118105,7 @@
             "import:fb61bc2532c019579cbd"
           ],
           "fieldPath": "$method:detail.$return.$variant:0.sources",
-          "type": "readonly {\n    readonly sourceId: string\n    readonly status: 'initial' | 'syncing' | 'ready' | 'failed' | 'legacy-unbound'\n    readonly asOf: string | null\n    readonly error: string | null\n    readonly costsVisible: boolean\n    readonly hasGaps: boolean\n  }[]"
+          "type": "readonly {\n    readonly sourceId: string\n    readonly platformProjectId: string | null\n    readonly platformTaskId: string | null\n    readonly status: 'initial' | 'syncing' | 'ready' | 'failed' | 'legacy-unbound'\n    readonly asOf: string | null\n    readonly error: string | null\n    readonly costsVisible: boolean\n    readonly hasGaps: boolean\n  }[]"
         },
         {
           "consumerEdgeIds": [],
@@ -118439,6 +118439,49 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:overview.$return.cohort",
           "type": "'started'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.collection.firstObservedAt.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.collection.firstObservedAt.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.collection.lastObservedAt.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.collection.lastObservedAt.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.collection.pendingRecords",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.collection.platforms",
+          "type": "readonly (ObservationTaskDetail['sources'][number] & {\n    readonly taskId: string\n  })[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.collection.retainedRecords",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:overview.$return.collection.tasks",
+          "type": "readonly (ObservationSourceBacklog & {\n    readonly firstObservedAt: number | null\n    readonly lastObservedAt: number | null\n  })[]"
         },
         {
           "consumerEdgeIds": [],
@@ -162039,7 +162082,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 55,
+        "maxTransitiveLeafFields": 57,
         "maxUnionVariants": 30
       },
       "consumerEdgeIds": [
@@ -162353,6 +162396,16 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:list.$return.nextCursor.$variant:1",
           "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:sourceBacklog.$parameter:taskIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:sourceBacklog.$return",
+          "type": "readonly ObservationSourceBacklog[]"
         }
       ],
       "file": "packages/backend/src/modules/task-execution/public/queries.ts",
@@ -162360,7 +162413,8 @@
       "members": [
         "attempts",
         "get",
-        "list"
+        "list",
+        "sourceBacklog"
       ],
       "methods": [
         {
@@ -162382,6 +162436,11 @@
           ],
           "name": "list",
           "signatureDigest": "sha256:ade54b4f985386b294077066543cf7273cb47113f41dd5b24402f9e3c38e5b6f"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "sourceBacklog",
+          "signatureDigest": "sha256:9394233bd4069959ed8580f694e2dbf2b3aeeaf7ed3f8581b00e8a1b4b1fe739"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#TaskObservationFactsQuery",
@@ -162402,7 +162461,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:387253fbc7934988ecc1c7dbe3674975a96d949f558eb76ad4d7423ba2b43ade",
+      "signatureDigest": "sha256:306eade5e6e924334fcb14e34b2a5040a31bd3ac7cd4f0821cf2a15773fd50a5",
       "status": "target-context-current-surface",
       "symbol": "TaskObservationFactsQuery",
       "transaction": "none",
@@ -167909,7 +167968,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c8dd8a243c78a6ea9224aa999e7905f44cbf8880fffb3a61c1c63136abaea332",
+  "sourceDigest": "sha256:8ef0a702a4d8ad5ab5ff0fd541e19b18ebca9770ce950d5d95a3c5856716158c",
   "targetContexts": [
     "collaboration",
     "development-automation",

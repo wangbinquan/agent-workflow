@@ -3,6 +3,7 @@ import type {
   ObservationOverviewQuery,
   ObservationTaskFacts,
   ObservationTaskSummary,
+  ObservationTaskDetail,
 } from '@agent-workflow/shared'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
@@ -17,6 +18,11 @@ export interface ObservationAnalysisTask {
   readonly agents: readonly Omit<Agent, 'tasks'>[]
   readonly models: readonly Model[]
   readonly runtimes: readonly Runtime[]
+  readonly collection: {
+    readonly firstObservedAt: number | null
+    readonly lastObservedAt: number | null
+    readonly platforms: ObservationTaskDetail['sources']
+  }
 }
 const LIMITS = { tasks: 200, invocations: 10_000, records: 20_000 } as const
 class ReadBudgetReached extends Error {}
@@ -95,6 +101,27 @@ export async function readObservationOverview(input: {
   } while (after)
   partial ||= rows.some((row) => row.summary.metrics.truncated)
   const tasks = rows.map((row) => row.summary)
+  const backlog = new Map(
+    (await sources.tasks.sourceBacklog(tasks.map((row) => row.task.id))).map((row) => [
+      row.taskId,
+      row,
+    ]),
+  )
+  const collectionTasks = rows.map((row) => {
+    const source = backlog.get(row.summary.task.id)
+    if (!source) throw new Error('Observation source status missing from owner snapshot')
+    return {
+      ...source,
+      firstObservedAt: row.collection.firstObservedAt,
+      lastObservedAt: row.collection.lastObservedAt,
+    }
+  })
+  const firstObserved = collectionTasks.flatMap((row) =>
+    row.firstObservedAt === null ? [] : [row.firstObservedAt],
+  )
+  const lastObserved = collectionTasks.flatMap((row) =>
+    row.lastObservedAt === null ? [] : [row.lastObservedAt],
+  )
   const statuses = new Map<string, number>(),
     quality = new Map<string, string[]>()
   const agents = new Map<string, { value: Omit<Agent, 'tasks'>; tasks: Agent['tasks'][number][] }>()
@@ -169,6 +196,16 @@ export async function readObservationOverview(input: {
     taskScope: 'direct',
     filtersEcho: input.query,
     partial,
+    collection: {
+      retainedRecords: collectionTasks.reduce((sum, row) => sum + row.retainedRecords, 0),
+      pendingRecords: collectionTasks.reduce((sum, row) => sum + row.pendingRecords, 0),
+      firstObservedAt: firstObserved.length ? Math.min(...firstObserved) : null,
+      lastObservedAt: lastObserved.length ? Math.max(...lastObserved) : null,
+      tasks: collectionTasks,
+      platforms: rows.flatMap((row) =>
+        row.collection.platforms.map((source) => ({ ...source, taskId: row.summary.task.id })),
+      ),
+    },
     limits: LIMITS,
     metrics: aggregate(
       tasks.map((row) => row.metrics),

@@ -76962,6 +76962,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskObservationFacts.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskObservationFacts.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:eaf57f773b05981c903e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionObservationSources",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "taskExecutionObservationSources",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/adapters/executionContractResourceAdapter.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/adapters/executionContractResourceAdapter.ts",
       "fromSymbol": "$file",
@@ -84050,9 +84067,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4944,
+    "architectureExceptions": 4945,
     "implementationSccs": 0,
-    "observedEdges": 5566,
+    "observedEdges": 5567,
     "requiredPorts": 36,
     "targetEdges": 69
   },
@@ -165726,6 +165743,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskObservationFacts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskObservationFacts.ts#$file",
+      "id": "import:eaf57f773b05981c903e",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "taskExecutionObservationSources",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionObservationSources"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/adapters/executionContractResourceAdapter.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/adapters/executionContractResourceAdapter.ts#$file",
@@ -173913,7 +173946,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c8dd8a243c78a6ea9224aa999e7905f44cbf8880fffb3a61c1c63136abaea332",
+  "sourceDigest": "sha256:8ef0a702a4d8ad5ab5ff0fd541e19b18ebca9770ce950d5d95a3c5856716158c",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

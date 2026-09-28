@@ -1,8 +1,8 @@
-import { and, asc, desc, eq, exists, gte, isNull, lt, or } from 'drizzle-orm'
+import { and, asc, count, desc, eq, exists, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm'
 import type { ObservationTaskPageQuery } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
-import { nodeRuns, taskRepos, tasks } from '@/db/schema'
+import { nodeRuns, taskExecutionObservationSources, taskRepos, tasks } from '@/db/schema'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import type { TaskObservationFactsQuery } from '../public/queries'
@@ -57,6 +57,39 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
       canReadAllTasks: actor.permissions.has('tasks:read:all'),
     })
   return {
+    async sourceBacklog(taskIds) {
+      if (taskIds.length > 200)
+        throw new RangeError('Observation source cohort exceeds read budget')
+      if (!taskIds.length) return []
+      const source = taskExecutionObservationSources
+      const rows = await db
+        .select({
+          taskId: nodeRuns.taskId,
+          retainedRecords: count(),
+          pendingRecords: sql`sum(case when ${source.pending} then 1 else 0 end)`,
+        })
+        .from(nodeRuns)
+        .innerJoin(
+          source,
+          and(eq(source.nodeRunId, nodeRuns.id), eq(source.taskId, nodeRuns.taskId)),
+        )
+        .where(inArray(nodeRuns.taskId, [...new Set(taskIds)]))
+        .groupBy(nodeRuns.taskId)
+        .all()
+      const byTask = new Map(rows.map((row) => [row.taskId, row]))
+      return [...new Set(taskIds)].map((taskId) => {
+        const row = byTask.get(taskId)
+        return {
+          taskId,
+          retainedRecords: row
+            ? engineOf(db).numericFromRawRow(row.retainedRecords, 'retainedRecords')
+            : 0,
+          pendingRecords: row
+            ? engineOf(db).numericFromRawRow(row.pendingRecords, 'pendingRecords')
+            : 0,
+        }
+      })
+    },
     async list({ actor, query }) {
       const after = continuation(query)
       if (!canRead(actor)) return { items: [], nextCursor: null }

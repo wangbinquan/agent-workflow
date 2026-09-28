@@ -73,6 +73,14 @@ function overview(): ObservationOverview {
     filtersEcho: { from: search.from, to: search.to, timezone: 'UTC' },
     partial: false,
     limits: { tasks: 200, invocations: 10000, records: 20000 },
+    collection: {
+      retainedRecords: 0,
+      pendingRecords: 0,
+      firstObservedAt: null,
+      lastObservedAt: null,
+      tasks: [],
+      platforms: [],
+    },
     metrics: value,
     tasks: [summary],
     statuses: [{ status: 'running', count: 1 }],
@@ -148,6 +156,8 @@ function detail(): ObservationTaskDetail {
     sources: [
       {
         sourceId: 'cs-instance',
+        platformProjectId: 'cs-project',
+        platformTaskId: 'cs-task',
         status: 'failed',
         asOf: new Date(NOW - 1000).toISOString(),
         error: 'unavailable',
@@ -349,7 +359,7 @@ test('task filters reach list and analysis queries, survive drill-down and reset
     target: { value: 'workflow-1' },
   })
   fireEvent.click(screen.getByRole('combobox', { name: '执行状态' }))
-  fireEvent.click(await screen.findByRole('option', { name: i18n.t('tasks.status.running') }))
+  fireEvent.mouseDown(await screen.findByRole('option', { name: i18n.t('tasks.status.running') }))
   await waitFor(() => expect(f.paths.at(-1)?.searchParams.get('status')).toBe('running'))
   fireEvent.click(screen.getByRole('tab', { name: '总览' }))
   await screen.findByRole('heading', { name: '任务用量趋势' })
@@ -443,6 +453,71 @@ test('performance distinguishes absent completed samples and quality drill-down 
     to: search.to,
   })
 })
+test('collection status exposes pending evidence, unknown observation time and platform gaps with task drilldown', async () => {
+  const data = overview()
+  const f = fixture(
+    { ...search, tab: 'performance', q: '真实' },
+    {
+      overview: {
+        ...data,
+        collection: {
+          retainedRecords: 7,
+          pendingRecords: 2,
+          firstObservedAt: null,
+          lastObservedAt: null,
+          tasks: [
+            {
+              taskId: task.id,
+              retainedRecords: 7,
+              pendingRecords: 2,
+              firstObservedAt: null,
+              lastObservedAt: null,
+            },
+          ],
+          platforms: [
+            {
+              taskId: task.id,
+              sourceId: 'cs-installation',
+              platformProjectId: 'cs-project',
+              platformTaskId: 'failed-platform-task',
+              status: 'failed',
+              asOf: null,
+              error: 'source-unavailable',
+              costsVisible: false,
+              hasGaps: true,
+            },
+            {
+              taskId: task.id,
+              sourceId: 'cs-installation',
+              platformProjectId: 'cs-project',
+              platformTaskId: 'ready-platform-task',
+              status: 'ready',
+              asOf: null,
+              error: null,
+              costsVisible: true,
+              hasGaps: false,
+            },
+          ],
+        },
+      },
+    },
+  )
+  const heading = await screen.findByRole('heading', { name: '采集与投影状态' })
+  const card = within(heading.closest('.card') as HTMLElement)
+  expect(card.getAllByText('7')).toHaveLength(2)
+  expect(card.getAllByText('2')).toHaveLength(2)
+  expect(card.getAllByText('—').length).toBeGreaterThan(0)
+  expect(screen.getByText('同步失败')).toBeTruthy()
+  expect(screen.getByText('存在缺口')).toBeTruthy()
+  const failedRow = screen.getByText('平台任务 failed-platform-task').closest('tr')!
+  const readyRow = screen.getByText('平台任务 ready-platform-task').closest('tr')!
+  expect(within(failedRow).getByText('同步失败')).toBeTruthy()
+  expect(within(readyRow).getByText('同步就绪')).toBeTruthy()
+  expect(screen.getByRole('heading', { name: '当前采集能力' })).toBeTruthy()
+  fireEvent.click(card.getByRole('button', { name: '真实任务' }))
+  await screen.findByRole('heading', { name: '任务整体' })
+  expect(f.changes.at(-1)).toMatchObject({ tab: 'performance', q: '真实', task: task.id })
+})
 test.each(['week', 'all'] as const)(
   'explicit refresh reanchors %s and resets pagination so new tasks enter the cohort',
   async (period) => {
@@ -493,6 +568,8 @@ test('an initial missing observation stays a dash in English, with a platform ex
         sources: [
           {
             sourceId: 'cs-instance',
+            platformProjectId: 'cs-project',
+            platformTaskId: 'cs-task',
             status: 'initial',
             asOf: null,
             error: null,

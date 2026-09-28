@@ -94,9 +94,9 @@ function TaskDetail({ data }: { data: ObservationTaskDetail }) {
       {data.sources.length > 0 && (
         <Card title={t('runObservability.sourceState')}>
           <div className="stack--sm">
-            {data.sources.map((s, index) => (
+            {data.sources.map((s) => (
               <NoticeBanner
-                key={`${s.sourceId}-${index}`}
+                key={JSON.stringify([s.sourceId, s.platformProjectId, s.platformTaskId])}
                 tone={s.status === 'ready' && !s.hasGaps ? 'info' : 'warning'}
                 size="compact"
                 title={t(`runObservability.${states[s.status]}`)}
@@ -108,6 +108,12 @@ function TaskDetail({ data }: { data: ObservationTaskDetail }) {
                       time: new Date(s.asOf).toLocaleString(i18n.language),
                     })
                   : t('runObservability.noSourceTime')}
+                {s.platformProjectId && (
+                  <div>{t('runObservability.platformProject', { id: s.platformProjectId })}</div>
+                )}
+                {s.platformTaskId && (
+                  <div>{t('runObservability.platformTask', { id: s.platformTaskId })}</div>
+                )}
                 {!s.costsVisible && <p>{t('runObservability.hiddenCost')}</p>}
                 {s.hasGaps && <p>{t('runObservability.sourceGap')}</p>}
               </NoticeBanner>

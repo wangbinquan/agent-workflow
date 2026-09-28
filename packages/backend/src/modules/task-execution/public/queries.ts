@@ -6,6 +6,7 @@ import type {
   ObservationAttemptFacts,
   ObservationTaskFacts,
   ObservationTaskPageQuery,
+  ObservationSourceBacklog,
 } from '@agent-workflow/shared'
 
 /** RFC-371: actor-filtered execution facts, without runtime payloads or private rows. */
@@ -15,6 +16,8 @@ export interface TaskObservationFactsQuery {
     readonly nextCursor: string | null
   }>
   get(actor: Actor, taskId: string): Promise<ObservationTaskFacts | null>
+  /** Only task IDs supplied by get/list in this same visible snapshot. */
+  sourceBacklog(taskIds: readonly string[]): Promise<readonly ObservationSourceBacklog[]>
   /** Called only after get/list supplied this visible task, inside the same read snapshot. */
   attempts(
     taskId: string,

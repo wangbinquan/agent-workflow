@@ -40,6 +40,14 @@ function fixture(): ObservationOverview {
     filtersEcho: window,
     partial: true,
     limits: { tasks: 200, invocations: 10000, records: 20000 },
+    collection: {
+      retainedRecords: 0,
+      pendingRecords: 0,
+      firstObservedAt: null,
+      lastObservedAt: null,
+      tasks: [],
+      platforms: [],
+    },
     metrics,
     tasks: ['first', 'second'].map((id) => ({
       task: {

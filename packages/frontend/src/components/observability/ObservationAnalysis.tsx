@@ -13,6 +13,7 @@ import { formatDurationMs } from '@/lib/duration'
 import { Tokens, Cost, Metrics, observationReasonKey } from './ObservationMetrics'
 import { formatObservationCny } from './formatObservations'
 import './ObservationAnalysis.css'
+import { ObservationCollection } from './ObservationCollection'
 
 export type ObservationAnalysisTab = 'overview' | 'agents' | 'usage' | 'performance'
 export const observationAgentKey = (agent: ObservationOverview['agents'][number]) =>
@@ -431,6 +432,7 @@ export function ObservationAnalysis({
               <p>{t('runObservability.noQualityIssues')}</p>
             )}
           </Card>
+          <ObservationCollection data={data} onTask={onTask} />
           {quality && (
             <Card title={t(`runObservability.${observationReasonKey(quality)}`)}>
               <TaskRows

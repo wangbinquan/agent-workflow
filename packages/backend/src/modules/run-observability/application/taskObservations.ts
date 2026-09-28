@@ -25,6 +25,7 @@ type Invocation = AcceptedObservationInvocation
 type PlatformUsage = Extract<PlatformObservation, { kind: 'usage' }>
 type PlatformValue = Extract<PlatformObservation, { kind: 'valuation' }>
 type Contribution = UsageContributionEvidence & {
+  readonly observedAt: number
   readonly localModel: { readonly provider: string | null; readonly id: string } | null
   readonly platformUsage?: PlatformUsage
   readonly platformValue?: PlatformValue
@@ -74,6 +75,7 @@ function platformContribution(
 ): Contribution {
   return {
     sourceId: item.sourceId,
+    observedAt: Date.parse(item.observedAt),
     measurement: {
       invocationId: invocation.invocationId,
       recordId: item.recordId,
@@ -168,7 +170,7 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
           m.nodeRunId === owner.nodeRunId &&
           m.agentId === owner.agentId
         )
-          local.push({ ...record, localModel: m.model })
+          local.push({ ...record, localModel: m.model, observedAt: m.observedAt })
       }
       after = page.nextCursor
     } while (after && scanned < RECORD_LIMIT)
@@ -246,6 +248,8 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
   const sourceStates: ObservationTaskDetail['sources'][number][] = [...states.values()].map(
     (s) => ({
       sourceId: s.binding.sourceId,
+      platformProjectId: s.binding.projectId,
+      platformTaskId: s.binding.taskId,
       status: s.status,
       asOf: s.asOf,
       error: s.error,
@@ -258,6 +262,8 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
   )
     sourceStates.push({
       sourceId: '',
+      platformProjectId: null,
+      platformTaskId: null,
       status: 'legacy-unbound',
       asOf: null,
       error: null,
@@ -436,9 +442,17 @@ export function createTaskObservationQueries(input: {
           sources,
           summarize: async (sources, task) => {
             const loaded = await loadTask(sources, task.id)
+            const observed = loaded.invocations
+              .flatMap((i) => i.records.map((r) => r.record.observedAt))
+              .filter((at) => Number.isSafeInteger(at) && at >= 0 && at <= asOf)
             return {
               summary: taskSummary(task, loaded, asOf),
               agents: agentSummaries(loaded),
+              collection: {
+                firstObservedAt: observed.length ? Math.min(...observed) : null,
+                lastObservedAt: observed.length ? Math.max(...observed) : null,
+                platforms: loaded.sources,
+              },
               ...usageDimensions(loaded),
             }
           },

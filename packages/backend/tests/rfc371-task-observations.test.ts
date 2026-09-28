@@ -14,6 +14,7 @@ import {
   observationInvocations,
   taskCollaborators,
   taskRepos,
+  taskExecutionObservationSources,
   tasks,
   users,
 } from '../src/db/schema'
@@ -341,7 +342,7 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
         await sync(selectedBinding)
         if ((await platform.state(selectedBinding)).mode === 'snapshot') await sync(selectedBinding)
       },
-      async offline() {
+      async offline(selectedBinding = binding) {
         const sync = createPlatformObservationSync({
           store: platform,
           now: () => NOW + 9000,
@@ -351,7 +352,7 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
             },
           },
         })
-        await sync(binding)
+        await sync(selectedBinding)
       },
     }
   }
@@ -464,6 +465,71 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     expect(
       (await f.queries.overview(admin, { ...selection, repository: '/extra' })).tasks,
     ).toHaveLength(0)
+  })
+  test('collection backlog and observation times share the visible filtered task snapshot', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.task('hidden', { ownerUserId: 'other' })
+    await f.task('older', { startedAt: NOW - 1 })
+    for (const taskId of ['task', 'hidden', 'older']) {
+      await f.attempt('run-' + taskId, 0, 5000, { taskId })
+      await harness.db
+        .insert(taskExecutionObservationSources)
+        .values({
+          taskId,
+          nodeRunId: 'run-' + taskId,
+          pending: true,
+          evidenceJson: JSON.stringify({
+            invocationId: taskId,
+            measurements: [],
+            diagnostics: ['native-session-unavailable'],
+          }),
+        })
+        .run()
+    }
+    await harness.db
+      .insert(taskExecutionObservationSources)
+      .values({
+        taskId: 'task',
+        nodeRunId: 'run-task',
+        pending: false,
+        evidenceJson: JSON.stringify({ invocationId: 'task', measurements: [], diagnostics: [] }),
+      })
+      .run()
+    await f.accept('task', { nodeRunId: 'run-task' })
+    await f.usage('task')
+    const actor = { ...admin, permissions: new Set(['tasks:read', 'tasks:read:own'] as const) }
+    const result = await f.queries.overview(actor, query)
+    expect(result.collection).toEqual({
+      retainedRecords: 2,
+      pendingRecords: 1,
+      firstObservedAt: NOW + 4000,
+      lastObservedAt: NOW + 4000,
+      tasks: [
+        {
+          taskId: 'task',
+          retainedRecords: 2,
+          pendingRecords: 1,
+          firstObservedAt: NOW + 4000,
+          lastObservedAt: NOW + 4000,
+        },
+      ],
+      platforms: [],
+    })
+    const empty = await f.queries.overview(actor, { ...query, q: 'absent' })
+    expect(empty.collection).toEqual({
+      retainedRecords: 0,
+      pendingRecords: 0,
+      firstObservedAt: null,
+      lastObservedAt: null,
+      tasks: [],
+      platforms: [],
+    })
+    await harness.db.update(taskExecutionObservationSources).set({ pending: false }).run()
+    expect((await f.queries.overview(actor, query)).collection).toMatchObject({
+      retainedRecords: 2,
+      pendingRecords: 0,
+    })
   })
   test('task search preserves non-ASCII literal names on both providers', async () => {
     const f = await fixture()
@@ -578,6 +644,47 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
       status: 'failed',
       asOf: new Date(NOW + 5000).toISOString(),
     })
+  })
+  test('one AW task preserves independent platform bindings from the same installation', async () => {
+    const f = await fixture()
+    await f.task()
+    const secondBinding = { ...binding, taskId: '01a0bf5d-8f4b-7793-867c-efd7527b3865' }
+    await f.accept('hosted-a', { authority: platformAuthority })
+    await f.accept('hosted-b', {
+      authority: {
+        ...platformAuthority,
+        ...secondBinding,
+        subtaskId: '01a0bf5d-8f4b-7793-867c-efd7527b3866',
+        executionResourceId: '01a0bf5d-8f4b-7793-867c-efd7527b3867',
+      },
+    })
+    await f.sync([], {}, binding)
+    await f.sync([], {}, secondBinding)
+    await f.offline(secondBinding)
+    const sources = [
+      {
+        sourceId: binding.sourceId,
+        platformProjectId: binding.projectId,
+        platformTaskId: binding.taskId,
+        status: 'ready',
+      },
+      {
+        sourceId: binding.sourceId,
+        platformProjectId: binding.projectId,
+        platformTaskId: secondBinding.taskId,
+        status: 'failed',
+      },
+    ]
+    const detail = (await f.queries.detail(admin, 'task'))!
+    expect(detail.sources).toHaveLength(2)
+    for (const source of sources)
+      expect(detail.sources).toContainEqual(expect.objectContaining(source))
+    const overview = await f.queries.overview(admin, query)
+    expect(overview.collection.platforms).toHaveLength(2)
+    for (const source of sources)
+      expect(overview.collection.platforms).toContainEqual(
+        expect.objectContaining({ ...source, taskId: 'task' }),
+      )
   })
   test('hosted initial and pending estimates stay unknown and hidden cost never falls back to AW', async () => {
     const f = await fixture()

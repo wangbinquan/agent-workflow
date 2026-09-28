@@ -163,12 +163,34 @@ export interface ObservationTaskDetail extends ObservationTaskSummary {
   }
   readonly sources: readonly {
     readonly sourceId: string
+    readonly platformProjectId: string | null
+    readonly platformTaskId: string | null
     readonly status: 'initial' | 'syncing' | 'ready' | 'failed' | 'legacy-unbound'
     readonly asOf: string | null
     readonly error: string | null
     readonly costsVisible: boolean
     readonly hasGaps: boolean
   }[]
+}
+
+/** AW-local durable execution source. Platform synchronization has its own status. */
+export interface ObservationSourceBacklog {
+  readonly taskId: string
+  readonly retainedRecords: number
+  readonly pendingRecords: number
+}
+export interface ObservationCollectionStatus {
+  readonly retainedRecords: number
+  readonly pendingRecords: number
+  readonly firstObservedAt: number | null
+  readonly lastObservedAt: number | null
+  readonly tasks: readonly (ObservationSourceBacklog & {
+    readonly firstObservedAt: number | null
+    readonly lastObservedAt: number | null
+  })[]
+  readonly platforms: readonly (ObservationTaskDetail['sources'][number] & {
+    readonly taskId: string
+  })[]
 }
 
 export interface ObservationOverview {
@@ -178,6 +200,8 @@ export interface ObservationOverview {
   readonly taskScope: 'direct'
   readonly filtersEcho: ObservationOverviewQuery
   readonly partial: boolean
+  /** Collection evidence in this task cohort. No pending rows is not proof of complete capture. */
+  readonly collection: ObservationCollectionStatus
   readonly limits: {
     readonly tasks: number
     readonly invocations: number

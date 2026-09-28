@@ -846,10 +846,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5566,
+      "baseline": 5567,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-371：接入 owner 任务范围筛选、固定长度游标指纹与正式公共筛选组件，rfc294-cross-context-observed-imports 5563 → 5566，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：接入 owner 持久来源积压事实、平台完整绑定身份及正式采集状态视图，rfc294-cross-context-observed-imports 5566 → 5567，按新增功能如实登记本批归属与公开合同。"
       }
     },
     {
@@ -870,10 +870,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4944,
+      "baseline": 4945,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-371：接入 owner 任务范围筛选、固定长度游标指纹与正式公共筛选组件，rfc294-architecture-exceptions 4941 → 4944，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：接入 owner 持久来源积压事实、平台完整绑定身份及正式采集状态视图，rfc294-architecture-exceptions 4944 → 4945，按新增功能如实登记本批归属与公开合同。"
       }
     },
     {
@@ -908,15 +908,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25449,
+      "baseline": 25453,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-371：接入 owner 任务范围筛选、固定长度游标指纹与正式公共筛选组件，rfc294-module-symbol-owners 25447 → 25449，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：接入 owner 持久来源积压事实、平台完整绑定身份及正式采集状态视图，rfc294-module-symbol-owners 25449 → 25453，按新增功能如实登记本批归属与公开合同。"
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:c8dd8a243c78a6ea9224aa999e7905f44cbf8880fffb3a61c1c63136abaea332",
+    "sourceDigest": "sha256:8ef0a702a4d8ad5ab5ff0fd541e19b18ebca9770ce950d5d95a3c5856716158c",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -929,8 +929,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d8ed3d008ce989abe4a2af0ac97cf0d3915c3d0d",
-    "contentDigest": "sha256:9a60b8b1f9bded23c6712f2297adef162053d005f6460831e0ab613f3deb7ebd",
+    "currentSnapshotSha": "68e571b51bcaccf72bcef39bf5b9d82093ee98ea",
+    "contentDigest": "sha256:e87221f94450c707d4a86bc7b71d462650626c3b6750dd7b8a7011559aa6799e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

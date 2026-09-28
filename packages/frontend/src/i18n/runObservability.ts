@@ -1,4 +1,33 @@
 export const runObservabilityZh = {
+  collectionTitle: '采集与投影状态',
+  collectionHint:
+    '仅统计当前筛选中已读取的任务。本地持久来源行是待投影证据，不等于 Token 或调用数；平台同步单列展示；待处理为零也不能证明进程崩溃前的数据已全部采集。观测时间来自当前已选择的用量证据，不是采集器心跳。',
+  sourceRetained: 'AW 本地持久来源行',
+  sourcePending: 'AW 本地待处理行',
+  firstObserved: '当前证据最早观测时间',
+  lastObserved: '当前证据最近观测时间',
+  collectionAsOf: '平台快照时间',
+  platformProject: '平台项目 {{id}}',
+  platformTask: '平台任务 {{id}}',
+  platformCollection: 'CrewStation 同步状态',
+  sourceGaps: '已报告缺口',
+  gapsPresent: '存在缺口',
+  gapsAbsent: '未报告缺口',
+  collection_initial: '尚未同步',
+  collection_syncing: '正在同步',
+  collection_ready: '同步就绪',
+  collection_failed: '同步失败',
+  'collection_legacy-unbound': '历史来源未绑定',
+  captureCapabilities: '当前采集能力',
+  captureCapabilitiesHint:
+    '以下是当前适配器的支持范围。实际证据以任务记录为准；未知或不支持的字段保持未知。',
+  claudeCapability:
+    '根调用输入与缓存、最终分模型汇总；最终汇总可能包含原生子 Agent。实际 provider、恢复累计基线和原生子会话单独分摊尚不完整。',
+  opencodeCapability:
+    '根 step_finish 四桶用量；实际 provider/model 从已关联的原生记录读取，迟到模型可补算。未映射原生子会话保持缺口。',
+  platformCapability:
+    '按平台已提交游标同步用量和人民币估值；平台快照与缺口独立展示，断连时保留已持久化历史。',
+
   filters: '观测筛选',
   taskQuery: '任务名称或 ID',
   allStates: '全部状态',
@@ -146,6 +175,35 @@ export const runObservabilityZh = {
 }
 export type RunObservabilityMessages = { [K in keyof typeof runObservabilityZh]: string }
 export const runObservabilityEn: RunObservabilityMessages = {
+  collectionTitle: 'Collection and projection status',
+  collectionHint:
+    'Only tasks loaded under the current filters are counted. Local durable source rows are projection evidence, not token or invocation counts; platform synchronization is shown separately. Zero pending rows does not prove all data before a process crash was captured. Observation times describe selected usage evidence, not a collector heartbeat.',
+  sourceRetained: 'AW local durable source rows',
+  sourcePending: 'AW local pending rows',
+  firstObserved: 'Earliest selected observation',
+  lastObserved: 'Latest selected observation',
+  collectionAsOf: 'Platform snapshot time',
+  platformProject: 'Platform project {{id}}',
+  platformTask: 'Platform task {{id}}',
+  platformCollection: 'CrewStation synchronization',
+  sourceGaps: 'Reported gaps',
+  gapsPresent: 'Gaps reported',
+  gapsAbsent: 'No gaps reported',
+  collection_initial: 'Not synchronized',
+  collection_syncing: 'Synchronizing',
+  collection_ready: 'Synchronized',
+  collection_failed: 'Synchronization failed',
+  'collection_legacy-unbound': 'Historical source unbound',
+  captureCapabilities: 'Current capture capabilities',
+  captureCapabilitiesHint:
+    'These are current adapter capabilities. Task records provide actual evidence; unknown or unsupported fields stay unknown.',
+  claudeCapability:
+    'Root input/cache evidence and final per-model totals, potentially including native child agents. Actual provider, resumed cumulative baselines and separate native child attribution remain incomplete.',
+  opencodeCapability:
+    'Root step_finish token buckets. Actual provider/model comes from correlated native records and may arrive later. Unmapped native child sessions remain gaps.',
+  platformCapability:
+    'Usage and CNY valuations follow platform committed cursors. Snapshots and gaps are shown separately; disconnection preserves durable history.',
+
   filters: 'Observation filters',
   taskQuery: 'Task name or ID',
   allStates: 'All states',
