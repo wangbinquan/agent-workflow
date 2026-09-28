@@ -1,7 +1,7 @@
 {
   "denominator": {
     "coLocatedCandidates": 27,
-    "transactionCallbacks": 260
+    "transactionCallbacks": 261
   },
   "entries": [
     {
@@ -2666,6 +2666,18 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts#transaction:80",
+      "line": 80,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts#createPlatformObservationStore",
+      "status": "clear",
+      "symbol": "createPlatformObservationStore",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts#transaction:119",
@@ -3184,7 +3196,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:45e5a27661d029a6ae196a1c47ee2c619fc7ad84ef1c1ce52b1bcf47e9977a1c",
+  "sourceDigest": "sha256:fde7100f1a1d0a955225f9f4d8496b50af46ca05db7f9c4fe2603b3ea1122c6d",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

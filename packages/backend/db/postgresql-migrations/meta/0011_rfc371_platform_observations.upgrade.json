@@ -1,0 +1,303 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:46a167b740646dee8344022bbdde8462ce38090b178016996a4341313a83fb92', 195, 6)"
+    },
+    "beforeDigest": "sha256:3d329b1e53462a39fb61ea5101cd58139b93a4eb68f0d94bbaa0ac2d62d325db"
+  },
+  "digest": "sha256:4291672c12602ae7eddc2bcf044de1294f397f1412ecf6fa965e86ac52795c25",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "observation_platform_records",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_platform_records\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"generation\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_platform_records_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "observation_platform_sources",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_platform_sources\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_platform_sources_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_platform_records:index:observation_platform_generation_idx",
+      "sql": "CREATE INDEX \"observation_platform_generation_idx\" ON \"agent_workflow\".\"observation_platform_records\" (\"source_key\", \"generation\", \"id\")"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:46a167b740646dee8344022bbdde8462ce38090b178016996a4341313a83fb92', active_table_count = 195, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:f25b12861dee6ead97e6f066776794739217086c2d38f21474dd2015f539b1cb' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:f25b12861dee6ead97e6f066776794739217086c2d38f21474dd2015f539b1cb",
+    "planDigest": "sha256:1457923ce31e583f923c8ad65ec8a95621ce521bc557f89537fa1ad369b95a44"
+  },
+  "id": "0011_rfc371_platform_observations",
+  "indexAdditions": [
+    {
+      "position": 129,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_platform_records",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_platform_records\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"generation\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_platform_records_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 130,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_platform_sources",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_platform_sources\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_platform_sources_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 428,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_platform_records:index:observation_platform_generation_idx",
+        "sql": "CREATE INDEX \"observation_platform_generation_idx\" ON \"agent_workflow\".\"observation_platform_records\" (\"source_key\", \"generation\", \"id\")"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 125,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "source_key",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "generation",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "document",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "observation_platform_records",
+        "indexes": [
+          {
+            "columns": ["source_key", "generation", "id"],
+            "name": "observation_platform_generation_idx",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "observation_platform_records",
+          "sqlite": "observation_platform_records"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationPlatformRecords",
+        "sourceTable": "observation_platform_records",
+        "unique": []
+      }
+    },
+    {
+      "position": 126,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "document",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "observation_platform_sources",
+        "indexes": [],
+        "migrationKey": ["id"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "observation_platform_sources",
+          "sqlite": "observation_platform_sources"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationPlatformSources",
+        "sourceTable": "observation_platform_sources",
+        "unique": []
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:82a25e97b05a04e783435a90f25b605cf2b37c01fc7349827dd48f528a6ae729",
+  "sequence": 11,
+  "sqlDigest": "sha256:100978b2b948522f1eed1a00c6bc3f1aede40d1b9a355ce5743783d0f16e7325",
+  "sqlFile": "0011_rfc371_platform_observations.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1790603015814,
+        "hash": "99ec39cb8d3e59e9897aada24a7a4d1519cdee3fd1b1eac076f05d626473a2a6",
+        "index": 234,
+        "tag": "0235_rfc371_platform_observations"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:d7cd59491706792c78691a8de15b8bbaf252a156aa3c84431193de1b6bfe1471",
+      "count": 234,
+      "last": {
+        "folderMillis": 1790593467918,
+        "hash": "079f05087822e819f07624403d45e7d8bc8b28bf09327900efa457e8d46bdd24",
+        "index": 233,
+        "tag": "0234_rfc371_committed_usage_source"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:2beeb04d1473195eac58e75c27595ffd4a2c6d0da16acba2288f1137793a36c6",
+      "count": 235,
+      "last": {
+        "folderMillis": 1790603015814,
+        "hash": "99ec39cb8d3e59e9897aada24a7a4d1519cdee3fd1b1eac076f05d626473a2a6",
+        "index": 234,
+        "tag": "0235_rfc371_platform_observations"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:46a167b740646dee8344022bbdde8462ce38090b178016996a4341313a83fb92",
+    "planDigest": "sha256:fab4440913af4e9e8acbcf7f949958923fdeec289630737e622b85e1044d69b3"
+  },
+  "version": 2
+}

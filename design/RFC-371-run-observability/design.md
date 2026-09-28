@@ -243,3 +243,14 @@ CS 托管 invocation 不使用本地 reader 或价格；本批仍不代替 CS �
 返回值严格对应 RFC034 executionObservationsV1：用量采用 CS 已归一的 projection.contribution 和 projectionRevision，不能再次减 basis.baseline；数字原生 revision、模型证据 modelRevision、用量投影 revision、valuationRevision 各自保留。人民币估值独立到达并引用 usageRevision，无金额授权、pending 和 unpriced 都是 null，不用 0 或本地价格代替。空页也处理 visibilityRevision。快照续页必须仍属同一快照和冻结水位。
 
 断连、HTTP 状态、协议错误、快照失效各自返回明确结果；404 只能说明来源未找到，不能据此宣布整个 CS 不支持观测。平台不可达不会改写 executionAuthority。后续同步事务须将整页投影、回执和 committed cursor 同时提交；快照先进入暂存代次，全部页到齐后再原子替换，不能在首屏导入时清空历史。可见性变更先撤去旧金额展示，再完整重取授权快照。此接口实现不等于后续持久同步及托管启动根已接通。
+
+
+## 17. 平台观测的持久同步
+
+平台安装来源、项目和业务任务构成同步绑定；独立本地用量账本与平台 canonical 投影分别持久化。`observation_platform_sources` 记录当前代次、游标、金额可见性和同步状态；`observation_platform_records` 保存用量与估值，并以执行身份/source/record/kind 分开去重。用量采用 projectionRevision，金额采用 valuationRevision，不再次扣累计基线。金额引用的 usageRevision 尚未到达或已过期时，读面先返回 pending/null，真实零额继续保留零。
+
+同步每轮在事务外获取一页，再在同一事务内检查本轮状态修订、更新投影和 committed cursor。同修订不同值整页回滚；迟到网络响应不能覆盖已提交的新页。首次或恢复快照先写暂存代次，所有页在同一 snapshot/through/asOf/expiry 内到齐后原子切换当前代次；发生故障时保留此前完整视图。来源404与能力不可用分开；已有暂存快照404会丢弃暂存并重新获取首屏，首次任务404只记录来源缺失。
+
+金额可见性变更（包括空增量页）先停止返回旧金额，再重新请求完整快照；重新开放时也须完成新快照才展示金额。平台不可达保留上次数据、游标和明确失败状态，访问不可用则隐藏旧金额并要求重取快照，均不调用 AW 价目表。查询通过数据库的一致快照读取状态、数据和估值依赖，跨页游标绑定当前代次及状态修订，视图变动需要重启分页。
+
+本批提供持久 source 应用与 SQLite/PostgreSQL 实现；AW invocation 映射查询、RFC370 托管启动根、同步后台生命周期及正式页面仍须继续接入。

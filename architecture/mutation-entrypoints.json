@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1762,
+    "entries": 1765,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20524,6 +20524,50 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/application/platformObservationSync.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/platformObservationSync.ts#apply",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/platformObservationSync.ts#apply",
+      "symbol": "apply",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/application/platformObservationSync.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/platformObservationSync.ts#createPlatformObservationSync",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/platformObservationSync.ts#createPlatformObservationSync",
+      "symbol": "createPlatformObservationSync",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": true,
@@ -20652,6 +20696,28 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts#createObservationInvocationStore",
       "symbol": "createObservationInvocationStore",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts#createPlatformObservationStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts#createPlatformObservationStore",
+      "symbol": "createPlatformObservationStore",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -42107,7 +42173,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:45e5a27661d029a6ae196a1c47ee2c619fc7ad84ef1c1ce52b1bcf47e9977a1c",
+  "sourceDigest": "sha256:fde7100f1a1d0a955225f9f4d8496b50af46ca05db7f9c4fe2603b3ea1122c6d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:45e5a27661d029a6ae196a1c47ee2c619fc7ad84ef1c1ce52b1bcf47e9977a1c`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:fde7100f1a1d0a955225f9f4d8496b50af46ca05db7f9c4fe2603b3ea1122c6d`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1900 |
+| backend production TS 文件 | 1904 |
 | `services/` 文件 | 295 |
-| `modules/**` 文件 / 非空 context | 1346 / 18 |
+| `modules/**` 文件 / 非空 context | 1350 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,16 +30,16 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 497 |
-| `architectureExceptions` | 4911 |
+| `architectureExceptions` | 4918 |
 | `backgroundJobs` | 333 |
-| `crossContextImports` | 5530 |
+| `crossContextImports` | 5538 |
 | `facades` | 295 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25300 |
-| `mutationEntrypoints` | 1762 |
+| `moduleSymbolOwners` | 25326 |
+| `mutationEntrypoints` | 1765 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1025 |
-| `transactionExternalEffects` | 260 |
+| `transactionExternalEffects` | 261 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -81,9 +81,9 @@
 | memory / application | 11 |
 | resource-catalog / domain | 11 |
 | runtime-management / infrastructure | 11 |
+| run-observability / domain | 10 |
 | digital-employee / infrastructure | 9 |
 | memory / domain | 9 |
-| run-observability / domain | 9 |
 | source-control / domain | 9 |
 | collaboration / composition | 8 |
 | event-center / application | 8 |
@@ -92,20 +92,21 @@
 | development-automation / engine | 7 |
 | intent / composition | 7 |
 | memory / infrastructure | 7 |
+| run-observability / ports | 7 |
 | task-execution / public | 7 |
 | digital-employee / composition | 6 |
 | digital-employee / domain | 6 |
 | identity-access / composition | 6 |
 | identity-access / public | 6 |
 | memory / public | 6 |
-| run-observability / ports | 6 |
+| run-observability / infrastructure | 6 |
 | collaboration / public | 5 |
 | digital-employee / public | 5 |
 | event-center / infrastructure | 5 |
 | event-center / public | 5 |
 | integration / public | 5 |
 | resource-catalog / public | 5 |
-| run-observability / infrastructure | 5 |
+| run-observability / application | 5 |
 | runtime-management / composition | 5 |
 | source-control / public | 5 |
 | system-operations / composition | 5 |
@@ -113,7 +114,6 @@
 | development-automation / public | 4 |
 | integration / domain | 4 |
 | knowledge-evolution / application | 4 |
-| run-observability / application | 4 |
 | runtime-management / public | 4 |
 | source-control / composition | 4 |
 | system-operations / public | 4 |
@@ -208,9 +208,9 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3241 |
+| legacy-outbound | 3248 |
 | legacy-inbound | 1483 |
-| infrastructure-external | 286 |
+| infrastructure-external | 287 |
 | offered-consumption | 195 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 83 |
@@ -223,7 +223,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3241 |
+| legacy-outbound | 3248 |
 | legacy-inbound | 1483 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 83 |
@@ -235,7 +235,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2674 |
+| W9 | 2681 |
 | W9-D | 792 |
 | W4-E1 | 656 |
 | W4 | 201 |

@@ -1639,6 +1639,13 @@
       "when": 1790593467918,
       "tag": "0234_rfc371_committed_usage_source",
       "breakpoints": true
+    },
+    {
+      "idx": 234,
+      "version": "6",
+      "when": 1790603015814,
+      "tag": "0235_rfc371_platform_observations",
+      "breakpoints": true
     }
   ]
 }

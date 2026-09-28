@@ -145,6 +145,8 @@ export const RFC349_SOURCE_TABLES = [
   'node_run_outputs',
   'node_runs',
   'observation_invocations',
+  'observation_platform_records',
+  'observation_platform_sources',
   'observation_price_heads',
   'observation_price_versions',
   'observation_usage_sources',

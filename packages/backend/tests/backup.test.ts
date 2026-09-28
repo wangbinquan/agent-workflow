@@ -136,7 +136,7 @@ describe('createBackup', () => {
       sourceProvider: 'sqlite',
       sourceGenerationId: 'dbg_legacy_sqlite',
       schemaDigest: manifest.database.schemaDigest,
-      activeTableCount: 193,
+      activeTableCount: 195,
       archiveOnlyTableCount: 6,
     })
   })

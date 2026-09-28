@@ -49,6 +49,24 @@ import { providerAwareSqliteTable } from './providerSchema'
 
 const sqliteTable = providerAwareSqliteTable(physicalSqliteTable)
 
+// RFC-371: platform snapshot generations and their cursor are swapped atomically.
+export const observationPlatformSources = sqliteTable('observation_platform_sources', {
+  id: text('id').primaryKey(),
+  document: text('document').notNull(),
+})
+export const observationPlatformRecords = sqliteTable(
+  'observation_platform_records',
+  {
+    id: text('id').primaryKey(),
+    sourceKey: text('source_key').notNull(),
+    generation: text('generation').notNull(),
+    document: text('document').notNull(),
+  },
+  (table) => [
+    index('observation_platform_generation_idx').on(table.sourceKey, table.generation, table.id),
+  ],
+)
+
 // RFC-371: immutable execution authority and local price-book acceptance.
 export const observationInvocations = sqliteTable(
   'observation_invocations',
