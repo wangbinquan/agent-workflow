@@ -162,3 +162,5 @@
 - 数值来源现在通过现有任务归档管线导出到独立 JSONL，pending/consumed 状态与原始 evidenceJson 保留；双 provider 用例通过生产归档参与者验证整树导出与删库后证据可读。
 - 保留精确表/周期清单与整图摘要约束；bootstrap 源参与者改用 AST 调用名、参数个数和数据库身份逐项验证，避免空白换行影响判据。
 - 该批不替代整套 RFC 验收；按仓库规定未运行本地 AW 测试或服务。
+
+- 后续 `8b1461ae3` / CI `36417065267` 类型检查指出二维数组推断出的 `database` 可能 undefined；固定三条二元组为 const，保留全部 AST 约束并移除 path 的非空断言。定向 lint/format 与独立功能复核 PASS，测试交后续精确 SHA CI。

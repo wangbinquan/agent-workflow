@@ -61,7 +61,7 @@ test('all standalone bootstraps explicitly bind local accounting', () => {
     ['cli/start.ts', 'db'],
     ['cli/postgresqlDaemonApplication.ts', 'input.db'],
     ['server.ts', 'deps.db'],
-  ]) {
+  ] as const) {
     let count = 0
     const walk = (node: ts.Node) => {
       if (ts.isPropertyAssignment(node) && node.name.getText() === 'observationInvocations') {
@@ -82,7 +82,7 @@ test('all standalone bootstraps explicitly bind local accounting', () => {
       }
       ts.forEachChild(node, walk)
     }
-    walk(source(path!))
+    walk(source(path))
     expect(count).toBe(1)
   }
 })
