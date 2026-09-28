@@ -88,6 +88,41 @@ export const observationUsageSources = sqliteTable('observation_usage_sources', 
   sourceId: text('source_id').primaryKey(),
   cursor: text('cursor'),
 })
+export const observationUsageCaptures = sqliteTable(
+  'observation_usage_captures',
+  {
+    invocationId: text('invocation_id').primaryKey(),
+    taskId: text('task_id').notNull(),
+    sourceId: text('source_id').notNull(),
+    sourceCursor: text('source_cursor').notNull(),
+    nativeRootKey: text('native_root_key'),
+    priorRevisionGap: integer('prior_revision_gap').notNull().default(0),
+    repairPending: integer('repair_pending').notNull().default(0),
+    document: text('document').notNull(),
+    summary: text('summary').notNull(),
+  },
+  (table) => [
+    index('observation_capture_task_idx').on(table.taskId, table.invocationId),
+    index('observation_capture_root_gap_idx').on(table.nativeRootKey, table.priorRevisionGap),
+    index('observation_capture_pending_idx').on(table.repairPending, table.invocationId),
+  ],
+)
+export const observationUsageNativeRecords = sqliteTable(
+  'observation_usage_native_records',
+  {
+    id: text('id').primaryKey(),
+    nativeSource: text('native_source').notNull(),
+    nativeRoot: text('native_root').notNull(),
+    recordId: text('record_id').notNull(),
+  },
+  (table) => [
+    index('observation_usage_native_step_idx').on(
+      table.nativeSource,
+      table.nativeRoot,
+      table.recordId,
+    ),
+  ],
+)
 export const observationUsageCurrent = sqliteTable(
   'observation_usage_current',
   {

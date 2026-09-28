@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import type { ObservationTokenUsage } from './observationUsage'
+import type {
+  ObservationTokenUsage,
+  ObservationNativeCapture,
+  ObservationNativeRevisionResolution,
+} from './observationUsage'
 import { TaskStatusSchema } from './task'
 
 const time = z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
@@ -148,6 +152,15 @@ export interface ObservationAttemptSummary {
   readonly agents: readonly { readonly id: string | null; readonly revision: number | null }[]
 }
 export interface ObservationTaskDetail extends ObservationTaskSummary {
+  readonly nativeCaptures?: readonly {
+    readonly invocationId: string
+    readonly nodeRunId: string | null
+    readonly state: 'pending' | 'partial' | 'complete' | 'unobserved'
+    readonly priorRevisionGap: boolean
+    readonly proof: ObservationNativeCapture | null
+    readonly issues?: readonly string[]
+    readonly revisions?: readonly ObservationNativeRevisionResolution[]
+  }[]
   readonly asOf: number
   readonly projectionVersion: 1
   readonly taskScope: 'direct'

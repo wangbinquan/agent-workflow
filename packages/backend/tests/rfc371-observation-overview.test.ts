@@ -96,6 +96,9 @@ function fixture(count: number) {
       return { items: [], truncated: false }
     },
     local: {
+      async captures() {
+        return []
+      },
       async records() {
         return { items: [] }
       },
@@ -188,6 +191,7 @@ test('shared record budget caps requests and discards a task interrupted midway'
   const sources: ObservationSnapshotSources = {
     ...f.sources,
     local: {
+      captures: f.sources.local.captures,
       async records(_taskId, query) {
         limits.push(query.limit)
         return { items: Array.from({ length: query.limit }, () => record), nextCursor: 'more' }

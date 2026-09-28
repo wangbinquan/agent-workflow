@@ -36,6 +36,9 @@ export const AcceptObservationInvocationSchema = z
     agentRevision: revision.nullable(),
     purpose: z.enum(['task', 'system', 'playground', 'memory']),
     authority: ObservationExecutionAuthoritySchema,
+    /** Absent on older invocations; never infer child completeness from root counters. */
+    nativeCaptureContract: z.literal('opencode-child-steps-v1').optional(),
+    nativeCaptureSource: key.optional(),
   })
   .strict()
 export const AcceptedObservationInvocationSchema = AcceptObservationInvocationSchema.extend({

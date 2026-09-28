@@ -2692,8 +2692,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts#transaction:127",
-      "line": 127,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts#transaction:200",
+      "line": 200,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts#createUsageLedgerStore",
       "status": "clear",
       "symbol": "createUsageLedgerStore",
@@ -3196,7 +3196,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8ef0a702a4d8ad5ab5ff0fd541e19b18ebca9770ce950d5d95a3c5856716158c",
+  "sourceDigest": "sha256:e817953d8dbe7b41ebbeed58913f0a6ac210d21846cb5650173cf10ed3095e2b",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -4291,9 +4291,9 @@
         "effectKind": "process",
         "file": "packages/backend/src/services/runner.ts",
         "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/services/runner.ts#1725:process",
+        "id": "task-effect:packages/backend/src/services/runner.ts#1735:process",
         "journaledBy": "createProcessEffectAttemptObserver",
-        "line": 1725,
+        "line": 1735,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/services/runner.ts#runNode",
         "recoveryClass": "managed-process-preactivation",

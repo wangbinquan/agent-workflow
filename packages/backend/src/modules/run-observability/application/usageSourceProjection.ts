@@ -19,6 +19,7 @@ export function createUsageSourceProjection(input: {
 }) {
   const ingest = createUsageIngestion(input.store)
   let afterNodeRunId: string | undefined
+  let afterCaptureId: string | undefined
   let active: Promise<number> | null = null
   const project = async (nodeRunId?: string) => {
     const rows = await input.source.pending({
@@ -37,7 +38,21 @@ export function createUsageSourceProjection(input: {
         if (!accepted || accepted.taskId !== row.taskId || accepted.nodeRunId !== row.nodeRunId)
           throw new Error('Observation source does not match accepted invocation')
         // Platform observations have a separate canonical source. Never ingest local duplicates.
-        if (accepted.authority.kind === 'local' && row.evidence.measurements.length) {
+        if (
+          accepted.authority.kind === 'local' &&
+          (row.evidence.measurements.length || row.evidence.capture)
+        ) {
+          if (
+            row.evidence.capture &&
+            row.evidence.capture.contract !== accepted.nativeCaptureContract
+          )
+            throw new Error('Native capture does not match accepted contract')
+          if (
+            row.evidence.capture &&
+            accepted.nativeCaptureSource !== undefined &&
+            row.evidence.capture.nativeSource !== accepted.nativeCaptureSource
+          )
+            throw new Error('Native capture source does not match accepted invocation')
           for (const m of row.evidence.measurements)
             if (
               m.invocationId !== accepted.invocationId ||
@@ -51,12 +66,24 @@ export function createUsageSourceProjection(input: {
           if (cursorId(cursor) < row.id)
             await ingest.ingest({
               sourceId,
+              ...(accepted.nativeCaptureSource
+                ? { nativeSource: accepted.nativeCaptureSource, nativeWatermark: row.id }
+                : {}),
               expectedCursor: cursor,
               nextCursor: 'node-event:' + row.id,
               events: row.evidence.measurements.map((measurement, index) => ({
                 eventId: `${row.id}:${index}`,
                 measurement,
               })),
+              ...(row.evidence.capture
+                ? {
+                    capture: {
+                      invocationId: accepted.invocationId,
+                      taskId: accepted.taskId,
+                      capture: row.evidence.capture,
+                    },
+                  }
+                : {}),
             })
         }
         await input.source.acknowledge([row.id])
@@ -64,6 +91,17 @@ export function createUsageSourceProjection(input: {
       } catch (error) {
         blocked.add(row.nodeRunId)
         errors.push(error)
+      }
+    }
+    if (nodeRunId === undefined) {
+      const repairs = await input.store.pendingCaptureRepairs(1, afterCaptureId)
+      for (const receipt of repairs) {
+        afterCaptureId = receipt.invocationId
+        try {
+          await ingest.repairCapture(receipt)
+        } catch (error) {
+          errors.push(error)
+        }
       }
     }
     if (errors.length) throw new AggregateError(errors, 'Observation projection remains pending')

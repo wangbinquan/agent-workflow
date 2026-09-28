@@ -35,3 +35,10 @@ Claude 官方 [cost tracking](https://code.claude.com/docs/en/agent-sdk/cost-tra
 AW source adapter 对齐 CrewStation RFC034 的 executionObservationsV1 候选合同，逐页保留其四桶投影、模型证据修订、独立 CNY 估值及金额可见性。金额未知与实报零分开；人民币金额不转换为二进制浮点。取消/截止覆盖身份头获取、HTTP 请求和正文读取。来源范围、快照代次与水位不符时不导入。
 
 AW 的协议测试与取消回归待 exact-SHA hosted CI。CS 当前定向验证为 64 pass / 319 assertions（包含真实 PostgreSQL、数字下降后的模型补证）；该候选尚未提交和部署。这些证据都不能替代实际托管同步、持久导入或双部署运行验收。
+
+
+## OpenCode 根与子会话最终扫描
+
+固定版本原生合同依据为 OpenCode v1.15.5 的 `packages/opencode/src/session/session.sql.ts`、`packages/opencode/src/session/message-v2.ts` 与 `packages/opencode/src/session/processor.ts`，并核对 v1.18.29 的 `packages/core/src/session/sql.ts`。step 身份由 part 表主键补全，父关系由 session.parent_id 建立；实际模型只从匹配 session/message 的 assistant 字段取值。step-start 与 step-finish 按 message 对照，未结束的请求仍标记缺口。
+
+新增只读 SQLite 夹具覆盖根与多层子树、模型关联、原生时间、恢复基线、未完成步骤和读取预算；持久数字、历史修订、来源倒序和事务失败使用 AW 双 provider 用例。最终扫描与 stdout 共用计量 ID 和序号；恢复前旧记录归原调用，未知归属不会当作本轮新增。此批尚待 exact-SHA hosted CI，仍不是实际模型调用或 CS 托管端到端验收。

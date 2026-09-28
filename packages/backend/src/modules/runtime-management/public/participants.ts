@@ -115,3 +115,8 @@ export interface RuntimeSelectionParticipantInTx {
     input: NodeRunRuntimeSelection,
   ): Promise<FrozenRuntimeRef>
 }
+export { createOpencodeNativeUsageCapture } from '../composition/nativeUsageCapture'
+export type {
+  NativeUsageCapture,
+  NativeUsageCaptureIdentity,
+} from '../application/ports/nativeUsageCapture'

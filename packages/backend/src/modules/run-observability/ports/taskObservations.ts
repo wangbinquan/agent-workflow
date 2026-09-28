@@ -32,7 +32,7 @@ export interface ObservationSnapshotSources {
     readonly items: readonly AcceptedObservationInvocation[]
     readonly truncated: boolean
   }>
-  readonly local: Pick<UsageLedgerStore, 'records'>
+  readonly local: Pick<UsageLedgerStore, 'records' | 'captures'>
   readonly platform: Pick<PlatformObservationStore, 'records'>
   value(input: {
     readonly invocationId: string

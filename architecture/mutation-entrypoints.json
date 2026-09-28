@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1770,
+    "entries": 1773,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20841,6 +20841,29 @@
     },
     {
       "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts#commitUsageCapture",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts#commitUsageCapture",
+      "symbol": "commitUsageCapture",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
         "audit": true,
         "authority": "none-observed",
         "authorization": false,
@@ -20860,6 +20883,27 @@
       "symbol": "createUsageLedgerStore",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/runtime-management/application/nativeUsageCapture.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/application/nativeUsageCapture.ts#createNativeUsageCapture",
+      "missingControls": [
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/nativeUsageCapture.ts#createNativeUsageCapture",
+      "symbol": "createNativeUsageCapture",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
     },
     {
       "controls": {
@@ -21536,6 +21580,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeSelection.ts#createRuntimeSelectionParticipantInTx",
       "symbol": "createRuntimeSelectionParticipantInTx",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/composition/nativeUsageCapture.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/composition/nativeUsageCapture.ts#createOpencodeNativeUsageCapture",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/nativeUsageCapture.ts#createOpencodeNativeUsageCapture",
+      "symbol": "createOpencodeNativeUsageCapture",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -42292,7 +42361,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8ef0a702a4d8ad5ab5ff0fd541e19b18ebca9770ce950d5d95a3c5856716158c",
+  "sourceDigest": "sha256:e817953d8dbe7b41ebbeed58913f0a6ac210d21846cb5650173cf10ed3095e2b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

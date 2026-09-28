@@ -25,6 +25,7 @@ type Invocation = AcceptedObservationInvocation
 type PlatformUsage = Extract<PlatformObservation, { kind: 'usage' }>
 type PlatformValue = Extract<PlatformObservation, { kind: 'valuation' }>
 type Contribution = UsageContributionEvidence & {
+  readonly localAdapter?: string
   readonly observedAt: number
   readonly localModel: { readonly provider: string | null; readonly id: string } | null
   readonly platformUsage?: PlatformUsage
@@ -147,6 +148,14 @@ async function valueRecord(
 
 async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
   const accepted = await sources.invocations(taskId)
+  const captures = new Map(
+    (
+      await sources.local.captures(
+        accepted.items.filter((i) => i.authority.kind === 'local').map((i) => i.invocationId),
+      )
+    ).map((row) => [row.invocationId, row]),
+  )
+  const nativeCaptures: NonNullable<ObservationTaskDetail['nativeCaptures']>[number][] = []
   let truncated = accepted.truncated
   const local: Contribution[] = []
   if (accepted.items.some((i) => i.authority.kind === 'local')) {
@@ -170,7 +179,12 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
           m.nodeRunId === owner.nodeRunId &&
           m.agentId === owner.agentId
         )
-          local.push({ ...record, localModel: m.model, observedAt: m.observedAt })
+          local.push({
+            ...record,
+            localModel: m.model,
+            localAdapter: m.adapterVersion,
+            observedAt: m.observedAt,
+          })
       }
       after = page.nextCursor
     } while (after && scanned < RECORD_LIMIT)
@@ -208,6 +222,41 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
     const binding = sourceIdentity(invocation),
       reasons: string[] = []
     let records = local.filter((r) => r.measurement.invocationId === invocation.invocationId)
+    if (
+      invocation.authority.kind === 'local' &&
+      (invocation.nativeCaptureContract ||
+        invocation.authority.runtime?.protocol === 'opencode' ||
+        records.some((r) => r.localAdapter?.startsWith('opencode-')))
+    ) {
+      const capture = captures.get(invocation.invocationId)
+      const currentIssues =
+        capture?.capture.issues.filter(
+          (issue) =>
+            capture.priorRevisionGap ||
+            !['native-prior-revision-gap', 'native-prior-revision-budget'].includes(issue),
+        ) ?? []
+      const state = !invocation.nativeCaptureContract
+        ? 'unobserved'
+        : !capture
+          ? 'pending'
+          : capture.priorRevisionGap || currentIssues.length
+            ? 'partial'
+            : capture.capture.snapshotFingerprint !== null
+              ? 'complete'
+              : 'partial'
+      nativeCaptures.push({
+        invocationId: invocation.invocationId,
+        nodeRunId: invocation.nodeRunId,
+        state,
+        priorRevisionGap: capture?.priorRevisionGap ?? false,
+        proof: capture?.capture ?? null,
+        issues: currentIssues,
+        revisions: capture?.resolutions ?? [],
+      })
+      if (state !== 'complete') reasons.push('native-capture-' + state)
+      if (capture?.priorRevisionGap) reasons.push('native-prior-revision-gap')
+      if (capture) reasons.push(...currentIssues)
+    }
     if (invocation.authority.kind === 'crewstation') {
       records = []
       if (!binding) reasons.push('legacy-unbound')
@@ -270,7 +319,7 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
       costsVisible: false,
       hasGaps: false,
     })
-  return { invocations, truncated, sources: sourceStates }
+  return { invocations, truncated, sources: sourceStates, nativeCaptures }
 }
 
 function metrics(
@@ -520,6 +569,7 @@ export function createTaskObservationQueries(input: {
             ).length,
           },
           sources: loaded.sources,
+          nativeCaptures: loaded.nativeCaptures,
         }
       }),
   }

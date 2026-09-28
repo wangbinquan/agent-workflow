@@ -128,8 +128,10 @@ export function createInvocationUsageCapture(input: {
   readonly nodeRunId: string
   readonly agentId: string | null
   readonly resumeSessionId?: string
+  readonly includeMeasurement?: (measurement: ObservationMeasurement) => boolean
 }) {
   let revision = 0
+  const nextRevision = () => ++revision
   const pending = new Map<string, { line: string; sessionId: string }>()
   const capture = (
     line: string,
@@ -156,7 +158,7 @@ export function createInvocationUsageCapture(input: {
         taskId: input.taskId,
         nodeRunId: input.nodeRunId,
         agentId: input.agentId,
-        revision: ++revision,
+        revision: nextRevision(),
         observedAt,
         rootSessionId: sessionId,
         sessionId,
@@ -179,6 +181,7 @@ export function createInvocationUsageCapture(input: {
       const evidence = ObservationCapturedUsageSchema.parse({
         invocationId: input.invocationId,
         ...result,
+        measurements: result.measurements.filter((row) => input.includeMeasurement?.(row) ?? true),
       })
       const key = JSON.stringify(evidence.measurements.map((row) => row.recordId))
       if (
@@ -198,6 +201,7 @@ export function createInvocationUsageCapture(input: {
     }
   }
   return Object.assign(capture, {
+    nextRevision,
     retryModels(observedAt: number, budgetMs = 50): ObservationCapturedUsage[] {
       const rows: ObservationCapturedUsage[] = [],
         deadline = performance.now() + budgetMs

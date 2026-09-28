@@ -230,6 +230,7 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
           agentId: 'agent-' + id,
           agentRevision: 2,
           purpose: 'task',
+          nativeCaptureContract: 'opencode-child-steps-v1',
           authority: {
             kind: 'local',
             runtime: { registrationId: 'runtime', configurationRevision: 0, protocol: 'opencode' },
@@ -241,6 +242,7 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
         id: string,
         counts = buckets('1000000'),
         patch: Partial<ObservationMeasurement> = {},
+        capture = true,
       ) {
         const accepted = await invocations.get(id)
         const measurement: ObservationMeasurement = {
@@ -268,6 +270,27 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
           expectedCursor: await ledger.cursor(id),
           nextCursor: String(measurement.revision),
           events: [{ eventId: 'event-' + measurement.revision, measurement }],
+          ...(capture && accepted!.nativeCaptureContract
+            ? {
+                capture: {
+                  invocationId: id,
+                  taskId: accepted!.taskId,
+                  capture: {
+                    contract: 'opencode-child-steps-v1' as const,
+                    nativeSource: 'fixture-db-' + id,
+                    rootSessionId: 'root-' + id,
+                    state: 'complete' as const,
+                    baseline: { kind: 'fresh' as const, fingerprint: null },
+                    snapshotFingerprint: 'fixture-scan',
+                    observedAt: NOW + 4000,
+                    scannedSessions: 1,
+                    scannedSteps: 1,
+                    issues: [],
+                    priorRevisions: [],
+                  },
+                },
+              }
+            : {}),
         })
       },
       async price(rate = '1', expectedRevision = 0) {
@@ -389,6 +412,37 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     const page = await f.queries.list(admin, query)
     expect(page.items[0]!.metrics).toEqual(result.metrics)
     expect(page.asOf).toBe(result.asOf)
+  })
+
+  test('complete root counts stay partial until a required native child completion proof is projected', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.price()
+    await f.accept('capture')
+    await f.usage('capture', buckets('10'), {}, false)
+    const pending = (await f.queries.detail(admin, 'task'))!
+    expect(pending.metrics.tokens).toMatchObject({ totalKnown: '10', complete: false })
+    expect(pending.metrics.cost.reasons).toContain('native-capture-pending')
+    expect(pending.nativeCaptures).toMatchObject([
+      { invocationId: 'capture', state: 'pending', proof: null },
+    ])
+    await f.usage('capture', buckets('10'), { revision: 2 })
+    const complete = (await f.queries.detail(admin, 'task'))!
+    expect(complete.metrics.tokens).toMatchObject({ totalKnown: '10', complete: true })
+    expect(complete.nativeCaptures).toMatchObject([
+      { state: 'complete', proof: { scannedSessions: 1 } },
+    ])
+  })
+
+  test('historical root-only invocations do not claim native child completeness', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.accept('legacy', { nativeCaptureContract: undefined })
+    await f.usage('legacy', buckets('10'))
+    const value = (await f.queries.detail(admin, 'task'))!
+    expect(value.metrics.tokens).toMatchObject({ totalKnown: '10', complete: false })
+    expect(value.metrics.cost.reasons).toContain('native-capture-unobserved')
+    expect(value.nativeCaptures).toMatchObject([{ state: 'unobserved', proof: null }])
   })
   test('task, state, workflow and secondary repository filters select one consistent cohort before aggregation', async () => {
     const f = await fixture()

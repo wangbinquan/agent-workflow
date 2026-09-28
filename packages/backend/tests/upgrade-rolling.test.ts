@@ -2,7 +2,7 @@
 //
 // LOCKS: a daemon home stopped at an old migration must (a) accept the
 // current migrations folder on startup and apply the missing migrations
-// idempotently, (b) end up with the HEAD schema (all 235 entries in
+// idempotently, (b) end up with the HEAD schema (all 236 entries in
 // `__drizzle_migrations` + all current tables present), and (c) remain
 // operationally functional — a fresh task driven by the scheduler runs
 // through to `done`. A regression in any of these three means existing
@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 235 entries (sanity — records the reviewed migration head)', () => {
+  test('HEAD journal has 236 entries (sanity — records the reviewed migration head)', () => {
     // Historical FREEZE_TARGETS intentionally stay fixed; this exact count
     // forces each new migration head to be acknowledged here. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -558,7 +558,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // EC durable origin/work intent 表 `event_automation_work_intents`。
     // RFC-371: 0231 immutable CNY prices, 0232 usage evidence, 0233 invocation acceptance; 0234 committed numeric source.
     // RFC-371: 0235 adds the durable CS source head and canonical observation projection.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(235)
+    // RFC-371: 0236 adds native capture proofs and indexed original-step ownership.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(236)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

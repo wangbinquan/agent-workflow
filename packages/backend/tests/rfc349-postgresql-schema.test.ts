@@ -1,4 +1,4 @@
-// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 195 active
+// RFC-349 T4/T8 — locks the independent PostgreSQL baseline: 197 active
 // tables, six archive-only omissions, native provider types/defaults, and no
 // replay of SQLite migration SQL.
 
@@ -18,16 +18,16 @@ import {
 } from '@/platform/persistence/schemaContract'
 
 describe('RFC-349 PostgreSQL schema projection', () => {
-  test('projects the exact 195-table active parity set', () => {
+  test('projects the exact 197-table active parity set', () => {
     const contract = buildLogicalSchemaContract()
     const plan = buildPostgresqlSchemaPlan(contract)
     const tables = plan.statements.filter((statement) => statement.kind === 'table')
-    expect(tables).toHaveLength(195)
+    expect(tables).toHaveLength(197)
     expect(tables.some((table) => table.logicalId === 'task_execution_observation_sources')).toBe(
       true,
     )
-    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(195)
-    // RFC-371 adds exactly eight observation tables to the 186-table baseline.
+    expect(new Set(tables.map((statement) => statement.logicalId)).size).toBe(197)
+    // RFC-371 adds exactly ten observation tables and one execution source table.
     expect(
       tables
         .map((statement) => statement.logicalId)
@@ -39,8 +39,10 @@ describe('RFC-349 PostgreSQL schema projection', () => {
       'observation_platform_sources',
       'observation_price_heads',
       'observation_price_versions',
+      'observation_usage_captures',
       'observation_usage_current',
       'observation_usage_events',
+      'observation_usage_native_records',
       'observation_usage_sources',
     ])
     expect(plan.activeTableCount).toBe(contract.activeTableCount)

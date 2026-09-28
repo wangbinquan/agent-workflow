@@ -3787,7 +3787,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:e9392ed19fff78dda4f7"
+      ],
       "exportedSymbols": [
         "assembleOpencodeBusinessSpawn",
         "assembleOpencodePersonaSpawn",
@@ -4101,12 +4103,14 @@
     {
       "boundaryEdgeIds": [
         "import:0f471184ca5f65924937",
+        "import:25d6e3fda5a55ab36a5d",
         "import:2c57d5f26601e387e86e",
         "import:878817dd026ba03d55c6",
         "import:9866049aeb621599bb0f",
         "import:a99307c8c8debf377c51",
         "import:b2ab14f8e45292d8b3f7",
         "import:b63768891ca64af1cb8d",
+        "import:d70a8f2b0aab923f89f4",
         "import:deaf92636d39c1f1d373",
         "import:fff3516f6ab19099a34d"
       ],
@@ -6286,5 +6290,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8ef0a702a4d8ad5ab5ff0fd541e19b18ebca9770ce950d5d95a3c5856716158c"
+  "sourceDigest": "sha256:e817953d8dbe7b41ebbeed58913f0a6ac210d21846cb5650173cf10ed3095e2b"
 }

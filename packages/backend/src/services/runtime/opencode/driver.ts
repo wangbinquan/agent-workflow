@@ -1,5 +1,6 @@
 import { normalizeUsage } from './usage'
-import { createOpencodeUsageNormalizer } from './nativeUsage'
+import { createOpencodeUsageNormalizer, opencodeUsageDatabasePath } from './nativeUsage'
+import { createOpencodeNativeUsageCapture } from '@/modules/runtime-management/public/participants'
 // RFC-111 PR-A — the opencode RuntimeDriver.
 //
 // PR-A slice A1 implements `parseEvent` (delegating to ./events). Later slices
@@ -366,6 +367,11 @@ export const opencodeDriver: RuntimeDriver = {
   },
   normalizeUsage,
   prepareUsageNormalizer: ({ env }) => createOpencodeUsageNormalizer(env),
+  prepareNativeUsageCapture: ({ env, ...identity }) =>
+    createOpencodeNativeUsageCapture({
+      ...identity,
+      path: opencodeUsageDatabasePath(env),
+    }),
   observeSystemEvent,
   // RFC-143 — capability methods. PR-1 delegates to the existing free functions
   // (byte-for-byte behavior); later PRs move call sites onto these.

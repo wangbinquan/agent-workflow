@@ -1,9 +1,20 @@
-import type { ObservationIngest } from '@agent-workflow/shared'
+import type {
+  ObservationIngest,
+  ObservationCaptureCommit,
+  ObservationNativeRevisionResolution,
+} from '@agent-workflow/shared'
 import type { UsageLedgerRecord } from '../domain/usageLedger'
 
 export interface UsageRevisionReceipt {
   readonly fingerprint: string
   readonly outcome: 'applied' | 'diagnostic' | 'stale'
+}
+export type NativeRevisionResolution = ObservationNativeRevisionResolution
+export interface UsageCaptureReceipt extends ObservationCaptureCommit {
+  readonly sourceCursor: string
+  readonly sourceId: string
+  readonly resolutions: readonly NativeRevisionResolution[]
+  readonly priorRevisionGap: boolean
 }
 export interface UsageLedgerScope {
   cursor(): Promise<string | null>
@@ -21,8 +32,25 @@ export interface UsageLedgerScope {
     event: ObservationIngest['events'][number],
     receipt: UsageRevisionReceipt,
     record: UsageLedgerRecord | undefined,
+    nativeSource?: string,
   ): Promise<void>
   advance(cursor: string): Promise<void>
+  capture(invocationId: string): Promise<UsageCaptureReceipt | undefined>
+  commitCapture(
+    value: ObservationCaptureCommit,
+    cursor: string,
+    resolutions: readonly NativeRevisionResolution[],
+  ): Promise<void>
+  lockNativeRoot(nativeSource: string, root: string): Promise<void>
+  nativeRecords(
+    nativeSource: string,
+    root: string,
+    recordIds: readonly string[],
+  ): Promise<{
+    readonly items: readonly UsageLedgerRecord[]
+    readonly truncated: boolean
+  }>
+  nativeScope(sourceId: string): Promise<UsageLedgerScope>
 }
 export interface UsageLedgerStore {
   cursor(sourceId: string): Promise<string | null>
@@ -31,4 +59,6 @@ export interface UsageLedgerStore {
     taskId: string,
     page: { readonly limit: number; readonly after?: string },
   ): Promise<{ readonly items: readonly UsageLedgerRecord[]; readonly nextCursor?: string }>
+  captures(invocationIds: readonly string[]): Promise<readonly UsageCaptureReceipt[]>
+  pendingCaptureRepairs(limit: number, after?: string): Promise<readonly UsageCaptureReceipt[]>
 }

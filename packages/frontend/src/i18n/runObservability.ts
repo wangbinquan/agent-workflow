@@ -1,4 +1,28 @@
 export const runObservabilityZh = {
+  nativeOutputIncomplete: '运行输出或原生步骤尚不完整',
+  nativeRevisionHint:
+    '展示历史证据到新证据的变化。已证明归属的修订计回原调用，其余保留为缺口，不计入恢复调用的新消耗。',
+  nativeRevisionOwner: '已计回调用 {{id}}',
+  nativeRevisionUnresolved: '原调用尚未确定',
+  nativeCaptureTitle: '原生子 Agent 采集',
+  nativeCaptureHint:
+    'OpenCode 子会话在进程结束并回收后补采。完整表示本轮有界扫描已投影；采集待完成、恢复基线缺失或历史修订未归属时，总量只显示已知下界。',
+  nativeState_pending: '等待最终子树采集',
+  nativeState_partial: '子树采集不完整',
+  nativeState_complete: '最终扫描已投影',
+  nativeState_unobserved: '历史调用未观测子树',
+  nativeScanSize: '扫描会话 / 步骤数',
+  nativeRevisionDetails: '查看历史步骤修订',
+  nativeStep: '原生会话 / 步骤',
+  nativePriorRevision:
+    '历史步骤发生修订，尚未归属原调用；不会计入本轮新增消耗，相关历史汇总也保持部分。',
+  nativeBaselineMissing: '恢复基线不可用',
+  nativeRootChanged: '恢复根会话发生变化',
+  nativeRootMissing: '原生根会话不可用',
+  nativeTreeConflict: '原生会话关系不一致',
+  nativeStoreUnavailable: '原生用量来源不可读',
+  nativeTimeUnknown: '原生步骤时间未知',
+  nativeScanLimit: '子树扫描达到预算上限',
   collectionTitle: '采集与投影状态',
   collectionHint:
     '仅统计当前筛选中已读取的任务。本地持久来源行是待投影证据，不等于 Token 或调用数；平台同步单列展示；待处理为零也不能证明进程崩溃前的数据已全部采集。观测时间来自当前已选择的用量证据，不是采集器心跳。',
@@ -24,7 +48,7 @@ export const runObservabilityZh = {
   claudeCapability:
     '根调用输入与缓存、最终分模型汇总；最终汇总可能包含原生子 Agent。实际 provider、恢复累计基线和原生子会话单独分摊尚不完整。',
   opencodeCapability:
-    '根 step_finish 四桶用量；实际 provider/model 从已关联的原生记录读取，迟到模型可补算。未映射原生子会话保持缺口。',
+    '根 step_finish 四桶用量；独立部署在结束后补采原生子会话的实际模型和用量。恢复前固定步骤基线，历史修订单列缺口；待完成的扫描不会标为完整。',
   platformCapability:
     '按平台已提交游标同步用量和人民币估值；平台快照与缺口独立展示，断连时保留已持久化历史。',
 
@@ -175,6 +199,30 @@ export const runObservabilityZh = {
 }
 export type RunObservabilityMessages = { [K in keyof typeof runObservabilityZh]: string }
 export const runObservabilityEn: RunObservabilityMessages = {
+  nativeOutputIncomplete: 'Runtime output or native step incomplete',
+  nativeRevisionHint:
+    'Historical and new evidence are shown together. Proven revisions update the original invocation; unresolved revisions remain gaps and are excluded from the resumer’s new usage.',
+  nativeRevisionOwner: 'Applied to invocation {{id}}',
+  nativeRevisionUnresolved: 'Original invocation unresolved',
+  nativeCaptureTitle: 'Native child agent capture',
+  nativeCaptureHint:
+    'OpenCode child sessions are collected after process exit and reap. Complete means the bounded final scan has been projected. Pending capture, missing resume baselines and unattributed historical revisions keep totals as known lower bounds.',
+  nativeState_pending: 'Awaiting final subtree capture',
+  nativeState_partial: 'Partial subtree capture',
+  nativeState_complete: 'Final scan projected',
+  nativeState_unobserved: 'Historical subtree not observed',
+  nativeScanSize: 'Scanned sessions / steps',
+  nativeRevisionDetails: 'Inspect historical step revisions',
+  nativeStep: 'Native session / step',
+  nativePriorRevision:
+    'A historical step changed and its original invocation is unresolved. It is excluded from this invocation’s new usage; related historical totals also remain partial.',
+  nativeBaselineMissing: 'Resume baseline unavailable',
+  nativeRootChanged: 'Resume root session changed',
+  nativeRootMissing: 'Native root session unavailable',
+  nativeTreeConflict: 'Conflicting native session ancestry',
+  nativeStoreUnavailable: 'Native usage source unreadable',
+  nativeTimeUnknown: 'Native step time unknown',
+  nativeScanLimit: 'Subtree scan budget reached',
   collectionTitle: 'Collection and projection status',
   collectionHint:
     'Only tasks loaded under the current filters are counted. Local durable source rows are projection evidence, not token or invocation counts; platform synchronization is shown separately. Zero pending rows does not prove all data before a process crash was captured. Observation times describe selected usage evidence, not a collector heartbeat.',
@@ -200,7 +248,7 @@ export const runObservabilityEn: RunObservabilityMessages = {
   claudeCapability:
     'Root input/cache evidence and final per-model totals, potentially including native child agents. Actual provider, resumed cumulative baselines and separate native child attribution remain incomplete.',
   opencodeCapability:
-    'Root step_finish token buckets. Actual provider/model comes from correlated native records and may arrive later. Unmapped native child sessions remain gaps.',
+    'Root step_finish buckets; standalone deployments collect native child usage and actual models after exit. Resume baselines exclude prior steps, historical revisions remain explicit gaps, and pending scans never count as complete.',
   platformCapability:
     'Usage and CNY valuations follow platform committed cursors. Snapshots and gaps are shown separately; disconnection preserves durable history.',
 

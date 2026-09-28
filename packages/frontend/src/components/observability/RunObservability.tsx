@@ -25,6 +25,7 @@ import { Tokens, Cost, Source, Metrics } from './ObservationMetrics'
 import { ObservationAnalysis, type ObservationAnalysisTab } from './ObservationAnalysis'
 import { ObservationExport } from './ObservationExport'
 import { ObservationFilters } from './ObservationFilters'
+import { ObservationNativeCapture } from './ObservationNativeCapture'
 import './RunObservability.css'
 
 export interface ObservationSearch {
@@ -121,6 +122,7 @@ function TaskDetail({ data }: { data: ObservationTaskDetail }) {
           </div>
         </Card>
       )}
+      <ObservationNativeCapture rows={data.nativeCaptures ?? []} />
       <Card title={t('runObservability.agents')}>
         {data.agents.length === 0 ? (
           <EmptyState title={t('runObservability.noAgents')} size="compact" />

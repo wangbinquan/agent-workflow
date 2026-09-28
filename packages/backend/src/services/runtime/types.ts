@@ -1,4 +1,8 @@
 import type { RuntimeUsageContext, RuntimeUsageFrame } from './usage'
+import type {
+  NativeUsageCapture,
+  NativeUsageCaptureIdentity,
+} from '@/modules/runtime-management/public/participants'
 // RFC-111 PR-A — runtime abstraction types.
 //
 // The platform drives one agent CLI per node_run. Today that CLI is opencode,
@@ -755,6 +759,11 @@ export interface RuntimeDriver {
   prepareUsageNormalizer?(input: {
     readonly env: Readonly<Record<string, string | undefined>>
   }): (raw: unknown, context: RuntimeUsageContext) => RuntimeUsageFrame
+  prepareNativeUsageCapture?(
+    input: NativeUsageCaptureIdentity & {
+      readonly env: Readonly<Record<string, string | undefined>>
+    },
+  ): NativeUsageCapture
   /**
    * RFC-297 T5 — synthetic events to append to the stream once the child has
    * exited. This is how an observation that does NOT arrive on stdout still

@@ -1344,6 +1344,16 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       nodeRunId: opts.nodeRunId,
       agentId: opts.agent.id,
       resumeSessionId: effectiveResumeSessionId,
+      includeMeasurement: (row) => nativeUsageCapture?.includesRecord(row.recordId) ?? true,
+    })
+    const nativeUsageCapture = driver.prepareNativeUsageCapture?.({
+      env: plan.env,
+      invocationId,
+      taskId: opts.taskId,
+      nodeRunId: opts.nodeRunId,
+      agentId: opts.agent.id,
+      resumeSessionId: effectiveResumeSessionId,
+      nextRevision: captureUsage.nextRevision,
     })
     /** 抛错前把已缓冲的取证事件写下去——它们恰恰在失败时最重要。冲刷本身再失败也不能
      *  盖住原始错误（那才是这次运行失败的原因）。 */
@@ -1752,11 +1762,24 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           agentId: opts.agent.id,
           agentRevision: opts.agent.updatedAt,
           purpose: opts.observationPurpose ?? 'task',
+          ...(nativeUsageCapture
+            ? {
+                nativeCaptureContract: nativeUsageCapture.contract,
+                nativeCaptureSource: nativeUsageCapture.nativeSource,
+              }
+            : {}),
           runtime: opts.runtimeObservationIdentity
             ? { ...opts.runtimeObservationIdentity, protocol: runtime }
             : null,
         })
         localObservationAccepted = accepted.authority.kind === 'local'
+        if (localObservationAccepted) {
+          try {
+            nativeUsageCapture?.begin()
+          } catch {
+            log.warn('node-run-observation-baseline-failed', { nodeRunId: opts.nodeRunId })
+          }
+        }
       },
       requireSpawnReceipt: true,
       onSpawned: async (receipt: {
@@ -1805,7 +1828,15 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     await stderrEvents.flush()
     if (localObservationAccepted && runResult.outcome !== 'unreaped') {
       try {
-        const observations = captureUsage.retryModels(Date.now())
+        const observedAt = Date.now()
+        const observations = [
+          ...captureUsage.retryModels(observedAt),
+          ...(nativeUsageCapture?.finish(
+            sessionId ?? effectiveResumeSessionId ?? null,
+            observedAt,
+            runResult.drainTimedOut || runResult.pumpError ? ['native-output-incomplete'] : [],
+          ) ?? []),
+        ]
         if (observations.length)
           await persistRunnerWrite('node-run-observation/model-revision', () =>
             opts.persistence.nodeExecution.appendEvents({

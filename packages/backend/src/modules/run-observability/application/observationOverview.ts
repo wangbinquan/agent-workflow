@@ -41,6 +41,12 @@ function boundedSources(sources: ObservationSnapshotSources): ObservationSnapsho
       return page
     },
     local: {
+      async captures(ids) {
+        if (ids.length > records) throw new ReadBudgetReached()
+        const rows = await sources.local.captures(ids)
+        records -= rows.length
+        return rows
+      },
       async records(taskId, query) {
         if (records === 0) throw new ReadBudgetReached()
         const page = await sources.local.records(taskId, {

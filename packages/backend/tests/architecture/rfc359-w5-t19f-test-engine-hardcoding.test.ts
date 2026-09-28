@@ -382,6 +382,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-w7-catalog-composition-roots.test.ts: 1',
   'rfc359-w8-logical-source-conformance.test.ts: 1',
   'rfc359-w8-migrator-conformance.test.ts: 1',
+  // RFC-371：嵌套子会话数字采集的原生只读 SQLite 夹具，AW 账本另做双 provider 回归。
+  'rfc371-native-child-capture.test.ts: 1',
   // RFC-371：原生 OpenCode 固定 SQLite 文件夹具（建库/修改各一处），不属于 AW 持久 provider。
   'rfc371-native-model.test.ts: 2',
   'runner-subagent-live-capture.test.ts: 6',

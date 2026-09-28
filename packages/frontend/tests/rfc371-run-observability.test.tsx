@@ -329,6 +329,88 @@ test('page → task → attempt → back preserves the original filter and exact
       .every((url) => url.searchParams.get('from') === String(search.from)),
   ).toBe(true)
 })
+
+test('native capture distinguishes pending, empty completed scans and historical revisions without claiming new spend', async () => {
+  const value = detail(),
+    before = { usage: { input: '10', output: '0', cacheRead: null, cacheWrite: '0' }, model: null }
+  fixture(
+    { ...search, task: 'task-1' },
+    {
+      detail: {
+        ...value,
+        nativeCaptures: [
+          {
+            invocationId: 'pending-call',
+            nodeRunId: 'pending-run',
+            state: 'pending',
+            priorRevisionGap: false,
+            proof: null,
+          },
+          {
+            invocationId: 'empty-call',
+            nodeRunId: 'empty-run',
+            state: 'complete',
+            priorRevisionGap: false,
+            proof: {
+              contract: 'opencode-child-steps-v1',
+              nativeSource: 'db',
+              rootSessionId: 'empty-root',
+              state: 'complete',
+              baseline: { kind: 'fresh', fingerprint: null },
+              snapshotFingerprint: 'scan',
+              observedAt: NOW,
+              scannedSessions: 1,
+              scannedSteps: 0,
+              issues: [],
+              priorRevisions: [],
+            },
+          },
+          {
+            invocationId: 'revised-call',
+            nodeRunId: 'revised-run',
+            state: 'partial',
+            priorRevisionGap: true,
+            proof: {
+              contract: 'opencode-child-steps-v1',
+              nativeSource: 'db',
+              rootSessionId: 'root',
+              state: 'partial',
+              baseline: { kind: 'resume', fingerprint: 'before' },
+              snapshotFingerprint: 'after',
+              observedAt: NOW,
+              scannedSessions: 2,
+              scannedSteps: 1,
+              issues: ['native-prior-revision-gap'],
+              priorRevisions: [
+                {
+                  sessionId: 'child',
+                  stepId: 'historical-step',
+                  before,
+                  after: { ...before, usage: { ...before.usage, input: '20' } },
+                },
+              ],
+            },
+          },
+        ],
+      },
+    },
+  )
+  await screen.findByRole('heading', { name: '原生子 Agent 采集' })
+  expect(screen.getByText('等待最终子树采集')).toBeTruthy()
+  expect(screen.getByText('最终扫描已投影')).toBeTruthy()
+  expect(screen.getByText('1 / 0')).toBeTruthy()
+  const trigger = screen.getByRole('button', { name: '查看历史步骤修订' })
+  trigger.focus()
+  fireEvent.click(trigger)
+  const dialog = await screen.findByRole('dialog', { name: '查看历史步骤修订' })
+  expect(within(dialog).getByText('historical-step')).toBeTruthy()
+  expect(within(dialog).getByText('10 → 20')).toBeTruthy()
+  expect(within(dialog).getAllByText('0 → 0')).toHaveLength(2)
+  expect(within(dialog).getAllByText('未观测 → 未观测')).toHaveLength(2)
+  fireEvent.keyDown(dialog, { key: 'Escape' })
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  await waitFor(() => expect(document.activeElement).toBe(trigger))
+})
 test('pagination requests the opaque cursor and disabling next does not erase first-page recovery', async () => {
   const f = fixture()
   await screen.findByRole('button', { name: '真实任务' })

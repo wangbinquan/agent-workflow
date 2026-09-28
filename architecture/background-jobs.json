@@ -5531,11 +5531,11 @@
   "denominator": {
     "ambientWiring": 501,
     "disabled": 9,
-    "entries": 333,
+    "entries": 335,
     "executionLocal": 41,
-    "longRunning": 77,
+    "longRunning": 78,
     "managed": 11,
-    "periodic": 206
+    "periodic": 207
   },
   "entries": [
     {
@@ -7805,6 +7805,27 @@
     },
     {
       "dependencies": [],
+      "file": "packages/backend/src/modules/run-observability/application/nativeUsageRevisions.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/run-observability/application/nativeUsageRevisions.ts#reconcileNativeUsageRevisions",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/nativeUsageRevisions.ts#reconcileNativeUsageRevisions",
+      "phase": "unknown",
+      "symbol": "reconcileNativeUsageRevisions",
+      "targetContext": "run-observability"
+    },
+    {
+      "dependencies": [],
       "file": "packages/backend/src/modules/run-observability/domain/usageLedger.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/run-observability/domain/usageLedger.ts#reconcileUsage",
@@ -7822,6 +7843,29 @@
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/domain/usageLedger.ts#reconcileUsage",
       "phase": "unknown",
       "symbol": "reconcileUsage",
+      "targetContext": "run-observability"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts#readPendingCaptureRepairs",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/usageCapturePersistence.ts#readPendingCaptureRepairs",
+      "phase": "unknown",
+      "symbol": "readPendingCaptureRepairs",
       "targetContext": "run-observability"
     },
     {
@@ -12877,5 +12921,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8ef0a702a4d8ad5ab5ff0fd541e19b18ebca9770ce950d5d95a3c5856716158c"
+  "sourceDigest": "sha256:e817953d8dbe7b41ebbeed58913f0a6ac210d21846cb5650173cf10ed3095e2b"
 }

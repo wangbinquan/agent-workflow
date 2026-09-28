@@ -11,6 +11,8 @@ export type UsageIssue =
 
 export interface UsageLedgerRecord {
   readonly sourceId: string
+  /** Monotonic durable execution-source row proving the newest native snapshot. */
+  readonly nativeWatermark?: number
   readonly measurement: ObservationMeasurement
   /** Revision used for ordering; may be newer than the last usable measurement. */
   readonly observedRevision: number

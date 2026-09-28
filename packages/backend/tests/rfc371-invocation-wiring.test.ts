@@ -145,3 +145,33 @@ test('native model preparation uses final spawn env and local numeric retries av
   expect(env).toBe('plan.env')
   expect(retries).toBe(1)
 })
+
+test('native child capture freezes its contract before spawn and starts only after local acceptance', () => {
+  const file = source('services/runner.ts'),
+    text = file.getFullText()
+  expect(text).toContain('driver.prepareNativeUsageCapture?.({')
+  expect(text).toContain('nativeCaptureContract: nativeUsageCapture.contract')
+  const accepted = text.indexOf("localObservationAccepted = accepted.authority.kind === 'local'")
+  const begin = text.indexOf('nativeUsageCapture?.begin()')
+  const spawnReceipt = text.indexOf('requireSpawnReceipt: true', accepted)
+  expect(accepted).toBeGreaterThan(0)
+  expect(begin).toBeGreaterThan(accepted)
+  expect(begin).toBeLessThan(spawnReceipt)
+  expect(text.slice(accepted, begin)).toContain('if (localObservationAccepted)')
+  const finalCapture = text.indexOf('nativeUsageCapture?.finish(')
+  expect(finalCapture).toBeGreaterThan(
+    text.indexOf("localObservationAccepted && runResult.outcome !== 'unreaped'"),
+  )
+  let includedInFinalBatch = false
+  const walk = (node: ts.Node) => {
+    if (
+      ts.isVariableDeclaration(node) &&
+      node.name.getText() === 'observations' &&
+      node.initializer?.getText().includes('nativeUsageCapture?.finish(')
+    )
+      includedInFinalBatch = true
+    ts.forEachChild(node, walk)
+  }
+  walk(file)
+  expect(includedInFinalBatch).toBe(true)
+})
