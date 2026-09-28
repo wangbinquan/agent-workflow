@@ -113,7 +113,7 @@ function fixture(value: unknown, status = 200) {
 test('hosted usage keeps the reconciled contribution and independent authorized CNY revision', async () => {
   const f = fixture(page())
   const result = await f.source.read(query)
-  expect(result).toEqual(page())
+  expect(result as unknown).toEqual(page())
   expect(result.items[0]).toMatchObject({
     usage: counts('130'),
     projection: { contribution: counts('30'), modelRevision: 5 },
@@ -149,7 +149,7 @@ test('opaque snapshot continuation is preserved and cannot silently become anoth
     cursor: 'meter:one',
     limit: 100,
   }
-  expect(await f.source.read(request)).toEqual(snapshot)
+  expect((await f.source.read(request)) as unknown).toEqual(snapshot)
   expect(f.seen[0]!.url.searchParams.get('snapshot')).toBe('true')
   expect(f.seen[0]!.url.searchParams.get('snapshotId')).toBe('snapshot:one')
   expect(f.seen[0]!.url.searchParams.get('cursor')).toBe('meter:one')
@@ -167,12 +167,12 @@ test('opaque snapshot continuation is preserved and cannot silently become anoth
 
 test('empty pages carry visibility updates and unknown amounts remain null', async () => {
   const hidden = page({ costVisibility: 'hidden', visibilityRevision: 4, items: [] })
-  expect(await fixture(hidden).source.read(query)).toEqual(hidden)
+  expect((await fixture(hidden).source.read(query)) as unknown).toEqual(hidden)
   for (const availability of ['unpriced', 'not-authorized', 'pending']) {
     const value = page({
       items: [{ ...valuation, availability, priceVersionRef: null, amountDecimal: null }],
     })
-    expect((await fixture(value).source.read(query)).items).toEqual(value.items)
+    expect((await fixture(value).source.read(query)).items as unknown).toEqual(value.items)
   }
   expect(
     (await fixture(page({ items: [{ ...valuation, amountDecimal: '0' }] })).source.read(query))
@@ -259,12 +259,14 @@ for (const stage of ['headers', 'request', 'body'] as const) {
       }
       const source = createCrewStationObservationSource({
         baseUrl: 'https://cs.example',
-        headers: () => (stage === 'headers' ? hang<HeadersInit>() : Promise.resolve({})),
+        headers: () =>
+          stage === 'headers' ? hang<NonNullable<RequestInit['headers']>>() : Promise.resolve({}),
         request: async () => {
           calls++
           if (stage === 'request') return hang<Response>()
           const response = Response.json(page())
-          if (stage === 'body') response.json = () => hang<unknown>()
+          if (stage === 'body')
+            Object.defineProperty(response, 'json', { value: () => hang<unknown>() })
           return response
         },
       })
@@ -277,11 +279,13 @@ for (const stage of ['headers', 'request', 'body'] as const) {
     const source = createCrewStationObservationSource({
       baseUrl: 'https://cs.example',
       timeoutMs: 1,
-      headers: () => (stage === 'headers' ? hang<HeadersInit>() : Promise.resolve({})),
+      headers: () =>
+        stage === 'headers' ? hang<NonNullable<RequestInit['headers']>>() : Promise.resolve({}),
       request: async () => {
         if (stage === 'request') return hang<Response>()
         const response = Response.json(page())
-        if (stage === 'body') response.json = () => hang<unknown>()
+        if (stage === 'body')
+          Object.defineProperty(response, 'json', { value: () => hang<unknown>() })
         return response
       },
     })

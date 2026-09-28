@@ -1,3 +1,7 @@
+## 2026-09-28 RFC-371 平台 source 类型修正
+
+b876a08fd 的 CI 36429128037 指出后端 Bun 类型库没有全局 HeadersInit、Response.json 为 readonly，且原始协议 fixture 在严格 expect 重载中被宽推断。现沿用 RequestInit.headers 类型，测试通过属性描述符注入正文挂起，原始 JSON 用 unknown 做完整值对拍；业务分支、截止/取消与失败断言均保持。未运行本地 AW 测试，完整 CI 等待修复提交。持久托管同步仍在实现中。
+
 ## 2026-09-28 RFC-371 CS 授权观测来源合同（实施中）
 
 新增平台 source 端口与 CrewStation HTTP adapter，读取已投影 Token 和独立人民币估值；保留不可变执行身份、快照水位、金额可见性与网络错误语义，无本地价格回退。三阶段取消/超时及具体错误回归经独立功能复审 PASS，测试交本批 exact-SHA CI。持久导入、托管装配与完整统计界面仍待实施，不将接口合同记为托管完成。

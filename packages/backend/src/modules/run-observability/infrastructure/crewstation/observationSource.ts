@@ -32,7 +32,7 @@ function abortable<T>(work: () => Promise<T>, signal: AbortSignal): Promise<T> {
 /** Bootstrap supplies the platform endpoint and existing service identity mechanism. */
 export function createCrewStationObservationSource(input: {
   readonly baseUrl: string
-  readonly headers: () => Promise<HeadersInit>
+  readonly headers: () => Promise<NonNullable<RequestInit['headers']>>
   readonly request?: (url: URL, init: RequestInit) => Promise<Response>
   readonly timeoutMs?: number
 }): PlatformObservationSource {
