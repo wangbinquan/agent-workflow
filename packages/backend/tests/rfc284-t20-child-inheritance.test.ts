@@ -46,6 +46,8 @@ const DISPOSITION = {
   identityAccess: 'dropped-registered',
   persistence: 'dropped-registered',
   memoryInjectionQueries: 'dropped-registered',
+  // RFC-371: each child receives its selected accounting participant from bootstrap.
+  observationInvocations: 'dropped-registered',
   runtimeSessionLeases: 'dropped-registered',
   runtimeRegistry: 'dropped-registered',
   // RFC-360: the daemon injects a live transaction selection adapter for each drive.
@@ -119,6 +121,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'identityAccess',
         'persistence',
         'memoryInjectionQueries',
+        'observationInvocations',
         'runtimeSessionLeases',
         'runtimeRegistry',
         'nodeRunRuntime',

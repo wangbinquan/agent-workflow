@@ -721,10 +721,7 @@
       "file": "packages/backend/tests/rfc287-t1-scheduler-source-lock-inventory.test.ts",
       "symbol": "SCHEDULER_SOURCE_LOCK_FILES",
       "baseline": 32,
-      "why": "RFC-287 T1：把调度器**源码文本**钉死的测试文件清单。每一条都是一处「重构会被文本断言拦住」的耦合，只该随源码锁退役而减少。RFC-359 W7 第二波按判据 C 补入网。",
-      "allowGrowth": {
-        "why": "RFC-371：以必填公开参与者接通六个生产进程入口和三个独立部署启动根，新增受理失败与不同调用身份回归，退役空 public 面，rfc287-scheduler-source-lock-files 31 → 32，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-287 T1：把调度器**源码文本**钉死的测试文件清单。每一条都是一处「重构会被文本断言拦住」的耦合，只该随源码锁退役而减少。RFC-359 W7 第二波按判据 C 补入网。"
     },
     {
       "id": "rfc199-workflow-writers",
@@ -850,20 +847,14 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5520,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-371：以必填公开参与者接通六个生产进程入口和三个独立部署启动根，新增受理失败与不同调用身份回归，退役空 public 面，rfc294-cross-context-observed-imports 5513 → 5520，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
       "file": "architecture/cross-context-imports.json",
       "symbol": "targetEdges",
       "baseline": 69,
-      "why": "RFC-294 N1：design §3.1 offered、required implementation 与 IA authority type-only 三类目标边，角色和合同不可折叠。",
-      "allowGrowth": {
-        "why": "RFC-371：以必填公开参与者接通六个生产进程入口和三个独立部署启动根，新增受理失败与不同调用身份回归，退役空 public 面，rfc294-target-context-edges 68 → 69，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：design §3.1 offered、required implementation 与 IA authority type-only 三类目标边，角色和合同不可折叠。"
     },
     {
       "id": "rfc294-required-port-liveness",
@@ -877,10 +868,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4903,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-371：以必填公开参与者接通六个生产进程入口和三个独立部署启动根，新增受理失败与不同调用身份回归，退役空 public 面，rfc294-architecture-exceptions 4898 → 4903，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -894,10 +882,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1024,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-371：以必填公开参与者接通六个生产进程入口和三个独立部署启动根，新增受理失败与不同调用身份回归，退役空 public 面，rfc294-public-surfaces 1022 → 1024，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -918,14 +903,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25259,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371：以必填公开参与者接通六个生产进程入口和三个独立部署启动根，新增受理失败与不同调用身份回归，退役空 public 面，rfc294-module-symbol-owners 25254 → 25259，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:4dba9ca1f7266b40f0eaced6f6cdef3a7b08c43a27c4069a824b04f6e2925045",
+    "sourceDigest": "sha256:be68e2be0c8a2edb44cde7c22c592b2fe47deafcf4607e2120a68e4caa1b17ee",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",

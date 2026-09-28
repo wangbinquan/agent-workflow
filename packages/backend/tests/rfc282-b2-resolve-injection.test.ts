@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { ulid } from 'ulid'
+import ts from 'typescript'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { skills } from '../src/db/schema'
@@ -190,22 +191,44 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
   test('the writeSem call sites (commit/merge) thread the scope signal (§9-5)', () => {
     const sites = [
       {
-        text: readFileSync(resolve(SRC, 'services/scheduler.ts'), 'utf8'),
-        marker: 'commit-push injection resolve failed',
+        path: 'services/scheduler.ts',
+        agent: 'commitAgent',
       },
       {
-        text: readFileSync(
-          resolve(SRC, 'modules/task-execution/composition/nodeMechanics.ts'),
-          'utf8',
-        ),
-        marker: 'merge injection resolve failed',
+        path: 'modules/task-execution/composition/nodeMechanics.ts',
+        agent: 'mergeAgent',
       },
     ]
-    for (const { text, marker } of sites) {
-      const idx = text.indexOf(marker)
-      expect(idx).toBeGreaterThan(0)
-      const call = text.slice(idx, idx + 2_000)
-      expect(call).toContain('signal: state.opts.signal')
+    for (const { path, agent } of sites) {
+      // RFC-371 adds invocation metadata: inspect the complete call rather
+      // than truncating the signal away at an arbitrary character boundary.
+      const source = ts.createSourceFile(
+        path,
+        readFileSync(resolve(SRC, path), 'utf8'),
+        ts.ScriptTarget.Latest,
+        true,
+      )
+      const calls: ts.CallExpression[] = []
+      const walk = (node: ts.Node) => {
+        if (ts.isCallExpression(node) && node.expression.getText(source) === 'runNode') {
+          const input = node.arguments[0]
+          if (
+            input &&
+            ts.isObjectLiteralExpression(input) &&
+            input.properties.some(
+              (p) =>
+                ts.isPropertyAssignment(p) &&
+                p.name.getText(source) === 'agent' &&
+                p.initializer.getText(source) === agent,
+            )
+          )
+            calls.push(node)
+        }
+        ts.forEachChild(node, walk)
+      }
+      walk(source)
+      expect(calls).toHaveLength(1)
+      expect(calls[0]!.getText(source)).toContain('signal: state.opts.signal')
     }
   })
 })

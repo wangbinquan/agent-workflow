@@ -104,6 +104,48 @@ describeEachProvider('RFC-371 durable usage ledger', (harness) => {
     })
   }
 
+  test('restart and reverse delivery never reuse rejected initial counters', async () => {
+    const evidence = [
+      usage({
+        validity: 'invalid-final',
+        usage: { input: '0', output: '0', cacheRead: '0', cacheWrite: '0' },
+      }),
+      usage({
+        revision: 2,
+        coverage: 'partial',
+        usage: { input: null, output: '8', cacheRead: '0', cacheWrite: '0' },
+      }),
+    ]
+    for (const [sourceId, order] of [
+      ['forward', evidence],
+      ['reverse', [...evidence].reverse()],
+    ] as const) {
+      let cursor: string | null = null
+      for (const item of order) {
+        const reopened = createUsageLedgerStore(harness.db)
+        const nextCursor = 'page:' + item.revision
+        await createUsageIngestion(reopened).ingest(
+          page({
+            sourceId,
+            expectedCursor: cursor,
+            nextCursor,
+            events: [{ eventId: 'event:' + item.revision, measurement: item }],
+          }),
+        )
+        cursor = nextCursor
+      }
+    }
+    const rows = (await createUsageLedgerStore(harness.db).records('task', { limit: 20 })).items
+    const forward = rows.find((row) => row.sourceId === 'forward')!,
+      reverse = rows.find((row) => row.sourceId === 'reverse')!
+    expect({ ...forward, sourceId: 'same' }).toEqual({ ...reverse, sourceId: 'same' })
+    expect(reverse).toMatchObject({
+      contribution: { input: null, output: '8' },
+      complete: false,
+      observedRevision: 2,
+    })
+  })
+
   test('replay, revision replacement and restart keep a single contribution', async () => {
     const store = createUsageLedgerStore(harness.db),
       ingest = createUsageIngestion(store)

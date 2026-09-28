@@ -55,7 +55,8 @@ function diagnostic(
     outcome: 'diagnostic',
     record: {
       sourceId,
-      measurement: previous?.measurement ?? next,
+      // Rejected first evidence supplies identity only, never reusable counters.
+      measurement: previous?.measurement ?? { ...next, usage: unknown },
       observedRevision: next.revision,
       contribution: previous?.contribution ?? unknown,
       complete: false,

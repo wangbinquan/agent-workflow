@@ -83,6 +83,41 @@ test('invalid final, unexplained decrease and stale delivery preserve the known 
   })
 })
 
+for (const rejected of [
+  measurement({ validity: 'invalid-final', usage: counts('0') }),
+  measurement({ validity: 'invalid-final', usage: counts('120') }),
+  measurement({
+    usage: counts('90'),
+    basis: { kind: 'native-session', lineageKey: 'session', baseline: counts('100') },
+  }),
+]) {
+  test(
+    'rejected first evidence cannot supply reusable counters: ' +
+      rejected.validity +
+      '/' +
+      rejected.usage.input,
+    () => {
+      const first = reconcileUsage('source', rejected).record
+      const partial = reconcileUsage(
+        'source',
+        measurement({
+          revision: 2,
+          basis: rejected.basis,
+          coverage: 'partial',
+          usage: { input: null, output: '8', cacheRead: '0', cacheWrite: '0' },
+        }),
+        first,
+      ).record
+      expect(partial).toMatchObject({
+        contribution: { input: null, output: '8' },
+        measurement: { usage: { input: null, output: '8' } },
+        complete: false,
+        issues: [],
+      })
+    },
+  )
+}
+
 test('missing counters do not erase known usage or become an assertion of completeness', () => {
   const prior = reconcileUsage('source', measurement()).record
   const next = reconcileUsage('source', measurement({ revision: 2, usage: counts(null) }), prior)

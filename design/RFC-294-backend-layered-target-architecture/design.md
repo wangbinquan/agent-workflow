@@ -327,6 +327,7 @@ flowchart LR
   TE --> SC["source-control"]
   TE --> RM["runtime-management"]
   RO["run-observability"] --> RM
+  TE --> RO
   RM --> RC
   TC["task-catalog"] --> IA
   COL["collaboration"] --> TE
