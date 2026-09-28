@@ -3,9 +3,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:560",
+      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:562",
       "kind": "register-call",
-      "line": 560,
+      "line": 562,
       "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlApplication",
@@ -531,9 +531,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:26",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:32",
       "kind": "register-call",
-      "line": 26,
+      "line": 32,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
@@ -542,9 +542,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:36",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:51",
       "kind": "register-call",
-      "line": 36,
+      "line": 51,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
@@ -553,9 +553,31 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:53",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:66",
       "kind": "register-call",
-      "line": 53,
+      "line": 66,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountObservationRoutes",
+      "targetContext": "run-observability"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:76",
+      "kind": "register-call",
+      "line": 76,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountObservationRoutes",
+      "targetContext": "run-observability"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:93",
+      "kind": "register-call",
+      "line": 93,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
@@ -5404,9 +5426,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3731",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3733",
       "kind": "register-call",
-      "line": 3731,
+      "line": 3733,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5415,9 +5437,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1457",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:1459",
       "kind": "register-call",
-      "line": 1457,
+      "line": 1459,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeProviderAppDeps",
       "removeAfterWave": "W6/W9",
       "symbol": "composeProviderAppDeps",
@@ -5426,9 +5448,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:3512",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:3514",
       "kind": "register-call",
-      "line": 3512,
+      "line": 3514,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5437,9 +5459,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3791",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3793",
       "kind": "register-call",
-      "line": 3791,
+      "line": 3793,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createHttpRequestApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createHttpRequestApp",
@@ -5485,7 +5507,7 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 497,
+    "ambientWiring": 499,
     "disabled": 9,
     "entries": 333,
     "executionLocal": 41,
@@ -12833,5 +12855,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a261b998740125880776cb3d2202e2b54a18ea5ca838604dd2fd57c68d607829"
+  "sourceDigest": "sha256:e08f355d6781fea77c3dfdd47b509205d9fc4c8a56321191054ec17094b21ced"
 }

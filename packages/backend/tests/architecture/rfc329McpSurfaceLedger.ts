@@ -41,6 +41,16 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
   { leaf: 'GET /api/fusions/pending-count', group: '/api/fusions', category: 'deliberate' },
   { leaf: 'POST /api/fusions', group: '/api/fusions', category: 'deliberate' },
   { leaf: 'GET /api/overview', group: '/api/overview', category: 'deliberate' },
+  {
+    leaf: 'GET /api/observability/tasks',
+    group: '/api/observability/tasks',
+    category: 'not-in-scope',
+  },
+  {
+    leaf: 'GET /api/observability/tasks/:id',
+    group: '/api/observability/tasks',
+    category: 'not-in-scope',
+  },
   { leaf: 'GET /api/reviews/pending-count', group: '/api/reviews', category: 'deliberate' },
   { leaf: 'GET /api/whoami', group: '/api/whoami', category: 'deliberate' },
   {
@@ -1130,6 +1140,8 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
 
 /** 每组一条理由。守卫要求：每个用到的 group 都在这里有非空理由。 */
 export const EXEMPT_REASONS: Readonly<Record<string, string>> = {
+  '/api/observability/tasks':
+    'RFC-371（Codex，2026-09-28）：本批提供运行观测页面的任务列表、同快照 Agent/尝试钻取；Agent 查询工具仍须在 RFC-371 后续 MCP 查询合同批次接入，当前登记仅这两个读路由，不覆盖其他观测 API。',
   '/api/observability/pricing':
     'RFC-371（Codex，2026-09-28）：运行时人民币价格目录、历史版本与改价是设置页的独立配置接口，沿用运行时配置的 settings:write 合同；不新增 Agent MCP 配置工具。此登记仅限三个精确路由，不覆盖后续观测查询。',
   '(infrastructure)':

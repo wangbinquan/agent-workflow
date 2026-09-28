@@ -1,13 +1,24 @@
-import type { UsageLedgerRecord } from './usageLedger'
+import type { ObservationMeasurement } from '@agent-workflow/shared'
+import type { TokenUsage } from './tokenUsage'
 import { summarizeTokenUsage, TOKEN_BUCKETS, type TokenBucket } from './tokenUsage'
 
-type ScopedRecord = UsageLedgerRecord & {
-  measurement: UsageLedgerRecord['measurement'] & {
-    scope: NonNullable<UsageLedgerRecord['measurement']['scope']>
+export interface UsageContributionEvidence {
+  readonly sourceId: string
+  readonly measurement: Pick<
+    ObservationMeasurement,
+    'invocationId' | 'recordId' | 'model' | 'scope' | 'coveredThroughTurn'
+  >
+  readonly contribution: TokenUsage
+  readonly complete: boolean
+  readonly coveredThrough?: Readonly<Record<TokenBucket, number | null>>
+}
+type ScopedRecord<T extends UsageContributionEvidence> = T & {
+  measurement: T['measurement'] & {
+    scope: NonNullable<ObservationMeasurement['scope']>
   }
 }
 
-function validateAncestry(records: readonly ScopedRecord[]) {
+function validateAncestry(records: readonly ScopedRecord<UsageContributionEvidence>[]) {
   const paths = new Map<string, string>()
   for (const {
     measurement: { scope },
@@ -27,7 +38,7 @@ function validateAncestry(records: readonly ScopedRecord[]) {
   }
 }
 
-function end(record: ScopedRecord, bucket: TokenBucket): number {
+function end(record: ScopedRecord<UsageContributionEvidence>, bucket: TokenBucket): number {
   return (
     record.coveredThrough?.[bucket] ??
     record.measurement.coveredThroughTurn ??
@@ -37,7 +48,11 @@ function end(record: ScopedRecord, bucket: TokenBucket): number {
 
 /** Compare a selected aggregate with another piece of evidence. Partial overlap
  * cannot be subtracted safely without the original per-turn/model breakdown. */
-function relation(a: ScopedRecord, b: ScopedRecord, bucket: TokenBucket) {
+function relation(
+  a: ScopedRecord<UsageContributionEvidence>,
+  b: ScopedRecord<UsageContributionEvidence>,
+  bucket: TokenBucket,
+) {
   const x = a.measurement.scope,
     y = b.measurement.scope
   const bInsideA =
@@ -63,7 +78,7 @@ function relation(a: ScopedRecord, b: ScopedRecord, bucket: TokenBucket) {
     : 'partial'
 }
 
-function selectTree(records: readonly ScopedRecord[]) {
+function selectTree<T extends UsageContributionEvidence>(records: readonly ScopedRecord<T>[]) {
   validateAncestry(records)
   const rank = { 'tree-total': 0, 'self-total': 1, request: 2 }
   const ordered = [...records].sort((a, b) => {
@@ -76,11 +91,11 @@ function selectTree(records: readonly ScopedRecord[]) {
       a.measurement.recordId.localeCompare(b.measurement.recordId)
     )
   })
-  const allocated = new Map<ScopedRecord, Record<TokenBucket, string | null>>()
-  const unavailable = new Set<ScopedRecord>(),
-    ambiguous = new Set<ScopedRecord>()
+  const allocated = new Map<ScopedRecord<T>, Record<TokenBucket, string | null>>()
+  const unavailable = new Set<ScopedRecord<T>>(),
+    ambiguous = new Set<ScopedRecord<T>>()
   for (const bucket of TOKEN_BUCKETS) {
-    const aggregates: ScopedRecord[] = []
+    const aggregates: ScopedRecord<T>[] = []
     for (const record of ordered) {
       const overlaps = aggregates.map((a) => relation(a, record, bucket))
       if (overlaps.includes('covered')) continue
@@ -115,9 +130,11 @@ function selectTree(records: readonly ScopedRecord[]) {
 
 /** Select disjoint evidence per model and bucket using native turn coverage.
  * Delivery order alone never proves that a cumulative report covers a child. */
-export function selectUsageContributions(records: readonly UsageLedgerRecord[]) {
-  const groups = new Map<string, ScopedRecord[]>()
-  const selected: UsageLedgerRecord[] = []
+export function selectUsageContributions<T extends UsageContributionEvidence>(
+  records: readonly T[],
+) {
+  const groups = new Map<string, ScopedRecord<T>[]>()
+  const selected: T[] = []
   let unavailableSummaries = 0,
     ambiguousOverlaps = 0
   for (const record of records) {
@@ -128,7 +145,7 @@ export function selectUsageContributions(records: readonly UsageLedgerRecord[]) 
     }
     const key = JSON.stringify([record.sourceId, m.invocationId, m.scope.root])
     const group = groups.get(key) ?? []
-    group.push(record as ScopedRecord)
+    group.push(record as ScopedRecord<T>)
     groups.set(key, group)
   }
   for (const group of groups.values()) {

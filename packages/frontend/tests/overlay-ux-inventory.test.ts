@@ -108,6 +108,8 @@ const OVERLAY_CALLSITES = {
   'components/observability/PriceEditor.tsx': { family: 'access-and-settings', count: 1 },
   'components/observability/PriceHistory.tsx': { family: 'access-and-settings', count: 1 },
   'components/observability/RuntimePricing.tsx': { family: 'access-and-settings', count: 1 },
+  // RFC-371: attempt inspection and focus restoration are rendered in rfc371-run-observability.
+  'components/observability/RunObservability.tsx': { family: 'task-execution', count: 1 },
   // RFC-321 — connection rebind and deletion can revoke personal credentials;
   // rfc269-code-host-settings.test.tsx owns both rendered confirmations.
   'components/settings/CodeHostsSection.tsx': {

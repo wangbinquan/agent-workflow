@@ -1,0 +1,7 @@
+.observation-metrics {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+}
+.observation-metrics dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

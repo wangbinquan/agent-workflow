@@ -86,6 +86,12 @@ export const NAV_GROUPS: NavGroupEntry[] = [
     subnav: [
       { to: '/tasks', i18nKey: 'nav.tasks', icon: 'task', permission: 'tasks:read' },
       {
+        to: '/observability',
+        i18nKey: 'nav.observability',
+        icon: 'review',
+        permission: 'tasks:read',
+      },
+      {
         to: '/scheduled',
         i18nKey: 'nav.scheduled',
         icon: 'schedule',

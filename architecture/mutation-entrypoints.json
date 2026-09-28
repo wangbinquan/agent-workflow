@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1766,
+    "entries": 1769,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20634,6 +20634,30 @@
     },
     {
       "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/application/taskObservations.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/taskObservations.ts#createTaskObservationQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/taskObservations.ts#createTaskObservationQueries",
+      "symbol": "createTaskObservationQueries",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
         "audit": true,
         "authority": "none-observed",
         "authorization": false,
@@ -20725,7 +20749,7 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
+        "authorization": false,
         "event": false,
         "fenceOrOcc": true,
         "transaction": true
@@ -20736,6 +20760,7 @@
       "missingControls": [
         "audit",
         "authority",
+        "authorization",
         "event"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts#createPlatformObservationStore",
@@ -20763,6 +20788,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts#createObservationPriceStore",
       "symbol": "createObservationPriceStore",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/taskObservationSnapshot.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/taskObservationSnapshot.ts#createTaskObservationSnapshot",
+      "missingControls": [
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/taskObservationSnapshot.ts#createTaskObservationSnapshot",
+      "symbol": "createTaskObservationSnapshot",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -29744,6 +29792,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/query.ts#openAlertTasksJoin",
       "symbol": "openAlertTasksJoin",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskObservationFacts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/taskObservationFacts.ts#createTaskObservationFacts",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskObservationFacts.ts#createTaskObservationFacts",
+      "symbol": "createTaskObservationFacts",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -42195,7 +42267,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a261b998740125880776cb3d2202e2b54a18ea5ca838604dd2fd57c68d607829",
+  "sourceDigest": "sha256:e08f355d6781fea77c3dfdd47b509205d9fc4c8a56321191054ec17094b21ced",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

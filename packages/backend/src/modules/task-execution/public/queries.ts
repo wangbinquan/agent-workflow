@@ -2,6 +2,28 @@ import { decodeWrapperProgress } from '../domain/wrapperProgress'
 import type { Actor } from '@/auth/actor'
 import { parseLoopExitCondition, type OverviewTasks } from '@agent-workflow/shared'
 import type { WorktreeTreeEntry } from '@agent-workflow/shared'
+import type {
+  ObservationAttemptFacts,
+  ObservationTaskFacts,
+  ObservationTaskPageQuery,
+} from '@agent-workflow/shared'
+
+/** RFC-371: actor-filtered execution facts, without runtime payloads or private rows. */
+export interface TaskObservationFactsQuery {
+  list(input: { readonly actor: Actor; readonly query: ObservationTaskPageQuery }): Promise<{
+    readonly items: readonly ObservationTaskFacts[]
+    readonly nextCursor: string | null
+  }>
+  get(actor: Actor, taskId: string): Promise<ObservationTaskFacts | null>
+  /** Called only after get/list supplied this visible task, inside the same read snapshot. */
+  attempts(
+    taskId: string,
+    limit: number,
+  ): Promise<{
+    readonly items: readonly ObservationAttemptFacts[]
+    readonly truncated: boolean
+  }>
+}
 
 /** The existing Task visibility gate runs before these bound workspace queries. */
 export interface TaskWorkspaceQueries {

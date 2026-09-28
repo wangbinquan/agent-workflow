@@ -1,5 +1,5 @@
 // RFC-371: hosted observations preserve CS projections and CNY values without local pricing.
-import { expect, test } from 'bun:test'
+import { expect, spyOn, test } from 'bun:test'
 import { createCrewStationObservationSource } from '../src/modules/run-observability/infrastructure/crewstation/observationSource'
 import { PlatformObservationPageSchema } from '../src/modules/run-observability/domain/platformObservation'
 
@@ -307,4 +307,18 @@ test('network failure during response body consumption stays unavailable', async
       ),
   })
   await expect(source.read(query)).rejects.toMatchObject({ code: 'unavailable' })
+})
+
+test('the referenced deadline is cancelled after success, HTTP failure and invalid body', async () => {
+  const cancel = spyOn(globalThis, 'clearTimeout')
+  try {
+    await fixture(page()).source.read(query)
+    expect(cancel).toHaveBeenCalledTimes(1)
+    await expect(fixture({}, 503).source.read(query)).rejects.toMatchObject({ code: 'unavailable' })
+    expect(cancel).toHaveBeenCalledTimes(2)
+    await expect(fixture({}).source.read(query)).rejects.toMatchObject({ code: 'invalid-response' })
+    expect(cancel).toHaveBeenCalledTimes(3)
+  } finally {
+    cancel.mockRestore()
+  }
 })

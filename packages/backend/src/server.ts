@@ -2,6 +2,8 @@ import { composeObservationUsageSource } from '@/modules/task-execution/composit
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
+import { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'
+import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { mountObservationRoutes } from '@/modules/run-observability/composition/observationRoutes'
 import type { HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import {
@@ -3421,10 +3423,10 @@ function composeSqliteApiRouteMounts(
         }),
       }),
     observability: (app) =>
-      mountObservationRoutes(
-        app,
-        composeObservationPricing({ db: deps.db, runtimes: runtimeManagement.observations }),
-      ),
+      mountObservationRoutes(app, {
+        ...composeObservationPricing({ db: deps.db, runtimes: runtimeManagement.observations }),
+        tasks: composeTaskObservations({ db: deps.db, taskSource: createTaskObservationFacts }),
+      }),
     maintenance: (app) =>
       mountMaintenanceRoutes(app, {
         configuration,

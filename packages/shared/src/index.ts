@@ -180,3 +180,4 @@ export * from './uploadNaming'
 // 完整请求体的纯函数。创建对话框调它发请求，后端契约测试调它打真实 app，
 // 两边不可能对不上（此前对不上两次，都是用户在 UI 上撞出来的）。
 export * from './developmentConfigCreate'
+export * from './schemas/observationTasks'

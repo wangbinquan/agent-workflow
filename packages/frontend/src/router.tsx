@@ -46,6 +46,7 @@ import { Route as scheduledRoute } from '@/routes/scheduled'
 import { Route as scheduledDetailRoute } from '@/routes/scheduled.$id'
 import { Route as webhooksRoute } from '@/routes/webhooks'
 import { Route as eventsRoute } from '@/routes/events'
+import { Route as observabilityRoute } from '@/routes/observability'
 import { Route as taskDetailRoute } from '@/routes/tasks.detail'
 import { Route as taskReviewersRoute } from '@/routes/tasks.reviewers'
 import { Route as taskPreviewRoute } from '@/routes/tasks.preview'
@@ -103,6 +104,7 @@ const routeTree = rootRoute.addChildren([
   // 具体有效权限守卫，导航不按角色分叉。
   webhooksRoute,
   eventsRoute,
+  observabilityRoute,
   // RFC-211: the guided tour. Intentionally NOT in the sidebar — it is entered
   // from the homepage, so `resolveActiveNav` leaves it unhighlighted the same
   // way it does for /tasks/new.

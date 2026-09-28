@@ -1,15 +1,21 @@
 import type { Hono } from 'hono'
-import { ObservationPricePageQuerySchema, SaveObservationPriceSchema } from '@agent-workflow/shared'
+import {
+  ObservationPricePageQuerySchema,
+  ObservationTaskPageQuerySchema,
+  SaveObservationPriceSchema,
+} from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
-import { DomainError, ValidationError } from '@/util/errors'
+import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { ObservationPriceError } from '../../domain/priceError'
 import type { ObservationPricingCommands } from '../../ports/pricingCommands'
 import type { ObservationPricingQueries } from '../../ports/pricingQueries'
+import type { ObservationTaskQueries } from '../../public/queries'
 
 export interface ObservationRouteDependencies {
   readonly commands: ObservationPricingCommands
   readonly queries: ObservationPricingQueries
+  readonly tasks: ObservationTaskQueries
 }
 async function mapped<T>(operation: () => Promise<T>): Promise<T> {
   try {
@@ -22,6 +28,40 @@ async function mapped<T>(operation: () => Promise<T>): Promise<T> {
   }
 }
 export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependencies): void {
+  const readGate = { permissions: ['tasks:read'] as const, tokenAccess: 'allow' as const }
+  registerRoute(
+    app,
+    {
+      ...readGate,
+      method: 'GET',
+      path: '/api/observability/tasks',
+      summary: 'Read visible task lifecycle observation summaries',
+    },
+    async (c) => {
+      const query = ObservationTaskPageQuerySchema.safeParse(c.req.query())
+      if (!query.success) throw new ValidationError('invalid-query', 'Invalid observation query')
+      try {
+        return c.json(await deps.tasks.list(actorOf(c), query.data))
+      } catch (error) {
+        if (error instanceof RangeError) throw new ValidationError('invalid-query', error.message)
+        throw error
+      }
+    },
+  )
+  registerRoute(
+    app,
+    {
+      ...readGate,
+      method: 'GET',
+      path: '/api/observability/tasks/:id',
+      summary: 'Read task, agent and attempt observations in one snapshot',
+    },
+    async (c) => {
+      const result = await deps.tasks.detail(actorOf(c), c.req.param('id'))
+      if (!result) throw new NotFoundError('task-not-found', 'Task not found')
+      return c.json(result)
+    },
+  )
   const gate = { permissions: ['settings:write'] as const, tokenAccess: 'allow' as const }
   registerRoute(
     app,

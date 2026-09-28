@@ -36,6 +36,7 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       '/intent',
       '/digital-employees',
       '/tasks',
+      '/observability',
       '/scheduled',
       '/events',
       '/repos',
@@ -75,6 +76,7 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
       ['/intent', 'intent'],
       ['/digital-employees', 'digital-employee'],
       ['/tasks', 'task'],
+      ['/observability', 'review'],
       ['/scheduled', 'schedule'],
       ['/events', 'webhook'],
       ['/repos', 'repo'],
@@ -83,6 +85,8 @@ describe('RFC-032 resolveActiveNav — pathname → group / item / chrome flags'
     expect(navIconForPath('/digital-employees')).toBe('digital-employee')
     expect(navIconForPath('/agents')).toBe('agent')
     expect(navIconForPath('/intent')).toBe('intent')
+    expect(resolveActiveNav('/observability').activeGroup).toBe('tasks')
+    expect(navPermissionForPath('/observability')).toBe('tasks:read')
   })
 
   test('root path activates the home link, nothing else', () => {

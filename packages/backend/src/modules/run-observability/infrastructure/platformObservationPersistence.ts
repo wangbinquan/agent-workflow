@@ -132,68 +132,74 @@ export function createPlatformObservationStore(
           },
         })
       }),
-    records: (binding, page) => {
-      if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 500)
-        throw new RangeError('Platform observation page limit must be 1 through 500')
-      return databaseSessionFor(db).snapshotRead(async (tx) => {
-        // A consistent read also covers the first publication, when no source head exists.
-        const id = sourceKey(binding)
-        const current = await state(tx, binding)
-        if (current.generation === null) return { state: current, items: [] }
-        let after: string | undefined
-        if (page.after !== undefined) {
-          let cursor: unknown
-          try {
-            cursor = JSON.parse(page.after)
-          } catch {
-            throw new PlatformSyncError('page-conflict', 'Invalid platform query cursor')
-          }
-          if (
-            !Array.isArray(cursor) ||
-            cursor.length !== 4 ||
-            cursor[0] !== id ||
-            cursor[1] !== current.generation ||
-            cursor[2] !== current.revision ||
-            typeof cursor[3] !== 'string' ||
-            !/^[a-f0-9]{64}$/.test(cursor[3])
-          )
-            throw new PlatformSyncError(
-              'page-conflict',
-              'Platform query snapshot changed; restart pagination',
-            )
-          after = cursor[3]
+    records: (binding, page) =>
+      databaseSessionFor(db).snapshotRead((tx) => readPlatformObservationPage(tx, binding, page)),
+  }
+}
+
+/** Read within an existing owner-composed snapshot; never open a session on a tx handle. */
+export async function readPlatformObservationPage(
+  tx: DatabaseTransaction,
+  binding: PlatformObservationBinding,
+  page: { readonly limit: number; readonly after?: string },
+): ReturnType<PlatformObservationStore['records']> {
+  if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 500)
+    throw new RangeError('Platform observation page limit must be 1 through 500')
+  // A consistent read also covers the first publication, when no source head exists.
+  const id = sourceKey(binding)
+  const current = await state(tx, binding)
+  if (current.generation === null) return { state: current, items: [] }
+  let after: string | undefined
+  if (page.after !== undefined) {
+    let cursor: unknown
+    try {
+      cursor = JSON.parse(page.after)
+    } catch {
+      throw new PlatformSyncError('page-conflict', 'Invalid platform query cursor')
+    }
+    if (
+      !Array.isArray(cursor) ||
+      cursor.length !== 4 ||
+      cursor[0] !== id ||
+      cursor[1] !== current.generation ||
+      cursor[2] !== current.revision ||
+      typeof cursor[3] !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(cursor[3])
+    )
+      throw new PlatformSyncError(
+        'page-conflict',
+        'Platform query snapshot changed; restart pagination',
+      )
+    after = cursor[3]
+  }
+  const rows = await tx
+    .select()
+    .from(observationPlatformRecords)
+    .where(
+      and(
+        eq(observationPlatformRecords.sourceKey, id),
+        eq(observationPlatformRecords.generation, current.generation),
+        after === undefined ? undefined : gt(observationPlatformRecords.id, after),
+      ),
+    )
+    .orderBy(asc(observationPlatformRecords.id))
+    .limit(page.limit + 1)
+    .all()
+  const selected = rows.slice(0, page.limit),
+    items: PlatformObservation[] = []
+  for (const row of selected) items.push(await visible(tx, current, decode(row.document)))
+  return {
+    state: current,
+    items,
+    ...(rows.length > page.limit
+      ? {
+          nextCursor: JSON.stringify([
+            id,
+            current.generation,
+            current.revision,
+            selected.at(-1)!.id,
+          ]),
         }
-        const rows = await tx
-          .select()
-          .from(observationPlatformRecords)
-          .where(
-            and(
-              eq(observationPlatformRecords.sourceKey, id),
-              eq(observationPlatformRecords.generation, current.generation),
-              after === undefined ? undefined : gt(observationPlatformRecords.id, after),
-            ),
-          )
-          .orderBy(asc(observationPlatformRecords.id))
-          .limit(page.limit + 1)
-          .all()
-        const selected = rows.slice(0, page.limit),
-          items: PlatformObservation[] = []
-        for (const row of selected) items.push(await visible(tx, current, decode(row.document)))
-        return {
-          state: current,
-          items,
-          ...(rows.length > page.limit
-            ? {
-                nextCursor: JSON.stringify([
-                  id,
-                  current.generation,
-                  current.revision,
-                  selected.at(-1)!.id,
-                ]),
-              }
-            : {}),
-        }
-      })
-    },
+      : {}),
   }
 }

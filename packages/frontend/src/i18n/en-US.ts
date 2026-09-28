@@ -4,9 +4,11 @@
 import type { Resources } from './zh-CN'
 import { buildPermissionCatalogResources } from './permissionCatalog'
 import { observationPricingEn } from './observationPricing'
+import { runObservabilityEn } from './runObservability'
 
 export const enUS: Resources = {
   observationPricing: observationPricingEn,
+  runObservability: runObservabilityEn,
   permissions: buildPermissionCatalogResources('en-US'),
   tabBar: {
     scrollStart: 'Show more sections before',
@@ -438,6 +440,7 @@ export const enUS: Resources = {
     repos: 'Repos',
     webhooks: 'Webhooks',
     events: 'Event Center',
+    observability: 'Run observability',
     code: 'Code',
     digitalEmployees: 'Digital employees',
     employeeAssignments: 'Repository scope',

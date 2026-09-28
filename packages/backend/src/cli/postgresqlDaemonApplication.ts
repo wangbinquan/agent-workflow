@@ -2,6 +2,8 @@ import { composeObservationUsageSource } from '@/modules/task-execution/composit
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
+import { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'
+import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import {
@@ -1931,10 +1933,10 @@ export async function composePostgresqlApplication(
       : { runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies }),
   })
   const platformRoutes: PostgresqlAppCompositionInput['platform'] = Object.freeze({
-    observability: composeObservationPricing({
-      db: input.db,
-      runtimes: runtimeManagement.observations,
-    }),
+    observability: {
+      ...composeObservationPricing({ db: input.db, runtimes: runtimeManagement.observations }),
+      tasks: composeTaskObservations({ db: input.db, taskSource: createTaskObservationFacts }),
+    },
     config: Object.freeze({
       configuration: composeFileApplicationConfiguration({
         configPath: input.configPath,

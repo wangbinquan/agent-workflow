@@ -1,0 +1,30 @@
+.execution-swimlane th:first-child {
+  width: 30%;
+  overflow-wrap: anywhere;
+}
+.execution-swimlane__select {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-1);
+  text-align: start;
+  white-space: normal;
+}
+.execution-swimlane__track {
+  position: relative;
+  overflow: hidden;
+  display: block;
+  height: var(--space-3);
+  background: var(--bg);
+  border-inline: 1px solid var(--border);
+}
+.execution-swimlane__bar {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  min-width: 2px;
+  max-width: 100%;
+  background: var(--accent);
+  border-radius: var(--radius-sm);
+}

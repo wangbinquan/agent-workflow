@@ -1,0 +1,422 @@
+import type {
+  AcceptedObservationInvocation,
+  ObservationAgentSummary,
+  ObservationAttemptFacts,
+  ObservationMetrics,
+  ObservationTaskDetail,
+  ObservationTaskFacts,
+  ObservationTaskPage,
+  ObservationTaskPageQuery,
+  ObservationTaskSummary,
+} from '@agent-workflow/shared'
+import type { Actor } from '@/auth/actor'
+import { sumCnyAmounts } from '../domain/cnyPricing'
+import { intervalDurations } from '../domain/executionIntervals'
+import type { PlatformObservation } from '../domain/platformObservation'
+import { platformObservationKey, type PlatformSyncState } from '../domain/platformSync'
+import { summarizeTokenUsage, TOKEN_BUCKETS } from '../domain/tokenUsage'
+import { selectUsageContributions, type UsageContributionEvidence } from '../domain/usageSelection'
+import type { ObservationSnapshot, ObservationSnapshotSources } from '../ports/taskObservations'
+
+type Invocation = AcceptedObservationInvocation
+type PlatformUsage = Extract<PlatformObservation, { kind: 'usage' }>
+type PlatformValue = Extract<PlatformObservation, { kind: 'valuation' }>
+type Contribution = UsageContributionEvidence & {
+  readonly localModel: { readonly provider: string | null; readonly id: string } | null
+  readonly platformUsage?: PlatformUsage
+  readonly platformValue?: PlatformValue
+}
+interface ValuedContribution {
+  readonly record: Contribution
+  readonly amount: string | null
+  readonly complete: boolean
+  readonly price: string | null
+  readonly reason: string | null
+}
+interface InvocationSummary {
+  readonly invocation: Invocation
+  readonly records: readonly ValuedContribution[]
+  readonly complete: boolean
+  readonly reasons: readonly string[]
+}
+const RECORD_LIMIT = 10_000
+const sourceIdentity = (invocation: Invocation) => {
+  const a = invocation.authority
+  return a.kind === 'local' || a.sourceId === null
+    ? null
+    : {
+        sourceId: a.sourceId,
+        projectId: a.projectId,
+        taskId: a.taskId,
+      }
+}
+const sourceKey = (value: NonNullable<ReturnType<typeof sourceIdentity>>) =>
+  JSON.stringify([value.sourceId, value.projectId, value.taskId])
+function belongsTo(item: PlatformObservation, invocation: Invocation): boolean {
+  const a = invocation.authority,
+    i = item.identity
+  return (
+    a.kind === 'crewstation' &&
+    i.projectId === a.projectId &&
+    i.taskId === a.taskId &&
+    i.subtaskId === a.subtaskId &&
+    i.executionId === a.executionResourceId &&
+    i.executionGeneration === a.executionGeneration
+  )
+}
+function platformContribution(
+  item: PlatformUsage,
+  invocation: Invocation,
+  value?: PlatformValue,
+): Contribution {
+  return {
+    sourceId: item.sourceId,
+    measurement: {
+      invocationId: invocation.invocationId,
+      recordId: item.recordId,
+      // Opaque equality only, never parsed or exposed as a provider/model name.
+      model: item.modelRef === null ? null : { provider: null, id: item.modelRef },
+      ...(item.scope === null ? {} : { scope: item.scope }),
+      ...(item.coveredThroughTurn === null ? {} : { coveredThroughTurn: item.coveredThroughTurn }),
+    },
+    contribution: item.projection.contribution,
+    complete: item.projection.complete,
+    ...(item.projection.coveredThrough === null
+      ? {}
+      : { coveredThrough: item.projection.coveredThrough }),
+    localModel: null,
+    platformUsage: item,
+    ...(value === undefined ? {} : { platformValue: value }),
+  }
+}
+
+async function valueRecord(
+  record: Contribution,
+  invocation: Invocation,
+  sources: ObservationSnapshotSources,
+): Promise<ValuedContribution> {
+  if (invocation.authority.kind === 'local') {
+    const result = await sources.value({
+      invocationId: invocation.invocationId,
+      model: record.localModel,
+      condition: null,
+      usage: record.contribution,
+    })
+    return {
+      record,
+      amount: result.amountDecimal,
+      complete: result.completeness === 'complete',
+      price: result.priceVersionId,
+      reason:
+        result.availability === 'priced'
+          ? result.completeness === 'complete'
+            ? null
+            : 'partial-price'
+          : result.availability,
+    }
+  }
+  const value = record.platformValue
+  // CS amounts value a whole canonical record. A bucket allocation is not a
+  // licence to prorate its amount, or to use an AW rate to fill the difference.
+  const wholeRecord = TOKEN_BUCKETS.every(
+    (bucket) =>
+      record.contribution[bucket] === record.platformUsage!.projection.contribution[bucket],
+  )
+  if (!wholeRecord)
+    return { record, amount: null, complete: false, price: null, reason: 'partial-allocation' }
+  if (value === undefined)
+    return { record, amount: null, complete: false, price: null, reason: 'pending' }
+  return {
+    record,
+    amount: value.amountDecimal,
+    complete: value.availability === 'priced' && value.completeness === 'complete',
+    price: value.priceVersionRef,
+    reason:
+      value.availability === 'priced'
+        ? value.completeness === 'complete'
+          ? null
+          : 'partial-price'
+        : value.availability,
+  }
+}
+
+async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
+  const accepted = await sources.invocations(taskId)
+  let truncated = accepted.truncated
+  const local: Contribution[] = []
+  if (accepted.items.some((i) => i.authority.kind === 'local')) {
+    const byId = new Map(
+      accepted.items.filter((i) => i.authority.kind === 'local').map((i) => [i.invocationId, i]),
+    )
+    let after: string | undefined,
+      scanned = 0
+    do {
+      const page = await sources.local.records(taskId, {
+        limit: Math.min(500, RECORD_LIMIT - scanned),
+        ...(after ? { after } : {}),
+      })
+      scanned += page.items.length
+      for (const record of page.items) {
+        const m = record.measurement,
+          owner = byId.get(m.invocationId)
+        if (
+          owner &&
+          m.taskId === owner.taskId &&
+          m.nodeRunId === owner.nodeRunId &&
+          m.agentId === owner.agentId
+        )
+          local.push({ ...record, localModel: m.model })
+      }
+      after = page.nextCursor
+    } while (after && scanned < RECORD_LIMIT)
+    truncated ||= after !== undefined
+  }
+  const bindings = new Map<string, NonNullable<ReturnType<typeof sourceIdentity>>>()
+  for (const invocation of accepted.items) {
+    const binding = sourceIdentity(invocation)
+    if (binding) bindings.set(sourceKey(binding), binding)
+  }
+  const platform = new Map<string, PlatformObservation[]>(),
+    states = new Map<string, PlatformSyncState>()
+  let scanned = 0
+  for (const [key, binding] of bindings) {
+    const items: PlatformObservation[] = []
+    let after: string | undefined
+    do {
+      if (scanned >= RECORD_LIMIT) {
+        truncated = true
+        break
+      }
+      const page = await sources.platform.records(binding, {
+        limit: Math.min(500, RECORD_LIMIT - scanned),
+        ...(after ? { after } : {}),
+      })
+      scanned += page.items.length
+      states.set(key, page.state)
+      items.push(...page.items)
+      after = page.nextCursor
+    } while (after)
+    platform.set(key, items)
+  }
+  const invocations: InvocationSummary[] = []
+  for (const invocation of accepted.items) {
+    const binding = sourceIdentity(invocation),
+      reasons: string[] = []
+    let records = local.filter((r) => r.measurement.invocationId === invocation.invocationId)
+    if (invocation.authority.kind === 'crewstation') {
+      records = []
+      if (!binding) reasons.push('legacy-unbound')
+      else {
+        const key = sourceKey(binding),
+          items = (platform.get(key) ?? []).filter((item) => belongsTo(item, invocation))
+        const values = new Map(
+          items
+            .filter((item): item is PlatformValue => item.kind === 'valuation')
+            .map((item) => [platformObservationKey(item, 'usage'), item]),
+        )
+        records = items
+          .filter((item): item is PlatformUsage => item.kind === 'usage')
+          .map((item) =>
+            platformContribution(item, invocation, values.get(platformObservationKey(item))),
+          )
+        const state = states.get(key)
+        if (!state || state.status !== 'ready') reasons.push(state?.status ?? 'initial')
+        if (state?.gaps.length) reasons.push('capture-gap')
+      }
+    }
+    let selected: Contribution[] = [],
+      complete = false
+    try {
+      const selection = selectUsageContributions(records)
+      selected = selection.records
+      complete = selection.allSelectedComplete
+      if (selection.ambiguousOverlaps || selection.unavailableSummaries)
+        reasons.push('coverage-partial')
+    } catch {
+      // Conflicting native ancestry has no defensible disjoint sum.
+      reasons.push('coverage-conflict')
+    }
+    const valued: ValuedContribution[] = []
+    for (const record of selected) valued.push(await valueRecord(record, invocation, sources))
+    invocations.push({ invocation, records: valued, complete, reasons })
+  }
+  const sourceStates: ObservationTaskDetail['sources'][number][] = [...states.values()].map(
+    (s) => ({
+      sourceId: s.binding.sourceId,
+      status: s.status,
+      asOf: s.asOf,
+      error: s.error,
+      costsVisible: s.costVisibility !== 'hidden' && s.costsReady,
+      hasGaps: s.gaps.length > 0,
+    }),
+  )
+  if (
+    accepted.items.some((i) => i.authority.kind === 'crewstation' && i.authority.sourceId === null)
+  )
+    sourceStates.push({
+      sourceId: '',
+      status: 'legacy-unbound',
+      asOf: null,
+      error: null,
+      costsVisible: false,
+      hasGaps: false,
+    })
+  return { invocations, truncated, sources: sourceStates }
+}
+
+function metrics(
+  invocations: readonly InvocationSummary[],
+  truncated: boolean,
+): ObservationMetrics {
+  const rows = invocations.flatMap((i) => i.records),
+    tokens = summarizeTokenUsage(rows.map((r) => r.record.contribution))
+  const observedInvocations = invocations.filter((i) => i.records.length > 0).length
+  const complete =
+    invocations.length > 0 &&
+    observedInvocations === invocations.length &&
+    !truncated &&
+    invocations.every((i) => i.complete && i.reasons.length === 0)
+  const amounts = rows.flatMap((r) => (r.amount === null ? [] : [r.amount]))
+  return {
+    invocations: invocations.length,
+    observedInvocations,
+    records: rows.length,
+    tokens: {
+      known: tokens.known,
+      totalKnown: tokens.totalKnown,
+      hasKnown: rows.some((r) => TOKEN_BUCKETS.some((b) => r.record.contribution[b] !== null)),
+      complete,
+      unknownBuckets: tokens.unknownBuckets,
+    },
+    cost: {
+      currency: 'CNY',
+      knownAmount: amounts.length ? sumCnyAmounts(amounts) : null,
+      complete: complete && rows.every((r) => r.complete),
+      pricedRecords: amounts.length,
+      priceVersionIds: [...new Set(rows.flatMap((r) => (r.price === null ? [] : [r.price])))],
+      reasons: [
+        ...new Set([
+          ...invocations.flatMap((i) => i.reasons),
+          ...rows.flatMap((r) => (r.reason === null ? [] : [r.reason])),
+          ...(observedInvocations < invocations.length || invocations.length === 0
+            ? ['not-observed']
+            : []),
+          ...(truncated ? ['truncated'] : []),
+        ]),
+      ],
+    },
+    authorities: [...new Set(invocations.map((i) => i.invocation.authority.kind))],
+    truncated,
+  }
+}
+function taskSummary(
+  task: ObservationTaskFacts,
+  loaded: Awaited<ReturnType<typeof loadTask>>,
+  asOf: number,
+): ObservationTaskSummary {
+  const end = Math.min(asOf, task.finishedAt ?? asOf)
+  return {
+    task,
+    metrics: metrics(loaded.invocations, loaded.truncated),
+    wallMs: Math.max(0, end - task.startedAt),
+    runningMs:
+      task.runningMs + (task.runningSince === null ? 0 : Math.max(0, end - task.runningSince)),
+  }
+}
+function attemptInterval(
+  attempt: ObservationAttemptFacts,
+  task: ObservationTaskFacts,
+  asOf: number,
+) {
+  const start = attempt.startedAt
+  const open =
+    attempt.finishedAt === null && attempt.status === 'running' && task.finishedAt === null
+  const end = attempt.finishedAt ?? (open ? asOf : null)
+  if (start === null || end === null || end < start || start > asOf) return null
+  return { start, end: Math.min(end, asOf), open }
+}
+
+export function createTaskObservationQueries(input: {
+  readonly snapshot: ObservationSnapshot
+  readonly now: () => number
+}) {
+  return {
+    list: (actor: Actor, query: ObservationTaskPageQuery): Promise<ObservationTaskPage> =>
+      input.snapshot.read(async (sources) => {
+        const asOf = input.now(),
+          page = await sources.tasks.list({ actor, query })
+        const items: ObservationTaskSummary[] = []
+        for (const task of page.items)
+          items.push(taskSummary(task, await loadTask(sources, task.id), asOf))
+        return {
+          items,
+          nextCursor: page.nextCursor,
+          asOf,
+          projectionVersion: 1,
+          cohort: 'started',
+          taskScope: 'direct',
+          filtersEcho: query,
+        }
+      }),
+    detail: (actor: Actor, taskId: string): Promise<ObservationTaskDetail | null> =>
+      input.snapshot.read(async (sources) => {
+        const asOf = input.now(),
+          task = await sources.tasks.get(actor, taskId)
+        if (!task) return null
+        const loaded = await loadTask(sources, taskId),
+          facts = await sources.tasks.attempts(taskId, 1000)
+        const groups = new Map<string, InvocationSummary[]>()
+        for (const value of loaded.invocations) {
+          const i = value.invocation,
+            key = JSON.stringify([i.agentId, i.agentRevision, i.purpose])
+          const group = groups.get(key) ?? []
+          group.push(value)
+          groups.set(key, group)
+        }
+        const agents: ObservationAgentSummary[] = [...groups.values()].map((group) => ({
+          agentId: group[0]!.invocation.agentId,
+          agentRevision: group[0]!.invocation.agentRevision,
+          purpose: group[0]!.invocation.purpose,
+          metrics: metrics(group, loaded.truncated),
+        }))
+        const attempts = facts.items.map((attempt) => {
+          const group = loaded.invocations.filter((i) => i.invocation.nodeRunId === attempt.id)
+          const agents = [
+            ...new Map(
+              group.map(({ invocation: i }) => [
+                JSON.stringify([i.agentId, i.agentRevision]),
+                { id: i.agentId, revision: i.agentRevision },
+              ]),
+            ).values(),
+          ]
+          return {
+            attempt,
+            agents,
+            metrics: metrics(group, loaded.truncated),
+            interval: attemptInterval(attempt, task, asOf),
+          }
+        })
+        const measuredAttempts = attempts.filter((a) => a.metrics.invocations > 0)
+        const intervals = measuredAttempts.flatMap((a) => (a.interval === null ? [] : [a.interval]))
+        const attemptIds = new Set(attempts.map((a) => a.attempt.id))
+        return {
+          ...taskSummary(task, loaded, asOf),
+          asOf,
+          projectionVersion: 1,
+          taskScope: 'direct',
+          agents,
+          attempts,
+          attemptsTruncated: facts.truncated,
+          intervals: {
+            ...intervalDurations(intervals, { from: 0, to: asOf, asOf }),
+            knownAttempts: intervals.length,
+            unknownAttempts: measuredAttempts.filter((a) => a.interval === null).length,
+            unlinkedInvocations: loaded.invocations.filter(
+              (i) => i.invocation.nodeRunId === null || !attemptIds.has(i.invocation.nodeRunId),
+            ).length,
+          },
+          sources: loaded.sources,
+        }
+      }),
+  }
+}

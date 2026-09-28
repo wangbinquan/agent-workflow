@@ -1,3 +1,4 @@
+import { timeoutSignal } from '@/util/timeoutSignal'
 import {
   PlatformObservationPageSchema,
   PlatformObservationSourceError,
@@ -64,66 +65,72 @@ export function createCrewStationObservationSource(input: {
         if (query.cursor !== undefined) url.searchParams.set('cursor', query.cursor)
       }
       query.signal?.throwIfAborted()
-      const deadline = AbortSignal.timeout(timeoutMs)
-      const signal = query.signal ? AbortSignal.any([query.signal, deadline]) : deadline
-      let response: Response
+      const deadline = timeoutSignal(timeoutMs)
+      const signal = query.signal
+        ? AbortSignal.any([query.signal, deadline.signal])
+        : deadline.signal
       try {
-        const headers = await abortable(input.headers, signal)
-        response = await abortable(() => request(url, { method: 'GET', headers, signal }), signal)
-      } catch {
-        if (query.signal?.aborted) throw query.signal.reason
-        throw new PlatformObservationSourceError(
-          'unavailable',
-          'Platform observation source is unavailable',
-        )
-      }
-      if (!response.ok) {
-        const code =
-          response.status === 401 || response.status === 403
-            ? 'access-unavailable'
-            : response.status === 409 || response.status === 410
-              ? 'snapshot-required'
-              : response.status === 404
-                ? 'source-not-found'
-                : response.status === 501
-                  ? 'capability-unavailable'
-                  : 'unavailable'
-        throw new PlatformObservationSourceError(
-          code,
-          'Platform observation response ' + response.status,
-        )
-      }
-      let body: unknown
-      try {
-        body = await abortable(() => response.json(), signal)
-      } catch (error) {
-        if (query.signal?.aborted) throw query.signal.reason
-        if (signal.aborted || !(error instanceof SyntaxError))
+        let response: Response
+        try {
+          const headers = await abortable(input.headers, signal)
+          response = await abortable(() => request(url, { method: 'GET', headers, signal }), signal)
+        } catch {
+          if (query.signal?.aborted) throw query.signal.reason
           throw new PlatformObservationSourceError(
             'unavailable',
-            'Platform observation body is unavailable',
+            'Platform observation source is unavailable',
           )
-        throw new PlatformObservationSourceError(
-          'invalid-response',
-          'Platform observation body is not valid JSON',
+        }
+        if (!response.ok) {
+          const code =
+            response.status === 401 || response.status === 403
+              ? 'access-unavailable'
+              : response.status === 409 || response.status === 410
+                ? 'snapshot-required'
+                : response.status === 404
+                  ? 'source-not-found'
+                  : response.status === 501
+                    ? 'capability-unavailable'
+                    : 'unavailable'
+          throw new PlatformObservationSourceError(
+            code,
+            'Platform observation response ' + response.status,
+          )
+        }
+        let body: unknown
+        try {
+          body = await abortable(() => response.json(), signal)
+        } catch (error) {
+          if (query.signal?.aborted) throw query.signal.reason
+          if (signal.aborted || !(error instanceof SyntaxError))
+            throw new PlatformObservationSourceError(
+              'unavailable',
+              'Platform observation body is unavailable',
+            )
+          throw new PlatformObservationSourceError(
+            'invalid-response',
+            'Platform observation body is not valid JSON',
+          )
+        }
+        const parsed = PlatformObservationPageSchema.safeParse(body)
+        if (
+          !parsed.success ||
+          parsed.data.projectId !== query.projectId ||
+          parsed.data.taskId !== query.taskId ||
+          parsed.data.mode !== query.mode ||
+          (query.mode === 'snapshot' &&
+            query.snapshotId !== undefined &&
+            parsed.data.mode === 'snapshot' &&
+            parsed.data.snapshotId !== query.snapshotId)
         )
+          throw new PlatformObservationSourceError(
+            'invalid-response',
+            'Platform observation page does not match the requested contract',
+          )
+        return parsed.data
+      } finally {
+        deadline.cancel()
       }
-      const parsed = PlatformObservationPageSchema.safeParse(body)
-      if (
-        !parsed.success ||
-        parsed.data.projectId !== query.projectId ||
-        parsed.data.taskId !== query.taskId ||
-        parsed.data.mode !== query.mode ||
-        (query.mode === 'snapshot' &&
-          query.snapshotId !== undefined &&
-          parsed.data.mode === 'snapshot' &&
-          parsed.data.snapshotId !== query.snapshotId)
-      )
-        throw new PlatformObservationSourceError(
-          'invalid-response',
-          'Platform observation page does not match the requested contract',
-        )
-      return parsed.data
     },
   }
 }

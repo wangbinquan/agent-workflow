@@ -5,6 +5,8 @@ import type { SaveObservationPrice } from '@agent-workflow/shared'
 import { createObservationPricing } from '../src/modules/run-observability/application/pricing'
 import { createObservationPriceStore } from '../src/modules/run-observability/infrastructure/pricingPersistence'
 import { mountObservationRoutes } from '../src/modules/run-observability/composition/observationRoutes'
+import { composeTaskObservations } from '../src/modules/run-observability/composition/taskObservations'
+import { createTaskObservationFacts } from '../src/modules/task-execution/composition/taskObservationFacts'
 import { buildActor } from '../src/auth/actor'
 import { errorHandler } from '../src/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
@@ -203,7 +205,10 @@ describeEachProvider('RFC-371 immutable runtime CNY pricing', (harness) => {
     }
     app.use('*', injectActor)
     app.onError(errorHandler)
-    mountObservationRoutes(app, f)
+    mountObservationRoutes(app, {
+      ...f,
+      tasks: composeTaskObservations({ db: harness.db, taskSource: createTaskObservationFacts }),
+    })
     const path = '/api/observability/pricing/runtimes/' + ID + '/versions'
     expect((await app.request('/api/observability/pricing/runtimes')).status).toBe(200)
     const save = (input: unknown) =>

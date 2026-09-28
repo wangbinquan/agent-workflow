@@ -395,6 +395,21 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       namedCalls(functionBody(server, 'composeProviderAppDeps'), server, 'mountObservationRoutes'),
     ).toHaveLength(1)
   })
+  test('RFC-371 task observations bind TE facts to the same selected snapshot database', () => {
+    for (const [source, name, database] of [
+      [pg, 'composePostgresqlApplication', 'input.db'],
+      [server, 'composeSqliteApiRouteMounts', 'deps.db'],
+    ] as const) {
+      const calls = namedCalls(functionBody(source, name), source, 'composeTaskObservations')
+      expect(calls).toHaveLength(1)
+      const argument = calls[0]!.arguments[0]!
+      if (!ts.isObjectLiteralExpression(argument)) throw new Error('Expected observation bindings')
+      expect(argument.properties.map((property) => compact(property, source))).toEqual([
+        `db:${database}`,
+        'taskSource:createTaskObservationFacts',
+      ])
+    }
+  })
   test('RFC-363 URL preparation uses the existing root IA authority context factory', () => {
     for (const [source, expected] of [
       [pg, 1],
@@ -667,7 +682,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: Intent and webhook routes receive the same live configuration query.
       // RFC-371: standalone task execution receives mandatory durable invocation accounting.
       // RFC-371: the same database now supplies the committed numeric source participant.
-      'f5d1605ee55bd8568a70331cf63c65e9e11cbbf39e81363eee5d0f7acf862487',
+      // RFC-371: task observation queries bind the selected DB and TE facts inside one read snapshot.
+      '2cb850683f445721d0cd910c80615796dd4a00d07ff54445cc36239ef8408ee0',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -876,7 +892,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 交给数字员工；旧字符串 participant 与适配器删除。装配图的变化是有意的，
       // 判据在 `tests/rfc368-*.test.ts`。
       // RFC-370: Intent and webhook configuration bindings change; route order and lifetime stay fixed.
-      'd3ee60af90a61614f96b54875e7e35ebf6fa3b0c1cf7b2a355966a59cc5c1de9',
+      // RFC-371: task observation queries bind the selected DB and TE facts inside one read snapshot.
+      'ef94353a5bb9395b2ef6c1fb02b13e46c8bf87ce6c332dc2b826117fe32c2cf4',
     )
     expect(
       namedCalls(

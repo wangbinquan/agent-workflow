@@ -12,9 +12,11 @@ import type {
 } from '@agent-workflow/shared'
 import { buildPermissionCatalogResources } from './permissionCatalog'
 import { observationPricingZh, type ObservationPricingMessages } from './observationPricing'
+import { runObservabilityZh, type RunObservabilityMessages } from './runObservability'
 
 export interface Resources {
   observationPricing: ObservationPricingMessages
+  runObservability: RunObservabilityMessages
   permissions: ReturnType<typeof buildPermissionCatalogResources>
   tabBar: {
     scrollStart: string
@@ -381,6 +383,7 @@ export interface Resources {
     repos: string
     webhooks: string
     events: string
+    observability: string
     code: string
     digitalEmployees: string
     employeeAssignments: string
@@ -6783,6 +6786,7 @@ export interface Resources {
 
 export const zhCN: Resources = {
   observationPricing: observationPricingZh,
+  runObservability: runObservabilityZh,
   presence: {
     online: '在线',
     offline: '离线',
@@ -7191,6 +7195,7 @@ export const zhCN: Resources = {
     repos: '远端仓',
     webhooks: 'Webhook',
     events: '事件中心',
+    observability: '运行观测与统计',
     code: '代码',
     digitalEmployees: '数字员工',
     employeeAssignments: '适用仓库',

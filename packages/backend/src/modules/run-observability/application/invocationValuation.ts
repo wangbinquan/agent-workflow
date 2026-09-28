@@ -26,8 +26,8 @@ export type InvocationValuation =
 
 /** Local estimation always uses the accepted catalogue. CS never falls through to local tariffs. */
 export function createInvocationValuation(
-  invocations: ObservationInvocationStore,
-  prices: ObservationPriceStore,
+  invocations: Pick<ObservationInvocationStore, 'get'>,
+  prices: Pick<ObservationPriceStore, 'priceAt'>,
 ) {
   return async (input: {
     readonly invocationId: string
