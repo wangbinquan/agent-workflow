@@ -1,4 +1,6 @@
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
+import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
+import { mountObservationRoutes } from '@/modules/run-observability/composition/observationRoutes'
 import type { HttpAuthenticationParticipant } from '@/modules/identity-access/public/participants'
 import {
   composeLocalHttpAuthentication,
@@ -1046,6 +1048,7 @@ export interface AppPublicRouteMounts {
  * fixed order for SQLite and PostgreSQL alike.
  */
 export interface AppApiRouteMounts {
+  readonly observability: AppRouteMount
   readonly config: AppRouteMount
   readonly maintenance: AppRouteMount
   readonly daemon: AppRouteMount
@@ -1200,6 +1203,7 @@ export interface ProviderPublicRouteComposition {
 }
 
 export interface ProviderPlatformRouteComposition {
+  readonly observability: Parameters<typeof mountObservationRoutes>[1]
   readonly config: Parameters<typeof mountConfigRoutes>[1]
   readonly maintenance: Parameters<typeof mountMaintenanceRoutes>[1]
   readonly daemon: Parameters<typeof mountDaemonRoutes>[1]
@@ -1409,6 +1413,7 @@ export function composeProviderAppDeps<TProvider extends DaemonProviderCore['pro
 
   const apiRoutes = Object.freeze({
     config: (app: Hono) => mountConfigRoutes(app, input.platform.config),
+    observability: (app: Hono) => mountObservationRoutes(app, input.platform.observability),
     maintenance: (app: Hono) => mountMaintenanceRoutes(app, input.platform.maintenance),
     daemon: (app: Hono) => mountDaemonRoutes(app, input.platform.daemon),
     plantuml: (app: Hono) => mountPlantumlRoutes(app, input.platform.plantuml),
@@ -3409,6 +3414,11 @@ function composeSqliteApiRouteMounts(
           concurrencyHotApply: deps.configConcurrencyHotApply,
         }),
       }),
+    observability: (app) =>
+      mountObservationRoutes(
+        app,
+        composeObservationPricing({ db: deps.db, runtimes: runtimeManagement.observations }),
+      ),
     maintenance: (app) =>
       mountMaintenanceRoutes(app, {
         configuration,
@@ -3661,6 +3671,7 @@ function composeSqliteApiRouteMounts(
  */
 export function mountApiRoutes(app: Hono, deps: ComposedAppDeps): void {
   const routes = deps.apiRoutes
+  routes.observability(app)
   routes.config(app)
   routes.maintenance(app)
   routes.daemon(app)

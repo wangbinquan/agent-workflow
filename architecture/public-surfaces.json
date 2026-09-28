@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 909,
-    "exactEntrypointFiles": 67,
+    "consumers": 911,
+    "exactEntrypointFiles": 69,
     "governedFieldSurfaces": 5,
-    "methods": 1085,
+    "methods": 1090,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21003,
-    "symbols": 1020
+    "recursiveFields": 21019,
+    "symbols": 1023
   },
   "entries": [
     {
@@ -117599,6 +117599,175 @@
       "authority": "request-authority",
       "budget": {
         "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:save.$parameter:createdBy",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:save.$parameter:input",
+          "type": "z.infer<typeof SaveObservationPriceSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:save.$parameter:registrationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:save.$return",
+          "type": "z.infer<typeof ObservationPriceVersionSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/run-observability/public/commands.ts",
+      "id": "public:run-observability:commands:ObservationPricingCommands",
+      "members": [
+        "save"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "save",
+          "signatureDigest": "sha256:7246b03d898137a4f9572ca2e49a52834fe4847fd695b49881a922dc939cbead"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/commands.ts#ObservationPricingCommands",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:0a4e7f42ead8da244cb1985bd22f6e634552e1f28e3dd3028d557a41cadab710",
+      "status": "target-context-current-surface",
+      "symbol": "ObservationPricingCommands",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:history.$parameter:query",
+          "type": "z.infer<typeof ObservationPricePageQuerySchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:history.$parameter:registrationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:history.$return.items",
+          "type": "readonly ObservationPriceVersion[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:history.$return.nextBeforeRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:history.$return.revision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:priceAtAcceptance.$parameter:input",
+          "type": "z.infer<typeof ObservationPriceIdentitySchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:priceAtAcceptance.$parameter:input.acceptedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:priceAtAcceptance.$parameter:input.registrationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:priceAtAcceptance.$return.$variant:0",
+          "type": "z.infer<typeof ObservationPriceVersionSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:priceAtAcceptance.$return.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:runtimes.$return.runtimes",
+          "type": "readonly ObservationPricingRuntime[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/run-observability/public/queries.ts",
+      "id": "public:run-observability:queries:ObservationPricingQueries",
+      "members": [
+        "history",
+        "priceAtAcceptance",
+        "runtimes"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "history",
+          "signatureDigest": "sha256:205675d6cea712f7e8bfc85f8929ea5007bf398987daaaddb151b441df4d1b20"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "priceAtAcceptance",
+          "signatureDigest": "sha256:1008d2befdf358bebb8a8053fa6861de863e929f7036e4c7965318efbbe68791"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "runtimes",
+          "signatureDigest": "sha256:4f1724c941ed75c3dc61a84bad4289d695238d6e4df1d839e2f646df97d0deae"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/queries.ts#ObservationPricingQueries",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:9e1e75dc5894d5bb42d224fd5a4710d2619a523ec37ece23bb6e5919910e240e",
+      "status": "target-context-current-surface",
+      "symbol": "ObservationPricingQueries",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
         "maxTopLevelFields": 15,
         "maxTransitiveLeafFields": 28,
         "maxUnionVariants": 24
@@ -122750,6 +122919,69 @@
       "signatureDigest": "sha256:d45960f202f59137b2f6306ed92714be58cd9b7b10bb7482cbad8c93625f44f8",
       "status": "target-context-current-surface",
       "symbol": "RuntimeModelQueryResult",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:121f6dbf781d0fc511be",
+        "import:3368f518f2d641dd7e40"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:121f6dbf781d0fc511be",
+            "import:3368f518f2d641dd7e40"
+          ],
+          "fieldPath": "$method:directory.$return.runtimes",
+          "type": "readonly {\n      readonly registrationId: string\n      readonly name: string\n      readonly configurationRevision: number\n      readonly protocol: RuntimeKind\n      readonly model: string | null\n      readonly enabled: boolean\n    }[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/queries.ts",
+      "id": "public:runtime-management:queries:RuntimeObservationQueries",
+      "members": [
+        "directory"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "directory",
+          "signatureDigest": "sha256:8a9e5fb776a9dcd37036de78d667bfa9df6a5d0290d0299047862101478bd9ef"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#RuntimeObservationQueries",
+      "productionConsumers": [
+        {
+          "context": "run-observability",
+          "edgeId": "import:121f6dbf781d0fc511be",
+          "file": "packages/backend/src/modules/run-observability/composition/pricing.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/run-observability/composition/pricing.ts#$file"
+        },
+        {
+          "context": "run-observability",
+          "edgeId": "import:3368f518f2d641dd7e40",
+          "file": "packages/backend/src/modules/run-observability/ports/pricing.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/run-observability/ports/pricing.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:e428aaeb3ff3a39443c18c95c03b5b90377f4e5d6d6bda47f0d8c25c9b8ecf73",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeObservationQueries",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -166241,7 +166473,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:460a062ad98dcfa9129e2fbe08de8a59e7c8e36ad47035034cbe19c2873e26e0",
+  "sourceDigest": "sha256:d818dbdc105d42fbea4ffa31e2ce633ad6bc3fd1203a801a912ad276c3e69c6d",
   "targetContexts": [
     "collaboration",
     "development-automation",
@@ -166254,6 +166486,7 @@
     "knowledge-evolution",
     "memory",
     "resource-catalog",
+    "run-observability",
     "runtime-management",
     "source-control",
     "system-operations",

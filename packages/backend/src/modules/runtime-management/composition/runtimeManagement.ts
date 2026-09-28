@@ -5,6 +5,7 @@ import { withRuntimeProbeConfigFence } from '../infrastructure/runtimeProbeFence
 import type { RuntimeRegistryOperations } from '@/modules/runtime-management/application/ports/runtimeRegistry'
 import { createRuntimeRegistryEffects } from '../infrastructure/runtimeRegistryEffects'
 import { createRuntimeManagement } from '../application/runtimeManagement'
+import { createRuntimeObservationQueries } from '../application/runtimeObservationQueries'
 import { createRuntimeManagementEffects } from '../infrastructure/runtimeManagementEffects'
 
 export type { RuntimeDiagnosticDependencies } from '../infrastructure/runtimeManagementEffects'
@@ -27,6 +28,7 @@ export function composeRuntimeManagement(
     }),
   })
   return Object.freeze({
+    observations: createRuntimeObservationQueries(input.runtimeRegistry),
     models: application.models,
     configuration: createRuntimeProfileConfigurationCommands(input.runtimeRegistry),
     runtimes: Object.freeze({

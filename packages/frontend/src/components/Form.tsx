@@ -99,7 +99,7 @@ interface TextInputProps {
   value: string
   onChange: (v: string) => void
   placeholder?: string
-  type?: 'text' | 'search' | 'email' | 'password' | 'url' | 'tel' | 'number'
+  type?: 'text' | 'search' | 'email' | 'password' | 'url' | 'tel' | 'number' | 'datetime-local'
   id?: string
   name?: string
   autoComplete?: string

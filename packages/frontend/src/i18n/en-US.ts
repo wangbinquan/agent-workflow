@@ -3,8 +3,10 @@
 
 import type { Resources } from './zh-CN'
 import { buildPermissionCatalogResources } from './permissionCatalog'
+import { observationPricingEn } from './observationPricing'
 
 export const enUS: Resources = {
+  observationPricing: observationPricingEn,
   permissions: buildPermissionCatalogResources('en-US'),
   tabBar: {
     scrollStart: 'Show more sections before',

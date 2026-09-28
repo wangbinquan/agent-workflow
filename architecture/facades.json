@@ -6218,5 +6218,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:460a062ad98dcfa9129e2fbe08de8a59e7c8e36ad47035034cbe19c2873e26e0"
+  "sourceDigest": "sha256:d818dbdc105d42fbea4ffa31e2ce633ad6bc3fd1203a801a912ad276c3e69c6d"
 }

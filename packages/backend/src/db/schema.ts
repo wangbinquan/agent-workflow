@@ -49,6 +49,44 @@ import { providerAwareSqliteTable } from './providerSchema'
 
 const sqliteTable = providerAwareSqliteTable(physicalSqliteTable)
 
+// RFC-371: immutable CNY tariffs owned exclusively by run-observability.
+// No runtime FK: deleting and recreating a name must retain separate price histories.
+export const observationPriceHeads = sqliteTable('observation_price_heads', {
+  registrationId: text('registration_id').primaryKey(),
+  revision: integer('revision').notNull().default(0),
+})
+export const observationPriceVersions = sqliteTable(
+  'observation_price_versions',
+  {
+    id: text('id').primaryKey(),
+    registrationId: text('registration_id').notNull(),
+    revision: integer('revision').notNull(),
+    requestKey: text('request_key').notNull(),
+    fingerprint: text('fingerprint').notNull(),
+    configurationRevision: integer('configuration_revision').notNull(),
+    protocol: text('protocol').notNull(),
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    condition: text('condition'),
+    effectiveFrom: integer('effective_from').notNull(),
+    // Validated ObservationPriceVersion JSON. Decimal rates remain exact strings.
+    document: text('document').notNull(),
+  },
+  (table) => [
+    uniqueIndex('observation_price_revision_idx').on(table.registrationId, table.revision),
+    uniqueIndex('observation_price_request_idx').on(table.registrationId, table.requestKey),
+    index('observation_price_match_idx').on(
+      table.registrationId,
+      table.configurationRevision,
+      table.protocol,
+      table.provider,
+      table.model,
+      table.condition,
+      table.effectiveFrom,
+    ),
+  ],
+)
+
 // -----------------------------------------------------------------------------
 // agents — DB is source of truth. Frontmatter fields are split into columns.
 // -----------------------------------------------------------------------------

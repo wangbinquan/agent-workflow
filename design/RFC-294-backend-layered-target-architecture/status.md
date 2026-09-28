@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:460a062ad98dcfa9129e2fbe08de8a59e7c8e36ad47035034cbe19c2873e26e0`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:d818dbdc105d42fbea4ffa31e2ce633ad6bc3fd1203a801a912ad276c3e69c6d`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,14 +10,14 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1865 |
+| backend production TS 文件 | 1878 |
 | `services/` 文件 | 291 |
-| `modules/**` 文件 / 非空 context | 1315 / 17 |
+| `modules/**` 文件 / 非空 context | 1328 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
-| production ambient wiring seam | 494 |
+| production ambient wiring seam | 497 |
 | background work entries | 332 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 76 |
@@ -29,17 +29,17 @@
 
 | 账本 | 条目数 |
 | --- | --- |
-| `ambientWiring` | 494 |
-| `architectureExceptions` | 4871 |
+| `ambientWiring` | 497 |
+| `architectureExceptions` | 4884 |
 | `backgroundJobs` | 332 |
-| `crossContextImports` | 5480 |
+| `crossContextImports` | 5496 |
 | `facades` | 291 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25083 |
-| `mutationEntrypoints` | 1743 |
+| `moduleSymbolOwners` | 25169 |
+| `mutationEntrypoints` | 1748 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1020 |
-| `transactionExternalEffects` | 257 |
+| `publicSurfaces` | 1023 |
+| `transactionExternalEffects` | 258 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
 
@@ -75,8 +75,8 @@
 | collaboration / domain | 14 |
 | development-automation / composition | 14 |
 | digital-employee / application | 14 |
+| runtime-management / application | 13 |
 | identity-access / infrastructure | 12 |
-| runtime-management / application | 12 |
 | code-capability / domain | 11 |
 | memory / application | 11 |
 | resource-catalog / domain | 11 |
@@ -110,6 +110,7 @@
 | development-automation / public | 4 |
 | integration / domain | 4 |
 | knowledge-evolution / application | 4 |
+| run-observability / domain | 4 |
 | runtime-management / public | 4 |
 | source-control / composition | 4 |
 | system-operations / public | 4 |
@@ -125,6 +126,9 @@
 | intent / public | 2 |
 | knowledge-evolution / inbound | 2 |
 | knowledge-evolution / infrastructure | 2 |
+| run-observability / composition | 2 |
+| run-observability / infrastructure | 2 |
+| run-observability / public | 2 |
 | source-control / ports | 2 |
 | task-catalog / composition | 2 |
 | code-capability / public | 1 |
@@ -133,6 +137,8 @@
 | intent / inbound | 1 |
 | knowledge-evolution / composition | 1 |
 | memory / composition | 1 |
+| run-observability / application | 1 |
+| run-observability / ports | 1 |
 | runtime-management / domain | 1 |
 | task-catalog / application | 1 |
 | task-catalog / public | 1 |
@@ -202,10 +208,10 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3212 |
-| legacy-inbound | 1472 |
-| infrastructure-external | 282 |
-| offered-consumption | 189 |
+| legacy-outbound | 3222 |
+| legacy-inbound | 1475 |
+| infrastructure-external | 283 |
+| offered-consumption | 191 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 83 |
 | authority-type-only | 77 |
@@ -217,8 +223,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3212 |
-| legacy-inbound | 1472 |
+| legacy-outbound | 3222 |
+| legacy-inbound | 1475 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 83 |
 | no-circular | 6 |
@@ -229,8 +235,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2645 |
-| W9-D | 791 |
+| W9 | 2654 |
+| W9-D | 792 |
 | W4-E1 | 652 |
 | W4 | 201 |
 | W4-B | 187 |
@@ -239,6 +245,7 @@
 | W4-E9 | 71 |
 | W2-D/W3/W5 | 8 |
 | W9-E | 6 |
+| RFC-371 | 3 |
 | W4-E10 | 3 |
 | W4-E5 | 2 |
 
@@ -256,7 +263,7 @@
 | identity-access | 65 |
 | digital-employee | 51 |
 | development-automation | 39 |
-| runtime-management | 32 |
+| runtime-management | 33 |
 | knowledge-evolution | 25 |
 | execution-contract | 22 |
 | memory | 22 |
@@ -264,9 +271,10 @@
 | code-capability | 19 |
 | integration | 14 |
 | intent | 10 |
+| run-observability | 2 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1020）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 138 / 1023）
 
 | context | 数量 |
 | --- | --- |
@@ -281,6 +289,7 @@
 | identity-access | 6 |
 | integration | 5 |
 | execution-contract | 3 |
+| run-observability | 2 |
 | task-catalog | 1 |
 
 ## 7. Required ports（`cross-context-imports.json` → `requiredPorts`）

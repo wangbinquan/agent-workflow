@@ -74,6 +74,7 @@ import { Select } from '@/components/Select'
 import { StatusChip } from '@/components/StatusChip'
 import { TableViewport } from '@/components/TableViewport'
 import { RuntimeList } from '@/components/RuntimeList'
+import { RuntimePricing } from '@/components/observability/RuntimePricing'
 import { UnsavedChangesGuard } from '@/components/split/UnsavedChangesGuard'
 import { describeApiError, setLanguage, type SupportedLanguage } from '@/i18n'
 import { isSupportedLanguage } from '@/hooks/useLanguage'
@@ -545,6 +546,7 @@ export function RuntimeTab({
       data-flash={flashing ? '1' : '0'}
     >
       <RuntimeList restoreFocusFallbackRef={focusFallbackRef} />
+      <RuntimePricing />
     </div>
   )
 }

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1743,
+    "entries": 1748,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20502,6 +20502,75 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/application/pricing.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/pricing.ts#createObservationPricing",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/pricing.ts#createObservationPricing",
+      "symbol": "createObservationPricing",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/application/pricing.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/pricing.ts#savePrice",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/pricing.ts#savePrice",
+      "symbol": "savePrice",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts#createObservationPriceStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/pricingPersistence.ts#createObservationPriceStore",
+      "symbol": "createObservationPriceStore",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -21031,6 +21100,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeManagement.ts#RuntimeManagementApplication",
       "symbol": "RuntimeManagementApplication",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/application/runtimeObservationQueries.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/application/runtimeObservationQueries.ts#createRuntimeObservationQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeObservationQueries.ts#createRuntimeObservationQueries",
+      "symbol": "createRuntimeObservationQueries",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -21838,6 +21931,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#RuntimeModelQueryResult",
       "symbol": "RuntimeModelQueryResult",
+      "targetContext": "runtime-management",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/public/queries.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/public/queries.ts#RuntimeObservationQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/queries.ts#RuntimeObservationQueries",
+      "symbol": "RuntimeObservationQueries",
       "targetContext": "runtime-management",
       "targetLayer": "public"
     },
@@ -41659,7 +41776,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:460a062ad98dcfa9129e2fbe08de8a59e7c8e36ad47035034cbe19c2873e26e0",
+  "sourceDigest": "sha256:d818dbdc105d42fbea4ffa31e2ce633ad6bc3fd1203a801a912ad276c3e69c6d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

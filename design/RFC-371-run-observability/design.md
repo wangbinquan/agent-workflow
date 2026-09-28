@@ -75,10 +75,11 @@ type UsageEnvelopeV1 = {
 
 1. `(sourceId, invocationId, recordId, revision)` 唯一。重复同值 no-op；同键不同值进入冲突诊断，不再次贡献。
 2. delta 必须有稳定事件 ID；不能用时间戳 + 用量猜测唯一性。
-3. cumulative 是一个 invocation 内的快照；同来源按 revision 替换，不把每个快照相加。最终上报校正 provisional，包括允许向下修订；修订记录保留审计，不用盲目 `max` 隐藏差异。
-4. 父 final 与 leaf deltas 的覆盖关系由 driver 合同确定；完成对账后原 provisional 被替代，不能同时入账。
-5. 最后一次进程退出不一定收到 usage；关闭执行不等于 coverage complete。硬崩溃后展示已持久化的已知用量与缺口。
-6. 旧 NodeRun 的非空总量可回填 attempt 级 legacy record；不合成 LLM request/spans。旧 0 缺少 presence 证据时标 unknown，不能自动写“零消耗”。
+3. cumulative 的计量范围由版本化 adapter 明确为 invocation 或 native-session；不能默认每次 invocation 都从零开始。native-session 以 runtime 注册身份、原生 session/lineage/generation、模型与包含范围保存快照；恢复调用先扣除受理时已知的同谱系基线再归属本次 invocation。例如首次100、恢复累计130，只增加30。fork 必须保存继承基线，clear/reset 新建代次；基线未知的余额标未归因/partial，不全归给新调用。同来源按有序 revision 替换，不以到达顺序覆盖。
+4. 有依据的有效 final/correction 可校正 provisional（包括向下），修订留审计；`error_during_execution` 等失效终态的全零不能当纠正依据，不覆盖已知消耗并标 partial。真实零、有效修订、reset 与无效观测分别编码，不用盲目 `max` 掩盖差异。
+5. 父 final 与 leaf deltas 的覆盖关系由 driver 合同确定；完成对账后原 provisional 被替代，不能同时入账。
+6. 最后一次进程退出不一定收到 usage；关闭执行不等于 coverage complete。硬崩溃后展示已持久化的已知用量与缺口。
+7. 旧 NodeRun 的非空总量可回填 attempt 级 legacy record；不合成 LLM request/spans。旧 0 缺少 presence 证据时标 unknown，不能自动写“零消耗”。
 
 现有 OpenCode 平台 adapter 在 `services/runtime/opencode/events.ts:123` 做 delta 累积；Claude 平台 adapter 在 `services/runtime/claudeCode/events.ts:233` 只取 result 的累计 usage。实施先固定协议 fixture、查对应 upstream 版本，再扩展合同，不能将两种策略抽象成同一个 `+=`。
 
@@ -126,13 +127,30 @@ type UsageEnvelopeV1 = {
 
 价格管理界面位于设置的运行时页，统计模块 RunObservability 仍是价格规则和估算的唯一owner。RuntimeManagement只提供exact public query的安全运行时摘要，不为改价调用旧runtime PUT/模型测试，更不直接读取runtime私有表或秘密配置。
 
-候选管理合同：`GET /api/observability/pricing/runtimes`、`GET /api/observability/pricing/runtimes/:name/versions`、`POST /api/observability/pricing/runtimes/:name/versions`。管理员鉴权后处理请求；普通任务查看权不附带改价权。版本请求带expectedRevision、requestKey、currency固定CNY、provider/model身份、四桶decimal字符串、生效时间与来源说明；服务端校验非负/精度/有效区间、幂等和CAS，冲突保留草稿。
+管理合同：`GET /api/observability/pricing/runtimes`、`GET /api/observability/pricing/runtimes/:registrationId/versions`、`POST /api/observability/pricing/runtimes/:registrationId/versions`。路径使用不可变注册身份，避免同名删除重建误读旧价格。管理员鉴权后处理请求；普通任务查看权不附带改价权。版本请求带expectedRevision、configurationRevision、requestKey、currency固定CNY、provider/model身份、四桶decimal字符串、生效时间与来源说明；服务端校验非负/精度/有效区间、幂等和CAS，冲突保留草稿。
 
 运行时名称可以删除重建，所以价格绑定要保留owner提供的注册身份/配置修订或新增明确generation，不能仅用名称把旧价移给新对象。每个invocation在受理时记录价格表快照引用；实际模型调用在该快照中匹配provider/model/计价条件。执行中换模型没有对应项时标未定价，不套默认模型价格。历史迟到usage沿用原快照；纠正价格另建valuationVersion。
 
 输入、缓存读、缓存写、输出为互斥桶，reasoning属于输出子集。人民币金额使用decimal，最后才格式化到最多6位小数，极小非零值标小于显示阈值，不能误报免费。原始厂商实报与配置估算并列，不相加。订阅/包月价格不自动除以Token做“实际单价”。
 
-CS托管adapter未来只消费平台授权返回的CNY金额、计量范围、完整性与priceVersion引用；使用execution/invocation映射去重。缺字段或无授权就是未定价，不倒查平台采购秘密；本地规则不得覆盖CS来源。此处只设计接口接缝，不修改RFC-370并行实现和CS现有项目数据边界。
+CS托管adapter只消费平台授权返回的CNY金额、计量范围、完整性与priceVersion引用；使用execution/invocation映射去重。缺字段或无授权就是未定价，不倒查平台采购秘密；本地规则不得覆盖CS来源。完整实施须接通此合同；RFC-370 的并行宿主改造仍由其 owner 维护。
+
+### 6.2 两种部署方式（用户明确要求）
+
+独立部署与 CS 托管部署都是正式验收场景，不把托管列为未来占位功能。领域口径与观测页面共用，采集、身份映射、价格 owner 和持久化装配经端口区分。
+
+| 合同     | 独立部署                                                   | CS 托管部署                                                                    |
+| -------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| 用量事实 | AW 本地 driver 的版本化 usage 记录；绑定调用与原生会话代次 | CS 已持久化的执行观测；绑定 project/task/execution/generation 与 AW invocation |
+| 断线恢复 | 持久源游标重放，账本和 checkpoint 同事务                   | 按 CS committed cursor 续传；未持久事件不推进水位；不能断线后改走本地计费      |
+| 价格管理 | AW 设置→运行时→Token成本，管理员独立保存 CNY 版本          | CS 系统管理→算力档位→Token成本；AW 显示平台管理、授权来源与可访问的管理入口    |
+| 金额来源 | 受理时冻结的 AW 单价快照，匹配实际模型                     | 仅使用 CS 授权的执行级 CNY valuation 与版本；无授权或未定价显示原因            |
+| 数据库   | 当前支持的 SQLite / PostgreSQL 均须验证                    | PostgreSQL，使用相同领域规则与数据库端口                                       |
+| 可用性   | 不依赖 CS 服务、凭据、网络或安装                           | 平台接口不可用显示采集延迟/缺口；已持久化的历史仍可查询                        |
+
+部署方式是装配能力，不以 URL、环境变量名称或当前有没有本地二进制猜测。每次 invocation 保存 `executionAuthority` 与 canonical source；同一执行不能同时计入本地解析与 CS 回传。平台同步的 Token 与 valuation 分开去重、分开版本化，usage 先到、估值后到不增加第二笔 Token。CS 平台采购费用和 AW 可见执行估算不是两个可相加的账目。
+
+验收覆盖：独立运行时无 CS 可达；CS 模式断开重连与重放；重复/乱序用量与估值；实际模型改变；价格变更后的在途/历史调用；平台未定价或项目无金额授权；两模式相同用量样本的汇总与泳道口径相同。
 
 ## 7. 持久化、事件与恢复
 

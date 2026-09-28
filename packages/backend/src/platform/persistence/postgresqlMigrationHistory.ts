@@ -44,6 +44,7 @@ const OwnerSchema = z.enum([
   'knowledge-evolution',
   'platform-events',
   'resource-catalog',
+  'run-observability',
   'source-control',
   'system-operations',
   'task-execution',

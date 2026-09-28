@@ -144,6 +144,8 @@ export const RFC349_SOURCE_TABLES = [
   'node_run_events',
   'node_run_outputs',
   'node_runs',
+  'observation_price_heads',
+  'observation_price_versions',
   'observer_activations',
   'oidc_providers',
   'plugins',
@@ -255,6 +257,7 @@ export type OwnerContext =
   | 'knowledge-evolution'
   | 'platform-events'
   | 'resource-catalog'
+  | 'run-observability'
   | 'source-control'
   | 'system-operations'
   | 'task-execution'
@@ -366,6 +369,7 @@ export interface LogicalSchemaContract {
 let cachedLogicalSchemaContract: LogicalSchemaContract | undefined
 
 function ownerFor(table: string): OwnerContext {
+  if (table.startsWith('observation_')) return 'run-observability'
   if (table.startsWith('development_') || table === 'mission_input_uploads') {
     return 'development-automation'
   }

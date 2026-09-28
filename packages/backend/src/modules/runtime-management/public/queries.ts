@@ -22,6 +22,20 @@ export interface RuntimeProfileQueries {
   status(): Promise<{ readonly runtimes: readonly RuntimeStatusView[] }>
 }
 
+/** RFC-371: immutable registration identity and pricing metadata, without probing. */
+export interface RuntimeObservationQueries {
+  directory(): Promise<{
+    readonly runtimes: readonly {
+      readonly registrationId: string
+      readonly name: string
+      readonly configurationRevision: number
+      readonly protocol: RuntimeKind
+      readonly model: string | null
+      readonly enabled: boolean
+    }[]
+  }>
+}
+
 export interface RuntimeModelList {
   readonly binary: string
   readonly models: readonly {

@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1743,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1748,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-371：新增 run-observability 计量、不可变人民币价格持久化与运行时公开目录，rfc294-mutation-entrypoints 1743 → 1748，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -825,8 +828,11 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 257,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
+      "baseline": 258,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
+      "allowGrowth": {
+        "why": "RFC-371：新增 run-observability 计量、不可变人民币价格持久化与运行时公开目录，rfc294-transaction-callbacks 257 → 258，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-background-jobs",
@@ -839,22 +845,31 @@
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
-      "baseline": 494,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
+      "baseline": 497,
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
+      "allowGrowth": {
+        "why": "RFC-371：新增 run-observability 计量、不可变人民币价格持久化与运行时公开目录，rfc294-ambient-wiring 494 → 497，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5480,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5496,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-371：新增 run-observability 计量、不可变人民币价格持久化与运行时公开目录，rfc294-cross-context-observed-imports 5480 → 5496，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
       "file": "architecture/cross-context-imports.json",
       "symbol": "targetEdges",
-      "baseline": 66,
-      "why": "RFC-294 N1：design §3.1 offered、required implementation 与 IA authority type-only 三类目标边，角色和合同不可折叠。"
+      "baseline": 68,
+      "why": "RFC-294 N1：design §3.1 offered、required implementation 与 IA authority type-only 三类目标边，角色和合同不可折叠。",
+      "allowGrowth": {
+        "why": "RFC-371：新增 run-observability 计量、不可变人民币价格持久化与运行时公开目录，rfc294-target-context-edges 66 → 68，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-required-port-liveness",
@@ -867,8 +882,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4871,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4884,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-371：新增 run-observability 计量、不可变人民币价格持久化与运行时公开目录，rfc294-architecture-exceptions 4871 → 4884，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -881,8 +899,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1020,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1023,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-371：新增 run-observability 计量、不可变人民币价格持久化与运行时公开目录，rfc294-public-surfaces 1020 → 1023，按新增功能如实登记本批归属与公开合同。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -902,12 +923,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25083,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25169,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371：新增 run-observability 计量、不可变人民币价格持久化与运行时公开目录，rfc294-module-symbol-owners 25083 → 25169，按新增功能如实登记本批归属与公开合同。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:460a062ad98dcfa9129e2fbe08de8a59e7c8e36ad47035034cbe19c2873e26e0",
+    "sourceDigest": "sha256:d818dbdc105d42fbea4ffa31e2ce633ad6bc3fd1203a801a912ad276c3e69c6d",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +944,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ebbcbe75420de88a5569f461f348fc8924a3bde1",
-    "contentDigest": "sha256:0428f9da6271c0dc5bdd72e970db659700e997593bf7a78257f48308781a434c",
+    "currentSnapshotSha": "522bf920faa2550fccbafb3b7ec6af23692ec395",
+    "contentDigest": "sha256:e3cc5edb2021d56c1c2ace73efde36a307cd3a7acb60eb5a2e88f8fc6e0bbfd5",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

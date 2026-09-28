@@ -11,8 +11,10 @@ import type {
   WorkgroupSystemTemplateKey,
 } from '@agent-workflow/shared'
 import { buildPermissionCatalogResources } from './permissionCatalog'
+import { observationPricingZh, type ObservationPricingMessages } from './observationPricing'
 
 export interface Resources {
+  observationPricing: ObservationPricingMessages
   permissions: ReturnType<typeof buildPermissionCatalogResources>
   tabBar: {
     scrollStart: string
@@ -6780,6 +6782,7 @@ export interface Resources {
 }
 
 export const zhCN: Resources = {
+  observationPricing: observationPricingZh,
   presence: {
     online: '在线',
     offline: '离线',

@@ -29,6 +29,7 @@ export * from './schemas/humanGate'
 export * from './schemas/review'
 export * from './schemas/reviewCollab' // RFC-340
 export * from './schemas/runtime'
+export * from './schemas/observationPricing'
 export * from './schemas/mcp'
 export * from './schemas/mcpProbe'
 export * from './schemas/mcpRuntimeTest' // RFC-238

@@ -1,0 +1,520 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:00667e4d68f1eb5de171729a79eef9b9507062b4fee5e9b02412d89eadf66f77', 188, 6)"
+    },
+    "beforeDigest": "sha256:b942dd35aba3a285e7d982cac9d90aaebdb29b89d884733833e12e75bd98b4ff"
+  },
+  "digest": "sha256:26edc21c8c38fee2fb57b2ac466b12c10feb98c6967bed7f025ad2892c28f22d",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "observation_price_heads",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_price_heads\" (\n  \"registration_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL DEFAULT 0,\n  CONSTRAINT \"observation_price_heads_pkey\" PRIMARY KEY (\"registration_id\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "observation_price_versions",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_price_versions\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"registration_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"request_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"fingerprint\" TEXT COLLATE \"C\" NOT NULL,\n  \"configuration_revision\" BIGINT NOT NULL,\n  \"protocol\" TEXT COLLATE \"C\" NOT NULL,\n  \"provider\" TEXT COLLATE \"C\" NOT NULL,\n  \"model\" TEXT COLLATE \"C\" NOT NULL,\n  \"condition\" TEXT COLLATE \"C\",\n  \"effective_from\" BIGINT NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_price_versions_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_price_versions:index:observation_price_revision_idx",
+      "sql": "CREATE UNIQUE INDEX \"observation_price_revision_idx\" ON \"agent_workflow\".\"observation_price_versions\" (\"registration_id\", \"revision\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_price_versions:index:observation_price_request_idx",
+      "sql": "CREATE UNIQUE INDEX \"observation_price_request_idx\" ON \"agent_workflow\".\"observation_price_versions\" (\"registration_id\", \"request_key\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_price_versions:index:observation_price_match_idx",
+      "sql": "CREATE INDEX \"observation_price_match_idx\" ON \"agent_workflow\".\"observation_price_versions\" (\"registration_id\", \"configuration_revision\", \"protocol\", \"provider\", \"model\", \"condition\", \"effective_from\")"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:00667e4d68f1eb5de171729a79eef9b9507062b4fee5e9b02412d89eadf66f77', active_table_count = 188, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:85b914204bdf43d5d3333d819113b3c226c22376465d4540f5d74d1ae7866bf0' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:85b914204bdf43d5d3333d819113b3c226c22376465d4540f5d74d1ae7866bf0",
+    "planDigest": "sha256:01e4bdc0440e0c11644407b37dd75cbd1ebebb47318fce31e82d962740ebfb1e"
+  },
+  "id": "0007_rfc371_observation_prices",
+  "indexAdditions": [
+    {
+      "position": 128,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_price_heads",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_price_heads\" (\n  \"registration_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL DEFAULT 0,\n  CONSTRAINT \"observation_price_heads_pkey\" PRIMARY KEY (\"registration_id\")\n)"
+      }
+    },
+    {
+      "position": 129,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_price_versions",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_price_versions\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"registration_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"revision\" BIGINT NOT NULL,\n  \"request_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"fingerprint\" TEXT COLLATE \"C\" NOT NULL,\n  \"configuration_revision\" BIGINT NOT NULL,\n  \"protocol\" TEXT COLLATE \"C\" NOT NULL,\n  \"provider\" TEXT COLLATE \"C\" NOT NULL,\n  \"model\" TEXT COLLATE \"C\" NOT NULL,\n  \"condition\" TEXT COLLATE \"C\",\n  \"effective_from\" BIGINT NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_price_versions_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 419,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_price_versions:index:observation_price_revision_idx",
+        "sql": "CREATE UNIQUE INDEX \"observation_price_revision_idx\" ON \"agent_workflow\".\"observation_price_versions\" (\"registration_id\", \"revision\")"
+      }
+    },
+    {
+      "position": 420,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_price_versions:index:observation_price_request_idx",
+        "sql": "CREATE UNIQUE INDEX \"observation_price_request_idx\" ON \"agent_workflow\".\"observation_price_versions\" (\"registration_id\", \"request_key\")"
+      }
+    },
+    {
+      "position": 421,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_price_versions:index:observation_price_match_idx",
+        "sql": "CREATE INDEX \"observation_price_match_idx\" ON \"agent_workflow\".\"observation_price_versions\" (\"registration_id\", \"configuration_revision\", \"protocol\", \"provider\", \"model\", \"condition\", \"effective_from\")"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 124,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "registration_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "0",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "0",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "observation_price_heads",
+        "indexes": [],
+        "migrationKey": ["registration_id"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["registration_id"],
+        "providerTables": {
+          "postgresql": "observation_price_heads",
+          "sqlite": "observation_price_heads"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationPriceHeads",
+        "sourceTable": "observation_price_heads",
+        "unique": []
+      }
+    },
+    {
+      "position": 125,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "registration_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "request_key",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "fingerprint",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "configuration_revision",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "protocol",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "provider",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "model",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "condition",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "effective_from",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "document",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "observation_price_versions",
+        "indexes": [
+          {
+            "columns": ["registration_id", "revision"],
+            "name": "observation_price_revision_idx",
+            "unique": true,
+            "where": null
+          },
+          {
+            "columns": ["registration_id", "request_key"],
+            "name": "observation_price_request_idx",
+            "unique": true,
+            "where": null
+          },
+          {
+            "columns": [
+              "registration_id",
+              "configuration_revision",
+              "protocol",
+              "provider",
+              "model",
+              "condition",
+              "effective_from"
+            ],
+            "name": "observation_price_match_idx",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "observation_price_versions",
+          "sqlite": "observation_price_versions"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationPriceVersions",
+        "sourceTable": "observation_price_versions",
+        "unique": [
+          {
+            "columns": ["registration_id", "revision"],
+            "expression": null,
+            "name": "observation_price_revision_idx"
+          },
+          {
+            "columns": ["registration_id", "request_key"],
+            "expression": null,
+            "name": "observation_price_request_idx"
+          }
+        ]
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:11cfe1c01c97bcf31c867ee3ac1910d126478911204aed0891d7bbc734ffb87a",
+  "sequence": 7,
+  "sqlDigest": "sha256:fff6edcbc6bcb17ce8ca1ce03790a5a718a632a9aa2368b15ab3d7310c4d3257",
+  "sqlFile": "0007_rfc371_observation_prices.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1790577006668,
+        "hash": "98b6d2a3ce4aa674a3f346290a5a3d6b4848dc641d7741ce427faf3cd306f60f",
+        "index": 230,
+        "tag": "0231_rfc371_observation_prices"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:886ca79c6d557f9aa932d56ba45d0cdddb119723907fa0a0e7c91917966abbbf",
+      "count": 230,
+      "last": {
+        "folderMillis": 1790438412067,
+        "hash": "3420115e70e43721a35127262745366378d549888e4a45e118c4c87032217b12",
+        "index": 229,
+        "tag": "0230_rfc368_reaction_execution_admissions"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:96491c0ea1259cd3a1ebcee612c9b4df73905d84a32731a81694e2e0e207041a",
+      "count": 231,
+      "last": {
+        "folderMillis": 1790577006668,
+        "hash": "98b6d2a3ce4aa674a3f346290a5a3d6b4848dc641d7741ce427faf3cd306f60f",
+        "index": 230,
+        "tag": "0231_rfc371_observation_prices"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:00667e4d68f1eb5de171729a79eef9b9507062b4fee5e9b02412d89eadf66f77",
+    "planDigest": "sha256:85f5914a760eef705dbef8477f8dfda0a34e800f3f3af5bd65ec43ac1b0e5c95"
+  },
+  "version": 2
+}
