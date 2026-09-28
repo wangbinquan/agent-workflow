@@ -2,7 +2,7 @@
 
 ## 2026-09-28 RFC-370 CrewStation 完整托管部署 —— In Progress
 
-用户已批准实现、部署和提交上库到远端。[RFC三件套](design/RFC-370-crewstation-hosted-deployment/proposal.md)按两阶段推进：A先补平台中立端口／local adapter并经AC00独立验收；B先M0必要能力实际部署，再M1任务闭环、M2/M3逐项接入执行／事件／恢复，M4完整收口。当前A-T1入口普查和A-T2配置／generation切面重构进行中：新增system-operations数据库配置端口及本地文件adapter，启动composition支持注入，原迁移恢复流程复用；generation验证已与文件adapter分离并发布；artifact运行时入口已发布；安装准备application及local adapter已发布；本批继续抽设置配置持久端口，将HTTP保存与热更新收归同一application；具体检查／发布证据见plan实施日志。H1/H6尚未完成，其余切面待逐项收口；尚无CS adapter或aw部署。独立设计门工具不可用，未记PASS，不提前通过A-G。保留standalone及完整能力目标，B1～B4按实际能力增量闭合。
+用户已批准实现、部署和提交上库到远端。[RFC三件套](design/RFC-370-crewstation-hosted-deployment/proposal.md)按两阶段推进：A先补平台中立端口／local adapter并经AC00独立验收；B先M0必要能力实际部署，再M1任务闭环、M2/M3逐项接入执行／事件／恢复，M4完整收口。当前A-T1入口普查和A-T2配置／generation切面重构进行中：新增system-operations数据库配置端口及本地文件adapter，启动composition支持注入，原迁移恢复流程复用；generation验证已与文件adapter分离并发布；artifact运行时入口已发布；安装准备application及local adapter已发布；设置配置持久端口及HTTP应用编排已发布；本批抽无IO的配置默认值／patch共同规则，原文件语义保持；具体检查／发布证据见plan实施日志。H1/H6尚未完成，其余切面待逐项收口；尚无CS adapter或aw部署。独立设计门工具不可用，未记PASS，不提前通过A-G。保留standalone及完整能力目标，B1～B4按实际能力增量闭合。
 
 ## 2026-09-23 RFC-369 node_run 旧代作废改由读侧推导 —— ✅ Done
 

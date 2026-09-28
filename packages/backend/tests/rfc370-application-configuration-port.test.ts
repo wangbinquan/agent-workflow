@@ -1,12 +1,11 @@
 // RFC-370: storage replacement must preserve Settings validation and the
 // persistence-before-notification/reconciliation/concurrency ordering.
 import { describe, expect, test } from 'bun:test'
+import { DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import {
-  ConfigPatchSchema,
-  ConfigSchema,
-  DEFAULT_CONFIG,
-  type Config,
-} from '@agent-workflow/shared'
+  validateConfigurationPatch,
+  mergeValidatedConfigurationPatch,
+} from '@/platform/configuration/configurationValues'
 import { composeApplicationConfiguration } from '@/modules/system-operations/composition'
 import type { ApplicationConfigurationDependencies } from '@/modules/system-operations/application/ports/applicationConfiguration'
 
@@ -22,10 +21,10 @@ function fixture() {
         return structuredClone(stored)
       },
       async previewPatch(body) {
-        return ConfigSchema.parse({ ...stored, ...ConfigPatchSchema.parse(body) })
+        return mergeValidatedConfigurationPatch(stored, validateConfigurationPatch(body))
       },
       async applyPatch(body) {
-        stored = ConfigSchema.parse({ ...stored, ...ConfigPatchSchema.parse(body) })
+        stored = mergeValidatedConfigurationPatch(stored, validateConfigurationPatch(body))
         calls.push('persist')
         return structuredClone(stored)
       },

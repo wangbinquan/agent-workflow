@@ -3,13 +3,7 @@
 // Atomic writes via tempfile + rename so a crashed save can never produce a
 // half-written config that fails subsequent loads.
 
-import {
-  ConfigPatchSchema,
-  ConfigSchema,
-  DEFAULT_CONFIG,
-  type Config,
-  type ConfigPatch,
-} from '@agent-workflow/shared'
+import { ConfigSchema, DEFAULT_CONFIG, type Config } from '@agent-workflow/shared'
 import {
   chmodSync,
   existsSync,
@@ -21,7 +15,13 @@ import {
   writeFileSync,
 } from 'node:fs'
 import { dirname, join } from 'node:path'
-import { ValidationError } from '@/util/errors'
+import {
+  isPlainObject,
+  mergeDefaults,
+  resolveConfigurationValue,
+  validateConfigurationPatch,
+  mergeValidatedConfigurationPatch,
+} from './configurationValues'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('config')
@@ -81,19 +81,15 @@ export function readConfig(path: string): Config | null {
   // Backfill defaults onto unknown blob, then validate. This makes config
   // forward-compatible: adding a new field with a default doesn't require
   // a migration as long as the existing $schema_version is current.
-  const merged = mergeDefaults(raw)
-  const parsed = ConfigSchema.safeParse(merged)
-  if (!parsed.success) {
-    throw new Error(`config: validation failed: ${JSON.stringify(parsed.error.issues)}`)
-  }
+  const config = resolveConfigurationValue(raw)
   if (stat !== null) {
     // Cache keyed on the PRE-read stat: a write racing between stat and read
     // leaves a stale key that simply misses next call (an extra re-read, never
     // stale data). The cached object is private — callers get clones.
-    readConfigCache.set(path, { mtimeMs: stat.mtimeMs, size: stat.size, config: parsed.data })
-    return structuredClone(parsed.data)
+    readConfigCache.set(path, { mtimeMs: stat.mtimeMs, size: stat.size, config })
+    return structuredClone(config)
   }
-  return parsed.data
+  return config
 }
 
 /**
@@ -125,21 +121,9 @@ export function applyConfigPatch(path: string, patch: unknown): Config {
  * use this to inspect the exact value that would be persisted before the
  * atomic save occurs. */
 export function previewConfigPatch(path: string, patch: unknown): Config {
-  const parsed = ConfigPatchSchema.safeParse(patch)
-  if (!parsed.success) {
-    throw new ValidationError('config-invalid', 'config patch failed validation', {
-      issues: parsed.error.issues,
-    })
-  }
+  const validatedPatch = validateConfigurationPatch(patch)
   const current = loadConfig(path)
-  const next = mergePatch(current, parsed.data)
-  const revalidated = ConfigSchema.safeParse(next)
-  if (!revalidated.success) {
-    throw new ValidationError('config-invalid', 'merged config failed validation', {
-      issues: revalidated.error.issues,
-    })
-  }
-  return revalidated.data
+  return mergeValidatedConfigurationPatch(current, validatedPatch)
 }
 
 /**
@@ -226,88 +210,4 @@ function migrateDeprecatedRuntimeHardeningConfig(path: string, parsed: Config): 
     keys: DEPRECATED_RUNTIME_HARDENING_KEYS,
   })
   return validated.data
-}
-
-/**
- * Config keys whose default is a nested object, DERIVED from `DEFAULT_CONFIG`
- * rather than hard-coded.
- *
- * These are the keys that must be deep-merged, and getting that wrong is not a
- * cosmetic issue: an older `config.json` that predates a newly added inner field
- * would be passed through verbatim, fail `ConfigSchema.safeParse` on the missing
- * field, and make `loadConfig` throw — i.e. the daemon stops booting. The list
- * used to be a hand-maintained pair of `if` branches, so every future nested
- * field silently opted out of that protection until someone remembered to add it.
- */
-const NESTED_CONFIG_KEYS: ReadonlySet<string> = new Set(
-  Object.entries(DEFAULT_CONFIG)
-    .filter(([, v]) => typeof v === 'object' && v !== null && !Array.isArray(v))
-    .map(([k]) => k),
-)
-
-function isPlainObject(v: unknown): v is Record<string, unknown> {
-  return typeof v === 'object' && v !== null && !Array.isArray(v)
-}
-
-/** Discriminated config objects deep-merge only while their discriminator is
- * unchanged. Merging a PostgreSQL payload over the SQLite variant (or vice
- * versa) would retain forbidden keys and make a valid provider switch fail. */
-function mergeNestedConfigValue(
-  key: string,
-  base: unknown,
-  patch: Record<string, unknown>,
-): Record<string, unknown> {
-  if (!isPlainObject(base)) return patch
-  if (
-    key === 'database' &&
-    typeof patch.provider === 'string' &&
-    typeof base.provider === 'string' &&
-    patch.provider !== base.provider
-  ) {
-    return patch
-  }
-  return { ...base, ...patch }
-}
-
-/** Merge defaults under unknown raw input (shallow + nested for known objects). */
-function mergeDefaults(raw: unknown): Record<string, unknown> {
-  const out: Record<string, unknown> = { ...DEFAULT_CONFIG }
-  if (typeof raw !== 'object' || raw === null) return out
-  const obj = raw as Record<string, unknown>
-  const defaults = DEFAULT_CONFIG as unknown as Record<string, unknown>
-  for (const [k, v] of Object.entries(obj)) {
-    if (v === undefined) continue
-    if (NESTED_CONFIG_KEYS.has(k) && isPlainObject(v)) {
-      const base = defaults[k]
-      out[k] = mergeNestedConfigValue(k, base, v)
-    } else {
-      out[k] = v
-    }
-  }
-  return out
-}
-
-function mergePatch(current: Config, patch: ConfigPatch): Config {
-  const next: Config = { ...current }
-  for (const [k, v] of Object.entries(patch)) {
-    if (v === undefined) continue
-    // RFC-117: explicit null clears the field (back to "unset" → inherits the
-    // global default), e.g. the settings runtime "Inherit" option. JSON.stringify
-    // drops undefined, so the UI sends null to actually remove a saved override.
-    if (v === null) {
-      delete (next as Record<string, unknown>)[k]
-      continue
-    }
-    // Same derived-key rule as mergeDefaults: a nested object in a PATCH is a
-    // partial update of that object, not a replacement. Hard-coding the key list
-    // here meant `PATCH {newNested: {onlyOneField: x}}` silently dropped the
-    // sibling fields for every nested key someone forgot to add.
-    if (NESTED_CONFIG_KEYS.has(k) && isPlainObject(v)) {
-      const base = (current as unknown as Record<string, unknown>)[k]
-      ;(next as Record<string, unknown>)[k] = mergeNestedConfigValue(k, base, v)
-    } else {
-      ;(next as Record<string, unknown>)[k] = v
-    }
-  }
-  return next
 }

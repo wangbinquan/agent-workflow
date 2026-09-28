@@ -112,3 +112,7 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 
 - 第四批 CI `36368991331` 的 Ubuntu backend shard 2 检出安装应用／port 仍直引 PG 迁移历史。第五批同时修复：history 由 composition 传给 local adapter，新增中立 `resolveRecoverySource` 端口返回逻辑 schema，原 bridge 校验留在 adapter；不扩大 provider-specific debt 允许表，既有真实 SQLite／PG 恢复用例继续覆盖。
 - 第五批切面检查：配置持久 port 的 consumer／provider／composition 均 active；运行时校验和 MCP 对账通过应用自有依赖形状注入原命令，无新增 off-dag offered 边。架构账本按真实新增入口、public 合同、owner 和接线登记一次性增长；目标 lint／格式与 diff 检查通过，正式结果待 GitHub CI。
+
+- 第五批 `6df459b60e7c52c6c7efbba982ba800a207b17eb` 已上库，精确 SHA CI `36370237803` 进行中。
+- A-T2 第六批候选：把存储值默认回填、patch 校验与嵌套／数据库判别联合合并抽为 `platform/configuration/configurationValues`；文件 adapter 与异步存储回归 fixture 复用同一规则。非法 patch 仍先拒绝再加载配置；原文件缓存、原子写入和 RFC-276 迁移段保持。新增内存值／真实文件对拍，覆盖默认值、null 继承、嵌套值、provider 切换及 schema 默认、错误和无意外创建文件。此批不是托管存储实现，其余配置调用者／内容／启动生命周期仍待收口。
+- 第六批候选检查：原 merge helper 段（仅两个导出标记）、原子写入段及 RFC-276 文件迁移段与第五批逐字核对一致；目标格式／lint 通过，未本地跑测试。架构仅 owner 分母 +4，其余本批无增长，移除第五批已消费增长声明。
