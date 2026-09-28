@@ -639,8 +639,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 取消（`cause: { kind: 'resource-reaped', ...reason }`），状态与原因同一次写入落下；此前
       // 按 `user` 取消、事后改写原因，中间几秒数字员工会把超时误判成用户取消。装配图变的是这两格，
       // 判据在 `tests/rfc368-implementation-gate.test.ts`。
-      // RFC-370: Intent routes receive the same live configuration query as other HTTP routes.
-      '83a961dd89a91814e954f66615209131fac350867ea4ce5940a6c7dea1c89357',
+      // RFC-370: Intent and webhook routes receive the same live configuration query.
+      '566da0a2eaa78b91eb71e6bb5a48f46b96cbeaeccaa1994a098071a4903c6a5d',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -846,8 +846,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // `composeReactionExecutionProvider({ db: deps.db, ... })` 装配、以 `reactionExecution`
       // 交给数字员工；旧字符串 participant 与适配器删除。装配图的变化是有意的，
       // 判据在 `tests/rfc368-*.test.ts`。
-      // RFC-370: only the Intent configuration binding changes; route order and lifetime stay fixed.
-      '20de91f3458999901d7feb29634fa1876de7b6b35093b1871199ebd760bc9084',
+      // RFC-370: Intent and webhook configuration bindings change; route order and lifetime stay fixed.
+      '39feae812c6e9b1061d48aef79c5fd48ad81c72bfa29a303741c55c967c6e413',
     )
     expect(
       namedCalls(

@@ -1,5 +1,5 @@
 import type { Actor } from '@/auth/actor'
-import { loadConfig } from '@/config'
+import type { WebhookConfigurationQuery } from '../application/ports/webhookConfiguration'
 import type { FrozenIntegrationTriggerResourceSnapshot } from '@/modules/resource-catalog/public/types'
 import { assertTriggerPreflight } from '@/services/execution/triggerPreflight'
 import {
@@ -171,12 +171,12 @@ export async function assertWebhookTriggerSaveable(
 
 export function composeWebhookTriggerValidation(
   operations: ScheduledTaskOperations,
-  configPath: string,
+  configuration: WebhookConfigurationQuery,
 ): WebhookTriggerServiceDeps['validateSaveable'] {
   return async (actor, resourceAuthority, candidate) => {
     let defaultRuntime: string | null | undefined
     try {
-      defaultRuntime = loadConfig(configPath).defaultRuntime
+      defaultRuntime = (await configuration.read()).defaultRuntime
     } catch {
       defaultRuntime = undefined
     }

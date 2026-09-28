@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:39db36064611f9c9ad3e751c0643cb100dd1d6e62d113552684757075a111fda`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:9004a8966d9388b3b7cdc04a891ba1210487fac6d26a1f00aa177731abc3f861`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1857 |
+| backend production TS 文件 | 1858 |
 | `services/` 文件 | 291 |
-| `modules/**` 文件 / 非空 context | 1307 / 17 |
+| `modules/**` 文件 / 非空 context | 1308 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 494 |
-| `architectureExceptions` | 4868 |
+| `architectureExceptions` | 4867 |
 | `backgroundJobs` | 332 |
-| `crossContextImports` | 5477 |
+| `crossContextImports` | 5476 |
 | `facades` | 291 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25051 |
+| `moduleSymbolOwners` | 25053 |
 | `mutationEntrypoints` | 1739 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1020 |
@@ -61,7 +61,7 @@
 | task-execution / domain | 32 |
 | identity-access / application | 25 |
 | intent / application | 25 |
-| integration / application | 22 |
+| integration / application | 23 |
 | integration / infrastructure | 22 |
 | system-operations / infrastructure | 21 |
 | code-capability / application | 20 |
@@ -202,7 +202,7 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3209 |
+| legacy-outbound | 3208 |
 | legacy-inbound | 1472 |
 | infrastructure-external | 282 |
 | offered-consumption | 189 |
@@ -217,7 +217,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3209 |
+| legacy-outbound | 3208 |
 | legacy-inbound | 1472 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 83 |
@@ -229,7 +229,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2642 |
+| W9 | 2641 |
 | W9-D | 791 |
 | W4-E1 | 652 |
 | W4 | 201 |

@@ -49,7 +49,7 @@ export function composeWebhookTriggerServiceDependencies(
  *
  * 合一前一对孪生，两份的 `administration` / `dispatchPersistence` 用的是**同两个中立构造器**，
  * 差别只有一处：**谁提供 `validateSaveable`**——SQLite 那份自己
- * `composeWebhookTriggerValidation(scheduledTasks, configPath)`，PostgreSQL 那份要求注入。
+ * `composeWebhookTriggerValidation(scheduledTasks, configuration)`，PostgreSQL 那份要求注入。
  *
  * 与 §5fy 的 MR 终端控制是同一个形状：「自己造」与「让人注入」不是引擎差异，
  * 是**装配责任放在了不同的地方**。按「装配者提供答案」收成一份，

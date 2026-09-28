@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1857,
+    "backendFiles": 1858,
     "frontendFiles": 622,
     "legacyFiles": 550,
-    "moduleFiles": 1307,
-    "productionFiles": 2634,
+    "moduleFiles": 1308,
+    "productionFiles": 2635,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25051
+    "symbolsIncludingFileRoots": 25053
   },
   "entries": [
     {
@@ -58079,6 +58079,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "VerifiedWebhookIngressDependencies",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/integration/application/ports/webhookConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/ports/webhookConfiguration.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "integration",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "integration",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/integration/application/ports/webhookConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/integration/application/ports/webhookConfiguration.ts#WebhookConfigurationQuery",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "WebhookConfigurationQuery",
       "targetContext": "integration",
       "targetLayer": "application"
     },
@@ -301337,5 +301361,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:39db36064611f9c9ad3e751c0643cb100dd1d6e62d113552684757075a111fda"
+  "sourceDigest": "sha256:9004a8966d9388b3b7cdc04a891ba1210487fac6d26a1f00aa177731abc3f861"
 }

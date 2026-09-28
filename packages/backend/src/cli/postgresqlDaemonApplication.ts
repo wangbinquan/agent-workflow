@@ -1387,7 +1387,7 @@ export async function composePostgresqlApplication(
   })
   const webhookTriggerService = composeWebhookTriggerServiceDependenciesFor(
     input.db,
-    composeWebhookTriggerValidation(scheduledTaskRuntime.operations, input.configPath),
+    composeWebhookTriggerValidation(scheduledTaskRuntime.operations, configuration),
   )
   const integrationRoutes: PostgresqlAppCompositionInput['integration'] = Object.freeze({
     scheduledTasks: Object.freeze({
@@ -1400,7 +1400,7 @@ export async function composePostgresqlApplication(
     webhookEndpoints: Object.freeze({
       webhookEndpointService: composeWebhookEndpointServiceDependencies({
         db: input.db,
-        configPath: input.configPath,
+        configuration,
         secretBox: input.secretBox,
       }),
     }),

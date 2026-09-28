@@ -190,3 +190,6 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 
 - H6 评审文稿切面及 WS CI 修复 `f518f037323b3c18e3ef2acc058720bd4d5ff2c5` 已发布，推送后 main／origin/main 精确同步。CI `36378565660` 已启动，未取得整体终态；不记 A-G 或部署通过。
 - H1 Intent 请求配置续批：九处轮次入口等待注入配置 query，保持各入口原读取位置；创建／预留前读取，取消入口仍先执行原取消再读取后继配置；dispatcher 的配置快照直接使用 Config 值。两 provider 根复用现有 live file reader，W29 仅重采这两处绑定摘要，装配语句数量及其余摘要不变。新增双 provider 真库用例验证异步读取失败不创建会话／轮次、非法 payload 优先拒绝，以及每次消息读取新预算且预算不足不预留轮次。其他后台、执行和 Intent 启动恢复读取仍未完成。
+
+- Intent 请求配置续批 `345275ada20d9da042206da47494ac8480d8dda9` 已发布且远端同步；CI `36379106536` 的 check 作业已通过，整体仍在运行。前批 `f518f0373` CI `36378565660` 被后继发布取消，不作为完整通过证据；由包含它的后继 SHA 验证。
+- H1/H8 Webhook 配置续批：integration-owned WebhookConfigurationQuery 支持异步值，端点 URL 展示及触发器保存验证移除 configPath／文件读取。两 provider 根复用原 live file query；端点写入仍先持久化再补响应 URL，列表逐项读取且保持顺序，读取失败仍返回原 null／默认 runtime 回退。新增双 provider 真库用例覆盖等待、公开地址热更新、各写响应与轮换以及读取失败；CS EventDelivery／receipt／ACK 仍留 B/M3。

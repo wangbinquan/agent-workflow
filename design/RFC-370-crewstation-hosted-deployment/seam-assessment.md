@@ -68,3 +68,7 @@ collaboration 保留原 operation／artifact 状态机，所有写效果支持�
 ## H1 Intent 请求配置续批
 
 Intent 入站九处轮次入口改为等待注入配置查询，保持各入口原读取位置；创建／预留前读取，取消入口仍先取消再读取后继配置；两 provider 复用现有 file query。dispatcher 仅持 Config 值，解除对文件 reader 的类型依赖。Intent 启动恢复／runtime inventory 和其余后台、执行配置读取仍待接线，不记 H1 完成。
+
+## H1/H8 Webhook 管理配置续批
+
+`WebhookConfigurationQuery` 是 integration 所需的公开地址／默认 runtime 值读取切面，端点展示与保存验证统一等待它；bootstrap 复用 system-operations 当前 file reader，不在 integration 选择文件实现。此处适配的是原直连 webhook 管理行为，CS 运输信封、receipt／ACK和事件订阅仍属于 B/M3。

@@ -19,10 +19,10 @@ import {
   CreateWebhookEndpointSchema,
   UpdateWebhookEndpointSchema,
   type WebhookEndpoint,
+  type Config,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import type { SecretBox } from '@/auth/secretBox'
-import { loadConfig } from '@/config'
 import type {
   WebhookEndpointAdministrationPort,
   WebhookEndpointRecord,
@@ -31,7 +31,9 @@ import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 
 export interface WebhookEndpointServiceDeps {
   administration: WebhookEndpointAdministrationPort
-  configPath: string
+  configuration: {
+    read(): Pick<Config, 'publicBaseUrl'> | Promise<Pick<Config, 'publicBaseUrl'>>
+  }
   secretBox: SecretBox
 }
 
@@ -88,13 +90,13 @@ function toWire(
 }
 
 /** 给代码平台填的完整 URL：只能由 publicBaseUrl 拼装（禁 c.req.url，audit-backlog:81）。 */
-function ingressUrlOf(
-  configPath: string,
+async function ingressUrlOf(
+  configuration: WebhookEndpointServiceDeps['configuration'],
   row: Pick<WebhookEndpointRecord, 'provider' | 'urlToken'>,
-): string | null {
+): Promise<string | null> {
   let base: string | undefined
   try {
-    base = loadConfig(configPath).publicBaseUrl
+    base = (await configuration.read()).publicBaseUrl
   } catch {
     base = undefined // config 不可读（测试装配/首启竞态）→ UI 显示相对路径提示
   }
@@ -103,20 +105,23 @@ function ingressUrlOf(
 }
 
 /** ingressUrl 的同一分层：明文 URL 含 urlToken，非明文 viewer 一律 null。 */
-function ingressUrlFor(
-  configPath: string,
+async function ingressUrlFor(
+  configuration: WebhookEndpointServiceDeps['configuration'],
   row: WebhookEndpointRecord,
   viewer: Actor,
-): string | null {
-  return revealsUrl(viewer) ? ingressUrlOf(configPath, row) : null
+): Promise<string | null> {
+  return revealsUrl(viewer) ? await ingressUrlOf(configuration, row) : null
 }
 
-function wireWithIngress(
+async function wireWithIngress(
   deps: WebhookEndpointServiceDeps,
   row: WebhookEndpointRecord,
   viewer: Actor,
-): WebhookEndpointWire {
-  return { ...toWire(deps, row, viewer), ingressUrl: ingressUrlFor(deps.configPath, row, viewer) }
+): Promise<WebhookEndpointWire> {
+  return {
+    ...toWire(deps, row, viewer),
+    ingressUrl: await ingressUrlFor(deps.configuration, row, viewer),
+  }
 }
 
 export async function listWebhookEndpoints(
@@ -124,7 +129,9 @@ export async function listWebhookEndpoints(
   viewer: Actor,
 ): Promise<WebhookEndpointWire[]> {
   const rows = await deps.administration.list()
-  return rows.map((r) => wireWithIngress(deps, r, viewer))
+  const result: WebhookEndpointWire[] = []
+  for (const row of rows) result.push(await wireWithIngress(deps, row, viewer))
+  return result
 }
 
 export async function getWebhookEndpoint(
@@ -167,7 +174,7 @@ export async function createWebhookEndpoint(
     throw new ConflictError('webhook-endpoint-token-mint-failed', 'url token minting collided')
   }
   // 一次性明文：仅此响应携带；之后只有掩码 hint。
-  return { ...wireWithIngress(deps, row, viewer), secret }
+  return { ...(await wireWithIngress(deps, row, viewer)), secret }
 }
 
 export async function updateWebhookEndpoint(
@@ -211,7 +218,7 @@ export async function rotateWebhookEndpointSecret(
     updatedAt: Date.now(),
   })
   if (!row) throw new NotFoundError('webhook-endpoint-not-found', 'endpoint not found')
-  return { ...wireWithIngress(deps, row, viewer), secret }
+  return { ...(await wireWithIngress(deps, row, viewer)), secret }
 }
 
 export async function rotateWebhookEndpointUrlToken(

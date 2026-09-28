@@ -20,6 +20,7 @@
 // 已按 RFC-359 AC-1 / plan §5ft 合一——见文件下半部那段注释。
 
 import { expect, test } from 'bun:test'
+import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
 import { randomBytes } from 'node:crypto'
 import type { CodeHostEvent } from '@agent-workflow/shared'
 import { eq } from 'drizzle-orm'
@@ -334,7 +335,10 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：投递 / 分发 
     // 「两个 provider 装出来的一致」由此得到的是比对读更强的证据。
     const deps = composeWebhookTriggerServiceDependenciesFor(
       harness.db,
-      composeWebhookTriggerValidation(scheduled.operations, '/tmp/aw-rfc359-w7.json'),
+      composeWebhookTriggerValidation(
+        scheduled.operations,
+        composeFileApplicationConfigurationQueries('/tmp/aw-rfc359-w7.json'),
+      ),
     )
 
     const record = triggerRecord(endpointId, owner.id)
@@ -401,15 +405,15 @@ describeEachProvider('RFC-359 W7 —— Integration 组合根：端点 / 入口 
   test('webhookEndpoints 服务依赖：tryCreate / getByUrlToken / update / delete 走真库', async () => {
     const sqlite = composeWebhookEndpointServiceDependencies({
       db: asSqlite(harness.db),
-      configPath: '/tmp/aw-rfc359-w7.json',
+      configuration: composeFileApplicationConfigurationQueries('/tmp/aw-rfc359-w7.json'),
       secretBox,
     })
     const postgresql = composeWebhookEndpointServiceDependencies({
       db: asPostgresql(harness.db),
-      configPath: '/tmp/aw-rfc359-w7.json',
+      configuration: composeFileApplicationConfigurationQueries('/tmp/aw-rfc359-w7.json'),
       secretBox,
     })
-    expect(sqlite.configPath).toBe('/tmp/aw-rfc359-w7.json')
+    expect(typeof sqlite.configuration.read).toBe('function')
     expect(postgresql.secretBox).toBe(secretBox)
 
     const urlToken = `tok_${ulid()}`

@@ -3191,14 +3191,14 @@ function composeSqliteApiRouteMounts(
     )
   const webhookEndpointService = composeWebhookEndpointServiceDependencies({
     db: deps.db,
-    configPath: deps.configPath,
+    configuration,
     secretBox: deps.secretBox,
   })
   // RFC-359 AC-1（plan §5gb）：触发器服务依赖的装配收成一份后，`validateSaveable` 由**调用方**
   // 提供（PostgreSQL bootstrap 本来就是这个姿势）。这里自己造一次再传进去。
   const webhookTriggerService = composeWebhookTriggerServiceDependenciesFor(
     deps.db,
-    composeWebhookTriggerValidation(scheduledTaskRuntime.operations, deps.configPath),
+    composeWebhookTriggerValidation(scheduledTaskRuntime.operations, configuration),
   )
   const webhookDeliveryRuntime = composeWebhookDeliveryRuntimeFor(deps.db)
   const capabilityTemplatePersistence = createCapabilityTemplatePersistence(deps.db)

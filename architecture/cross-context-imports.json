@@ -60557,23 +60557,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookAdmission.ts#$file",
-      "fromPath": "packages/backend/src/modules/integration/composition/webhookAdmission.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:bcf648cb4fe7065df0b7",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "integration",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file",
-      "toPath": "packages/backend/src/config/index.ts",
-      "toSymbol": "loadConfig",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
       "fromSymbol": "$file",
@@ -82758,9 +82741,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4868,
+    "architectureExceptions": 4867,
     "implementationSccs": 0,
-    "observedEdges": 5477,
+    "observedEdges": 5476,
     "requiredPorts": 36,
     "targetEdges": 66
   },
@@ -147106,22 +147089,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "integration",
-      "fromFile": "packages/backend/src/modules/integration/composition/webhookAdmission.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/webhookAdmission.ts#$file",
-      "id": "import:bcf648cb4fe7065df0b7",
-      "owner": "integration",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/config",
-      "syntax": "static-import",
-      "targetSymbol": "loadConfig",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/config/index.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/config/index.ts#$file"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file",
@@ -171197,7 +171164,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:39db36064611f9c9ad3e751c0643cb100dd1d6e62d113552684757075a111fda",
+  "sourceDigest": "sha256:9004a8966d9388b3b7cdc04a891ba1210487fac6d26a1f00aa177731abc3f861",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

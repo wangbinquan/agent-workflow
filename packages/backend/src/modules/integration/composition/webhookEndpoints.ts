@@ -2,6 +2,7 @@ import type { SecretBox } from '@/auth/secretBox'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { WebhookEndpointServiceDeps } from '@/services/webhookEndpoints'
 import type { WebhookEndpointAdministrationPort } from '../application/ports/webhookEndpointAdministration'
+import type { WebhookConfigurationQuery } from '../application/ports/webhookConfiguration'
 import { createWebhookEndpointAdministration } from '../infrastructure/webhookEndpointAdministration'
 
 export function composeWebhookEndpointAdministration(
@@ -16,12 +17,12 @@ export function composeWebhookEndpointAdministration(
  */
 export function composeWebhookEndpointServiceDependencies(input: {
   readonly db: ProviderNeutralDatabase
-  readonly configPath: string
+  readonly configuration: WebhookConfigurationQuery
   readonly secretBox: SecretBox
 }): WebhookEndpointServiceDeps {
   return {
     administration: createWebhookEndpointAdministration(input.db),
-    configPath: input.configPath,
+    configuration: input.configuration,
     secretBox: input.secretBox,
   }
 }
