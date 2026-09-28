@@ -256,6 +256,106 @@ test('带着已提交的意见按「通过」：弹窗要点明这些意见不�
   ).toBe(true)
 })
 
+// Regression for the 2026-09-28 report: native close() does not emit a close
+// event, so approving again must recover the memoised connection and still
+// inspect the persisted draft before deciding whether confirmation is needed.
+for (const keepDraft of [true, false]) {
+  test(`通过评审恢复已关闭的 IndexedDB 连接（${keepDraft ? '保留草稿确认' : '无草稿直接通过'}）`, async ({
+    page,
+  }) => {
+    const row = await launchAndAwaitReview(`draft-reconnect-${keepDraft}`)
+    const detail = await api<{ currentVersion: { id: string } }>(`/api/reviews/${row.nodeRunId}`)
+    const errors: string[] = []
+    const decisions: string[] = []
+    page.on('pageerror', (error) => errors.push(error.message))
+    page.on('request', (request) => {
+      if (request.url().endsWith(`/api/reviews/${row.nodeRunId}/decision`)) {
+        decisions.push(request.method())
+      }
+    })
+    await page.addInitScript(() => {
+      const nativeTransaction = IDBDatabase.prototype.transaction
+      IDBDatabase.prototype.transaction = function (
+        this: IDBDatabase,
+        ...args: Parameters<typeof nativeTransaction>
+      ) {
+        const tx = nativeTransaction.apply(this, args)
+        if (this.name === 'agent-workflow-drafts') {
+          ;(window as unknown as { __reviewDraftDb: IDBDatabase }).__reviewDraftDb = this
+        }
+        return tx
+      }
+    })
+    await openReview(page, row.nodeRunId)
+    const key = `${row.taskId}:${row.nodeRunId}:${detail.currentVersion.id}:reconnect`
+    await page.evaluate(async (draftKey) => {
+      await new Promise<void>((resolve, reject) => {
+        const req = indexedDB.open('agent-workflow-drafts', 2)
+        req.onupgradeneeded = () => {
+          for (const store of ['review-drafts', 'clarify-drafts']) {
+            if (!req.result.objectStoreNames.contains(store)) req.result.createObjectStore(store)
+          }
+        }
+        req.onerror = () => reject(req.error)
+        req.onsuccess = () => {
+          const db = req.result
+          const tx = db.transaction('review-drafts', 'readwrite')
+          tx.objectStore('review-drafts').put('Keep this unfinished review comment', draftKey)
+          tx.oncomplete = () => {
+            db.close()
+            resolve()
+          }
+          tx.onabort = () => {
+            db.close()
+            reject(tx.error)
+          }
+        }
+      })
+    }, key)
+    // Prime the application's own cached connection, then close that exact one.
+    const approve = page.getByRole('button', { name: 'Approve', exact: true })
+    const dialog = page.getByTestId('review-decision-dialog')
+    await approve.click()
+    await expect(dialog).toContainText('1 unsubmitted')
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
+    await expect(dialog).toHaveCount(0)
+    await page.evaluate(
+      async ({ draftKey, keep }) => {
+        const db = (window as unknown as { __reviewDraftDb: IDBDatabase }).__reviewDraftDb
+        if (!keep) {
+          await new Promise<void>((resolve, reject) => {
+            const tx = db.transaction('review-drafts', 'readwrite')
+            tx.objectStore('review-drafts').delete(draftKey)
+            tx.oncomplete = () => resolve()
+            tx.onabort = () => reject(tx.error)
+          })
+        }
+        db.close()
+      },
+      { draftKey: key, keep: keepDraft },
+    )
+
+    const decided = page.waitForResponse(
+      (response) =>
+        response.url().endsWith(`/api/reviews/${row.nodeRunId}/decision`) &&
+        response.request().method() === 'POST',
+    )
+    await approve.click()
+    if (keepDraft) {
+      await expect(dialog).toContainText('1 unsubmitted')
+      expect(decisions).toEqual([])
+      await dialog.getByRole('button', { name: 'Confirm' }).click()
+    }
+    expect((await decided).ok()).toBe(true)
+    expect(decisions).toEqual(['POST'])
+    expect(
+      (await api<{ summary: { decision: string } }>(`/api/reviews/${row.nodeRunId}`)).summary
+        .decision,
+    ).toBe('approved')
+    expect(errors).toEqual([])
+  })
+}
+
 test('反向对照：没有意见也没有草稿时按「通过」，不弹窗、直接过 @nightly', async ({ page }) => {
   await openReview(page, clean.nodeRunId)
   await page.getByRole('button', { name: 'Approve' }).click()

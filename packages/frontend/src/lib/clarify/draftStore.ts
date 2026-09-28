@@ -12,10 +12,10 @@
 // features can evolve independently. Same IDB facade for parity.
 
 import type { ClarifyAnswer } from '@agent-workflow/shared'
-import { openDraftDb } from '../draftDb'
+import { withDraftTransaction } from '../draftDb'
 
 // RFC-023/058 — clarify shares `agent-workflow-drafts` with review, through the
-// single shared façade (openDraftDb) so the two can never diverge on version
+// single shared façade (withDraftTransaction) so the two can never diverge on version
 // again (design/test-guard-audit-2026-07-21 F3).
 const STORE = 'clarify-drafts'
 
@@ -33,109 +33,109 @@ export function clarifyDraftKey(k: ClarifyDraftKey): string {
   return `clarify-round:${k.taskId}:${k.intermediaryNodeRunId}:${k.roundId}`
 }
 
-function openDb(): Promise<IDBDatabase | null> {
-  return openDraftDb()
-}
-
 export async function getClarifyDraft(k: ClarifyDraftKey): Promise<ClarifyAnswer[] | null> {
-  const db = await openDb()
-  if (db === null) return null
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE, 'readonly')
-    const req = tx.objectStore(STORE).get(clarifyDraftKey(k))
-    req.onsuccess = () => {
-      const v = req.result
-      if (typeof v !== 'string') {
-        resolve(null)
-        return
+  return withDraftTransaction<ClarifyAnswer[] | null>(STORE, 'readonly', (tx) => {
+    if (tx === null) return null
+    return new Promise((resolve) => {
+      const req = tx.objectStore(STORE).get(clarifyDraftKey(k))
+      req.onsuccess = () => {
+        const v = req.result
+        if (typeof v !== 'string') {
+          resolve(null)
+          return
+        }
+        try {
+          const parsed = JSON.parse(v) as unknown
+          resolve(Array.isArray(parsed) ? (parsed as ClarifyAnswer[]) : null)
+        } catch {
+          resolve(null)
+        }
       }
-      try {
-        const parsed = JSON.parse(v) as unknown
-        resolve(Array.isArray(parsed) ? (parsed as ClarifyAnswer[]) : null)
-      } catch {
-        resolve(null)
-      }
-    }
-    req.onerror = () => resolve(null)
+      req.onerror = () => resolve(null)
+    })
   })
 }
 
 export async function setClarifyDraft(k: ClarifyDraftKey, answers: ClarifyAnswer[]): Promise<void> {
-  const db = await openDb()
-  // RFC-250 T15: callers project the latest IDB generation into visible UX.
-  // Resolving on an unavailable/failed store would falsely advance localAck.
-  if (db === null) throw new Error('clarify draft storage unavailable')
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE, 'readwrite')
-    tx.objectStore(STORE).put(JSON.stringify(answers), clarifyDraftKey(k))
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => reject(tx.error ?? new Error('clarify draft write failed'))
-    tx.onabort = () => reject(tx.error ?? new Error('clarify draft write aborted'))
+  return withDraftTransaction<void>(STORE, 'readwrite', (tx) => {
+    // RFC-250 T15: callers project the latest IDB generation into visible UX.
+    // Resolving on an unavailable/failed store would falsely advance localAck.
+    if (tx === null) throw new Error('clarify draft storage unavailable')
+    return new Promise((resolve, reject) => {
+      tx.objectStore(STORE).put(JSON.stringify(answers), clarifyDraftKey(k))
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => reject(tx.error ?? new Error('clarify draft write failed'))
+      tx.onabort = () => reject(tx.error ?? new Error('clarify draft write aborted'))
+    })
   })
 }
 
 export async function deleteClarifyDraft(k: ClarifyDraftKey): Promise<void> {
-  const db = await openDb()
-  if (db === null) return
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE, 'readwrite')
-    tx.objectStore(STORE).delete(clarifyDraftKey(k))
-    // Request success precedes transaction commit. Submit cleanup must not
-    // proceed while the delete can still be rolled back by a late abort.
-    tx.oncomplete = () => resolve()
-    tx.onerror = () => resolve()
-    tx.onabort = () => resolve()
+  return withDraftTransaction<void>(STORE, 'readwrite', (tx) => {
+    if (tx === null) return
+    return new Promise((resolve) => {
+      tx.objectStore(STORE).delete(clarifyDraftKey(k))
+      // Request success precedes transaction commit. Submit cleanup must not
+      // proceed while the delete can still be rolled back by a late abort.
+      tx.oncomplete = () => resolve()
+      tx.onerror = () => resolve()
+      tx.onabort = () => resolve()
+    })
   })
 }
 
 export async function listClarifyDrafts(
   filter: Partial<Pick<ClarifyDraftKey, 'taskId' | 'intermediaryNodeRunId'>> = {},
 ): Promise<{ key: string; answers: ClarifyAnswer[] }[]> {
-  const db = await openDb()
-  if (db === null) return []
-  // Keys are `clarify-round:<taskId>:<intermediaryNodeRunId>:<roundId>`.
-  // Filter narrowed via prefix segments.
-  const segments: string[] = ['clarify-round']
-  if (filter.taskId !== undefined) segments.push(filter.taskId)
-  if (filter.intermediaryNodeRunId !== undefined) segments.push(filter.intermediaryNodeRunId)
-  const prefix = segments.join(':')
-  return new Promise((resolve) => {
-    const out: { key: string; answers: ClarifyAnswer[] }[] = []
-    const tx = db.transaction(STORE, 'readonly')
-    const req = tx.objectStore(STORE).openCursor()
-    req.onsuccess = () => {
-      const cursor = req.result
-      if (cursor === null) {
-        resolve(out)
-        return
-      }
-      const k = String(cursor.key)
-      if (k.startsWith(prefix)) {
-        if (typeof cursor.value === 'string') {
-          try {
-            const parsed = JSON.parse(cursor.value) as unknown
-            if (Array.isArray(parsed)) out.push({ key: k, answers: parsed as ClarifyAnswer[] })
-          } catch {
-            /* skip corrupt entry */
+  return withDraftTransaction<{ key: string; answers: ClarifyAnswer[] }[]>(
+    STORE,
+    'readonly',
+    (tx) => {
+      if (tx === null) return []
+      // Keys are `clarify-round:<taskId>:<intermediaryNodeRunId>:<roundId>`.
+      // Filter narrowed via prefix segments.
+      const segments: string[] = ['clarify-round']
+      if (filter.taskId !== undefined) segments.push(filter.taskId)
+      if (filter.intermediaryNodeRunId !== undefined) segments.push(filter.intermediaryNodeRunId)
+      const prefix = segments.join(':')
+      return new Promise((resolve) => {
+        const out: { key: string; answers: ClarifyAnswer[] }[] = []
+        const req = tx.objectStore(STORE).openCursor()
+        req.onsuccess = () => {
+          const cursor = req.result
+          if (cursor === null) {
+            resolve(out)
+            return
           }
+          const k = String(cursor.key)
+          if (k.startsWith(prefix)) {
+            if (typeof cursor.value === 'string') {
+              try {
+                const parsed = JSON.parse(cursor.value) as unknown
+                if (Array.isArray(parsed)) out.push({ key: k, answers: parsed as ClarifyAnswer[] })
+              } catch {
+                /* skip corrupt entry */
+              }
+            }
+          }
+          cursor.continue()
         }
-      }
-      cursor.continue()
-    }
-    req.onerror = () => resolve(out)
-  })
+        req.onerror = () => resolve(out)
+      })
+    },
+  )
 }
 
 /** Clears the ENTIRE clarify draft store. Used on logout (wipe the prior
  *  account's private drafts on a shared browser — RFC-099 audit) and by test
  *  suites to avoid leaking between cases. */
 export async function clearAllClarifyDrafts(): Promise<void> {
-  const db = await openDb()
-  if (db === null) return
-  return new Promise((resolve) => {
-    const tx = db.transaction(STORE, 'readwrite')
-    const req = tx.objectStore(STORE).clear()
-    req.onsuccess = () => resolve()
-    req.onerror = () => resolve()
+  return withDraftTransaction<void>(STORE, 'readwrite', (tx) => {
+    if (tx === null) return
+    return new Promise((resolve) => {
+      const req = tx.objectStore(STORE).clear()
+      req.onsuccess = () => resolve()
+      req.onerror = () => resolve()
+    })
   })
 }

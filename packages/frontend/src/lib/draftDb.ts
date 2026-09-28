@@ -35,13 +35,13 @@ export const DRAFT_DB_VERSION = 2
 let dbPromise: Promise<IDBDatabase | null> | null = null
 
 /**
- * Open (once, memoised) the shared drafts DB. Resolves null when IndexedDB is
- * unavailable (SSR / the happy-dom test env / a private-mode failure) — callers
- * then degrade to no-ops, exactly as before.
+ * Open (memoised while usable) the shared drafts DB. Resolves null when
+ * IndexedDB is unavailable (SSR / the happy-dom test env / a private-mode
+ * failure); callers retain their existing unavailable-storage behaviour.
  */
 export function openDraftDb(): Promise<IDBDatabase | null> {
   if (dbPromise !== null) return dbPromise
-  dbPromise = new Promise((resolve) => {
+  const pending: Promise<IDBDatabase | null> = new Promise<IDBDatabase | null>((resolve) => {
     if (typeof indexedDB === 'undefined') {
       resolve(null)
       return
@@ -55,10 +55,58 @@ export function openDraftDb(): Promise<IDBDatabase | null> {
         if (!db.objectStoreNames.contains(store)) db.createObjectStore(store)
       }
     }
-    req.onsuccess = () => resolve(req.result)
+    req.onsuccess = () => {
+      const db = req.result
+      const invalidate = () => {
+        // Late events from an old connection must not evict its replacement.
+        if (dbPromise === pending) dbPromise = null
+      }
+      db.onclose = invalidate
+      db.onversionchange = () => {
+        invalidate()
+        db.close()
+      }
+      resolve(db)
+    }
     req.onerror = () => resolve(null)
   })
-  return dbPromise
+    .catch(() => null)
+    .then((db) => {
+      // A temporary open failure must not disable drafts until a page reload.
+      if (db === null && dbPromise === pending) dbPromise = null
+      return db
+    })
+  dbPromise = pending
+  return pending
+}
+
+/**
+ * Create a transaction and enqueue its requests in the same turn. A cached
+ * connection can become close-pending before its close event (explicit close()
+ * never fires that event). Retry creation once, before any operation runs.
+ * Persistent unavailability keeps each store's existing null-storage contract.
+ */
+export async function withDraftTransaction<T>(
+  store: DraftStoreName,
+  mode: IDBTransactionMode,
+  operation: (tx: IDBTransaction | null) => T | Promise<T>,
+): Promise<T> {
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const pending = openDraftDb()
+    const db = await pending
+    if (db === null) break
+    let tx: IDBTransaction
+    try {
+      tx = db.transaction(store, mode)
+    } catch (error) {
+      if (!(error instanceof DOMException) || error.name !== 'InvalidStateError') throw error
+      if (dbPromise === pending) dbPromise = null
+      db.close()
+      continue
+    }
+    return operation(tx)
+  }
+  return operation(null)
 }
 
 /** Reset the memoised connection (test-only; each case starts fresh). */
