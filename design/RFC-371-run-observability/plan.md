@@ -164,3 +164,5 @@
 - 该批不替代整套 RFC 验收；按仓库规定未运行本地 AW 测试或服务。
 
 - 后续 `8b1461ae3` / CI `36417065267` 类型检查指出二维数组推断出的 `database` 可能 undefined；固定三条二元组为 const，保留全部 AST 约束并移除 path 的非空断言。定向 lint/format 与独立功能复核 PASS，测试交后续精确 SHA CI。
+
+- `acbd92a58` / CI `36418307629` 的类型检查通过；后端发现归档批次的两条一次性 allowGrowth 在后续提交未退役。当前无新增计数，删除两条已消费许可并刷新本账本 provenance digest，所有 baseline 与生成快照保持不变。
