@@ -1,3 +1,4 @@
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-041 — distill scheduler tests (PR2 scope).
 //
 // Drives `distillTick` synchronously (no setInterval) with a deterministic
@@ -67,7 +68,10 @@ function createMemoryDistillTestContext(db: ProviderNeutralDatabase) {
   return {
     store: new DrizzleMemoryDistillWorkStore(db),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
-    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, root),
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
+      db,
+      createFileReviewArtifactContent(root),
+    ),
     cleanup() {
       if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
       else process.env.AGENT_WORKFLOW_HOME = previousHome

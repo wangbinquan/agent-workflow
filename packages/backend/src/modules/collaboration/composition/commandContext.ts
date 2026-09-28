@@ -12,6 +12,7 @@ import type { TaskExecutionReadModels } from '@/modules/task-execution/public/ty
 import type { HumanGateOperationStore } from '../application/ports/humanGateOperationStore'
 import type { ClarifyQuestionSnapshotReader } from '../application/ports/clarifyQuestionSnapshotReader'
 import type { HumanGateArtifactStore } from '../application/ports/humanGateArtifactStore'
+import type { ReviewArtifactContentPort } from '../application/ports/reviewArtifactContent'
 import type { ManualQuestionOpenWriter } from '../application/ports/manualQuestionOpenWriter'
 import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
 import type { ReviewNodeReviewerStore } from '../application/ports/reviewNodeReviewerStore'
@@ -20,6 +21,7 @@ import type { TaskFeedbackStore } from '../application/ports/taskFeedbackStore'
 import type { CollaborationTaskAccessPort } from '../application/ports/collaborationTaskAccess'
 import type { ClarifyDirectiveStore } from '../application/ports/clarifyDirectiveStore'
 import { FsHumanGateArtifactStore } from '../infrastructure/fsHumanGateArtifactStore'
+import { createFileReviewArtifactContent } from '../infrastructure/local/fileReviewArtifactContent'
 import { DatabaseClarifyQuestionSnapshotReader } from '../infrastructure/clarifyQuestionSnapshotReader'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { DatabaseHumanGateOperationPersistence } from '../infrastructure/humanGateOperationPersistence'
@@ -80,6 +82,10 @@ export type CollaborationCommandContextInput = Omit<
 > & {
   readonly db: ProviderNeutralDatabase
   readonly appHome?: string
+  readonly reviewArtifacts?: {
+    readonly store: HumanGateArtifactStore
+    readonly content: ReviewArtifactContentPort
+  }
 }
 
 export type PostgresqlCollaborationCommandContextInput = Omit<
@@ -102,6 +108,14 @@ export function createCollaborationCommandContext<I extends CollaborationCommand
 export function createCollaborationCommandContext(
   input: CollaborationCommandContextInput,
 ): CollaborationCommandContext {
+  const reviewArtifacts =
+    input.reviewArtifacts ??
+    (input.appHome === undefined
+      ? undefined
+      : {
+          store: new FsHumanGateArtifactStore(input.appHome),
+          content: createFileReviewArtifactContent(input.appHome),
+        })
   return createCollaborationCommandContextFromPersistence({
     ...input,
     taskAccess: createCollaborationTaskAccessPort(input.db),
@@ -116,15 +130,16 @@ export function createCollaborationCommandContext(
       reviewers: new DrizzleReviewNodeReviewerStore(input.db),
       feedback: new DrizzleTaskFeedbackStore(input.db),
       clarifyDirectives: createClarifyDirectiveStore(input.db),
-      ...(input.appHome === undefined
+      ...(reviewArtifacts === undefined
         ? {}
         : {
-            committedArtifacts: new DatabaseCommittedReviewArtifactReader(input.db, input.appHome),
+            committedArtifacts: new DatabaseCommittedReviewArtifactReader(
+              input.db,
+              reviewArtifacts.content,
+            ),
           }),
     },
-    ...(input.appHome === undefined
-      ? {}
-      : { artifacts: new FsHumanGateArtifactStore(input.appHome) }),
+    ...(reviewArtifacts === undefined ? {} : { artifacts: reviewArtifacts.store }),
   })
 }
 

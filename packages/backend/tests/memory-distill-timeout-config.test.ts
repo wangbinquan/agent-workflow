@@ -1,3 +1,4 @@
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // 记忆蒸馏超时：默认值 + 可配置 + 全链路接线。
 //
 // 用户 2026-09-21 报障：「记忆提炼任务默认 120s 超时太短了，改成 1 小时超时，
@@ -44,7 +45,10 @@ function createContext(db: ProviderNeutralDatabase) {
   return {
     store: new DrizzleMemoryDistillWorkStore(db),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
-    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, root),
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
+      db,
+      createFileReviewArtifactContent(root),
+    ),
     cleanup() {
       if (previousHome === undefined) delete process.env.AGENT_WORKFLOW_HOME
       else process.env.AGENT_WORKFLOW_HOME = previousHome

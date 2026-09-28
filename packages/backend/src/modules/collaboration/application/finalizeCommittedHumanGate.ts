@@ -19,7 +19,7 @@ export class CommittedHumanGateFinalizer {
     }
     const artifacts = await this.operations.listArtifacts(operation.id)
     for (const artifact of artifacts) {
-      const receiptJson = this.artifacts.finalizeReviewArtifact(artifact)
+      const receiptJson = await this.artifacts.finalizeReviewArtifact(artifact)
       if (artifact.state === 'finalized') continue
       if (artifact.state !== 'consumed') {
         throw new Error(

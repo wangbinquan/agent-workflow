@@ -1,3 +1,4 @@
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-043 T3 — locks the new capture-side behaviour added to runDistill:
 //   1. attempts === 0 path writes user_prompt_md + dedup_snapshot_ids_json
 //   2. attempts > 0 path does NOT overwrite user_prompt_md (audit trail)
@@ -39,7 +40,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 function createMemoryDistillTestContext(db: ProviderNeutralDatabase) {
   return {
     store: new DrizzleMemoryDistillWorkStore(db),
-    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, appHome()),
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
+      db,
+      createFileReviewArtifactContent(appHome()),
+    ),
   }
 }
 

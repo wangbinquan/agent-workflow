@@ -1,3 +1,4 @@
+import { createFileReviewArtifactContent } from './local/fileReviewArtifactContent'
 // SQLite review persistence and decision mechanics (RFC-005 / RFC-349).
 //
 // This module owns the review feature's state transitions outside the
@@ -1623,7 +1624,10 @@ export async function readDocVersionBody(
 ): Promise<string> {
   try {
     // RFC-359：正文读取器两引擎一份（日志校验 + final/staged 回退），不再经 SQLite 命令上下文。
-    return await new DatabaseCommittedReviewArtifactReader(db, appHome).read(docVersion.bodyPath)
+    return await new DatabaseCommittedReviewArtifactReader(
+      db,
+      createFileReviewArtifactContent(appHome),
+    ).read(docVersion.bodyPath)
   } catch {
     const abs = join(appHome, docVersion.bodyPath)
     throw new NotFoundError('doc-version-body-missing', `doc_version body file not found: ${abs}`)

@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1738,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1739,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2/H6：新增 collaboration 本地文稿内容 adapter 工厂 createFileReviewArtifactContent，原文件读取机制从 DB reader 独立，计数1738→1739；业务状态机与写点不增。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -882,10 +885,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1020,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T3/H2：identity-access 新增已被生产 bootstrap／实时 composition 消费的 WebSocketAuthenticationParticipant 与不透明 WebSocketCredential；runtime-management 兼容别名复用同一合同，净1018→1020。原 local token union 不再进入实时 transport；没有 CS DTO 或未消费合同豁免。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -905,12 +905,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25048,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25051,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 A-T2/H6：新增 ReviewArtifactContentPort 及 file adapter 两个文件／声明，删除 DB reader 内旧 absolutePath helper，净25048→25051；全部归 collaboration owner，无未归属符号或公共合同新增。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:001366529814adacc69aee42798d8685bcc63d413bbc9211d56873b4e5dfa4c5",
+    "sourceDigest": "sha256:9b1d5a58ebc2a26918c901402e592ea266b65e287c4f6f164711db2dc6c42d11",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -923,8 +926,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "465987a332e74f8db29ede7405f2b6b5275fbc15",
-    "contentDigest": "sha256:ed39add8fb598bc7fce67a4bd287ef512014c0ef993f2899a999ec024eef6030",
+    "currentSnapshotSha": "51fed92c17735d570df994ae1a3320d9b8339011",
+    "contentDigest": "sha256:97b41f03c75c4741aef1ff8b97509e1630efc12fd26f2f698da708f55f9dc6d9",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -180,3 +180,10 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - WS 续批静态复核补齐 RFC-305 精确 public／consumer 清单：前批新增 HttpAuthenticationParticipant 与 authentication composition 的条目、本批 WS 两个合同及 credential owner 迁移均逐条对应源码；扫描器和判据保持。架构净 public +2、exception -1、owner -2、import／mutation 数不变，删除前批已消费 allowGrowth，仅保留本批两个已消费 WS 合同的精确增长。W29 只更新 PG composition 内 token 从 WS transport 移到本地身份装配的摘要。
 
 - 前批 `465987a33` CI `36376587910` 已完成 check；运行中的后端作业显示迁移已通过重复 start 和真实回滚，剩余旧断言把 active 表数固定为182（当前合同186）。改为核对回滚前后操作 tableCounts 保持一致，不再把 schema 演进误报为迁移失败。同时更新 runtime registry 接线文本锁以容纳并要求显式 public satisfies 绑定；补记 auth/session 兼容门面的4条精确 R1 边及具名退役阶段。移入 owner 的 Actor 投影直接返回同一对象，删除原兼容层多余类型断言，没有增补检查逻辑或改变认证行为。此批继续由新 SHA CI 验收，不将前批失败作业记成功。
+
+- WS 续批 `51fed92c17735d570df994ae1a3320d9b8339011` 已发布，推送后 main／origin/main 同步。精确 SHA CI `36377661392` 已启动，maintenance-soak `36377661346` 单独记录；未取得完整终态，不记 A-G 通过。
+
+- A-T2/H6 评审文稿切面：保留 collaboration 的 HumanGateArtifactStore／operation journal，允许 stage／finalize／cleanup 返回异步持久 receipt；准备、提交后发布及恢复全部等待效果完成再更新原状态。新增 owner-owned ReviewArtifactContentPort，DB reader 保留原 committed／completed 及 staged fallback 规则，字节读取归 file adapter；composition 可在无 appHome 时注入成对的存储／读取实现。standalone 文件路径、内容摘要、旧无journal文稿和恢复行为不变。
+- 新增双 provider 真库回归：异步 stage 完成前仍 preparing／declared、finalize 完成前仍 committed／consumed 且 staged 可读、cleanup 完成前不清声明；无本机 home 的内容 reader 覆盖异步等待、staged→final、摘要失配、缺失、旧文稿与读取失败。原 finalize 失败重试用例增加异步拒绝。生产和测试的既有本地读取入口显式选择 file adapter，没有新 PG 内容表或 CS adapter；Skills／plugins／其他产物与全量存储机制仍待后续，不记 H6 完成。
+
+- WS 续批 CI `36377661392` 检出 fixture 的 `Object.freeze` 对象未推导两个 credential 参数类型，以及 RFC-305 精确 import 清单漏记 server 中第二条 IA participant 类型导入。本批显式标注 `RealtimeCredential`，补齐实际导入条目；不修改扫描判据。原失败作业不记成功，正式验证交给本批精确 SHA CI。

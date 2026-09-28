@@ -33,11 +33,11 @@ export const STUB_REALTIME_CHANNELS: RealtimeChannelAccess = Object.freeze({
 const STUB_DAEMON_CREDENTIAL: RealtimeCredential = Object.freeze({ kind: 'daemon' })
 
 export const STUB_REALTIME_CREDENTIALS: RealtimeCredentialAccess = Object.freeze({
-  revalidationKey(credential) {
+  revalidationKey(credential: RealtimeCredential) {
     const local = credential as WsCredentialWithExpiry
     return local.kind === 'daemon' ? 'daemon' : `${local.kind}\u0000${local.hash}`
   },
-  expiresAt(credential) {
+  expiresAt(credential: RealtimeCredential) {
     const local = credential as WsCredentialWithExpiry
     return local.kind === 'daemon' ? null : local.expiresAt
   },

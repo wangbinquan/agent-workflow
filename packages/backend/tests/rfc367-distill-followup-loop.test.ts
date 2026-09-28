@@ -1,3 +1,4 @@
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-367 T6 — runDistill's protocol follow-up loop.
 //
 // The behaviour under test is the whole point of the RFC: before it, a model
@@ -146,7 +147,10 @@ describeEachProvider('RFC-367 runDistill follow-up loop', (harness) => {
       setRootSessionId: async () => {},
       markTerminal: async () => {},
     })),
-    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, appHome()),
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
+      db,
+      createFileReviewArtifactContent(appHome()),
+    ),
     job,
     siblings: [job],
     runFn,

@@ -1,3 +1,4 @@
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-367 closeout — the three acceptance items that had no named lock yet.
 //
 // AC-7 / AC-8 / AC-10 were implemented in the RFC batch (4e956ba87) but shipped
@@ -176,7 +177,10 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
   ): RunDistillOptions => ({
     // No sinkFactory => the REAL memory_distill_events writer.
     store: new DrizzleMemoryDistillWorkStore(db),
-    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, appHome()),
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
+      db,
+      createFileReviewArtifactContent(appHome()),
+    ),
     job,
     siblings: [job],
     runFn,

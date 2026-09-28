@@ -1,3 +1,4 @@
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { DatabaseCommittedReviewArtifactReader } from '@/modules/collaboration/infrastructure/committedReviewArtifactReader'
 import { DrizzleMemoryDistillRuntimeResolver } from '@/modules/memory/infrastructure/memoryDistillRuntimeResolver'
@@ -10,7 +11,10 @@ export function createSqliteMemoryDistillTestContext(
   db: ProviderNeutralDatabase,
   root = appHome(),
 ) {
-  const reviewedArtifacts = new DatabaseCommittedReviewArtifactReader(db, root)
+  const reviewedArtifacts = new DatabaseCommittedReviewArtifactReader(
+    db,
+    createFileReviewArtifactContent(root),
+  )
   return Object.freeze({
     store: new DrizzleMemoryDistillWorkStore(db),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),

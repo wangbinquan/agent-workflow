@@ -1,3 +1,4 @@
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-359 W12 — exercise the two collaboration route composition roots.
 // These cases retain the selected W7 behavior assertions and real DB/file fixtures,
 // then enter through the composed route participants and a real command context.
@@ -64,7 +65,10 @@ function operations(harness: ProviderHarness): CollaborationRouteOperations {
   const db = harness.db
   const memoryOperations = composeMemoryOperationsFor({
     db: db,
-    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, APP_HOME),
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
+      db,
+      createFileReviewArtifactContent(APP_HOME),
+    ),
   })
   const context = createCollaborationCommandContext({
     db,

@@ -1,3 +1,4 @@
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-050 — locks the output-language directive plumbing in the distiller.
 //
 // Verifies:
@@ -115,7 +116,10 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
       const db = harness.db
       const memory = {
         store: new DrizzleMemoryDistillWorkStore(db),
-        reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, root),
+        reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
+          db,
+          createFileReviewArtifactContent(root),
+        ),
       }
       await runDistill({
         store: memory.store,

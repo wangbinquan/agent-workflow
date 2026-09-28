@@ -1,3 +1,4 @@
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-044 — distiller source-context loader + builder unit tests.
 //
 // What we lock here:
@@ -47,7 +48,10 @@ import { describeEachProvider } from './helpers/eachProvider'
 function createMemoryDistillTestContext(db: ProviderNeutralDatabase, root = appHome()) {
   return {
     store: new DrizzleMemoryDistillWorkStore(db),
-    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, root),
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
+      db,
+      createFileReviewArtifactContent(root),
+    ),
   }
 }
 

@@ -5,36 +5,35 @@
 // （consumed/finalized 且操作 committed/completed），final 路径在则按 digest 校验读取，
 // 否则回退 staged 路径。
 
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { and, eq, inArray } from 'drizzle-orm'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { collaborationGateArtifacts, collaborationGateOperations } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import type { CommittedReviewArtifactReader } from '../application/ports/committedReviewArtifactReader'
+import type { ReviewArtifactContentPort } from '../application/ports/reviewArtifactContent'
 import { HumanGateOperationError } from '../domain/humanGateOperation'
 
-function absolutePath(appHome: string, relativePath: string): string {
-  return join(appHome, ...relativePath.split('/'))
-}
-
-function readVerified(path: string, sha256: string, byteSize: number): string {
-  const body = readFileSync(path)
+function readVerified(
+  content: { readonly body: Uint8Array; readonly label: string },
+  sha256: string,
+  byteSize: number,
+): string {
+  const { body, label } = content
   if (sha256Hex(body) !== sha256 || body.byteLength !== byteSize) {
     throw new HumanGateOperationError(
       'human-gate-artifact-digest-mismatch',
-      `human-gate artifact content does not match its journal: ${path}`,
+      `human-gate artifact content does not match its journal: ${label}`,
       { expectedBytes: byteSize, actualBytes: body.byteLength },
     )
   }
-  return body.toString('utf8')
+  return Buffer.from(body).toString('utf8')
 }
 
 export class DatabaseCommittedReviewArtifactReader implements CommittedReviewArtifactReader {
   constructor(
     private readonly db: ProviderNeutralDatabase,
-    private readonly appHome: string,
+    private readonly content: ReviewArtifactContentPort,
   ) {}
 
   async read(finalPath: string): Promise<string> {
@@ -58,15 +57,15 @@ export class DatabaseCommittedReviewArtifactReader implements CommittedReviewArt
       )
       .limit(1)
     const artifact = rows[0]
-    const final = absolutePath(this.appHome, finalPath)
-    if (existsSync(final)) {
+    const final = await this.content.read(finalPath)
+    if (final !== null) {
       return artifact === undefined
-        ? readFileSync(final, 'utf8')
+        ? Buffer.from(final.body).toString('utf8')
         : readVerified(final, artifact.sha256, artifact.byteSize)
     }
     if (artifact !== undefined) {
-      const staged = absolutePath(this.appHome, artifact.stagedPath)
-      if (existsSync(staged)) return readVerified(staged, artifact.sha256, artifact.byteSize)
+      const staged = await this.content.read(artifact.stagedPath)
+      if (staged !== null) return readVerified(staged, artifact.sha256, artifact.byteSize)
     }
     throw new HumanGateOperationError(
       'human-gate-artifact-missing',

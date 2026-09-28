@@ -341,7 +341,7 @@ export class ReviewGateOpenPreparation {
     }
 
     for (const entry of planned) {
-      const receiptJson = this.artifacts.stageReviewArtifact(entry.plan, entry.body)
+      const receiptJson = await this.artifacts.stageReviewArtifact(entry.plan, entry.body)
       await this.operations.transitionArtifact({
         operationId: operation.id,
         artifactKey: entry.plan.artifactKey,

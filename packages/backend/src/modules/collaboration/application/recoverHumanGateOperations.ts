@@ -116,7 +116,7 @@ export class HumanGateOperationRecovery {
 
   private async finishCleanup(operation: HumanGateOperationSnapshot, at: number): Promise<void> {
     for (const artifact of await this.artifactsFor(operation.id)) {
-      this.options.artifacts.cleanupReviewArtifact(artifact)
+      await this.options.artifacts.cleanupReviewArtifact(artifact)
     }
     await this.options.operations.completeCleanup({
       operationId: operation.id,
@@ -136,7 +136,7 @@ export class HumanGateOperationRecovery {
     const artifacts = await this.artifactsFor(operation.id)
     for (const artifact of artifacts) {
       if (artifact.state === 'finalized') {
-        this.options.artifacts.finalizeReviewArtifact(artifact)
+        await this.options.artifacts.finalizeReviewArtifact(artifact)
         continue
       }
       if (artifact.state !== 'consumed') {
@@ -144,7 +144,7 @@ export class HumanGateOperationRecovery {
           `committed human-gate artifact '${artifact.artifactKey}' is '${artifact.state}'`,
         )
       }
-      const receiptJson = this.options.artifacts.finalizeReviewArtifact(artifact)
+      const receiptJson = await this.options.artifacts.finalizeReviewArtifact(artifact)
       await this.options.operations.transitionArtifact({
         operationId: operation.id,
         artifactKey: artifact.artifactKey,

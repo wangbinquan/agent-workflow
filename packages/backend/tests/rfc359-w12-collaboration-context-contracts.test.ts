@@ -1,3 +1,4 @@
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-359 AC12: command contexts must retain the capabilities actually supplied at
 // construction. Complete routes cannot accept a base or partially composed context;
 // gate/artifact consumers keep their base contract. The runtime fixtures use real
@@ -62,7 +63,10 @@ import { DESIGNER, freshTaskId, seedTask } from './helpers/questionDispatchFixtu
 function composeCapabilities(db: ProviderNeutralDatabase, appHome: string) {
   const memory = composeMemoryOperationsFor({
     db,
-    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, appHome),
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
+      db,
+      createFileReviewArtifactContent(appHome),
+    ),
   })
   return {
     reviewDecisions: createReviewDecisionCommand({ db, appHome }),

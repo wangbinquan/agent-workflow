@@ -1,3 +1,4 @@
+import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
@@ -126,7 +127,10 @@ export async function createProductionPerformanceApplication(
   })
   const memoryOperations = composeMemoryOperationsFor({
     db,
-    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(db, appHome),
+    reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
+      db,
+      createFileReviewArtifactContent(appHome),
+    ),
   })
   const collaborationContext = createCollaborationCommandContext({
     db,

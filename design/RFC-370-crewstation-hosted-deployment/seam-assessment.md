@@ -59,3 +59,7 @@ HTTP participant 不能替代 WS 全链路。后续 A-T3 须一起迁移下面�
 ## H2 WS 续批实现（待本批 CI）
 
 上述五处接线现统一消费 identity-access 的 `WebSocketAuthenticationParticipant`：升级传递 URL／header 事实，连接持有 adapter-owned object，合流键与同步到期事实经所选 participant 获取，open／主动重验返回同一 IA authority 投影。本地原 token 解析位于 `infrastructure/local/webSocketAuthentication.ts`，runtime-management composition 只收已选 participant，不再构造身份机制。H2 的外部身份映射／首个管理员／浏览器模式仍留阶段 B；本批只能作为 A 的切面证据，不能替代完整阶段 A 验收。
+
+## H6 评审文稿切面（待本批 CI）
+
+collaboration 保留原 operation／artifact 状态机，所有写效果支持并等待异步 receipt；`ReviewArtifactContentPort` 按日志中的逻辑 key 读取字节，DB reader 继续拥有当前读／staged fallback 与摘要判定。`commandContext` 可注入成对的 store／content，无 appHome 也能完成装配。已有 local helper 与测试显式选择文件 reader；这不表示 Skills／plugin 版本发布或全量 ContentStore 已完成，亦不代表 hosted PG 内容已实现。
