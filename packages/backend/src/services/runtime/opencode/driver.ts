@@ -1,3 +1,4 @@
+import { normalizeUsage } from './usage'
 // RFC-111 PR-A — the opencode RuntimeDriver.
 //
 // PR-A slice A1 implements `parseEvent` (delegating to ./events). Later slices
@@ -362,6 +363,7 @@ export const opencodeDriver: RuntimeDriver = {
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)
   },
+  normalizeUsage,
   observeSystemEvent,
   // RFC-143 — capability methods. PR-1 delegates to the existing free functions
   // (byte-for-byte behavior); later PRs move call sites onto these.

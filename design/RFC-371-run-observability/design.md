@@ -209,3 +209,7 @@ TaskExecution 在现有事务提交链发出最小事实（started/status/attemp
 ## 12. 本次实现前的待决点
 
 默认建议已体现在设计，可在评审后调整：新增独立 run-observability context；默认保留期限 30/90/365；费用先做估算与来源说明；告警仅提醒；runtime 细粒度按能力渐进接入。上游协议的精确字段、现有持久事件是否足以无缝回放、恢复阶段的 invocation 边界在 P0-T1 固定 fixture 后决策，不留隐性假设。
+
+### 实施补充：原生计量 driver 能力
+
+协议载荷解析归属现有 RuntimeDriver：OpenCode 与 Claude 各自提供可选 normalizeUsage，运行时注册表分发，中立边界只校验统一 measurement。调用方不按协议字面量二选一；未注册或未声明计量能力的 driver 返回 unsupported 覆盖，不调用其他协议的解析器。统计领域仍只处理规范化记录与覆盖关系。

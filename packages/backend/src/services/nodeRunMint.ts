@@ -25,7 +25,10 @@ import { isClarifyRerunCause, type NodeRunStatus, type RerunCause } from '@agent
 import type { RuntimeKind } from '@/services/runtime'
 import { tryGetRuntimeDriver, isKnownRuntimeKind } from '@/services/runtime'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
-import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
+import type {
+  RuntimeProfile,
+  RuntimeObservationIdentity,
+} from '@/modules/runtime-management/public/types'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import { createLogger } from '@/util/log'
 import { nextRetryIndex } from '@/modules/task-execution/application/nextRetryIndex'
@@ -323,6 +326,31 @@ export interface FrozenRuntime {
    * transcript lives under the frozen dir, re-resolving would lose it.
    */
   configDir: RuntimeConfigDirProfile
+  /** Registered identity at selection, retained through rename/delete/resume. */
+  observationIdentity?: RuntimeObservationIdentity
+}
+
+function parseObservationIdentity(
+  json: string | null | undefined,
+): RuntimeObservationIdentity | undefined {
+  try {
+    const value: unknown = JSON.parse(json ?? '{}').__observation
+    if (value === null || typeof value !== 'object') return undefined
+    const identity = value as Partial<RuntimeObservationIdentity>
+    if (
+      typeof identity.registrationId !== 'string' ||
+      identity.registrationId.length === 0 ||
+      !Number.isSafeInteger(identity.configurationRevision) ||
+      identity.configurationRevision! < 0
+    )
+      return undefined
+    return {
+      registrationId: identity.registrationId,
+      configurationRevision: identity.configurationRevision!,
+    }
+  } catch {
+    return undefined
+  }
 }
 
 /** Parse the frozen `runtime_params_json`, tolerating legacy NULL / bad JSON. */
@@ -441,6 +469,7 @@ export async function resolveFrozenRuntimeWith(
         binary: row.runtimeBinary ?? configBackedBinary(row.runtime, binaryConfig),
         params: parseFrozenParams(row.runtimeParamsJson),
         configDir: parseFrozenConfigDir(row.runtimeParamsJson, row.runtime),
+        observationIdentity: parseObservationIdentity(row.runtimeParamsJson),
       }
     }
     // Codex impl-gate P2-2: a NON-null stored value that isn't a known protocol
@@ -478,7 +507,11 @@ export async function resolveFrozenRuntimeWith(
       runtimeBinary: frozen.binary,
       // RFC-154: __configDir rides inside the same JSON column (no new column);
       // parseFrozenParams whitelists its keys so it never leaks into params.
-      runtimeParamsJson: JSON.stringify({ ...frozen.params, __configDir: frozen.configDir }),
+      runtimeParamsJson: JSON.stringify({
+        ...frozen.params,
+        __configDir: frozen.configDir,
+        ...(frozen.observationIdentity ? { __observation: frozen.observationIdentity } : {}),
+      }),
     })
     return frozen
   })
@@ -495,6 +528,7 @@ export async function frozenRuntimeOfSessionWith(
       binary: row.runtimeBinary ?? null,
       params: parseFrozenParams(row.runtimeParamsJson),
       configDir: parseFrozenConfigDir(row.runtimeParamsJson, row.runtime),
+      observationIdentity: parseObservationIdentity(row.runtimeParamsJson),
     }
   }
   return null

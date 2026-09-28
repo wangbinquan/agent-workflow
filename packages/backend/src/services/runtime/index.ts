@@ -1,3 +1,5 @@
+import type { RuntimeUsageContext, RuntimeUsageFrame } from './usage'
+export type { RuntimeUsageContext, RuntimeUsageFrame } from './usage'
 // RFC-111 PR-A — runtime driver registry + resolution.
 //
 // `getRuntimeDriver` is the factory (multica's Backend-factory pattern) that
@@ -85,3 +87,17 @@ export { NOOP_HANDLE } from './opencode/subagentLiveCapture'
 export { DISTILL_CAPTURE_FAILED_KIND } from '@/modules/runtime-management/public/types'
 // Frozen plugin runtime specifier projection used by startup inventory.
 export { pluginFileSpec } from './opencode/pluginSpec'
+
+/** Usage support follows the registered driver; unknown or unsupported protocols stay unknown. */
+export function normalizeRuntimeUsage(
+  protocol: string,
+  raw: unknown,
+  context: RuntimeUsageContext,
+): RuntimeUsageFrame {
+  return (
+    tryGetRuntimeDriver(protocol)?.normalizeUsage?.(raw, context) ?? {
+      measurements: [],
+      diagnostics: ['runtime-usage-unsupported'],
+    }
+  )
+}

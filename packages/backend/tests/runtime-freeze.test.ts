@@ -6,6 +6,8 @@
 // wrong driver or binary.
 
 import { expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import ts from 'typescript'
 import { describeEachProvider } from './helpers/eachProvider'
 import { canonicalBinaryPath } from './fixtures/platformPaths'
 import { eq } from 'drizzle-orm'
@@ -15,6 +17,7 @@ import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { frozenRuntimeOfSession, resolveFrozenRuntime } from './helpers/nodeRunRuntime'
 import {
   createRuntime,
+  deleteRuntime,
   seedBuiltinRuntimes,
   updateRuntime,
 } from './helpers/runtimeRegistryApplication'
@@ -312,4 +315,126 @@ describeEachProvider('RFC-360 runtime selection transaction', (harness) => {
     )
     expect((await frozenCols(db, id)).runtime).toBeNull()
   })
+})
+
+// RFC-371: price lookup needs the registered identity that was actually frozen,
+// including its configuration revision; the mutable name is not that identity.
+describeEachProvider('RFC-371 frozen observation identity', (harness) => {
+  test('registry edits and deletion do not rewrite resumed or inherited attribution', async () => {
+    const { db, id } = await seedRun(harness.db)
+    const registry = runtimeRegistryPersistence(db)
+    await createRuntime(registry, { name: 'priced-runtime', protocol: 'opencode', model: 'before' })
+    const row = (await registry.getRuntime('priced-runtime'))!
+    const first = await resolveFrozenRuntime(db, id, 'priced-runtime', null)
+    const identity = { registrationId: row.id, configurationRevision: row.probeFence }
+    expect(first.observationIdentity).toEqual(identity)
+    expect('__observation' in first.params).toBe(false)
+    await updateRuntime(registry, 'priced-runtime', { model: 'after' })
+    expect((await registry.getRuntime('priced-runtime'))?.probeFence).toBeGreaterThan(
+      row.probeFence,
+    )
+    await deleteRuntime(registry, 'priced-runtime')
+    expect(
+      (await resolveFrozenRuntime(db, id, 'priced-runtime', null)).observationIdentity,
+    ).toEqual(identity)
+    await db
+      .update(nodeRuns)
+      .set({ opencodeSessionId: 'priced-native-session' })
+      .where(eq(nodeRuns.id, id))
+    const inherited = await frozenRuntimeOfSession(db, 'priced-native-session')
+    const next = await seedRun(db)
+    expect(
+      (await resolveFrozenRuntime(db, next.id, 'opencode', null, inherited)).observationIdentity,
+    ).toEqual(identity)
+    const persisted = (
+      await db
+        .select({ value: nodeRuns.runtimeParamsJson })
+        .from(nodeRuns)
+        .where(eq(nodeRuns.id, next.id))
+    )[0]!
+    expect(JSON.parse(persisted.value!).__observation).toEqual(identity)
+  })
+
+  test('the selected revision comes from the same uncommitted profile snapshot', async () => {
+    const { db, id } = await seedRun(harness.db)
+    const registry = runtimeRegistryPersistence(db)
+    await createRuntime(registry, {
+      name: 'observation-profile',
+      protocol: 'opencode',
+      model: 'before',
+    })
+    await expect(
+      databaseSessionFor(db).transaction(async () => {
+        await updateRuntime(registry, 'observation-profile', { model: 'inside' })
+        const row = (await registry.getRuntime('observation-profile'))!
+        const frozen = await resolveFrozenRuntime(db, id, 'observation-profile', null)
+        expect(frozen.observationIdentity).toEqual({
+          registrationId: row.id,
+          configurationRevision: row.probeFence,
+        })
+        expect(frozen.params.model).toBe('inside')
+        throw new Error('rollback-observation-freeze')
+      }),
+    ).rejects.toThrow('rollback-observation-freeze')
+    expect((await frozenCols(db, id)).runtime).toBeNull()
+  })
+
+  test('unregistered fallbacks and legacy snapshots never borrow a current registration', async () => {
+    const { db, id } = await seedRun(harness.db)
+    const fallback = await resolveFrozenRuntime(db, id, 'missing-runtime', null)
+    expect(fallback.observationIdentity).toBeUndefined()
+    await seedBuiltinRuntimes(runtimeRegistryPersistence(db))
+    expect(
+      (await resolveFrozenRuntime(db, id, 'opencode', null)).observationIdentity,
+    ).toBeUndefined()
+    for (const bad of [
+      null,
+      { registrationId: '', configurationRevision: 0 },
+      { registrationId: 'id', configurationRevision: -1 },
+      { registrationId: 'id', configurationRevision: 1.1 },
+    ]) {
+      await db
+        .update(nodeRuns)
+        .set({ runtimeParamsJson: JSON.stringify({ __observation: bad }) })
+        .where(eq(nodeRuns.id, id))
+      expect(
+        (await resolveFrozenRuntime(db, id, 'opencode', null)).observationIdentity,
+      ).toBeUndefined()
+    }
+  })
+})
+
+test('RFC-371 internal commit and merge launches carry the selected runtime attribution', () => {
+  for (const path of [
+    '../src/services/scheduler.ts',
+    '../src/modules/task-execution/composition/nodeMechanics.ts',
+  ]) {
+    const source = ts.createSourceFile(
+      path,
+      readFileSync(new URL(path, import.meta.url), 'utf8'),
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const inherited: ts.ObjectLiteralExpression[] = []
+    const visit = (node: ts.Node) => {
+      if (
+        ts.isCallExpression(node) &&
+        node.expression.getText(source) === 'resolveFrozenRuntimeWith'
+      ) {
+        const value = node.arguments[4]
+        if (value && ts.isObjectLiteralExpression(value)) inherited.push(value)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(source)
+    expect(inherited.length).toBeGreaterThan(0)
+    for (const object of inherited) {
+      const property = object.properties.find(
+        (p) => p.name?.getText(source) === 'observationIdentity',
+      )
+      expect(
+        property && ts.isPropertyAssignment(property) && property.initializer.getText(source),
+      ).toBe('rt.observationIdentity')
+    }
+  }
 })

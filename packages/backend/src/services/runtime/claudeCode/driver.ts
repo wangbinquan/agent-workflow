@@ -1,3 +1,4 @@
+import { normalizeUsage } from './usage'
 // RFC-111 PR-B — the Claude Code RuntimeDriver.
 //
 // The shared seam exposes `parseEvent` (the generic stdout pump consumes it for
@@ -504,6 +505,7 @@ export const claudeCodeDriver: RuntimeDriver = {
   parseEvent(line: string): NormalizedEvent | null {
     return parseEvent(line)
   },
+  normalizeUsage,
   observeSystemEvent,
   // RFC-237 (design-gate P2-4) — surface a clean-exit terminal `is_error`
   // result (auth/API failure) so systemAgentRun can fail the run instead of

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 911,
+    "consumers": 913,
     "exactEntrypointFiles": 67,
     "governedFieldSurfaces": 5,
     "methods": 1086,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21004,
-    "symbols": 1021
+    "recursiveFields": 21014,
+    "symbols": 1022
   },
   "entries": [
     {
@@ -122012,7 +122012,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 75,
+        "maxTransitiveLeafFields": 81,
         "maxUnionVariants": 63
       },
       "consumerEdgeIds": [
@@ -122125,6 +122125,16 @@
             "import:f8a4030fdfccacbf609e"
           ],
           "fieldPath": "$method:resolveAgentRuntime.$return.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.observationIdentity.configurationRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.observationIdentity.registrationId",
           "type": "string"
         },
         {
@@ -122271,6 +122281,16 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.observationIdentity.configurationRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.observationIdentity.registrationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:resolveInternalAgentRuntime.$return.protocol.$variant:0",
           "type": "'opencode'"
         },
@@ -122394,6 +122414,16 @@
             "import:f8a4030fdfccacbf609e"
           ],
           "fieldPath": "$method:resolveRuntimeByName.$return.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.observationIdentity.configurationRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.observationIdentity.registrationId",
           "type": "string"
         },
         {
@@ -123187,6 +123217,16 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "observationIdentity.configurationRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "observationIdentity.registrationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "protocol.$variant:0",
           "type": "'opencode'"
         },
@@ -123232,6 +123272,7 @@
         "binaryPath",
         "configDir",
         "name",
+        "observationIdentity",
         "protocol"
       ],
       "methods": [],
@@ -123249,7 +123290,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:67ba3f6d62c060ed220409c977b0987cc5c0809612d6d5050035a72db27641f3",
+      "signatureDigest": "sha256:f740b3562e675e77d32572a4e0890131298d2c7cf3a24bb25950c6cefed4c9c7",
       "status": "target-context-current-surface",
       "symbol": "ResolvedRuntimeProfile",
       "transaction": "none",
@@ -123383,6 +123424,73 @@
       "signatureDigest": "sha256:8417be7c1702f9b384de9d3791ae5842cabb299ab726c989a14deb2ff777c81e",
       "status": "target-context-current-surface",
       "symbol": "RuntimeMcpTestEligibilityInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:a5262c30ddde11b5716c",
+        "import:c16b8a9635c61acf650f"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:a5262c30ddde11b5716c"
+          ],
+          "fieldPath": "configurationRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a5262c30ddde11b5716c"
+          ],
+          "fieldPath": "registrationId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "id": "public:runtime-management:types:RuntimeObservationIdentity",
+      "members": [
+        "configurationRevision",
+        "registrationId"
+      ],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeObservationIdentity",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:a5262c30ddde11b5716c",
+          "file": "packages/backend/src/services/nodeRunMint.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/nodeRunMint.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:c16b8a9635c61acf650f",
+          "file": "packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nodeRunRuntimePersistence.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:queries:RuntimeExecutionQueries",
+        "public:runtime-management:types:ResolvedRuntimeProfile"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:ae2834e585031631462bcdb5109fd08131c85badc1a1eb4800dbc2f729941a66",
+      "status": "target-context-current-surface",
+      "symbol": "RuntimeObservationIdentity",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -166304,7 +166412,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e0c3dff70af29acaf22276e3c2940b720c8e742130e8df8d15326a8dfa72d0d5",
+  "sourceDigest": "sha256:2b6028ed32f170fe4686b5f3e7f5bf010eaeecaba0237623e1beb2c28400343b",
   "targetContexts": [
     "collaboration",
     "development-automation",

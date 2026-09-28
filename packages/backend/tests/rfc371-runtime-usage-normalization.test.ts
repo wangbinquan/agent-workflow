@@ -2,10 +2,7 @@
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import type { ObservationMeasurement } from '@agent-workflow/shared'
-import {
-  normalizeRuntimeUsage,
-  type RuntimeUsageContext,
-} from '../src/modules/run-observability/domain/runtimeUsage'
+import { normalizeRuntimeUsage, type RuntimeUsageContext } from '../src/services/runtime'
 import {
   reconcileUsage,
   type UsageLedgerRecord,
@@ -348,4 +345,11 @@ test('an unavailable summary bucket stays unknown instead of becoming an allocat
   expect(selected.summary.unknownBuckets.output).toBe(1)
   expect(selected.summary.complete).toBe(0)
   expect(selected.allSelectedComplete).toBe(false)
+})
+
+test('unregistered runtime reports unavailable usage without invoking another protocol parser', () => {
+  expect(normalizeRuntimeUsage('future-runtime', result(100), context)).toEqual({
+    measurements: [],
+    diagnostics: ['runtime-usage-unsupported'],
+  })
 })

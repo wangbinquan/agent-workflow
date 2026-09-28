@@ -575,9 +575,9 @@
     {
       "callee": "setRuntimeEnabled",
       "file": "packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts",
-      "id": "ambient:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#setRuntimeEnabled:499",
+      "id": "ambient:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#setRuntimeEnabled:500",
       "kind": "global-setter",
-      "line": 499,
+      "line": 500,
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#createRuntimeRegistryApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "createRuntimeRegistryApplication",
@@ -586,9 +586,9 @@
     {
       "callee": "setRuntimeEnabled",
       "file": "packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts",
-      "id": "ambient:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#setRuntimeEnabled:708",
+      "id": "ambient:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#setRuntimeEnabled:709",
       "kind": "global-setter",
-      "line": 708,
+      "line": 709,
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#createRuntimeRegistryApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "createRuntimeRegistryApplication",
@@ -696,9 +696,9 @@
     {
       "callee": "registerKnownChildTask",
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
-      "id": "ambient:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#registerKnownChildTask:1506",
+      "id": "ambient:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#registerKnownChildTask:1507",
       "kind": "register-call",
-      "line": 1506,
+      "line": 1507,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#runCallWorkflowNode",
       "removeAfterWave": "W6/W9",
       "symbol": "runCallWorkflowNode",
@@ -8364,7 +8364,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setInterval:1578",
+      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setInterval:1579",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8378,7 +8378,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:1578",
+      "symbol": "$setInterval:1579",
       "targetContext": "task-execution"
     },
     {
@@ -8387,7 +8387,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setTimeout:1962",
+      "id": "background:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$setTimeout:1963",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8401,7 +8401,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:1962",
+      "symbol": "$setTimeout:1963",
       "targetContext": "task-execution"
     },
     {
@@ -12833,5 +12833,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e0c3dff70af29acaf22276e3c2940b720c8e742130e8df8d15326a8dfa72d0d5"
+  "sourceDigest": "sha256:2b6028ed32f170fe4686b5f3e7f5bf010eaeecaba0237623e1beb2c28400343b"
 }

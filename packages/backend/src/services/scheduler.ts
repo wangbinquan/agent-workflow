@@ -216,6 +216,7 @@ export async function maybeRunCommitPush(
               isSandbox: rt.isSandbox,
             },
             configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
+            observationIdentity: rt.observationIdentity,
           },
           // Codex impl-gate P1-2: profile binaryPath NULL + config head set used
           // to reach this spawn via opts.opencodeCmd; fold it into the freeze.

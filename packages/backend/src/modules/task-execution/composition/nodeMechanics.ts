@@ -1120,6 +1120,7 @@ export async function resolveMergeConflicts(
           isSandbox: rt.isSandbox,
         },
         configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
+        observationIdentity: rt.observationIdentity,
       },
       // Codex impl-gate P1-2: same config-head fold as the commit-session site.
       freezeBinaryConfig(state.opts.configPath),

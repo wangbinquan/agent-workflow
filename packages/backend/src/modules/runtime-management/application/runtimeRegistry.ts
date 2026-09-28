@@ -186,6 +186,7 @@ export function createRuntimeRegistryApplication(effects: RuntimeRegistryEffects
           name: row.name,
           protocol: row.protocol,
           binaryPath: row.binaryPath,
+          observationIdentity: { registrationId: row.id, configurationRevision: row.probeFence },
           // RFC-154: fold the row's config-dir overrides over the protocol default.
           configDir: resolveConfigDirProfile(row.protocol, row.configDirEnv, row.configDirName),
           ...runtimeProfileOf(row),

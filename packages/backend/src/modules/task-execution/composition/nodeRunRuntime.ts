@@ -46,6 +46,9 @@ export function composeNodeRunRuntimePersistence(
             extraArgs: runtime.extraArgs ?? null,
           },
           configDir: runtime.configDir,
+          ...(runtime.observationIdentity
+            ? { observationIdentity: runtime.observationIdentity }
+            : {}),
         }
       }
     },

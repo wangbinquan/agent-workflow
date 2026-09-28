@@ -3172,7 +3172,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e0c3dff70af29acaf22276e3c2940b720c8e742130e8df8d15326a8dfa72d0d5",
+  "sourceDigest": "sha256:2b6028ed32f170fe4686b5f3e7f5bf010eaeecaba0237623e1beb2c28400343b",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -4141,9 +4141,9 @@
         "effectKind": "code-host-mutation",
         "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
         "generationPolicy": "next-retained-generation",
-        "id": "task-effect:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#2460:code-host-mutation",
+        "id": "task-effect:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#2461:code-host-mutation",
         "journaledBy": "createCodeHostEffectAttemptObserver",
-        "line": 2460,
+        "line": 2461,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#runCodeHostCallNode",
         "recoveryClass": "action-provider-candidate-matrix",
@@ -4159,9 +4159,9 @@
         "effectKind": "process",
         "file": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
         "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#3046:process",
+        "id": "task-effect:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#3047:process",
         "journaledBy": "createProcessEffectAttemptObserver",
-        "line": 3046,
+        "line": 3047,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#runOneScriptAttempt",
         "recoveryClass": "managed-process-preactivation",

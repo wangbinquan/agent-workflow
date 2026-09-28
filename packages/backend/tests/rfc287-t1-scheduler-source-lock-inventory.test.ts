@@ -68,6 +68,8 @@ const SCHEDULER_SOURCE_LOCK_FILES: readonly string[] = [
   // absence of a second add/commit/push implementation in code-capability.
   'runner-injected-memories.test.ts',
   'runner-resume-session-flag.test.ts',
+  // RFC-371: internal commit/merge inherited snapshots retain runtime pricing identity.
+  'runtime-freeze.test.ts',
   'scheduler-audit-s13-freshest-fork-source-guards.test.ts',
   'scheduler-audit-s17-readonly-starved-by-writer-queue.test.ts',
   'scheduler-boundary-resume-retryindex-vs-id.test.ts',

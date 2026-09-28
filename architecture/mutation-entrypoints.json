@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1753,
+    "entries": 1754,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -20570,80 +20570,6 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/run-observability/domain/runtimeUsage.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/run-observability/domain/runtimeUsage.ts#opencode",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/domain/runtimeUsage.ts#opencode",
-      "symbol": "opencode",
-      "targetContext": "run-observability",
-      "targetLayer": "domain"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/run-observability/domain/runtimeUsage.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/run-observability/domain/runtimeUsage.ts#RuntimeUsageContext",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/domain/runtimeUsage.ts#RuntimeUsageContext",
-      "symbol": "RuntimeUsageContext",
-      "targetContext": "run-observability",
-      "targetLayer": "domain"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/run-observability/domain/runtimeUsage.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/run-observability/domain/runtimeUsage.ts#RuntimeUsageFrame",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/domain/runtimeUsage.ts#RuntimeUsageFrame",
-      "symbol": "RuntimeUsageFrame",
-      "targetContext": "run-observability",
-      "targetLayer": "domain"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
         "fenceOrOcc": true,
         "transaction": true
       },
@@ -22198,6 +22124,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeMcpTestEligibilityInput",
       "symbol": "RuntimeMcpTestEligibilityInput",
+      "targetContext": "runtime-management",
+      "targetLayer": "public"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/public/types.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeObservationIdentity",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeObservationIdentity",
+      "symbol": "RuntimeObservationIdentity",
       "targetContext": "runtime-management",
       "targetLayer": "public"
     },
@@ -38251,6 +38201,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/services/runtime/opencode/usage.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/runtime/opencode/usage.ts#opencode",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/usage.ts#opencode",
+      "symbol": "opencode",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/services/runtime/opencode/util.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/services/runtime/opencode/util.ts#OpencodeProbe",
@@ -38583,6 +38558,55 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#StartupInventory",
       "symbol": "StartupInventory",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/runtime/usage.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/runtime/usage.ts#RuntimeUsageContext",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/runtime/usage.ts#RuntimeUsageContext",
+      "symbol": "RuntimeUsageContext",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/runtime/usage.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/runtime/usage.ts#RuntimeUsageFrame",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/runtime/usage.ts#RuntimeUsageFrame",
+      "symbol": "RuntimeUsageFrame",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -41894,7 +41918,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e0c3dff70af29acaf22276e3c2940b720c8e742130e8df8d15326a8dfa72d0d5",
+  "sourceDigest": "sha256:2b6028ed32f170fe4686b5f3e7f5bf010eaeecaba0237623e1beb2c28400343b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

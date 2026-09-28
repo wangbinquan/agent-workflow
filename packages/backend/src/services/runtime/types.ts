@@ -1,3 +1,4 @@
+import type { RuntimeUsageContext, RuntimeUsageFrame } from './usage'
 // RFC-111 PR-A — runtime abstraction types.
 //
 // The platform drives one agent CLI per node_run. Today that CLI is opencode,
@@ -748,6 +749,8 @@ export interface RuntimeDriver {
    * to the pump's raw-text path.
    */
   parseEvent(line: string): NormalizedEvent | null
+  /** RFC-371: optional native numeric evidence; absence reports unsupported coverage. */
+  normalizeUsage?(raw: unknown, context: RuntimeUsageContext): RuntimeUsageFrame
   /**
    * RFC-297 T5 — synthetic events to append to the stream once the child has
    * exited. This is how an observation that does NOT arrive on stdout still

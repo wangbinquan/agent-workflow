@@ -1,6 +1,10 @@
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 
-import type { RuntimeKind, RuntimeProfile } from '@/modules/runtime-management/public/types'
+import type {
+  RuntimeKind,
+  RuntimeProfile,
+  RuntimeObservationIdentity,
+} from '@/modules/runtime-management/public/types'
 
 export interface FrozenNodeRunRuntimeRecord {
   readonly runtime: string | null
@@ -13,6 +17,7 @@ export interface FrozenNodeRunRuntime {
   readonly binary: string | null
   readonly params: RuntimeProfile
   readonly configDir: RuntimeConfigDirProfile
+  readonly observationIdentity?: RuntimeObservationIdentity
 }
 
 /** Provider-neutral read/freeze boundary for a node run's immutable runtime. */

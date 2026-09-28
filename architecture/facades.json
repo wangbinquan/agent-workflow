@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 291,
+    "serviceFiles": 294,
     "thinFacades": 49
   },
   "entries": [
@@ -2373,6 +2373,7 @@
         "import:9af46ae42a33dda547cf",
         "import:9e22458e484593ea92db",
         "import:a28f35b0356915075c36",
+        "import:a5262c30ddde11b5716c",
         "import:a91c35e499c872aef8f7",
         "import:b7d3eebe685a3561fc45",
         "import:ca6046281bee8fcde23a",
@@ -3693,6 +3694,19 @@
     {
       "boundaryEdgeIds": [],
       "exportedSymbols": [
+        "normalizeUsage"
+      ],
+      "file": "packages/backend/src/services/runtime/claudeCode/usage.ts",
+      "id": "facade:packages/backend/src/services/runtime/claudeCode/usage.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/usage.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-implementation",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [],
+      "exportedSymbols": [
         "pickRuntimeHead"
       ],
       "file": "packages/backend/src/services/runtime/head.ts",
@@ -3722,6 +3736,7 @@
         "RUNTIME_KINDS",
         "getRuntimeDriver",
         "isKnownRuntimeKind",
+        "normalizeRuntimeUsage",
         "tryGetRuntimeDriver"
       ],
       "file": "packages/backend/src/services/runtime/index.ts",
@@ -3982,6 +3997,19 @@
     {
       "boundaryEdgeIds": [],
       "exportedSymbols": [
+        "normalizeUsage"
+      ],
+      "file": "packages/backend/src/services/runtime/opencode/usage.ts",
+      "id": "facade:packages/backend/src/services/runtime/opencode/usage.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/usage.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-implementation",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [],
+      "exportedSymbols": [
         "OpencodeProbe",
         "detectOpencodeSessionNotFound",
         "probeOpencode"
@@ -4107,6 +4135,29 @@
       "file": "packages/backend/src/services/runtime/types.ts",
       "id": "facade:packages/backend/src/services/runtime/types.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-implementation",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [],
+      "exportedSymbols": [
+        "JsonObject",
+        "RuntimeUsageContext",
+        "RuntimeUsageFrame",
+        "TOKEN_BUCKETS",
+        "common",
+        "model",
+        "nativeId",
+        "normalizeUsageFrame",
+        "object",
+        "readUsage",
+        "scope"
+      ],
+      "file": "packages/backend/src/services/runtime/usage.ts",
+      "id": "facade:packages/backend/src/services/runtime/usage.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/runtime/usage.ts#$file",
       "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
@@ -6218,5 +6269,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e0c3dff70af29acaf22276e3c2940b720c8e742130e8df8d15326a8dfa72d0d5"
+  "sourceDigest": "sha256:2b6028ed32f170fe4686b5f3e7f5bf010eaeecaba0237623e1beb2c28400343b"
 }

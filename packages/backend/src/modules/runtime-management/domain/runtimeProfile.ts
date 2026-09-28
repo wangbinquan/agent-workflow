@@ -12,6 +12,7 @@ import type {
   RuntimeProfile,
   RuntimeView,
   RuntimeProfileInput,
+  RuntimeObservationIdentity,
 } from '../public/types'
 
 /** RFC-112 Codex P3: runtime names are lowercase, URL-safe (used in /:name routes). */
@@ -327,6 +328,7 @@ export interface ResolvedRuntime extends RuntimeProfile {
   isSandbox: boolean
   /** RFC-154: resolved config-dir profile (row overrides folded over the protocol default). */
   configDir: RuntimeConfigDirProfile
+  observationIdentity?: RuntimeObservationIdentity
 }
 
 /**

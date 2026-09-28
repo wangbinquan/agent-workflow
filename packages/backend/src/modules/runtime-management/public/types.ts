@@ -103,11 +103,18 @@ export interface UpdateRuntimeInput extends RuntimeProfileInput {
 }
 
 /** Immutable profile facts required by execution mechanisms and dependent-agent injection. */
+export interface RuntimeObservationIdentity {
+  readonly registrationId: string
+  readonly configurationRevision: number
+}
+
 export interface ResolvedRuntimeProfile extends RuntimeProfile {
   readonly name: string
   readonly protocol: RuntimeProtocol
   readonly binaryPath: string | null
   readonly configDir: { readonly env: string; readonly name: string }
+  /** Absent for an unregistered protocol fallback; never infer an identity by name. */
+  readonly observationIdentity?: RuntimeObservationIdentity
 }
 
 /** Driver inspection facts used by MCP diagnostics; no runtime configuration or executable escapes. */
