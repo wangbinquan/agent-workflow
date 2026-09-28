@@ -1,3 +1,5 @@
+import type { ObservationTaskQueries } from '@/modules/run-observability/public/queries'
+import type { TaskObservationFactsQuery } from '@/modules/task-execution/public/queries'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
@@ -1935,7 +1937,12 @@ export async function composePostgresqlApplication(
   const platformRoutes: PostgresqlAppCompositionInput['platform'] = Object.freeze({
     observability: {
       ...composeObservationPricing({ db: input.db, runtimes: runtimeManagement.observations }),
-      tasks: composeTaskObservations({ db: input.db, taskSource: createTaskObservationFacts }),
+      tasks: composeTaskObservations({
+        db: input.db,
+        taskSource: createTaskObservationFacts satisfies (
+          db: Parameters<typeof createTaskObservationFacts>[0],
+        ) => TaskObservationFactsQuery,
+      }) satisfies ObservationTaskQueries,
     },
     config: Object.freeze({
       configuration: composeFileApplicationConfiguration({

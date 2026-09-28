@@ -157,7 +157,7 @@ function TaskDetail({ data }: { data: ObservationTaskDetail }) {
     'legacy-unbound': 'sourceUnbound',
   } as const
   return (
-    <>
+    <div className="stack--md">
       <NoticeBanner tone="info" size="compact">
         {t('runObservability.detailHint')}
       </NoticeBanner>
@@ -191,24 +191,26 @@ function TaskDetail({ data }: { data: ObservationTaskDetail }) {
       </Card>
       {data.sources.length > 0 && (
         <Card title={t('runObservability.sourceState')}>
-          {data.sources.map((s, index) => (
-            <NoticeBanner
-              key={`${s.sourceId}-${index}`}
-              tone={s.status === 'ready' && !s.hasGaps ? 'info' : 'warning'}
-              size="compact"
-              title={t(`runObservability.${states[s.status]}`)}
-            >
-              {s.sourceId && <code>{s.sourceId}</code>}
-              {' · '}
-              {s.asOf
-                ? t('runObservability.sourceAsOf', {
-                    time: new Date(s.asOf).toLocaleString(i18n.language),
-                  })
-                : t('runObservability.noSourceTime')}
-              {!s.costsVisible && <p>{t('runObservability.hiddenCost')}</p>}
-              {s.hasGaps && <p>{t('runObservability.sourceGap')}</p>}
-            </NoticeBanner>
-          ))}
+          <div className="stack--sm">
+            {data.sources.map((s, index) => (
+              <NoticeBanner
+                key={`${s.sourceId}-${index}`}
+                tone={s.status === 'ready' && !s.hasGaps ? 'info' : 'warning'}
+                size="compact"
+                title={t(`runObservability.${states[s.status]}`)}
+              >
+                {s.sourceId && <code>{s.sourceId}</code>}
+                {' · '}
+                {s.asOf
+                  ? t('runObservability.sourceAsOf', {
+                      time: new Date(s.asOf).toLocaleString(i18n.language),
+                    })
+                  : t('runObservability.noSourceTime')}
+                {!s.costsVisible && <p>{t('runObservability.hiddenCost')}</p>}
+                {s.hasGaps && <p>{t('runObservability.sourceGap')}</p>}
+              </NoticeBanner>
+            ))}
+          </div>
         </Card>
       )}
       <Card title={t('runObservability.agents')}>
@@ -315,7 +317,7 @@ function TaskDetail({ data }: { data: ObservationTaskDetail }) {
         {t('runObservability.priceHint')}
         <p>{t('runObservability.currencyHint')}</p>
       </NoticeBanner>
-    </>
+    </div>
   )
 }
 

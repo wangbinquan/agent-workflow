@@ -542,7 +542,7 @@ export function RuntimeTab({
   return (
     <div
       ref={runtimeRef}
-      className={`runtime-status-anchor${flashing ? ' runtime-status-anchor--flash' : ''}`}
+      className={`runtime-status-anchor stack--md${flashing ? ' runtime-status-anchor--flash' : ''}`}
       data-flash={flashing ? '1' : '0'}
     >
       <RuntimeList restoreFocusFallbackRef={focusFallbackRef} />

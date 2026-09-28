@@ -402,11 +402,15 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     ] as const) {
       const calls = namedCalls(functionBody(source, name), source, 'composeTaskObservations')
       expect(calls).toHaveLength(1)
+      const contract = calls[0]!.parent
+      expect(ts.isSatisfiesExpression(contract)).toBe(true)
+      if (!ts.isSatisfiesExpression(contract)) throw new Error('Missing public query contract')
+      expect(compact(contract.type, source)).toBe('ObservationTaskQueries')
       const argument = calls[0]!.arguments[0]!
       if (!ts.isObjectLiteralExpression(argument)) throw new Error('Expected observation bindings')
       expect(argument.properties.map((property) => compact(property, source))).toEqual([
         `db:${database}`,
-        'taskSource:createTaskObservationFacts',
+        'taskSource:createTaskObservationFactssatisfies(db:Parameters<typeofcreateTaskObservationFacts>[0],)=>TaskObservationFactsQuery',
       ])
     }
   })
@@ -683,7 +687,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-371: standalone task execution receives mandatory durable invocation accounting.
       // RFC-371: the same database now supplies the committed numeric source participant.
       // RFC-371: task observation queries bind the selected DB and TE facts inside one read snapshot.
-      '2cb850683f445721d0cd910c80615796dd4a00d07ff54445cc36239ef8408ee0',
+      '7952bf9b5d79869cadc4e17e5590e14f03b08061719d598e01db90975586f5fd',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -893,7 +897,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 判据在 `tests/rfc368-*.test.ts`。
       // RFC-370: Intent and webhook configuration bindings change; route order and lifetime stay fixed.
       // RFC-371: task observation queries bind the selected DB and TE facts inside one read snapshot.
-      'ef94353a5bb9395b2ef6c1fb02b13e46c8bf87ce6c332dc2b826117fe32c2cf4',
+      'e2a362af65a4136c2568f37e1e1bab5c40eaf7e099cd5b71ff3840703f9e58bc',
     )
     expect(
       namedCalls(

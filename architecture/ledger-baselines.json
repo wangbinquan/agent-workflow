@@ -301,10 +301,7 @@
       "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
       "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
       "baseline": 397,
-      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。",
-      "allowGrowth": {
-        "why": "RFC-371：新增同快照任务事实查询、双部署任务聚合与正式观测页面及两个精确 HTTP 读面，rfc329-mcp-surface-exemptions 395 → 397，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
     },
     {
       "id": "rfc345-resource-acl-facade-compatibility",
@@ -815,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1769,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-371：新增同快照任务事实查询、双部署任务聚合与正式观测页面及两个精确 HTTP 读面，rfc294-mutation-entrypoints 1766 → 1769，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,19 +840,16 @@
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 499,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-371：新增同快照任务事实查询、双部署任务聚合与正式观测页面及两个精确 HTTP 读面，rfc294-ambient-wiring 497 → 499，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5558,
+      "baseline": 5562,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-371：新增同快照任务事实查询、双部署任务聚合与正式观测页面及两个精确 HTTP 读面，rfc294-cross-context-observed-imports 5538 → 5558，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：在 SQLite/PG 启动根显式消费两个已接线的观测公共查询合同，rfc294-cross-context-observed-imports 5558 → 5562，按新增功能如实登记本批归属与公开合同。"
       }
     },
     {
@@ -879,10 +870,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4936,
+      "baseline": 4940,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-371：新增同快照任务事实查询、双部署任务聚合与正式观测页面及两个精确 HTTP 读面，rfc294-architecture-exceptions 4918 → 4936，按新增功能如实登记本批归属与公开合同。"
+        "why": "RFC-371：在 SQLite/PG 启动根显式消费两个已接线的观测公共查询合同，rfc294-architecture-exceptions 4936 → 4940，按新增功能如实登记本批归属与公开合同。"
       }
     },
     {
@@ -897,10 +888,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1027,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-371：新增同快照任务事实查询、双部署任务聚合与正式观测页面及两个精确 HTTP 读面，rfc294-public-surfaces 1025 → 1027，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -920,15 +908,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25409,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371：新增同快照任务事实查询、双部署任务聚合与正式观测页面及两个精确 HTTP 读面，rfc294-module-symbol-owners 25336 → 25409，按新增功能如实登记本批归属与公开合同。"
-      }
+      "baseline": 25408,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:e08f355d6781fea77c3dfdd47b509205d9fc4c8a56321191054ec17094b21ced",
+    "sourceDigest": "sha256:877e303a07565590649ba430e868a55a9ee9cf0cd91d94fbc90c6856b7618ca1",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -941,8 +926,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0240a30a37fae92521a4c2ebe742da96edd76535",
-    "contentDigest": "sha256:1bb9996161c68a7a0a21da2394af75bb0b96074be9478e3886b1e8d819e5371b",
+    "currentSnapshotSha": "7eeaf7aefbc4b2690f152de7c8ce1ef9fe80b449",
+    "contentDigest": "sha256:1e96b10b993c33b5fdae97a2f7cd22050e91519582b8192b37316c0f3f9232f1",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

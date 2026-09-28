@@ -1,9 +1,10 @@
 // RFC-371: task/agent/attempt totals share one snapshot and one frozen execution authority.
 import { expect, test } from 'bun:test'
-import { Hono } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
 import type {
   AcceptObservationInvocation,
   ObservationMeasurement,
+  ObservationTaskPage,
   ObservationTaskPageQuery,
 } from '@agent-workflow/shared'
 import { buildActor } from '../src/auth/actor'
@@ -265,7 +266,7 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
           'runtime',
           {
             expectedRevision,
-            requestKey: 'price-' + expectedRevision,
+            requestKey: 'price-request-' + expectedRevision,
             configurationRevision: 0,
             protocol: 'opencode',
             provider: 'gateway',
@@ -273,7 +274,9 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
             condition: null,
             currency: 'CNY',
             rates: { input: rate, output: '2', cacheRead: '0', cacheWrite: '0' },
-            effectiveFrom: new Date(NOW + 1000).toISOString(),
+            // Both versions are effective before acceptance; the frozen catalogue
+            // must still exclude the subsequently published version.
+            effectiveFrom: new Date(NOW + 1000 + expectedRevision).toISOString(),
             sourceNote: 'CNY fixture',
           },
           'reader',
@@ -480,10 +483,11 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     const f = await fixture()
     await f.task()
     const app = new Hono()
-    app.use('*', async (c, next) => {
+    const injectActor: MiddlewareHandler = async (c, next) => {
       c.set('actor', admin)
       await next()
-    })
+    }
+    app.use('*', injectActor)
     app.onError(errorHandler)
     mountObservationRoutes(app, { ...f.pricing, tasks: f.queries })
     expect((await app.request('/api/observability/tasks?from=1&to=0')).status).toBe(422)
@@ -495,7 +499,8 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     expect((await app.request('/api/observability/tasks/missing')).status).toBe(404)
     const response = await app.request(`/api/observability/tasks?from=${NOW}&to=${NOW + 20000}`)
     expect(response.status).toBe(200)
-    expect((await response.json()).items[0].metrics.cost.currency).toBe('CNY')
+    const result = (await response.json()) as ObservationTaskPage
+    expect(result.items[0]!.metrics.cost.currency).toBe('CNY')
   })
 
   test('platform parent coverage allocates tokens once and never prorates a whole-record cost', async () => {

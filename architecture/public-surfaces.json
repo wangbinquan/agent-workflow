@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 917,
+    "consumers": 921,
     "exactEntrypointFiles": 69,
     "governedFieldSurfaces": 5,
     "methods": 1095,
@@ -117844,7 +117844,10 @@
         "maxTransitiveLeafFields": 87,
         "maxUnionVariants": 32
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:44a2cc15a17a1d4359b4",
+        "import:fb61bc2532c019579cbd"
+      ],
       "context": "run-observability",
       "dataClass": "metadata",
       "direction": "offered",
@@ -117886,12 +117889,17 @@
           "type": "'daemon'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:detail.$parameter:actor.user.displayName",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:detail.$parameter:actor.user.id",
           "type": "string"
         },
@@ -117931,7 +117939,9 @@
           "type": "'invited'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:detail.$parameter:actor.user.username",
           "type": "string"
         },
@@ -117941,7 +117951,10 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:detail.$return.$variant:0.agents",
           "type": "readonly ObservationAgentSummary[]"
         },
@@ -117991,7 +118004,10 @@
           "type": "readonly ('local' | 'crewstation')[]"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:detail.$return.$variant:0.metrics.cost.complete",
           "type": "boolean"
         },
@@ -118041,7 +118057,10 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:detail.$return.$variant:0.metrics.tokens.complete",
           "type": "boolean"
         },
@@ -118081,7 +118100,10 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:detail.$return.$variant:0.sources",
           "type": "readonly {\n    readonly sourceId: string\n    readonly status: 'initial' | 'syncing' | 'ready' | 'failed' | 'legacy-unbound'\n    readonly asOf: string | null\n    readonly error: string | null\n    readonly costsVisible: boolean\n    readonly hasGaps: boolean\n  }[]"
         },
@@ -118096,12 +118118,18 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:detail.$return.$variant:0.task.id",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:detail.$return.$variant:0.task.name",
           "type": "string"
         },
@@ -118131,12 +118159,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:detail.$return.$variant:0.task.startedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:detail.$return.$variant:0.task.status",
           "type": "string"
         },
@@ -118191,12 +118224,17 @@
           "type": "'daemon'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:list.$parameter:actor.user.displayName",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:list.$parameter:actor.user.id",
           "type": "string"
         },
@@ -118236,7 +118274,9 @@
           "type": "'invited'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:fb61bc2532c019579cbd"
+          ],
           "fieldPath": "$method:list.$parameter:actor.user.username",
           "type": "string"
         },
@@ -118294,18 +118334,35 @@
       ],
       "methods": [
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:fb61bc2532c019579cbd"
+          ],
           "name": "detail",
           "signatureDigest": "sha256:9b0e70cffafbe4a40579ae846bab07c6c8188ee9028400e752f0590dd1cbec57"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4"
+          ],
           "name": "list",
           "signatureDigest": "sha256:3d2b40a09ac2bc1f3876d07660c125c2bf0915807e827105aeccadb560b9b870"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/queries.ts#ObservationTaskQueries",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:44a2cc15a17a1d4359b4",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:fb61bc2532c019579cbd",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
@@ -161658,7 +161715,10 @@
         "maxTransitiveLeafFields": 55,
         "maxUnionVariants": 30
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:0f0f0c7c9b99f8905c51",
+        "import:c82e310dedf362bdf079"
+      ],
       "context": "task-execution",
       "dataClass": "metadata",
       "direction": "offered",
@@ -161720,12 +161780,17 @@
           "type": "'daemon'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51"
+          ],
           "fieldPath": "$method:get.$parameter:actor.user.displayName",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
           "fieldPath": "$method:get.$parameter:actor.user.id",
           "type": "string"
         },
@@ -161765,7 +161830,9 @@
           "type": "'invited'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51"
+          ],
           "fieldPath": "$method:get.$parameter:actor.user.username",
           "type": "string"
         },
@@ -161785,12 +161852,18 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
           "fieldPath": "$method:get.$return.$variant:0.id",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
           "fieldPath": "$method:get.$return.$variant:0.name",
           "type": "string"
         },
@@ -161820,12 +161893,17 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
           "fieldPath": "$method:get.$return.$variant:0.startedAt",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51"
+          ],
           "fieldPath": "$method:get.$return.$variant:0.status",
           "type": "string"
         },
@@ -161870,12 +161948,17 @@
           "type": "'daemon'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51"
+          ],
           "fieldPath": "$method:list.$parameter:input.actor.user.displayName",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
           "fieldPath": "$method:list.$parameter:input.actor.user.id",
           "type": "string"
         },
@@ -161915,12 +161998,17 @@
           "type": "'invited'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51"
+          ],
           "fieldPath": "$method:list.$parameter:input.actor.user.username",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
           "fieldPath": "$method:list.$parameter:input.query",
           "type": "z.infer<typeof ObservationTaskPageQuerySchema>"
         },
@@ -161954,18 +162042,36 @@
           "signatureDigest": "sha256:53311bc2d70229b49779a4a9397ac68f294b2c6f0411380ebd19b5b4e9f1b1a2"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
           "name": "get",
           "signatureDigest": "sha256:7c3accfae306245f3bc57f015f93ac29ab84755c1e68e54fdb5256db93d37f42"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:c82e310dedf362bdf079"
+          ],
           "name": "list",
           "signatureDigest": "sha256:ade54b4f985386b294077066543cf7273cb47113f41dd5b24402f9e3c38e5b6f"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#TaskObservationFactsQuery",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:0f0f0c7c9b99f8905c51",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:c82e310dedf362bdf079",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
@@ -167476,7 +167582,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e08f355d6781fea77c3dfdd47b509205d9fc4c8a56321191054ec17094b21ced",
+  "sourceDigest": "sha256:877e303a07565590649ba430e868a55a9ee9cf0cd91d94fbc90c6856b7618ca1",
   "targetContexts": [
     "collaboration",
     "development-automation",

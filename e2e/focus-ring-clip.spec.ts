@@ -906,6 +906,7 @@ const ROUTES = [
   '/agents/new',
   '/workflows',
   '/tasks',
+  '/observability',
   '/tasks/new',
   '/repos',
   '/skills',

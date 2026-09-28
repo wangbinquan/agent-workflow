@@ -5,16 +5,6 @@ import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/quer
 import { nodeRuns, tasks } from '@/db/schema'
 import type { TaskObservationFactsQuery } from '../public/queries'
 
-const taskFields = {
-  id: tasks.id,
-  name: tasks.name,
-  status: tasks.status,
-  parentTaskId: tasks.parentTaskId,
-  startedAt: tasks.startedAt,
-  finishedAt: tasks.finishedAt,
-  runningMs: tasks.runningMs,
-  runningSince: tasks.runningSince,
-}
 const canRead = (actor: Actor) =>
   actor.permissions.has('tasks:read:all') || actor.permissions.has('tasks:read:own')
 const scope = (query: ObservationTaskPageQuery) =>
@@ -42,6 +32,16 @@ function continuation(query: ObservationTaskPageQuery): [number, string] | null 
 
 /** Bind to the snapshot handle supplied by bootstrap; do not open another transaction. */
 export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObservationFactsQuery {
+  const taskFields = {
+    id: tasks.id,
+    name: tasks.name,
+    status: tasks.status,
+    parentTaskId: tasks.parentTaskId,
+    startedAt: tasks.startedAt,
+    finishedAt: tasks.finishedAt,
+    runningMs: tasks.runningMs,
+    runningSince: tasks.runningSince,
+  }
   const visible = (actor: Actor) =>
     taskVisibilityCondition(db, {
       userId: actor.user.id,

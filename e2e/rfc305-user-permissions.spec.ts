@@ -536,6 +536,7 @@ test('guest browser exposes public resources without mutation or task affordance
     // stable-nav 契约），所以导航改版必然要同步改它。
     '/digital-employees',
     '/tasks',
+    '/observability',
     '/scheduled',
     '/events',
     '/repos',

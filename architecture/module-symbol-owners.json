@@ -6,7 +6,7 @@
     "moduleFiles": 1359,
     "productionFiles": 2705,
     "sharedFiles": 159,
-    "symbolsIncludingFileRoots": 25409
+    "symbolsIncludingFileRoots": 25408
   },
   "entries": [
     {
@@ -140572,18 +140572,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "scope",
-      "targetContext": "task-execution",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskObservationFacts.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/taskObservationFacts.ts#taskFields",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "taskFields",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -305640,5 +305628,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e08f355d6781fea77c3dfdd47b509205d9fc4c8a56321191054ec17094b21ced"
+  "sourceDigest": "sha256:877e303a07565590649ba430e868a55a9ee9cf0cd91d94fbc90c6856b7618ca1"
 }

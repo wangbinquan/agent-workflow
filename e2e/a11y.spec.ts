@@ -45,8 +45,8 @@ async function postJson(path: string, body: unknown): Promise<unknown> {
   return response.json()
 }
 
-async function seedTerminalTask(): Promise<string> {
-  const agentName = 'a11y-task-agent'
+async function seedTerminalTask(label = 'detail'): Promise<string> {
+  const agentName = `a11y-task-${label}-agent`
   const agent = (await postJson('/api/agents', {
     name: agentName,
     description: 'RFC-201 task detail accessibility fixture',
@@ -55,7 +55,7 @@ async function seedTerminalTask(): Promise<string> {
     bodyMd: '',
   })) as { id: string }
   const workflow = (await postJson('/api/workflows', {
-    name: 'a11y-task-workflow',
+    name: `a11y-task-${label}-workflow`,
     description: 'RFC-201 task detail accessibility fixture',
     definition: {
       $schema_version: 1,
@@ -93,7 +93,7 @@ async function seedTerminalTask(): Promise<string> {
   })) as { id: string }
   const task = (await postJson('/api/tasks', {
     workflowId: workflow.id,
-    name: 'A11y task detail',
+    name: `A11y task ${label}`,
     scratch: true,
     inputs: { topic: 'accessible page sections' },
   })) as { id: string }
@@ -465,5 +465,31 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await page.goto(`${daemon.baseUrl}/tasks/${taskId}`)
     await expect(page.getByRole('heading', { name: /^A11y task detail/ })).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/tasks/:id')
+  })
+
+  test('/observability task list, swimlanes and attempt dialog pass a11y', async ({ page }) => {
+    await seedTerminalTask('observations')
+    await setDaemonTheme('light')
+    await primeAuth(page, daemon)
+    await page.goto(`${daemon.baseUrl}/observability`)
+    const task = page.getByRole('button', { name: 'A11y task observations', exact: true })
+    await expect(task).toBeVisible()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/observability (task list)')
+    await task.click()
+    const attempt = page.getByRole('button', { name: /^Show attempt statistics/ }).first()
+    await expect(attempt).toBeVisible()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/observability (task detail)')
+    await page.setViewportSize({ width: 390, height: 844 })
+    await setDaemonTheme('dark')
+    await page.reload()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+    await expect(attempt).toBeVisible()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/observability (390 dark)')
+    await attempt.click()
+    await expect(page.getByRole('dialog', { name: /^Attempt / })).toBeVisible()
+    await expectNoCriticalOrSeriousAxeViolations(page, '/observability (attempt dialog)')
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog')).toHaveCount(0)
+    await expect(attempt).toBeFocused()
   })
 })

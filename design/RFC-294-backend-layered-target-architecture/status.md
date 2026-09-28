@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:e08f355d6781fea77c3dfdd47b509205d9fc4c8a56321191054ec17094b21ced`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:877e303a07565590649ba430e868a55a9ee9cf0cd91d94fbc90c6856b7618ca1`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 499 |
-| `architectureExceptions` | 4936 |
+| `architectureExceptions` | 4940 |
 | `backgroundJobs` | 333 |
-| `crossContextImports` | 5558 |
+| `crossContextImports` | 5562 |
 | `facades` | 295 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25409 |
+| `moduleSymbolOwners` | 25408 |
 | `mutationEntrypoints` | 1769 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1027 |
@@ -209,7 +209,7 @@
 | role | 数量 |
 | --- | --- |
 | legacy-outbound | 3262 |
-| legacy-inbound | 1487 |
+| legacy-inbound | 1491 |
 | infrastructure-external | 289 |
 | offered-consumption | 195 |
 | temporary-internal-debt | 92 |
@@ -224,7 +224,7 @@
 | rule | 数量 |
 | --- | --- |
 | legacy-outbound | 3262 |
-| legacy-inbound | 1487 |
+| legacy-inbound | 1491 |
 | temporary-internal-debt | 92 |
 | off-dag-offered | 83 |
 | no-circular | 6 |
@@ -235,7 +235,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2691 |
+| W9 | 2695 |
 | W9-D | 796 |
 | W4-E1 | 658 |
 | W4 | 201 |
@@ -274,13 +274,13 @@
 | run-observability | 4 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 138 / 1027）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1027）
 
 | context | 数量 |
 | --- | --- |
 | collaboration | 44 |
 | digital-employee | 18 |
-| task-execution | 15 |
+| task-execution | 14 |
 | system-operations | 12 |
 | code-capability | 11 |
 | event-center | 8 |
@@ -289,7 +289,6 @@
 | identity-access | 6 |
 | integration | 5 |
 | execution-contract | 3 |
-| run-observability | 1 |
 | task-catalog | 1 |
 
 ## 7. Required ports（`cross-context-imports.json` → `requiredPorts`）
