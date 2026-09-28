@@ -20,12 +20,27 @@ export const ObservationMeasurementSchema = z
     agentId: identity.nullable(),
     occurredAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable(),
     observedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-    model: z.object({ provider: identity, id: identity }).strict().nullable(),
+    model: z.object({ provider: identity.nullable(), id: identity }).strict().nullable(),
     adapterVersion: identity,
     reporting: z.enum(['delta', 'cumulative']),
     inclusion: z.enum(['self', 'includes-descendants', 'unknown']),
     coverage: z.enum(['partial', 'complete', 'unknown']),
     validity: z.enum(['valid', 'correction', 'invalid-final']),
+    /** Explicit overlap relation; absent on legacy flat measurements. */
+    scope: z
+      .object({
+        root: identity,
+        session: identity,
+        parentSession: identity.nullable(),
+        ancestors: z.array(identity).max(64),
+        turn: identity,
+        turnIndex: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+        level: z.enum(['request', 'self-total', 'tree-total']),
+      })
+      .strict()
+      .optional(),
+    /** Native turn watermark covered by this aggregate, independent of delivery order. */
+    coveredThroughTurn: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
     basis: z.discriminatedUnion('kind', [
       z.object({ kind: z.literal('invocation') }).strict(),
       z

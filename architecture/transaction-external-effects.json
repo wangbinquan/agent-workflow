@@ -2668,8 +2668,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts#transaction:128",
-      "line": 128,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts#transaction:127",
+      "line": 127,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts#createUsageLedgerStore",
       "status": "clear",
       "symbol": "createUsageLedgerStore",
@@ -3172,7 +3172,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:22a10e572c7f7a1938364d55659a23374e64e092b9d9bc3660dbf8d152ed52c7",
+  "sourceDigest": "sha256:e0c3dff70af29acaf22276e3c2940b720c8e742130e8df8d15326a8dfa72d0d5",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

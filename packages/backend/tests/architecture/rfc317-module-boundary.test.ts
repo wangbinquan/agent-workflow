@@ -161,8 +161,12 @@ function trackedFileCount(context: string): number {
  * 「模块没有 public 合同」意味着它对外完全不可用，或者它的消费者正在走内部路径——
  * 后者恰恰是 R1 要抓的形态。
  */
-const MODULES_WITHOUT_PUBLIC: Readonly<Record<string, { why: string; removeAfterWave: string }>> =
-  {}
+const MODULES_WITHOUT_PUBLIC: Readonly<Record<string, { why: string; removeAfterWave: string }>> = {
+  'run-observability': {
+    why: 'RFC-371 分批实现中，目前只有 bootstrap 装配的价格 HTTP 入口与内部账本；执行源尚未接入，不提前声明没有消费者的 public 合同。',
+    removeAfterWave: 'RFC-371 P0-T3 执行源公开合同接入时退役',
+  },
+}
 
 /** 非 exact public 入口。与 rfc294-architecture-preflight 的 PUBLIC_SURFACE_PILOT_DEBT 同源。 */
 const NON_EXACT_PUBLIC: Readonly<Record<string, readonly string[]>> = {

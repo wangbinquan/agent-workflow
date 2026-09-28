@@ -17,6 +17,8 @@ export interface UsageLedgerRecord {
   readonly contribution: TokenUsage
   readonly complete: boolean
   readonly issues: readonly UsageIssue[]
+  /** A missing bucket must not move the previous bucket's coverage watermark. */
+  readonly coveredThrough?: Readonly<Record<(typeof TOKEN_BUCKETS)[number], number | null>>
 }
 
 export type UsageDecision =
@@ -37,6 +39,7 @@ function sameIdentity(a: ObservationMeasurement, b: ObservationMeasurement): boo
     a.agentId === b.agentId &&
     a.reporting === b.reporting &&
     a.inclusion === b.inclusion &&
+    JSON.stringify(a.scope) === JSON.stringify(b.scope) &&
     JSON.stringify(a.model) === JSON.stringify(b.model) &&
     JSON.stringify(a.basis) === JSON.stringify(b.basis)
   )
@@ -57,6 +60,7 @@ function diagnostic(
       contribution: previous?.contribution ?? unknown,
       complete: false,
       issues: [...new Set([...(previous?.issues ?? []), issue])],
+      ...(previous?.coveredThrough ? { coveredThrough: previous.coveredThrough } : {}),
     },
   }
 }
@@ -106,6 +110,18 @@ export function reconcileUsage(
     }
   }
   if (next.inclusion === 'unknown') issues.push('unknown-inclusion')
+  const coveredThrough = next.scope
+    ? (Object.fromEntries(
+        TOKEN_BUCKETS.map((bucket) => [
+          bucket,
+          contribution[bucket] === null
+            ? null
+            : next.usage[bucket] !== null
+              ? (next.coveredThroughTurn ?? next.scope!.turnIndex)
+              : (previous?.coveredThrough?.[bucket] ?? null),
+        ]),
+      ) as Readonly<Record<(typeof TOKEN_BUCKETS)[number], number | null>>)
+    : undefined
   return {
     outcome: 'applied',
     record: {
@@ -113,6 +129,7 @@ export function reconcileUsage(
       measurement: { ...next, usage },
       observedRevision: next.revision,
       contribution,
+      ...(coveredThrough ? { coveredThrough } : {}),
       complete:
         next.coverage === 'complete' &&
         issues.length === 0 &&

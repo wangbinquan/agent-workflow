@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto'
 import { and, asc, eq, gt } from 'drizzle-orm'
 import { ObservationMeasurementSchema } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import { sha256Hex } from '@/util/hash'
 import {
   observationUsageCurrent,
   observationUsageEvents,
@@ -15,8 +15,7 @@ import {
 import type { UsageLedgerRecord } from '../domain/usageLedger'
 import type { UsageLedgerScope, UsageLedgerStore } from '../ports/usageLedger'
 
-const key = (...parts: readonly string[]) =>
-  createHash('sha256').update(JSON.stringify(parts)).digest('hex')
+const key = (...parts: readonly string[]) => sha256Hex(JSON.stringify(parts))
 const decode = (document: string): UsageLedgerRecord => JSON.parse(document) as UsageLedgerRecord
 
 function scope(tx: DatabaseTransaction, sourceId: string): UsageLedgerScope {
