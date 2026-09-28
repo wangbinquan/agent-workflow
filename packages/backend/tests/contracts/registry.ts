@@ -889,6 +889,24 @@ export const ENDPOINTS: EndpointSpec[] = [
   // rfc371-pricing-provider.test.ts; this inventory covers the mounted app.
   {
     method: 'GET',
+    path: '/api/observability/overview',
+    happy: {
+      query: { from: '0', to: '4102444800000' },
+      schema: z.object({
+        metrics: z.object({ cost: z.object({ currency: z.literal('CNY') }) }),
+        tasks: z.array(z.object({ task: z.object({ id: z.string() }) })),
+        agents: z.array(z.object({ agentId: z.string().nullable() })),
+        models: z.array(z.object({ sourceId: z.string().nullable() })),
+        runtimes: z.array(z.object({ sourceId: z.string().nullable() })),
+        asOf: z.number(),
+        taskScope: z.literal('direct'),
+        cohort: z.literal('started'),
+        partial: z.boolean(),
+      }),
+    },
+  },
+  {
+    method: 'GET',
     path: '/api/observability/tasks',
     happy: {
       query: { from: '0', to: '4102444800000' },
