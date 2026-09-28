@@ -8,7 +8,7 @@
 
 ## 2026-09-28 RFC-370 CrewStation 完整托管部署 —— In Progress
 
-用户已批准实现、部署和提交上库到远端。[RFC 三件套](design/RFC-370-crewstation-hosted-deployment/proposal.md)按两阶段推进：A 先补平台中立端口／local adapter并经 AC00 独立验收；B 先 M0 必要能力实际部署，再 M1 任务闭环、M2/M3 逐项接入执行／事件／恢复，M4 完整收口。已发布配置／generation／安装准备、HTTP／WS 身份、webhook 中立受理与配置、异步评审文稿等切面；已补 H6 技能正文／文件树／单文件读取切面，本批继续版本内容暂存／快照／发布／补偿的独立 store，editor／restore／ZIP overwrite 改传声明式变更，AW 保留原版本状态机。初始树／删除／历史读取／启动恢复／完整导入导出、H3～H7 全调用者及启动生命周期尚待收口；当前 start 已是前台运行，托管须替换的是宿主依赖。详细源码与发布记录见 RFC plan／seam-assessment。独立门工具不可用，未记 PASS；完整 CI 尚待通过，不提前通过 A-G。尚无 CS adapter 或 aw 在 CS 的实际部署，完整能力目标保持。
+用户已批准实现、部署和提交上库到远端。[RFC 三件套](design/RFC-370-crewstation-hosted-deployment/proposal.md)按两阶段推进：A 先补平台中立端口／local adapter并经 AC00 独立验收；B 先 M0 必要能力实际部署，再 M1 任务闭环、M2/M3 逐项接入执行／事件／恢复，M4 完整收口。已发布配置／generation／安装准备、HTTP／WS 身份、webhook 中立受理与配置、异步评审文稿等切面；已补 H6 技能正文／文件树／单文件读取切面，已补版本内容暂存／快照／发布／补偿的独立 store；本批继续首次创建内容及补偿切面，普通新建与 ZIP create 由 composition 注入同一存储，AW 保留原预留／ready 与版本状态机。删除／历史读取／启动恢复／完整导入导出、H3～H7 全调用者及启动生命周期尚待收口；当前 start 已是前台运行，托管须替换的是宿主依赖。详细源码与发布记录见 RFC plan／seam-assessment。独立门工具不可用，未记 PASS；完整 CI 尚待通过，不提前通过 A-G。尚无 CS adapter 或 aw 在 CS 的实际部署，完整能力目标保持。
 
 ## 2026-09-23 RFC-369 node_run 旧代作废改由读侧推导 —— ✅ Done
 

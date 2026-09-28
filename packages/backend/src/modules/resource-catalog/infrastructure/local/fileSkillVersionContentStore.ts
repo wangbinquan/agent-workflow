@@ -9,8 +9,9 @@ import {
   unlinkSync,
   writeFileSync,
 } from 'node:fs'
-import { dirname, join, relative, resolve, sep } from 'node:path'
+import { dirname, join, relative } from 'node:path'
 import { realpathWriteInside, safeJoin } from '@/util/safePath'
+import { writeFileSkillTree } from './fileSkillTree'
 import type {
   SkillVersionContentChange,
   SkillVersionContentStore,
@@ -138,19 +139,7 @@ function applyChange(
     case 'replace-files': {
       for (const entry of readdirSync(staging))
         rmSync(join(staging, entry), { recursive: true, force: true })
-      const safeRoot = resolve(staging) + sep
-      mkdirSync(staging, { recursive: true })
-      for (const file of change.files) {
-        if (file.path === 'SKILL.md') continue
-        const dst = resolve(join(staging, file.path))
-        if (!(dst + (file.path.endsWith('/') ? sep : '')).startsWith(safeRoot)) {
-          throw new Error(`unsafe path resolved outside skill dir: ${file.path}`)
-        }
-        mkdirSync(dirname(dst), { recursive: true })
-        writeFileSync(dst, file.content)
-      }
-      writeFileSync(join(staging, 'SKILL.md'), change.mainContent, 'utf-8')
-      if (!existsSync(join(staging, 'SKILL.md'))) throw new Error('SKILL.md was not written')
+      writeFileSkillTree(staging, change)
       return
     }
   }

@@ -1,3 +1,5 @@
+import type { SkillTreeFiles } from './creationContentStore'
+
 /** Physical changes selected by AW's editor, restore or import workflow. */
 export type SkillVersionContentChange =
   | { readonly kind: 'retain' }
@@ -5,11 +7,7 @@ export type SkillVersionContentChange =
   | { readonly kind: 'write-file'; readonly path: string; readonly content: string }
   | { readonly kind: 'delete-file'; readonly path: string }
   | { readonly kind: 'restore-version'; readonly version: number }
-  | {
-      readonly kind: 'replace-files'
-      readonly files: readonly { readonly path: string; readonly content: Uint8Array }[]
-      readonly mainContent: string
-    }
+  | ({ readonly kind: 'replace-files' } & SkillTreeFiles)
 
 /** Opaque durable storage references; only the selected adapter interprets them. */
 export interface SkillVersionPublication {

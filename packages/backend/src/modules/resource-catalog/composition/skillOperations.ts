@@ -17,6 +17,8 @@ import type {
 import type { SkillRestoreMembershipPort } from '../infrastructure/legacy/skillVersion'
 import { createSkillRepository } from '../infrastructure/skillRepository'
 import type { SkillContentReader } from '../application/skills/contentReader'
+import type { SkillCreationContentStore } from '../application/skills/creationContentStore'
+import { createFileSkillCreationContentStore } from '../infrastructure/local/fileSkillCreationContentStore'
 import type { SkillVersionContentStore } from '../application/skills/versionContentStore'
 import { createFileSkillVersionContentStore } from '../infrastructure/local/fileSkillVersionContentStore'
 import { createFileSkillContentReader } from '../infrastructure/local/fileSkillContentReader'
@@ -31,6 +33,7 @@ export interface SkillCatalogCompositionDependencies {
   readonly appHome: string
   readonly content?: SkillContentReader
   readonly versionContent?: SkillVersionContentStore
+  readonly creationContent?: SkillCreationContentStore
   /**
    * RFC-353 T7：回滚时「哪些记忆退回待用」由 knowledge-evolution 的协调器裁定。
    * 由 bootstrap 交进来——RFC-294 的目标边表里没有 `resource-catalog → knowledge-evolution`，
@@ -87,6 +90,8 @@ export function composeSkillCatalogFromAdapters(
 export function composeSkillCatalog(
   input: SkillCatalogCompositionDependencies,
 ): SkillCatalogModule {
+  const creationContent =
+    input.creationContent ?? createFileSkillCreationContentStore(input.appHome)
   const versionContent = input.versionContent ?? createFileSkillVersionContentStore(input.appHome)
   const repository = createSkillRepository(
     input.db,
@@ -94,6 +99,7 @@ export function composeSkillCatalog(
       appHome: input.appHome,
       content: input.content ?? createFileSkillContentReader(input.appHome),
       versionContent,
+      creationContent,
     },
     input.restoreMembership,
   )
@@ -127,6 +133,7 @@ export function composeSkillCatalog(
       db: input.db,
       appHome: input.appHome,
       versionContent,
+      creationContent,
     }),
   })
 }

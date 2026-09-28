@@ -85,23 +85,22 @@ describe('RFC-208 · a failed filesystem rollback cannot strand a skill operatio
     'utf8',
   )
 
-  test('rmSync in the reserve rollback is guarded so abandonOperation always runs', () => {
+  test('storage cleanup in the reserve rollback is guarded so abandonOperation always runs', () => {
     // `force: true` only swallows ENOENT. When rmSync threw (EPERM / EBUSY /
     // ENOTEMPTY) the DB rollback below it never ran, leaving the row `reserving`
     // and the op lock ACTIVE — which the orphan sweep cannot reclaim, because it
     // only collects locks whose op is no longer active. Result: that skill name
     // answers 409 forever.
-    const rmAt = skillSource.indexOf('rmSync(skillDir')
+    const discardAt = skillSource.indexOf('await creation.discard(contentPlan)')
+    expect(discardAt).toBeGreaterThan(0)
     const rollback = skillSource.slice(
-      rmAt - 200,
+      discardAt - 200,
       skillSource.indexOf('abandonOperation(tx, opId)'),
     )
     // the cleanup sits inside its own try/catch …
-    expect(rollback).toMatch(/try \{[\s\S]*rmSync\(skillDir[\s\S]*\} catch/)
+    expect(rollback).toMatch(/try \{[\s\S]*await creation\.discard\(contentPlan\)[\s\S]*\} catch/)
     // and the rollback itself must still be there, after the guarded cleanup
-    expect(skillSource.indexOf('rmSync(skillDir')).toBeLessThan(
-      skillSource.indexOf('abandonOperation(tx, opId)'),
-    )
+    expect(discardAt).toBeLessThan(skillSource.indexOf('abandonOperation(tx, opId)'))
   })
 })
 

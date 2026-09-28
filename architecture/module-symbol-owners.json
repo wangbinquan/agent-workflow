@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1862,
+    "backendFiles": 1865,
     "frontendFiles": 622,
     "legacyFiles": 550,
-    "moduleFiles": 1312,
-    "productionFiles": 2639,
+    "moduleFiles": 1315,
+    "productionFiles": 2642,
     "sharedFiles": 155,
-    "symbolsIncludingFileRoots": 25073
+    "symbolsIncludingFileRoots": 25084
   },
   "entries": [
     {
@@ -79267,6 +79267,78 @@
       "currentContext": "resource-catalog",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/creationContentStore.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/creationContentStore.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/creationContentStore.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/creationContentStore.ts#SkillContentRoot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillContentRoot",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/creationContentStore.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/creationContentStore.ts#SkillCreationContentPlan",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillCreationContentPlan",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/creationContentStore.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/creationContentStore.ts#SkillCreationContentStore",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillCreationContentStore",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/creationContentStore.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/creationContentStore.ts#SkillInitialContent",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillInitialContent",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/creationContentStore.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/creationContentStore.ts#SkillTreeFiles",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillTreeFiles",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/application/skills/ports.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/ports.ts#$file",
       "removeAfterWave": null,
@@ -91734,18 +91806,6 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts#writeCandidateFiles",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "writeCandidateFiles",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill-zip.ts#ZIP_LIMITS",
@@ -91884,6 +91944,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createManagedSkillWithFiles",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts#creationContentFor",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "creationContentFor",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -96456,6 +96528,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "walkDir",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillCreationContentStore.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillCreationContentStore.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillCreationContentStore.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillCreationContentStore.ts#createFileSkillCreationContentStore",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileSkillCreationContentStore",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillCreationContentStore.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillCreationContentStore.ts#discardFileSkillContentRoot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "discardFileSkillContentRoot",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillTree.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillTree.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillTree.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillTree.ts#writeFileSkillTree",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "writeFileSkillTree",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -301601,5 +301733,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4eb8f136a43d438ae4d296728a0d236261ac80bd4d8f9c205a291dd6a7a30668"
+  "sourceDigest": "sha256:75ed8fdce3d5adebdd3d31617116a56a1210a0615b47c0c9221c1561a22334e3"
 }

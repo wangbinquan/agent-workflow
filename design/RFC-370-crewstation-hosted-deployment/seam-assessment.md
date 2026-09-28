@@ -1,6 +1,6 @@
 # RFC-370 阶段 A 切面核对
 
-2026-09-28。已发布基线 `583820430aa05d1563a310d981c6fe411838679c`；当前追加 H6 版本写入与发布切面。此表记录已沿源码确认的部分，不替代[全入口候选清单](./seam-inventory.md)，完整 CI 和独立 A-G 尚未通过。
+2026-09-28。已发布基线 `954f91f2ee9c5ce7a1b03ad516c389a5c8391e46`；当前追加 H6 首次创建内容切面及 CI 回归修复。此表记录已沿源码确认的部分，不替代[全入口候选清单](./seam-inventory.md)，完整 CI 和独立 A-G 尚未通过。
 
 | 切面            | 已有可复用合同／机制                                                                                                                                                                                                              | 已确认的缺口与下一步                                                                                                                                                                          | 状态                                       |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
@@ -86,3 +86,12 @@ Intent 入站九处轮次入口改为等待注入配置查询，保持各入口�
 `application/skills/versionContentStore.ts` 定义版本存储效果及声明式内容变更；`infrastructure/local/fileSkillVersionContentStore` 保留原本地实现。editor／restore／ZIP overwrite 的调用者传递内容／相对文件名／逻辑版本，不再拿暂存目录执行闭包。原版本机器等待 stage、snapshot、publish 和补偿完成后才推进对应操作阶段；空写仍由 AW 决定且走原 DB 校验，不复制业务状态机。
 
 `composeSkillCatalog` 为仓库与 ZIP adapter 注入同一 store。旧 `stageSkillVersion`／`commitSkillVersion` 的本地 callback 兼容入口及旧持久 journal 形状保留；不同存储不能消费旧物理目录 callback。后续必须继续迁移初始化、删除、历史查询、startup recovery、统一资源包和其他直接物理效果；尤其恢复必须从当前安装选择同一个 adapter，不能对远程引用调用文件恢复函数。这些工作完成前不开放 hosted 技能读写，不把本批计为 H6 全量完成。
+
+
+## H6 首次创建内容续批
+
+`SkillCreationContentStore` 只拥有 plan／initialize／discard，普通新建传 main 内容，ZIP create 传 AW 解析完成的文件字节及主文档。catalog 的 repository 和 ZIP participant 共用选定的 creation／version store；local adapter 保留原文件树物化，版本 replace-files 复用同一写树函数。旧同步 producer 仅保留于 local 默认入口，不能与选定的中立 store 混用。
+
+AW 继续拥有名称占用、不可见预留、初始版本归档、ready 提交和操作锁。所有异步效果完成前不推进对应阶段；计划失败发生于预留前。提交前清理支持 await，仍遵守旧 best-effort 语义：清理失败不能阻止删除预留行和释放锁；ready 提交后的错误保留内容及操作记录，供恢复推进。旧 bundle receipt 的 skillDir 字段暂时承载 adapter rootRef，使用选定 store 的补偿可处理不透明引用；旧 local 调用兼容。
+
+此批双 provider 测试使用真实数据库和可暂停的非文件 fixture 验证阶段／补偿，同时通过实际 catalog 对异步 local adapter 做普通新建、ZIP 及二进制文件往返验证。fixture 不代表 CS 持久化。启动 reserve recovery、旧 bundle 的全部调用者、删除／历史／backfill 仍需后续统一接线，不能凭 creation／version 注入单独开放 hosted 编辑。

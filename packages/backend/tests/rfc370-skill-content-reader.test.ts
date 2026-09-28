@@ -7,8 +7,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Skill } from '@agent-workflow/shared'
-import { buildActor } from '@/auth/actor'
-import { skills } from '@/db/schema'
+import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
+import type { SkillOperationContext } from '@/modules/resource-catalog/public/participants'
+import { skills, users } from '@/db/schema'
 import type {
   SkillContentReader,
   SkillContentReference,
@@ -23,6 +24,7 @@ import {
 } from '@/modules/resource-catalog/infrastructure/legacy/skill'
 import { createFileSkillContentReader } from '@/modules/resource-catalog/infrastructure/local/fileSkillContentReader'
 import { describeEachProvider } from './helpers/eachProvider'
+import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 
 function barrier() {
   let release!: () => void
@@ -32,22 +34,27 @@ function barrier() {
   return { pending, release }
 }
 
-const authority = buildActor({
-  user: {
-    id: 'skill-content-admin',
-    username: 'skill-content-admin',
-    displayName: 'Skill content admin',
-    role: 'admin',
-    status: 'active',
-  },
-  source: 'session',
-})
-
 describeEachProvider('RFC-370 skill content reader', (harness) => {
   let appHome: string
   let skill: Skill
+  let authority: SkillOperationContext
   beforeEach(async () => {
     appHome = mkdtempSync(join(tmpdir(), 'aw-content-reader-'))
+    await harness.db.insert(users).values({
+      id: 'skill-content-admin',
+      username: 'skill-content-admin',
+      displayName: 'Skill content admin',
+      role: 'admin',
+      status: 'active',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const identity = await admitTestDirectAuthority(
+      createIdentityAccessRuntime({ db: harness.db }).directAuthority,
+      { source: 'session', userId: 'skill-content-admin' },
+    )
+    if (identity === null) throw new Error('skill content fixture authority unavailable')
+    authority = identity.actor
     skill = await createManagedSkill(
       harness.db,
       { appHome },

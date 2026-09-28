@@ -114,7 +114,9 @@ describeEachProvider('RFC-370 Intent configuration query', (harness) => {
     expect(await harness.db.select().from(intentSessions)).toEqual([])
     expect(await harness.db.select().from(intentTurns)).toEqual([])
     // Payload validation retains its original precedence over configuration IO.
-    expect((await post(http, '/api/intent-sessions', {})).status).toBe(400)
+    const invalid = await post(http, '/api/intent-sessions', {})
+    expect(invalid.status).toBe(422)
+    expect(await invalid.json()).toMatchObject({ code: 'intent-invalid' })
     expect(reads).toBe(1)
   })
 

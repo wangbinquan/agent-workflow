@@ -19,7 +19,7 @@ import type {
 } from '@agent-workflow/shared'
 import { isProtectedSkillMainFile } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
-import { existsSync, mkdirSync, realpathSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { existsSync, realpathSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -53,7 +53,6 @@ import type { Actor } from '@/auth/actor'
 import {
   skillFilesAbs,
   skillFilesRel,
-  skillRootAbs,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 import {
   findAgentsUsingManagedSkill,
@@ -70,11 +69,21 @@ import {
   resolveFileSkillReadRoot,
 } from '../local/fileSkillContentReader'
 
+import type {
+  SkillCreationContentStore,
+  SkillInitialContent,
+} from '../../application/skills/creationContentStore'
+import {
+  createFileSkillCreationContentStore,
+  discardFileSkillContentRoot,
+} from '../local/fileSkillCreationContentStore'
+
 type SkillRow = typeof skills.$inferSelect
 
 export interface SkillFsOptions extends SkillVersionFsOptions {
-  /** Selected reader; initial tree creation and legacy recovery still use appHome. */
+  /** Selected reader; legacy history and recovery still use appHome. */
   content?: SkillContentReader
+  creationContent?: SkillCreationContentStore
 }
 
 export interface SkillContentReadOptions {
@@ -162,6 +171,22 @@ export async function isSkillNameOccupiedForOwner(
   return rows.length > 0
 }
 
+function creationContentFor(
+  opts: SkillFsOptions,
+  content: SkillInitialContent | ((filesDirectory: string) => void),
+): SkillCreationContentStore {
+  if (typeof content === 'function' && opts.creationContent !== undefined) {
+    throw new Error('legacy skill producer requires the local file creation store')
+  }
+  return (
+    opts.creationContent ??
+    createFileSkillCreationContentStore(
+      opts.appHome,
+      typeof content === 'function' ? content : undefined,
+    )
+  )
+}
+
 // --- create ---
 
 export async function createManagedSkill(
@@ -179,12 +204,12 @@ export async function createManagedSkill(
       ownerUserId: aclOpts?.ownerUserId,
       actor: aclOpts?.actor,
     },
-    (filesDir) => {
-      const skillMd = stringifyFrontmatter({
+    {
+      kind: 'main',
+      content: stringifyFrontmatter({
         data: { name: input.name, description: input.description, ...input.frontmatterExtra },
         body: input.bodyMd,
-      })
-      writeFileSync(join(filesDir, 'SKILL.md'), skillMd, 'utf-8')
+      }),
     },
   )
 }
@@ -207,7 +232,7 @@ export async function createManagedSkillWithFiles(
   db: ProviderNeutralDatabase,
   opts: SkillFsOptions,
   meta: { name: string; description: string; ownerUserId?: string; actor?: Actor | null },
-  produceFiles: (filesDir: string) => void,
+  produceFiles: SkillInitialContent | ((filesDir: string) => void),
   hooks: {
     /** Test-only fault seam after ready + db-committed, before op retirement. */
     __afterDbCommitForTest?: () => void
@@ -224,7 +249,9 @@ export async function createManagedSkillWithFiles(
     throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
   }
 
+  const creation = creationContentFor(opts, produceFiles)
   const id = ulid()
+  const contentPlan = creation.plan(id)
   const now = Date.now()
 
   // ① reserve intent: insert the row at reservation_state='reserving' (invisible
@@ -258,13 +285,13 @@ export async function createManagedSkillWithFiles(
     throw err
   }
 
-  const skillDir = skillRootAbs(opts.appHome, id)
   let committed = false
   try {
     // ② fs-staged: produce the files tree into the (still-invisible) files dir.
-    const filesDir = join(skillDir, 'files')
-    mkdirSync(filesDir, { recursive: true })
-    produceFiles(filesDir)
+    await creation.initialize(
+      contentPlan,
+      typeof produceFiles === 'function' ? { kind: 'main', content: '' } : produceFiles,
+    )
     await databaseSessionFor(db).transaction(
       async (tx) => await advancePhase(tx, opId, 'fs-staged'),
     )
@@ -310,7 +337,7 @@ export async function createManagedSkillWithFiles(
     // longer active — and this one is. Leftover files are recoverable (GC, and
     // the boot reserve-recovery handler); a stuck lock is not.
     try {
-      rmSync(skillDir, { recursive: true, force: true })
+      await creation.discard(contentPlan)
     } catch {
       /* best-effort: a leftover dir is reclaimable, a stranded lock is not */
     }
@@ -353,7 +380,7 @@ export async function stageManagedSkill(
     /** RFC-234: pre-minted bundle id so same-bundle refs resolve before insert. */
     id?: string
   },
-  produceFiles: (filesDir: string) => void,
+  produceFiles: SkillInitialContent | ((filesDir: string) => void),
 ): Promise<{ skillId: string; opId: string; skillDir: string }> {
   const ownerUserId = meta.ownerUserId ?? null
   assertInitialResourceOwner(meta.actor, ownerUserId)
@@ -361,7 +388,10 @@ export async function stageManagedSkill(
   if (await isSkillNameOccupiedForOwner(db, meta.name, ownerUserId)) {
     throw new ConflictError('skill-name-in-use', `skill '${meta.name}' already exists`)
   }
+  const creation = creationContentFor(opts, produceFiles)
   const id = meta.id ?? ulid()
+  const contentPlan = creation.plan(id)
+  const skillDir = contentPlan.rootRef
   const now = Date.now()
   let opId: string
   try {
@@ -389,11 +419,11 @@ export async function stageManagedSkill(
     }
     throw err
   }
-  const skillDir = skillRootAbs(opts.appHome, id)
   try {
-    const filesDir = join(skillDir, 'files')
-    mkdirSync(filesDir, { recursive: true })
-    produceFiles(filesDir)
+    await creation.initialize(
+      contentPlan,
+      typeof produceFiles === 'function' ? { kind: 'main', content: '' } : produceFiles,
+    )
     await databaseSessionFor(db).transaction(
       async (tx) => await advancePhase(tx, opId, 'fs-staged'),
     )
@@ -413,7 +443,7 @@ export async function stageManagedSkill(
     )
     return { skillId: id, opId, skillDir }
   } catch (err) {
-    await compensateManagedSkillStage(db, { skillId: id, opId, skillDir })
+    await compensateManagedSkillStage(db, { skillId: id, opId, skillDir }, creation)
     throw err
   }
 }
@@ -424,9 +454,12 @@ export async function stageManagedSkill(
 export async function compensateManagedSkillStage(
   db: ProviderNeutralDatabase,
   p: { skillId: string; opId: string; skillDir: string },
+  creation?: SkillCreationContentStore,
 ): Promise<void> {
   try {
-    rmSync(p.skillDir, { recursive: true, force: true })
+    const root = { skillId: p.skillId, rootRef: p.skillDir }
+    if (creation) await creation.discard(root)
+    else discardFileSkillContentRoot(root)
   } catch {
     /* best-effort: a leftover dir is reclaimable, a stranded lock is not */
   }

@@ -210,3 +210,9 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 候选源码复核确认 `commitSkillVersionInTx` 与前批逐字一致，未改 DB 提交或既有业务判定；目标格式／lint 通过，census 记录实际入口 +2、owner +11、净 util 引用／exception +1 并替换前批已消费的增长说明。后继 CI `36380839265` 的 Ubuntu shard 2 为文档提交后一次性 allowGrowth 过期（本批以实际新增长重新登记）；macOS shard 4 的唯一失败为既有全仓源码扫描超出 5s，本批不改扫描判据或预算，等待新候选正式验证。
 
 - 版本内容切面 `9dec01277ac429240b91796e5cc16e83eebc45ec` 已上库并与远端同步，CI `36381850501` 已创建。发布后补查旧源码锁发现 `skill-version-atomic-publish` 仍把 swap 固定在 legacy 文件；续修同时锁定 AW→所选 store 的等待接线和 local adapter 的原子 swap，并在两处禁止非原子发布，不放宽原判据。此续修仅测试／记录和已消费增长声明退役，无生产变更。
+
+
+- A-T2/H6 首次创建续批：新增 `SkillCreationContentStore` 与独立 local 实现，普通新建／ZIP create 改传中立内容，catalog 同时为 repository 与 ZIP 选择 creation／version store。统一 file 写树函数复用原二进制及主文档行为，删除重复 ZIP 函数。预留前纯 plan，initialize／discard 等待异步完成；AW 原 reserve→ready 与初始归档顺序不变，提交前清理失败仍释放 DB 预留，提交后错误仍保留待恢复操作。
+- 新增双 provider 回归覆盖初始化／发布期间不可见、初始化失败等待清理及清理失败、计划失败零预留、post-commit 故障保留、bundle 阶段补偿，以及实际 catalog 普通新建／ZIP 与 live／snapshot 二进制字节。非文件 fixture 仅验证端口，不能替代 CS 持久化或真实部署验收。删除、history、backfill、boot recovery 和所有 bundle 调用者尚未收口，H6／A-G 仍未完成。
+- `954f91f2ee9c5ce7a1b03ad516c389a5c8391e46` 的 CI `36382025085` 已检出三类需修复测试：SkillContentReader 用 plain Actor 传入 DirectAuthenticatedAuthority（本批改为真库用户的正式 admission）；RFC-347 exact 源码锁仍指向旧 auth/session（本批改锁唯一 localCredentialAdmission 与 compatibility composition 的实际入口）；Intent invalid payload 原契约为 422 而新夹具误写 400（本批纠正并增加 intent-invalid code 断言，继续锁零 config IO）。不为这些失败更改生产身份或 HTTP 合同，旧失败 run 不记通过。
+- 本批目标 Prettier／ESLint 和源码 census 检查，未运行本地功能测试；实际 mutation 入口净增 1、owner 项净增 11，逐项声明一次性增长，其余账本按源码重采。正式功能结果仍以新候选精确 SHA 的 GitHub CI 为准。

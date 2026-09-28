@@ -6,8 +6,6 @@
 // commitSkillZip:  applies a decision map and writes accepted candidates to
 //                  ~/.agent-workflow/skills/{id}/files/.
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, join, resolve, sep } from 'node:path'
 import { Unzip, UnzipInflate, unzipSync, type UnzipFileInfo } from 'fflate'
 import { eq, inArray } from 'drizzle-orm'
 import {
@@ -54,6 +52,7 @@ import { listWritableGrantedResourceIds } from '@/modules/resource-catalog/infra
 import { ConflictError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { stringifyFrontmatter } from '@/util/frontmatter'
+import type { SkillCreationContentStore } from '../../application/skills/creationContentStore'
 
 const log = createLogger('skill-zip')
 
@@ -62,7 +61,9 @@ const log = createLogger('skill-zip')
 // frontend cannot drift from them.
 export const ZIP_LIMITS = SKILL_ZIP_LIMITS
 
-export type SkillZipFsOptions = SkillVersionFsOptions
+export interface SkillZipFsOptions extends SkillVersionFsOptions {
+  creationContent?: SkillCreationContentStore
+}
 
 // --- decodeZip ---------------------------------------------------------------
 
@@ -644,7 +645,11 @@ export async function commitSkillZipBuffer(
             ownerUserId: aclOpts.actor.user.id,
             actor: aclOpts.actor,
           },
-          (filesDir) => writeCandidateFiles(filesDir, candidate, targetName),
+          {
+            kind: 'files',
+            files: candidate.files.map((file) => ({ path: file.relPath, content: file.bytes })),
+            mainContent: candidateMainContent(candidate, targetName),
+          },
         )
         outcome.created.push(created)
       } else {
@@ -731,38 +736,6 @@ function candidateMainContent(candidate: SkillCandidate, targetName: string): st
     },
     body: candidate.bodyMd,
   })
-}
-
-/**
- * Lay a ZIP candidate's tree (support files + the generated SKILL.md) into an
- * arbitrary target dir — a live `files/` for a fresh create, OR an op-scoped
- * staging dir for the RFC-170 version-funnel overwrite. Path-traversal-safe.
- */
-function writeCandidateFiles(
-  targetDir: string,
-  candidate: SkillCandidate,
-  targetName: string,
-): void {
-  const safeRoot = resolve(targetDir) + sep
-  mkdirSync(targetDir, { recursive: true })
-
-  for (const file of candidate.files) {
-    if (file.relPath === 'SKILL.md') continue // we re-write this below
-    const dst = resolve(join(targetDir, file.relPath))
-    if (!(dst + (file.relPath.endsWith('/') ? sep : '')).startsWith(safeRoot)) {
-      throw new Error(`unsafe path resolved outside skill dir: ${file.relPath}`)
-    }
-    mkdirSync(dirname(dst), { recursive: true })
-    writeFileSync(dst, file.bytes)
-  }
-
-  const skillMd = candidateMainContent(candidate, targetName)
-  writeFileSync(join(targetDir, 'SKILL.md'), skillMd, 'utf-8')
-
-  // Sanity: directory must actually exist after write.
-  if (!existsSync(join(targetDir, 'SKILL.md'))) {
-    throw new Error('SKILL.md was not written')
-  }
 }
 
 // The old direct-write create helpers (writeCandidate → live files/ +

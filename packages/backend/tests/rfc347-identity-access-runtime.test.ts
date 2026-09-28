@@ -257,6 +257,8 @@ describe('RFC-347 exact production source locks', () => {
       'src/server.ts',
     ])
     expect(importPaths('identity-access/composition')).toEqual([
+      // RFC-370: standalone compatibility facade binds through the module composition.
+      'src/auth/session.ts',
       'src/cli/postgresqlDaemonApplication.ts',
       // RFC-359 AC-1（plan §5hn 之后的盘点，第 3 刀）：`cli/start.ts` 是 SQLite 的第三个
       // 组合根，列表行的 owner 身份投影在这里装配后注入任务路由——与另外两个根同形
@@ -283,9 +285,15 @@ describe('RFC-347 exact production source locks', () => {
     ])
     expect(callPaths('buildCurrentActor(')).toEqual([])
     expect(callPaths('buildInheritedActor(')).toEqual([])
-    expect(callPaths('.fromSession(')).toEqual(['src/auth/session.ts'])
-    expect(callPaths('.fromPat(')).toEqual(['src/auth/session.ts'])
-    expect(callPaths('.fromDaemon(')).toEqual(['src/auth/session.ts'])
+    expect(callPaths('.fromSession(')).toEqual([
+      'src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts',
+    ])
+    expect(callPaths('.fromPat(')).toEqual([
+      'src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts',
+    ])
+    expect(callPaths('.fromDaemon(')).toEqual([
+      'src/modules/identity-access/infrastructure/local/localCredentialAdmission.ts',
+    ])
     const authorityAdapter = source('src/routes/operationAuthority.ts')
     expect(authorityAdapter).not.toContain('authorityFromAuthenticatedPrincipal')
     expect(authorityAdapter).toContain('authorityForLegacyProjection')
