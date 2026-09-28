@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1728,
+    "entries": 1729,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -31935,6 +31935,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/platform/persistence/generationStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/persistence/generationStore.ts#createFileDatabaseGenerationArtifacts",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#createFileDatabaseGenerationArtifacts",
+      "symbol": "createFileDatabaseGenerationArtifacts",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/platform/persistence/logicalDatabaseArtifact.ts#createLegacyArchiveManifest",
@@ -41296,7 +41321,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e782d777919ce9cab0890e7f414a588853345562385ec5d4815075007dd9d105",
+  "sourceDigest": "sha256:f10c8277ae8fb7ddc9c788edb62169d261e9ac3899a6ac9743299eb64282aeb2",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

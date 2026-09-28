@@ -290,7 +290,7 @@ describe('RFC-349 provider completeness', () => {
     // all. Deriving this enum would let it through and hand every fork above its
     // `else` branch instead. Widen it deliberately, as the last step of adapting
     // a provider — after the traits table and the ledger above are answered.
-    const store = backendSource('packages/backend/src/platform/persistence/generationStore.ts')
+    const store = backendSource('packages/backend/src/platform/persistence/generationValidation.ts')
     expect(store.text).toContain("z.enum(['sqlite', 'postgresql'])")
     expect(store.text).not.toContain('z.enum(DATABASE_PROVIDERS)')
   })

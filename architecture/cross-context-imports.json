@@ -9158,7 +9158,7 @@
       "owner": "system-operations",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#digestDatabaseArtifact",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
       "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
       "toSymbol": "digestDatabaseArtifact",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -13561,7 +13561,7 @@
       "owner": "system-operations",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#DatabaseGenerationPayload",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
       "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
       "toSymbol": "DatabaseGenerationPayload",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -19409,7 +19409,7 @@
       "owner": "system-operations",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#digestDatabaseArtifact",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
       "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
       "toSymbol": "digestDatabaseArtifact",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -34080,7 +34080,7 @@
       "owner": "system-operations",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#DatabaseGenerationBootstrapCandidate",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
       "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
       "toSymbol": "DatabaseGenerationBootstrapCandidate",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -38177,7 +38177,7 @@
       "owner": "system-operations",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#DatabaseGenerationBootstrapCandidate",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
       "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
       "toSymbol": "DatabaseGenerationBootstrapCandidate",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -57880,7 +57880,7 @@
       "owner": "system-operations",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#DatabaseGenerationPayload",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
       "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
       "toSymbol": "DatabaseGenerationPayload",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -61671,7 +61671,7 @@
       "owner": "system-operations",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#DatabaseGenerationError",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
       "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
       "toSymbol": "DatabaseGenerationError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -64646,7 +64646,7 @@
       "owner": "system-operations",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#digestGenerationPayload",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file",
       "toPath": "packages/backend/src/platform/persistence/generationStore.ts",
       "toSymbol": "digestGenerationPayload",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -91173,7 +91173,7 @@
       "targetSymbol": "digestDatabaseArtifact",
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#digestDatabaseArtifact"
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -96021,7 +96021,7 @@
       "targetSymbol": "DatabaseGenerationPayload",
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#DatabaseGenerationPayload"
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -102117,7 +102117,7 @@
       "targetSymbol": "digestDatabaseArtifact",
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#digestDatabaseArtifact"
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -117973,7 +117973,7 @@
       "targetSymbol": "DatabaseGenerationBootstrapCandidate",
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#DatabaseGenerationBootstrapCandidate"
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -122197,7 +122197,7 @@
       "targetSymbol": "DatabaseGenerationBootstrapCandidate",
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#DatabaseGenerationBootstrapCandidate"
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -143509,7 +143509,7 @@
       "targetSymbol": "DatabaseGenerationPayload",
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#DatabaseGenerationPayload"
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -147317,7 +147317,7 @@
       "targetSymbol": "DatabaseGenerationError",
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#DatabaseGenerationError"
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -150421,7 +150421,7 @@
       "targetSymbol": "digestGenerationPayload",
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#digestGenerationPayload"
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -169200,7 +169200,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e782d777919ce9cab0890e7f414a588853345562385ec5d4815075007dd9d105",
+  "sourceDigest": "sha256:f10c8277ae8fb7ddc9c788edb62169d261e9ac3899a6ac9743299eb64282aeb2",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

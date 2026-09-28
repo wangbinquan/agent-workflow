@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:e782d777919ce9cab0890e7f414a588853345562385ec5d4815075007dd9d105`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:f10c8277ae8fb7ddc9c788edb62169d261e9ac3899a6ac9743299eb64282aeb2`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,7 +10,7 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1839 |
+| backend production TS 文件 | 1840 |
 | `services/` 文件 | 291 |
 | `modules/**` 文件 / 非空 context | 1291 / 17 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
@@ -35,8 +35,8 @@
 | `crossContextImports` | 5416 |
 | `facades` | 291 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 24994 |
-| `mutationEntrypoints` | 1728 |
+| `moduleSymbolOwners` | 25004 |
+| `mutationEntrypoints` | 1729 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1012 |
 | `transactionExternalEffects` | 257 |
@@ -141,7 +141,7 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| platform | 181 |
+| platform | 182 |
 | task-execution | 74 |
 | resource-catalog | 51 |
 | runtime-management | 41 |
