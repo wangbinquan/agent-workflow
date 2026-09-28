@@ -4,7 +4,7 @@ import type {
   ApplicationConfigurationDependencies,
   ApplicationConfigurationPersistencePort,
 } from './ports/applicationConfiguration'
-import type { RuntimeKind } from '@agent-workflow/shared'
+import type { RuntimeStatusEntry } from '@agent-workflow/shared'
 import { ValidationError } from '@/util/errors'
 
 export function createApplicationConfiguration(
@@ -42,7 +42,7 @@ export function createApplicationConfiguration(
             `webhookDeliveryBodyRetentionDays (${nextConfig.webhookDeliveryBodyRetentionDays}) must not exceed webhookDeliveryRowRetentionDays (${nextConfig.webhookDeliveryRowRetentionDays})`,
           )
         }
-        const changedBinaryProtocols: RuntimeKind[] = []
+        const changedBinaryProtocols: RuntimeStatusEntry['protocol'][] = []
         if (nextConfig.opencodePath !== currentConfig.opencodePath) {
           changedBinaryProtocols.push('opencode')
         }

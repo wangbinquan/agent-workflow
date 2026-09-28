@@ -116,3 +116,5 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 第五批 `6df459b60e7c52c6c7efbba982ba800a207b17eb` 已上库，精确 SHA CI `36370237803` 进行中。
 - A-T2 第六批候选：把存储值默认回填、patch 校验与嵌套／数据库判别联合合并抽为 `platform/configuration/configurationValues`；文件 adapter 与异步存储回归 fixture 复用同一规则。非法 patch 仍先拒绝再加载配置；原文件缓存、原子写入和 RFC-276 迁移段保持。新增内存值／真实文件对拍，覆盖默认值、null 继承、嵌套值、provider 切换及 schema 默认、错误和无意外创建文件。此批不是托管存储实现，其余配置调用者／内容／启动生命周期仍待收口。
 - 第六批候选检查：原 merge helper 段（仅两个导出标记）、原子写入段及 RFC-276 文件迁移段与第五批逐字核对一致；目标格式／lint 通过，未本地跑测试。架构仅 owner 分母 +4，其余本批无增长，移除第五批已消费增长声明。
+
+- 第六批 `d725f7bda26627e944ea7de82308d968f6d5cbab` 已发布，精确 SHA CI `36370688213` 已排队。前一批 CI `36370237803` 的 typecheck 检出 shared 未导出 `RuntimeKind`；修复为消费现有 `RuntimeStatusEntry['protocol']`，不新增协议枚举或跨域依赖。此修复仅类型引用，退役第六批已消费的 owner 增长声明；等待后继精确 SHA CI，不将原失败记成功。

@@ -1,4 +1,4 @@
-import type { Config, RuntimeKind } from '@agent-workflow/shared'
+import type { Config, RuntimeStatusEntry } from '@agent-workflow/shared'
 import type { ConfigConcurrencyHotApplyCommand } from '../../public/commands'
 
 /** Storage validates schema and preserves unrelated settings on each patch.
@@ -16,7 +16,9 @@ export interface ApplicationConfigurationDependencies {
       readonly previous: string | null | undefined
       readonly next: string
     }): Promise<void>
-    invalidateInheritedRuntimeProbeReceipts(protocols: readonly RuntimeKind[]): Promise<number>
+    invalidateInheritedRuntimeProbeReceipts(
+      protocols: readonly RuntimeStatusEntry['protocol'][],
+    ): Promise<number>
   }
   readonly withRuntimeProbeConfigFence: <T>(operation: () => Promise<T>) => Promise<T>
   readonly runtimeTests: {

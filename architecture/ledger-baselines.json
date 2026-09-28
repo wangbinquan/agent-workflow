@@ -903,14 +903,11 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25027,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2：原 mergeDefaults／mergePatch 等四个 helper 及嵌套 key 集合原样迁入 configurationValues，新增三个纯值入口与一个文件 owner，25023→25027；没有新增运行效果或跨域边。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:eb237a66ea37881878e2a9afed5f1af58eca59cf0b7eb024a254332d42b48ad2",
+    "sourceDigest": "sha256:2f53ceec8aef480f544f632daaad236305deb24e60d68f162ec3f0d8cf436034",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -923,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "6df459b60e7c52c6c7efbba982ba800a207b17eb",
-    "contentDigest": "sha256:9b43eaf633344c4a7bca23b7062521689d5e02dd2604ca6fce1d45efba33f427",
+    "currentSnapshotSha": "d725f7bda26627e944ea7de82308d968f6d5cbab",
+    "contentDigest": "sha256:04a51fd1380d82804e86b7fe22e4078ab606ade4078f8cde37cb8f74fec15890",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
