@@ -140,3 +140,6 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - A-T2／H5 第十批候选：RuntimeManagementConfigPort 支持同步／异步读取，11处使用点等待当前配置；配置投影和既有探针队列收归 runtime-management/infrastructure/local/fileRuntimeManagementConfiguration，composition 可注入独立配置 adapter，默认仍走原文件。registry 启动旧默认值检查改接 RuntimeLegacyConfigurationPort，原始文本在应用中解析／判定，文件读取另有 local adapter；SQLite／PG 启动均显式装配，无业务层 configPath。
 - 第十批回归：原双 provider 管理应用测试改用异步配置，新增无路径 composition、读取未完成前无探针、读取失败不删 profile；旧默认值测试保留真实文件路径覆盖，补异步文本拒绝／已迁移放行／不可读回退，boot 顺序和错误传播继续覆盖。仅目标格式／lint 与架构生成，本地未跑功能测试，等待精确 SHA CI。
 - 第十批架构按既有规则登记2个 adapter 文件／工厂和1个port的owner增长、3个被计数的读端口／工厂入口及1条净新增bootstrap接线；无新增业务效果或平台DTO。启动全生命周期、内容和远程runtime执行材料仍待完成，不据此关闭 H1／H5／H6。
+
+- 第十批 `e62fe79be9fd0539549088d6351b4ae5cf25fb98` 已发布且远端同步，精确 SHA CI `36373218652` 已排队。同 SHA 自动 maintenance-soak `36373218651` 为单独工作流，不替代功能 CI。
+- 第九批 CI `36372660023` 类型检查发现测试的闭包写入不被 TypeScript 控制流识别，初值 sqlite 被错误用于后续 PostgreSQL 断言类型。修复为带 DatabaseConfig 类型的可变状态容器，保留真实双向持久化和切换时序断言；不改生产行为，原失败 run 不记成功。

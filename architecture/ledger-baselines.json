@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1735,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2/H5：旧配置读取端口 RuntimeLegacyConfigurationPort 与两个本地配置工厂按既有符号规则计入分母，1732→1735；只拆读取与原探针队列，无新增业务写路径，不改变 census 判据。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -850,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5446,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2/H5：运行时文件读取从旧效果工厂移入 local adapter 并改用原 platform 文件机制；daemon bootstrap 新增旧配置读取装配引用，净 5445→5446。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -874,10 +868,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4839,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2/H5：配置读取 legacy-outbound 边更换位置，bootstrap 引用原始配置 local adapter 的 composition 新增一条 legacy-inbound，4838→4839；无新增 off-dag offered 边。"
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -912,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25034,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 A-T2/H5：两个本地配置 adapter 文件及工厂、一个旧配置读取端口，25029→25034；全部归 runtime-management，无新增全局服务。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -932,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "bf71912e8d57db8f191e03985f6d592205331b6b",
-    "contentDigest": "sha256:d22c5e0729ee628e602427836b5e886519a2b64878c1b29ece356357386e09d1",
+    "currentSnapshotSha": "e62fe79be9fd0539549088d6351b4ae5cf25fb98",
+    "contentDigest": "sha256:18f14b172fe768916ac6804db107237f74760725adf356b659c9ca5135f55b47",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

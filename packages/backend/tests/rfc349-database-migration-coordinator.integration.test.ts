@@ -151,7 +151,7 @@ describe('RFC-349 production database migration coordinator', () => {
       const sourceWriteAllowed = new Promise<void>((resolve) => {
         releaseSourceWrite = resolve
       })
-      let configured: DatabaseConfig = { provider: 'sqlite' }
+      const configurationState: { current: DatabaseConfig } = { current: { provider: 'sqlite' } }
       let failBackground!: (error: unknown) => void
       const backgroundFailure = new Promise<never>((_resolve, reject) => {
         failBackground = reject
@@ -176,7 +176,7 @@ describe('RFC-349 production database migration coordinator', () => {
         },
         configuration: {
           async read() {
-            return configured
+            return configurationState.current
           },
           async write(database) {
             if (database.provider === 'postgresql') {
@@ -188,7 +188,7 @@ describe('RFC-349 production database migration coordinator', () => {
               await sourceWriteAllowed
               sourceActivations += 1
             }
-            configured = database
+            configurationState.current = database
           },
         },
         executionMode: 'background',
@@ -238,7 +238,7 @@ describe('RFC-349 production database migration coordinator', () => {
       try {
         await Promise.race([targetWriteEntered, backgroundFailure])
         expect(admissions).toEqual(['freeze'])
-        expect(configured).toEqual({ provider: 'sqlite' })
+        expect(configurationState.current).toEqual({ provider: 'sqlite' })
       } finally {
         releaseTargetWrite()
       }
@@ -274,7 +274,7 @@ describe('RFC-349 production database migration coordinator', () => {
           }),
         ])
         expect(admissions).toEqual(['freeze', 'postgresql', 'open', 'freeze'])
-        expect(configured).toEqual(input.target)
+        expect(configurationState.current).toEqual(input.target)
       } finally {
         releaseSourceWrite()
       }
@@ -285,7 +285,7 @@ describe('RFC-349 production database migration coordinator', () => {
         rollback: { eligible: false, reason: 'operation-rolled-back' },
       })
       expect(sourceActivations).toBe(1)
-      expect(configured).toEqual({ provider: 'sqlite' })
+      expect(configurationState.current).toEqual({ provider: 'sqlite' })
       expect(admissions.slice(-2)).toEqual(['freeze', 'sqlite'])
       await expect(coordinator.finalize({ operationId: migrated.operationId })).rejects.toThrow(
         'rolled-back database migration',
