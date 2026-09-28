@@ -749,10 +749,7 @@
       "file": "packages/frontend/tests/tab-callsite-contract.test.ts",
       "symbol": "TRUE_TAB_CALLSITES",
       "baseline": 20,
-      "why": "RFC-317：真正实现 tab 语义的调用点存量（`文件::id`）。这份清单是 tab 契约的被测面，新增一处就要人确认它确实按 tab 语义接线。RFC-359 W7 第二波按判据 C 补入网。",
-      "allowGrowth": {
-        "why": "RFC-371：运行观测五视图采用统一 TabBar，新增 run-observation 真页签调用点；显式登记已实现且具有关联面板的正式交互，19 → 20。"
-      }
+      "why": "RFC-317：真正实现 tab 语义的调用点存量（`文件::id`）。这份清单是 tab 契约的被测面，新增一处就要人确认它确实按 tab 语义接线。RFC-359 W7 第二波按判据 C 补入网。"
     },
     {
       "id": "frontend-overlay-family-owners",
@@ -923,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "f8a013c373a41451db72e071741c061634f8b554",
-    "contentDigest": "sha256:360bd0ad9f79a6caee76864fe42d6f20b3efd6d70add78b07bc539aec2e0df4d",
+    "currentSnapshotSha": "79fdcaa837b54b7e7ddaa42ee82b063217df72b1",
+    "contentDigest": "sha256:4e631201ba7db9159b513a8bbd7e827bda0a53c49b35e1b52e15205b64206be9",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
