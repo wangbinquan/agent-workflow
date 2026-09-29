@@ -1,6 +1,5 @@
 // Real daemon/API/browser flow. The basic runtime emits no usage: missing values must stay unknown.
 import { expect, test, type Page } from '@playwright/test'
-import { readFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import type { ObservationOverview, ObservationTaskDetail } from '@agent-workflow/shared'
 import { startDaemon, type DaemonHandle } from './harness'
@@ -181,7 +180,11 @@ test('task, agents and attempt drill-down use real observations and standard car
   await page
     .getByRole('textbox', { name: 'Task name or ID', exact: true })
     .fill('Observed parallel task')
-  await page.getByRole('textbox', { name: 'Workflow ID', exact: true }).fill(workflow.id)
+  await expect(page.getByRole('textbox', { name: /Workflow ID|Linked workflow ID/ })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: /More filters/ })).toHaveCount(0)
+  // Existing shared URLs retain their workflow scope, with a visible removable label.
+  await page.goto(`${daemon.baseUrl}/observability?workflow=${workflow.id}`)
+  await expect(page.getByText(`Linked workflow: ${workflow.id}`, { exact: true })).toBeVisible()
   await expect(page).toHaveURL(new RegExp(`workflow=${workflow.id}`))
   await expect(page.getByRole('heading', { name: 'Task usage trend', exact: true })).toBeVisible()
   for (const width of [1280, 390]) {
@@ -237,23 +240,7 @@ test('task, agents and attempt drill-down use real observations and standard car
   await expect(
     page.getByRole('heading', { name: 'Agent contributions by task', exact: true }),
   ).toBeVisible()
-  const [download] = await Promise.all([
-    page.waitForEvent('download'),
-    page.getByRole('button', { name: 'Export snapshot CSV', exact: true }).click(),
-  ])
-  expect(await download.failure()).toBeNull()
-  expect(download.suggestedFilename()).toMatch(/^aw-observations-agents-\d+-\d+\.csv$/)
-  const csvPath = await download.path()
-  expect(csvPath).not.toBeNull()
-  const csv = await readFile(csvPath!, 'utf8')
-  expect(csv).toContain('"agent_revision"')
-  expect(csv).toContain('"CNY"')
-  expect(csv).toContain(agents[0]!.id)
-  expect(csv).not.toContain(agents[1]!.id)
-  expect(csv).toContain(task.id)
-  expect(csv).toContain('"workflow_filter"')
-  expect(csv).toContain(workflow.id)
-  expect(csv).toContain('Observed parallel task')
+  await expect(page.getByRole('button', { name: /CSV|Export/ })).toHaveCount(0)
   await page.getByRole('button', { name: 'Observed parallel task', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Task total', exact: true })).toBeVisible()
   await page.getByRole('button', { name: 'Back to analysis', exact: true }).click()
@@ -297,99 +284,69 @@ test('task, agents and attempt drill-down use real observations and standard car
   ).toBeVisible()
 })
 
-test('attention preview is bounded, explains causes and opens the canonical task page by keyboard', async ({
+test('overview omits attention, labels every token column and aligns collection facts', async ({
   page,
 }, testInfo) => {
-  const { task } = await seedTask()
-  // Read-only display fixture: business state remains unchanged. The selected row
-  // uses a real task ID so the handling link also exercises the canonical route.
+  const { workflow } = await seedTask()
+  // Read-only display fixture gives the chart nonzero and partial values; real
+  // daemon task and drill-down coverage remain in the preceding journey.
   await page.route('**/api/observability/overview?*', async (route) => {
-    const response = await route.fetch()
-    const data = (await response.json()) as ObservationOverview
-    const observed = data.tasks.find((row) => row.task.id === task.id)!
-    const statuses = [
-      'failed',
-      'interrupted',
-      'awaiting_review',
-      'failed',
-      'failed',
-      'failed',
-      'awaiting_human',
-      'failed',
-      'awaiting_human',
-    ]
+    const response = await route.fetch(),
+      data = (await response.json()) as ObservationOverview
     await route.fulfill({
       response,
       json: {
         ...data,
-        tasks: statuses.map((status, i) => ({
-          ...observed,
-          task: {
-            ...observed.task,
-            id: i === 8 ? task.id : `attention-fixture-${i}`,
-            name: `Attention ${i}: ${'A long but readable task name '.repeat(8)}`,
-            status,
-            startedAt: observed.task.startedAt + i,
-            errorSummary: status === 'failed' ? 'Result persistence failed: '.repeat(30) : null,
+        trend: data.trend.slice(0, 3).map((row, i) => ({
+          ...row,
+          metrics: {
+            ...row.metrics,
+            tokens: {
+              ...row.metrics.tokens,
+              hasKnown: i !== 2,
+              totalKnown: ['1250', '2500', '0'][i],
+              complete: i === 0,
+            },
           },
         })),
       },
     })
   })
   await prime(page)
-  await page.goto(`${daemon.baseUrl}/observability`)
-  const card = page.getByRole('region', { name: 'Tasks needing attention' })
-  const list = card.getByRole('list')
-  await expect(list.getByRole('listitem')).toHaveCount(5)
-  await expect(list.getByRole('link').first()).toContainText('Waiting for more information')
-  await expect(list.getByRole('link').nth(2)).toContainText('human review')
-  await expect(list.getByRole('link').nth(3)).toContainText('Result persistence failed')
-  await expect(card).toContainText('9 in the loaded scope; showing 5')
-  const all = card.getByRole('link', { name: 'View all in task center' })
-  const destination = new URL((await all.getAttribute('href'))!, daemon.baseUrl)
-  expect(destination.searchParams.get('statuses')!.split(',').sort()).toEqual([
-    'awaiting_human',
-    'awaiting_review',
-    'failed',
-    'interrupted',
-  ])
+  await page.goto(`${daemon.baseUrl}/observability?workflow=${workflow.id}`)
+  const chart = page.getByRole('list', { name: 'Task usage trend' })
+  await expect(chart.locator('.observation-trend__value')).toHaveText(['1,250', '≥ 2,500', '—'])
+  await expect(page.getByRole('region', { name: 'Tasks needing attention' })).toHaveCount(0)
+  await page.getByRole('tab', { name: 'Task traces', exact: true }).click()
+  const name = page.getByRole('button', { name: 'Observed parallel task', exact: true })
+  await expect(name).toBeVisible()
+  expect(
+    await name.evaluate((element) => [
+      getComputedStyle(element).borderTopWidth,
+      getComputedStyle(element).backgroundColor,
+    ]),
+  ).toEqual(['0px', 'rgba(0, 0, 0, 0)'])
+  await page.getByRole('tab', { name: 'Performance and data quality', exact: true }).click()
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 })
-    await expectAnalysisSpacing(page)
-    const geometry = await list.evaluate((element) => {
-      const box = element.getBoundingClientRect()
-      return {
-        width: box.width,
-        height: box.height,
-        overflow: element.scrollWidth - element.clientWidth,
-        rows: Array.from(element.querySelectorAll('a')).map((row) => {
-          const rect = row.getBoundingClientRect()
-          return { left: rect.left, right: rect.right }
+    const facts = page.locator('.detail-grid--centered')
+    await expect(facts).toHaveCount(2)
+    for (const list of await facts.all()) {
+      const differences = await list.evaluate((element) =>
+        Array.from(element.querySelectorAll('dt')).map((title) => {
+          const label = title.getBoundingClientRect(),
+            value = title.nextElementSibling!.getBoundingClientRect()
+          return Math.abs((label.top + label.bottom) / 2 - (value.top + value.bottom) / 2)
         }),
-      }
-    })
-    expect(geometry.overflow).toBeLessThanOrEqual(1)
-    expect(geometry.height).toBeLessThan(width === 390 ? 900 : 620)
-    for (const row of geometry.rows) {
-      expect(row.left).toBeGreaterThanOrEqual(0)
-      expect(row.right).toBeLessThanOrEqual(width)
+      )
+      expect(differences.every((difference) => difference <= 1)).toBe(true)
     }
-    const last = list.getByRole('link').last()
-    // Start from the header on each viewport: focusing an already-focused row
-    // after screenshot scrolling does not trigger browser focus scrolling again.
-    await all.focus()
-    for (let index = 0; index < 5; index++) await page.keyboard.press('Tab')
-    await expect(last).toBeFocused()
-    await expect(last).toBeInViewport()
-    await card.screenshot({ path: testInfo.outputPath(`attention-summary-${width}.png`) })
+    await expectAnalysisSpacing(page)
+    await page.screenshot({
+      path: testInfo.outputPath(`collection-facts-${width}.png`),
+      fullPage: true,
+    })
   }
-  await list.getByRole('link').first().focus()
-  await page.keyboard.press('Enter')
-  await expect(page).toHaveURL(new RegExp(`/tasks/${task.id}`))
-  // The canonical task heading includes its status chip in the accessible name.
-  await expect(
-    page.getByRole('heading', { name: 'Observed parallel task Done', exact: true }),
-  ).toBeVisible()
 })
 
 test('runtime configuration and CNY price cards retain the shared section gap', async ({

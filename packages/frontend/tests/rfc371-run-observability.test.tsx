@@ -187,12 +187,10 @@ function fixture(
   } = {},
 ) {
   const paths: URL[] = [],
-    exports: unknown[] = [],
     changes: ObservationSearch[] = [],
     state = {
       error: false,
       empty: false,
-      exportError: false,
       detail: detail(),
       overview: overview(),
       ...options,
@@ -200,24 +198,6 @@ function fixture(
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (raw, init) => {
     const url = new URL(String(raw))
     paths.push(url)
-    if (url.pathname === '/api/observability/exports/snapshot') {
-      expect(init?.method).toBe('POST')
-      exports.push(JSON.parse(String(init?.body)))
-      return state.exportError
-        ? Response.json(
-            { error: { code: 'unavailable', message: 'Export offline' } },
-            { status: 503 },
-          )
-        : Response.json({
-            filename: `aw-observations-agents-${search.from}-${search.to}.csv`,
-            mediaType: 'text/csv;charset=utf-8',
-            content: '\ufeff"tokens","cost_cny"\r\n"10","0"\r\n',
-            asOf: NOW,
-            rows: 1,
-            partial: true,
-            bounded: true,
-          })
-    }
     expect(init?.method ?? 'GET').toBe('GET')
     if (state.error)
       return Response.json({ error: { code: 'unavailable', message: 'offline' } }, { status: 503 })
@@ -259,48 +239,16 @@ function fixture(
       <RouterProvider router={router as AnyRouter} />
     </QueryClientProvider>,
   )
-  return { paths, changes, state, exports }
+  return { paths, changes, state }
 }
-test('CSV downloads the selected agent revision, resets feedback on view changes and preserves read data on failure', async () => {
-  const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:observation-export')
-  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
-  const downloads: string[] = []
-  vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
-    this: HTMLAnchorElement,
-  ) {
-    downloads.push(this.download)
-  })
-  const agent = '["agent-1",3,"task"]'
-  const f = fixture({ ...search, tab: 'agents', agent })
+test('run views have no CSV export operation', async () => {
+  const f = fixture({ ...search, tab: 'agents', agent: '["agent-1",3,"task"]' })
   await screen.findByRole('heading', { name: '该 Agent 的任务贡献' })
-  fireEvent.click(screen.getByRole('button', { name: '导出当前快照 CSV' }))
-  await screen.findByText(/已生成 1 行/)
-  expect(f.exports).toEqual([
-    {
-      window: {
-        from: search.from,
-        to: search.to,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      },
-      view: 'agents',
-      agent,
-    },
-  ])
-  expect(downloads).toEqual([`aw-observations-agents-${search.from}-${search.to}.csv`])
-  expect((create.mock.calls[0]![0] as Blob).type).toBe('text/csv;charset=utf-8')
-  expect(await (create.mock.calls[0]![0] as Blob).text()).toContain('"10","0"')
-  expect(screen.getByText(/CSV 中已标明部分统计/)).toBeTruthy()
+  expect(screen.queryByRole('button', { name: /CSV|导出/ })).toBeNull()
   fireEvent.click(screen.getByRole('tab', { name: '性能与数据质量' }))
   await screen.findByRole('heading', { name: '用量与估值的数据质量' })
-  expect(screen.queryByText(/已生成 1 行/)).toBeNull()
-  fireEvent.click(screen.getByRole('button', { name: '估值待同步 · 1' }))
-  f.state.exportError = true
-  fireEvent.click(screen.getByRole('button', { name: '导出当前快照 CSV' }))
-  await screen.findByRole('button', { name: '重试' })
-  expect(f.exports.at(-1)).toMatchObject({ view: 'tasks', quality: 'pending' })
-  expect(f.exports.at(-1)).not.toHaveProperty('agent')
-  expect(downloads).toHaveLength(1)
-  expect(screen.getByRole('button', { name: '真实任务' })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: /CSV|导出/ })).toBeNull()
+  expect(f.paths.every((url) => !url.pathname.includes('/exports'))).toBe(true)
 })
 test('page → task → attempt → back preserves the original filter and exact-zero CNY', async () => {
   const f = fixture()
@@ -427,7 +375,7 @@ test('pagination requests the opaque cursor and disabling next does not erase fi
   expect(f.changes.at(-1)?.after).toBeUndefined()
 })
 test('task filters reach list and analysis queries, survive drill-down and reset pagination', async () => {
-  const f = fixture({ ...search, after: 'old-page' })
+  const f = fixture({ ...search, after: 'old-page', workflow: 'workflow-1' })
   await screen.findByRole('button', { name: '真实任务' })
   fireEvent.change(screen.getByRole('textbox', { name: '任务名称或 ID' }), {
     target: { value: '真实任务' },
@@ -437,9 +385,9 @@ test('task filters reach list and analysis queries, survive drill-down and reset
   fireEvent.change(screen.getByRole('textbox', { name: '仓库' }), {
     target: { value: '/team/repo' },
   })
-  fireEvent.change(screen.getByRole('textbox', { name: '工作流 ID' }), {
-    target: { value: 'workflow-1' },
-  })
+  expect(screen.queryByRole('textbox', { name: /工作流 ID/ })).toBeNull()
+  expect(screen.queryByRole('button', { name: /更多筛选/ })).toBeNull()
+  expect(screen.getByText('关联工作流：workflow-1')).toBeTruthy()
   fireEvent.click(screen.getByRole('combobox', { name: '执行状态' }))
   fireEvent.mouseDown(await screen.findByRole('option', { name: i18n.t('tasks.status.running') }))
   await waitFor(() => expect(f.paths.at(-1)?.searchParams.get('status')).toBe('running'))
@@ -526,6 +474,9 @@ test('trend columns scale exact large totals and expose focused interval details
   const columns = within(chart).getAllByRole('button')
   expect(columns).toHaveLength(4)
   expect(
+    columns.map((column) => column.querySelector('.observation-trend__value')?.textContent),
+  ).toEqual(['18,014,398,509,481,986', '≥ 9,007,199,254,740,993', '0', '—'])
+  expect(
     columns.map(
       (button) => (button.querySelector('.observation-trend__bar') as HTMLElement).style.height,
     ),
@@ -553,102 +504,17 @@ test('trend columns scale exact large totals and expose focused interval details
     }),
   )
 })
-test('attention is a five-item action summary with real causes, scope counts and task-center links', async () => {
-  const statuses = [
-    'failed',
-    'running',
-    'awaiting_review',
-    'failed',
-    'interrupted',
-    'failed',
-    'awaiting_human',
-    'failed',
-    'awaiting_human',
-  ]
-  const data: ObservationOverview = {
-    ...overview(),
-    partial: true,
-    tasks: statuses.map((status, i) => ({
-      task: {
-        ...task,
-        id: `attention-${i}`,
-        name: `关注事项 ${i}`,
-        status,
-        startedAt: NOW - (9 - i) * 1000,
-        errorSummary: status === 'failed' ? 'daemon-restart' : null,
-      },
-      metrics: metrics(),
-      wallMs: 10000,
-      runningMs: 5000,
-    })),
+test('overview omits the attention card for both failed and empty task sets', async () => {
+  for (const tasks of [
+    [{ task: { ...task, status: 'failed' }, metrics: metrics(), wallMs: 10000, runningMs: 5000 }],
+    [],
+  ]) {
+    fixture({ ...search, tab: 'overview' }, { overview: { ...overview(), tasks } })
+    await screen.findByRole('heading', { name: '任务用量趋势' })
+    expect(screen.queryByRole('region', { name: '需要关注的任务' })).toBeNull()
+    expect(screen.queryByText('在任务中心查看全部')).toBeNull()
+    cleanup()
   }
-  const f = fixture({ ...search, tab: 'overview' }, { overview: data })
-  const card = await screen.findByRole('region', { name: '需要关注的任务' })
-  const rows = within(within(card).getByRole('list')).getAllByRole('listitem')
-  expect(rows).toHaveLength(5)
-  expect(rows.map((row) => within(row).getByRole('link').getAttribute('href'))).toEqual([
-    '/tasks/attention-8',
-    '/tasks/attention-6',
-    '/tasks/attention-2',
-    '/tasks/attention-7',
-    '/tasks/attention-5',
-  ])
-  expect(within(rows[0]!).getByText('去回答')).toBeTruthy()
-  expect(within(rows[2]!).getByText('去评审')).toBeTruthy()
-  expect(within(rows[3]!).getByText(i18n.t('tasks.failure.summary.daemonRestart'))).toBeTruthy()
-  expect(within(rows[3]!).getByText('查看失败')).toBeTruthy()
-  expect(card.textContent).toContain('已加载范围内共 8 项，显示前 5 项')
-  const counts = within(card).getByRole('group', { name: '当前已加载范围内的关注任务数' })
-  for (const [status, count] of [
-    ['awaiting_human', 2],
-    ['awaiting_review', 1],
-    ['failed', 4],
-    ['interrupted', 1],
-  ] as const)
-    expect(counts.textContent).toContain(`${i18n.t(`tasks.status.${status}`)} ${count}`)
-  const all = new URL(
-    within(card).getByRole('link', { name: '在任务中心查看全部' }).getAttribute('href')!,
-    'http://localhost',
-  )
-  expect(all.pathname).toBe('/tasks')
-  expect(all.searchParams.get('statuses')!.split(',').sort()).toEqual([
-    'awaiting_human',
-    'awaiting_review',
-    'failed',
-    'interrupted',
-  ])
-  expect(all.searchParams.get('scope')).toBe('all')
-  expect(all.searchParams.has('view')).toBe(false)
-  expect(card.textContent).toContain('任务中心展示所有时间、仓库')
-  expect(screen.getByText('当前为部分统计')).toBeTruthy()
-  expect(f.paths.filter((path) => path.pathname === '/api/observability/overview')).toHaveLength(1)
-  expect(f.paths.some((path) => path.pathname.startsWith('/api/tasks'))).toBe(false)
-})
-test('attention preserves unknown interruption and raw causes, with an explicit loaded-scope empty state', async () => {
-  const data: ObservationOverview = {
-    ...overview(),
-    tasks: ['failed', 'interrupted', 'interrupted'].map((status, i) => ({
-      task: {
-        ...task,
-        id: `cause-${i}`,
-        status,
-        errorSummary: i === 2 ? 'Worker disconnected while saving result' : null,
-      },
-      metrics: metrics(),
-      wallMs: 10000,
-      runningMs: 5000,
-    })),
-  }
-  fixture({ ...search, tab: 'overview' }, { overview: data })
-  const card = await screen.findByRole('region', { name: '需要关注的任务' })
-  expect(within(card).getByText('任务执行失败，原因未记录。')).toBeTruthy()
-  expect(within(card).getByText('执行已中断，原因未记录。')).toBeTruthy()
-  expect(within(card).getByText('Worker disconnected while saving result')).toBeTruthy()
-  cleanup()
-  fixture({ ...search, tab: 'overview' })
-  const empty = await screen.findByRole('region', { name: '需要关注的任务' })
-  expect(within(empty).getByText('已加载任务中暂无待处理项')).toBeTruthy()
-  expect(within(empty).queryByRole('list')).toBeNull()
 })
 test('trend drill-down fixes an exact interval; refresh preserves a custom window', async () => {
   const f = fixture({ ...search, tab: 'overview' })

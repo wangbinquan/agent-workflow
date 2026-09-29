@@ -531,9 +531,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:100",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:108",
       "kind": "register-call",
-      "line": 100,
+      "line": 108,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
@@ -542,9 +542,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:110",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:33",
       "kind": "register-call",
-      "line": 110,
+      "line": 33,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
@@ -553,31 +553,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:127",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:47",
       "kind": "register-call",
-      "line": 127,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:35",
-      "kind": "register-call",
-      "line": 35,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:52",
-      "kind": "register-call",
-      "line": 52,
+      "line": 47,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
@@ -597,9 +575,20 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:85",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:81",
       "kind": "register-call",
-      "line": 85,
+      "line": 81,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountObservationRoutes",
+      "targetContext": "run-observability"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:91",
+      "kind": "register-call",
+      "line": 91,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
@@ -5529,7 +5518,7 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 501,
+    "ambientWiring": 500,
     "disabled": 9,
     "entries": 335,
     "executionLocal": 41,
@@ -12921,5 +12910,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:df007e87033e8b8417bb7b4fbce130beb8edc81ad9001ba0eead5b6c7e83f586"
+  "sourceDigest": "sha256:3889ed06701464e5344884a1d7b1a45b349c893bd77e7ab0d0a7dc648476cdeb"
 }

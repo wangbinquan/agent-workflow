@@ -300,7 +300,7 @@
       "id": "rfc329-mcp-surface-exemptions",
       "file": "packages/backend/tests/architecture/rfc329McpSurfaceLedger.ts",
       "symbol": "MCP_SURFACE_EXEMPTION_LEAVES",
-      "baseline": 399,
+      "baseline": 398,
       "why": "RFC-329：没有 MCP 工具的路由，逐条精确叶子（每条一个数组元素）。只许降。盯叶子数而不是组数：高水位按 AST 数顶层元素、不递归子数组，所以分组结构下往已有组加一条豁免会让基线纹丝不动——那和用前缀批量豁免是同一个漏洞。前缀在账本里一条都没有：新路由不在任何一条叶子里就落进 uncovered，逼出一次有署名的决定。"
     },
     {
@@ -839,7 +839,7 @@
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
-      "baseline": 501,
+      "baseline": 500,
       "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
@@ -902,12 +902,12 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25504,
+      "baseline": 25487,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:df007e87033e8b8417bb7b4fbce130beb8edc81ad9001ba0eead5b6c7e83f586",
+    "sourceDigest": "sha256:3889ed06701464e5344884a1d7b1a45b349c893bd77e7ab0d0a7dc648476cdeb",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "40446aa0a15d2d5c23b6dcef7450f4dc4f88d263",
-    "contentDigest": "sha256:3b9688b3a9bf2c0f61ff34f215442f089e65806322fdb814bc284c54b596c1f0",
+    "currentSnapshotSha": "1b18e4a1a90f25d53bd84c62baf4d9b19243476a",
+    "contentDigest": "sha256:c3fb2dae96b442ced3a8a03f426a68aa24385a74baaac78b516995c7ece224a4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

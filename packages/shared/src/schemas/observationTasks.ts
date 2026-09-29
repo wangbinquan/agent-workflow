@@ -50,35 +50,6 @@ export const ObservationOverviewQuerySchema = ObservationTaskPageQuerySchema.ref
 }))
 export type ObservationOverviewQuery = z.infer<typeof ObservationOverviewQuerySchema>
 
-/** A fresh bounded snapshot. Large asynchronous exports have a separate contract. */
-export const ObservationSnapshotExportQuerySchema = z
-  .object({
-    window: ObservationOverviewQuerySchema,
-    view: z.enum(['tasks', 'agents']),
-    agent: z.string().min(1).max(2048).optional(),
-    quality: z.string().min(1).max(200).optional(),
-  })
-  .strict()
-  .refine((query) => query.agent === undefined || query.view === 'agents', {
-    message: 'Agent selection requires the agents view',
-  })
-  .refine((query) => query.quality === undefined || query.view === 'tasks', {
-    message: 'Quality selection requires the tasks view',
-  })
-export type ObservationSnapshotExportQuery = z.infer<typeof ObservationSnapshotExportQuerySchema>
-export const ObservationSnapshotExportSchema = z
-  .object({
-    filename: z.string().regex(/^aw-observations-(tasks|agents)-\d+-\d+\.csv$/),
-    mediaType: z.literal('text/csv;charset=utf-8'),
-    content: z.string().max(16 * 1024 * 1024),
-    rows: z.number().int().min(0).max(10000),
-    asOf: time,
-    partial: z.boolean(),
-    bounded: z.literal(true),
-  })
-  .strict()
-export type ObservationSnapshotExport = z.infer<typeof ObservationSnapshotExportSchema>
-
 /** Owner facts, not a copy of task snapshots, prompts or outputs. */
 export interface ObservationTaskFacts {
   readonly id: string

@@ -21302,6 +21302,9 @@ fieldset.settings-card {
 .detail-grid dd {
   margin: 0;
 }
+.detail-grid--centered {
+  align-items: center;
+}
 .schedule-dialog__fieldset {
   min-width: 0;
   margin: 0;

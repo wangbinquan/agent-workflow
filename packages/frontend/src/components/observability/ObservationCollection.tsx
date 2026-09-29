@@ -20,7 +20,7 @@ export function ObservationCollection({
     <div className="stack--md">
       <Card title={t('runObservability.collectionTitle')}>
         <p className="muted">{t('runObservability.collectionHint')}</p>
-        <dl className="detail-grid">
+        <dl className="detail-grid detail-grid--centered observation-metrics">
           <dt>{t('runObservability.sourceRetained')}</dt>
           <dd>{collection.retainedRecords}</dd>
           <dt>{t('runObservability.sourcePending')}</dt>
@@ -46,7 +46,7 @@ export function ObservationCollection({
                 <tr key={row.taskId}>
                   <th scope="row">
                     <button
-                      className="btn btn--sm"
+                      className="link link--button data-table__link task-operations__name"
                       type="button"
                       onClick={() => onTask(row.taskId)}
                     >
@@ -88,7 +88,7 @@ export function ObservationCollection({
                   >
                     <th scope="row">
                       <button
-                        className="btn btn--sm"
+                        className="link link--button data-table__link task-operations__name"
                         type="button"
                         onClick={() => onTask(row.taskId)}
                       >
@@ -128,7 +128,7 @@ export function ObservationCollection({
       )}
       <Card title={t('runObservability.captureCapabilities')}>
         <p className="muted">{t('runObservability.captureCapabilitiesHint')}</p>
-        <dl className="detail-grid">
+        <dl className="detail-grid detail-grid--centered observation-metrics">
           <dt>Claude Code</dt>
           <dd>{t('runObservability.claudeCapability')}</dd>
           <dt>OpenCode</dt>

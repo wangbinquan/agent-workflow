@@ -30,7 +30,6 @@ import {
   MaintenanceStatusSchema,
   OverviewResponseSchema,
   ObservationPriceVersionSchema,
-  ObservationSnapshotExportSchema,
   ScheduledTaskListItemSchema,
   SkillSchema,
   TaskCatalogPageSchema,
@@ -888,14 +887,6 @@ export const ENDPOINTS: EndpointSpec[] = [
 
   // RFC-371: full save/conflict fixtures also run against both providers in
   // rfc371-pricing-provider.test.ts; this inventory covers the mounted app.
-  {
-    method: 'POST',
-    path: '/api/observability/exports/snapshot',
-    happy: {
-      body: { window: { from: 0, to: 4102444800000, timezone: 'UTC' }, view: 'tasks' },
-      schema: ObservationSnapshotExportSchema,
-    },
-  },
   {
     method: 'GET',
     path: '/api/observability/overview',

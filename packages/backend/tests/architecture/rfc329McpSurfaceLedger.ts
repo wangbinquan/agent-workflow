@@ -42,11 +42,6 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
   { leaf: 'POST /api/fusions', group: '/api/fusions', category: 'deliberate' },
   { leaf: 'GET /api/overview', group: '/api/overview', category: 'deliberate' },
   {
-    leaf: 'POST /api/observability/exports/snapshot',
-    group: '/api/observability/exports',
-    category: 'not-in-scope',
-  },
-  {
     leaf: 'GET /api/observability/overview',
     group: '/api/observability/tasks',
     category: 'not-in-scope',

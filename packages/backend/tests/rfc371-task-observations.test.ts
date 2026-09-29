@@ -861,28 +861,10 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
       (await app.request(`/api/observability/overview?from=${NOW}&to=${NOW + 20000}&after=x`))
         .status,
     ).toBe(422)
-    const exportCsv = (body: unknown) =>
-      app.request('/api/observability/exports/snapshot', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-    const selection = { window: { from: NOW, to: NOW + 20000, timezone: 'UTC' }, view: 'tasks' }
-    const before = await exportCsv(selection)
-    expect(before.status).toBe(200)
-    const initial = (await before.json()) as { rows: number; content: string; bounded: boolean }
-    expect(initial).toMatchObject({ rows: 1, bounded: true })
-    expect(initial.content).toContain('"task"')
-    await f.accept('local')
-    await f.usage('local', buckets('98765'))
-    const fresh = await exportCsv(selection)
-    expect(fresh.status).toBe(200)
-    const updated = (await fresh.json()) as { content: string }
-    expect(updated.content).toContain('"98765"')
-    expect(updated.content).not.toEqual(initial.content)
+    // The user removed CSV exports from run observability, including its HTTP operation.
     expect(
-      (await exportCsv({ ...selection, window: { ...selection.window, after: 'page' } })).status,
-    ).toBe(422)
+      (await app.request('/api/observability/exports/snapshot', { method: 'POST' })).status,
+    ).toBe(404)
   })
 
   test('overview quality preserves partial numeric evidence even when every bucket is priced', async () => {

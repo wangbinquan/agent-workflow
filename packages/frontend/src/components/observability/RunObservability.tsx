@@ -23,7 +23,6 @@ import { TabBar, tabDomIds } from '@/components/TabBar'
 import { formatDurationMs } from '@/lib/duration'
 import { Tokens, Cost, Source, Metrics } from './ObservationMetrics'
 import { ObservationAnalysis, type ObservationAnalysisTab } from './ObservationAnalysis'
-import { ObservationExport } from './ObservationExport'
 import { ObservationFilters } from './ObservationFilters'
 import { ObservationNativeCapture } from './ObservationNativeCapture'
 import './RunObservability.css'
@@ -369,15 +368,6 @@ export function RunObservability({
               to: new Date(search.to).toLocaleString(i18n.language),
             })}
           </p>
-          <ObservationExport
-            key={JSON.stringify([window, tab, search.agent, search.quality])}
-            query={{
-              window,
-              view: tab === 'agents' ? 'agents' : 'tasks',
-              ...(tab === 'agents' && search.agent ? { agent: search.agent } : {}),
-              ...(tab === 'performance' && search.quality ? { quality: search.quality } : {}),
-            }}
-          />
         </>
       )}
       {current.error && (
@@ -457,7 +447,8 @@ export function RunObservability({
                               <th scope="row">
                                 <button
                                   type="button"
-                                  className="btn btn--sm"
+                                  className="link link--button data-table__link task-operations__name"
+                                  title={row.task.name}
                                   onClick={() => onChange({ ...search, task: row.task.id })}
                                 >
                                   {row.task.name}

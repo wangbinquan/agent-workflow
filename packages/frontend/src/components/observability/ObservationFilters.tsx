@@ -25,22 +25,29 @@ export function ObservationFilters({
     <FilterBar
       ariaLabel={t('runObservability.filters')}
       trailing={
-        (search.q || search.status || search.repository || search.workflow) && (
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={() =>
-              update({
-                q: undefined,
-                status: undefined,
-                repository: undefined,
-                workflow: undefined,
-              })
-            }
-          >
-            {t('runObservability.clearFilters')}
-          </button>
-        )
+        <>
+          {search.workflow && (
+            <span className="muted">
+              {t('runObservability.workflowActive', { id: search.workflow })}
+            </span>
+          )}
+          {(search.q || search.status || search.repository || search.workflow) && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() =>
+                update({
+                  q: undefined,
+                  status: undefined,
+                  repository: undefined,
+                  workflow: undefined,
+                })
+              }
+            >
+              {t('runObservability.clearFilters')}
+            </button>
+          )}
+        </>
       }
     >
       <FilterField label={t('runObservability.period')}>
@@ -94,14 +101,6 @@ export function ObservationFilters({
           onChange={(repository) =>
             update({ repository: repository.trim() ? repository : undefined })
           }
-        />
-      </FilterField>
-      <FilterField label={t('runObservability.workflowFilter')}>
-        <TextInput
-          value={search.workflow ?? ''}
-          aria-label={t('runObservability.workflowFilter')}
-          maxLength={200}
-          onChange={(workflow) => update({ workflow: workflow.trim() ? workflow : undefined })}
         />
       </FilterField>
     </FilterBar>

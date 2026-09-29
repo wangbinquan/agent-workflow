@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1922,
-    "frontendFiles": 640,
+    "backendFiles": 1921,
+    "frontendFiles": 638,
     "legacyFiles": 554,
-    "moduleFiles": 1368,
-    "productionFiles": 2721,
+    "moduleFiles": 1367,
+    "productionFiles": 2718,
     "sharedFiles": 159,
-    "symbolsIncludingFileRoots": 25504
+    "symbolsIncludingFileRoots": 25487
   },
   "entries": [
     {
@@ -105204,78 +105204,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "same",
-      "targetContext": "run-observability",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/run-observability/application/observationExport.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/application/observationExport.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "run-observability",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/run-observability/application/observationExport.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/application/observationExport.ts#cell",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "cell",
-      "targetContext": "run-observability",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/run-observability/application/observationExport.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/application/observationExport.ts#Cell",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "Cell",
-      "targetContext": "run-observability",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/run-observability/application/observationExport.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/application/observationExport.ts#exportObservationSnapshot",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "exportObservationSnapshot",
-      "targetContext": "run-observability",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/run-observability/application/observationExport.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/application/observationExport.ts#metricHeaders",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "metricHeaders",
-      "targetContext": "run-observability",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "run-observability",
-      "currentLayer": "application",
-      "exported": false,
-      "file": "packages/backend/src/modules/run-observability/application/observationExport.ts",
-      "id": "owner:packages/backend/src/modules/run-observability/application/observationExport.ts#metrics",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "metrics",
       "targetContext": "run-observability",
       "targetLayer": "application"
     },
@@ -224244,66 +224172,6 @@
       "currentContext": "frontend",
       "currentLayer": "components",
       "exported": false,
-      "file": "packages/frontend/src/components/observability/ObservationAttention.tsx",
-      "id": "owner:packages/frontend/src/components/observability/ObservationAttention.tsx#$file",
-      "removeAfterWave": null,
-      "status": "cross-package-contract",
-      "symbol": "$file",
-      "targetContext": "frontend",
-      "targetLayer": "components"
-    },
-    {
-      "currentContext": "frontend",
-      "currentLayer": "components",
-      "exported": false,
-      "file": "packages/frontend/src/components/observability/ObservationAttention.tsx",
-      "id": "owner:packages/frontend/src/components/observability/ObservationAttention.tsx#AttentionStatus",
-      "removeAfterWave": null,
-      "status": "cross-package-contract",
-      "symbol": "AttentionStatus",
-      "targetContext": "frontend",
-      "targetLayer": "components"
-    },
-    {
-      "currentContext": "frontend",
-      "currentLayer": "components",
-      "exported": false,
-      "file": "packages/frontend/src/components/observability/ObservationAttention.tsx",
-      "id": "owner:packages/frontend/src/components/observability/ObservationAttention.tsx#isAttentionStatus",
-      "removeAfterWave": null,
-      "status": "cross-package-contract",
-      "symbol": "isAttentionStatus",
-      "targetContext": "frontend",
-      "targetLayer": "components"
-    },
-    {
-      "currentContext": "frontend",
-      "currentLayer": "components",
-      "exported": true,
-      "file": "packages/frontend/src/components/observability/ObservationAttention.tsx",
-      "id": "owner:packages/frontend/src/components/observability/ObservationAttention.tsx#ObservationAttention",
-      "removeAfterWave": null,
-      "status": "cross-package-contract",
-      "symbol": "ObservationAttention",
-      "targetContext": "frontend",
-      "targetLayer": "components"
-    },
-    {
-      "currentContext": "frontend",
-      "currentLayer": "components",
-      "exported": false,
-      "file": "packages/frontend/src/components/observability/ObservationAttention.tsx",
-      "id": "owner:packages/frontend/src/components/observability/ObservationAttention.tsx#statuses",
-      "removeAfterWave": null,
-      "status": "cross-package-contract",
-      "symbol": "statuses",
-      "targetContext": "frontend",
-      "targetLayer": "components"
-    },
-    {
-      "currentContext": "frontend",
-      "currentLayer": "components",
-      "exported": false,
       "file": "packages/frontend/src/components/observability/ObservationCollection.tsx",
       "id": "owner:packages/frontend/src/components/observability/ObservationCollection.tsx#$file",
       "removeAfterWave": null,
@@ -224321,30 +224189,6 @@
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "ObservationCollection",
-      "targetContext": "frontend",
-      "targetLayer": "components"
-    },
-    {
-      "currentContext": "frontend",
-      "currentLayer": "components",
-      "exported": false,
-      "file": "packages/frontend/src/components/observability/ObservationExport.tsx",
-      "id": "owner:packages/frontend/src/components/observability/ObservationExport.tsx#$file",
-      "removeAfterWave": null,
-      "status": "cross-package-contract",
-      "symbol": "$file",
-      "targetContext": "frontend",
-      "targetLayer": "components"
-    },
-    {
-      "currentContext": "frontend",
-      "currentLayer": "components",
-      "exported": true,
-      "file": "packages/frontend/src/components/observability/ObservationExport.tsx",
-      "id": "owner:packages/frontend/src/components/observability/ObservationExport.tsx#ObservationExport",
-      "removeAfterWave": null,
-      "status": "cross-package-contract",
-      "symbol": "ObservationExport",
       "targetContext": "frontend",
       "targetLayer": "components"
     },
@@ -285409,54 +285253,6 @@
       "currentLayer": "contracts",
       "exported": true,
       "file": "packages/shared/src/schemas/observationTasks.ts",
-      "id": "owner:packages/shared/src/schemas/observationTasks.ts#ObservationSnapshotExport",
-      "removeAfterWave": null,
-      "status": "cross-package-contract",
-      "symbol": "ObservationSnapshotExport",
-      "targetContext": "shared-contracts",
-      "targetLayer": "contracts"
-    },
-    {
-      "currentContext": "shared",
-      "currentLayer": "contracts",
-      "exported": true,
-      "file": "packages/shared/src/schemas/observationTasks.ts",
-      "id": "owner:packages/shared/src/schemas/observationTasks.ts#ObservationSnapshotExportQuery",
-      "removeAfterWave": null,
-      "status": "cross-package-contract",
-      "symbol": "ObservationSnapshotExportQuery",
-      "targetContext": "shared-contracts",
-      "targetLayer": "contracts"
-    },
-    {
-      "currentContext": "shared",
-      "currentLayer": "contracts",
-      "exported": true,
-      "file": "packages/shared/src/schemas/observationTasks.ts",
-      "id": "owner:packages/shared/src/schemas/observationTasks.ts#ObservationSnapshotExportQuerySchema",
-      "removeAfterWave": null,
-      "status": "cross-package-contract",
-      "symbol": "ObservationSnapshotExportQuerySchema",
-      "targetContext": "shared-contracts",
-      "targetLayer": "contracts"
-    },
-    {
-      "currentContext": "shared",
-      "currentLayer": "contracts",
-      "exported": true,
-      "file": "packages/shared/src/schemas/observationTasks.ts",
-      "id": "owner:packages/shared/src/schemas/observationTasks.ts#ObservationSnapshotExportSchema",
-      "removeAfterWave": null,
-      "status": "cross-package-contract",
-      "symbol": "ObservationSnapshotExportSchema",
-      "targetContext": "shared-contracts",
-      "targetLayer": "contracts"
-    },
-    {
-      "currentContext": "shared",
-      "currentLayer": "contracts",
-      "exported": true,
-      "file": "packages/shared/src/schemas/observationTasks.ts",
       "id": "owner:packages/shared/src/schemas/observationTasks.ts#ObservationSourceBacklog",
       "removeAfterWave": null,
       "status": "cross-package-contract",
@@ -306780,5 +306576,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:df007e87033e8b8417bb7b4fbce130beb8edc81ad9001ba0eead5b6c7e83f586"
+  "sourceDigest": "sha256:3889ed06701464e5344884a1d7b1a45b349c893bd77e7ab0d0a7dc648476cdeb"
 }

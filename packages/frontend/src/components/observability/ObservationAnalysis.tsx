@@ -14,7 +14,6 @@ import { Tokens, Cost, Metrics, observationReasonKey } from './ObservationMetric
 import { formatObservationCny } from './formatObservations'
 import './ObservationAnalysis.css'
 import { ObservationCollection } from './ObservationCollection'
-import { ObservationAttention } from './ObservationAttention'
 
 export type ObservationAnalysisTab = 'overview' | 'agents' | 'usage' | 'performance'
 export const observationAgentKey = (agent: ObservationOverview['agents'][number]) =>
@@ -78,7 +77,12 @@ function TaskRows({
           {rows.map((row) => (
             <tr key={row.task.id}>
               <th scope="row">
-                <button type="button" className="btn btn--sm" onClick={() => onTask(row.task.id)}>
+                <button
+                  type="button"
+                  className="link link--button data-table__link task-operations__name"
+                  title={row.task.name}
+                  onClick={() => onTask(row.task.id)}
+                >
                   {row.task.name}
                 </button>
               </th>
@@ -192,6 +196,11 @@ function Trend({
                     aria-label={label}
                     title={label}
                   >
+                    <span className="observation-trend__value" aria-hidden="true">
+                      {tokens.hasKnown
+                        ? `${tokens.complete ? '' : '≥ '}${BigInt(tokens.totalKnown).toLocaleString(i18n.language)}`
+                        : '—'}
+                    </span>
                     <span className="observation-trend__track" aria-hidden="true">
                       <span
                         className="observation-trend__bar"
@@ -201,11 +210,6 @@ function Trend({
                           height: `${Number((BigInt(tokens.totalKnown) * 10000n) / (max > 0n ? max : 1n)) / 100}%`,
                         }}
                       />
-                      {(!tokens.hasKnown || tokens.totalKnown === '0') && (
-                        <span className="observation-trend__zero">
-                          {tokens.hasKnown ? '0' : '—'}
-                        </span>
-                      )}
                     </span>
                     <span className="observation-trend__label" aria-hidden="true">
                       {new Date(row.from).toLocaleDateString(i18n.language, {
@@ -310,7 +314,6 @@ export function ObservationAnalysis({
             <Trend data={data} onBucket={onBucket} />
             <Card title={t('runObservability.agentRanking')}>{ranked(agents.slice(0, 8))}</Card>
           </div>
-          <ObservationAttention tasks={data.tasks} />
           <Card title={t('runObservability.recent')}>
             <TaskRows rows={data.tasks.slice(0, 8)} onTask={onTask} />
           </Card>
