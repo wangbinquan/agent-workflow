@@ -1,3 +1,7 @@
+## 2026-09-30 RFC-371 剩余工作索引入口
+
+RFC总索引已同步当前实施阶段并直接链接[12项剩余清单](design/RFC-371-run-observability/remaining-work.md)。浏览器加载修正ee1af6da15b827e32ea0e15557f79ccd47e2f6b9已精确推送；源内容未再变更，最终包含该修正的CI仍需终态验证。当前仅更新观测文档入口，其他并行输出完整保留。
+
 ## 2026-09-30 RFC-371 剩余清单验证回执与浏览器加载修正
 
 剩余工作清单已上库，状态保持 In Progress。8c6e9a076 的 CI36619139778 已终态 46 success / 4 failure，原类型、JSON 与归属账本问题已通过；两个浏览器分片同为平台轮次加载前读取卡片。现等待全部30个轮次入口渲染后再执行原有390/1280间距、末行Dialog和焦点恢复断言；格式/lint与独立只读功能复核PASS，无生产改动或本地AW测试。静态扫描仅记录状态。CS v2代码94aabd6d的六项CI成功且本机八组件Ready，693ef50c的剩余清单与已复核开发采集设计已推送；两RFC仍有真实联动和采集等未闭环工作，详见[AW清单](design/RFC-371-run-observability/remaining-work.md)与CS RFC034清单。并行resource-catalog四路径原样保留。
