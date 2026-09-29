@@ -1145,8 +1145,6 @@ export const MCP_SURFACE_EXEMPTION_LEAVES: ReadonlyArray<ExemptLeaf> = [
 
 /** 每组一条理由。守卫要求：每个用到的 group 都在这里有非空理由。 */
 export const EXEMPT_REASONS: Readonly<Record<string, string>> = {
-  '/api/observability/exports':
-    'RFC-371（Codex，2026-09-29）：当前快照 CSV 是观测页面的浏览器下载入口，严格复用授权 overview 查询与筛选；本批不新增 Agent 文件下载工具，此登记仅限一个精确路由。',
   '/api/observability/tasks':
     'RFC-371（Codex，2026-09-28）：本批提供运行观测页面的总览、任务列表、同快照 Agent/尝试钻取；Agent 查询工具仍须在 RFC-371 后续 MCP 查询合同批次接入，当前登记仅这三个读路由，不覆盖其他观测 API。',
   '/api/observability/pricing':
