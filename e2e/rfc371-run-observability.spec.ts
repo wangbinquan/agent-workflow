@@ -1,10 +1,20 @@
 // Real daemon/API/browser flow. The basic runtime emits no usage: missing values must stay unknown.
 import { expect, test, type Page } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
 import type { ObservationOverview, ObservationTaskDetail } from '@agent-workflow/shared'
 import { startDaemon, type DaemonHandle } from './harness'
 import { ObservationPlatformNativeCaptureSchema } from '../packages/shared/src/schemas/observationPlatform'
-import nativeCapture from '../packages/shared/tests/fixtures/crewstation-native-capture-v2.json'
+
+const nativeCapture = JSON.parse(
+  readFileSync(
+    new URL(
+      '../packages/shared/tests/fixtures/crewstation-native-capture-v2.json',
+      import.meta.url,
+    ),
+    'utf8',
+  ),
+) as { capture: unknown }
 
 let daemon: DaemonHandle
 test.setTimeout(120_000)

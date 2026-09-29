@@ -903,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25510,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371：补齐托管 v2 原生轮次证明、原子版本迁移与完整空树统计，rfc294-module-symbol-owners 25487 → 25510，按新增功能如实登记本批归属与公开合同。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -923,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "00de070ececc0ab3e7633fe163678fb5e0790763",
-    "contentDigest": "sha256:d9a5d380bd8418015ccce45f135aa3c8d7040bc597bb968def94d76fdec7d81c",
+    "currentSnapshotSha": "904ccfdaa0de41d63472d1a4c251a657a32857fa",
+    "contentDigest": "sha256:7e7ae525bd8b547e8565bef7a8bbbc750909ad806cc41c5b5817c4b7bbde1b0a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

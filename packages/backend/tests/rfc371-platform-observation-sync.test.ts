@@ -157,7 +157,8 @@ describeEachProvider('RFC-371 durable platform observation sync', (harness) => {
       schemaVersion: 2,
       capability: 'executionObservationsV2',
       items: [nativeCapture as PlatformObservation],
-    }).items.find((item) => item.kind === 'capture')!
+    }).items.find((item) => item.kind === 'capture')
+    if (!cap || cap.kind !== 'capture') throw new Error('Fixture must retain capture kind')
     const v2 = { schemaVersion: 2 as const, capability: 'executionObservationsV2' as const }
     f.set(page([cap], { ...v2, persistedThrough: 'committed:2' }))
     expect((await f.sync()).state).toMatchObject({

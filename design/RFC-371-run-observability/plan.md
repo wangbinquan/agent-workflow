@@ -4,6 +4,8 @@
 
 状态：In Progress；用户已批准完整实施两份 RFC、提交并推送及 CS 本机部署。设计原型、生产实现与实机验收分别记录，不互相替代。
 
+当前剩余工作、执行顺序和退出证据统一见 [剩余工作清单](./remaining-work.md)。下文保留各批次历史；未完成项不再靠散落在回执中的句子追踪。
+
 ## 1. 本次设计范围
 
 - [x] 读取当前导航、NodeRun/Task 用量与计时、driver 累积规则、RFC-294 架构边界。
@@ -21,11 +23,11 @@
 | P0-T2 | usage/span/identity/coverage 合同与归一规则                  | T1       | 领域与协议 fixture 测试                                   |
 | P0-T3 | run-observability context、owner public contracts、架构清单  | T2       | 无跨域私有表读取，required/offered 对账                   |
 | P0-T4 | durable ingest、账本 / checkpoint、恢复与历史 legacy 回填    | T3       | SQLite/PG 幂等和故障注入                                  |
-| P0-T5 | 任务可见性 port、查询 / 缓存 / 导出统一权限                  | T3       | 撤权与树状聚合负测                                        |
+| P0-T5 | 任务可见性 port、查询 / 缓存统一权限                  | T3       | 撤权与树状聚合负测                                        |
 | P1-T1 | 概览 / 任务 / Agent 聚合 API、明确窗口口径                   | P0       | 对账用例与性能预算                                        |
 | P1-T2 | 导航 / 总览 / 任务列表 / Agent 页面                          | P1-T1    | URL 筛选、双语、空/错误/部分状态                          |
 | P1-T3 | 公共 ExecutionTimeline、尝试详情与 Agent 汇总                | P1-T1    | 六 Agent 八次运行全链路、键盘/窄屏                        |
-| P1-T4 | CSV/异步导出、数据质量与新鲜度                               | T2/T3    | 服务端过滤、下载重新鉴权                                  |
+| P1-T4 | 数据质量、来源能力与新鲜度                               | T2/T3    | 质量分级、采集水位与缺口恢复                                  |
 | P2-T1 | 模型 / 工具 / runtime 内部 Agent spans                       | P0-T1    | 每个 driver 单独能力证据                                  |
 | P2-T2 | 运行时人民币单价/价格版本、模型成本归因、未定价              | P1       | 修订和历史重算对账                                        |
 | P2-T3 | 关键路径、执行对比、性能分布                                 | P2-T1    | DAG 正确性、缺依赖降级                                    |
@@ -373,3 +375,5 @@ AW 显式请求 v2，并严格兼容旧 CS 的 v1 正文；导入采集摘要使
 34 节第一轮发布回执：`f4d02c115d999262f97794b270c8cbff9a448fc9`，视觉 CI `36513591563` 成功；主 CI `36513591538` 暴露测试配套错误。联合版本 patch 改为原始对象后仍经生产严格 schema 解析，捕获项通过判别字段缩窄；原始 JSON 的深相等比较只解除测试 matcher 的类型窄化，不改变值断言。补登记平台 Dialog，并让根目录 E2E 直接从共享 schema 源路径导入运行时值，修复根包无 workspace 依赖的加载失败。四个文件格式/lint通过，完整验证交修正提交；静态扫描日志未读取。CS 前置 `ca2ff256` 的精确 CI `36512613256` 已成功，v2 服务端完整门禁仍运行。
 
 本轮四文件修正已通过独立只读功能复核 PASS：合同深相等、版本拒绝、Dialog 双向 AST 数量与移动端防护及真实浏览器几何断言均保留。
+
+34 节第二轮 CI 回执（2026-09-30）：`904ccfdaa0de41d63472d1a4c251a657a32857fa` 的主 CI [36514863155](https://github.com/wangbinquan/agent-workflow/actions/runs/36514863155) 终态 failure，视觉 [36514863164](https://github.com/wangbinquan/agent-workflow/actions/runs/36514863164) success。失败定位为 capture matcher 的三处联合类型、根目录 Node 加载 JSON 需要 import attribute，以及上批一次性 allowGrowth 应退役。修正增加显式 capture 判别守卫；用 `readFileSync(new URL(..., import.meta.url))` 解析原始夹具并继续严格 schema 校验；仅删除本 RFC 已消费的归属增长并用官方 helper 更新 ledger 摘要。所有数值、版本、权限及浏览器断言保留，生产代码未变。静态扫描仅记录失败，不读取日志；新的精确 SHA CI 仍须取得终态。剩余功能统一见 [清单](./remaining-work.md)。
