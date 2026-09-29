@@ -11,6 +11,8 @@ export interface PlatformSyncState {
   readonly revision: number
   readonly cursor: string | null
   readonly generation: string | null
+  /** Missing in stored pre-v2 states; readers normalize it to 1. */
+  readonly schemaVersion: 1 | 2
   readonly mode: 'snapshot' | 'incremental'
   readonly staging: {
     readonly generation: string
@@ -19,6 +21,7 @@ export interface PlatformSyncState {
     readonly through: string
     readonly expiresAt: string
     readonly asOf: string
+    readonly schemaVersion: 1 | 2
   } | null
   readonly visibilityRevision: number | null
   readonly costVisibility: PlatformObservationPage['costVisibility']
@@ -36,6 +39,7 @@ export function initialPlatformSyncState(binding: PlatformObservationBinding): P
     revision: 0,
     cursor: null,
     generation: null,
+    schemaVersion: 1,
     mode: 'snapshot',
     staging: null,
     visibilityRevision: null,
@@ -51,7 +55,11 @@ export function initialPlatformSyncState(binding: PlatformObservationBinding): P
 
 /** No counter/model/valuation revision is substituted for another revision axis. */
 export function platformObservationRevision(item: PlatformObservation): number {
-  return item.kind === 'usage' ? item.projection.projectionRevision : item.valuationRevision
+  return item.kind === 'usage'
+    ? item.projection.projectionRevision
+    : item.kind === 'valuation'
+      ? item.valuationRevision
+      : item.revision
 }
 export function platformObservationKey(item: PlatformObservation, kind = item.kind): string {
   const i = item.identity
@@ -70,7 +78,7 @@ export function hidePlatformAmount(
   item: PlatformObservation,
   availability: 'pending' | 'not-authorized',
 ): PlatformObservation {
-  return item.kind === 'usage'
+  return item.kind !== 'valuation'
     ? item
     : {
         ...item,

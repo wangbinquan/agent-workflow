@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:3889ed06701464e5344884a1d7b1a45b349c893bd77e7ab0d0a7dc648476cdeb`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:14e65cc1803332a21d69fbe39cb829a019f6d375586d8a42001b5c39de8bf142`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1921 |
+| backend production TS 文件 | 1922 |
 | `services/` 文件 | 295 |
-| `modules/**` 文件 / 非空 context | 1367 / 18 |
+| `modules/**` 文件 / 非空 context | 1368 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -35,7 +35,7 @@
 | `crossContextImports` | 5580 |
 | `facades` | 295 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25487 |
+| `moduleSymbolOwners` | 25510 |
 | `mutationEntrypoints` | 1773 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1030 |
@@ -77,11 +77,11 @@
 | development-automation / composition | 14 |
 | digital-employee / application | 14 |
 | identity-access / infrastructure | 12 |
+| run-observability / domain | 12 |
 | runtime-management / infrastructure | 12 |
 | code-capability / domain | 11 |
 | memory / application | 11 |
 | resource-catalog / domain | 11 |
-| run-observability / domain | 11 |
 | digital-employee / infrastructure | 9 |
 | memory / domain | 9 |
 | run-observability / application | 9 |

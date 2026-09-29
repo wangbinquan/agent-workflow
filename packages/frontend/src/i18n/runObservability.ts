@@ -1,4 +1,15 @@
 export const runObservabilityZh = {
+  platformCaptureTitle: 'CrewStation 原生轮次采集',
+  captureActions: '操作',
+  nativeCaptureDetails: '查看轮次采集',
+  platformCaptureHint:
+    '展示 CrewStation 已持久化的轮次证明。采集与同步均完整时才能确认零消耗；数值及人民币费用沿用平台账本。',
+  nativeState_unsupported: '运行时不支持采集',
+  nativeTurn: '原生轮次',
+  nativeTurnGap: '原生轮次记录缺失或重复',
+  nativeReceived: '已接收步骤',
+  nativeUnresolved: '待归属历史步骤',
+  nativeCorrected: '已校正历史步骤',
   nativeOutputIncomplete: '运行输出或原生步骤尚不完整',
   nativeRevisionHint:
     '展示历史证据到新证据的变化。已证明归属的修订计回原调用，其余保留为缺口，不计入恢复调用的新消耗。',
@@ -195,6 +206,17 @@ export const runObservabilityZh = {
 }
 export type RunObservabilityMessages = { [K in keyof typeof runObservabilityZh]: string }
 export const runObservabilityEn: RunObservabilityMessages = {
+  platformCaptureTitle: 'CrewStation native turn capture',
+  captureActions: 'Actions',
+  nativeCaptureDetails: 'View turn capture',
+  platformCaptureHint:
+    'Persisted CrewStation turn proofs. Zero usage requires complete capture and synchronization; tokens and CNY costs follow the platform ledger.',
+  nativeState_unsupported: 'Capture unsupported by runtime',
+  nativeTurn: 'Native turn',
+  nativeTurnGap: 'Missing or duplicate native turns',
+  nativeReceived: 'Received steps',
+  nativeUnresolved: 'Unresolved historical steps',
+  nativeCorrected: 'Corrected historical steps',
   nativeOutputIncomplete: 'Runtime output or native step incomplete',
   nativeRevisionHint:
     'Historical and new evidence are shown together. Proven revisions update the original invocation; unresolved revisions remain gaps and are excluded from the resumer’s new usage.',

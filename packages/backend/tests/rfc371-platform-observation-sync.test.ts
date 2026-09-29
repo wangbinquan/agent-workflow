@@ -12,6 +12,7 @@ import { hidePlatformAmount } from '../src/modules/run-observability/domain/plat
 import { createPlatformObservationStore } from '../src/modules/run-observability/infrastructure/platformObservationPersistence'
 import type { PlatformObservationRequest } from '../src/modules/run-observability/ports/platformObservationSource'
 import { describeEachProvider } from './helpers/eachProvider'
+import nativeCapture from '../../shared/tests/fixtures/crewstation-native-capture-v2.json'
 
 const binding = {
   sourceId: 'cs-installation-1',
@@ -149,6 +150,85 @@ function fixture(db: ProviderNeutralDatabase) {
 }
 
 describeEachProvider('RFC-371 durable platform observation sync', (harness) => {
+  test('v1 upgrade, proof revisions and v2 rollback publish only complete generations', async () => {
+    const f = fixture(harness.db)
+    await f.sync()
+    const cap = page([], {
+      schemaVersion: 2,
+      capability: 'executionObservationsV2',
+      items: [nativeCapture as PlatformObservation],
+    }).items[0]!
+    const v2 = { schemaVersion: 2 as const, capability: 'executionObservationsV2' as const }
+    f.set(page([cap], { ...v2, persistedThrough: 'committed:2' }))
+    expect((await f.sync()).state).toMatchObject({
+      mode: 'snapshot',
+      status: 'syncing',
+      schemaVersion: 2,
+      costsReady: false,
+    })
+    expect((await f.rows()).items.some((item) => item.kind === 'capture')).toBe(false)
+    f.set(snapshot([usage()], { ...v2, snapshotId: 'v2-snapshot', nextCursor: 'v2:next' }))
+    await f.sync()
+    expect((await f.rows()).items).toHaveLength(2)
+    f.set(snapshot([cap, valuation()], { ...v2, snapshotId: 'v2-snapshot' }))
+    expect((await f.sync()).state).toMatchObject({
+      mode: 'incremental',
+      status: 'ready',
+      schemaVersion: 2,
+    })
+    expect(f.requests.at(-1)).toMatchObject({ expectedSchemaVersion: 2, cursor: 'v2:next' })
+    expect((await f.rows()).items.find((item) => item.kind === 'capture')).toEqual(cap)
+    f.set(
+      page([{ ...cap, revision: cap.revision - 1 }], { ...v2, persistedThrough: 'committed:3' }),
+    )
+    await f.sync()
+    expect((await f.rows()).items.find((item) => item.kind === 'capture')).toEqual(cap)
+    const changed = {
+      ...nativeCapture,
+      capture: { ...nativeCapture.capture, state: 'partial', issues: ['native-owner-unresolved'] },
+    }
+    f.set(page([changed as PlatformObservation], { ...v2, persistedThrough: 'committed:4' }))
+    expect((await f.sync()).state.error).toBe('revision-conflict')
+    expect((await f.rows()).items.find((item) => item.kind === 'capture')).toEqual(cap)
+    f.set(page([], { persistedThrough: 'committed:5' }))
+    expect((await f.sync()).state).toMatchObject({ mode: 'snapshot', schemaVersion: 1 })
+    expect((await f.rows()).items.some((item) => item.kind === 'capture')).toBe(true)
+    f.set(snapshot([], { snapshotId: 'v1-again' }))
+    expect((await f.sync()).state.status).toBe('ready')
+    expect((await f.rows()).items).toEqual([])
+  })
+
+  test('snapshot downgrade errors discard staging but preserve the last published generation', async () => {
+    const f = fixture(harness.db)
+    await f.sync()
+    f.set(page([], { schemaVersion: 2, capability: 'executionObservationsV2' }))
+    await f.sync()
+    f.set(
+      snapshot([], {
+        schemaVersion: 2,
+        capability: 'executionObservationsV2',
+        nextCursor: 'v2:next',
+      }),
+    )
+    await f.sync()
+    f.set(
+      new PlatformObservationSourceError(
+        'snapshot-required',
+        'old server rejected v2 continuation',
+      ),
+    )
+    expect((await f.sync()).state).toMatchObject({
+      staging: null,
+      mode: 'snapshot',
+      schemaVersion: 2,
+    })
+    expect((await f.rows()).items).toHaveLength(2)
+    f.set(snapshot([], { snapshotId: 'old-server-snapshot' }))
+    expect((await f.sync()).state).toMatchObject({ schemaVersion: 1, status: 'ready' })
+    expect(f.requests.at(-1)).not.toHaveProperty('cursor')
+    expect(f.requests.at(-1)).not.toHaveProperty('snapshotId')
+    expect((await f.rows()).items).toEqual([])
+  })
   test('snapshot pages remain staging across reopen and commit one complete generation', async () => {
     const f = fixture(harness.db)
     f.set(snapshot([usage()], { nextCursor: 'snapshot:page2' }))

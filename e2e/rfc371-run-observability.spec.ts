@@ -3,6 +3,8 @@ import { expect, test, type Page } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import type { ObservationOverview, ObservationTaskDetail } from '@agent-workflow/shared'
 import { startDaemon, type DaemonHandle } from './harness'
+import { ObservationPlatformNativeCaptureSchema } from '@agent-workflow/shared'
+import nativeCapture from '../packages/shared/tests/fixtures/crewstation-native-capture-v2.json'
 
 let daemon: DaemonHandle
 test.setTimeout(120_000)
@@ -368,5 +370,62 @@ test('runtime configuration and CNY price cards retain the shared section gap', 
     expect(before).not.toBeNull()
     expect(after).not.toBeNull()
     expect(after!.y - before!.y - before!.height).toBeCloseTo(expectedGap, 0)
+  }
+})
+
+test('platform capture dialog keeps last-row focus and shared spacing at wide and narrow widths', async ({
+  page,
+}, testInfo) => {
+  const { task } = await seedTask()
+  const capture = ObservationPlatformNativeCaptureSchema.parse(nativeCapture.capture)
+  // Read-only platform display fixture, not a claim of a live managed CS execution.
+  await page.route('**/api/observability/tasks/' + task.id, async (route) => {
+    const response = await route.fetch(),
+      data = (await response.json()) as ObservationTaskDetail
+    await route.fulfill({
+      response,
+      json: {
+        ...data,
+        platformCaptures: Array.from({ length: 30 }, (_, index) => ({
+          invocationId: 'platform-invocation-' + index,
+          nodeRunId: 'platform-attempt-' + index,
+          sourceId: 'cs-fixture',
+          schemaVersion: 2,
+          capture: {
+            ...capture,
+            id: 'capture-' + index,
+            proof: { ...capture.proof, turn: 'turn-' + index, turnIndex: index },
+          },
+          issues: [],
+        })),
+      },
+    })
+  })
+  await prime(page)
+  await page.goto(`${daemon.baseUrl}/observability?task=${task.id}`)
+  const opener = page.getByRole('button', { name: 'View turn capture', exact: true }).last()
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 })
+    await expectCardSpacing(page)
+    // Mouse click intentionally has no preceding focus() (WebKit does not focus it).
+    await opener.click()
+    const dialog = page.getByRole('dialog', {
+      name: 'CrewStation native turn capture',
+      exact: true,
+    })
+    await expect(dialog).toBeVisible()
+    await expect(dialog).toContainText('turn-29')
+    await expect(dialog).toContainText('Corrected historical steps')
+    const box = await dialog.boundingBox()
+    expect(box!.x).toBeGreaterThanOrEqual(0)
+    expect(box!.x + box!.width).toBeLessThanOrEqual(width)
+    await page.screenshot({
+      path: testInfo.outputPath(`platform-capture-${width}.png`),
+      fullPage: true,
+    })
+    await page.keyboard.press('Escape')
+    await expect(dialog).toHaveCount(0)
+    await expect(opener).toBeFocused()
+    await expect(page.getByRole('button', { name: /CSV|Export|More filters/ })).toHaveCount(0)
   }
 })

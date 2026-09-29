@@ -16,6 +16,7 @@ import { sumCnyAmounts } from '../domain/cnyPricing'
 import { intervalDurations } from '../domain/executionIntervals'
 import type { PlatformObservation } from '../domain/platformObservation'
 import { platformObservationKey, type PlatformSyncState } from '../domain/platformSync'
+import { platformCaptureEvidence } from '../domain/platformCapture'
 import { summarizeTokenUsage, TOKEN_BUCKETS } from '../domain/tokenUsage'
 import { selectUsageContributions, type UsageContributionEvidence } from '../domain/usageSelection'
 import type { ObservationSnapshot, ObservationSnapshotSources } from '../ports/taskObservations'
@@ -42,6 +43,8 @@ interface InvocationSummary {
   readonly records: readonly ValuedContribution[]
   readonly complete: boolean
   readonly reasons: readonly string[]
+  readonly knownZero?: boolean
+  readonly emptyCostVisible?: boolean
 }
 const RECORD_LIMIT = 10_000
 const sourceIdentity = (invocation: Invocation) => {
@@ -155,6 +158,7 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
     ).map((row) => [row.invocationId, row]),
   )
   const nativeCaptures: NonNullable<ObservationTaskDetail['nativeCaptures']>[number][] = []
+  const platformCaptures: NonNullable<ObservationTaskDetail['platformCaptures']>[number][] = []
   let truncated = accepted.truncated
   const local: Contribution[] = []
   if (accepted.items.some((i) => i.authority.kind === 'local')) {
@@ -219,6 +223,8 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
   for (const invocation of accepted.items) {
     const binding = sourceIdentity(invocation),
       reasons: string[] = []
+    let knownZero = false,
+      emptyCostVisible = false
     let records = local.filter((r) => r.measurement.invocationId === invocation.invocationId)
     // Completeness follows the accepted capability and its durable proof. A
     // runtime name or a root-only adapter cannot prove descendant coverage.
@@ -269,8 +275,21 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
             platformContribution(item, invocation, values.get(platformObservationKey(item))),
           )
         const state = states.get(key)
-        if (!state || state.status !== 'ready') reasons.push(state?.status ?? 'initial')
-        if (state?.gaps.length) reasons.push('capture-gap')
+        const evidence = platformCaptureEvidence(items, state)
+        reasons.push(...evidence.reasons)
+        knownZero = evidence.knownZero && !truncated
+        emptyCostVisible = knownZero && evidence.emptyCostVisible
+        if (knownZero && !emptyCostVisible)
+          reasons.push(state?.costVisibility === 'hidden' ? 'not-authorized' : 'pending')
+        for (const capture of evidence.captures.length ? evidence.captures : [null])
+          platformCaptures.push({
+            invocationId: invocation.invocationId,
+            nodeRunId: invocation.nodeRunId,
+            sourceId: binding.sourceId,
+            schemaVersion: state?.schemaVersion ?? 1,
+            capture,
+            issues: evidence.reasons,
+          })
       }
     }
     let selected: Contribution[] = [],
@@ -287,7 +306,14 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
     }
     const valued: ValuedContribution[] = []
     for (const record of selected) valued.push(await valueRecord(record, invocation, sources))
-    invocations.push({ invocation, records: valued, complete, reasons })
+    invocations.push({
+      invocation,
+      records: valued,
+      complete: complete || knownZero,
+      reasons,
+      knownZero,
+      emptyCostVisible,
+    })
   }
   const sourceStates: ObservationTaskDetail['sources'][number][] = [...states.values()].map(
     (s) => ({
@@ -314,7 +340,7 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
       costsVisible: false,
       hasGaps: false,
     })
-  return { invocations, truncated, sources: sourceStates, nativeCaptures }
+  return { invocations, truncated, sources: sourceStates, nativeCaptures, platformCaptures }
 }
 
 function metrics(
@@ -323,12 +349,16 @@ function metrics(
 ): ObservationMetrics {
   const rows = invocations.flatMap((i) => i.records),
     tokens = summarizeTokenUsage(rows.map((r) => r.record.contribution))
-  const observedInvocations = invocations.filter((i) => i.records.length > 0).length
+  const observedInvocations = invocations.filter((i) => i.records.length > 0 || i.knownZero).length
   const complete =
     invocations.length > 0 &&
     observedInvocations === invocations.length &&
     !truncated &&
-    invocations.every((i) => i.complete && i.reasons.length === 0)
+    invocations.every(
+      (i) =>
+        i.complete &&
+        i.reasons.every((r) => i.knownZero && ['not-authorized', 'pending'].includes(r)),
+    )
   const amounts = rows.flatMap((r) => (r.amount === null ? [] : [r.amount]))
   return {
     invocations: invocations.length,
@@ -337,14 +367,23 @@ function metrics(
     tokens: {
       known: tokens.known,
       totalKnown: tokens.totalKnown,
-      hasKnown: rows.some((r) => TOKEN_BUCKETS.some((b) => r.record.contribution[b] !== null)),
+      hasKnown:
+        invocations.some((i) => i.knownZero) ||
+        rows.some((r) => TOKEN_BUCKETS.some((b) => r.record.contribution[b] !== null)),
       complete,
       unknownBuckets: tokens.unknownBuckets,
     },
     cost: {
       currency: 'CNY',
-      knownAmount: amounts.length ? sumCnyAmounts(amounts) : null,
-      complete: complete && rows.every((r) => r.complete),
+      knownAmount: amounts.length
+        ? sumCnyAmounts(amounts)
+        : invocations.some((i) => i.emptyCostVisible)
+          ? '0'
+          : null,
+      complete:
+        complete &&
+        rows.every((r) => r.complete) &&
+        invocations.every((i) => !i.knownZero || i.emptyCostVisible),
       pricedRecords: amounts.length,
       priceVersionIds: [...new Set(rows.flatMap((r) => (r.price === null ? [] : [r.price])))],
       reasons: [
@@ -565,6 +604,7 @@ export function createTaskObservationQueries(input: {
           },
           sources: loaded.sources,
           nativeCaptures: loaded.nativeCaptures,
+          platformCaptures: loaded.platformCaptures,
         }
       }),
   }

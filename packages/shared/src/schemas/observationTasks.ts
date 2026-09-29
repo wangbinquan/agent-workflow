@@ -5,6 +5,7 @@ import type {
   ObservationNativeRevisionResolution,
 } from './observationUsage'
 import { TaskStatusSchema } from './task'
+import type { ObservationPlatformNativeCapture } from './observationPlatform'
 
 const time = z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
 export const ObservationTaskPageQuerySchema = z
@@ -125,6 +126,14 @@ export interface ObservationAttemptSummary {
   readonly agents: readonly { readonly id: string | null; readonly revision: number | null }[]
 }
 export interface ObservationTaskDetail extends ObservationTaskSummary {
+  readonly platformCaptures?: readonly {
+    readonly invocationId: string
+    readonly nodeRunId: string | null
+    readonly sourceId: string
+    readonly schemaVersion: 1 | 2
+    readonly capture: ObservationPlatformNativeCapture | null
+    readonly issues: readonly string[]
+  }[]
   readonly nativeCaptures?: readonly {
     readonly invocationId: string
     readonly nodeRunId: string | null

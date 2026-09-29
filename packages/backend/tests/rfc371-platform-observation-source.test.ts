@@ -2,6 +2,7 @@
 import { expect, spyOn, test } from 'bun:test'
 import { createCrewStationObservationSource } from '../src/modules/run-observability/infrastructure/crewstation/observationSource'
 import { PlatformObservationPageSchema } from '../src/modules/run-observability/domain/platformObservation'
+import nativeCapture from '../../shared/tests/fixtures/crewstation-native-capture-v2.json'
 
 const projectId = '01a0bf5d-8f4b-7793-867c-efd7527b3861',
   taskId = '01a0bf5d-8f4b-7793-867c-efd7527b3862'
@@ -128,8 +129,57 @@ test('hosted usage keeps the reconciled contribution and independent authorized 
   expect(f.seen[0]!.url.searchParams.get('after')).toBe(query.after)
   expect(f.seen[0]!.init.method).toBe('GET')
   expect(f.seen[0]!.init.signal).toBeInstanceOf(AbortSignal)
+  const headers = new Headers(f.seen[0]!.init.headers)
+  expect(headers.get('Accept')).toBe('application/vnd.crewstation.execution-observations.v2+json')
+  expect(headers.get('x-fixture-identity')).toBe('project')
   await f.source.read(query)
   expect(f.headers()).toBe(2)
+})
+
+test('v2 preserves the raw CS capture projection and v1 rejects it', async () => {
+  const body = page({
+    schemaVersion: 2,
+    capability: 'executionObservationsV2',
+    items: [usage, nativeCapture, valuation],
+  })
+  expect(await fixture(body).source.read(query)).toEqual(body)
+  await expect(fixture(page({ items: [nativeCapture] })).source.read(query)).rejects.toMatchObject({
+    code: 'invalid-response',
+  })
+  const mismatched = { ...nativeCapture, recordId: 'different-capture' }
+  await expect(fixture({ ...body, items: [mismatched] }).source.read(query)).rejects.toMatchObject({
+    code: 'invalid-response',
+  })
+  await expect(fixture({ ...body, schemaVersion: 3 }).source.read(query)).rejects.toMatchObject({
+    code: 'invalid-response',
+  })
+})
+
+test('only known v2 snapshot continuations restart after an old server rejects the cursor', async () => {
+  for (const status of [400, 422]) {
+    const source = fixture({}, status).source
+    const continuation = {
+      projectId,
+      taskId,
+      limit: 100,
+      mode: 'snapshot' as const,
+      snapshotId: 'v2:one',
+      cursor: 'v2:next',
+    }
+    await expect(source.read({ ...continuation, expectedSchemaVersion: 2 })).rejects.toMatchObject({
+      code: 'snapshot-required',
+    })
+    await expect(source.read({ ...continuation, expectedSchemaVersion: 1 })).rejects.toMatchObject({
+      code: 'unavailable',
+    })
+    await expect(source.read(continuation)).rejects.toMatchObject({ code: 'unavailable' })
+    await expect(
+      source.read({ projectId, taskId, limit: 100, mode: 'snapshot', expectedSchemaVersion: 2 }),
+    ).rejects.toMatchObject({ code: 'unavailable' })
+    await expect(source.read({ ...query, expectedSchemaVersion: 2 })).rejects.toMatchObject({
+      code: 'unavailable',
+    })
+  }
 })
 
 test('opaque snapshot continuation is preserved and cannot silently become another snapshot', async () => {

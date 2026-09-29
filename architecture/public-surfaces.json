@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1101,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21268,
+    "recursiveFields": 21269,
     "symbols": 1030
   },
   "entries": [
@@ -117841,7 +117841,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 156,
+        "maxTransitiveLeafFields": 157,
         "maxUnionVariants": 56
       },
       "consumerEdgeIds": [
@@ -118093,6 +118093,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:detail.$return.$variant:0.nativeCaptures",
           "type": "readonly {\n    readonly invocationId: string\n    readonly nodeRunId: string | null\n    readonly state: 'pending' | 'partial' | 'complete' | 'unobserved'\n    readonly priorRevisionGap: boolean\n    readonly proof: ObservationNativeCapture | null\n    readonly issues?: readonly string[]\n    readonly revisions?: readonly ObservationNativeRevisionResolution[]\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:detail.$return.$variant:0.platformCaptures",
+          "type": "readonly {\n    readonly invocationId: string\n    readonly nodeRunId: string | null\n    readonly sourceId: string\n    readonly schemaVersion: 1 | 2\n    readonly capture: ObservationPlatformNativeCapture | null\n    readonly issues: readonly string[]\n  }[]"
         },
         {
           "consumerEdgeIds": [],
@@ -168283,7 +168288,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3889ed06701464e5344884a1d7b1a45b349c893bd77e7ab0d0a7dc648476cdeb",
+  "sourceDigest": "sha256:14e65cc1803332a21d69fbe39cb829a019f6d375586d8a42001b5c39de8bf142",
   "targetContexts": [
     "collaboration",
     "development-automation",

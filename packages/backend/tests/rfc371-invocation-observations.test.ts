@@ -9,6 +9,7 @@ import {
   PlatformObservationSourceError,
   type PlatformObservation,
   type PlatformObservationPage,
+  type PlatformObservationV1Page,
 } from '../src/modules/run-observability/domain/platformObservation'
 import { createObservationInvocationStore } from '../src/modules/run-observability/infrastructure/invocationPersistence'
 import { createPlatformObservationStore } from '../src/modules/run-observability/infrastructure/platformObservationPersistence'
@@ -97,7 +98,7 @@ const valuation = (): Extract<
   priceVersionRef: 'platform-price',
   amountDecimal: '0.000000000001',
 })
-const snapshot = (items: PlatformObservation[]): PlatformObservationPage => ({
+const snapshot = (items: PlatformObservationV1Page['items']): PlatformObservationPage => ({
   schemaVersion: 1,
   capability: 'executionObservationsV1',
   projectId: binding.projectId,
@@ -261,7 +262,7 @@ describeEachProvider('RFC-371 invocation observation authority routing', (harnes
     await f.invocations.accept(acceptance())
     await f.sync(snapshot([usage()]))
     const incremental = (
-      items: PlatformObservation[],
+      items: PlatformObservationV1Page['items'],
       visibilityRevision = 0,
     ): PlatformObservationPage => ({
       schemaVersion: 1,

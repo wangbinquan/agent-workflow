@@ -28,6 +28,7 @@ import { createUsageIngestion } from '../src/modules/run-observability/applicati
 import { createPlatformObservationSync } from '../src/modules/run-observability/application/platformObservationSync'
 import { createPlatformObservationStore } from '../src/modules/run-observability/infrastructure/platformObservationPersistence'
 import {
+  PlatformObservationPageSchema,
   PlatformObservationSourceError,
   type PlatformObservation,
   type PlatformObservationPage,
@@ -35,6 +36,7 @@ import {
 import { mountObservationRoutes } from '../src/modules/run-observability/composition/observationRoutes'
 import { errorHandler } from '../src/util/errors'
 import { describeEachProvider } from './helpers/eachProvider'
+import nativeCapture from '../../shared/tests/fixtures/crewstation-native-capture-v2.json'
 
 const NOW = Date.parse('2026-09-28T00:00:00.000Z')
 const admin = buildActor({
@@ -316,12 +318,15 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
       },
       async sync(
         items: PlatformObservation[],
-        patch: Partial<Pick<PlatformObservationPage, 'costVisibility' | 'visibilityRevision'>> = {},
+        patch: Partial<
+          Pick<PlatformObservationPage, 'costVisibility' | 'visibilityRevision' | 'schemaVersion'>
+        > = {},
         selectedBinding = binding,
       ) {
-        const response: PlatformObservationPage = {
-          schemaVersion: 1,
-          capability: 'executionObservationsV1',
+        const response = PlatformObservationPageSchema.parse({
+          schemaVersion: patch.schemaVersion ?? 1,
+          capability:
+            patch.schemaVersion === 2 ? 'executionObservationsV2' : 'executionObservationsV1',
           projectId: selectedBinding.projectId,
           taskId: selectedBinding.taskId,
           mode: 'snapshot',
@@ -337,14 +342,14 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
           snapshotThrough: 'through-' + syncSerial,
           expiresAt: new Date(NOW + 600_000).toISOString(),
           ...patch,
-        }
+        })
         const sync = createPlatformObservationSync({
           store: platform,
           now: () => NOW + 6000,
           source: {
             read: async (request) => {
               if (request.mode === 'snapshot') return response
-              return {
+              return PlatformObservationPageSchema.parse({
                 schemaVersion: response.schemaVersion,
                 capability: response.capability,
                 projectId: response.projectId,
@@ -358,7 +363,7 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
                 visibilityRevision: response.visibilityRevision,
                 costVisibility: response.costVisibility,
                 gaps: response.gaps,
-              }
+              })
             },
           },
         })
@@ -731,6 +736,46 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
       status: 'failed',
       asOf: new Date(NOW + 5000).toISOString(),
     })
+  })
+  test('only complete v2 empty proofs establish zero; late usage and hidden CNY remain separate', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.price('999')
+    await f.accept('hosted', { authority: platformAuthority })
+    await f.sync([])
+    expect((await f.queries.detail(admin, 'task'))!.metrics.tokens.hasKnown).toBe(false)
+    const capture: PlatformObservation = {
+      ...nativeCapture,
+      kind: 'capture',
+      identity,
+      capture: { ...nativeCapture.capture, identity },
+    } as PlatformObservation
+    await f.sync([capture], { schemaVersion: 2 })
+    let result = (await f.queries.detail(admin, 'task'))!
+    expect(result.metrics.tokens).toMatchObject({ hasKnown: true, totalKnown: '0', complete: true })
+    expect(result.metrics).toMatchObject({ records: 0, observedInvocations: 1 })
+    expect(result.metrics.cost).toMatchObject({
+      knownAmount: '0',
+      complete: true,
+      priceVersionIds: [],
+    })
+    expect(result.platformCaptures).toHaveLength(1)
+    expect(result.platformCaptures![0]!.capture?.id).toBe('native-empty')
+    await f.sync([capture], { schemaVersion: 2, costVisibility: 'hidden', visibilityRevision: 1 })
+    result = (await f.queries.detail(admin, 'task'))!
+    expect(result.metrics.tokens).toMatchObject({ hasKnown: true, complete: true })
+    expect(result.metrics.cost).toMatchObject({ knownAmount: null, complete: false })
+    await f.sync([capture, csUsage()], {
+      schemaVersion: 2,
+      costVisibility: 'hidden',
+      visibilityRevision: 1,
+    })
+    result = (await f.queries.detail(admin, 'task'))!
+    expect(result.metrics.tokens).toMatchObject({ totalKnown: '30', complete: false })
+    expect(result.metrics.cost.knownAmount).toBeNull()
+    expect(result.metrics.cost.reasons).toContain('native-capture-unobserved')
+    await f.offline()
+    expect((await f.queries.detail(admin, 'task'))!.metrics.tokens.complete).toBe(false)
   })
   test('one AW task preserves independent platform bindings from the same installation', async () => {
     const f = await fixture()

@@ -1,0 +1,54 @@
+{
+  "kind": "capture",
+  "identity": {
+    "projectId": "01a0bf5d-8f4b-7793-867c-efd7527b3861",
+    "taskId": "01a0bf5d-8f4b-7793-867c-efd7527b3862",
+    "subtaskId": "01a0bf5d-8f4b-7793-867c-efd7527b3863",
+    "executionId": "01a0bf5d-8f4b-7793-867c-efd7527b3864",
+    "executionGeneration": 2
+  },
+  "sourceId": "runner",
+  "recordId": "native-empty",
+  "revision": 10,
+  "occurredAt": null,
+  "observedAt": "2026-09-28T00:00:00.000Z",
+  "capture": {
+    "id": "native-empty",
+    "identity": {
+      "projectId": "01a0bf5d-8f4b-7793-867c-efd7527b3861",
+      "taskId": "01a0bf5d-8f4b-7793-867c-efd7527b3862",
+      "subtaskId": "01a0bf5d-8f4b-7793-867c-efd7527b3863",
+      "executionId": "01a0bf5d-8f4b-7793-867c-efd7527b3864",
+      "executionGeneration": 2
+    },
+    "sourceId": "runner",
+    "proof": {
+      "contract": "opencode-child-steps-v1",
+      "lineageKey": "lineage",
+      "turn": "turn-empty",
+      "turnIndex": 0,
+      "state": "complete",
+      "root": "native-root",
+      "observedAt": "2026-09-28T00:00:00.000Z",
+      "baseline": {
+        "kind": "fresh",
+        "fingerprint": null
+      },
+      "fingerprint": "empty-tree",
+      "sessions": 1,
+      "steps": 0,
+      "emitted": 0,
+      "baselineSteps": 0,
+      "priorRevisionGap": false,
+      "issues": []
+    },
+    "state": "complete",
+    "issues": [],
+    "receivedSteps": 0,
+    "receivedBaselineSteps": 0,
+    "unresolvedBaselineSteps": 0,
+    "revisedBaselineSteps": 0,
+    "correctedBaselineSteps": 0,
+    "historicalRevisionGap": false
+  }
+}

@@ -902,12 +902,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25487,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25510,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371：补齐托管 v2 原生轮次证明、原子版本迁移与完整空树统计，rfc294-module-symbol-owners 25487 → 25510，按新增功能如实登记本批归属与公开合同。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:3889ed06701464e5344884a1d7b1a45b349c893bd77e7ab0d0a7dc648476cdeb",
+    "sourceDigest": "sha256:14e65cc1803332a21d69fbe39cb829a019f6d375586d8a42001b5c39de8bf142",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +923,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1b18e4a1a90f25d53bd84c62baf4d9b19243476a",
-    "contentDigest": "sha256:c3fb2dae96b442ced3a8a03f426a68aa24385a74baaac78b516995c7ece224a4",
+    "currentSnapshotSha": "00de070ececc0ab3e7633fe163678fb5e0790763",
+    "contentDigest": "sha256:d9a5d380bd8418015ccce45f135aa3c8d7040bc597bb968def94d76fdec7d81c",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

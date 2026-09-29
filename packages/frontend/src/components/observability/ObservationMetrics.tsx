@@ -26,6 +26,8 @@ const reasonKeys: Readonly<Record<string, string>> = {
   'native-capture-pending': 'nativeState_pending',
   'native-capture-partial': 'nativeState_partial',
   'native-capture-unobserved': 'nativeState_unobserved',
+  'native-capture-unsupported': 'nativeState_unsupported',
+  'native-turn-gap': 'nativeTurnGap',
   'native-baseline-not-started': 'nativeBaselineMissing',
   'native-baseline-unavailable': 'nativeBaselineMissing',
   'native-root-changed': 'nativeRootChanged',
@@ -97,7 +99,11 @@ export function Metrics({ value }: { value: ObservationMetrics }) {
         <Fragment key={key}>
           <dt>{t(`runObservability.${key}`)}</dt>
           <dd>
-            {value.records === 0 || value.tokens.unknownBuckets[key] === value.records
+            {(
+              value.records === 0
+                ? !value.tokens.hasKnown
+                : value.tokens.unknownBuckets[key] === value.records
+            )
               ? '—'
               : BigInt(value.tokens.known[key]).toLocaleString(i18n.language)}
           </dd>

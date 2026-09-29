@@ -72,7 +72,8 @@ export function createCrewStationObservationSource(input: {
       try {
         let response: Response
         try {
-          const headers = await abortable(input.headers, signal)
+          const headers = new Headers(await abortable(input.headers, signal))
+          headers.set('Accept', 'application/vnd.crewstation.execution-observations.v2+json')
           response = await abortable(() => request(url, { method: 'GET', headers, signal }), signal)
         } catch {
           if (query.signal?.aborted) throw query.signal.reason
@@ -85,7 +86,13 @@ export function createCrewStationObservationSource(input: {
           const code =
             response.status === 401 || response.status === 403
               ? 'access-unavailable'
-              : response.status === 409 || response.status === 410
+              : response.status === 409 ||
+                  response.status === 410 ||
+                  ((response.status === 400 || response.status === 422) &&
+                    query.expectedSchemaVersion === 2 &&
+                    query.mode === 'snapshot' &&
+                    query.snapshotId !== undefined &&
+                    query.cursor !== undefined)
                 ? 'snapshot-required'
                 : response.status === 404
                   ? 'source-not-found'

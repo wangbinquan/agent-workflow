@@ -5,6 +5,7 @@ export type PlatformObservationRequest = {
   readonly taskId: string
   readonly limit: number
   readonly signal?: AbortSignal
+  readonly expectedSchemaVersion?: 1 | 2
 } & (
   | { readonly mode: 'incremental'; readonly after?: string }
   | { readonly mode: 'snapshot'; readonly snapshotId?: string; readonly cursor?: string }

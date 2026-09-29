@@ -1,5 +1,9 @@
 import { z } from 'zod'
-import { ObservationMeasurementSchema, ObservationTokenUsageSchema } from '@agent-workflow/shared'
+import {
+  ObservationMeasurementSchema,
+  ObservationTokenUsageSchema,
+  ObservationPlatformNativeCaptureSchema,
+} from '@agent-workflow/shared'
 
 // RFC-034 executionObservationsV1: CS projections are already reconciled.
 // Importers replace these values; they never subtract the native baseline again.
@@ -137,12 +141,26 @@ const valuation = z.discriminatedUnion('availability', [
     })
     .strict(),
 ])
+const capture = z
+  .object({
+    ...envelope,
+    kind: z.literal('capture'),
+    occurredAt: z.null(),
+    capture: ObservationPlatformNativeCaptureSchema,
+  })
+  .strict()
+  .superRefine((value, ctx) => {
+    if (
+      JSON.stringify(value.identity) !== JSON.stringify(value.capture.identity) ||
+      value.sourceId !== value.capture.sourceId ||
+      value.recordId !== value.capture.id ||
+      value.observedAt !== value.capture.proof.observedAt
+    )
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Capture envelope mismatch' })
+  })
 const page = {
-  schemaVersion: z.literal(1),
-  capability: z.literal('executionObservationsV1'),
   projectId: resource,
   taskId: resource,
-  items: z.array(z.union([usage, valuation])).max(500),
   nextCursor: key.nullable(),
   persistedThrough: key,
   firstAvailableCursor: key,
@@ -161,45 +179,71 @@ const page = {
     )
     .max(100),
 }
-export const PlatformObservationPageSchema = z
-  .discriminatedUnion('mode', [
-    z.object({ ...page, mode: z.literal('incremental') }).strict(),
-    z
-      .object({
-        ...page,
-        mode: z.literal('snapshot'),
-        snapshotId: key,
-        snapshotThrough: key,
-        expiresAt: z.string().datetime(),
-      })
-      .strict(),
-  ])
-  .superRefine((value, ctx) => {
-    for (const [index, item] of value.items.entries()) {
-      if (item.identity.taskId !== value.taskId || item.identity.projectId !== value.projectId)
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['items', index, 'identity'],
-          message: 'Page identity mismatch',
-        })
-      if (
-        value.costVisibility === 'hidden' &&
-        item.kind === 'valuation' &&
-        item.availability === 'priced'
-      )
-        ctx.addIssue({
-          code: z.ZodIssueCode.custom,
-          path: ['items', index],
-          message: 'Hidden valuation contains an amount',
-        })
-    }
-    if (value.mode === 'snapshot' && value.snapshotThrough !== value.persistedThrough)
+const v1 = {
+  ...page,
+  schemaVersion: z.literal(1),
+  capability: z.literal('executionObservationsV1'),
+  items: z.array(z.union([usage, valuation])).max(500),
+}
+const v2 = {
+  ...page,
+  schemaVersion: z.literal(2),
+  capability: z.literal('executionObservationsV2'),
+  items: z.array(z.union([usage, valuation, capture])).max(500),
+}
+const rawV1 = z.discriminatedUnion('mode', [
+  z.object({ ...v1, mode: z.literal('incremental') }).strict(),
+  z
+    .object({
+      ...v1,
+      mode: z.literal('snapshot'),
+      snapshotId: key,
+      snapshotThrough: key,
+      expiresAt: z.string().datetime(),
+    })
+    .strict(),
+])
+const rawV2 = z.discriminatedUnion('mode', [
+  z.object({ ...v2, mode: z.literal('incremental') }).strict(),
+  z
+    .object({
+      ...v2,
+      mode: z.literal('snapshot'),
+      snapshotId: key,
+      snapshotThrough: key,
+      expiresAt: z.string().datetime(),
+    })
+    .strict(),
+])
+function validatePage(value: z.infer<typeof rawV1> | z.infer<typeof rawV2>, ctx: z.RefinementCtx) {
+  for (const [index, item] of value.items.entries()) {
+    if (item.identity.taskId !== value.taskId || item.identity.projectId !== value.projectId)
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
-        path: ['snapshotThrough'],
-        message: 'Snapshot watermark changed',
+        path: ['items', index, 'identity'],
+        message: 'Page identity mismatch',
       })
-  })
+    if (
+      value.costVisibility === 'hidden' &&
+      item.kind === 'valuation' &&
+      item.availability === 'priced'
+    )
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['items', index],
+        message: 'Hidden valuation contains an amount',
+      })
+  }
+  if (value.mode === 'snapshot' && value.snapshotThrough !== value.persistedThrough)
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['snapshotThrough'],
+      message: 'Snapshot watermark changed',
+    })
+}
+export const PlatformObservationV1PageSchema = rawV1.superRefine(validatePage)
+export const PlatformObservationPageSchema = z.union([rawV1, rawV2]).superRefine(validatePage)
+export type PlatformObservationV1Page = z.infer<typeof PlatformObservationV1PageSchema>
 export type PlatformObservationPage = z.infer<typeof PlatformObservationPageSchema>
 export type PlatformObservation = PlatformObservationPage['items'][number]
 

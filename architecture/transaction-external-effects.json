@@ -2668,8 +2668,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts#transaction:80",
-      "line": 80,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts#transaction:86",
+      "line": 86,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/platformObservationPersistence.ts#createPlatformObservationStore",
       "status": "clear",
       "symbol": "createPlatformObservationStore",
@@ -3196,7 +3196,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3889ed06701464e5344884a1d7b1a45b349c893bd77e7ab0d0a7dc648476cdeb",
+  "sourceDigest": "sha256:14e65cc1803332a21d69fbe39cb829a019f6d375586d8a42001b5c39de8bf142",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

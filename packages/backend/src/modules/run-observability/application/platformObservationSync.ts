@@ -84,7 +84,15 @@ async function apply(
     costVisibility: page.costVisibility,
     costsReady: visibilityChanged ? false : before.costsReady,
     gaps: page.gaps,
+    schemaVersion: page.schemaVersion,
   }
+  // An incremental cursor cannot prove history for a different wire version.
+  // Keep the published generation until a fresh snapshot is complete.
+  if (
+    (page.mode === 'incremental' && page.schemaVersion !== before.schemaVersion) ||
+    (before.staging !== null && page.schemaVersion !== before.staging.schemaVersion)
+  )
+    return restartSnapshot(tx, { ...next, costsReady: false })
   if (
     (visibilityChanged && (page.mode === 'incremental' || before.staging !== null)) ||
     (page.mode === 'incremental' && page.gaps.some((g) => g.reason !== 'capture-incomplete'))
@@ -131,6 +139,7 @@ async function apply(
         through: page.snapshotThrough,
         expiresAt: page.expiresAt,
         asOf: page.asOf,
+        schemaVersion: page.schemaVersion,
       },
     }
   if (before.generation !== null && before.generation !== generation)
@@ -165,6 +174,7 @@ export function createPlatformObservationSync(input: {
       taskId: binding.taskId,
       limit: options.limit ?? 200,
       signal: options.signal,
+      expectedSchemaVersion: before.staging?.schemaVersion ?? before.schemaVersion,
     }
     try {
       const raw = await input.source.read(

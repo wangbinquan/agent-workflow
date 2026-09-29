@@ -22,6 +22,10 @@ import {
 } from '../src/components/observability/RunObservability'
 import { formatObservationCny } from '../src/components/observability/formatObservations'
 import { ExecutionSwimlane } from '../src/components/ExecutionSwimlane'
+import { ObservationPlatformCapture } from '../src/components/observability/ObservationPlatformCapture'
+import { Metrics } from '../src/components/observability/ObservationMetrics'
+import { ObservationPlatformNativeCaptureSchema } from '@agent-workflow/shared'
+import nativeCapture from '../../shared/tests/fixtures/crewstation-native-capture-v2.json'
 import i18n from '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 
@@ -733,4 +737,68 @@ test('CNY presentation preserves exact large values, tiny nonzero amounts and re
   expect(formatObservationCny('0')).toBe('¥0')
   expect(formatObservationCny('0.000000000001')).toBe('<¥0.000001')
   expect(formatObservationCny('9007199254740993.9999999')).toBe('¥9007199254740994')
+})
+
+test('platform turn details use the shared dialog and return focus to the last row in both languages', async () => {
+  const capture = ObservationPlatformNativeCaptureSchema.parse(nativeCapture.capture)
+  const rows = Array.from({ length: 30 }, (_, index) => ({
+    invocationId: 'invocation-' + index,
+    nodeRunId: 'attempt-' + index,
+    sourceId: 'cs-installation',
+    schemaVersion: 2 as const,
+    capture: {
+      ...capture,
+      id: 'capture-' + index,
+      proof: { ...capture.proof, turn: 'turn-' + index },
+    },
+    issues: [],
+  }))
+  for (const language of ['zh-CN', 'en-US']) {
+    await i18n.changeLanguage(language)
+    const view = render(<ObservationPlatformCapture rows={rows} />)
+    const last = screen
+      .getAllByRole('button', { name: i18n.t('runObservability.nativeCaptureDetails') })
+      .at(-1)!
+    // WebKit mouse clicks do not focus buttons: return must use the actual trigger.
+    fireEvent.click(last)
+    const dialog = await screen.findByRole('dialog', {
+      name: i18n.t('runObservability.platformCaptureTitle'),
+    })
+    expect(within(dialog).getByText('turn-29')).toBeTruthy()
+    expect(within(dialog).getByText(i18n.t('runObservability.nativeUnresolved'))).toBeTruthy()
+    expect(within(dialog).getByText(i18n.t('runObservability.nativeCorrected'))).toBeTruthy()
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await waitFor(() => expect(document.activeElement).toBe(last))
+    expect(
+      screen.getAllByRole('button', { name: i18n.t('runObservability.nativeCaptureDetails') }),
+    ).toHaveLength(30)
+    view.unmount()
+  }
+})
+
+test('an empty proven tree displays all four zero buckets while unobserved usage keeps dashes', () => {
+  const value = metrics({
+    records: 0,
+    observedInvocations: 1,
+    tokens: { ...metrics().tokens, hasKnown: true, complete: true },
+  })
+  const view = render(<Metrics value={value} />)
+  for (const key of ['input', 'output', 'cacheRead', 'cacheWrite'])
+    expect(
+      screen.getByText(i18n.t('runObservability.' + key)).nextElementSibling?.textContent,
+    ).toBe('0')
+  view.rerender(
+    <Metrics
+      value={{
+        ...value,
+        observedInvocations: 0,
+        tokens: { ...value.tokens, hasKnown: false, complete: false },
+      }}
+    />,
+  )
+  for (const key of ['input', 'output', 'cacheRead', 'cacheWrite'])
+    expect(
+      screen.getByText(i18n.t('runObservability.' + key)).nextElementSibling?.textContent,
+    ).toBe('—')
 })

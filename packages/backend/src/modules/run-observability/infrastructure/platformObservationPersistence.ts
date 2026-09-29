@@ -36,7 +36,13 @@ async function state(
   const result = JSON.parse(row.document) as PlatformSyncState
   if (sourceKey(result.binding) !== sourceKey(binding))
     throw new PlatformSyncError('binding-conflict', 'Stored platform source identity changed')
-  return result
+  return {
+    ...result,
+    schemaVersion: result.schemaVersion ?? 1,
+    staging: result.staging
+      ? { ...result.staging, schemaVersion: result.staging.schemaVersion ?? 1 }
+      : null,
+  }
 }
 async function record(
   tx: DatabaseTransaction,
@@ -56,7 +62,7 @@ async function visible(
   state: PlatformSyncState,
   item: PlatformObservation,
 ) {
-  if (item.kind === 'usage') return item
+  if (item.kind !== 'valuation') return item
   if (state.costVisibility === 'hidden') return hidePlatformAmount(item, 'not-authorized')
   if (!state.costsReady) return hidePlatformAmount(item, 'pending')
   const usage = await record(
