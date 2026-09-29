@@ -413,7 +413,10 @@ test('platform capture dialog keeps last-row focus and shared spacing at wide an
   })
   await prime(page)
   await page.goto(`${daemon.baseUrl}/observability?task=${task.id}`)
-  const opener = page.getByRole('button', { name: 'View turn capture', exact: true }).last()
+  const openers = page.getByRole('button', { name: 'View turn capture', exact: true })
+  // Wait for the task response to render; locator.all() does not wait for loading cards.
+  await expect(openers).toHaveCount(30)
+  const opener = openers.last()
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 })
     await expectCardSpacing(page)

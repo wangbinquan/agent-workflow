@@ -377,3 +377,6 @@ AW 显式请求 v2，并严格兼容旧 CS 的 v1 正文；导入采集摘要使
 本轮四文件修正已通过独立只读功能复核 PASS：合同深相等、版本拒绝、Dialog 双向 AST 数量与移动端防护及真实浏览器几何断言均保留。
 
 34 节第二轮 CI 回执（2026-09-30）：`904ccfdaa0de41d63472d1a4c251a657a32857fa` 的主 CI [36514863155](https://github.com/wangbinquan/agent-workflow/actions/runs/36514863155) 终态 failure，视觉 [36514863164](https://github.com/wangbinquan/agent-workflow/actions/runs/36514863164) success。失败定位为 capture matcher 的三处联合类型、根目录 Node 加载 JSON 需要 import attribute，以及上批一次性 allowGrowth 应退役。修正增加显式 capture 判别守卫；用 `readFileSync(new URL(..., import.meta.url))` 解析原始夹具并继续严格 schema 校验；仅删除本 RFC 已消费的归属增长并用官方 helper 更新 ledger 摘要。所有数值、版本、权限及浏览器断言保留，生产代码未变。静态扫描仅记录失败，不读取日志；新的精确 SHA CI 仍须取得终态。剩余功能统一见 [清单](./remaining-work.md)。
+
+
+34 节第三轮 CI 回执（2026-09-30）：`8c6e9a0766a1a184170dec1e9685a07b580334e5` 的主 CI [36619139778](https://github.com/wangbinquan/agent-workflow/actions/runs/36619139778) 终态 failure，46 success / 4 failure。类型、后端、前端和构建通过；Ubuntu/macOS 的 2/3 浏览器分片同为平台轮次用例在加载完成前调用 `locator.all()`，卡片数读取为 0。修正只增加等待全部 30 个轮次入口渲染的断言，随后保留宽/窄屏间距、防溢出、末行 Dialog 与 Escape 焦点恢复；无固定延时、删断言或生产改动。改动文件格式/lint 与独立功能复核 PASS，完整测试继续由该修正发布后的精确 SHA CI 验证。静态扫描仅记录失败状态，不读取日志。CS v2 `94aabd6d` 精确 CI 36619175682 六项成功，已在本机部署且八组件 Ready；开发会话实际采集与双部署真实联动仍未完成，见两仓剩余清单。

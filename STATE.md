@@ -1,3 +1,7 @@
+## 2026-09-30 RFC-371 剩余清单验证回执与浏览器加载修正
+
+剩余工作清单已上库，状态保持 In Progress。8c6e9a076 的 CI36619139778 已终态 46 success / 4 failure，原类型、JSON 与归属账本问题已通过；两个浏览器分片同为平台轮次加载前读取卡片。现等待全部30个轮次入口渲染后再执行原有390/1280间距、末行Dialog和焦点恢复断言；格式/lint与独立只读功能复核PASS，无生产改动或本地AW测试。静态扫描仅记录状态。CS v2代码94aabd6d的六项CI成功且本机八组件Ready，693ef50c的剩余清单与已复核开发采集设计已推送；两RFC仍有真实联动和采集等未闭环工作，详见[AW清单](design/RFC-371-run-observability/remaining-work.md)与CS RFC034清单。并行resource-catalog四路径原样保留。
+
 ## 2026-09-30 RFC-371 剩余工作统一落档与第二轮 CI 配套修正
 
 按用户要求新增 [remaining-work](design/RFC-371-run-observability/remaining-work.md)，以 AW-R01～12 记录当前证据、依赖、退出条件和执行顺序。CI 修复之外尚含真实来源/托管联动、调用片段、树形归因、窗口消耗、等待时间/关键路径、历史维护及规模/真实验收；取消项与 P3 独立列出。904ccfdaa 的 CI36514863155 已终态失败、视觉36514863164成功；现修正 capture 测试显式判别、Node JSON 读取及一次性 allowGrowth 退役，仅更新该账本 provenance，不触碰并行 resource-catalog WIP 或重生全仓 census。CS v2 本地完整4197/142skip/0通过，发布部署另记。此为待办文档，不宣告功能或两 RFC 完成。
