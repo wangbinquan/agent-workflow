@@ -142,7 +142,7 @@ test('v2 preserves the raw CS capture projection and v1 rejects it', async () =>
     capability: 'executionObservationsV2',
     items: [usage, nativeCapture, valuation],
   })
-  expect(await fixture(body).source.read(query)).toEqual(body)
+  expect((await fixture(body).source.read(query)) as unknown).toEqual(body)
   await expect(fixture(page({ items: [nativeCapture] })).source.read(query)).rejects.toMatchObject({
     code: 'invalid-response',
   })

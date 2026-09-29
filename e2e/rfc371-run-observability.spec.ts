@@ -3,7 +3,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import type { ObservationOverview, ObservationTaskDetail } from '@agent-workflow/shared'
 import { startDaemon, type DaemonHandle } from './harness'
-import { ObservationPlatformNativeCaptureSchema } from '@agent-workflow/shared'
+import { ObservationPlatformNativeCaptureSchema } from '../packages/shared/src/schemas/observationPlatform'
 import nativeCapture from '../packages/shared/tests/fixtures/crewstation-native-capture-v2.json'
 
 let daemon: DaemonHandle

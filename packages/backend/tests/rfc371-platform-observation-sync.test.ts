@@ -92,7 +92,7 @@ function valuation(
 }
 function page(
   items: PlatformObservation[] = [usage(), valuation()],
-  patch: Partial<PlatformObservationPage> = {},
+  patch: Record<string, unknown> = {},
 ): PlatformObservationPage {
   return PlatformObservationPageSchema.parse({
     schemaVersion: 1,
@@ -113,7 +113,7 @@ function page(
 }
 function snapshot(
   items: PlatformObservation[] = [usage(), valuation()],
-  patch: Partial<PlatformObservationPage> = {},
+  patch: Record<string, unknown> = {},
 ): PlatformObservationPage {
   return page(items, {
     mode: 'snapshot',
@@ -157,7 +157,7 @@ describeEachProvider('RFC-371 durable platform observation sync', (harness) => {
       schemaVersion: 2,
       capability: 'executionObservationsV2',
       items: [nativeCapture as PlatformObservation],
-    }).items[0]!
+    }).items.find((item) => item.kind === 'capture')!
     const v2 = { schemaVersion: 2 as const, capability: 'executionObservationsV2' as const }
     f.set(page([cap], { ...v2, persistedThrough: 'committed:2' }))
     expect((await f.sync()).state).toMatchObject({
