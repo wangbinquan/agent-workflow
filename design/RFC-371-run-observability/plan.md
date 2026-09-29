@@ -380,3 +380,7 @@ AW 显式请求 v2，并严格兼容旧 CS 的 v1 正文；导入采集摘要使
 
 
 34 节第三轮 CI 回执（2026-09-30）：`8c6e9a0766a1a184170dec1e9685a07b580334e5` 的主 CI [36619139778](https://github.com/wangbinquan/agent-workflow/actions/runs/36619139778) 终态 failure，46 success / 4 failure。类型、后端、前端和构建通过；Ubuntu/macOS 的 2/3 浏览器分片同为平台轮次用例在加载完成前调用 `locator.all()`，卡片数读取为 0。修正只增加等待全部 30 个轮次入口渲染的断言，随后保留宽/窄屏间距、防溢出、末行 Dialog 与 Escape 焦点恢复；无固定延时、删断言或生产改动。改动文件格式/lint 与独立功能复核 PASS，完整测试继续由该修正发布后的精确 SHA CI 验证。静态扫描仅记录失败状态，不读取日志。CS v2 `94aabd6d` 精确 CI 36619175682 六项成功，已在本机部署且八组件 Ready；开发会话实际采集与双部署真实联动仍未完成，见两仓剩余清单。
+
+34 节最终功能 CI 回执（2026-09-30）：浏览器修复 `ee1af6da15b827e32ea0e15557f79ccd47e2f6b9` 已精确推送；当前 `fb53e21542e38e866cd508cfa6b105b50eea3895` 是其仅增文档的后继。[CI 36624953215](https://github.com/wangbinquan/agent-workflow/actions/runs/36624953215) 终态48成功/2失败，十个Playwright作业及功能检查成功，静态扫描和`CI required`失败仅记录状态，整体仍failure。此前加载竞态已验证，整体CI关闭依赖和真实来源/托管等余项按[剩余清单](./remaining-work.md)继续。
+
+关联CS开发数字链Stage 1已推送 `fc491a4d6b31c6476d3222209ced880810936c3e`：独立功能门PASS、完整4226/142skip/0、41路径指纹未变，[CI 36640100860](https://github.com/wangbinquan/CrewStation/actions/runs/36640100860)继续。仅底座，生产仍关闭，Session PG/owner/价格/排空及正式明细未接通，不能据此关闭AW-R02或两RFC。
