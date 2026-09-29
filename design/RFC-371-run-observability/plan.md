@@ -384,3 +384,6 @@ AW 显式请求 v2，并严格兼容旧 CS 的 v1 正文；导入采集摘要使
 34 节最终功能 CI 回执（2026-09-30）：浏览器修复 `ee1af6da15b827e32ea0e15557f79ccd47e2f6b9` 已精确推送；当前 `fb53e21542e38e866cd508cfa6b105b50eea3895` 是其仅增文档的后继。[CI 36624953215](https://github.com/wangbinquan/agent-workflow/actions/runs/36624953215) 终态48成功/2失败，十个Playwright作业及功能检查成功，静态扫描和`CI required`失败仅记录状态，整体仍failure。此前加载竞态已验证，整体CI关闭依赖和真实来源/托管等余项按[剩余清单](./remaining-work.md)继续。
 
 关联CS开发数字链Stage 1已推送 `fc491a4d6b31c6476d3222209ced880810936c3e`：独立功能门PASS、完整4226/142skip/0、41路径指纹未变，[CI 36640100860](https://github.com/wangbinquan/CrewStation/actions/runs/36640100860)继续。仅底座，生产仍关闭，Session PG/owner/价格/排空及正式明细未接通，不能据此关闭AW-R02或两RFC。
+
+
+文档后继精确 CI 终态（2026-09-30）：`5681ca12055c654922db556aec906c9de6d19476` 自 fb53e215 仅修改 STATE/本计划/剩余清单，源码与浏览器加载修复 ee1af6da 一致；[CI 36641142819](https://github.com/wangbinquan/agent-workflow/actions/runs/36641142819) 已终态48success/2failure，十个Playwright及功能检查成功，静态扫描与CI required失败，整体failure。扫描只读取任务元数据，无日志检查或修复授权，不将功能通过等同整体CI关闭。CS Stage 1 `fc491a4d6b31c6476d3222209ced880810936c3e` 的 [CI 36640100860](https://github.com/wangbinquan/CrewStation/actions/runs/36640100860) 六项已success；Session数字PG/outbox继续实施，owner/CNY/生命周期/正式明细与实际托管验收仍未闭环，AW-R02及两RFC继续。

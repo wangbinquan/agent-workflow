@@ -33,6 +33,7 @@
 
 - `8c6e9a076` 的主 CI 36619139778 已终态 failure（46 success / 4 failure）：先前的 matcher 类型、JSON 加载和归属账本问题已通过；Ubuntu/macOS 两个浏览器分片均在新平台轮次用例进入后、数据尚未渲染时读取了空卡片列表。
 - 当前修正先等待夹具的全部 30 个轮次按钮渲染，再验证 1280/390px 卡片间距、末行 Dialog、边界与 Escape 焦点恢复。保持全部原有断言，未修改生产逻辑或添加固定延时；改动文件格式/lint 与独立只读功能复核 PASS。该修正已随 `ee1af6da15b827e32ea0e15557f79ccd47e2f6b9` 精确推送，后继 `fb53e21542e38e866cd508cfa6b105b50eea3895` 包含该修正且只追加 STATE/总计划文档；源码未变。其 [CI 36624953215](https://github.com/wangbinquan/agent-workflow/actions/runs/36624953215) 终态 48 success / 2 failure，十个 Playwright 作业及功能检查成功。两个失败为 `Static scans (audit + actionlint + shellcheck + gitleaks)` 和 `CI required`；整体结论仍 failure，不写成全绿。
+- 文档后继 `5681ca12055c654922db556aec906c9de6d19476` 自 fb53e215 只变三个观测文档，包含原加载修复且源码一致；[CI 36641142819](https://github.com/wangbinquan/agent-workflow/actions/runs/36641142819) 已终态48success/2failure。十个Playwright及功能检查全部success，失败仍仅静态扫描与`CI required`，整体failure；扫描只核元数据，外部关闭依赖不变。
 - 若后续提交使 CI 被取消，记录包含候选的后继 SHA 和祖先证明，并定位失败归属，不能只写“后继已绿”。
 - 核对 v1/v2 严格合同、双数据库持久同步、平台 Dialog 双向登记、390/1280px 几何和末行焦点回归。禁止通过删断言、跳过或仅重跑掩盖失败。
 - 退出证据：终态作业清单、功能失败修复提交与复核记录。静态扫描日志不在当前授权检查范围；仅记录其状态和关闭依赖，失败时不宣称整体 CI 成功。

@@ -1,3 +1,7 @@
+## 2026-09-30 RFC-371 文档后继精确 CI 终态
+
+5681ca12055c654922db556aec906c9de6d19476的CI36641142819已终态48success/2failure：十个Playwright及全部功能检查成功，静态扫描与CI required失败；只读取元数据，整体仍failure。该提交自fb53e215仅变更三个观测文档，包含ee1af6da加载等待修复，源码未变。CS底座fc491a4d的CI36640100860六项success；Session PG/outbox正在接续，生产开发仍关闭。两RFC未完成；本次仅补[剩余清单](design/RFC-371-run-observability/remaining-work.md)的精确回执，resource-catalog四个并行路径保留。
+
 ## 2026-09-30 RFC-371 功能 CI 与关联开发底座检查点
 
 当前fb53e215是浏览器修复ee1af6da的仅增文档后继；精确CI36624953215已终态48success/2failure，十个Playwright及功能检查通过，静态扫描及CI required失败仍保留，整体不写成全绿。CS开发Runner底座fc491a4d已精确推送，独立PASS及完整4226/142skip/0、41路径指纹一致，CI36640100860继续；生产仍未启用，Session PG/owner/CNY受理/排空与两级明细待接。两个RFC仍In Progress，详见[剩余清单](design/RFC-371-run-observability/remaining-work.md)。resource-catalog并行四路径原样保留。
