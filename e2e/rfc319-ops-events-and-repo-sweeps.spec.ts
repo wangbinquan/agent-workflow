@@ -1303,15 +1303,14 @@ test('RFC-319 EVENT-X2: 频率弹窗改周期真落库并重算下一次触发�
 // REPO-39 —— 孤儿工作树与半成品镜像目录的自动回收
 // ---------------------------------------------------------------------------
 
-/** 24 小时是这两处回收的年龄地板（gc.ts 的 SCRATCH_ORPHAN_MIN_AGE_MS）。 */
+/** 24 小时是这两处回收的年龄地板（workspaceMaintenance.ts）。 */
 function ageDir(dir: string, ageMs: number): void {
   const when = new Date(Date.now() - ageMs)
   utimesSync(dir, when, when)
 }
 
 test('RFC-319 REPO-39: 没有任务行锚定的孤儿工作树与半成品镜像目录被后台拍回收，而有主的、未到龄的都原样留着 @nightly', async () => {
-  // 这一拍的相位是 daemon 启动后 4 分钟（daemonCadence.ts 的 MAINTENANCE_PHASE.worktreeGc），
-  // 既没有 boot 首拍也没有手动入口，所以这条用例只能真等。预算按 4 分钟相位 + 余量给。
+  // 等真实 daemon 的后台维护 worker，不直接调用 GC；预算容纳调度和各持久阶段的续跑。
   test.setTimeout(420_000)
   const daemon = await launch()
   const worktrees = join(daemon.home, 'worktrees', 'rfc319-fixture-slug')
@@ -1357,7 +1356,7 @@ test('RFC-319 REPO-39: 没有任务行锚定的孤儿工作树与半成品镜像
   ).toEqual([anchoredTaskId])
 
   // 半成品镜像目录：冷克隆先落到 `<hash>-<slug>~partial~<ULID>`，成功后才原子改名。
-  // 进程被 SIGKILL 时它会留在盘上，此前无人回收（gc.ts:583-620）。
+  // 进程被 SIGKILL 时它会留在盘上，由 nodeWorkspaceMaintenanceFilesystem.ts 回收。
   // `~` 不在 slug 白名单里，所以这个判据在字符集层面不可能误命中一个合法镜像目录——
   // 下面那个同前缀的 canonical 目录就是这条「不许误删」的对照。
   const partial = join(repos, 'abcd1234-rfc319~partial~01ARZ3NDEKTSV4RRFFQ69G5FAV')
@@ -1368,17 +1367,20 @@ test('RFC-319 REPO-39: 没有任务行锚定的孤儿工作树与半成品镜像
     ageDir(dir, 30 * DAY_MS)
   }
 
+  // RFC-371 CI 修复：maintenanceJobRunner 按 orphan → partial 分别执行，阶段间会让出
+  // worker。孤儿工作树消失不是整轮清理完成的信号，必须在同一预算内等两个实际结果。
   await expect
-    .poll(() => existsSync(orphan), {
+    .poll(() => ({ orphan: existsSync(orphan), partial: existsSync(partial) }), {
       timeout: 330_000,
       intervals: [5_000],
       message:
         '一个没有任何任务行锚定、且早就过了 24 小时年龄地板的工作树目录，在后台拍过之后' +
-        '还在盘上 ⇒ 「先删行、再尽力删盘」这套删除语义就没有兜底了：每一次任务硬删' +
+        '仍在盘上，或半成品镜像目录未被回收 ⇒ 「先删行、再尽力删盘」这套删除语义' +
+        '就没有兜底了：每一次任务硬删' +
         '（或删行与删盘之间的一次崩溃）都会永久留下一整份工作树，机器最终被自己删掉的' +
         '任务塞满磁盘',
     })
-    .toBe(false)
+    .toEqual({ orphan: false, partial: false })
 
   expect(
     existsSync(anchored),

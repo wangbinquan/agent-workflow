@@ -31,6 +31,8 @@
 
 ### AW-R01 当前候选 CI 收口〔修复与九种定时配置验证进行中；原 P0/P1〕
 
+- 最新完整候选 `0647dadbedd66a20b162377788e92f2c79b68f83` 的 [CI 36676635657](https://github.com/wangbinquan/agent-workflow/actions/runs/36676635657) 已50项全部success，九种定时八success；[WebKit 36676700139](https://github.com/wangbinquan/agent-workflow/actions/runs/36676700139) 7/8分片成功，Ubuntu3/4的REPO-39首轮及重试均在partial目录未删除断言失败。只等orphan阶段不能证明后续partial完成；当前修正为在同一原预算内等待两项实际删除，保留全部保护断言。上一笔单次增长声明同步退役。全部十个旧运行正常终态、无取消；新候选精确主CI和九个默认矩阵继续验证，详见[完整回执](./ci-recovery.md#第三轮终态与-repo-39-阶段等待修正)。
+
 - 第二轮候选 `18c487f8c57743c9731b8757b31d9795d494004b` 已精确推送并取得限定静态功能门PASS。Windows36671976956终态failure，类型检查发现新mint回归任务夹具遗漏必需startedAt；补Date.now()且保留全部实际数据库断言。主CI另有canonical清单漏更新，按官方生成器补同步onPresenceConnectionState顶层归属、摘要和单次增长依据；旧主CI36671910180已46success/4failure，失败均为上述两类原因；九个定时八success（包含实际定价覆盖对账及两平台WebKit），仅Windows类型失败；18路径新修复候选独立静态功能门PASS，新精确SHA验证待运行，最新退出证据见[CI修复记录](./ci-recovery.md)。
 
 - `8c6e9a076` 的主 CI 36619139778 已终态 failure（46 success / 4 failure）：先前的 matcher 类型、JSON 加载和归属账本问题已通过；Ubuntu/macOS 两个浏览器分片均在新平台轮次用例进入后、数据尚未渲染时读取了空卡片列表。

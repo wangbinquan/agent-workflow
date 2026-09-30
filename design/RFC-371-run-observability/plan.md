@@ -413,3 +413,7 @@ ef28b3a14d3d4e536096df4fea4f9c6468104622的CI36665459531终态47success/3failure
 ## 2026-09-30 Windows 必需字段补正与第二轮精确回执
 
 第二轮12路径独立静态功能门PASS，18c487f8c57743c9731b8757b31d9795d494004b已精确推送。Windows36671976956在Typecheck因新的双provider mint夹具漏填tasks.startedAt失败，本批补同既有RFC185夹具的Date.now()；原nonce持久性、兄弟并发、真实SQL与回滚断言全部保留。主CI新增canonical精确投影失败，官方生成器仅从已提交源码和本任务候选读取，补onPresenceConnectionState顶层符号与摘要，按原规则写25510→25511的一次性增长依据。原十个运行已终态：主CI36671910180为46success/4failure，两后端失败均为已修时间字段与canonical；九个定时八success，Windows类型失败。真实价格访问对账与两平台8个WebKit分片全部成功。18路径独立静态功能门PASS，不取消原矩阵、不将旧八绿写为新候选完成。后续精确SHA主CI与全部九个定时配置继续验收，本机不执行AW测试/构建。详见[CI修复记录](./ci-recovery.md)。
+
+## 2026-09-30 第三轮终态与 REPO-39 等待屏障
+
+0647dadbedd66a20b162377788e92f2c79b68f83已精确推送：主CI36676635657全部50项success，九种定时八success；WebKit36676700139只有Ubuntu3/4失败。REPO-39只等待orphan消失就立即断言partial已消失，而真实maintenance worker通过持久continuation分别执行两个阶段。当前在原330/420秒预算内共同等待两项真实删除，保留有主/未到龄/正常镜像保护、全部最终断言和原调度/重试/矩阵；按规则只退役已消费的单条allowGrowth，25511高水位不变。十个旧运行未取消且已终态，限定静态复核与新精确主CI/全部九种定时验收另记，AW-R01与完整RFC不关闭。详见[逐项终态与源码诊断](./ci-recovery.md#第三轮终态与-repo-39-阶段等待修正)。

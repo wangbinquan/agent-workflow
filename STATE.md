@@ -1,3 +1,7 @@
+## 2026-09-30 RFC-371 第三轮 CI 终态与回收阶段等待
+
+0647dadbedd66a20b162377788e92f2c79b68f83的主CI36676635657全部50项success，九种定时八success；WebKit36676700139为7/8分片成功、Ubuntu3/4的REPO-39失败。只等待孤儿工作树删除不能证明后续partial阶段完成；当前在原预算内共同等待两个真实删除结果，保护/最终断言全部保留，不改变生产调度、用例矩阵或重试。25511归属基线不变，仅退役已消费allowGrowth并更新原内容摘要。十个旧运行正常终态、无取消，新候选精确主CI与九种原默认定时配置待回执，AW-R01仍未关闭。CS实际来源底座d01ba8223的六项CI成功，本机部署接续且生产采集OFF；两个RFC继续，四个并行skill路径原样保留。详见[CI修复记录](design/RFC-371-run-observability/ci-recovery.md)。
+
 ## 2026-09-30 RFC-371 Windows 回归夹具必需时间补正
 
 第二轮候选18c487f8c57743c9731b8757b31d9795d494004b已精确推送。Windows定时36671976956在类型检查发现新双provider mint回归夹具漏填tasks.startedAt；本批补Date.now()，保留三成员、持久nonce、真实SQL无回读及回滚断言。主CI还报canonical清单遗漏：沿用官方生成器在内存读取已提交源码，登记onPresenceConnectionState这一新增顶层符号（25510→25511）及内容摘要，并按原高水位规则写单次增长依据；四个并行skill来源不参与本批生成。原十个运行已全部终态：主CI36671910180为46success/4failure，同为上述两类原因；九个定时中八success（含真实定价覆盖与两平台WebKit），Windows类型失败。18路径独立静态功能门PASS，源码/生成候选不变；新的精确SHA主CI及九种定时配置仍待验证，不能由旧八绿关闭AW-R01。完整修复以新的精确SHA主CI与全部九种定时配置为准；本机未执行AW测试/构建，共享resource-catalog四路径保留。

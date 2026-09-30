@@ -2,7 +2,7 @@
 
 更新：2026-09-30。本页属于 AW-R01 的 CI 关闭证据；两 RFC 的产品剩余范围继续按 remaining-work.md 实施。用户本轮明确要求修复 AW CI 和定时 CI，因此本轮读取失败步骤与日志定位根因；此前仅记录扫描元数据的历史保留。
 
-## 基线与根因
+## 首轮基线与根因
 
 - 当前基线 `f3bfc548fb25edfa95994e262730186820148f03`。[提交 CI 36658830125](https://github.com/wangbinquan/agent-workflow/actions/runs/36658830125) 终态 failure，48 success/2 failure。失败源是 dependency audit gate 的两条 fast-uri high 公告，CI required 随之失败；其余功能检查通过。
 - 根清单已有 fast-uri 3.1.6 覆盖；本轮改为 **3.1.7** 并以 Bun lockfile-only/ignore-scripts 生成锁文件。仅该覆盖值、包版本及其完整性摘要变化。官方 [GHSA-qw65-cvwx-89v3](https://github.com/advisories/GHSA-qw65-cvwx-89v3) 和 [GHSA-58mr-gqgx-xq4g](https://github.com/advisories/GHSA-58mr-gqgx-xq4g) 均列 3.1.7 为修复版本。本轮不增加公告豁免，不降低严重度或必需检查。
@@ -61,3 +61,26 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 同一SHA的主CI36671910180已终态46success/4failure：Lint+Typecheck、macOS后端6/6、Ubuntu后端8/16及required；日志逐项确认类型/NOT NULL时间遗漏与canonical投影是全部根因。九种定时配置八success，Windows类型失败；完整E2E36671974233的四分片和覆盖对账、WebKit36671979603的两平台各四分片均成功。原全部十个运行正常跑到终态，没有取消。新候选仍须实际执行全部原有矩阵，不修改schedule、重试、规模或预算。本机AW门禁未运行，AW-R01保持未完成。
 
 第三轮18路径独立静态功能门PASS：首尾冻结hash匹配，2721份提交生产源码独立重算摘要匹配，四份治理内容摘要匹配，仅新增onPresenceConnectionState这一归属条目。原测试与严格投影/增长过期判据保持；没有本地AW测试或服务。发布前只更新旧矩阵完整终态回执，生产和13生成产物内容不变。
+
+## 第三轮终态与 REPO-39 阶段等待修正
+
+完整源码 `0647dadbedd66a20b162377788e92f2c79b68f83` 已精确推送。原十个运行均正常结束，未取消；主 CI 全部50项成功，九个定时配置八成功，只有 WebKit 的 Ubuntu 3/4 分片失败。
+
+| 工作流 | exact-SHA run | 终态 |
+| --- | --- | --- |
+| CI | [36676635657](https://github.com/wangbinquan/agent-workflow/actions/runs/36676635657) | success，50项 |
+| maintenance-soak-nightly | [36676691371](https://github.com/wangbinquan/agent-workflow/actions/runs/36676691371) | success |
+| e2e-full-nightly | [36676694347](https://github.com/wangbinquan/agent-workflow/actions/runs/36676694347) | success，四分片及真实覆盖对账 |
+| windows-platform | [36676697214](https://github.com/wangbinquan/agent-workflow/actions/runs/36676697214) | success |
+| e2e-webkit-nightly | [36676700139](https://github.com/wangbinquan/agent-workflow/actions/runs/36676700139) | failure，7/8分片成功 |
+| integration-opencode | [36676703066](https://github.com/wangbinquan/agent-workflow/actions/runs/36676703066) | success |
+| git-protocols-e2e | [36676706170](https://github.com/wangbinquan/agent-workflow/actions/runs/36676706170) | success |
+| evidence-soak-nightly | [36676709321](https://github.com/wangbinquan/agent-workflow/actions/runs/36676709321) | success |
+| visual-regression-nightly | [36676711965](https://github.com/wangbinquan/agent-workflow/actions/runs/36676711965) | success |
+| postgresql-evidence | [36676714930](https://github.com/wangbinquan/agent-workflow/actions/runs/36676714930) | success，原 weekly/all 五项矩阵 |
+
+失败用例是 `e2e/rfc319-ops-events-and-repo-sweeps.spec.ts` 的 REPO-39。首轮与重试均在孤儿工作树消失后，立即检查半成品镜像目录还存在而失败；不能靠旧版本的绿色或再跑一次关闭。实际 `platform/background/maintenanceJobRunner.ts` 定义 worktree→iso→scratch→orphan→partial，每阶段完成后以持久 cursor、resumeAfterMs=25 续跑。`source-control/application/workspaceMaintenance.ts` 分别调用异步目录移除；orphan 消失只证明这一阶段的目标已删除，不能作为后续 partial 完成的屏障。日志与代码支持测试观察了允许存在的中间状态；尚未用日志唯一还原当时 worker 的具体排队时长。
+
+本批只修真实 daemon E2E 的等待条件：在原330秒总体 poll/420秒用例预算内，同时等待孤儿工作树和半成品镜像目录消失，随后保留锚定任务、未到龄目录、正常镜像必须存在以及半成品确实消失的全部断言。既不直接调用 GC，也不改变生产调度、重试、超时、分片或用例选择。补正旧 GC 路径和启动相位注释。生产源码与 canonical census 不变；25511 高水位保持，按过期规则只退役上一提交已消费的单条 allowGrowth，并用原官方函数更新 ledger 内容寻址 provenance。
+
+新精确候选的主 CI 与九种定时原默认矩阵仍待实际终态。AW-R01 保持进行中；本机未运行 AW 测试、构建、类型检查或服务，四个并行 resource-catalog 文件完整保留。CS 实际来源底座 `d01ba8223fc08c8b2b70ee4db859e560c2151668` 的 [CI 36682129650](https://github.com/wangbinquan/CrewStation/actions/runs/36682129650) 六项已全部成功，本机部署另记，生产开发采集仍 OFF，两 RFC 不关闭。

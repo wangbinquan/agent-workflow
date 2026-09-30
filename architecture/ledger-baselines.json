@@ -903,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25511,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371 CI修复：presence断线同步回调新增顶层onPresenceConnectionState，归属条目25510→25511；如实登记一个功能符号，未新增架构违规或放宽扫描；下一笔无增长提交须退役。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -923,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "18c487f8c57743c9731b8757b31d9795d494004b",
-    "contentDigest": "sha256:43f4c9b632820b8785d992e04fffe46eff433cf119471bbbe106ae234ba313b6",
+    "currentSnapshotSha": "0647dadbedd66a20b162377788e92f2c79b68f83",
+    "contentDigest": "sha256:5f882bf1a97753d745fe9a85bd3e3d2b5ccb80c5f5c4be3f26656a7639865e98",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
