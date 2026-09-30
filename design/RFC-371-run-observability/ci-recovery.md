@@ -27,7 +27,7 @@
 
 ## 当前状态与关闭边界
 
-版本与锁文件已修正，精确提交 CI 和九个定时配置的新版本结果待回执。主 CI required 与所有目标工作流终态成功前，AW-R01 保持未关闭；若发现新的真实失败继续定位和修复，不能将旧修正祖先或单个绿色分片当整体成功。并行 resource-catalog 四文件原样保留，不纳入本轮提交。AW-R02～12、CS 开发来源/清理/消费/两级明细及真实身份/模型验收继续，不以 CI 修复宣称两个 RFC 完成。
+修复提交 `edd56ebe33731cb05aa7491b292be294a3026521` 的主 CI 和九种原默认定时配置已全部终态 success，共75个作业成功；AW-R01 已关闭，精确矩阵见[最新终态回执](#修复候选精确终态2026-09-30)。下方失败与中间候选记录保留为历史。并行 resource-catalog 四文件原样保留；AW-R02～12、CS owner/清理/消费/两级明细及真实联合验收继续，两个 RFC 仍 In Progress。后继四份文档提交的精确 CI 另行验证。
 
 
 ## 第二轮 CI 候选：传递依赖与启动回读（2026-09-30）
@@ -84,3 +84,26 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 本批只修真实 daemon E2E 的等待条件：在原330秒总体 poll/420秒用例预算内，同时等待孤儿工作树和半成品镜像目录消失，随后保留锚定任务、未到龄目录、正常镜像必须存在以及半成品确实消失的全部断言。既不直接调用 GC，也不改变生产调度、重试、超时、分片或用例选择。补正旧 GC 路径和启动相位注释。生产源码与 canonical census 不变；25511 高水位保持，按过期规则只退役上一提交已消费的单条 allowGrowth，并用原官方函数更新 ledger 内容寻址 provenance。
 
 新精确候选的主 CI 与九种定时原默认矩阵仍待实际终态。AW-R01 保持进行中；本机未运行 AW 测试、构建、类型检查或服务，四个并行 resource-catalog 文件完整保留。CS 实际来源底座 `d01ba8223fc08c8b2b70ee4db859e560c2151668` 的 [CI 36682129650](https://github.com/wangbinquan/CrewStation/actions/runs/36682129650) 六项已全部成功，本机部署另记，生产开发采集仍 OFF，两 RFC 不关闭。
+
+## 修复候选精确终态（2026-09-30）
+
+源码修复提交 `edd56ebe33731cb05aa7491b292be294a3026521` 已推送，限定六路径独立功能门 PASS；主 CI 及九种定时配置全部终态 **success**，共 10 个运行、75 个作业全部成功，AW-R01 退出条件已满足。本轮九种定时配置从 main 以原 workflow_dispatch 默认参数运行，覆盖与原定时相同的 full/weekly-all 和既定两平台/分片矩阵；没有修改 schedule、权限、重试、超时或必需检查，也没有取消旧候选运行。以下每个运行的 headSha 均严格等于该完整提交。
+
+| 工作流 | 精确运行 | 成功作业 |
+| --- | --- | --- |
+| CI | [36684248034](https://github.com/wangbinquan/agent-workflow/actions/runs/36684248034) | 50 / 50 |
+| maintenance-soak-nightly | [36684316158](https://github.com/wangbinquan/agent-workflow/actions/runs/36684316158) | 1 / 1 |
+| e2e-full-nightly | [36684319531](https://github.com/wangbinquan/agent-workflow/actions/runs/36684319531) | 5 / 5 |
+| windows-platform | [36684323276](https://github.com/wangbinquan/agent-workflow/actions/runs/36684323276) | 1 / 1 |
+| e2e-webkit-nightly | [36684326977](https://github.com/wangbinquan/agent-workflow/actions/runs/36684326977) | 8 / 8 |
+| integration-opencode | [36684331034](https://github.com/wangbinquan/agent-workflow/actions/runs/36684331034) | 2 / 2 |
+| git-protocols-e2e | [36684335151](https://github.com/wangbinquan/agent-workflow/actions/runs/36684335151) | 1 / 1 |
+| evidence-soak-nightly | [36684338781](https://github.com/wangbinquan/agent-workflow/actions/runs/36684338781) | 1 / 1 |
+| visual-regression-nightly | [36684342388](https://github.com/wangbinquan/agent-workflow/actions/runs/36684342388) | 1 / 1 |
+| postgresql-evidence | [36684345862](https://github.com/wangbinquan/agent-workflow/actions/runs/36684345862) | 5 / 5 |
+
+主 CI 包含静态扫描、类型、构建、双 provider 后端与十个浏览器分片及 CI required；full E2E 包含四个分片和实际 route-hit 覆盖对账，WebKit 的 Ubuntu/macOS 各四分片成功，PostgreSQL 为原 weekly/all 五项矩阵。REPO-39 已在原330秒 poll/420秒用例预算内共同等待孤儿工作树和半成品镜像删除，保留锚定、未到龄及正常镜像的所有保护断言。Windows 必需时间夹具、Node JSON 加载、真实价格版本访问、原生键盘及 presence 生命周期等修正均包含在该提交祖先；依赖公告已按兼容修复版本处理，一次性增长按原失效规则退役，未新增豁免或降低检查强度。
+
+只提交本任务精确路径，并行 resource-catalog 四个路径完整保留；本机没有运行 AW 测试、类型检查、构建或服务。后继只写回本页、STATE、plan、remaining-work 四份文档；对应精确文档提交 CI 另外验证，不把文档变化当作重新执行九个源码矩阵的理由。
+
+此回执只关闭 AW-R01。AW-R02～12 与 CS 的 owner派发/清理、消费者、两级正式开发明细及真实联合验收继续，两个 RFC 保持 In Progress。CS 已部署源码 d01ba8223 的六项 CI 成功；b0f17691 仅发布已复核的消费者设计和剩余文档，未启用生产开发采集。

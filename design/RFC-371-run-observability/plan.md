@@ -417,3 +417,9 @@ ef28b3a14d3d4e536096df4fea4f9c6468104622的CI36665459531终态47success/3failure
 ## 2026-09-30 第三轮终态与 REPO-39 等待屏障
 
 0647dadbedd66a20b162377788e92f2c79b68f83已精确推送：主CI36676635657全部50项success，九种定时八success；WebKit36676700139只有Ubuntu3/4失败。REPO-39只等待orphan消失就立即断言partial已消失，而真实maintenance worker通过持久continuation分别执行两个阶段。当前在原330/420秒预算内共同等待两项真实删除，保留有主/未到龄/正常镜像保护、全部最终断言和原调度/重试/矩阵；按规则只退役已消费的单条allowGrowth，25511高水位不变。十个旧运行未取消且已终态，限定静态复核与新精确主CI/全部九种定时验收另记，AW-R01与完整RFC不关闭。详见[逐项终态与源码诊断](./ci-recovery.md#第三轮终态与-repo-39-阶段等待修正)。
+
+## 2026-09-30 AW-R01 最终关闭回执
+
+修复提交 `edd56ebe33731cb05aa7491b292be294a3026521` 已推送，限定独立功能门PASS；[精确主CI36684248034](https://github.com/wangbinquan/agent-workflow/actions/runs/36684248034)50项全部成功，九种原默认定时配置25项全部成功，共10运行/75作业。WebKit两平台八分片、full四分片及route-hit对账、weekly/all PG五项均正常success；所有headSha一致、无取消，不改变schedule或门禁强度，本机无AW测试/类型/构建/服务。根因、修正祖先和逐运行退出证据见[CI修复记录](./ci-recovery.md#修复候选精确终态2026-09-30)。本批后继仅提交STATE及三份RFC文档，精确文档CI另行验证。
+
+AW-R01已关闭，AW-R02～12和CS的实际owner派发/完整清理/消费者/两级事实与真实联合验收继续，两RFC保持In Progress。CS源码d01ba8223已经六项CI成功、本机八组件Ready；b0f17691仅发布已复核consumer设计，生产开发采集仍OFF。并行resource-catalog四路径原样保留。

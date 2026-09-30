@@ -1,3 +1,7 @@
+## 2026-09-30 RFC-371 主 CI 与九种定时配置全部成功
+
+修复提交 `edd56ebe33731cb05aa7491b292be294a3026521` 的主CI36684248034全部50项success，九种原默认定时配置全部25项success，共10运行/75作业，所有headSha严格一致。包括WebKit两平台八分片、full四分片/真实覆盖对账、weekly-all PG五项；没有取消旧运行或降低门禁。AW-R01已关闭；根因、源码修复及逐运行回执见[CI修复记录](design/RFC-371-run-observability/ci-recovery.md#修复候选精确终态2026-09-30)。本批只更新四份观测文档，后继精确CI另验；本机无AW测试/构建/服务。其余AW/CS范围和真实联合验收继续，两RFC保持In Progress；CS已部署d01ba8223八组件Ready，consumer设计b0f17691已推送、生产仍OFF。并行resource-catalog四路径保留。下方为历史记录。
+
 ## 2026-09-30 RFC-371 第三轮 CI 终态与回收阶段等待
 
 0647dadbedd66a20b162377788e92f2c79b68f83的主CI36676635657全部50项success，九种定时八success；WebKit36676700139为7/8分片成功、Ubuntu3/4的REPO-39失败。只等待孤儿工作树删除不能证明后续partial阶段完成；当前在原预算内共同等待两个真实删除结果，保护/最终断言全部保留，不改变生产调度、用例矩阵或重试。25511归属基线不变，仅退役已消费allowGrowth并更新原内容摘要。十个旧运行正常终态、无取消，新候选精确主CI与九种原默认定时配置待回执，AW-R01仍未关闭。CS实际来源底座d01ba8223的六项CI成功，本机部署接续且生产采集OFF；两个RFC继续，四个并行skill路径原样保留。详见[CI修复记录](design/RFC-371-run-observability/ci-recovery.md)。

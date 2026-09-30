@@ -19,7 +19,7 @@
 
 ## 下一步执行顺序
 
-1. AW-R01：关闭本轮功能 CI，记录终态和剩余外部阻塞。
+1. AW-R01 已关闭：主 CI 与九种原默认定时配置全部成功，精确终态记录见下文。
 2. AW-R02 与 CS RFC-034 的 CS-R01：完成 v2 跨仓同步和托管准入验证；CS-R02～05 优先补项目开发消耗。
 3. AW-R03～08：补齐调用来源、树形归因、时间口径、细粒度泳道与分析。
 4. AW-R09～11：异常、历史维护和规模验证。
@@ -29,9 +29,11 @@
 
 ## 待办清单
 
-### AW-R01 当前候选 CI 收口〔修复与九种定时配置验证进行中；原 P0/P1〕
+### AW-R01 当前候选 CI 收口〔已关闭；原 P0/P1〕
 
-- 最新完整候选 `0647dadbedd66a20b162377788e92f2c79b68f83` 的 [CI 36676635657](https://github.com/wangbinquan/agent-workflow/actions/runs/36676635657) 已50项全部success，九种定时八success；[WebKit 36676700139](https://github.com/wangbinquan/agent-workflow/actions/runs/36676700139) 7/8分片成功，Ubuntu3/4的REPO-39首轮及重试均在partial目录未删除断言失败。只等orphan阶段不能证明后续partial完成；当前修正为在同一原预算内等待两项实际删除，保留全部保护断言。上一笔单次增长声明同步退役。全部十个旧运行正常终态、无取消；新候选精确主CI和九个默认矩阵继续验证，详见[完整回执](./ci-recovery.md#第三轮终态与-repo-39-阶段等待修正)。
+- 修复提交 `edd56ebe33731cb05aa7491b292be294a3026521` 的[主 CI 36684248034](https://github.com/wangbinquan/agent-workflow/actions/runs/36684248034)50项成功；九种定时配置共25项全部成功，含[WebKit 36684326977](https://github.com/wangbinquan/agent-workflow/actions/runs/36684326977)两平台八分片、[full 36684319531](https://github.com/wangbinquan/agent-workflow/actions/runs/36684319531)四分片/覆盖对账，以及[weekly-all PG 36684345862](https://github.com/wangbinquan/agent-workflow/actions/runs/36684345862)五项。10个运行的headSha均为同一完整提交、均正常终态success；未取消或削弱门禁，本机无AW测试/构建。修复候选限定独立功能门PASS，AW-R01已满足退出条件，[完整矩阵](./ci-recovery.md#修复候选精确终态2026-09-30)。后继文档CI另外验证；AW-R02～12和两个RFC保持未完成。
+
+- 上一完整候选 `0647dadbedd66a20b162377788e92f2c79b68f83` 的 [CI 36676635657](https://github.com/wangbinquan/agent-workflow/actions/runs/36676635657) 已50项全部success，九种定时八success；[WebKit 36676700139](https://github.com/wangbinquan/agent-workflow/actions/runs/36676700139) 7/8分片成功，Ubuntu3/4的REPO-39首轮及重试均在partial目录未删除断言失败。只等orphan阶段不能证明后续partial完成；当前修正为在同一原预算内等待两项实际删除，保留全部保护断言。上一笔单次增长声明同步退役。全部十个旧运行正常终态、无取消；新候选精确主CI和九个默认矩阵继续验证，详见[完整回执](./ci-recovery.md#第三轮终态与-repo-39-阶段等待修正)。
 
 - 第二轮候选 `18c487f8c57743c9731b8757b31d9795d494004b` 已精确推送并取得限定静态功能门PASS。Windows36671976956终态failure，类型检查发现新mint回归任务夹具遗漏必需startedAt；补Date.now()且保留全部实际数据库断言。主CI另有canonical清单漏更新，按官方生成器补同步onPresenceConnectionState顶层归属、摘要和单次增长依据；旧主CI36671910180已46success/4failure，失败均为上述两类原因；九个定时八success（包含实际定价覆盖对账及两平台WebKit），仅Windows类型失败；18路径新修复候选独立静态功能门PASS，新精确SHA验证待运行，最新退出证据见[CI修复记录](./ci-recovery.md)。
 
@@ -152,3 +154,7 @@ AW-R02 仍需 RFC-370 owner 的托管准入及真实 CS→AW 对拍，不能由�
 ef28b3a14d3d4e536096df4fea4f9c6468104622的CI36665459531终态47success/3failure：fast-uri已消除，新增brace-expansion两主版本公告及RFC185真实PG启动前少一次调用。仅更新两条兼容主版本锁，并去掉host mint的多余nonce回读；新增双provider持久/回滚/SQL形状回归，旧三成员全部断言保留且补错误诊断。本机不跑AW测试/类型/构建/服务；独立限定复核、新SHA精确主CI及九个定时配置仍待验收，七个旧候选定时success不冒充新候选通过。详见[逐项CI修复](./ci-recovery.md#第二轮-ci-候选传递依赖与启动回读2026-09-30)，两RFC不关闭。
 
 第二轮八路径静态复核已PASS。旧full四分片success但价格版本GET/POST未进入真实访问账本；旧WebKit在macOS趋势键盘失败，另有在线点首轮失败。追加实际浏览器CNY保存/历史/刷新旅程、原生Option+Tab遍历及同步presence生命周期/受控恢复回归；不扩大uncovered或降低任何断言。完整候选复核、新SHA主CI及全部九种定时终态仍待回执，详见[定时诊断](./ci-recovery.md#第二轮定时诊断真实价格访问与webkit生命周期)。
+
+## 2026-09-30 AW-R01 最终关闭回执
+
+`edd56ebe33731cb05aa7491b292be294a3026521` 精确主CI和九种原默认定时配置全部成功，共10运行/75作业；功能修复和独立复核、源提交、终态矩阵均在[CI修复记录](./ci-recovery.md#修复候选精确终态2026-09-30)。原失败历史完整保留。AW-R01关闭，其余11项AW和CS剩余范围继续；真实身份/模型/托管准入仍有独立退出条件，不把CI绿色当作真实执行验收。
