@@ -1,3 +1,7 @@
+## 2026-09-30 RFC-371 剩余工作与关联 CS 接线持续落档
+
+7bc79b8e 的精确 CI36646022107 已终态 48 success/2 failure，十个 Playwright 及功能通过，静态扫描/汇总失败只读取元数据。CS Session/owner 底座均已发布、CI成功、本机部署；新 render/元数据候选 bc8522cb 已推送、完整4288/142skip/0通过，CI/部署待回执。实际原生来源与持久停止、全清理/消费/两级事实UI尚未接通，生产开发采集仍关闭。12项AW及13项CS剩余工作、关闭证据与授权依赖均有文档入口；两RFC不关闭，resource-catalog四路径保留。
+
 ## 2026-09-30 RFC-371 文档后继精确 CI 终态
 
 5681ca12055c654922db556aec906c9de6d19476的CI36641142819已终态48success/2failure：十个Playwright及全部功能检查成功，静态扫描与CI required失败；只读取元数据，整体仍failure。该提交自fb53e215仅变更三个观测文档，包含ee1af6da加载等待修复，源码未变。CS底座fc491a4d的CI36640100860六项success；Session PG/outbox正在接续，生产开发仍关闭。两RFC未完成；本次仅补[剩余清单](design/RFC-371-run-observability/remaining-work.md)的精确回执，resource-catalog四个并行路径保留。

@@ -126,3 +126,13 @@
 AW-R01 功能检查已通过：浏览器修复 `ee1af6da15b827e32ea0e15557f79ccd47e2f6b9` 是当前 `fb53e21542e38e866cd508cfa6b105b50eea3895` 的祖先，中间仅 STATE/总计划文档变化。精确 [CI 36624953215](https://github.com/wangbinquan/agent-workflow/actions/runs/36624953215) 已终态，48成功/2失败；十个浏览器作业、类型、数值同步与功能作业通过，静态扫描及汇总失败仍是整体CI关闭依赖。没有读取扫描日志，也没有本机AW测试。
 
 关联 CS-R02 的 Runner Stage 1 底座已精确推送 `fc491a4d6b31c6476d3222209ced880810936c3e`；独立功能门PASS，修正候选完整4226 pass/142 skip/0 fail、41路径指纹未变，首轮旧导航异步断言失败与修复历史保留。[CS CI 36640100860](https://github.com/wangbinquan/CrewStation/actions/runs/36640100860) 进行中。该提交没有开启生产开发采集：Session PG/outbox、owner固定原键与CNY价格/排空、两级正式明细尚须接通；当前本机平台仍是94aabd6d。AW-R02的托管准入、实际联合对拍和AW-R03～12仍未关闭。
+
+## 2026-09-30 剩余工作与关联 CS 当前回执
+
+AW 文档后继 `7bc79b8ecb0a3632dea79c705a491a12d2b9caf3` 自 `5681ca12055c654922db556aec906c9de6d19476` 只变三个观测文档，源码和加载修复保持一致。[精确 CI 36646022107](https://github.com/wangbinquan/agent-workflow/actions/runs/36646022107) 已终态 failure：48 success / 2 failure，十个 Playwright 和功能检查通过，失败仅静态扫描及 `CI required`。本轮只刷新元数据，没有读取扫描日志或运行本机 AW 测试；AW-R01 的整体关闭依赖保留。
+
+CS 的 Session PG/outbox 底座 `1326fdd1ac3a0fdd0205bc0e4857a4423cc7df9d`、owner 稳定受理底座 `8d2e547adc3251ab3307b61b3faa5134ed08aa67` 均已精确 CI 六项成功及本机部署。当前本机版本为后者，2026-09-30T01:20:19Z 八组件 Ready=1、storage-contract=1；生产开发采集仍关闭，不能视为项目开发消耗已接通。
+
+CS 双路径数字布局/固定元数据候选 `bc8522cb7c98a6ef308065a5b5821ce181775ad9` 已推送：独立功能门 PASS，完整 4288 pass / 142 skip / 0 fail，23 路径指纹一致；[精确 CI 36657789922](https://github.com/wangbinquan/CrewStation/actions/runs/36657789922) 与本机部署待回执。其实际原生来源证明（最终 Hook 环境与临时 HOME、复制/替换沿革）及原键持久停止（取消等待窗口、迟到 Start、重启恢复）还未实现，已单列于 CS-R02 及 development-owner 文档；后续 owner 派发/全清理屏障、consumer、两级事实和 UI 仍待共同接通。
+
+AW-R02 仍需 RFC-370 owner 的托管准入及真实 CS→AW 对拍，不能由上述底座或测试自行关闭。AW-R03～12 与真实身份/模型授权依赖继续；不恢复 CSV、更多筛选、关注任务卡片或顶部工作流输入。两 RFC 保持 In Progress。
