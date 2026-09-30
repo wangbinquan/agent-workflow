@@ -136,3 +136,8 @@ CS 的 Session PG/outbox 底座 `1326fdd1ac3a0fdd0205bc0e4857a4423cc7df9d`、own
 CS 双路径数字布局/固定元数据候选 `bc8522cb7c98a6ef308065a5b5821ce181775ad9` 已推送：独立功能门 PASS，完整 4288 pass / 142 skip / 0 fail，23 路径指纹一致；[精确 CI 36657789922](https://github.com/wangbinquan/CrewStation/actions/runs/36657789922) 与本机部署待回执。其实际原生来源证明（最终 Hook 环境与临时 HOME、复制/替换沿革）及原键持久停止（取消等待窗口、迟到 Start、重启恢复）还未实现，已单列于 CS-R02 及 development-owner 文档；后续 owner 派发/全清理屏障、consumer、两级事实和 UI 仍待共同接通。
 
 AW-R02 仍需 RFC-370 owner 的托管准入及真实 CS→AW 对拍，不能由上述底座或测试自行关闭。AW-R03～12 与真实身份/模型授权依赖继续；不恢复 CSV、更多筛选、关注任务卡片或顶部工作流输入。两 RFC 保持 In Progress。
+
+
+### AW-R01 CI 与定时配置新版本修复（2026-09-30）
+
+用户本轮要求修复主 CI 和定时 CI，根因与全部九个定时配置、现有修正祖先和退出证据已写入[CI 修复记录](./ci-recovery.md)。fast-uri 已升 3.1.7、锁文件只更新该包；主 CI 和全部目标配置的最新版本结果仍待回执，AW-R01不提前关闭。此前只读扫描元数据的记录保留为历史，不把旧 SHA 红色运行改写成绿色。其他 AW-R02～12和 CS 剩余范围继续。

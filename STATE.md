@@ -1,3 +1,7 @@
+## 2026-09-30 RFC-371 AW 提交与定时 CI 修复
+
+按用户新增要求读取 CI 失败步骤与日志：主 CI 根因是 fast-uri 3.1.6 两条高危公告，已升 3.1.7并只生成对应锁文件；不增加豁免或降低门禁。三个失败定时配置的 JSON/Windows capture 类型修正已在8c6e9a祖先，需最新提交实际重跑；全九个定时工作流与主 CI 的精确结果待回执。遵循 hosted-CI-only，并行resource-catalog四文件不纳入提交，两个RFC继续。详见[CI修复记录](design/RFC-371-run-observability/ci-recovery.md)。下方历史保留。
+
 ## 2026-09-30 RFC-371 剩余工作与关联 CS 接线持续落档
 
 7bc79b8e 的精确 CI36646022107 已终态 48 success/2 failure，十个 Playwright 及功能通过，静态扫描/汇总失败只读取元数据。CS Session/owner 底座均已发布、CI成功、本机部署；新 render/元数据候选 bc8522cb 已推送、完整4288/142skip/0通过，CI/部署待回执。实际原生来源与持久停止、全清理/消费/两级事实UI尚未接通，生产开发采集仍关闭。12项AW及13项CS剩余工作、关闭证据与授权依赖均有文档入口；两RFC不关闭，resource-catalog四路径保留。
