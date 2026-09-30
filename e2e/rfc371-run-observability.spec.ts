@@ -2,7 +2,13 @@
 import { expect, test, type Page } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import type { ObservationOverview, ObservationTaskDetail } from '@agent-workflow/shared'
+import type {
+  ObservationOverview,
+  ObservationTaskDetail,
+  ObservationPriceHistory,
+  ObservationPriceVersion,
+  ObservationPricingRuntime,
+} from '@agent-workflow/shared'
 import { startDaemon, type DaemonHandle } from './harness'
 import { ObservationPlatformNativeCaptureSchema } from '../packages/shared/src/schemas/observationPlatform'
 
@@ -176,6 +182,7 @@ async function expectAnalysisSpacing(page: Page) {
 
 test('task, agents and attempt drill-down use real observations and standard card spacing', async ({
   page,
+  browserName,
 }, testInfo) => {
   const { task, agents, workflow } = await seedTask()
   const detail = await api<ObservationTaskDetail>(`/api/observability/tasks/${task.id}`)
@@ -217,7 +224,15 @@ test('task, agents and attempt drill-down use real observations and standard car
     }
     const last = chart.getByRole('button').last()
     await chart.getByRole('button').first().focus()
-    for (let index = 1; index < tracks.length; index++) await page.keyboard.press('Tab')
+    // Like the shared UX keyboard journey, macOS Safari uses Option+Tab to
+    // traverse buttons in its default text-field-only Tab mode. Keep real
+    // keyboard traversal and every focus/geometry assertion on both runners.
+    const nextControl =
+      process.platform === 'darwin' && browserName === 'webkit' ? 'Alt+Tab' : 'Tab'
+    for (let index = 1; index < tracks.length; index++) {
+      await page.keyboard.press(nextControl)
+      await expect(chart.getByRole('button').nth(index)).toBeFocused()
+    }
     await expect(last).toBeFocused()
     const visible = await last.boundingBox()
     expect(visible!.x).toBeGreaterThanOrEqual(0)
@@ -381,6 +396,98 @@ test('runtime configuration and CNY price cards retain the shared section gap', 
     expect(after).not.toBeNull()
     expect(after!.y - before!.y - before!.height).toBeCloseTo(expectedGap, 0)
   }
+})
+
+// The full nightly route journal exposed two uncovered price-version routes.
+// Exercise actual browser saves and durable history; no pricing request is mocked.
+test('CNY price saves preserve runtime configuration and survive reopening history', async ({
+  page,
+}) => {
+  const directory = await api<{ runtimes: ObservationPricingRuntime[] }>(
+    '/api/observability/pricing/runtimes',
+  )
+  const runtime = directory.runtimes.find((entry) => entry.protocol === 'opencode')
+  expect(runtime).toBeDefined()
+  if (!runtime) throw new Error('The real daemon did not register its OpenCode runtime')
+  const versionsPath =
+    '/api/observability/pricing/runtimes/' +
+    encodeURIComponent(runtime.registrationId) +
+    '/versions'
+  const before = await api<ObservationPriceHistory>(versionsPath + '?limit=20')
+  const note = 'RFC-371 browser CNY tariff ' + randomUUID()
+  await prime(page)
+  await page.goto(`${daemon.baseUrl}/settings?tab=runtime`)
+  const runtimeRow = page.locator('#token-cost tbody tr').filter({ hasText: runtime.name })
+  await expect(runtimeRow).toHaveCount(1)
+  await runtimeRow.getByRole('button', { name: 'Configure token prices', exact: true }).click()
+  const editor = page.getByRole('dialog', { name: runtime.name + ' · Token cost', exact: true })
+  await expect(editor).toBeVisible()
+  await editor.getByLabel('Model provider', { exact: true }).fill('browser-fixture-provider')
+  await editor.getByLabel('Actual model', { exact: true }).fill('browser-fixture-model')
+  await editor.getByLabel('Uncached input', { exact: true }).fill('1.25')
+  await editor.getByLabel('Cache read', { exact: true }).fill('0')
+  await editor.getByLabel('Output', { exact: true }).fill('4.5')
+  await editor.getByLabel('Pricing source / note', { exact: true }).fill(note)
+  await expect(editor).toContainText('CNY per million tokens')
+  const savedResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === versionsPath && response.request().method() === 'POST',
+  )
+  await editor.getByRole('button', { name: 'Save price version', exact: true }).click()
+  const response = await savedResponse
+  expect(response.status()).toBe(201)
+  const saved = (await response.json()) as ObservationPriceVersion
+  expect(saved).toMatchObject({
+    registrationId: runtime.registrationId,
+    configurationRevision: runtime.configurationRevision,
+    protocol: runtime.protocol,
+    currency: 'CNY',
+    revision: before.revision + 1,
+    provider: 'browser-fixture-provider',
+    model: 'browser-fixture-model',
+    condition: null,
+    rates: { input: '1.25', cacheRead: '0', cacheWrite: null, output: '4.5' },
+    sourceNote: note,
+  })
+  await expect(editor).toHaveCount(0)
+  await expect(runtimeRow).toContainText('CNY-v' + saved.revision)
+  const historyButton = runtimeRow.getByRole('button', { name: 'Price history', exact: true })
+  const history = page.getByRole('dialog', {
+    name: runtime.name + ' · Price history',
+    exact: true,
+  })
+  for (const reopen of [false, true]) {
+    if (reopen) {
+      await page.reload()
+      await expect(runtimeRow).toContainText('CNY-v' + saved.revision)
+    }
+    const historyResponse = page.waitForResponse(
+      (result) =>
+        new URL(result.url()).pathname === versionsPath && result.request().method() === 'GET',
+    )
+    await historyButton.click()
+    const result = await historyResponse
+    expect(result.status()).toBe(200)
+    const persisted = (await result.json()) as ObservationPriceHistory
+    expect(persisted.revision).toBe(saved.revision)
+    expect(persisted.items.find((item) => item.id === saved.id)).toEqual(saved)
+    const priceRow = history.locator('tbody tr').filter({ hasText: note })
+    await expect(priceRow).toHaveCount(1)
+    await expect(priceRow.locator('td').nth(3)).toHaveText('¥1.25')
+    await expect(priceRow.locator('td').nth(4)).toHaveText('¥0')
+    await expect(priceRow.locator('td').nth(5)).toHaveText('Unpriced')
+    await expect(priceRow.locator('td').nth(6)).toHaveText('¥4.5')
+    await page.keyboard.press('Escape')
+    await expect(history).toHaveCount(0)
+    await expect(historyButton).toBeFocused()
+  }
+  const after = await api<{ runtimes: ObservationPricingRuntime[] }>(
+    '/api/observability/pricing/runtimes',
+  )
+  expect(after.runtimes.find((entry) => entry.registrationId === runtime.registrationId)).toEqual({
+    ...runtime,
+    pricingRevision: saved.revision,
+  })
 })
 
 test('platform capture dialog keeps last-row focus and shared spacing at wide and narrow widths', async ({

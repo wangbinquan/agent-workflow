@@ -537,8 +537,42 @@ describeEachProvider('RFC-185 — engine fan-out integration (fake hooks)', (har
     const result = await runWorkgroupEngine({ db, taskId, log, hooks })
     expect(result.kind, JSON.stringify(result)).toBe('ok')
 
+    const assignments = await db
+      .select()
+      .from(workgroupAssignments)
+      .where(eq(workgroupAssignments.taskId, taskId))
+    const messages = await db
+      .select()
+      .from(workgroupMessages)
+      .where(eq(workgroupMessages.taskId, taskId))
+    const memberRuns = await db
+      .select()
+      .from(nodeRuns)
+      .where(eq(nodeRuns.nodeId, WG_MEMBER_NODE_ID))
+    // CI 36665459531: distinguish an internal startup failure from a missed
+    // wake without removing the three-member execution/aggregation contract.
+    const diagnostics = JSON.stringify({
+      assignments: assignments.map(({ title, status, nodeRunId, attemptCount }) => ({
+        title,
+        status,
+        nodeRunId,
+        attemptCount,
+      })),
+      runs: memberRuns.map(({ id, shardKey, status, errorMessage }) => ({
+        id,
+        shardKey,
+        status,
+        errorMessage,
+      })),
+      errors: messages
+        .filter((message) => message.kind === 'system')
+        .map((message) => message.bodyMd),
+    })
     // run shape: leader, 3 member instances (any interleaving), leader again
-    expect(requests.map((r) => r.nodeId)).toEqual([
+    expect(
+      requests.map((r) => r.nodeId),
+      diagnostics,
+    ).toEqual([
       WG_LEADER_NODE_ID,
       WG_MEMBER_NODE_ID,
       WG_MEMBER_NODE_ID,
@@ -547,28 +581,16 @@ describeEachProvider('RFC-185 — engine fan-out integration (fake hooks)', (har
     ])
 
     // 3 assignment rows, all done, each with its own result message
-    const assignments = await db
-      .select()
-      .from(workgroupAssignments)
-      .where(eq(workgroupAssignments.taskId, taskId))
     expect(assignments).toHaveLength(3)
     expect(assignments.every((a) => a.status === 'done')).toBe(true)
     expect(new Set(assignments.map((a) => a.resultMessageId)).size).toBe(3)
     expect(new Set(assignments.map((a) => a.assigneeMemberId))).toEqual(new Set(['m-coder']))
 
     // one dispatch message per instance (auto-publicity, no confirmation gate)
-    const messages = await db
-      .select()
-      .from(workgroupMessages)
-      .where(eq(workgroupMessages.taskId, taskId))
     expect(messages.filter((m) => m.kind === 'dispatch')).toHaveLength(3)
 
     // instance isolation: 3 borrowed runs on the shared member node, each keyed
     // by ITS assignment id, all impersonating the same agent
-    const memberRuns = await db
-      .select()
-      .from(nodeRuns)
-      .where(eq(nodeRuns.nodeId, WG_MEMBER_NODE_ID))
     expect(memberRuns).toHaveLength(3)
     expect(new Set(memberRuns.map((r) => r.shardKey))).toEqual(
       new Set(assignments.map((a) => a.id)),

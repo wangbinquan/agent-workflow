@@ -1,3 +1,7 @@
+## 2026-09-30 RFC-371 CI第二轮与定时完整候选
+
+ef28b3a14的精确CI36665459531已47success/3failure：fast-uri公告已消除，扫描新增brace-expansion两主版本公告；后端真实PG三成员只执行两名。兼容锁升1.1.20/5.0.11、host mint去掉nonce回读和双provider回归已独立限定复核PASS。旧候选九个定时已终态：七success，full缺两个定价版本真实访问，WebKit有趋势键盘failure及在线点首轮失败。本批补真实CNY保存/历史/刷新持久性E2E，按macOS WebKit原生Option+Tab遍历并逐项断言；presence改同步socket生命周期清空并补受控重连回归，首轮缺trace，不能认定唯一根因。完整新候选复核、新SHA主CI及九种定时配置待验收，不减断言/隔离/预算。本机不运行AW门禁，四个并行skill文件保留。CS bebb3d9b精确六项CI成功及本机八组件升级/HTTP200，生产开发采集仍OFF；剩余范围继续。详见[CI修复记录](design/RFC-371-run-observability/ci-recovery.md)。下方历史保留。
+
 ## 2026-09-30 RFC-371 AW 提交与定时 CI 修复
 
 按用户新增要求读取 CI 失败步骤与日志：主 CI 根因是 fast-uri 3.1.6 两条高危公告，已升 3.1.7并只生成对应锁文件；不增加豁免或降低门禁。三个失败定时配置的 JSON/Windows capture 类型修正已在8c6e9a祖先，需最新提交实际重跑；全九个定时工作流与主 CI 的精确结果待回执。遵循 hosted-CI-only，并行resource-catalog四文件不纳入提交，两个RFC继续。详见[CI修复记录](design/RFC-371-run-observability/ci-recovery.md)。下方历史保留。

@@ -11,6 +11,7 @@ import type {
 } from '../public/commands'
 import { WORKGROUP_TURN_LEADER_NODE_ID, WORKGROUP_TURN_MEMBER_NODE_ID } from '../public/commands'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
+import { generateNodeRunEnvelopeNonce } from '../application/buildNodeRunMintRecord'
 import { createNodeRunMintParticipantInTx } from './nodeRunMintParticipant'
 import { setNodeRunStatusTx } from './nodeRunLifecycleTransition'
 
@@ -127,6 +128,9 @@ async function applyOperation(
   operation: Exclude<WorkgroupHostLedgerOperation, WorkgroupHostLedgerFailRunOperation>,
 ): Promise<WorkgroupHostLedgerMintReceipt | null> {
   if (operation.kind === 'mint-host-run') {
+    // Returning the inserted value avoids a SERIALIZABLE predicate read on
+    // node_runs while sibling workgroup turns are inserting into the same page.
+    const envelopeNonce = generateNodeRunEnvelopeNonce()
     await createNodeRunMintParticipantInTx(transaction).mint({
       id: operation.runId,
       taskId,
@@ -139,17 +143,9 @@ async function applyOperation(
         agentOverrideName: operation.agentOverrideName,
         agentOverrideId: operation.agentOverrideId,
         wgRound: operation.wgRound,
+        envelopeNonce,
       },
     })
-    const mintedRows = await transaction
-      .select({ envelopeNonce: nodeRuns.envelopeNonce })
-      .from(nodeRuns)
-      .where(and(eq(nodeRuns.taskId, taskId), eq(nodeRuns.id, operation.runId)))
-      .limit(1)
-    const envelopeNonce = mintedRows[0]?.envelopeNonce
-    if (envelopeNonce === null || envelopeNonce === undefined) {
-      throw new WorkgroupHostLedgerConflict(operation.operationKey)
-    }
     return {
       operationKey: operation.operationKey,
       runId: operation.runId,

@@ -10,7 +10,7 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import { WS_PATHS } from '@agent-workflow/shared'
 import { useAuthSessionRevision, usePermission } from '@/hooks/useActor'
-import { useWebSocket } from '@/hooks/useWebSocket'
+import { useWebSocket, type WebSocketConnectionState } from '@/hooks/useWebSocket'
 
 /** 这些 id 不是真实用户（历史行 / 系统行 / 未解析），一律返回"未知"而不是"离线"。 */
 const SENTINELS = new Set(['local', '__system__', ''])
@@ -67,6 +67,10 @@ export function resetPresence(): void {
   emit(EMPTY)
 }
 
+function onPresenceConnectionState(state: WebSocketConnectionState): void {
+  if (!state.connected) resetPresence()
+}
+
 function subscribe(listener: () => void): () => void {
   listeners.add(listener)
   return () => listeners.delete(listener)
@@ -112,15 +116,15 @@ export function usePresenceSubscription(): void {
     },
     [revision],
   )
-  const connection = useWebSocket({
+  useWebSocket({
     path: WS_PATHS.presence,
     onMessage,
+    onConnectionStateChange: onPresenceConnectionState,
     enabled: canSeePresence,
   })
-  // 物理连接断开 ⇒ 立刻回到"未知"。重连后由新的快照重新水化。
-  useEffect(() => {
-    if (!connection.connected) resetPresence()
-  }, [connection.connected])
+  // Reset at the physical disconnect/acquire boundary. A passive effect from
+  // an older disconnected render can run after a new open+snapshot and erase
+  // the only authoritative snapshot, leaving presence unknown until reconnect.
   // 失去权限（或从未有过）⇒ 不订阅且清空。
   useEffect(() => {
     if (!canSeePresence) resetPresence()

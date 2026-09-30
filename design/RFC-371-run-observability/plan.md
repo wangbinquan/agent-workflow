@@ -402,3 +402,10 @@ AW-R02 仍需 RFC-370 owner 的托管准入及真实 CS→AW 对拍，不能由�
 ## AW-R01 提交与定时 CI 修复（2026-09-30）
 
 按本轮用户指令修复失败 CI，新增[逐项修复与定时验收记录](./ci-recovery.md)。根 pin 与锁文件 fast-uri 3.1.6→3.1.7；不修改审计接受列表、severity、测试强度、schedule 或必需汇总。历史 nightly JSON/Windows TS2769 修正已是当前 main 祖先，必须在新提交上验证主 CI和九个定时配置，精确发布与终态结果待回执。本机不运行 AW 测试/构建/类型/服务；与 CS 工作并行推进，完整 RFC不关闭。
+
+
+### AW-R01 第二轮 CI 根因及修正候选
+
+ef28b3a14d3d4e536096df4fea4f9c6468104622的CI36665459531终态47success/3failure：fast-uri已消除，新增brace-expansion两主版本公告及RFC185真实PG启动前少一次调用。仅更新两条兼容主版本锁，并去掉host mint的多余nonce回读；新增双provider持久/回滚/SQL形状回归，旧三成员全部断言保留且补错误诊断。本机不跑AW测试/类型/构建/服务；独立限定复核、新SHA精确主CI及九个定时配置仍待验收，七个旧候选定时success不冒充新候选通过。详见[逐项CI修复](./ci-recovery.md#第二轮-ci-候选传递依赖与启动回读2026-09-30)，两RFC不关闭。
+
+第二轮八路径静态复核已PASS。旧full四分片success但价格版本GET/POST未进入真实访问账本；旧WebKit在macOS趋势键盘失败，另有在线点首轮失败。追加实际浏览器CNY保存/历史/刷新旅程、原生Option+Tab遍历及同步presence生命周期/受控恢复回归；不扩大uncovered或降低任何断言。完整候选复核、新SHA主CI及全部九种定时终态仍待回执，详见[定时诊断](./ci-recovery.md#第二轮定时诊断真实价格访问与webkit生命周期)。

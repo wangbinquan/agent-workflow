@@ -28,3 +28,26 @@
 ## 当前状态与关闭边界
 
 版本与锁文件已修正，精确提交 CI 和九个定时配置的新版本结果待回执。主 CI required 与所有目标工作流终态成功前，AW-R01 保持未关闭；若发现新的真实失败继续定位和修复，不能将旧修正祖先或单个绿色分片当整体成功。并行 resource-catalog 四文件原样保留，不纳入本轮提交。AW-R02～12、CS 开发来源/清理/消费/两级明细及真实身份/模型验收继续，不以 CI 修复宣称两个 RFC 完成。
+
+
+## 第二轮 CI 候选：传递依赖与启动回读（2026-09-30）
+
+`ef28b3a14d3d4e536096df4fea4f9c6468104622` 的 [CI36665459531](https://github.com/wangbinquan/agent-workflow/actions/runs/36665459531) 终态 failure：47 success/3 failure。fast-uri 两条公告已消除；扫描又发现 brace-expansion 的两条高危公告分别影响锁住的1.1.18和5.0.9，已按官方 [GHSA-qhr7-859c-m2p7](https://github.com/advisories/GHSA-qhr7-859c-m2p7)、[GHSA-6j4f-fj2g-mc7p](https://github.com/advisories/GHSA-6j4f-fj2g-mc7p) 修复范围，在现有位置保持主版本升为1.1.20与5.0.11，仅两个版本/完整性摘要变化。npm注册表的dependencies与现有条目一致，frozen lockfile-only/ignore-scripts可解析；这只是锁文件核对，不是本机测试或CI通过。package.json没有新增直接依赖、豁免或跨主版本覆盖。
+
+Ubuntu后端9/16分片的RFC185真实PG fan-out只调用两名成员，但任务最终ok。同一时间PG在host participant的post-insert nonce SELECT和assignment CAS上反复40001；十次事务预算耗尽会把尚未启动的卡片记为failed，领队允许这种终态聚合。夹具在runHostNode入口立即记录，没有等待采样问题。日志缺少派单ID和最后卡片错误，尚不能唯一还原漏掉成员的全部十次重试；不把相关性冒充唯一根因。
+
+本批最小减冲突修正：在TaskExecution自身host participant用既有随机nonce生成器生成值，经既有mint overrides.envelopeNonce随行写入，成功后直接返回，去掉多余node_runs回读；公共mint类型、事务隔离、重试预算和失败收场规则不变。新增双provider真实并发三run、receipt与持久nonce一致、回滚后新尝试和实际SQL录制回归；旧三成员完整执行断言不变，只补卡片/run/系统错误诊断。新用例会确定性拦住这次不必要的回读，真实并发效果与完整三成员执行仍须新SHA hosted CI。
+
+旧候选九个定时工作流均已终态。七个success：maintenance36665773019、Windows36665778557、OpenCode36665783652、Git36665786505、evidence36665789813、visual36665459576、weekly PG36665792231，均为上述完整SHA。full36665775717与WebKit36665780868为failure，诊断及增量候选见下节。本批改变依赖和启动代码，旧绿色不能直接关闭新候选；按新提交重新验证主CI及九个目标配置，不取消正在执行的定时矩阵。全部必要终态前AW-R01保持未完成。
+
+CS原键持久停止源码bebb3d9b3b2a879a8e8ecf9b56b818fc912b15b7的精确CI36665601664六项success，2026-09-30T04:11:33Z本机八组件Ready=1、storage-contract=1、公开登录页HTTP200。它只完成停止底座；完整开发采集/owner清理/consumer/两级事实UI仍未关闭，生产开发采集OFF。两RFC继续，真实身份/模型验收没有执行。
+
+## 第二轮定时诊断：真实价格访问与WebKit生命周期
+
+[full E2E 36665775717](https://github.com/wangbinquan/agent-workflow/actions/runs/36665775717) 的四个Playwright分片全部success，失败在RFC319覆盖对账：新增的 `GET/POST /api/observability/pricing/runtimes/:registrationId/versions` 没有真实访问。本批在既有RFC371浏览器文件补 actual daemon CNY 定价旅程：保存价格版本201、读取历史200、刷新后同一持久版本/价格、零价与未定价分别显示，并核对运行时配置修订/模型未被价格保存修改。没有mock定价路由，不改uncovered账本或覆盖门禁。
+
+[WebKit 36665780868](https://github.com/wangbinquan/agent-workflow/actions/runs/36665780868) 只有macOS 4/4分片失败，终态 **1 failed + 1 flaky**，不能只描述成重跑成功。RFC371趋势图首轮/重试均在键盘末柱焦点失败；macOS Safari默认Tab只遍历文本控件，已有 `e2e/ux-consistency.spec.ts` 使用原生Option+Tab。本批沿用同一平台/浏览器判据，所有柱仍通过真实按键依次到达，增加每一步焦点断言，宽窄屏末柱可视与截图断言保持；不程序化focus末柱绕过键盘路径。
+
+WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实session，owner来自同一 `/auth/me`；PresenceDot对确定离线也画点，因此0代表unknown而非未在线。首轮仅有视频/error-context，成功重试trace无WS帧，不能唯一确认此次CI的失水化原因。源码存在可以受控覆盖的时序缺陷：断线render的passive effect可在新open+snapshot后清空唯一快照。本批用共享socket可选同步生命周期回调在断线/新订阅尚未连接时reset，移除presence旧connected passive reset；权限失败关闭及认证代次守卫保留。新增真实hook/共享socket重连回归，在布局阶段交付新open、可选snapshot后再允许旧effect执行，分别验证最新已知值保留、无新快照仍unknown、迟到旧帧不覆盖、新连接断开回unknown。原WG-35全部断言保持，不加固定等待或更改重试/预算。
+
+依赖/PG启动原八路径已独立静态功能复核PASS，定时增量随完整候选继续复核；这些测试未在本机执行，新SHA hosted主CI、真实full覆盖对账及两平台WebKit矩阵全部成功前，不声称已解决全部失败。

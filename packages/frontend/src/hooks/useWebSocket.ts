@@ -34,6 +34,8 @@ export interface UseWebSocketOptions {
   path: string
   /** Receives every JSON message. */
   onMessage: Listener
+  /** Synchronous physical lifecycle notification, before any later socket frame. */
+  onConnectionStateChange?: ConnectionStateListener
   /** When false the connection is torn down (useful when no taskId yet). */
   enabled?: boolean
 }
@@ -272,20 +274,33 @@ const DISCONNECTED_STATE: WebSocketConnectionState = {
 export function useWebSocket({
   path,
   onMessage,
+  onConnectionStateChange,
   enabled = true,
 }: UseWebSocketOptions): WebSocketConnectionState {
   // Latest-listener ref so we don't resubscribe every render when the caller
   // passes an inline arrow function.
   const listenerRef = useRef<Listener>(onMessage)
+  const connectionListenerRef = useRef(onConnectionStateChange)
   const [connectionState, setConnectionState] =
     useState<WebSocketConnectionState>(DISCONNECTED_STATE)
   useEffect(() => {
     listenerRef.current = onMessage
-  }, [onMessage])
+    connectionListenerRef.current = onConnectionStateChange
+  }, [onMessage, onConnectionStateChange])
 
   useEffect(() => {
-    if (!enabled) return
-    return acquireSharedConn(path, (msg) => listenerRef.current(msg), setConnectionState)
+    if (!enabled) {
+      connectionListenerRef.current?.(DISCONNECTED_STATE)
+      return
+    }
+    return acquireSharedConn(
+      path,
+      (msg) => listenerRef.current(msg),
+      (state) => {
+        connectionListenerRef.current?.(state)
+        setConnectionState(state)
+      },
+    )
   }, [path, enabled])
 
   return enabled ? connectionState : DISCONNECTED_STATE

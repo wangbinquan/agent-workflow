@@ -13,6 +13,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest'
 import { act, render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { useLayoutEffect } from 'react'
 
 import { clearToken, getAuthSessionRevision, setBaseUrl, setToken } from '../src/stores/auth'
 import {
@@ -50,7 +51,12 @@ class MockSocket {
   fireMessage(data: unknown): void {
     for (const fn of this.listeners.message ?? []) fn({ data: JSON.stringify(data) })
   }
+  fireOpen(): void {
+    this.readyState = 1
+    for (const fn of this.listeners.open ?? []) fn({})
+  }
   fireClose(code: number): void {
+    this.readyState = 3
     for (const fn of this.listeners.close ?? []) fn({ code })
   }
 }
@@ -219,11 +225,65 @@ describe('RFC-312 实现门 —— 订阅接线必须被真的挂载过一次', 
     expect(presenceSockets).toHaveLength(1)
 
     act(() => {
+      presenceSockets[0]?.fireOpen()
       presenceSockets[0]?.fireMessage({ type: 'presence.snapshot', online: ['u1'] })
     })
     expect(view.getByTestId('probe').textContent).toBe('true')
     view.unmount()
   })
+
+  // WebKit nightly WG-35 exposed a presence-unknown failure. Control the
+  // recovery frame's delivery before the disconnected render's passive
+  // effects, so the old effect-based reset deterministically loses a fresh
+  // snapshot. This locks the lifecycle race without relaxing the browser case.
+  test.each([true, false])(
+    '重连在延迟 effect 前打开，snapshot=%s：只收到新快照才恢复已知状态',
+    (deliverSnapshot) => {
+      vi.useFakeTimers()
+      grantPresence()
+      function RecoveringHost({ recover }: { recover: boolean }) {
+        usePresenceSubscription()
+        const online = usePresenceOf('u1')
+        useLayoutEffect(() => {
+          if (!recover) return
+          const current = MockSocket.instances.at(-1)
+          current?.fireOpen()
+          if (deliverSnapshot) current?.fireMessage({ type: 'presence.snapshot', online: ['u1'] })
+        }, [recover])
+        return <span data-testid="probe">{online === undefined ? 'unknown' : String(online)}</span>
+      }
+      const element = (recover: boolean) => (
+        <QueryClientProvider client={appQueryClient}>
+          <RecoveringHost recover={recover} />
+        </QueryClientProvider>
+      )
+      const view = render(element(false))
+      try {
+        const previous = MockSocket.instances.at(-1)
+        expect(previous).toBeDefined()
+        act(() => {
+          previous?.fireOpen()
+          previous?.fireMessage({ type: 'presence.snapshot', online: ['u1'] })
+        })
+        expect(view.getByTestId('probe').textContent).toBe('true')
+        act(() => {
+          previous?.fireClose(1006)
+          vi.advanceTimersByTime(500)
+          view.rerender(element(true))
+        })
+        const current = MockSocket.instances.at(-1)
+        expect(current).not.toBe(previous)
+        expect(view.getByTestId('probe').textContent).toBe(deliverSnapshot ? 'true' : 'unknown')
+        act(() => previous?.fireMessage({ type: 'presence.snapshot', online: [] }))
+        expect(view.getByTestId('probe').textContent).toBe(deliverSnapshot ? 'true' : 'unknown')
+        act(() => current?.fireClose(1006))
+        expect(view.getByTestId('probe').textContent).toBe('unknown')
+      } finally {
+        view.unmount()
+        vi.useRealTimers()
+      }
+    },
+  )
 
   test('无权限时挂载 ⇒ 根本不建立连接（服务端也会拒绝升级）', () => {
     const view = render(
