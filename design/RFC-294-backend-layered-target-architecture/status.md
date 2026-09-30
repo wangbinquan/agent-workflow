@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:14e65cc1803332a21d69fbe39cb829a019f6d375586d8a42001b5c39de8bf142`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:60f3075ecd59dc84e313b9a2c78ebb35c65aaa8ee6245e3848f40d6c23716dd9`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -35,7 +35,7 @@
 | `crossContextImports` | 5580 |
 | `facades` | 295 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25510 |
+| `moduleSymbolOwners` | 25511 |
 | `mutationEntrypoints` | 1773 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1030 |

@@ -409,3 +409,7 @@ AW-R02 仍需 RFC-370 owner 的托管准入及真实 CS→AW 对拍，不能由�
 ef28b3a14d3d4e536096df4fea4f9c6468104622的CI36665459531终态47success/3failure：fast-uri已消除，新增brace-expansion两主版本公告及RFC185真实PG启动前少一次调用。仅更新两条兼容主版本锁，并去掉host mint的多余nonce回读；新增双provider持久/回滚/SQL形状回归，旧三成员全部断言保留且补错误诊断。本机不跑AW测试/类型/构建/服务；独立限定复核、新SHA精确主CI及九个定时配置仍待验收，七个旧候选定时success不冒充新候选通过。详见[逐项CI修复](./ci-recovery.md#第二轮-ci-候选传递依赖与启动回读2026-09-30)，两RFC不关闭。
 
 第二轮八路径静态复核已PASS。旧full四分片success但价格版本GET/POST未进入真实访问账本；旧WebKit在macOS趋势键盘失败，另有在线点首轮失败。追加实际浏览器CNY保存/历史/刷新旅程、原生Option+Tab遍历及同步presence生命周期/受控恢复回归；不扩大uncovered或降低任何断言。完整候选复核、新SHA主CI及全部九种定时终态仍待回执，详见[定时诊断](./ci-recovery.md#第二轮定时诊断真实价格访问与webkit生命周期)。
+
+## 2026-09-30 Windows 必需字段补正与第二轮精确回执
+
+第二轮12路径独立静态功能门PASS，18c487f8c57743c9731b8757b31d9795d494004b已精确推送。Windows36671976956在Typecheck因新的双provider mint夹具漏填tasks.startedAt失败，本批补同既有RFC185夹具的Date.now()；原nonce持久性、兄弟并发、真实SQL与回滚断言全部保留。主CI新增canonical精确投影失败，官方生成器仅从已提交源码和本任务候选读取，补onPresenceConnectionState顶层符号与摘要，按原规则写25510→25511的一次性增长依据。原十个运行已终态：主CI36671910180为46success/4failure，两后端失败均为已修时间字段与canonical；九个定时八success，Windows类型失败。真实价格访问对账与两平台8个WebKit分片全部成功。18路径独立静态功能门PASS，不取消原矩阵、不将旧八绿写为新候选完成。后续精确SHA主CI与全部九个定时配置继续验收，本机不执行AW测试/构建。详见[CI修复记录](./ci-recovery.md)。

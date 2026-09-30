@@ -51,3 +51,13 @@ CS原键持久停止源码bebb3d9b3b2a879a8e8ecf9b56b818fc912b15b7的精确CI366
 WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实session，owner来自同一 `/auth/me`；PresenceDot对确定离线也画点，因此0代表unknown而非未在线。首轮仅有视频/error-context，成功重试trace无WS帧，不能唯一确认此次CI的失水化原因。源码存在可以受控覆盖的时序缺陷：断线render的passive effect可在新open+snapshot后清空唯一快照。本批用共享socket可选同步生命周期回调在断线/新订阅尚未连接时reset，移除presence旧connected passive reset；权限失败关闭及认证代次守卫保留。新增真实hook/共享socket重连回归，在布局阶段交付新open、可选snapshot后再允许旧effect执行，分别验证最新已知值保留、无新快照仍unknown、迟到旧帧不覆盖、新连接断开回unknown。原WG-35全部断言保持，不加固定等待或更改重试/预算。
 
 依赖/PG启动原八路径已独立静态功能复核PASS，定时增量随完整候选继续复核；这些测试未在本机执行，新SHA hosted主CI、真实full覆盖对账及两平台WebKit矩阵全部成功前，不声称已解决全部失败。
+
+## 第二轮发布后：Windows必需字段补正
+
+完整12路径候选已独立静态功能复核PASS，并以 `18c487f8c57743c9731b8757b31d9795d494004b` 精确推送，提交前后主分支与远端一致、四个并行resource-catalog路径未改动。[Windows 36671976956](https://github.com/wangbinquan/agent-workflow/actions/runs/36671976956) 终态failure：新 `rfc369-workgroup-mint-receipt.test.ts` 的任务夹具漏填必需 `startedAt`，TS2769在执行功能测试前拒绝。本批补 `startedAt: Date.now()`，不放宽类型，也不改变三个兄弟mint、实际持久nonce、SQL回读禁止或回滚重试断言。
+
+主CI已结束的macOS后端6/6除两个夹具NOT NULL失败，还报两条canonical精确生成投影失败。沿用官方生成器，源码仅在内存读取已提交main与本任务候选，未建立其他checkout或改动并行来源。新增顶层onPresenceConnectionState符号导致归属分母25510→25511；同步13份生成/治理/状态产物、sourceDigest sha256:60f3075ecd59dc84e313b9a2c78ebb35c65aaa8ee6245e3848f40d6c23716dd9及四份内容寻址provenance。唯一allowGrowth按原规则精确解释这一个新增符号，下一笔无增长提交须退役；不增加架构违规、豁免或放宽生成相等检查。
+
+同一SHA的主CI36671910180已终态46success/4failure：Lint+Typecheck、macOS后端6/6、Ubuntu后端8/16及required；日志逐项确认类型/NOT NULL时间遗漏与canonical投影是全部根因。九种定时配置八success，Windows类型失败；完整E2E36671974233的四分片和覆盖对账、WebKit36671979603的两平台各四分片均成功。原全部十个运行正常跑到终态，没有取消。新候选仍须实际执行全部原有矩阵，不修改schedule、重试、规模或预算。本机AW门禁未运行，AW-R01保持未完成。
+
+第三轮18路径独立静态功能门PASS：首尾冻结hash匹配，2721份提交生产源码独立重算摘要匹配，四份治理内容摘要匹配，仅新增onPresenceConnectionState这一归属条目。原测试与严格投影/增长过期判据保持；没有本地AW测试或服务。发布前只更新旧矩阵完整终态回执，生产和13生成产物内容不变。

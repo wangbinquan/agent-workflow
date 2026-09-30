@@ -1,3 +1,7 @@
+## 2026-09-30 RFC-371 Windows 回归夹具必需时间补正
+
+第二轮候选18c487f8c57743c9731b8757b31d9795d494004b已精确推送。Windows定时36671976956在类型检查发现新双provider mint回归夹具漏填tasks.startedAt；本批补Date.now()，保留三成员、持久nonce、真实SQL无回读及回滚断言。主CI还报canonical清单遗漏：沿用官方生成器在内存读取已提交源码，登记onPresenceConnectionState这一新增顶层符号（25510→25511）及内容摘要，并按原高水位规则写单次增长依据；四个并行skill来源不参与本批生成。原十个运行已全部终态：主CI36671910180为46success/4failure，同为上述两类原因；九个定时中八success（含真实定价覆盖与两平台WebKit），Windows类型失败。18路径独立静态功能门PASS，源码/生成候选不变；新的精确SHA主CI及九种定时配置仍待验证，不能由旧八绿关闭AW-R01。完整修复以新的精确SHA主CI与全部九种定时配置为准；本机未执行AW测试/构建，共享resource-catalog四路径保留。
+
 ## 2026-09-30 RFC-371 CI第二轮与定时完整候选
 
 ef28b3a14的精确CI36665459531已47success/3failure：fast-uri公告已消除，扫描新增brace-expansion两主版本公告；后端真实PG三成员只执行两名。兼容锁升1.1.20/5.0.11、host mint去掉nonce回读和双provider回归已独立限定复核PASS。旧候选九个定时已终态：七success，full缺两个定价版本真实访问，WebKit有趋势键盘failure及在线点首轮失败。本批补真实CNY保存/历史/刷新持久性E2E，按macOS WebKit原生Option+Tab遍历并逐项断言；presence改同步socket生命周期清空并补受控重连回归，首轮缺trace，不能认定唯一根因。完整新候选复核、新SHA主CI及九种定时配置待验收，不减断言/隔离/预算。本机不运行AW门禁，四个并行skill文件保留。CS bebb3d9b精确六项CI成功及本机八组件升级/HTTP200，生产开发采集仍OFF；剩余范围继续。详见[CI修复记录](design/RFC-371-run-observability/ci-recovery.md)。下方历史保留。

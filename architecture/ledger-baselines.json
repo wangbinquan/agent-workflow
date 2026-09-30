@@ -902,12 +902,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25510,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25511,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371 CI修复：presence断线同步回调新增顶层onPresenceConnectionState，归属条目25510→25511；如实登记一个功能符号，未新增架构违规或放宽扫描；下一笔无增长提交须退役。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:14e65cc1803332a21d69fbe39cb829a019f6d375586d8a42001b5c39de8bf142",
+    "sourceDigest": "sha256:60f3075ecd59dc84e313b9a2c78ebb35c65aaa8ee6245e3848f40d6c23716dd9",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +923,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "904ccfdaa0de41d63472d1a4c251a657a32857fa",
-    "contentDigest": "sha256:7e7ae525bd8b547e8565bef7a8bbbc750909ad806cc41c5b5817c4b7bbde1b0a",
+    "currentSnapshotSha": "18c487f8c57743c9731b8757b31d9795d494004b",
+    "contentDigest": "sha256:43f4c9b632820b8785d992e04fffe46eff433cf119471bbbe106ae234ba313b6",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

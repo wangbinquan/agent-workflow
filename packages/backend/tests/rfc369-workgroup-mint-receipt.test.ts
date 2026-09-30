@@ -30,6 +30,7 @@ async function seedTask(db: ProviderNeutralDatabase): Promise<string> {
     branch: `agent-workflow/${taskId}`,
     status: 'running',
     inputs: '{}',
+    startedAt: Date.now(),
     executionLineageId: taskId,
     lineageSlotPathJson: JSON.stringify([
       { stableNodeKey: 'task-root', frozenOccurrenceKey: taskId, workflowRevision: null },
