@@ -153,3 +153,16 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 卡片 helper 的同步快照保留公共 16px 标准、全部相邻对/可见尺寸/溢出以及宽窄屏、长列表、公共 Dialog 和焦点断言；未确认的首轮 53px 位移来源仍未作产品根因结论。迁移历史完整性只有含三轮 load/verify 的单用例使用 20 秒预算，其他六条用例、真实 PG 性能门槛和所有 workflow 预算不变。修复经独立实现 v3 PASS，再精确提交七路径并推送，远端同步；原失败没有删除，也没有取消、重跑或绕过旧失败来收口。
 
 这一回执只完成本轮 CI 修复；AW-R08 服务端维度筛选、模型/用途下钻及两个 RFC 剩余实施继续。后继只提交本页、runtime-contributions、remaining-work、plan 与 STATE 五份文档，精确主 CI 单独验证；源码/工作流不变，不重复调度已成功的九种矩阵。
+
+
+## 2026-10-01 分类 Token 与返回入口之后的定时修正
+
+分类提交 `b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d` 的十个运行均已终态，整体未通过：主 CI 被后继 push 取消，Windows 类型失败；完整夜间的第 4 分片和覆盖对账失败，WebKit 夜间也有失败分片并被后继运行取消。历史成功的 `a241fcf4` 不能替代新候选回执。标题精确查询已由 `f512dc321932e6be0b3453dfc6cc1b69c9bb9dd9` 修正，并行 `7e33d3d415dbbe672eb9445be4020bb593cdff17` 补齐自己的类型和显式零推理夹具；不据此宣告整个 CI 成功。
+
+当前三项可定位配套修正：
+
+- [完整夜间 36853166930](https://github.com/wangbinquan/agent-workflow/actions/runs/36853166930) 的趋势只读夹具改了正数 Token，却继承真实空区间的四个 `hasKnownBuckets=false`，因此详情正确显示未观测。夹具现在显式提供同四类的证据位；保留第一个完整值断言，并检查第二个部分值及第三个全未观测区间，不改变产品的未知语义。
+- [Windows 36857497630](https://github.com/wangbinquan/agent-workflow/actions/runs/36857497630) 的两条失败同源于 RFC-370 机械搬迁：原 `skillMigrateOp.ts` 的 `.dev`／`.ino` 比较已移入 `fileSkillIdentityContentStore.ts`，守卫仍登记旧路径。本次只搬迁原有两个各 1 次的许可，规则、总许可次数、反例和过期检查不变。
+- 同一完整夜间的 WG-32 在准备已交付卡片时遇到引擎短暂持有 durable owner 的 409。只在测试准备阶段对 `task-execution-stale-owner` 重试，沿用房间消息夹具的 40 次／250ms 有限上限，其他拒绝立即失败；真实 UI 交付、两次取消确认、终态拒绝码和终态状态断言保留。
+
+返回入口修复已单独提交为 `aac0aa3243fef404f60842fc19ec7b36e9ca0236`，本机实际页面已见紧凑的标题前返回按钮且返回保留查询上下文。本修正仅四个测试／文档路径；本机只做精确格式与 lint，完整主 CI、九种原默认定时配置以及返回几何矩阵仍由最终提交的 hosted CI 验证。不修改 cron、并发、性能预算或业务围栏，不重跑旧失败冒充修复。

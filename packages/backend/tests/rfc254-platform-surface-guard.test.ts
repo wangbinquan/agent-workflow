@@ -245,7 +245,9 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-file-identity',
-    file: 'modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts',
+    // RFC-370 moved the same case-folding migration check into the local port
+    // adapter. Keep its two existing allowances; no new match is permitted.
+    file: 'modules/resource-catalog/infrastructure/local/fileSkillIdentityContentStore.ts',
     match: '.dev === ',
     count: 1,
     why: 'NOT a verified-store fence — same case-folding role as skill.ts; needs the same non-fail-closed identity notion before it can migrate',
@@ -253,7 +255,7 @@ const ALLOWANCES: readonly Allowance[] = [
   },
   {
     rule: 'posix-file-identity',
-    file: 'modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts',
+    file: 'modules/resource-catalog/infrastructure/local/fileSkillIdentityContentStore.ts',
     match: '.ino === ',
     count: 1,
     why: 'NOT a verified-store fence — same case-folding role as skill.ts; needs the same non-fail-closed identity notion before it can migrate',

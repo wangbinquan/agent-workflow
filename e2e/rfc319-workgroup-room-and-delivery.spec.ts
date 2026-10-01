@@ -365,6 +365,24 @@ async function dispatchHumanCard(taskId: string, title: string): Promise<string>
   return card.id
 }
 
+/** WG-32 setup hit the durable owner fence in full nightly run 36853166930.
+ * Only retry its transient refusal while preparing the delivered fixture;
+ * actual UI delivery and terminal-card rejection assertions remain unchanged.
+ */
+async function deliverFixtureCard(taskId: string, cardId: string): Promise<void> {
+  const path = `/api/workgroup-tasks/${taskId}/assignments/${cardId}/deliver`
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    const result = await rawPost(path, { body: 'Checklist signed off.' })
+    if (result.status === 201) return
+    if (result.status === 409 && result.code === 'task-execution-stale-owner') {
+      await new Promise((resolve) => setTimeout(resolve, 250))
+      continue
+    }
+    throw new Error(`deliver fixture card ⇒ ${result.status} ${result.text}`)
+  }
+  throw new Error('deliver fixture card ⇒ engine retained its owner after 40 retries')
+}
+
 async function authPage(page: Page): Promise<void> {
   await page.addInitScript(
     ([baseUrl, token]) => {
@@ -732,10 +750,7 @@ test('RFC-319 WG-32: 取消派单卡 —— dispatched 的卡两下确认才取�
   const taskId = await quietTask('RFC-319 cancel room')
   const cancelCardId = await dispatchHumanCard(taskId, 'draft the comms plan')
   const deliveredCardId = await dispatchHumanCard(taskId, 'sign off the checklist')
-  await api(`/api/workgroup-tasks/${taskId}/assignments/${deliveredCardId}/deliver`, {
-    method: 'POST',
-    body: JSON.stringify({ body: 'Checklist signed off.' }),
-  })
+  await deliverFixtureCard(taskId, deliveredCardId)
 
   await openRoom(page, taskId)
   const card = page.getByTestId(`wg-card-${cancelCardId}`)

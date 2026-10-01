@@ -585,6 +585,14 @@ test('overview omits attention, labels every token column and aligns collection 
             tokens: {
               ...row.metrics.tokens,
               hasKnown: i !== 2,
+              // The response can carry explicit unknown evidence for empty
+              // intervals. These display fixtures supply known native buckets.
+              hasKnownBuckets: {
+                input: i !== 2,
+                cacheRead: i !== 2,
+                cacheWrite: i !== 2,
+                output: i !== 2,
+              },
               known: {
                 input: ['800', '1600', '0'][i],
                 cacheRead: ['200', '400', '0'][i],
@@ -612,6 +620,15 @@ test('overview omits attention, labels every token column and aligns collection 
   await expect(chart.getByRole('button').first()).toHaveAccessibleName(
     /Uncached input 800.*Cache read 200.*Cache write 50.*Output 200/,
   )
+  await chart.getByRole('button').nth(1).focus()
+  await expect(selectedBuckets.locator('dd')).toHaveText(['≥ 1,600', '≥ 400', '≥ 100', '≥ 400'])
+  await chart.getByRole('button').nth(2).focus()
+  await expect(selectedBuckets.locator('dd')).toHaveText([
+    'Not observed',
+    'Not observed',
+    'Not observed',
+    'Not observed',
+  ])
   await expect(page.getByRole('region', { name: 'Tasks needing attention' })).toHaveCount(0)
   await page.getByRole('tab', { name: 'Task traces', exact: true }).click()
   const name = page.getByRole('button', { name: 'Observed parallel task', exact: true })
