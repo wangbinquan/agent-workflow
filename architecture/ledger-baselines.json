@@ -847,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5615,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-371 AW-R08: dimensionTasks uses the existing Actor type and sha256Hex utility for the owner-authorized dimension query and stable continuation identity; these are two explicit existing-boundary dependencies, with removal owned by W9-D/W9."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -871,10 +868,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4984,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-371 AW-R08: the same two dimensionTasks Actor/hash imports have canonical legacy-outbound exception entries; no new wildcard, depcheck waiver, ownership bypass, or wave completion is introduced, and W9-D/W9 retains their removal."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -909,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25648,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371 AW-R08: three new production files for strict dimension selection, paged Task contribution queries and the public dimension Dialog add their actual owned symbols; the inventory counts the full candidate corpus and changes no ownership criterion."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -929,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e3b656a10e2bae30c2c51994d565bbcc649efed6",
-    "contentDigest": "sha256:e5785b49c9e22c361e0af55899941ac2d9d33bdc0dc542b5b7c06b54f19d0590",
+    "currentSnapshotSha": "b8995791eb0eb177f944b04166c1e4922d7b3690",
+    "contentDigest": "sha256:9d240c217b7e5cf374affc7b3a98b56e4398e51c309533dae783284845217018",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
