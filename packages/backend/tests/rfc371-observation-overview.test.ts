@@ -379,7 +379,7 @@ test('an oversized first dimension task advances only with its unresolved facts 
   const first = await readDimensionTasks(input)
   expect(limits).toEqual([10_000, 10_000])
   expect(first.rows.map((row) => row.summary.task.id)).toEqual(['0'])
-  expect(first.rows[0]?.summary.dimensionMatch).toBe('unresolved')
+  expect(first.rows[0]?.summary).toMatchObject({ dimensionMatch: 'unresolved' })
   expect(first.rows[0]?.summary.metrics.tokens.hasKnown).toBe(false)
   expect(first.rows[0]?.summary.metrics.cost.knownAmount).toBeNull()
   expect(first.partial).toBe(true)
@@ -417,7 +417,7 @@ test('one remaining source record cannot create a half-read subtotal or prevent 
   const first = await readDimensionTasks(input)
   expect(limits).toEqual([19_999, 1])
   expect(first.rows.map((row) => row.summary.task.id)).toEqual(['0', '1'])
-  expect(first.rows[1]?.summary.dimensionMatch).toBe('unresolved')
+  expect(first.rows[1]?.summary).toMatchObject({ dimensionMatch: 'unresolved' })
   expect(first.rows[1]?.summary.metrics.tokens.hasKnown).toBe(false)
   const second = await readDimensionTasks({
     ...input,
@@ -512,6 +512,9 @@ test('actual dimension Task loader handles one capture plus 10000 local and 1000
         ({
           invocationId,
           taskId: invocationId.slice(-1),
+          sourceId: 'local',
+          sourceCursor: `capture-${invocationId}`,
+          resolutions: [],
           priorRevisionGap: false,
           capture: {
             contract: 'opencode-child-steps-v1',
@@ -526,7 +529,7 @@ test('actual dimension Task loader handles one capture plus 10000 local and 1000
             issues: [],
             priorRevisions: [],
           },
-        }) as Awaited<ReturnType<ObservationSnapshotSources['local']['captures']>>[number],
+        }) satisfies Awaited<ReturnType<ObservationSnapshotSources['local']['captures']>>[number],
     )
   f.sources.local.records = async (taskId, request) => {
     const record: UsageLedgerRecord = {
