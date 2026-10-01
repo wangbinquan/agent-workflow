@@ -1,3 +1,7 @@
+## 2026-10-01 RFC-371 当前主 CI 与九种定时配置全部成功
+
+修复提交 `a241fcf48420c363cf5c1255b4100a5dd113dd93` 的主 CI 与九种原默认定时配置全部终态 success，共 10 个运行、75 个作业成功；每个运行的 headSha 严格相同。主 CI 50 项，full E2E 四分片加真实覆盖对账 5 项，WebKit Ubuntu/macOS 八分片，weekly/all PostgreSQL 5 项，以及 Windows、维护、2 GiB evidence、Git 协议、OpenCode 集成和视觉矩阵均成功。九种定时配置通过 workflow_dispatch 验证原默认矩阵；不冒充本周实际 cron，未改 schedule、并发策略、重试或必需检查。本机无 AW 测试/类型检查/构建/服务；并行 resource-catalog 四路径保留。独立功能复核 PASS，卡片同一快照和完整迁移历史单用例的明确预算均已在该提交验证；原失败、取消和后继 48/2 失败记录保留。详见[精确终态回执](design/RFC-371-run-observability/ci-recovery.md#2026-10-01-最终修复的主-ci-与九种定时配置终态)。AW-R08 服务端筛选/模型用途下钻及 AW/CS 其他剩余项继续，两个 RFC 保持 In Progress。CS 准入回执设计四文档 `7370ea97` 已发布，限定实现继续，producer OFF。后继纯文档提交的精确主 CI 单独验证，不因文档变化重跑已成功源码矩阵。下方为历史记录。
+
 ## 2026-10-01 RFC-371 新功能 CI 回归与定时矩阵接续
 
 运行时贡献 `df870108` 的旧 full/WebKit/Windows 已终态失败，真实任务详情字段与新增类型问题已独立 PASS 并推送 `ed2cd483dc74c5f73bfba9e6530f7f64d1e09a98`；主 CI 36825750653 已终态 48 success/2 failure：类型与十个浏览器分片通过，唯一功能失败为 macOS 完整迁移历史用例超过默认5秒；仅给其三轮完整验证20秒上限，所有断言保留。macOS 卡片 helper 存在跨两次 boundingBox 的测量缺口，现限定为一次同步浏览器快照，保留16px/可见尺寸/横溢出及全部末行宽窄屏/焦点断言；具体53px移动来源未确证，不改生产布局。独立复核、最终修复 SHA 主 CI 与九种原定时配置待完成，原失败见 [CI 修复记录](design/RFC-371-run-observability/ci-recovery.md)。本机无 AW 测试/类型检查/构建/服务，四条并行 resource-catalog WIP 保留；两 RFC 剩余实施与 CS 准入原回执设计继续。

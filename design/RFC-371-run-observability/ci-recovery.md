@@ -27,7 +27,7 @@
 
 ## 当前状态与关闭边界
 
-修复提交 `edd56ebe33731cb05aa7491b292be294a3026521` 的主 CI 和九种原默认定时配置已全部终态 success，共75个作业成功；AW-R01 已关闭，精确矩阵见[最新终态回执](#修复候选精确终态2026-09-30)。下方失败与中间候选记录保留为历史。并行 resource-catalog 四文件原样保留；AW-R02～12、CS owner/清理/消费/两级明细及真实联合验收继续，两个 RFC 仍 In Progress。后继四份文档提交的精确 CI 另行验证。
+当前源码修复 `a241fcf48420c363cf5c1255b4100a5dd113dd93` 的主 CI 和九种原默认定时配置已全部终态 success，共 75 个作业成功；本次回归已恢复，AW-R01 保持关闭。精确矩阵见[最新终态回执](#2026-10-01-最终修复的主-ci-与九种定时配置终态)。下方原失败与中间候选记录完整保留。并行 resource-catalog 四路径保留；AW-R08 维度筛选/模型用途下钻及其余 AW/CS 工作继续，两个 RFC 仍 In Progress。后继五份纯文档提交的精确主 CI 另验。
 
 
 ## 第二轮 CI 候选：传递依赖与启动回读（2026-09-30）
@@ -131,3 +131,25 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 `ed2cd483` 的 macOS 后端 3/6 在 `rfc349-postgresql-migration-history.test.ts` 报 5772.89ms、`this test timed out after 5000ms`。源码正向用例先完整 load，再 verify 原 historical plan，再 verify 被清空 statement 的非法 plan；每次都扫描/重放完整历史并核对当前 projection，因此该用例包含三轮完整校验，而不是单条 SQL 或性能门禁。
 
 仅此一条功能完整性用例给出 20 秒上限，正向 contractDigest/planDigest/statementCount 与非法 plan 的漂移拒绝断言原样保留；同文件其他六个用例、真实 PG 性能门槛及全部 workflow 预算不变。不通过重跑旧 SHA、跳过或取暖缓存宣称修复。该测试修正与几何快照修正共同提交，最终精确 SHA 的主 CI 和九种定时配置另取终态回执。
+
+
+## 2026-10-01 最终修复的主 CI 与九种定时配置终态
+
+修复提交 `a241fcf48420c363cf5c1255b4100a5dd113dd93` 的主 CI 与九种原默认定时配置全部终态 success，共 10 个运行、75 个作业成功；每个运行的 headSha 严格相同。主 CI 50 项，full E2E 四分片加真实覆盖对账 5 项，WebKit Ubuntu/macOS 八分片，weekly/all PostgreSQL 5 项，以及 Windows、维护、2 GiB evidence、Git 协议、OpenCode 集成和视觉矩阵均成功。九种定时配置通过 workflow_dispatch 验证原默认矩阵；不冒充本周实际 cron，未改 schedule、并发策略、重试或必需检查。本机无 AW 测试/类型检查/构建/服务；并行 resource-catalog 四路径保留。完整终态收齐于 `2026-10-01T08:14:44.687116Z`。
+
+| 工作流 | 精确运行 | 成功作业 |
+|---|---|---|
+| CI | [36830019349](https://github.com/wangbinquan/agent-workflow/actions/runs/36830019349) | 50 / 50 |
+| maintenance-soak-nightly | [36830637589](https://github.com/wangbinquan/agent-workflow/actions/runs/36830637589) | 1 / 1 |
+| e2e-full-nightly | [36830649443](https://github.com/wangbinquan/agent-workflow/actions/runs/36830649443) | 5 / 5 |
+| windows-platform | [36830662133](https://github.com/wangbinquan/agent-workflow/actions/runs/36830662133) | 1 / 1 |
+| e2e-webkit-nightly | [36830675518](https://github.com/wangbinquan/agent-workflow/actions/runs/36830675518) | 8 / 8 |
+| git-protocols-e2e | [36830703968](https://github.com/wangbinquan/agent-workflow/actions/runs/36830703968) | 1 / 1 |
+| integration-opencode | [36830689834](https://github.com/wangbinquan/agent-workflow/actions/runs/36830689834) | 2 / 2 |
+| evidence-soak-nightly | [36830717909](https://github.com/wangbinquan/agent-workflow/actions/runs/36830717909) | 1 / 1 |
+| visual-regression-nightly | [36830731440](https://github.com/wangbinquan/agent-workflow/actions/runs/36830731440) | 1 / 1 |
+| postgresql-evidence | [36830745031](https://github.com/wangbinquan/agent-workflow/actions/runs/36830745031) | 5 / 5 |
+
+卡片 helper 的同步快照保留公共 16px 标准、全部相邻对/可见尺寸/溢出以及宽窄屏、长列表、公共 Dialog 和焦点断言；未确认的首轮 53px 位移来源仍未作产品根因结论。迁移历史完整性只有含三轮 load/verify 的单用例使用 20 秒预算，其他六条用例、真实 PG 性能门槛和所有 workflow 预算不变。修复经独立实现 v3 PASS，再精确提交七路径并推送，远端同步；原失败没有删除，也没有取消、重跑或绕过旧失败来收口。
+
+这一回执只完成本轮 CI 修复；AW-R08 服务端维度筛选、模型/用途下钻及两个 RFC 剩余实施继续。后继只提交本页、runtime-contributions、remaining-work、plan 与 STATE 五份文档，精确主 CI 单独验证；源码/工作流不变，不重复调度已成功的九种矩阵。
