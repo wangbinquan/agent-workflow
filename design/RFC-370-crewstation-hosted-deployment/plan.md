@@ -240,3 +240,11 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 新增三组双 provider 回归，验证异步效果未完成时版本／可用性不提前发布、删除和恢复锁保留、失败后沿原操作及持久引用重试、元数据矛盾先拒绝、既有 live 手工编辑不覆盖、真实 local 内容恢复。额外通过真正 boot identity barrier 检验已选删除恢复 adapter 的等待和真实残留清理；原创建／发布／迁移回归保留。
 - 仅运行精确文件格式／lint及官方源码 census；生成时在内存使用 HEAD 中的并行源码，未修改或纳入 RFC-371 在制文件。新增四个 file 工厂按既有 create 规则计入入口，两个 recovery 名称按既有规则计入后台分母，owner 净增20；实际增长按两笔发布协议声明并退役，不修改扫描判据。正式功能结果等待本批精确 SHA hosted CI，独立评审工具仍不可用，A-G 未通过。
 - H6 仍有旧目录身份迁移、完整资源 bundle 及其余内容消费者；H1～H8 全切面收口、阶段 B 的 RFC035 对象方案冻结／独立 CS adapter、M0 与后续能力的联合实机验收继续。未部署本批、不关闭 H6 或整个 RFC。
+
+
+### 生命周期 CI 配套修复（2026-10-01）
+
+- `00367b19eb3d091bca9e83eac1b0b35bf2ca2835`／CI `36846302858` 已检出本批三类问题：删除夹具 `plans[0]` 在严格 expect 重载中可能 undefined；原 RFC345 的四条源码接线锁仍引用 `input`；canonical 产物混入并行源码。原 run 已终态 45 success／5 failure（含汇总失败），不记为成功，后续适配暂停。
+- 删除回归先断言仅有一个已暂存计划，再核对同一个确定首项；boot 源码锁精确更新为 `selected` 并补四个默认 local adapter 的接线，保留唯一中立状态机／禁止 provider 孪生的原断言。没有改生产行为或减弱回归。
+- 查明先前 fs 对象替换未影响 Bun 加载的 named import。修复仅在临时内存加载器接入官方 census 的 source read/readdir，按 HEAD 字节读取所有并行在制源码；仓库生成器、规则与他人文件不修改。生成后 `sourceDigest=sha256:e8aec5cb562cbe85c8ff5856fbc0e83ac347fbacc743231637237597bee8b4c2`，与远端失败日志自行计算的确切已提交语料一致；误混入的 opencode 清单标记同步恢复为 HEAD 的真实投影。
+- 各 baseline 无增长，无新增 allowGrowth；只用原 provenance 生成协议更新摘要。两份回归的格式/lint通过，未运行本地 AW 测试/类型检查/构建。完整终态仍须修复提交 hosted CI；独立评审工具未恢复，不据此关闭 A-G 或 RFC。

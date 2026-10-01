@@ -105,7 +105,8 @@ describeEachProvider('RFC-370 skill deletion content', (harness) => {
         await stageReady.pending
       },
       async discard(plan) {
-        expect(plan).toBe(plans[0])
+        expect(plans).toHaveLength(1)
+        expect(plan).toBe(plans[0]!)
         clearing.release()
         await clearReady.pending
       },

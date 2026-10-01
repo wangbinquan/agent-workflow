@@ -76,10 +76,19 @@ describe('RFC-345 provider-owned Skill Catalog boot participant', () => {
     expect(composition).not.toMatch(
       /composeSqliteSkillCatalogBoot|composePostgresqlSkillCatalogBoot/,
     )
-    expect(adapter).toContain('runSkillIdentityMigrationBarrier(input.db, input)')
-    expect(adapter).toContain('reconcileSkillLiveFiles(input.db, input)')
-    expect(adapter).toContain('backfillLegacySkillVersions(input.db, input)')
-    expect(adapter).toContain('runBootSnapshotReverify(input.db, input)')
+    // RFC-370 selects storage effects once; both engines still use this machine.
+    expect(adapter).toContain('runSkillIdentityMigrationBarrier(input.db, selected)')
+    expect(adapter).toContain('reconcileSkillLiveFiles(input.db, selected)')
+    expect(adapter).toContain('backfillLegacySkillVersions(input.db, selected)')
+    expect(adapter).toContain('runBootSnapshotReverify(input.db, selected)')
+    for (const port of [
+      'lifecycleContent',
+      'snapshotInspector',
+      'deletionContent',
+      'versionRecovery',
+    ]) {
+      expect(adapter).toContain(`input.${port} ?? createFileSkill`)
+    }
     expect(adapter).toContain('ProviderNeutralDatabase')
     expect(adapter).not.toMatch(/\bDbClient\b|PostgresqlDatabaseClient|createSqlite|fallback/)
 
