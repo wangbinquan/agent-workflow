@@ -280,3 +280,20 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - RFC-345 原三参 reader 源码锁迁到四参接线，并固定同一输入的所选 reader／file 默认值；其余七臂、生命周期和服务依赖约束保持。W29 完整装配摘要只因已发布的两处 `NonNullable` 方法形参类型变化更新；保留 166 条语句、原顺序、全部相位与实例断言，未放宽摘要算法。独立 AST token 对拍确认完整 PG 装配的 runtime tokens 与 `eef12e256` 完全一致。
 - 并行文档提交 `993ab7ce694988536ecf600d9e4a874901e5ea41` 原样保留，来源和远端已核对。本批精确提交三个修复测试及所需文档／官方证据，scoped census 从 HEAD 读取未提交 Intent source；不把其在制效果或新增合同混入修复。正式结果交本批确切 SHA CI，本地不执行 AW 测试、类型检查、构建或服务。
 - 后续 Intent 中立工件合同、local 效果迁位、所选异步内容／恢复接线及真实双 provider 回归处于未发布候选；当前先修复资源包 CI。独立评审及 A-G 未通过，阶段 B／M0～M4 尚未交付，按用户要求持续推进完整 RFC。
+
+### H6 Intent 内容、旧日志恢复与 scratch 续批（2026-10-01）
+
+- 资源包 CI 修复已精确发布 `13f5b8e33350ba6159f85edd6eec1810750ef2e4`，对应 [CI 36874167121](https://github.com/wangbinquan/agent-workflow/actions/runs/36874167121) 等待终态；未以失败旧 run 或未终态 run 关闭 CI。修复未提交本节 source 候选。
+- RC 原有 Intent 工件／stage／publication／owner 合同下沉 `application/intent/artifactOwners.ts`，三个具有真实跨域消费者的中立类型由 exact `public/types` 提供。事务参数改用现有 `DatabaseTransaction`，文件工件效果迁到 `infrastructure/local/fileIntentApplyArtifactOwners.ts`，旧工厂／类型路径仅兼容出口；没有第二套资源事务或发布状态机。
+- Intent-owned `IntentArtifactContentPort` 承担插件内容存在／丢弃、技能内容发布／丢弃与旧格式补偿，local 实现独立落位。AW 保留 DB 元数据／快照检查、版本选择、journal 解码及收敛、错误隔离和已提交回执；由 AW 先判断 current／superseded，再把事实交存储，adapter 不复制版本业务判据。
+- apply composition 可独立选择 skill/plugin owner、内容生命周期及 legacy 兼容端口；boot/hourly recovery 复用同一选择入口，保留自定义 pluginsDir。旧格式继续按整批撤销 boot 标记、逐条等待发布、原事务收尾顺序恢复；默认 standalone 仍使用原 file 实现。
+- `IntentScratchStore` 只拥有 stale listing／remove，file adapter 机械迁位，旧名称保持兼容。维护 composition 允许选择异步 store，等待列举及删除后才推进原计数和 swept 标记；running 与失败删除仍排除。旧 application/maintenance 的直接测试兼容入口、turn 执行 scratch 物化及其他内容消费者尚待后续收口，本批不关闭 H6。
+- 新真实双 provider 回归覆盖创建／更新、persist-before-stage、owner／content／complete 等待、幂等重放、提交前双层补偿、提交后错误与重试、AW 元数据／superseded 判据、selected legacy 整批发布、boot 原生／旧格式与 active fence、scratch 异步等待／运行／失败／recent 保留。原真实文件及 RFC271／355／359 行为锁保持，源码路径锁随 local 迁位。
+- 机械对拍确认 RC file owner、Intent 原文件效果、legacy replay、journal convergence、apply engine 与资源事务主体的 runtime tokens 保持；scratch file 工厂效果主体逐字相同。仅精确格式/lint和官方源码 census，本机不执行 AW 测试、类型检查、构建或服务。实际 census：mutation 1781→1782、observed imports 5585→5590、exception 4962→4960、public 1030→1033、owner 25573→25587；真实增长按既有协议逐项解释并在发布后退役。
+- 正式行为等待本节发布后的确切 SHA CI。独立评审工具仍不可用，未记设计门／实现门或 A-G PASS；H1～H8 余项、CS 各 owner 独立 adapter、M0 首次部署及 M1～M4 验收持续推进，RFC 保持 In Progress。
+
+### 资源包 CI 第二轮夹具补正（2026-10-01）
+
+- `13f5b8e33350ba6159f85edd6eec1810750ef2e4` 的 [CI 36874167121](https://github.com/wangbinquan/agent-workflow/actions/runs/36874167121) 已有后端失败，整体终态尚待回执；原三类导入／类型／源码锁遗漏已通过。Ubuntu 2/16 的真实包解析指出新夹具 opId 使用 `op-storage`，与既有 `op-<n>` schema 不符；改为 `op-1`，包解析、预检、storage 效果及原状态／等待断言均不变。未发布 Intent 同类夹具同步纠正，但不混入本次修复提交。
+- macOS 1/6 的既有 RFC294 E9-C 崩溃重放用例第一次在固定 50ms 后未进入 launch，第二次随后看到了延迟的 `execution-2`。改为等待 core 明确到达 before-task／after-task 对应崩溃位置，再推进租约时钟与重放；after-task 必须先完成真实任务行写入。保留所有 execution-1、单行、admission 与内核零重复调用断言，不增加重试或修改生产派发。
+- 两份修复测试精确格式／lint通过。官方 scoped census 从 HEAD 读取 Intent 在制内容，baseline 无增长；仅发布测试、文档与 provenance。正式结果以本次修复 SHA 的完整 hosted CI 为准，不把当前失败或可能被后继自动取消的 run 记成功。RFC 全部实施与部署持续，A-G 未关闭。

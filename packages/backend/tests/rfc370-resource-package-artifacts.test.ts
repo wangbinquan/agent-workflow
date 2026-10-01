@@ -81,7 +81,7 @@ danglingCallRefs: []
           bundleVersion: 1,
           ops: [
             {
-              opId: 'op-storage',
+              opId: 'op-1',
               kind: `${kind}-create`,
               slug,
               payload:

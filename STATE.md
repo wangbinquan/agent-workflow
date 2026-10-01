@@ -1,3 +1,11 @@
+## 2026-10-01 RFC-370 资源包 CI 第二轮补正
+
+13f5b8e33 的 CI 36874167121 已有后端 failure，整体终态尚待回执；导入／类型／源码锁已通过。新包夹具 opId 与既有 op-<n> schema 不符，改 op-1；macOS 原 E9-C 固定50ms未等到 launch，并跨用例迟到，改等待明确 before-task／after-task 崩溃边界再推进租约，原单行／execution-1／零重复派发断言不变。仅两测试及证据，官方 scoped census 排除 Intent 在制源码，baseline 无增长；无本地 AW 测试／类型检查／构建，继续等修复确切 SHA CI。完整 RFC、切面余项与 CS 部署验收继续，下方 Intent 候选及全部并行输出保留。
+
+## 2026-10-01 RFC-370 Intent 内容与 scratch 候选
+
+资源包 CI 修复已精确推送 13f5b8e33350ba6159f85edd6eec1810750ef2e4，CI 36874167121 等待终态；旧 0fb 的 43/50 failure 保留。Intent 工件合同下沉 RC application／exact public，file owner 和内容效果独立 local；apply／恢复可选择异步 owner、content 与 legacy 能力，AW 原事务／journal／版本判据保持。scratch 列举与删除支持异步等待，running／失败／recent 行保护不变；补真实双 provider 回归并机械验证原效果／业务主体，正式行为交本批确切 SHA hosted CI。本机只做目标格式/lint和官方 census；仍有 H1～H8 余项，独立评审、A-G、CS adapter 与 M0～M4 持续推进，不关闭 RFC。下方历史及并行输出完整保留。
+
 ## 2026-10-01 RFC-370 资源包 CI 修复
 
 资源包源提交 e945204a8／账本 0fb4894be 的 CI 36868540371 已 completed/failure、43/50。失败归为新夹具导入不存在的预检函数、旧三参 reader 文本断言及两处纯类型 NonNullable 引起的完整装配文本摘要漂移。改用实际 reader 预检入口并补 importId／插件前置声明，保持 reader 选择与 166 条装配语句／顺序断言；AST 对拍确认 PG 组合根全部 runtime token 与原版本相同。仅精确格式/lint与 scoped 官方 census；本批不提交 Intent 存储续批在制代码，正式结果等待确切 SHA CI。RFC、A-G 和 CS 部署仍继续，未关闭。

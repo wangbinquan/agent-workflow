@@ -144,12 +144,22 @@ describe('RFC-294 E9-C —— 一次 Reaction 只起一个任务', () => {
       const db = harness.db
       const tasksPort = composeDatabaseDigitalEmployeeExecutionPorts(db).tasks
       const kernelLaunches: string[] = []
+      let reachedCrash!: () => void
+      const crashBoundary = new Promise<void>((resolve) => {
+        reachedCrash = resolve
+      })
       const core: DigitalEmployeeExecutionCore = {
         async launch(input) {
           kernelLaunches.push(input.taskId)
-          if (crash === 'before-task') await new Promise<never>(() => {})
+          if (crash === 'before-task') {
+            reachedCrash()
+            await new Promise<never>(() => {})
+          }
           await insertTask(db, input.taskId)
-          if (crash === 'after-task') await new Promise<never>(() => {})
+          if (crash === 'after-task') {
+            reachedCrash()
+            await new Promise<never>(() => {})
+          }
           return { executionRef: input.taskId }
         },
         executionExists: async (executionRef) => (await tasksPort.get(executionRef)) !== null,
@@ -168,7 +178,7 @@ describe('RFC-294 E9-C —— 一次 Reaction 只起一个任务', () => {
         },
         now,
       })
-      return { port, kernelLaunches }
+      return { port, kernelLaunches, crashBoundary }
     }
 
     async function taskRowsForRound(): Promise<string[]> {
@@ -186,13 +196,21 @@ describe('RFC-294 E9-C —— 一次 Reaction 只起一个任务', () => {
       minted = 0
       await seedReaction(harness.db)
       const crashed = tePort(crash)
-      void reactionService(harness.db, {
+      const dispatch = reactionService(harness.db, {
         port: crashed.port,
         now,
         mint,
         workerId: 'daemon-before-restart',
       }).dispatchOneReaction()
-      await Bun.sleep(50)
+      // CI 36874167121: 50ms did not reach launch on the first macOS case;
+      // its delayed launch then crossed the next case's reset. Advance the
+      // clock only after the exact requested crash boundary has been reached.
+      await Promise.race([
+        crashed.crashBoundary,
+        dispatch.then(() => {
+          throw new Error('reaction dispatch returned before reaching the crash boundary')
+        }),
+      ])
       expect(crashed.kernelLaunches).toEqual(['execution-1'])
 
       // 重启后：派发租约过期，同一个 round 被重新选中。

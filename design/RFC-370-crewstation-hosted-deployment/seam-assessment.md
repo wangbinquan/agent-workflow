@@ -1,6 +1,6 @@
 # RFC-370 阶段 A 切面核对
 
-2026-10-01。身份切面及 CI 修复已包含于 `eef12e256408a54d5e52c351c23e4ebea9fdeb32`；该提交的 Windows platform 已成功，主 CI `36862619605` 已 completed/success、50/50。H6 资源包字节读取及工件选择已发布到 `0fb4894be`；其 CI `36868540371` 已失败，三处测试／源码锁遗漏正在修复，正式结果等待修复确切 SHA CI。Intent 存储续批尚未发布。此表记录已沿源码确认的部分，不替代[全入口候选清单](./seam-inventory.md)，独立 A-G 尚未通过。
+2026-10-01。身份切面及 CI 修复已包含于 `eef12e256408a54d5e52c351c23e4ebea9fdeb32`；该提交的 Windows platform 已成功，主 CI `36862619605` 已 completed/success、50/50。H6 资源包字节读取及工件选择已发布到 `0fb4894be`；其 CI `36868540371` 已失败，修复 `13f5b8e33` 又检出包 opId 与既有崩溃测试固定等待的夹具问题，第二轮修复等待确切 SHA CI。Intent 内容／scratch 续批待发布与正式 CI。此表记录已沿源码确认的部分，不替代[全入口候选清单](./seam-inventory.md)，独立 A-G 尚未通过。
 
 | 切面            | 已有可复用合同／机制                                                                                                                                                  | 已确认的缺口与下一步                                                                                                                                                                         | 状态                                           |
 | --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
@@ -91,6 +91,12 @@ Intent 入站九处轮次入口改为等待注入配置查询，保持各入口�
 AW 继续拥有名称占用、不可见预留、初始版本归档、ready 提交和操作锁。所有异步效果完成前不推进对应阶段；计划失败发生于预留前。提交前清理支持 await，仍遵守旧 best-effort 语义：清理失败不能阻止删除预留行和释放锁；ready 提交后的错误保留内容及操作记录，供恢复推进。旧 bundle receipt 的 skillDir 字段暂时承载 adapter rootRef，使用选定 store 的补偿可处理不透明引用；旧 local 调用兼容。
 
 此批双 provider 测试使用真实数据库和可暂停的非文件 fixture 验证阶段／补偿，同时通过实际 catalog 对异步 local adapter 做普通新建、ZIP 及二进制文件往返验证。fixture 不代表 CS 持久化。启动 reserve recovery、旧 bundle 的全部调用者、删除／历史／backfill 仍需后续统一接线，不能凭 creation／version 注入单独开放 hosted 编辑。
+
+## H6 Intent 内容与 scratch 续批候选
+
+RC 现有 Intent 工件与 owner 合同已下沉 application 并提供 exact public 中立类型；file owner 独立落位，Intent composition 可选择 skill/plugin 工件与内容生命周期。Intent 内容端口只处理存储效果；DB 行／快照和版本判据、旧 journal 解码、事务、回执与恢复仍归 AW。当前版本和被后续版本取代的工件由 AW 明确 disposition 后交 adapter。
+
+apply、boot/hourly convergence 与旧格式恢复均可选择同一内容能力，旧整批 boot 标记撤销／逐条发布／原事务收尾顺序保持。scratch listing／remove 已抽为异步可替换的 owner port，维护在效果完成后才记计数和持久 swept；running／失败／recent 行的原保护保留。旧 application/maintenance 兼容入口、turn scratch 物化及其他 H6 消费者尚未全覆盖；此候选不替代 CS 对象持久性或完整 A-G 验收，正式结果待确切 SHA CI。
 
 ## H6 历史、生命周期与身份续批
 
