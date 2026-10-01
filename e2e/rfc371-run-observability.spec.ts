@@ -528,12 +528,17 @@ test('runtime last-row contributions preserve Dialog, URL, scroll and focus acro
           }),
         ).toBeVisible()
         await expect(page.locator('.observation-metrics').first()).toContainText('470,100')
-        await page
-          .getByRole('button', {
-            name: language === 'zh-CN' ? '返回统计分析' : 'Back to analysis',
-            exact: true,
-          })
-          .click()
+        const back = page.getByRole('button', {
+          name: language === 'zh-CN' ? '返回统计分析' : 'Back to analysis',
+          exact: true,
+        })
+        const backBox = await back.boundingBox()
+        const titleBox = await page.locator('.page__header .page__title').boundingBox()
+        expect(backBox!.width).toBeLessThanOrEqual(180)
+        expect(backBox!.height).toBeLessThanOrEqual(44)
+        expect(backBox!.x).toBeCloseTo(titleBox!.x, 0)
+        expect(backBox!.y + backBox!.height).toBeLessThanOrEqual(titleBox!.y + 1)
+        await back.click()
         await expect(dialog).toBeVisible()
         await expect(page).toHaveURL(saved.url)
         await expect(taskButton).toBeFocused()

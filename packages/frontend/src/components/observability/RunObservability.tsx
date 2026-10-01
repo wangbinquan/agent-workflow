@@ -356,9 +356,10 @@ export function RunObservability({
           search.task && (
             <button
               type="button"
-              className="btn btn--sm"
+              className="btn btn--sm btn--ghost page__heading-back"
               onClick={() => onChange({ ...search, task: undefined })}
             >
+              <span aria-hidden="true">←</span>{' '}
               {t(`runObservability.${tab === 'tasks' ? 'back' : 'backAnalysis'}`)}
             </button>
           )
