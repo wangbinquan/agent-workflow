@@ -135,7 +135,7 @@ describe('RFC359 W40 resource-package skill document', () => {
     // 判据因此从「两侧都消费同一份序列化器」收成「唯一那一侧消费它，且本文件没有私有副本」。
     const pgSource = readFileSync(
       new URL(
-        '../src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts',
+        '../src/modules/resource-catalog/infrastructure/local/fileResourcePackageArtifacts.ts',
         import.meta.url,
       ),
       'utf8',
@@ -157,7 +157,7 @@ describe('RFC359 W40 resource-package skill document', () => {
           .map((item) => ({ local: item.name.text, module: node.moduleSpecifier.getText(source) }))
       })
     expect(bindings(pg)).toEqual([
-      { local: 'skillMarkdown', module: "'./resourcePackageSkillDocument'" },
+      { local: 'skillMarkdown', module: "'../resourcePackageSkillDocument'" },
     ])
     // 「复辟一份私有实现」的反向锁：本文件里不得再出现同名的本地函数声明。
     expect(

@@ -1,3 +1,25 @@
+import type {
+  ResourcePackagePendingResourceId as PostgresqlResourcePackagePendingResourceId,
+  ResourcePackageRequestIds as PostgresqlResourcePackageRequestIds,
+  ResourcePackageArtifactContext as PostgresqlResourcePackageMutationRequestContext,
+  ResourcePackageMutationArtifact as PostgresqlResourcePackageMutationArtifact,
+  ResourcePackagePluginArtifactOwner as PostgresqlResourcePackagePluginArtifactOwner,
+  ResourcePackageSkillArtifactOwner as PostgresqlResourcePackageSkillArtifactOwner,
+  ResourcePackageArtifactReceipt as PostgresqlResourcePackageApplyReceipt,
+} from '../../application/package/artifactOwners'
+export type {
+  ResourcePackagePendingResourceId as PostgresqlResourcePackagePendingResourceId,
+  ResourcePackageRequestIds as PostgresqlResourcePackageRequestIds,
+  ResourcePackageArtifactContext as PostgresqlResourcePackageMutationRequestContext,
+  ResourcePackageMutationArtifact as PostgresqlResourcePackageMutationArtifact,
+  ResourcePackagePluginArtifact as PostgresqlResourcePackagePluginArtifact,
+  ResourcePackageSkillArtifact as PostgresqlResourcePackageSkillArtifact,
+  ResourcePackagePluginInstallPlan as PostgresqlResourcePackagePluginInstallPlan,
+  ResourcePackagePluginArtifactOwner as PostgresqlResourcePackagePluginArtifactOwner,
+  ResourcePackageSkillStagePlan as PostgresqlResourcePackageSkillStagePlan,
+  ResourcePackageSkillArtifactOwner as PostgresqlResourcePackageSkillArtifactOwner,
+  ResourcePackageArtifactReceipt as PostgresqlResourcePackageApplyReceipt,
+} from '../../application/package/artifactOwners'
 import { decodeBundleIdentityRef, type ResourceVisibility } from '@agent-workflow/shared'
 import { and, eq, inArray } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -496,30 +518,6 @@ export function bindPostgresqlResourcePackageTransactionReader(
   return Object.freeze(reader)
 }
 
-export interface PostgresqlResourcePackagePendingResourceId {
-  readonly type: PackageResourceKind
-  readonly localSlug: string
-  readonly resourceId: string
-}
-
-export interface PostgresqlResourcePackageRequestIds {
-  mintCreate(input: { readonly type: PackageResourceKind; readonly localSlug: string }): string
-  findCreate(input: {
-    readonly type: PackageResourceKind
-    readonly localSlug: string
-  }): string | null
-  listPending(): readonly PostgresqlResourcePackagePendingResourceId[]
-}
-
-export interface PostgresqlResourcePackageMutationRequestContext {
-  readonly actor: Actor
-  readonly authority: ResourceRequestContext
-  readonly humanMemberMappings: readonly ResourcePackageHumanMemberMapping[]
-  readonly secretInputs: readonly ResourcePackageSecretInput[]
-  readonly readSkillFile?: (ref: string) => Uint8Array
-  readonly ids: PostgresqlResourcePackageRequestIds
-}
-
 export interface PostgresqlResourcePackageMutationSessionCreateInput {
   readonly actor: Actor
   readonly authority: ResourceRequestContext
@@ -603,120 +601,6 @@ export interface PostgresqlResourcePackageTransactionSession {
   readonly participants: PostgresqlResourcePackageTransactionParticipants
 }
 
-/** Durable, JSON-safe record written before each plugin/skill side effect. */
-export type PostgresqlResourcePackageMutationArtifact =
-  | Readonly<{
-      kind: 'plugin-install'
-      operationId: string
-      pluginId: string
-      generationId: string
-      generationDirectory: string
-    }>
-  | Readonly<{
-      kind: 'skill-stage'
-      operationId: string
-      skillId: string
-      stagingDirectory: string
-      targetDirectory: string
-    }>
-  | Readonly<{
-      kind: 'skill-version-stage'
-      operationId: string
-      skillId: string
-      publishId: string
-      version: number
-      stagingDirectory: string
-      versionDirectory: string
-    }>
-
-export type PostgresqlResourcePackagePluginArtifact = Extract<
-  PostgresqlResourcePackageMutationArtifact,
-  { kind: 'plugin-install' }
->
-
-export type PostgresqlResourcePackageSkillArtifact = Extract<
-  PostgresqlResourcePackageMutationArtifact,
-  { kind: 'skill-stage' | 'skill-version-stage' }
->
-
-export interface PostgresqlResourcePackagePluginInstallPlan {
-  /** Planning is side-effect free; install may run only after artifact persistence. */
-  readonly artifact: PostgresqlResourcePackagePluginArtifact
-  install(): Promise<PostgresqlResourcePackagePluginPublication>
-}
-
-export interface PostgresqlResourcePackagePluginArtifactOwner {
-  planInstall(
-    context: PostgresqlResourcePackageMutationRequestContext,
-    input: Readonly<{
-      mutation: PluginPackageMutation
-      pluginId: string
-      generationId: string
-    }>,
-  ): PostgresqlResourcePackagePluginInstallPlan
-  compensate(
-    context: PostgresqlResourcePackageMutationRequestContext,
-    input: Readonly<{
-      artifact: PostgresqlResourcePackagePluginArtifact
-      databaseCommitted: boolean
-    }>,
-  ): Promise<void>
-  rollForward(
-    context: PostgresqlResourcePackageMutationRequestContext,
-    input: Readonly<{
-      artifact: PostgresqlResourcePackagePluginArtifact
-      receipt: PostgresqlResourcePackageApplyReceipt
-    }>,
-  ): Promise<void>
-  afterCommitted(
-    context: PostgresqlResourcePackageMutationRequestContext,
-    receipt: PostgresqlResourcePackageApplyReceipt,
-  ): Promise<void>
-}
-
-export interface PostgresqlResourcePackageSkillStagePlan {
-  /** Planning is side-effect free; stage may run only after artifact persistence. */
-  readonly artifact: PostgresqlResourcePackageSkillArtifact
-  stage(): Promise<PostgresqlResourcePackageSkillPublication>
-}
-
-export interface PostgresqlResourcePackageSkillArtifactOwner {
-  planCreate(
-    context: PostgresqlResourcePackageMutationRequestContext,
-    input: Readonly<{
-      mutation: Extract<SkillPackageMutation, { kind: 'skill-create' }>
-      skillId: string
-    }>,
-  ): PostgresqlResourcePackageSkillStagePlan
-  planUpdate(
-    context: PostgresqlResourcePackageMutationRequestContext,
-    input: Readonly<{
-      mutation: Extract<SkillPackageMutation, { kind: 'skill-update' }>
-      skillId: string
-      publishId: string
-      version: number
-    }>,
-  ): PostgresqlResourcePackageSkillStagePlan
-  compensate(
-    context: PostgresqlResourcePackageMutationRequestContext,
-    input: Readonly<{
-      artifact: PostgresqlResourcePackageSkillArtifact
-      databaseCommitted: boolean
-    }>,
-  ): Promise<void>
-  rollForward(
-    context: PostgresqlResourcePackageMutationRequestContext,
-    input: Readonly<{
-      artifact: PostgresqlResourcePackageSkillArtifact
-      receipt: PostgresqlResourcePackageApplyReceipt
-    }>,
-  ): Promise<void>
-  afterCommitted(
-    context: PostgresqlResourcePackageMutationRequestContext,
-    receipt: PostgresqlResourcePackageApplyReceipt,
-  ): Promise<void>
-}
-
 /** Capability-template persistence remains owned by its native aggregate. */
 export interface PostgresqlCapabilityTemplatePackageMutationOwner {
   prepareOwnerNative(
@@ -752,22 +636,6 @@ export interface PostgresqlResourcePackagePrestageInput {
 export interface PostgresqlResourcePackageCompensationInput {
   readonly artifacts: readonly PostgresqlResourcePackageMutationArtifact[]
   readonly databaseCommitted: boolean
-}
-
-export interface PostgresqlResourcePackageApplyReceipt {
-  readonly journalId: string
-  readonly applied: readonly ResourcePackageMutationReceipt[]
-  readonly root?: Readonly<{
-    resourceType: ResourcePackageMutationReceipt['resourceType']
-    resourceId: string
-    name: string
-    action: 'create' | 'update' | 'reuse'
-  }>
-  readonly skippedSecrets?: readonly Readonly<{
-    resourceType: PackageResourceKind
-    resourceName: string
-    field: string
-  }>[]
 }
 
 export interface PostgresqlResourcePackageRollForwardInput {

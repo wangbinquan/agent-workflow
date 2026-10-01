@@ -117,7 +117,10 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     )
     expect(sharedReads).toContain('createResourcePackageOwnedResourceLookup(input.db)')
     expect(sharedReads).toContain('createResourcePackageReadPort(input.db)')
-    expect(sharedReads).toContain('readPackageSkillTree(input.db, input.appHome, skillId)')
+    expect(sharedReads).toContain('readPackageSkillTree(input.db, input.appHome, skillId, content)')
+    expect(sharedReads).toContain(
+      'input.skillPackageContent ?? createFileSkillPackageContentReader(input.appHome)',
+    )
     expect(postgresqlComposition).toContain('composePostgresqlResourcePackageProvider')
     expect(postgresqlComposition).toContain('...composeResourcePackageProvider(input)')
     expect(postgresqlComposition).toContain('createPostgresqlResourcePackageMutationSessionFactory')
@@ -215,7 +218,9 @@ describe('RFC-349 resource-catalog PostgreSQL provider adapters', () => {
     expect(postgresqlMutationParticipants).toContain('transactionParticipants({')
     expect(postgresqlMutationParticipants).toContain('PostgresqlResourcePackageSelectedResource')
     expect(postgresqlMutationParticipants).toContain("action: 'reuse' | 'overwrite'")
-    expect(postgresqlMutationParticipants).toContain('resourceType: PackageResourceKind')
+    expect(source('src/modules/resource-catalog/application/package/artifactOwners.ts')).toContain(
+      'resourceType: PackageResourceKind',
+    )
     for (const reader of [
       'getById:',
       'findBuiltin:',

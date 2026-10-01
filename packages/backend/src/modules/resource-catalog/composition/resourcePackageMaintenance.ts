@@ -73,6 +73,7 @@ export function composeSqliteResourcePackageApplyMaintenance(input: {
   readonly appHome: string
   readonly pluginsDir: string
   readonly activitySource: ResourcePackageApplyActivitySource
+  readonly artifacts?: ResourcePackageApplyArtifactRecoveryPort
   readonly now?: () => number
   readonly log?: Logger
 }): ResourcePackageApplyMaintenance {
@@ -82,19 +83,21 @@ export function composeSqliteResourcePackageApplyMaintenance(input: {
       journal: createResourcePackageApplyJournalPort(input.db),
       // RFC-359 —— 写出侧已合一，读回侧跟着：先按统一格式读，读不认识才回落到 legacy 那一份
       // （只可能是合一之前留在盘上的半成品）。
-      artifacts: composeResourcePackageApplyArtifactRecoveryChain(
-        createPostgresqlResourcePackageApplyArtifactRecovery({
-          db: input.db,
-          appHome: input.appHome,
-          pluginsDir: input.pluginsDir,
-        }),
-        createSqliteResourcePackageApplyArtifactRecovery({
-          db: input.db,
-          appHome: input.appHome,
-          pluginsDir: input.pluginsDir,
-          log: maintenanceLog(log),
-        }),
-      ),
+      artifacts:
+        input.artifacts ??
+        composeResourcePackageApplyArtifactRecoveryChain(
+          createPostgresqlResourcePackageApplyArtifactRecovery({
+            db: input.db,
+            appHome: input.appHome,
+            pluginsDir: input.pluginsDir,
+          }),
+          createSqliteResourcePackageApplyArtifactRecovery({
+            db: input.db,
+            appHome: input.appHome,
+            pluginsDir: input.pluginsDir,
+            log: maintenanceLog(log),
+          }),
+        ),
       ...(input.now === undefined ? {} : { now: input.now }),
       log: maintenanceLog(log),
     }),
@@ -106,6 +109,7 @@ export function composePostgresqlResourcePackageApplyMaintenance(input: {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly pluginsDir: string
+  readonly artifacts?: ResourcePackageApplyArtifactRecoveryPort
   readonly now?: () => number
   readonly log?: Logger
 }): PostgresqlResourcePackageApplyMaintenance {
@@ -114,11 +118,13 @@ export function composePostgresqlResourcePackageApplyMaintenance(input: {
   return Object.freeze({
     command: createResourcePackageApplyMaintenanceCommand({
       journal: createResourcePackageApplyJournalPort(input.db),
-      artifacts: createPostgresqlResourcePackageApplyArtifactRecovery({
-        db: input.db,
-        appHome: input.appHome,
-        pluginsDir: input.pluginsDir,
-      }),
+      artifacts:
+        input.artifacts ??
+        createPostgresqlResourcePackageApplyArtifactRecovery({
+          db: input.db,
+          appHome: input.appHome,
+          pluginsDir: input.pluginsDir,
+        }),
       ...(input.now === undefined ? {} : { now: input.now }),
       log: maintenanceLog(log),
     }),

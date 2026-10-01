@@ -1,3 +1,11 @@
+import type {
+  ResourcePackageSkillPublication as PostgresqlResourcePackageSkillPublication,
+  ResourcePackagePluginPublication as PostgresqlResourcePackagePluginPublication,
+} from '../../application/package/artifactOwners'
+export type {
+  ResourcePackageSkillPublication as PostgresqlResourcePackageSkillPublication,
+  ResourcePackagePluginPublication as PostgresqlResourcePackagePluginPublication,
+} from '../../application/package/artifactOwners'
 import {
   workgroupMemberPersistenceValues,
   workgroupSnapshotValues,
@@ -29,7 +37,6 @@ import {
   type AclResourceType,
   type BundleResourceType,
   type CreateAgent,
-  type PluginSourceKind,
   type WorkgroupDraftMember,
   type WorkgroupDraftSnapshot,
 } from '@agent-workflow/shared'
@@ -95,18 +102,6 @@ export interface PostgresqlResourcePackagePendingName {
   readonly localSlug: string
   readonly resourceId: string
   readonly name: string
-}
-
-export interface PostgresqlResourcePackageSkillPublication {
-  readonly managedPath: string
-  readonly filesPath: string
-  readonly contentHash: string | null
-}
-
-export interface PostgresqlResourcePackagePluginPublication {
-  readonly sourceKind: PluginSourceKind
-  readonly cachedPath: string
-  readonly resolvedVersion: string | null
 }
 
 interface MutationArmInput<TMutation> {

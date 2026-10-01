@@ -109,8 +109,8 @@ describe('RFC-349 PostgreSQL ResourcePackage bootstrap', () => {
     for (const factory of [
       'createPostgresqlResourcePackageMutationSessionFactory',
       'composePostgresqlResourcePackageProvider',
-      'createPostgresqlResourcePackagePluginArtifactOwner',
-      'createPostgresqlResourcePackageSkillArtifactOwner',
+      'createFileResourcePackagePluginArtifactOwner',
+      'createFileResourcePackageSkillArtifactOwner',
     ]) {
       expect(source).toContain(`${factory}(`)
     }
@@ -124,7 +124,10 @@ describe('RFC-349 PostgreSQL ResourcePackage bootstrap', () => {
     )
     expect(source).toContain('...composeResourcePackageProvider(input)')
     expect(sharedReads).toContain('createResourcePackageReadPort(input.db)')
-    expect(sharedReads).toContain('readPackageSkillTree(input.db, input.appHome, skillId)')
+    expect(sharedReads).toContain('readPackageSkillTree(input.db, input.appHome, skillId, content)')
+    expect(sharedReads).toContain(
+      'input.skillPackageContent ?? createFileSkillPackageContentReader(input.appHome)',
+    )
     expect(source).not.toMatch(
       /@\/services\/(?:bundle\/legacyResourcePackageMutationDependencies|resourcePackage\/(?:commit|export|parse|preview))/,
     )

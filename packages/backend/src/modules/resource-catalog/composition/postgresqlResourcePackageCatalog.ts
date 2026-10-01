@@ -1,3 +1,8 @@
+import type { SkillPackageContentReader } from '../application/skills/packageContentReader'
+import type {
+  ResourcePackagePluginArtifactOwner,
+  ResourcePackageSkillArtifactOwner,
+} from '../application/package/artifactOwners'
 import { join } from 'node:path'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -9,10 +14,10 @@ import {
 } from '../infrastructure/aggregateAdapters/postgresqlResourcePackageMutationParticipants'
 import type { McpTransactionLifecycle } from '../infrastructure/mcpRepository'
 import {
-  createPostgresqlResourcePackagePluginArtifactOwner,
-  createPostgresqlResourcePackageSkillArtifactOwner,
-  type PostgresqlResourcePackagePluginInstaller,
-} from '../infrastructure/resourcePackageArtifacts'
+  createFileResourcePackagePluginArtifactOwner,
+  createFileResourcePackageSkillArtifactOwner,
+  type FileResourcePackagePluginInstaller,
+} from '../infrastructure/local/fileResourcePackageArtifacts'
 import { composeResourcePackageProvider } from './resourcePackageProvider'
 import {
   composeResourcePackageOperations,
@@ -25,17 +30,31 @@ export interface PostgresqlResourcePackageProviderComposition extends ResourcePa
   readonly mutationSessionFactory: PostgresqlResourcePackageMutationSessionFactory
 }
 
-export interface PostgresqlResourcePackageProviderDependencies {
+interface PostgresqlResourcePackageProviderBaseDependencies {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
+  readonly skillPackageContent?: SkillPackageContentReader
+  readonly skillArtifacts?: ResourcePackageSkillArtifactOwner
   readonly authorityResolver: ResourceCurrentAuthorityResolver
   readonly mcpLifecycle: McpTransactionLifecycle
   readonly capabilityTemplates: PostgresqlCapabilityTemplatePackageMutationOwner
-  readonly pluginInstaller: PostgresqlResourcePackagePluginInstaller
   readonly pluginsDir?: string
   readonly id?: () => string
   readonly now?: () => number
 }
+
+export type PostgresqlResourcePackageProviderDependencies =
+  PostgresqlResourcePackageProviderBaseDependencies &
+    (
+      | Readonly<{
+          pluginArtifacts: ResourcePackagePluginArtifactOwner
+          pluginInstaller?: FileResourcePackagePluginInstaller
+        }>
+      | Readonly<{
+          pluginArtifacts?: undefined
+          pluginInstaller: FileResourcePackagePluginInstaller
+        }>
+    )
 
 export interface PostgresqlResourcePackageCatalogDependencies {
   readonly provider: PostgresqlResourcePackageProviderComposition
@@ -48,16 +67,22 @@ export function composePostgresqlResourcePackageProvider(
   input: PostgresqlResourcePackageProviderDependencies,
 ): PostgresqlResourcePackageProviderComposition {
   const pluginsDir = input.pluginsDir ?? join(input.appHome, 'plugins')
+  const pluginArtifacts =
+    input.pluginArtifacts !== undefined
+      ? input.pluginArtifacts
+      : createFileResourcePackagePluginArtifactOwner({
+          pluginsDir,
+          installer: input.pluginInstaller,
+        })
   const mutationSessionFactory = createPostgresqlResourcePackageMutationSessionFactory({
     authorityResolver: input.authorityResolver,
     mcpLifecycle: input.mcpLifecycle,
-    pluginArtifacts: createPostgresqlResourcePackagePluginArtifactOwner({
-      pluginsDir,
-      installer: input.pluginInstaller,
-    }),
-    skillArtifacts: createPostgresqlResourcePackageSkillArtifactOwner({
-      appHome: input.appHome,
-    }),
+    pluginArtifacts,
+    skillArtifacts:
+      input.skillArtifacts ??
+      createFileResourcePackageSkillArtifactOwner({
+        appHome: input.appHome,
+      }),
     capabilityTemplates: input.capabilityTemplates,
     ...(input.id === undefined ? {} : { id: input.id }),
     ...(input.now === undefined ? {} : { now: input.now }),

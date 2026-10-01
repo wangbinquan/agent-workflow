@@ -826,7 +826,9 @@ export async function composePostgresqlApplication(
     pluginInstaller: Object.freeze({
       plannedGenerationDirectory(
         request: Parameters<
-          PostgresqlResourcePackageProviderInput['pluginInstaller']['plannedGenerationDirectory']
+          NonNullable<
+            PostgresqlResourcePackageProviderInput['pluginInstaller']
+          >['plannedGenerationDirectory']
         >[0],
       ) {
         return plannedGenerationDir(
@@ -838,7 +840,7 @@ export async function composePostgresqlApplication(
       },
       async install(
         request: Parameters<
-          PostgresqlResourcePackageProviderInput['pluginInstaller']['install']
+          NonNullable<PostgresqlResourcePackageProviderInput['pluginInstaller']>['install']
         >[0],
       ) {
         const installed = await installPlugin(request.pluginId, request.spec, {

@@ -14723,6 +14723,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/package/artifactOwners.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/application/package/artifactOwners.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2b22a3b3075971e28552",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor",
+      "toPath": "packages/backend/src/auth/actor.ts",
+      "toSymbol": "Actor",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginPersistence.ts#$file",
@@ -46294,23 +46311,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:8d22f8e47ca4c975f120",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin",
-      "toPath": "packages/backend/src/util/safePath.ts",
-      "toSymbol": "safeJoin",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
       "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
@@ -56254,23 +56254,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:ad740fb61cc7a18c6551",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError",
-      "toPath": "packages/backend/src/util/errors.ts",
-      "toSymbol": "ValidationError",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts#$file",
@@ -57323,6 +57306,23 @@
       "toPath": "packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts",
       "toSymbol": "filterVisibleRows",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillPackageContentReader.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillPackageContentReader.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b1222a93d53a66be4c3a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ValidationError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "type",
@@ -70383,6 +70383,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageArtifacts.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageArtifacts.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d70edf7312f990085ed3",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin",
+      "toPath": "packages/backend/src/util/safePath.ts",
+      "toSymbol": "safeJoin",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
       "fromSymbol": "$file",
@@ -76992,6 +77009,23 @@
       "toPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toSymbol": "taskExecutionMaintenanceMembers",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageArtifacts.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageArtifacts.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ea08aba94c9b2ca50cce",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError",
+      "toPath": "packages/backend/src/util/errors.ts",
+      "toSymbol": "ValidationError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -84322,9 +84356,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4960,
+    "architectureExceptions": 4962,
     "implementationSccs": 0,
-    "observedEdges": 5583,
+    "observedEdges": 5585,
     "requiredPorts": 36,
     "targetEdges": 69
   },
@@ -99771,6 +99805,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/application/package/artifactOwners.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/package/artifactOwners.ts#$file",
+      "id": "import:2b22a3b3075971e28552",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/actor",
+      "syntax": "static-import",
+      "targetSymbol": "Actor",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/actor.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
     },
     {
       "edgeKind": "value",
@@ -133390,22 +133440,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts#$file",
-      "id": "import:8d22f8e47ca4c975f120",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/safePath",
-      "syntax": "static-import",
-      "targetSymbol": "safeJoin",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/safePath.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -144269,22 +144303,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#filterVisibleRows"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts#$file",
-      "id": "import:ad740fb61cc7a18c6551",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/errors",
-      "syntax": "static-import",
-      "targetSymbol": "ValidationError",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/errors.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "source-control",
       "fromFile": "packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceStore.ts",
@@ -145451,6 +145469,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillPackageContentReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillPackageContentReader.ts#$file",
+      "id": "import:b1222a93d53a66be4c3a",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ValidationError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
     },
     {
       "edgeKind": "type",
@@ -158990,6 +159024,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageArtifacts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageArtifacts.ts#$file",
+      "id": "import:d70edf7312f990085ed3",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/safePath",
+      "syntax": "static-import",
+      "targetSymbol": "safeJoin",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/safePath.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#$file",
@@ -166027,6 +166077,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageArtifacts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageArtifacts.ts#$file",
+      "id": "import:ea08aba94c9b2ca50cce",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/errors",
+      "syntax": "static-import",
+      "targetSymbol": "ValidationError",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/errors.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ValidationError"
     },
     {
       "edgeKind": "value",
@@ -174457,7 +174523,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a1de0d78f6ee7c57206ebd9ad8bd0d09846acccb631bc5b3ff68dfb191358789",
+  "sourceDigest": "sha256:42ddcaf19bd3f7f08469ab0949903f73f743c6e46a6e05555e4e27b3f9a63676",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

@@ -33,92 +33,49 @@
 // （`legacy/skillBootVerify.ts:89-96`），PostgreSQL 那份此前没有。启动复核激活后，未通过复核的
 // 技能在两个引擎上都以 `package-invalid` 收场，与平台的快照权威模型一致。
 
-import { readFileSync, lstatSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
-
 import { parseSkillMarkdown } from '@agent-workflow/shared'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { ValidationError } from '@/util/errors'
 
 import type { ResourcePackageSkillTree } from '../application/package/ports'
-import { getSkillById, skillReadRoot } from './legacy/skill'
+import { getSkillById } from './legacy/skill'
+import type { SkillPackageContentReader } from '../application/skills/packageContentReader'
+import { createFileSkillPackageContentReader } from './local/fileSkillPackageContentReader'
 
 /** 技能主文档：不进 `files`，其 frontmatter / 正文单独投影。 */
 export const SKILL_MAIN = 'SKILL.md'
 
-/** 目标必须是一个**真目录**（不是符号链接、不是缺失、不是常规文件）。 */
-export function assertRegularDirectory(path: string, code: string): void {
-  let stat: ReturnType<typeof lstatSync>
-  try {
-    stat = lstatSync(path)
-  } catch {
-    throw new ValidationError(code, `resource package filesystem path is missing: ${path}`)
-  }
-  if (stat.isDirectory() && !stat.isSymbolicLink()) return
-  throw new ValidationError(
-    code,
-    `resource package filesystem path is not a real directory: ${path}`,
-  )
-}
-
-/**
- * 递归收集 `root` 下的全部常规文件（相对路径，`/` 分隔）。符号链接与非常规条目直接抛
- * `resource-package-skill-tree-invalid`——包要么忠实反映这棵树，要么导出失败。
- */
-export function collectSkillFiles(root: string, relativeRoot: string, output: string[]): void {
-  const absolute = relativeRoot === '' ? root : join(root, relativeRoot)
-  for (const entry of readdirSync(absolute, { withFileTypes: true })) {
-    const childRelative = relativeRoot === '' ? entry.name : `${relativeRoot}/${entry.name}`
-    const childAbsolute = join(root, childRelative)
-    const stat = lstatSync(childAbsolute)
-    if (stat.isSymbolicLink()) {
-      throw new ValidationError(
-        'resource-package-skill-tree-invalid',
-        `skill tree contains a symbolic link: ${childAbsolute}`,
-      )
-    }
-    if (stat.isDirectory()) {
-      collectSkillFiles(root, childRelative, output)
-      continue
-    }
-    if (!stat.isFile()) {
-      throw new ValidationError(
-        'resource-package-skill-tree-invalid',
-        `skill tree contains a non-regular entry: ${childAbsolute}`,
-      )
-    }
-    output.push(childRelative)
-  }
-}
+export { assertRegularDirectory, collectSkillFiles } from './local/fileSkillPackageContentReader'
 
 /** 读一个托管技能的可打包文件树。两个 provider 共用；差异与取舍见文件头。 */
 export async function readPackageSkillTree(
   db: ProviderNeutralDatabase,
   appHome: string,
   skillId: string,
+  content: SkillPackageContentReader = createFileSkillPackageContentReader(appHome),
 ): Promise<ResourcePackageSkillTree> {
   const skill = await getSkillById(db, skillId)
   if (skill === null) {
     throw new ValidationError('package-invalid', `skill '${skillId}' vanished mid-export`)
   }
-  const root = skillReadRoot(skill, { appHome })
-  assertRegularDirectory(root, 'resource-package-skill-tree-invalid')
-
-  const relativeFiles: string[] = []
-  collectSkillFiles(root, '', relativeFiles)
-  // 全路径一次排序：与目录递归次序、与 readdir 的返回次序都无关，两个引擎上逐字相同。
-  relativeFiles.sort((left, right) => left.localeCompare(right))
-
+  const entries = [
+    ...(await content.readTree({
+      id: skill.id,
+      name: skill.name,
+      contentVersion: skill.contentVersion,
+    })),
+  ].sort((left, right) => left.path.localeCompare(right.path))
   let frontmatterExtra: Record<string, unknown> = {}
   let bodyMd = ''
-  if (relativeFiles.includes(SKILL_MAIN)) {
-    const parsed = parseSkillMarkdown(readFileSync(join(root, SKILL_MAIN), 'utf8'))
+  const main = entries.find((entry) => entry.path === SKILL_MAIN)
+  if (main !== undefined) {
+    const parsed = parseSkillMarkdown(Buffer.from(main.bytes).toString('utf8'))
     frontmatterExtra = parsed.frontmatterExtra
     bodyMd = parsed.bodyMd
   }
-  const files = relativeFiles
-    .filter((path) => path !== SKILL_MAIN)
-    .map((path) => Object.freeze({ path, bytes: new Uint8Array(readFileSync(join(root, path))) }))
+  const files = entries
+    .filter((entry) => entry.path !== SKILL_MAIN)
+    .map((entry) => Object.freeze({ path: entry.path, bytes: new Uint8Array(entry.bytes) }))
   return Object.freeze({ frontmatterExtra, bodyMd, files })
 }

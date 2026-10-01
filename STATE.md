@@ -1,3 +1,7 @@
+## 2026-10-01 RFC-370 资源包存储切面候选
+
+身份清单配套修复已由并行提交 eef12e256 保留并上库，其 Windows platform 36862619599 成功、主 CI 36862619605 已 50/50 success；7e33 的取消／失败仍保留。资源包新增完整字节 reader，已有工件合同下沉 application、文件效果独立 local，composition 可选择工件及恢复 adapter；原 AW journal／事务／补偿状态机不变。新增真实双 provider apply／恢复回归，仅精确格式/lint与源码生成，正式类型与行为交本批确切 SHA CI。完整 RFC／A-G／CS adapter／部署继续，下方并行和历史记录保留。
+
 ## 2026-10-01 RFC-370 身份切面 CI 修复
 
 本批两处类型遗漏已修正：同步 graph helper 返回 void，reserve 夹具先证明非空摘要。CI `36854974478` 同时发现并行观测夹具问题；前端修正在 `f512dc321`，本批为原已知 output=10 的 runner 夹具显式报告 reasoning=0，原持久投影及数值断言保持。scoped census 排除下一批资源包 reader 在制源码，基线无增长；仅目标格式/lint，正式行为等待包含提交 hosted CI。暂停后续发布、保留资源包 WIP，RFC-370／A-G／部署仍继续，未宣称完成。

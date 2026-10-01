@@ -9,6 +9,8 @@ import {
   createResourcePackageReadPort,
 } from '../infrastructure/packageResourceRows'
 import { readPackageSkillTree } from '../infrastructure/packageSkillTree'
+import type { SkillPackageContentReader } from '../application/skills/packageContentReader'
+import { createFileSkillPackageContentReader } from '../infrastructure/local/fileSkillPackageContentReader'
 
 /** Read capabilities consumed by the external package execution owner. */
 export interface ResourcePackageProviderComposition {
@@ -22,10 +24,13 @@ export interface ResourcePackageProviderComposition {
 export function composeResourcePackageProvider(input: {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
+  readonly skillPackageContent?: SkillPackageContentReader
 }): ResourcePackageProviderComposition {
+  const content = input.skillPackageContent ?? createFileSkillPackageContentReader(input.appHome)
   return Object.freeze({
     resources: createResourcePackageOwnedResourceLookup(input.db),
     reads: createResourcePackageReadPort(input.db),
-    readSkillTree: (skillId: string) => readPackageSkillTree(input.db, input.appHome, skillId),
+    readSkillTree: (skillId: string) =>
+      readPackageSkillTree(input.db, input.appHome, skillId, content),
   })
 }

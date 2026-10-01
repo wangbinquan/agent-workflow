@@ -39,7 +39,7 @@ H1～H8 是职责清单，不是现有八个插件接口。先按下表普查每
 | H3 工作区       | 已有 Task／SC 读取与准备合同；物理 Git／FS 效果需继续收口         | SC-owned workspace／Git 效果端口与 local adapter；Task 继续依赖 SC public 合同                                         | SC 远程工作卷、命令、文件读写 adapter                           |
 | H4 执行         | 现 AgentProcessRequest 仍暴露 cmd／cwd／env／PID                  | task-execution 拥有中立执行效果合同；本地 spawn、PID、管道和终止树封装入 local adapter，业务／系统执行入口全部接线     | CS 原生 agent／command、收据、流、取消与恢复 adapter            |
 | H5 Runtime 材料 | 已有两种 RuntimeDriver，但 buildSpawn／文件物化与协议职责交织     | runtime-management 拥有冻结配置／能力需求；两种协议职责保留，分离本地启动物化与执行目标材料转换                        | profile／image 绑定、CS 材料编译与能力翻译                      |
-| H6 内容         | Paths 下技能／插件／快照等本地事实尚未统一经内容合同访问          | 各域拥有内容引用与保留规则；platform 提供中立存储机制，原文件目录由 filesystem adapter 实现                            | 各 owner 的 CS 对象 adapter；AW PG 只存元数据、引用与效果日志    |
+| H6 内容         | Paths 下技能／插件／快照等本地事实尚未统一经内容合同访问          | 各域拥有内容引用与保留规则；platform 提供中立存储机制，原文件目录由 filesystem adapter 实现                            | 各 owner 的 CS 对象 adapter；AW PG 只存元数据、引用与效果日志   |
 | H7 执行权／恢复 | 现单实例与 owner 规则存在，后台效果和启动恢复尚需统一接线         | system-operations 拥有执行权生命周期合同；local 实现保留现单实例／重启语义，各域消费必要 authority／恢复合同           | CS lease／handoff／recovery adapter；业务恢复仍归原域           |
 | H8 事件入站     | 已有 verified webhook 受理、持久化与归一化；需分离 transport 信封 | integration 收口 transport-neutral 受理输入／事务参与者；GitLab／GitHub 直连入站 adapter 保持验签、去重、MR 与事件语义 | CS EventDelivery 入站 adapter、来源绑定及独立 transport receipt |
 
@@ -137,6 +137,8 @@ Manifest 使用 `crewstation/v3` DigitalWorker、服务 replicas=1、startup/rea
 aw 还有 skills、plugins、snapshots、runs、attachments、archives 等本地事实。CS serviceSpec 没有持久服务卷字段，不能通过未声明 hostPath/PVC 偷补。
 
 CS RFC-035 已提供服务域对象合同。本稿选定 CS 对象空间保存不可变 skills／plugins 版本、附件和归档内容，AW PG 保存配置、域版本、objectId／摘要、引用及持久效果日志，standalone 文件实现不变。原 PG 内容字节／chunk 方案不再作为实施目标。各 owner 的读／写／生命周期／恢复端口保持独立，在本模块 `infrastructure/crewstation/` 翻译对象协议；共同客户端只提供传输机制，不拥有 AW 的版本发布、保留或恢复决定。详细合同与阶段边界见 [RFC-035 存储接入](./rfc035-storage.md)。
+
+资源包复用现有 record-before-act 工件与恢复合同，计划／暂存／安装／补偿／完成都在同一 AW apply 编排中等待；合同归 resource-catalog application，local 文件实现与后续 CS 实现分别装配。旧 journal 字段及兼容出口不变，物理引用只由所选存储解释；包读取的元数据、正文解析与稳定排序仍由 AW 投影，不建立 provider 或 CS 专属业务状态机。
 
 对象 ready 并完成域引用／pin 后才发布可消费版本。AW 原 canonical tree `contentHash` 与归档字节 `sha256` 分别保存，目录、二进制文件、mode 位保持原语义。对象操作和 AW PG 提交不是单一事务；稳定 requestKey、operationId、uploadId 与阶段记录支持丢回执后沿原操作恢复，不因未知写结果换键重复上传。缓存可重建；Secret／主密钥仍由 H1 稳定提供。M0 验证已开放编辑路径跨服务副本及 Pod 重建的耐久性；大历史容量、对象备份和活跃任务卷恢复在对应里程碑验收，平台单独 acceptance 不替代 AW 联合证明。
 
@@ -248,7 +250,7 @@ CS dead replay 是同一 transport delivery 的重试，不自动创造 aw 新�
 | task-execution                  | hosted effect intent／execution binding／运行 cursor | 原 execution identity + logical attempt + operation；CS ID 不覆盖 aw ULID |
 | source-control                  | remote workspace binding／准备及 chunk receipt       | workspaceRef + generation + operationId；继承现来源封存                   |
 | runtime-management              | runtime/profile/image binding                        | aw runtime snapshot + platform revision；变更影响新 run                   |
-| 各资源 owner + platform storage | object binding／域引用／持久效果日志；字节在 CS       | 稳定操作键；ready／pin 后发布；跨 CS／AW 提交沿原日志恢复                 |
+| 各资源 owner + platform storage | object binding／域引用／持久效果日志；字节在 CS      | 稳定操作键；ready／pin 后发布；跨 CS／AW 提交沿原日志恢复                 |
 | integration                     | cs_event_inbox／producer source binding              | delivery 唯一、event事实唯一、stage 可重放                                |
 
 这些是逻辑表合同，阶段 B 各增量任务冻结所需schema与迁移编号后再编码；不能把多域 writer 合并进一个“CrewStationService”万能模块。新增 schema 必须遵循双 provider 迁移／测试基线；standalone 不启用托管 workers，但迁移不能破坏旧库。ULID、CS UUIDv7、上游仓库/评论ID及 native sessionId 保持各自命名空间。
@@ -271,11 +273,11 @@ CS dead replay 是同一 transport delivery 的重试，不自动创造 aw 新�
 
 ## 11. 未闭合项及禁止偷换
 
-| 阻塞项                                         | 谁负责闭合                   | 阶段 B 对应任务实施前需要的结论                                     |
-| ---------------------------------------------- | ---------------------------- | ------------------------------------------------------------------- |
-| B1 完整材料／插件／inventory／session取证等价  | aw runtime + CS Agent合同    | 实际可映射矩阵与失败用例；若不能等价，先给CS配套设计并补齐后再验收  |
-| B2 MCP自定义入口及task-scoped回连／Git认证网络 | aw integration + CS授权/网络 | 授权、撤权、Secret、回连和私有仓访问证据；不借用管理员会话          |
+| 阻塞项                                         | 谁负责闭合                   | 阶段 B 对应任务实施前需要的结论                                                                     |
+| ---------------------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------- |
+| B1 完整材料／插件／inventory／session取证等价  | aw runtime + CS Agent合同    | 实际可映射矩阵与失败用例；若不能等价，先给CS配套设计并补齐后再验收                                  |
+| B2 MCP自定义入口及task-scoped回连／Git认证网络 | aw integration + CS授权/网络 | 授权、撤权、Secret、回连和私有仓访问证据；不借用管理员会话                                          |
 | B3 对象消费／域引用恢复与H3输入／动态写入      | aw storage／SC + CS 对象合同 | 冻结 binding／pin／效果日志；实测当期容量、丢回执恢复与任务输入／动态写入，不以平台通过替代 AW 验收 |
-| B4 托管身份迁移与PAT调用者                     | 用户／aw identity            | 批准业务管理员名单和旧自动化客户端替代方案                          |
+| B4 托管身份迁移与PAT调用者                     | 用户／aw identity            | 批准业务管理员名单和旧自动化客户端替代方案                                                          |
 
 架构目标无新增豁免；存量PID/FS/driver耦合在本次触及范围必须收敛到端口，未触及的RFC-294债务不顺带宣称清零。CS合同已具备的部分与以上待验证差异分开记账。

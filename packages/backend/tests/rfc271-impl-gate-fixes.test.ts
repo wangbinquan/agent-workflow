@@ -155,7 +155,9 @@ describe('P1-6 · 补偿没做干净就不许终态化 failed', () => {
     // RFC-359（plan §5dy）：统一引擎的技能版本工件把 publish 重放需要的每一项都记全——
     // 代际（`publishId` / `version`）与两个目录（暂存 / 版本）。少任何一项，崩溃后的前滚
     // 就只够 abort、不够 publish，而那正是这条判据当初抓到的形态。
-    const src = read('src/modules/resource-catalog/infrastructure/resourcePackageArtifacts.ts')
+    const src = read(
+      'src/modules/resource-catalog/infrastructure/local/fileResourcePackageArtifacts.ts',
+    )
     const artifact = src.slice(src.indexOf("kind: 'skill-version-stage'"))
     for (const field of [
       'operationId',

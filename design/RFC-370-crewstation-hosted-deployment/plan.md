@@ -241,14 +241,12 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 仅运行精确文件格式／lint及官方源码 census；生成时在内存使用 HEAD 中的并行源码，未修改或纳入 RFC-371 在制文件。新增四个 file 工厂按既有 create 规则计入入口，两个 recovery 名称按既有规则计入后台分母，owner 净增20；实际增长按两笔发布协议声明并退役，不修改扫描判据。正式功能结果等待本批精确 SHA hosted CI，独立评审工具仍不可用，A-G 未通过。
 - H6 仍有旧目录身份迁移、完整资源 bundle 及其余内容消费者；H1～H8 全切面收口、阶段 B 的 RFC035 对象方案冻结／独立 CS adapter、M0 与后续能力的联合实机验收继续。未部署本批、不关闭 H6 或整个 RFC。
 
-
 ### 生命周期 CI 配套修复（2026-10-01）
 
 - `00367b19eb3d091bca9e83eac1b0b35bf2ca2835`／CI `36846302858` 已检出本批三类问题：删除夹具 `plans[0]` 在严格 expect 重载中可能 undefined；原 RFC345 的四条源码接线锁仍引用 `input`；canonical 产物混入并行源码。原 run 已终态 45 success／5 failure（含汇总失败），不记为成功，后续适配暂停。
 - 删除回归先断言仅有一个已暂存计划，再核对同一个确定首项；boot 源码锁精确更新为 `selected` 并补四个默认 local adapter 的接线，保留唯一中立状态机／禁止 provider 孪生的原断言。没有改生产行为或减弱回归。
 - 查明先前 fs 对象替换未影响 Bun 加载的 named import。修复仅在临时内存加载器接入官方 census 的 source read/readdir，按 HEAD 字节读取所有并行在制源码；仓库生成器、规则与他人文件不修改。生成后 `sourceDigest=sha256:e8aec5cb562cbe85c8ff5856fbc0e83ac347fbacc743231637237597bee8b4c2`，与远端失败日志自行计算的确切已提交语料一致；误混入的 opencode 清单标记同步恢复为 HEAD 的真实投影。
 - 各 baseline 无增长，无新增 allowGrowth；只用原 provenance 生成协议更新摘要。两份回归的格式/lint通过，未运行本地 AW 测试/类型检查/构建。完整终态仍须修复提交 hosted CI；独立评审工具未恢复，不据此关闭 A-G 或 RFC。
-
 
 ### H6 身份迁移存储切面与 RFC-035 对齐（2026-10-01）
 
@@ -260,9 +258,17 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 完整 bundle／插件／其余内容消费者及 H1～H8 收口继续；本批不宣称 H6、A-G、CS adapter 或部署完成。
 - 官方 census 记录本批真实分母：两个 create 工厂使 mutation +2；既有 sweep 名称规则使 background +1，没有新增定时器；两个原 ValidationError 引用使 observed import／exception 各 +2；owner 净 +18。逐项声明一次性增长，并在随后 ledger-only 提交退役；扫描范围和判据保持。
 
-
 ### 身份切面 CI 配套修复（2026-10-01）
 
 - `d97f55dde9393464f4ca8f5cd5afdf1b7ffdee86`／CI `36854974478` 检出两处本批类型遗漏：机械移出的同步 graph helper 残留 `Promise<void>` 声明，reserve 夹具的已发布摘要仍被推为 nullable。改为真实 void 返回，先断言摘要非空再比较完整输入；不改变效果或数据库阶段。
 - 同 run 还检出 RFC-371 的前端 exact 选项及 runner 观测夹具。前端由并行作者在 `f512dc321932e6be0b3453dfc6cc1b69c9bb9dd9` 修复，输出完整保留。本批 runner 的“独立投影”夹具显式报告 `reasoning: 0`，对应它原本断言的已知 output=10；保留全部输出、持久受理与不等待投影断言。生产归一化继续将缺失 reasoning 表示为未知，没有放宽判据。
 - 格式／lint通过；通过 scoped source transport 仅生成 HEAD＋本次 inspector 修复的候选，未混入下一批 package reader 的未提交代码。全部 baseline 无增长、allowGrowth 为空，原扫描规则保持。后续适配暂停发布，完整终态由包含修复及并行输出的精确 SHA CI 给出。
+
+### 身份切面平台清单修复与资源包候选（2026-10-01）
+
+- `7e33d3d415dbbe672eb9445be4020bb593cdff17`／CI `36858098007` 已取消；macOS shard 1 的两条原目录 identity 比较允许记录尚指向旧 legacy 文件，原失败仍保留。并行作者在 `eef12e256408a54d5e52c351c23e4ebea9fdeb32` 将两条记录迁到实际 local adapter，匹配数量与原判据不变；同时保留其观测／E2E 修正。该提交 Windows platform `36862619599` 已 success，主 CI [36862619605](https://github.com/wangbinquan/agent-workflow/actions/runs/36862619605) 已 completed/success、50/50；本批不重提或覆盖其输出。
+- 资源包候选新增 `SkillPackageContentReader`，原文件字节与目录判据移入 local reader；AW 保留可用性和 DB 版本选择、主文档投影、全路径排序与二进制复制。两种 provider 共用同一选择，未就绪技能在 IO 前拒绝，异步存储错误不回落本机。
+- 原资源包工件合同下沉 `application/package/artifactOwners.ts`，旧类型与工厂入口保留兼容。文件效果独立迁入 `infrastructure/local/fileResourcePackageArtifacts.ts`，composition 可选择 skill/plugin artifact owner；所选 plugin owner 不再被迫提供 local installer。恢复 composition 复用已有 recovery port，默认 SQLite 统一格式／legacy 回落与 PostgreSQL 实现保持，不新建状态机。
+- 双 provider 新回归经真实 package apply／journal 检验 persist-before-stage、暂存与发布／完成尾部等待、非文件引用写入、提交前补偿等待、提交后错误保留 committed 行及选定恢复重试；两种 maintenance composition 保留 active attempt 并等待补偿后才 settle。原真实文件、七臂及幂等回归继续生效，原源码锁随 local 位置／reader 接线迁移，不降低断言。
+- 精确格式／lint通过；机械 AST token 对比确认文件工件 owner 效果主体与提交版本一致，仅位置／合同／兼容名称变动。正式类型与行为仍交本批 hosted CI；不执行本地 AW 测试、类型检查、构建或服务。官方 census 记录实际 mutation +1、observed import／exception 各 +2、owner 净 +8，分别给出一次性增长说明，发布后按既有协议退役。
+- 上述完整 CI 修复已收口，本批按精确路径发布，正式结果等待资源包候选确切 SHA CI。独立评审工具不可用，不能记 A-G PASS。其余 H1～H8、CS 独立 adapter、M0 首次部署和后续完整验收继续，RFC 不关闭。

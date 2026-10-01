@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1780,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1781,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：createFileSkillPackageContentReader 按既有 create 规则计为入口，1780→1781；原两个工件工厂仅移位和兼容命名，没有新增发布状态机。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5583,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5585,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：文件 package reader 的原 ValidationError 移位和 application 工件上下文的 Actor 类型引用产生两条实际 observed 边，5583→5585；合同与 local adapter 分层，不增加跨域业务调用。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +873,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4960,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4962,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：上述两条 module→legacy 现有 util/Actor 引用按原 exact 规则同步计数，4960→4962；扫描规则及到期波次不变。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +911,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25565,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25573,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：package reader/entry、application 工件合同、local 工厂兼容出口及 composition 选择类型的真实净符号变化，25565→25573；旧合同下沉而非新增业务机器。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:a1de0d78f6ee7c57206ebd9ad8bd0d09846acccb631bc5b3ff68dfb191358789",
+    "sourceDigest": "sha256:42ddcaf19bd3f7f08469ab0949903f73f743c6e46a6e05555e4e27b3f9a63676",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +932,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "7e33d3d415dbbe672eb9445be4020bb593cdff17",
-    "contentDigest": "sha256:3430319f86c3ece7c5402b16dc0604552f40067eb9541a2b9361af061a141763",
+    "currentSnapshotSha": "eef12e256408a54d5e52c351c23e4ebea9fdeb32",
+    "contentDigest": "sha256:698f02b5629b1bc2859760e760a386de702453af9057d27efcdcd2808a6532bb",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
