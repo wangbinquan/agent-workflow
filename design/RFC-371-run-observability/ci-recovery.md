@@ -11,24 +11,23 @@
 
 ## 本轮必须核对的工作流
 
-| 工作流 | 频率（UTC） | 本轮退出要求 |
-| --- | --- | --- |
-| maintenance-soak-nightly | 每日 05:00 | 原 full 模式、默认规模和资源预算通过 |
-| e2e-full-nightly | 每日 06:00 | 四分片与 RFC-319 覆盖账本对账成功，route-hit 完整 |
-| windows-platform | 每日 06:15 | Windows 实际表面、类型、构建等全部成功 |
-| e2e-webkit-nightly | 每日 07:00 | 两平台各四分片全部成功 |
-| integration-opencode | 每日 07:30 | 固定工作流默认协议集成成功 |
-| git-protocols-e2e | 每日 08:00 | 既定 Git 协议矩阵全部成功 |
-| evidence-soak-nightly | 每日 08:30 | 原默认证据规模与预算成功 |
-| visual-regression-nightly | 每日 09:00 | 原视觉矩阵通过，不批量接受差异 |
-| postgresql-evidence | 每周日 03:30 | weekly/all 默认矩阵成功，真实 PG 证据完整 |
+| 工作流                    | 频率（UTC）  | 本轮退出要求                                      |
+| ------------------------- | ------------ | ------------------------------------------------- |
+| maintenance-soak-nightly  | 每日 05:00   | 原 full 模式、默认规模和资源预算通过              |
+| e2e-full-nightly          | 每日 06:00   | 四分片与 RFC-319 覆盖账本对账成功，route-hit 完整 |
+| windows-platform          | 每日 06:15   | Windows 实际表面、类型、构建等全部成功            |
+| e2e-webkit-nightly        | 每日 07:00   | 两平台各四分片全部成功                            |
+| integration-opencode      | 每日 07:30   | 固定工作流默认协议集成成功                        |
+| git-protocols-e2e         | 每日 08:00   | 既定 Git 协议矩阵全部成功                         |
+| evidence-soak-nightly     | 每日 08:30   | 原默认证据规模与预算成功                          |
+| visual-regression-nightly | 每日 09:00   | 原视觉矩阵通过，不批量接受差异                    |
+| postgresql-evidence       | 每周日 03:30 | weekly/all 默认矩阵成功，真实 PG 证据完整         |
 
 九个工作流保留现有 schedule、workflow_dispatch、权限、测试强度与失败汇总。本轮将复用该候选自动触发的等价运行，仅对缺少等价运行的工作流从 main 手动触发，逐个记录实际 headSha、run ID 和终态；不在本机运行 AW 测试、构建、类型检查或服务。每周 PG 最近 [36309246936](https://github.com/wangbinquan/agent-workflow/actions/runs/36309246936) 在 `a53425b87bc6fa124d74829c278f52059ca04c93` 成功，仍需本轮新版本验证。
 
 ## 当前状态与关闭边界
 
 当前源码修复 `a241fcf48420c363cf5c1255b4100a5dd113dd93` 的主 CI 和九种原默认定时配置已全部终态 success，共 75 个作业成功；本次回归已恢复，AW-R01 保持关闭。精确矩阵见[最新终态回执](#2026-10-01-最终修复的主-ci-与九种定时配置终态)。下方原失败与中间候选记录完整保留。并行 resource-catalog 四路径保留；AW-R08 维度筛选/模型用途下钻及其余 AW/CS 工作继续，两个 RFC 仍 In Progress。后继五份纯文档提交的精确主 CI 另验。
-
 
 ## 第二轮 CI 候选：传递依赖与启动回读（2026-09-30）
 
@@ -66,18 +65,18 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 
 完整源码 `0647dadbedd66a20b162377788e92f2c79b68f83` 已精确推送。原十个运行均正常结束，未取消；主 CI 全部50项成功，九个定时配置八成功，只有 WebKit 的 Ubuntu 3/4 分片失败。
 
-| 工作流 | exact-SHA run | 终态 |
-| --- | --- | --- |
-| CI | [36676635657](https://github.com/wangbinquan/agent-workflow/actions/runs/36676635657) | success，50项 |
-| maintenance-soak-nightly | [36676691371](https://github.com/wangbinquan/agent-workflow/actions/runs/36676691371) | success |
-| e2e-full-nightly | [36676694347](https://github.com/wangbinquan/agent-workflow/actions/runs/36676694347) | success，四分片及真实覆盖对账 |
-| windows-platform | [36676697214](https://github.com/wangbinquan/agent-workflow/actions/runs/36676697214) | success |
-| e2e-webkit-nightly | [36676700139](https://github.com/wangbinquan/agent-workflow/actions/runs/36676700139) | failure，7/8分片成功 |
-| integration-opencode | [36676703066](https://github.com/wangbinquan/agent-workflow/actions/runs/36676703066) | success |
-| git-protocols-e2e | [36676706170](https://github.com/wangbinquan/agent-workflow/actions/runs/36676706170) | success |
-| evidence-soak-nightly | [36676709321](https://github.com/wangbinquan/agent-workflow/actions/runs/36676709321) | success |
-| visual-regression-nightly | [36676711965](https://github.com/wangbinquan/agent-workflow/actions/runs/36676711965) | success |
-| postgresql-evidence | [36676714930](https://github.com/wangbinquan/agent-workflow/actions/runs/36676714930) | success，原 weekly/all 五项矩阵 |
+| 工作流                    | exact-SHA run                                                                         | 终态                            |
+| ------------------------- | ------------------------------------------------------------------------------------- | ------------------------------- |
+| CI                        | [36676635657](https://github.com/wangbinquan/agent-workflow/actions/runs/36676635657) | success，50项                   |
+| maintenance-soak-nightly  | [36676691371](https://github.com/wangbinquan/agent-workflow/actions/runs/36676691371) | success                         |
+| e2e-full-nightly          | [36676694347](https://github.com/wangbinquan/agent-workflow/actions/runs/36676694347) | success，四分片及真实覆盖对账   |
+| windows-platform          | [36676697214](https://github.com/wangbinquan/agent-workflow/actions/runs/36676697214) | success                         |
+| e2e-webkit-nightly        | [36676700139](https://github.com/wangbinquan/agent-workflow/actions/runs/36676700139) | failure，7/8分片成功            |
+| integration-opencode      | [36676703066](https://github.com/wangbinquan/agent-workflow/actions/runs/36676703066) | success                         |
+| git-protocols-e2e         | [36676706170](https://github.com/wangbinquan/agent-workflow/actions/runs/36676706170) | success                         |
+| evidence-soak-nightly     | [36676709321](https://github.com/wangbinquan/agent-workflow/actions/runs/36676709321) | success                         |
+| visual-regression-nightly | [36676711965](https://github.com/wangbinquan/agent-workflow/actions/runs/36676711965) | success                         |
+| postgresql-evidence       | [36676714930](https://github.com/wangbinquan/agent-workflow/actions/runs/36676714930) | success，原 weekly/all 五项矩阵 |
 
 失败用例是 `e2e/rfc319-ops-events-and-repo-sweeps.spec.ts` 的 REPO-39。首轮与重试均在孤儿工作树消失后，立即检查半成品镜像目录还存在而失败；不能靠旧版本的绿色或再跑一次关闭。实际 `platform/background/maintenanceJobRunner.ts` 定义 worktree→iso→scratch→orphan→partial，每阶段完成后以持久 cursor、resumeAfterMs=25 续跑。`source-control/application/workspaceMaintenance.ts` 分别调用异步目录移除；orphan 消失只证明这一阶段的目标已删除，不能作为后续 partial 完成的屏障。日志与代码支持测试观察了允许存在的中间状态；尚未用日志唯一还原当时 worker 的具体排队时长。
 
@@ -89,18 +88,18 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 
 源码修复提交 `edd56ebe33731cb05aa7491b292be294a3026521` 已推送，限定六路径独立功能门 PASS；主 CI 及九种定时配置全部终态 **success**，共 10 个运行、75 个作业全部成功，AW-R01 退出条件已满足。本轮九种定时配置从 main 以原 workflow_dispatch 默认参数运行，覆盖与原定时相同的 full/weekly-all 和既定两平台/分片矩阵；没有修改 schedule、权限、重试、超时或必需检查，也没有取消旧候选运行。以下每个运行的 headSha 均严格等于该完整提交。
 
-| 工作流 | 精确运行 | 成功作业 |
-| --- | --- | --- |
-| CI | [36684248034](https://github.com/wangbinquan/agent-workflow/actions/runs/36684248034) | 50 / 50 |
-| maintenance-soak-nightly | [36684316158](https://github.com/wangbinquan/agent-workflow/actions/runs/36684316158) | 1 / 1 |
-| e2e-full-nightly | [36684319531](https://github.com/wangbinquan/agent-workflow/actions/runs/36684319531) | 5 / 5 |
-| windows-platform | [36684323276](https://github.com/wangbinquan/agent-workflow/actions/runs/36684323276) | 1 / 1 |
-| e2e-webkit-nightly | [36684326977](https://github.com/wangbinquan/agent-workflow/actions/runs/36684326977) | 8 / 8 |
-| integration-opencode | [36684331034](https://github.com/wangbinquan/agent-workflow/actions/runs/36684331034) | 2 / 2 |
-| git-protocols-e2e | [36684335151](https://github.com/wangbinquan/agent-workflow/actions/runs/36684335151) | 1 / 1 |
-| evidence-soak-nightly | [36684338781](https://github.com/wangbinquan/agent-workflow/actions/runs/36684338781) | 1 / 1 |
-| visual-regression-nightly | [36684342388](https://github.com/wangbinquan/agent-workflow/actions/runs/36684342388) | 1 / 1 |
-| postgresql-evidence | [36684345862](https://github.com/wangbinquan/agent-workflow/actions/runs/36684345862) | 5 / 5 |
+| 工作流                    | 精确运行                                                                              | 成功作业 |
+| ------------------------- | ------------------------------------------------------------------------------------- | -------- |
+| CI                        | [36684248034](https://github.com/wangbinquan/agent-workflow/actions/runs/36684248034) | 50 / 50  |
+| maintenance-soak-nightly  | [36684316158](https://github.com/wangbinquan/agent-workflow/actions/runs/36684316158) | 1 / 1    |
+| e2e-full-nightly          | [36684319531](https://github.com/wangbinquan/agent-workflow/actions/runs/36684319531) | 5 / 5    |
+| windows-platform          | [36684323276](https://github.com/wangbinquan/agent-workflow/actions/runs/36684323276) | 1 / 1    |
+| e2e-webkit-nightly        | [36684326977](https://github.com/wangbinquan/agent-workflow/actions/runs/36684326977) | 8 / 8    |
+| integration-opencode      | [36684331034](https://github.com/wangbinquan/agent-workflow/actions/runs/36684331034) | 2 / 2    |
+| git-protocols-e2e         | [36684335151](https://github.com/wangbinquan/agent-workflow/actions/runs/36684335151) | 1 / 1    |
+| evidence-soak-nightly     | [36684338781](https://github.com/wangbinquan/agent-workflow/actions/runs/36684338781) | 1 / 1    |
+| visual-regression-nightly | [36684342388](https://github.com/wangbinquan/agent-workflow/actions/runs/36684342388) | 1 / 1    |
+| postgresql-evidence       | [36684345862](https://github.com/wangbinquan/agent-workflow/actions/runs/36684345862) | 5 / 5    |
 
 主 CI 包含静态扫描、类型、构建、双 provider 后端与十个浏览器分片及 CI required；full E2E 包含四个分片和实际 route-hit 覆盖对账，WebKit 的 Ubuntu/macOS 各四分片成功，PostgreSQL 为原 weekly/all 五项矩阵。REPO-39 已在原330秒 poll/420秒用例预算内共同等待孤儿工作树和半成品镜像删除，保留锚定、未到龄及正常镜像的所有保护断言。Windows 必需时间夹具、Node JSON 加载、真实价格版本访问、原生键盘及 presence 生命周期等修正均包含在该提交祖先；依赖公告已按兼容修复版本处理，一次性增长按原失效规则退役，未新增豁免或降低检查强度。
 
@@ -132,28 +131,26 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 
 仅此一条功能完整性用例给出 20 秒上限，正向 contractDigest/planDigest/statementCount 与非法 plan 的漂移拒绝断言原样保留；同文件其他六个用例、真实 PG 性能门槛及全部 workflow 预算不变。不通过重跑旧 SHA、跳过或取暖缓存宣称修复。该测试修正与几何快照修正共同提交，最终精确 SHA 的主 CI 和九种定时配置另取终态回执。
 
-
 ## 2026-10-01 最终修复的主 CI 与九种定时配置终态
 
 修复提交 `a241fcf48420c363cf5c1255b4100a5dd113dd93` 的主 CI 与九种原默认定时配置全部终态 success，共 10 个运行、75 个作业成功；每个运行的 headSha 严格相同。主 CI 50 项，full E2E 四分片加真实覆盖对账 5 项，WebKit Ubuntu/macOS 八分片，weekly/all PostgreSQL 5 项，以及 Windows、维护、2 GiB evidence、Git 协议、OpenCode 集成和视觉矩阵均成功。九种定时配置通过 workflow_dispatch 验证原默认矩阵；不冒充本周实际 cron，未改 schedule、并发策略、重试或必需检查。本机无 AW 测试/类型检查/构建/服务；并行 resource-catalog 四路径保留。完整终态收齐于 `2026-10-01T08:14:44.687116Z`。
 
-| 工作流 | 精确运行 | 成功作业 |
-|---|---|---|
-| CI | [36830019349](https://github.com/wangbinquan/agent-workflow/actions/runs/36830019349) | 50 / 50 |
-| maintenance-soak-nightly | [36830637589](https://github.com/wangbinquan/agent-workflow/actions/runs/36830637589) | 1 / 1 |
-| e2e-full-nightly | [36830649443](https://github.com/wangbinquan/agent-workflow/actions/runs/36830649443) | 5 / 5 |
-| windows-platform | [36830662133](https://github.com/wangbinquan/agent-workflow/actions/runs/36830662133) | 1 / 1 |
-| e2e-webkit-nightly | [36830675518](https://github.com/wangbinquan/agent-workflow/actions/runs/36830675518) | 8 / 8 |
-| git-protocols-e2e | [36830703968](https://github.com/wangbinquan/agent-workflow/actions/runs/36830703968) | 1 / 1 |
-| integration-opencode | [36830689834](https://github.com/wangbinquan/agent-workflow/actions/runs/36830689834) | 2 / 2 |
-| evidence-soak-nightly | [36830717909](https://github.com/wangbinquan/agent-workflow/actions/runs/36830717909) | 1 / 1 |
-| visual-regression-nightly | [36830731440](https://github.com/wangbinquan/agent-workflow/actions/runs/36830731440) | 1 / 1 |
-| postgresql-evidence | [36830745031](https://github.com/wangbinquan/agent-workflow/actions/runs/36830745031) | 5 / 5 |
+| 工作流                    | 精确运行                                                                              | 成功作业 |
+| ------------------------- | ------------------------------------------------------------------------------------- | -------- |
+| CI                        | [36830019349](https://github.com/wangbinquan/agent-workflow/actions/runs/36830019349) | 50 / 50  |
+| maintenance-soak-nightly  | [36830637589](https://github.com/wangbinquan/agent-workflow/actions/runs/36830637589) | 1 / 1    |
+| e2e-full-nightly          | [36830649443](https://github.com/wangbinquan/agent-workflow/actions/runs/36830649443) | 5 / 5    |
+| windows-platform          | [36830662133](https://github.com/wangbinquan/agent-workflow/actions/runs/36830662133) | 1 / 1    |
+| e2e-webkit-nightly        | [36830675518](https://github.com/wangbinquan/agent-workflow/actions/runs/36830675518) | 8 / 8    |
+| git-protocols-e2e         | [36830703968](https://github.com/wangbinquan/agent-workflow/actions/runs/36830703968) | 1 / 1    |
+| integration-opencode      | [36830689834](https://github.com/wangbinquan/agent-workflow/actions/runs/36830689834) | 2 / 2    |
+| evidence-soak-nightly     | [36830717909](https://github.com/wangbinquan/agent-workflow/actions/runs/36830717909) | 1 / 1    |
+| visual-regression-nightly | [36830731440](https://github.com/wangbinquan/agent-workflow/actions/runs/36830731440) | 1 / 1    |
+| postgresql-evidence       | [36830745031](https://github.com/wangbinquan/agent-workflow/actions/runs/36830745031) | 5 / 5    |
 
 卡片 helper 的同步快照保留公共 16px 标准、全部相邻对/可见尺寸/溢出以及宽窄屏、长列表、公共 Dialog 和焦点断言；未确认的首轮 53px 位移来源仍未作产品根因结论。迁移历史完整性只有含三轮 load/verify 的单用例使用 20 秒预算，其他六条用例、真实 PG 性能门槛和所有 workflow 预算不变。修复经独立实现 v3 PASS，再精确提交七路径并推送，远端同步；原失败没有删除，也没有取消、重跑或绕过旧失败来收口。
 
 这一回执只完成本轮 CI 修复；AW-R08 服务端维度筛选、模型/用途下钻及两个 RFC 剩余实施继续。后继只提交本页、runtime-contributions、remaining-work、plan 与 STATE 五份文档，精确主 CI 单独验证；源码/工作流不变，不重复调度已成功的九种矩阵。
-
 
 ## 2026-10-01 分类 Token 与返回入口之后的定时修正
 
@@ -166,3 +163,24 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 - 同一完整夜间的 WG-32 在准备已交付卡片时遇到引擎短暂持有 durable owner 的 409。只在测试准备阶段对 `task-execution-stale-owner` 重试，沿用房间消息夹具的 40 次／250ms 有限上限，其他拒绝立即失败；真实 UI 交付、两次取消确认、终态拒绝码和终态状态断言保留。
 
 返回入口修复已单独提交为 `aac0aa3243fef404f60842fc19ec7b36e9ca0236`，本机实际页面已见紧凑的标题前返回按钮且返回保留查询上下文。本修正仅四个测试／文档路径；本机只做精确格式与 lint，完整主 CI、九种原默认定时配置以及返回几何矩阵仍由最终提交的 hosted CI 验证。不修改 cron、并发、性能预算或业务围栏，不重跑旧失败冒充修复。
+
+## 分类 Token / 紧凑返回入口的精确 CI 收口
+
+提交 `eef12e256408a54d5e52c351c23e4ebea9fdeb32`（包含分类 Token、精确标题查询、机械搬迁夹具和 `aac0aa324` 紧凑返回入口）已完成十个精确运行：75 个作业均为 success，headSha 全部一致。两条由 push 触发，八条定时工作流按原默认矩阵 workflow_dispatch 验收；不冒充已经等待 cron 自动触发。
+
+| 工作流                    | 实际触发          | 精确运行                                                                              | 成功作业 |
+| ------------------------- | ----------------- | ------------------------------------------------------------------------------------- | -------- |
+| CI                        | push              | [36862619605](https://github.com/wangbinquan/agent-workflow/actions/runs/36862619605) | 50 / 50  |
+| e2e-full-nightly          | workflow_dispatch | [36862922051](https://github.com/wangbinquan/agent-workflow/actions/runs/36862922051) | 5 / 5    |
+| e2e-webkit-nightly        | workflow_dispatch | [36862927689](https://github.com/wangbinquan/agent-workflow/actions/runs/36862927689) | 8 / 8    |
+| evidence-soak-nightly     | workflow_dispatch | [36862938467](https://github.com/wangbinquan/agent-workflow/actions/runs/36862938467) | 1 / 1    |
+| git-protocols-e2e         | workflow_dispatch | [36862932820](https://github.com/wangbinquan/agent-workflow/actions/runs/36862932820) | 1 / 1    |
+| integration-opencode      | workflow_dispatch | [36862911235](https://github.com/wangbinquan/agent-workflow/actions/runs/36862911235) | 2 / 2    |
+| maintenance-soak-nightly  | workflow_dispatch | [36862916934](https://github.com/wangbinquan/agent-workflow/actions/runs/36862916934) | 1 / 1    |
+| postgresql-evidence       | workflow_dispatch | [36862944587](https://github.com/wangbinquan/agent-workflow/actions/runs/36862944587) | 5 / 5    |
+| visual-regression-nightly | workflow_dispatch | [36862906433](https://github.com/wangbinquan/agent-workflow/actions/runs/36862906433) | 1 / 1    |
+| windows-platform          | push              | [36862619599](https://github.com/wangbinquan/agent-workflow/actions/runs/36862619599) | 1 / 1    |
+
+主 CI 的中英文 / 明暗主题 / 1280 与 390 宽度返回矩阵和全夜间趋势证据位、WG-32 真实 UI 路径均通过；Windows guard 保留原两条各一次许可。原失败与取消历史继续保留，未降低预算、删除断言或更改定时配置。源代码候选不再重跑已通过矩阵；本页后继仅为文档，其精确主 CI 单独记录。
+
+该回执关闭本次 CI 修复与按钮几何验收，AW-R02～12 / CS 联动、服务端维度和其他 RFC 剩余事项仍继续，不宣告整个观测能力完成。
