@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1774,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：历史读取 file adapter 的 createFileSkillVersionContentReader 工厂由现有 create 前缀规则计入；1773 → 1774，实际由 catalog 和 legacy 默认接线消费，不增加业务写入。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -906,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25525,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：历史读取端口四个中立类型与文件根、独立 file reader 工厂和文件根，迁移两个原树读取函数并复用类型别名，owner 净增 6；25519 → 25525。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -926,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e89a95720b833b98cc813393e2c9b5d53220e7ef",
-    "contentDigest": "sha256:fc11f93a0aa941ea2697695e4b4635e91df48a2879838ae271d31e03ed92a7e7",
+    "currentSnapshotSha": "30c892b5eaf0cc2757235e3793cb4383c04de90a",
+    "contentDigest": "sha256:c9c55b99898cd8685202ac50d58699045e045f3531ed7285fd44fb6954ffe736",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
