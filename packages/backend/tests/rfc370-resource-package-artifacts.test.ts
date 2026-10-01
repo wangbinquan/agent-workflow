@@ -26,7 +26,7 @@ import {
 } from '@/modules/resource-catalog/composition/resourcePackageMaintenance'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { parseResourcePackage } from '@/services/resourcePackage/parse'
-import { buildPackagePreview } from '@/services/resourcePackage/preview'
+import { buildPackagePreviewFromReadPort } from '@/services/resourcePackage/preview'
 import { encodeZip } from '@/util/zip'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -48,6 +48,14 @@ afterEach(() => {
 
 function packageBytes(kind: 'skill' | 'plugin') {
   const slug = `${kind}-storage`
+  const requirements =
+    kind === 'plugin'
+      ? `requirements:
+  pluginSources:
+    - name: storage
+      spec: storage-fixture@1.0.0
+      sourceKind: npm`
+      : 'requirements: {}'
   return encodeZip([
     {
       path: 'manifest.yaml',
@@ -61,7 +69,7 @@ resources:
   - slug: ${slug}
     type: ${kind}
     name: storage
-requirements: {}
+${requirements}
 secrets: []
 danglingCallRefs: []
 `),
@@ -147,7 +155,10 @@ describeEachProvider('RFC-370 selected resource package artifacts', (harness) =>
       })
       const pkg = await parseResourcePackage(packageBytes(kind))
       const preview = PackagePreviewSchema.parse(
-        await buildPackagePreview(harness.db, actor, pkg, { box }),
+        await buildPackagePreviewFromReadPort(provider.reads, actor, pkg, {
+          box,
+          importId: 'storage-preview',
+        }),
       )
       return createPostgresqlResourcePackageAtomicApplyOperations({ db: harness.db, box }).apply({
         actor,

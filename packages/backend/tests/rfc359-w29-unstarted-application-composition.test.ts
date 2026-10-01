@@ -687,7 +687,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-371: standalone task execution receives mandatory durable invocation accounting.
       // RFC-371: the same database now supplies the committed numeric source participant.
       // RFC-371: task observation queries bind the selected DB and TE facts inside one read snapshot.
-      '7952bf9b5d79869cadc4e17e5590e14f03b08061719d598e01db90975586f5fd',
+      // RFC-370: selected package owners make the local installer optional; its two
+      // method parameter types use NonNullable. Runtime statements/order are unchanged.
+      'feea6d7df4f2173c7705bf2bd98e3f4bc1bc231290b96710e22a01e866116f4b',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

@@ -1,3 +1,7 @@
+## 2026-10-01 RFC-370 资源包 CI 修复
+
+资源包源提交 e945204a8／账本 0fb4894be 的 CI 36868540371 已 completed/failure、43/50。失败归为新夹具导入不存在的预检函数、旧三参 reader 文本断言及两处纯类型 NonNullable 引起的完整装配文本摘要漂移。改用实际 reader 预检入口并补 importId／插件前置声明，保持 reader 选择与 166 条装配语句／顺序断言；AST 对拍确认 PG 组合根全部 runtime token 与原版本相同。仅精确格式/lint与 scoped 官方 census；本批不提交 Intent 存储续批在制代码，正式结果等待确切 SHA CI。RFC、A-G 和 CS 部署仍继续，未关闭。
+
 ## 2026-10-01 RFC-370 资源包存储切面候选
 
 身份清单配套修复已由并行提交 eef12e256 保留并上库，其 Windows platform 36862619599 成功、主 CI 36862619605 已 50/50 success；7e33 的取消／失败仍保留。资源包新增完整字节 reader，已有工件合同下沉 application、文件效果独立 local，composition 可选择工件及恢复 adapter；原 AW journal／事务／补偿状态机不变。新增真实双 provider apply／恢复回归，仅精确格式/lint与源码生成，正式类型与行为交本批确切 SHA CI。完整 RFC／A-G／CS adapter／部署继续，下方并行和历史记录保留。

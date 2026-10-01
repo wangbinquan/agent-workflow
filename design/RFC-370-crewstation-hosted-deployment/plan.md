@@ -272,3 +272,11 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 双 provider 新回归经真实 package apply／journal 检验 persist-before-stage、暂存与发布／完成尾部等待、非文件引用写入、提交前补偿等待、提交后错误保留 committed 行及选定恢复重试；两种 maintenance composition 保留 active attempt 并等待补偿后才 settle。原真实文件、七臂及幂等回归继续生效，原源码锁随 local 位置／reader 接线迁移，不降低断言。
 - 精确格式／lint通过；机械 AST token 对比确认文件工件 owner 效果主体与提交版本一致，仅位置／合同／兼容名称变动。正式类型与行为仍交本批 hosted CI；不执行本地 AW 测试、类型检查、构建或服务。官方 census 记录实际 mutation +1、observed import／exception 各 +2、owner 净 +8，分别给出一次性增长说明，发布后按既有协议退役。
 - 上述完整 CI 修复已收口，本批按精确路径发布，正式结果等待资源包候选确切 SHA CI。独立评审工具不可用，不能记 A-G PASS。其余 H1～H8、CS 独立 adapter、M0 首次部署和后续完整验收继续，RFC 不关闭。
+
+### 资源包 CI 修复与 Intent 在制边界（2026-10-01）
+
+- 资源包源提交 `e945204a80f3130d4ceae532ceafca4bf011d949`、账本 `0fb4894be2533f6c87e587a8b22b2a04898c84df` 已同步远端。其 [CI 36868540371](https://github.com/wangbinquan/agent-workflow/actions/runs/36868540371) 已 completed/failure、43/50；lint/typecheck 与五个后端分片的实际失败归为三个遗漏，原失败回执保留。
+- 新测试导入了不存在的 `buildPackagePreview`，改为已有 `buildPackagePreviewFromReadPort(provider.reads, …)` 并提供真实 importId；同时按既有 parse 合同补齐插件 fixture 的 pluginSources 声明。未修改预检或包解析判据。
+- RFC-345 原三参 reader 源码锁迁到四参接线，并固定同一输入的所选 reader／file 默认值；其余七臂、生命周期和服务依赖约束保持。W29 完整装配摘要只因已发布的两处 `NonNullable` 方法形参类型变化更新；保留 166 条语句、原顺序、全部相位与实例断言，未放宽摘要算法。独立 AST token 对拍确认完整 PG 装配的 runtime tokens 与 `eef12e256` 完全一致。
+- 并行文档提交 `993ab7ce694988536ecf600d9e4a874901e5ea41` 原样保留，来源和远端已核对。本批精确提交三个修复测试及所需文档／官方证据，scoped census 从 HEAD 读取未提交 Intent source；不把其在制效果或新增合同混入修复。正式结果交本批确切 SHA CI，本地不执行 AW 测试、类型检查、构建或服务。
+- 后续 Intent 中立工件合同、local 效果迁位、所选异步内容／恢复接线及真实双 provider 回归处于未发布候选；当前先修复资源包 CI。独立评审及 A-G 未通过，阶段 B／M0～M4 尚未交付，按用户要求持续推进完整 RFC。

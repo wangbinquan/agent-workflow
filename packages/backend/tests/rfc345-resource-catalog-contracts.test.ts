@@ -1774,10 +1774,13 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(composition).toContain("from './resourcePackageProvider'")
     expect(composition).not.toContain('createResourcePackageReadPort')
     expect(providerComposition).toContain('reads: createResourcePackageReadPort(input.db)')
-    // RFC-359 W12：W8 合一的技能树读出随共享 provider 装配搬家，数据库与 appHome 仍来自同一输入。
+    // RFC-370：同一 provider 的数据库、appHome 和所选内容 reader 一起转交。
     expect(providerComposition).toContain("from '../infrastructure/packageSkillTree'")
     expect(providerComposition).toContain(
-      'readSkillTree: (skillId: string) => readPackageSkillTree(input.db, input.appHome, skillId)',
+      'readPackageSkillTree(input.db, input.appHome, skillId, content)',
+    )
+    expect(providerComposition).toContain(
+      'input.skillPackageContent ?? createFileSkillPackageContentReader(input.appHome)',
     )
     for (const source of [composition, providerComposition]) {
       expect(source).not.toMatch(
