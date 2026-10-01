@@ -1,6 +1,7 @@
 // RFC-371: frozen execution identity selects one ledger, even while CS is offline.
 import { expect, test } from 'bun:test'
 import type { AcceptObservationInvocation, ObservationMeasurement } from '@agent-workflow/shared'
+import { AcceptObservationInvocationSchema } from '@agent-workflow/shared'
 import { observationInvocations } from '../src/db/schema'
 import { createInvocationObservationQuery } from '../src/modules/run-observability/application/invocationObservations'
 import { createPlatformObservationSync } from '../src/modules/run-observability/application/platformObservationSync'
@@ -180,6 +181,44 @@ describeEachProvider('RFC-371 invocation observation authority routing', (harnes
       },
     }
   }
+
+  test('accepted runtime names are optional immutable metadata and cannot rewrite the price snapshot', async () => {
+    const f = fixture()
+    const runtime = {
+      registrationId: 'registered',
+      configurationRevision: 7,
+      protocol: 'opencode',
+    } as const
+    const original: AcceptObservationInvocation = {
+      ...acceptance(),
+      authority: { kind: 'local', runtime: { ...runtime, acceptedName: 'original-name' } },
+    }
+    const accepted = await f.invocations.accept(original)
+    expect(accepted.priceBookRevision).toBe(0)
+    expect(await f.invocations.accept(original)).toEqual(accepted)
+    await expect(
+      f.invocations.accept({
+        ...original,
+        authority: { kind: 'local', runtime: { ...runtime, acceptedName: 'changed-name' } },
+      }),
+    ).rejects.toMatchObject({ code: 'invocation-conflict' })
+    expect(await f.invocations.get(original.invocationId)).toEqual(accepted)
+    const legacy = await f.invocations.accept({
+      ...acceptance('legacy-name'),
+      authority: { kind: 'local', runtime },
+    })
+    expect(legacy.authority).toEqual({ kind: 'local', runtime })
+    for (const acceptedName of ['', ' ', 'x'.repeat(201)]) {
+      const bad = {
+        ...original,
+        invocationId: 'bad-name',
+        authority: { kind: 'local', runtime: { ...runtime, acceptedName } },
+      }
+      expect(AcceptObservationInvocationSchema.safeParse(bad).success).toBe(false)
+      await expect(f.invocations.accept(bad)).rejects.toMatchObject({ code: 'invalid-invocation' })
+      expect(await f.invocations.get('bad-name')).toBeUndefined()
+    }
+  })
 
   test('standalone reads only its accepted invocation with no platform dependency', async () => {
     const f = fixture()

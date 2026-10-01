@@ -3,6 +3,7 @@ import type {
   AcceptedObservationInvocation,
   ObservationMetrics,
   ObservationTaskFacts,
+  ObservationRuntimeSummary,
 } from '@agent-workflow/shared'
 import type { UsageLedgerRecord } from '../src/modules/run-observability/domain/usageLedger'
 import { buildActor } from '../src/auth/actor'
@@ -139,6 +140,62 @@ test('overview marks a bounded read partial and never labels the loaded 200 task
   expect(result.trend[0]!.metrics.tokens.complete).toBe(false)
   expect((await readObservationOverview(fixture(200))).partial).toBe(false)
   expect((await readObservationOverview(fixture(0))).metrics.cost.knownAmount).toBeNull()
+})
+
+test('bounded runtime groups reconcile only their own task contributions without numeric precision loss', async () => {
+  const f = fixture(201)
+  const result = await readObservationOverview({
+    ...f,
+    async summarize(sources, task) {
+      const row = await f.summarize(sources, task)
+      const value = metrics(
+        task.id === '0' ? '9007199254740993' : '0',
+        task.id === '0' ? '1.000000000001' : '0',
+      )
+      const runtimes: ObservationRuntimeSummary[] = [
+        {
+          authority: 'local',
+          sourceId: null,
+          registrationId: 'registered',
+          configurationRevision: 7,
+          protocol: 'opencode',
+          acceptedNames: task.id === '0' ? [] : ['original'],
+          unnamedInvocations: task.id === '0' ? 1 : 0,
+          metrics: value,
+        },
+      ]
+      if (task.id === '0')
+        runtimes.push({
+          ...runtimes[0]!,
+          registrationId: 'other-runtime',
+          acceptedNames: ['original'],
+          unnamedInvocations: 0,
+          metrics: metrics('99', null),
+        })
+      return {
+        ...row,
+        summary: { ...row.summary, metrics: aggregate(runtimes.map((runtime) => runtime.metrics)) },
+        runtimes,
+      }
+    },
+  })
+  expect(result.partial).toBe(true)
+  const primary = result.runtimes.find((row) => row.registrationId === 'registered')!
+  expect(primary.acceptedNames).toEqual(['original'])
+  expect(primary.unnamedInvocations).toBe(1)
+  expect(primary.tasks).toHaveLength(200)
+  expect(primary.metrics.tokens.totalKnown).toBe('9007199254740993')
+  expect(primary.metrics.cost.knownAmount).toBe('1.000000000001')
+  expect(primary.metrics.tokens.complete).toBe(false)
+  expect(primary.metrics.cost.reasons).toContain('truncated')
+  for (const group of result.runtimes)
+    expect(
+      aggregate(
+        group.tasks!.map((row) => row.metrics),
+        result.partial,
+      ),
+    ).toEqual(group.metrics)
+  expect(result.tasks[0]!.metrics.tokens.totalKnown).toBe('9007199254741092')
 })
 
 test('ordinary data-source failures propagate instead of masquerading as partial successful statistics', async () => {

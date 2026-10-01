@@ -7,6 +7,13 @@ const runtime = z
     registrationId: key,
     configurationRevision: revision,
     protocol: z.enum(['opencode', 'claude-code']),
+    /** Display fact from the frozen selection, never a current-directory lookup. */
+    acceptedName: z
+      .string()
+      .min(1)
+      .max(200)
+      .refine((name) => name.trim().length > 0)
+      .optional(),
   })
   .strict()
 const localAuthority = z.object({ kind: z.literal('local'), runtime: runtime.nullable() }).strict()

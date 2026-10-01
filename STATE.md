@@ -1,3 +1,7 @@
+## 2026-10-01 RFC-371 运行时贡献第一批实现候选
+
+AW-R01 已关闭，原精确主 CI 与九种定时配置保持完整回执；AW-R08 原受理名称与运行时任务贡献的独立设计门 PASS 后，22 源码/回归路径已落地且精确 Prettier/lint 通过，等待独立实现门和精确 SHA hosted CI。名称随同原注册 ID/配置冻结，公共 Dialog 只展示该运行时对任务的贡献，并保留详情返回范围、滚动和焦点；旧响应不借任务整体量。官方治理仅从 HEAD 加精确候选内存生成，四个并行 skill 文件原样保留；本机无 AW 测试/构建/服务。CS 完整组合 557cb50c5b6800771a5d016526d7a4d49d61eb77 已实际部署八组件 Ready，consumer 与两级事实页面接通；回执提交 1d896ab777b9dbe133a4db79f98d585fb5600831 六项 CI 成功，生产 producer 仍 OFF。服务端维度筛选、CS 全删除/全部 writer 封口与其他剩余项继续，两个 RFC 保持 In Progress。下方保留历史。
+
 ## 2026-09-30 RFC-371 主 CI 与九种定时配置全部成功
 
 修复提交 `edd56ebe33731cb05aa7491b292be294a3026521` 的主CI36684248034全部50项success，九种原默认定时配置全部25项success，共10运行/75作业，所有headSha严格一致。包括WebKit两平台八分片、full四分片/真实覆盖对账、weekly-all PG五项；没有取消旧运行或降低门禁。AW-R01已关闭；根因、源码修复及逐运行回执见[CI修复记录](design/RFC-371-run-observability/ci-recovery.md#修复候选精确终态2026-09-30)。本批只更新四份观测文档，后继精确CI另验；本机无AW测试/构建/服务。其余AW/CS范围和真实联合验收继续，两RFC保持In Progress；CS已部署d01ba8223八组件Ready，consumer设计b0f17691已推送、生产仍OFF。并行resource-catalog四路径保留。下方为历史记录。

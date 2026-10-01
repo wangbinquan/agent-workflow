@@ -188,6 +188,32 @@ export interface ObservationCollectionStatus {
   })[]
 }
 
+/** Display metadata and accounting values are deliberately absent from this identity. */
+export interface ObservationRuntimeIdentity {
+  readonly authority: 'local' | 'crewstation'
+  readonly sourceId: string | null
+  readonly registrationId: string | null
+  readonly configurationRevision: number | null
+  readonly protocol: string | null
+}
+export function observationRuntimeKey(runtime: ObservationRuntimeIdentity): string {
+  return JSON.stringify([
+    runtime.authority,
+    runtime.sourceId,
+    runtime.registrationId,
+    runtime.configurationRevision,
+    runtime.protocol,
+  ])
+}
+export interface ObservationRuntimeSummary extends ObservationRuntimeIdentity {
+  /** Optional for older responses; sourced only from accepted invocation documents. */
+  readonly acceptedNames?: readonly string[]
+  readonly unnamedInvocations?: number
+  /** Direct contribution to each authorized task, never the task's whole consumption. */
+  readonly tasks?: readonly { readonly taskId: string; readonly metrics: ObservationMetrics }[]
+  readonly metrics: ObservationMetrics
+}
+
 export interface ObservationOverview {
   readonly asOf: number
   readonly projectionVersion: 1
@@ -221,14 +247,7 @@ export interface ObservationOverview {
     readonly model: string | null
     readonly metrics: ObservationMetrics
   }[]
-  readonly runtimes: readonly {
-    readonly authority: 'local' | 'crewstation'
-    readonly sourceId: string | null
-    readonly registrationId: string | null
-    readonly configurationRevision: number | null
-    readonly protocol: string | null
-    readonly metrics: ObservationMetrics
-  }[]
+  readonly runtimes: readonly ObservationRuntimeSummary[]
   readonly durations: {
     readonly completedTasks: number
     readonly p50Ms: number | null

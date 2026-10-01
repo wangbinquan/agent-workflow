@@ -113,6 +113,8 @@ const OVERLAY_CALLSITES = {
   'components/observability/ObservationNativeCapture.tsx': { family: 'task-execution', count: 1 },
   // RFC-371: hosted capture details share the same close/focus and long-list browser coverage.
   'components/observability/ObservationPlatformCapture.tsx': { family: 'task-execution', count: 1 },
+  // RFC-371: runtime contributions, whole-task return and keyboard focus are covered by the rendered and hosted flows.
+  'components/observability/ObservationRuntimeDetails.tsx': { family: 'task-execution', count: 1 },
   // RFC-371: attempt inspection and focus restoration are rendered in rfc371-run-observability.
   'components/observability/RunObservability.tsx': { family: 'task-execution', count: 1 },
   // RFC-321 — connection rebind and deletion can revoke personal credentials;

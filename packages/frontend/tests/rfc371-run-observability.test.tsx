@@ -25,6 +25,8 @@ import { ExecutionSwimlane } from '../src/components/ExecutionSwimlane'
 import { ObservationPlatformCapture } from '../src/components/observability/ObservationPlatformCapture'
 import { Metrics } from '../src/components/observability/ObservationMetrics'
 import { ObservationPlatformNativeCaptureSchema } from '@agent-workflow/shared'
+import { observationRuntimeKey } from '@agent-workflow/shared'
+import { validateObservationSearch } from '../src/routes/observability'
 import nativeCapture from '../../shared/tests/fixtures/crewstation-native-capture-v2.json'
 import i18n from '../src/i18n'
 import { setBaseUrl, setToken } from '../src/stores/auth'
@@ -444,6 +446,164 @@ test('overview tabs share one server snapshot and agent drill-down restores its 
   expect(screen.getAllByText('¥0').length).toBeGreaterThan(0)
   expect(screen.getByText('CS 管理的运行时')).toBeTruthy()
   expect(f.paths.filter((path) => path.pathname === '/api/observability/overview')).toHaveLength(1)
+})
+
+function runtimeMetrics(total: string, amount: string | null): ObservationMetrics {
+  const base = metrics()
+  return {
+    ...base,
+    invocations: 1,
+    observedInvocations: 1,
+    tokens: {
+      ...base.tokens,
+      known: { ...base.tokens.known, input: total },
+      totalKnown: total,
+      complete: true,
+    },
+    cost: {
+      ...base.cost,
+      knownAmount: amount,
+      complete: amount !== null,
+      reasons: amount === null ? ['not-authorized'] : [],
+      priceVersionIds: amount === null ? [] : ['frozen-CNY'],
+    },
+    authorities: ['local'],
+  }
+}
+function runtimeOverview(): ObservationOverview {
+  const base = overview()
+  const whole = {
+    ...runtimeMetrics('1000', '9'),
+    invocations: 2,
+    observedInvocations: 2,
+    records: 2,
+  }
+  return {
+    ...base,
+    metrics: whole,
+    tasks: [{ ...base.tasks[0]!, metrics: whole }],
+    runtimes: [
+      {
+        authority: 'local',
+        sourceId: null,
+        registrationId: 'opaque-registration-A',
+        configurationRevision: 7,
+        protocol: 'opencode',
+        acceptedNames: ['original-name'],
+        unnamedInvocations: 0,
+        metrics: runtimeMetrics('300', '1.25'),
+        tasks: [{ taskId: task.id, metrics: runtimeMetrics('300', '1.25') }],
+      },
+      {
+        authority: 'local',
+        sourceId: null,
+        registrationId: 'opaque-registration-B',
+        configurationRevision: 8,
+        protocol: 'opencode',
+        acceptedNames: ['other-name'],
+        unnamedInvocations: 0,
+        metrics: runtimeMetrics('700', '7.75'),
+        tasks: [{ taskId: task.id, metrics: runtimeMetrics('700', '7.75') }],
+      },
+    ],
+  }
+}
+
+test.each(['zh-CN', 'en-US'])(
+  'runtime Dialog shows its own contribution and returns from whole-task detail with context and focus in %s',
+  async (language) => {
+    await i18n.changeLanguage(language)
+    const data = runtimeOverview()
+    const f = fixture(
+      { ...search, tab: 'usage', q: '真实任务', repository: '/team/repo' },
+      { overview: data, detail: { ...detail(), metrics: data.metrics } },
+    )
+    const opener = await screen.findByRole('button', {
+      name: /(?:查看运行时贡献|View runtime contributions) · original-name/,
+    })
+    expect(opener.className).toContain('task-operations__name')
+    fireEvent.click(opener)
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog.textContent).toContain('opaque-registration-A')
+    const table = within(dialog).getByRole('table')
+    expect(within(table).getByText('300')).toBeTruthy()
+    expect(within(table).getByText('¥1.25')).toBeTruthy()
+    expect(within(dialog).queryByText('1,000')).toBeNull()
+    expect(within(dialog).queryByText('¥9')).toBeNull()
+    const body = dialog.querySelector<HTMLElement>('.dialog__body')!
+    body.scrollTop = 137
+    fireEvent.click(within(table).getByRole('button', { name: '真实任务' }))
+    await screen.findByRole('heading', { name: language === 'zh-CN' ? '任务整体' : 'Task total' })
+    expect(screen.getAllByText('1,000').length).toBeGreaterThan(0)
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: language === 'zh-CN' ? '返回统计分析' : 'Back to analysis',
+      }),
+    )
+    const returned = await screen.findByRole('dialog')
+    const restored = within(returned).getByRole('button', { name: '真实任务' })
+    await waitFor(() => expect(document.activeElement).toBe(restored))
+    expect(returned.querySelector<HTMLElement>('.dialog__body')!.scrollTop).toBe(137)
+    expect(f.changes.at(-1)).toMatchObject({
+      from: search.from,
+      to: search.to,
+      tab: 'usage',
+      runtime: observationRuntimeKey(data.runtimes[0]!),
+      q: '真实任务',
+      repository: '/team/repo',
+    })
+    expect(f.paths.filter((url) => url.pathname === '/api/observability/overview')).toHaveLength(1)
+    expect(f.paths.every((url) => !url.searchParams.has('runtime'))).toBe(true)
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(document.activeElement).toBe(
+      screen.getByRole('button', {
+        name: /(?:查看运行时贡献|View runtime contributions) · original-name/,
+      }),
+    )
+    fireEvent.change(
+      screen.getByRole('textbox', {
+        name: language === 'zh-CN' ? '任务名称或 ID' : 'Task name or ID',
+      }),
+      { target: { value: 'new-scope' } },
+    )
+    expect(f.changes.at(-1)?.runtime).toBeUndefined()
+  },
+)
+
+test('legacy runtime responses show missing names and unavailable task contributions without substituting whole-task metrics', async () => {
+  const data = runtimeOverview(),
+    original = data.runtimes[0]!
+  const { acceptedNames: _names, tasks: _tasks, ...legacy } = original
+  fixture(
+    { ...search, tab: 'usage' },
+    { overview: { ...data, runtimes: [{ ...legacy, unnamedInvocations: 1 }] } },
+  )
+  fireEvent.click(
+    await screen.findByRole('button', { name: '查看运行时贡献 · 受理时未记录运行时名称' }),
+  )
+  const dialog = await screen.findByRole('dialog')
+  expect(within(dialog).getByText('opaque-registration-A')).toBeTruthy()
+  expect(within(dialog).getByText(/1 次调用在受理时未记录名称/)).toBeTruthy()
+  expect(within(dialog).getByText(/当前响应未提供运行时的任务贡献/)).toBeTruthy()
+  expect(within(dialog).queryByRole('table')).toBeNull()
+  expect(within(dialog).queryByText('1,000')).toBeNull()
+})
+
+test('an absent runtime key has an explicit empty Dialog and a stable close focus target', async () => {
+  fixture({ ...search, tab: 'usage', runtime: 'missing-runtime-key' })
+  const dialog = await screen.findByRole('dialog')
+  expect(within(dialog).getByText('该运行时不在当前统计范围中')).toBeTruthy()
+  fireEvent.keyDown(window, { key: 'Escape' })
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+  expect((document.activeElement as HTMLElement).getAttribute('tabindex')).toBe('-1')
+})
+
+test('runtime URL keys are bounded display state and do not alter server query validation', () => {
+  const runtime = observationRuntimeKey(runtimeOverview().runtimes[0]!)
+  expect(validateObservationSearch({ ...search, tab: 'usage', runtime }).runtime).toBe(runtime)
+  for (const runtime of ['', ' ', 'x'.repeat(2049), 42])
+    expect(validateObservationSearch({ ...search, runtime }).runtime).toBeUndefined()
 })
 // User requested vertical columns matching CS; preserve exact large totals, zero and unknown semantics.
 test('trend columns scale exact large totals and expose focused interval details without treating unknown as zero', async () => {

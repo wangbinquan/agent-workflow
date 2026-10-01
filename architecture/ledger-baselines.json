@@ -846,8 +846,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5580,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5581,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-371 AW-R08 first batch: 5580 -> 5581. services/runner.ts imports the existing RuntimeObservationIdentity public type from runtime-management/public/types.ts to carry the same frozen acceptedName receipt instead of a duplicate inline type; no new value writer or private adapter import. Exact edge import:a3cc771dbfd60e02c49d remains owned by platform and retires with its existing W9 legacy caller."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +870,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4957,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4958,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-371 AW-R08 first batch: 4957 -> 4958. One exact type-only legacy-inbound edge runner.ts -> runtime-management/public/types.ts#RuntimeObservationIdentity replaces the incomplete inline identity contract. This does not permit private persistence, new services facades, or arbitrary imports; exception:import:a3cc771dbfd60e02c49d retains the existing platform owner, W9 removal and exact stale/unknown mutation checks."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +908,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25511,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25519,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371 AW-R08 first batch: 25511 -> 25519. Eight concrete frontend/shared owner entries: ObservationRuntimeDetails file/component; useObservationReturn file/ReturnPosition/hook; shared ObservationRuntimeIdentity/observationRuntimeKey/ObservationRuntimeSummary. They implement the public Dialog, return restoration and one accounting identity contract. No foreign skill WIP or RFC-294 wave completion is included."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:60f3075ecd59dc84e313b9a2c78ebb35c65aaa8ee6245e3848f40d6c23716dd9",
+    "sourceDigest": "sha256:48ed2ae797d1516edc5063644eaee2c4c8bfa59767c6f9be607f92692da66c40",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +929,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0647dadbedd66a20b162377788e92f2c79b68f83",
-    "contentDigest": "sha256:5f882bf1a97753d745fe9a85bd3e3d2b5ccb80c5f5c4be3f26656a7639865e98",
+    "currentSnapshotSha": "7886ac97b979bee331738a9c2486e6b4f3bac114",
+    "contentDigest": "sha256:c1b43026fa2923e521625e2199f44da38630e5889a87a164a11390a12d94a106",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

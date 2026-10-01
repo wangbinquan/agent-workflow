@@ -8,6 +8,8 @@ import type {
   ObservationTaskPage,
   ObservationTaskPageQuery,
 } from '@agent-workflow/shared'
+import { observationRuntimeKey } from '@agent-workflow/shared'
+import { aggregateObservationMetrics } from '../src/modules/run-observability/domain/aggregateMetrics'
 import { buildActor } from '../src/auth/actor'
 import {
   nodeRuns,
@@ -1038,6 +1040,110 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     expect(overview.statuses).toEqual([{ status: 'done', count: 2 }])
   })
 
+  test('runtime contributions use frozen names and full identities within the authorized task sample', async () => {
+    const f = await fixture()
+    await f.price()
+    await f.task('first', {
+      name: 'Focus task',
+      status: 'done',
+      finishedAt: NOW + 6000,
+      runningSince: null,
+    })
+    await f.task('second', { startedAt: NOW + 1000 })
+    await f.task('hidden', { ownerUserId: 'other' })
+    await f.task('outside', { startedAt: NOW + 20000 })
+    const runtime = {
+      registrationId: 'runtime',
+      configurationRevision: 0,
+      protocol: 'opencode',
+    } as const
+    const rows = [
+      { id: 'legacy', taskId: 'first', runtime, count: '1000000' },
+      {
+        id: 'named',
+        taskId: 'first',
+        runtime: { ...runtime, acceptedName: 'alpha' },
+        count: '2000000',
+      },
+      {
+        id: 'replacement',
+        taskId: 'first',
+        runtime: { ...runtime, registrationId: 'other-id', acceptedName: 'alpha' },
+        count: '4000000',
+      },
+      {
+        id: 'shared',
+        taskId: 'second',
+        runtime: { ...runtime, acceptedName: 'beta' },
+        count: '9007199254740993',
+      },
+      {
+        id: 'revision',
+        taskId: 'second',
+        runtime: { ...runtime, configurationRevision: 1, acceptedName: 'alpha' },
+        count: '7',
+      },
+      {
+        id: 'hidden',
+        taskId: 'hidden',
+        runtime: { ...runtime, acceptedName: 'hidden-name' },
+        count: '999',
+      },
+      {
+        id: 'outside',
+        taskId: 'outside',
+        runtime: { ...runtime, acceptedName: 'outside-name' },
+        count: '999',
+      },
+    ]
+    for (const row of rows) {
+      await f.accept(row.id, {
+        taskId: row.taskId,
+        authority: { kind: 'local', runtime: row.runtime },
+      })
+      await f.usage(row.id, buckets(row.count), { taskId: row.taskId })
+    }
+    const reader = { ...admin, permissions: new Set(['tasks:read', 'tasks:read:own'] as const) }
+    const result = await f.queries.overview(reader, query)
+    expect(result.runtimes).toHaveLength(3)
+    expect(new Set(result.runtimes.map(observationRuntimeKey)).size).toBe(3)
+    const selected = result.runtimes.find(
+      (row) => row.registrationId === 'runtime' && row.configurationRevision === 0,
+    )!
+    expect(selected.acceptedNames).toEqual(['alpha', 'beta'])
+    expect(selected.unnamedInvocations).toBe(1)
+    expect(selected.metrics.tokens.totalKnown).toBe('9007199257740993')
+    expect(selected.metrics.cost.knownAmount).toBe('9007199257.740993')
+    expect(selected.tasks!.map((row) => [row.taskId, row.metrics.tokens.totalKnown])).toEqual([
+      ['second', '9007199254740993'],
+      ['first', '3000000'],
+    ])
+    for (const group of result.runtimes)
+      expect(
+        aggregateObservationMetrics(
+          group.tasks!.map((row) => row.metrics),
+          result.partial,
+        ),
+      ).toEqual(group.metrics)
+    expect(
+      result.runtimes.find((row) => row.registrationId === 'other-id')!.metrics.cost.knownAmount,
+    ).toBeNull()
+    const first = result.tasks.find((row) => row.task.id === 'first')!
+    expect(first.metrics.tokens.totalKnown).toBe('7000000')
+    expect(
+      (await f.queries.detail(reader, 'first'))!.runtimes.find(
+        (row) => row.registrationId === 'runtime',
+      )!.acceptedNames,
+    ).toEqual(['alpha'])
+    const filtered = await f.queries.overview(reader, { ...query, q: 'focus', status: 'done' })
+    expect(filtered.tasks.map((row) => row.task.id)).toEqual(['first'])
+    expect(filtered.runtimes.find((row) => row.registrationId === 'runtime')!).toMatchObject({
+      acceptedNames: ['alpha'],
+      unnamedInvocations: 1,
+      metrics: { tokens: { totalKnown: '3000000' }, cost: { knownAmount: '3' } },
+    })
+  })
+
   test('overview retains missing and zero costs, actual model identities and running samples', async () => {
     const f = await fixture()
     await f.price()
@@ -1104,6 +1210,13 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
       registrationId: null,
       protocol: null,
       configurationRevision: null,
+      acceptedNames: [],
+      tasks: [
+        {
+          taskId: 'task',
+          metrics: { tokens: { totalKnown: '30' }, cost: { knownAmount: '7.25' } },
+        },
+      ],
     })
     await f.sync(
       [
@@ -1122,6 +1235,9 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     expect(result.metrics.cost.knownAmount).toBe('1')
     expect(result.metrics.cost.complete).toBe(false)
     expect(result.quality).toContainEqual({ reason: 'not-authorized', taskIds: ['task'] })
+    expect(
+      result.runtimes.find((row) => row.authority === 'crewstation')!.tasks![0]!.metrics.cost,
+    ).toMatchObject({ knownAmount: null, complete: false, priceVersionIds: [] })
   })
 
   test('platform parent coverage allocates tokens once and never prorates a whole-record cost', async () => {

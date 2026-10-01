@@ -81,7 +81,10 @@ import { renderUserPrompt } from './protocol'
 // the inline-config surface are re-exported at the bottom so existing importers
 // (tests, memoryDistiller) keep resolving from './runner'.
 import { getRuntimeDriver, pluginFileSpec, type RuntimeKind } from './runtime'
-import type { RuntimeProfile } from '@/modules/runtime-management/public/types'
+import type {
+  RuntimeProfile,
+  RuntimeObservationIdentity,
+} from '@/modules/runtime-management/public/types'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
@@ -413,7 +416,7 @@ export interface RunNodeOptions {
   persistence: TaskExecutionPersistence
   /** Bootstrap-selected durable accounting; no deployment inference in the runner. */
   observationInvocations: ObservationInvocationParticipant
-  runtimeObservationIdentity?: { registrationId: string; configurationRevision: number }
+  runtimeObservationIdentity?: RuntimeObservationIdentity
   observationPurpose?: 'task' | 'system' | 'playground' | 'memory'
   /** Bootstrap-selected runtime registry operations. */
   runtimeRegistry: Pick<RuntimeExecutionQueries, 'resolveAgentRuntime'>

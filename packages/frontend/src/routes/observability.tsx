@@ -19,11 +19,13 @@ export function validateObservationSearch(raw: Record<string, unknown>): Observa
     typeof raw[key] === 'string' && raw[key].trim() && raw[key].length <= max ? raw[key] : undefined
   const q = text('q', 200),
     repository = text('repository', 4096),
-    workflow = text('workflow', 200)
+    workflow = text('workflow', 200),
+    runtime = text('runtime', 2048)
   return {
     ...(q === undefined ? {} : { q }),
     ...(repository === undefined ? {} : { repository }),
     ...(workflow === undefined ? {} : { workflow }),
+    ...(runtime === undefined ? {} : { runtime }),
     ...(status.success ? { status: status.data } : {}),
     from,
     to,
@@ -56,8 +58,22 @@ function Page() {
   return (
     <RunObservability
       search={search}
-      onChange={(search) => {
-        void navigate({ search })
+      onChange={(next) => {
+        const openingTask = !search.task && !!next.task
+        const returningFromTask = !!search.task && !next.task
+        const sameScope =
+          search.from === next.from &&
+          search.to === next.to &&
+          search.tab === next.tab &&
+          search.q === next.q &&
+          search.status === next.status &&
+          search.repository === next.repository &&
+          search.workflow === next.workflow &&
+          search.after === next.after
+        void navigate({
+          search: next,
+          resetScroll: openingTask || (!returningFromTask && !sameScope),
+        })
       }}
     />
   )

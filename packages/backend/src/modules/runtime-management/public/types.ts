@@ -106,6 +106,8 @@ export interface UpdateRuntimeInput extends RuntimeProfileInput {
 export interface RuntimeObservationIdentity {
   readonly registrationId: string
   readonly configurationRevision: number
+  /** Original selection name; older snapshots remain unnamed. */
+  readonly acceptedName?: string
 }
 
 export interface ResolvedRuntimeProfile extends RuntimeProfile {

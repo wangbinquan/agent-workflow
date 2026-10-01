@@ -608,9 +608,9 @@
     {
       "callee": "setRuntimeEnabled",
       "file": "packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts",
-      "id": "ambient:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#setRuntimeEnabled:500",
+      "id": "ambient:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#setRuntimeEnabled:504",
       "kind": "global-setter",
-      "line": 500,
+      "line": 504,
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#createRuntimeRegistryApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "createRuntimeRegistryApplication",
@@ -619,9 +619,9 @@
     {
       "callee": "setRuntimeEnabled",
       "file": "packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts",
-      "id": "ambient:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#setRuntimeEnabled:709",
+      "id": "ambient:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#setRuntimeEnabled:713",
       "kind": "global-setter",
-      "line": 709,
+      "line": 713,
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeRegistry.ts#createRuntimeRegistryApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "createRuntimeRegistryApplication",
@@ -12910,5 +12910,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:60f3075ecd59dc84e313b9a2c78ebb35c65aaa8ee6245e3848f40d6c23716dd9"
+  "sourceDigest": "sha256:48ed2ae797d1516edc5063644eaee2c4c8bfa59767c6f9be607f92692da66c40"
 }

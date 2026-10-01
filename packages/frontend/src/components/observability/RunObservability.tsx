@@ -21,6 +21,7 @@ import { PageHeader } from '@/components/PageHeader'
 import { TableViewport } from '@/components/TableViewport'
 import { TabBar, tabDomIds } from '@/components/TabBar'
 import { formatDurationMs } from '@/lib/duration'
+import { useObservationReturn } from '@/hooks/useObservationReturn'
 import { Tokens, Cost, Source, Metrics } from './ObservationMetrics'
 import { ObservationAnalysis, type ObservationAnalysisTab } from './ObservationAnalysis'
 import { ObservationFilters } from './ObservationFilters'
@@ -36,6 +37,7 @@ export interface ObservationSearch {
   readonly task?: string
   readonly tab?: ObservationAnalysisTab | 'tasks'
   readonly agent?: string
+  readonly runtime?: string
   readonly quality?: string
   readonly q?: string
   readonly status?: TaskStatus
@@ -240,6 +242,7 @@ export function RunObservability({
   onChange: (search: ObservationSearch) => void
 }) {
   const { t, i18n } = useTranslation()
+  const pageRef = useRef<HTMLDivElement | null>(null)
   const tab = search.tab ?? 'tasks'
   const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone
   const window: ObservationOverviewQuery = {
@@ -285,6 +288,29 @@ export function RunObservability({
     refetchIntervalInBackground: false,
   })
   const current = search.task ? detail : tab === 'tasks' ? list : overview
+  const captureReturn = useObservationReturn(
+    JSON.stringify([
+      search.from,
+      search.to,
+      search.period,
+      tab,
+      search.after,
+      search.agent,
+      search.quality,
+      search.runtime,
+      search.q,
+      search.status,
+      search.repository,
+      search.workflow,
+    ]),
+    search.task,
+    pageRef,
+    !search.task && !!current.data,
+  )
+  const openTask = (task: string, trigger?: HTMLElement) => {
+    captureReturn(task, trigger)
+    onChange({ ...search, task })
+  }
   const refresh = () => {
     if (search.task) {
       void detail.refetch()
@@ -317,7 +343,7 @@ export function RunObservability({
     return t(`common.dur.${token.key}`, token.opts)
   }
   return (
-    <div className="page">
+    <div className="page" ref={pageRef}>
       <PageHeader
         title={search.task && detail.data ? detail.data.task.name : t('runObservability.title')}
         meta={
@@ -386,7 +412,14 @@ export function RunObservability({
           }))}
           active={tab}
           onSelect={(tab) =>
-            onChange({ ...search, tab, after: undefined, agent: undefined, quality: undefined })
+            onChange({
+              ...search,
+              tab,
+              after: undefined,
+              agent: undefined,
+              quality: undefined,
+              runtime: undefined,
+            })
           }
         />
       )}
@@ -407,10 +440,12 @@ export function RunObservability({
                   data={overview.data}
                   tab={tab}
                   selectedAgent={search.agent}
+                  selectedRuntime={search.runtime}
                   quality={search.quality}
                   onQuality={(quality) => onChange({ ...search, quality })}
                   onAgent={(agent) => onChange({ ...search, tab: 'agents', agent })}
-                  onTask={(task) => onChange({ ...search, task })}
+                  onRuntime={(runtime) => onChange({ ...search, tab: 'usage', runtime })}
+                  onTask={openTask}
                   onBucket={(from, to) =>
                     onChange({
                       ...search,
@@ -421,6 +456,7 @@ export function RunObservability({
                       after: undefined,
                       agent: undefined,
                       quality: undefined,
+                      runtime: undefined,
                     })
                   }
                 />
@@ -451,7 +487,8 @@ export function RunObservability({
                                   type="button"
                                   className="link link--button data-table__link task-operations__name"
                                   title={row.task.name}
-                                  onClick={() => onChange({ ...search, task: row.task.id })}
+                                  data-observation-task={row.task.id}
+                                  onClick={(event) => openTask(row.task.id, event.currentTarget)}
                                 >
                                   {row.task.name}
                                 </button>

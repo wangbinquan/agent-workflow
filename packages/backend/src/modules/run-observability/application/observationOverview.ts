@@ -5,6 +5,7 @@ import type {
   ObservationTaskSummary,
   ObservationTaskDetail,
 } from '@agent-workflow/shared'
+import { observationRuntimeKey } from '@agent-workflow/shared'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { aggregateObservationMetrics as aggregate } from '../domain/aggregateMetrics'
@@ -154,15 +155,9 @@ export async function readObservationOverview(input: {
       models.set(key, group)
     }
     for (const runtime of row.runtimes) {
-      const key = JSON.stringify([
-        runtime.authority,
-        runtime.sourceId,
-        runtime.registrationId,
-        runtime.configurationRevision,
-        runtime.protocol,
-      ])
+      const key = observationRuntimeKey(runtime)
       const group = runtimes.get(key) ?? []
-      group.push(runtime)
+      group.push({ ...runtime, tasks: [{ taskId: task.id, metrics: runtime.metrics }] })
       runtimes.set(key, group)
     }
   }
@@ -237,6 +232,16 @@ export async function readObservationOverview(input: {
     })),
     runtimes: [...runtimes.values()].map((group) => ({
       ...group[0]!,
+      acceptedNames: [...new Set(group.flatMap((row) => row.acceptedNames ?? []))].sort(),
+      ...(group[0]!.authority === 'local' && group[0]!.registrationId !== null
+        ? {
+            unnamedInvocations: group.reduce(
+              (sum, row) => sum + (row.unnamedInvocations ?? row.metrics.invocations),
+              0,
+            ),
+          }
+        : {}),
+      tasks: group.flatMap((row) => row.tasks ?? []),
       metrics: aggregate(
         group.map((row) => row.metrics),
         partial,

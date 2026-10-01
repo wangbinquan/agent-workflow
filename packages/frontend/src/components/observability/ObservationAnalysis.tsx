@@ -1,10 +1,11 @@
-import { Fragment, useState, type ReactNode } from 'react'
+import { Fragment, useRef, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   ObservationMetrics,
   ObservationOverview,
   ObservationTaskSummary,
 } from '@agent-workflow/shared'
+import { observationRuntimeKey } from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
 import { TableViewport } from '@/components/TableViewport'
 import { EmptyState } from '@/components/EmptyState'
@@ -14,6 +15,7 @@ import { Tokens, Cost, Metrics, observationReasonKey } from './ObservationMetric
 import { formatObservationCny } from './formatObservations'
 import './ObservationAnalysis.css'
 import { ObservationCollection } from './ObservationCollection'
+import { ObservationRuntimeDetails } from './ObservationRuntimeDetails'
 
 export type ObservationAnalysisTab = 'overview' | 'agents' | 'usage' | 'performance'
 export const observationAgentKey = (agent: ObservationOverview['agents'][number]) =>
@@ -56,7 +58,7 @@ function TaskRows({
   metrics,
 }: {
   rows: readonly ObservationTaskSummary[]
-  onTask: (id: string) => void
+  onTask: (id: string, trigger?: HTMLElement) => void
   metrics?: ReadonlyMap<string, ObservationMetrics>
 }) {
   const { t } = useTranslation()
@@ -81,17 +83,26 @@ function TaskRows({
                   type="button"
                   className="link link--button data-table__link task-operations__name"
                   title={row.task.name}
-                  onClick={() => onTask(row.task.id)}
+                  data-observation-task={row.task.id}
+                  onClick={(event) => onTask(row.task.id, event.currentTarget)}
                 >
                   {row.task.name}
                 </button>
               </th>
               <td>{t(`tasks.status.${row.task.status}`, { defaultValue: row.task.status })}</td>
               <td>
-                <Tokens metrics={metrics?.get(row.task.id) ?? row.metrics} />
+                {metrics && !metrics.has(row.task.id) ? (
+                  '—'
+                ) : (
+                  <Tokens metrics={metrics?.get(row.task.id) ?? row.metrics} />
+                )}
               </td>
               <td>
-                <Cost metrics={metrics?.get(row.task.id) ?? row.metrics} />
+                {metrics && !metrics.has(row.task.id) ? (
+                  '—'
+                ) : (
+                  <Cost metrics={metrics?.get(row.task.id) ?? row.metrics} />
+                )}
               </td>
             </tr>
           ))}
@@ -248,22 +259,37 @@ export function ObservationAnalysis({
   data,
   tab,
   selectedAgent,
+  selectedRuntime,
   quality,
   onQuality,
   onAgent,
+  onRuntime,
   onTask,
   onBucket,
 }: {
   data: ObservationOverview
   tab: ObservationAnalysisTab
   selectedAgent?: string
+  selectedRuntime?: string
   quality?: string
   onQuality: (reason?: string) => void
   onAgent: (key?: string) => void
-  onTask: (id: string) => void
+  onRuntime: (key?: string) => void
+  onTask: (id: string, trigger?: HTMLElement) => void
   onBucket: (from: number, to: number) => void
 }) {
   const { t } = useTranslation()
+  const runtimeTrigger = useRef<HTMLElement | null>(null)
+  const runtimeFallback = useRef<HTMLDivElement | null>(null)
+  const runtime = data.runtimes.find((row) => observationRuntimeKey(row) === selectedRuntime)
+  const runtimeTitle = (row: ObservationOverview['runtimes'][number]) =>
+    row.authority === 'crewstation'
+      ? t('runObservability.platformRuntime')
+      : row.acceptedNames?.length
+        ? row.acceptedNames.join(' · ')
+        : t(
+            `runObservability.${row.registrationId === null ? 'registrationUnknown' : 'runtimeNameUnknown'}`,
+          )
   const agents = [...data.agents].sort(byTokens)
   const selected = agents.find((agent) => observationAgentKey(agent) === selectedAgent)
   const agentLabel = (agent: ObservationOverview['agents'][number]) => (
@@ -390,36 +416,64 @@ export function ObservationAnalysis({
             />
           </Card>
           <Card title={t('runObservability.runtimes')}>
-            <Distribution
-              label={t('runObservability.runtime')}
-              rows={data.runtimes.map((row) => ({
-                key: JSON.stringify([
-                  row.authority,
-                  row.sourceId,
-                  row.registrationId,
-                  row.configurationRevision,
-                  row.protocol,
-                ]),
-                metrics: row.metrics,
-                label: (
-                  <>
-                    {row.authority === 'crewstation'
-                      ? t('runObservability.platformRuntime')
-                      : (row.registrationId ?? t('runObservability.registrationUnknown'))}
-                    <div className="muted">
-                      {row.protocol ?? '—'} ·{' '}
-                      {row.configurationRevision === null
-                        ? '—'
-                        : t('runObservability.revision', { revision: row.configurationRevision })}
-                      {row.sourceId && (
-                        <div>{t('runObservability.platformSource', { id: row.sourceId })}</div>
-                      )}
-                    </div>
-                  </>
-                ),
-              }))}
-            />
+            <div ref={runtimeFallback} tabIndex={-1}>
+              <Distribution
+                label={t('runObservability.runtime')}
+                rows={data.runtimes.map((row) => ({
+                  key: observationRuntimeKey(row),
+                  metrics: row.metrics,
+                  label: (
+                    <>
+                      <button
+                        type="button"
+                        className="link link--button data-table__link task-operations__name"
+                        aria-label={t('runObservability.runtimeView', { name: runtimeTitle(row) })}
+                        title={runtimeTitle(row)}
+                        data-observation-runtime={observationRuntimeKey(row)}
+                        ref={(button) => {
+                          if (selectedRuntime === observationRuntimeKey(row) && button)
+                            runtimeTrigger.current = button
+                        }}
+                        onClick={(event) => {
+                          runtimeTrigger.current = event.currentTarget
+                          onRuntime(observationRuntimeKey(row))
+                        }}
+                      >
+                        {runtimeTitle(row)}
+                      </button>
+                      <div className="muted">
+                        {row.registrationId && <div>{row.registrationId}</div>}
+                        {row.protocol ?? '—'} ·{' '}
+                        {row.configurationRevision === null
+                          ? '—'
+                          : t('runObservability.revision', { revision: row.configurationRevision })}
+                        {row.sourceId && (
+                          <div>{t('runObservability.platformSource', { id: row.sourceId })}</div>
+                        )}
+                      </div>
+                    </>
+                  ),
+                }))}
+              />
+            </div>
           </Card>
+          <ObservationRuntimeDetails
+            open={selectedRuntime !== undefined}
+            row={runtime}
+            title={runtime ? runtimeTitle(runtime) : t('runObservability.runtime')}
+            partial={data.partial}
+            onClose={() => onRuntime()}
+            triggerRef={runtimeTrigger}
+            fallbackRef={runtimeFallback}
+          >
+            <TaskRows
+              rows={data.tasks.filter((row) =>
+                runtime?.tasks?.some((entry) => entry.taskId === row.task.id),
+              )}
+              metrics={new Map(runtime?.tasks?.map((row) => [row.taskId, row.metrics]) ?? [])}
+              onTask={onTask}
+            />
+          </ObservationRuntimeDetails>
           <NoticeBanner tone="info">
             {t('runObservability.priceHint')}
             <p>{t('runObservability.currencyHint')}</p>

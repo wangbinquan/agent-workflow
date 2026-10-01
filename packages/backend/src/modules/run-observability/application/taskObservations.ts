@@ -11,6 +11,7 @@ import type {
   ObservationTaskPageQuery,
   ObservationTaskSummary,
 } from '@agent-workflow/shared'
+import { observationRuntimeKey } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { sumCnyAmounts } from '../domain/cnyPricing'
 import { intervalDurations } from '../domain/executionIntervals'
@@ -450,7 +451,10 @@ function agentSummaries(loaded: Awaited<ReturnType<typeof loadTask>>): Observati
 
 function usageDimensions(loaded: Awaited<ReturnType<typeof loadTask>>) {
   type Model = Omit<ObservationOverview['models'][number], 'metrics'>
-  type Runtime = Omit<ObservationOverview['runtimes'][number], 'metrics'>
+  type Runtime = Omit<
+    ObservationOverview['runtimes'][number],
+    'metrics' | 'acceptedNames' | 'unnamedInvocations' | 'tasks'
+  >
   const models = new Map<string, { value: Model; rows: InvocationSummary[] }>()
   const runtimes = new Map<string, { value: Runtime; rows: InvocationSummary[] }>()
   for (const row of loaded.invocations) {
@@ -463,7 +467,7 @@ function usageDimensions(loaded: Awaited<ReturnType<typeof loadTask>>) {
       configurationRevision: runtime?.configurationRevision ?? null,
       protocol: runtime?.protocol ?? null,
     }
-    const key = JSON.stringify(value),
+    const key = observationRuntimeKey(value),
       group = runtimes.get(key) ?? { value, rows: [] }
     group.rows.push(row)
     runtimes.set(key, group)
@@ -505,6 +509,24 @@ function usageDimensions(loaded: Awaited<ReturnType<typeof loadTask>>) {
     })),
     runtimes: [...runtimes.values()].map(({ value, rows }) => ({
       ...value,
+      acceptedNames: [
+        ...new Set(
+          rows.flatMap(({ invocation }) => {
+            const runtime =
+              invocation.authority.kind === 'local' ? invocation.authority.runtime : null
+            return runtime?.acceptedName === undefined ? [] : [runtime.acceptedName]
+          }),
+        ),
+      ].sort(),
+      ...(value.authority === 'local' && value.registrationId !== null
+        ? {
+            unnamedInvocations: rows.filter(
+              ({ invocation }) =>
+                invocation.authority.kind === 'local' &&
+                invocation.authority.runtime?.acceptedName === undefined,
+            ).length,
+          }
+        : {}),
       metrics: metrics(rows, loaded.truncated),
     })),
   }

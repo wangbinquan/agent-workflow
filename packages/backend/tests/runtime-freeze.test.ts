@@ -327,7 +327,11 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
     await createRuntime(registry, { name: 'priced-runtime', protocol: 'opencode', model: 'before' })
     const row = (await registry.getRuntime('priced-runtime'))!
     const first = await resolveFrozenRuntime(db, id, 'priced-runtime', null)
-    const identity = { registrationId: row.id, configurationRevision: row.probeFence }
+    const identity = {
+      registrationId: row.id,
+      configurationRevision: row.probeFence,
+      acceptedName: 'priced-runtime',
+    }
     expect(first.observationIdentity).toEqual(identity)
     expect('__observation' in first.params).toBe(false)
     await updateRuntime(registry, 'priced-runtime', { model: 'after' })
@@ -354,6 +358,20 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
         .where(eq(nodeRuns.id, next.id))
     )[0]!
     expect(JSON.parse(persisted.value!).__observation).toEqual(identity)
+    await createRuntime(registry, { name: 'priced-runtime', protocol: 'opencode', model: 'new' })
+    const replacement = (await registry.getRuntime('priced-runtime'))!
+    expect(replacement.id).not.toBe(row.id)
+    const fresh = await seedRun(db)
+    expect(
+      (await resolveFrozenRuntime(db, fresh.id, 'priced-runtime', null)).observationIdentity,
+    ).toEqual({
+      registrationId: replacement.id,
+      configurationRevision: replacement.probeFence,
+      acceptedName: 'priced-runtime',
+    })
+    expect(
+      (await resolveFrozenRuntime(db, id, 'priced-runtime', null)).observationIdentity,
+    ).toEqual(identity)
   })
 
   test('the selected revision comes from the same uncommitted profile snapshot', async () => {
@@ -375,6 +393,7 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
         expect(frozen.observationIdentity).toEqual({
           registrationId: row.id,
           configurationRevision: row.probeFence,
+          acceptedName: 'observation-profile',
         })
         expect(frozen.params.model).toBe('inside')
         throw new Error('rollback-observation-freeze')
@@ -409,6 +428,30 @@ describeEachProvider('RFC-371 frozen observation identity', (harness) => {
         (await resolveFrozenRuntime(db, id, 'opencode', null)).observationIdentity,
       ).toBeUndefined()
     }
+    const oldIdentity = { registrationId: 'historical-registration', configurationRevision: 7 }
+    for (const acceptedName of [undefined, null, '', '   ', 42, 'x'.repeat(201)]) {
+      await db
+        .update(nodeRuns)
+        .set({
+          runtimeParamsJson: JSON.stringify({ __observation: { ...oldIdentity, acceptedName } }),
+        })
+        .where(eq(nodeRuns.id, id))
+      expect((await resolveFrozenRuntime(db, id, 'opencode', null)).observationIdentity).toEqual(
+        oldIdentity,
+      )
+    }
+    await db
+      .update(nodeRuns)
+      .set({
+        runtimeParamsJson: JSON.stringify({
+          __observation: { ...oldIdentity, acceptedName: 'original-name' },
+        }),
+      })
+      .where(eq(nodeRuns.id, id))
+    expect((await resolveFrozenRuntime(db, id, 'opencode', null)).observationIdentity).toEqual({
+      ...oldIdentity,
+      acceptedName: 'original-name',
+    })
   })
 })
 

@@ -1,11 +1,11 @@
 {
   "denominator": {
-    "consumers": 924,
+    "consumers": 925,
     "exactEntrypointFiles": 69,
     "governedFieldSurfaces": 5,
     "methods": 1101,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21269,
+    "recursiveFields": 21274,
     "symbols": 1030
   },
   "entries": [
@@ -118681,7 +118681,7 @@
             "import:fb61bc2532c019579cbd"
           ],
           "fieldPath": "$method:overview.$return.runtimes",
-          "type": "readonly {\n    readonly authority: 'local' | 'crewstation'\n    readonly sourceId: string | null\n    readonly registrationId: string | null\n    readonly configurationRevision: number | null\n    readonly protocol: string | null\n    readonly metrics: ObservationMetrics\n  }[]"
+          "type": "readonly ObservationRuntimeSummary[]"
         },
         {
           "consumerEdgeIds": [],
@@ -123473,7 +123473,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 81,
+        "maxTransitiveLeafFields": 84,
         "maxUnionVariants": 63
       },
       "consumerEdgeIds": [
@@ -123589,16 +123589,17 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:f8a4030fdfccacbf609e"
-          ],
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveAgentRuntime.$return.observationIdentity.acceptedName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:resolveAgentRuntime.$return.observationIdentity.configurationRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:f8a4030fdfccacbf609e"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:resolveAgentRuntime.$return.observationIdentity.registrationId",
           "type": "string"
         },
@@ -123745,16 +123746,17 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:f8a4030fdfccacbf609e"
-          ],
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveInternalAgentRuntime.$return.observationIdentity.acceptedName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:resolveInternalAgentRuntime.$return.observationIdentity.configurationRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:f8a4030fdfccacbf609e"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:resolveInternalAgentRuntime.$return.observationIdentity.registrationId",
           "type": "string"
         },
@@ -123886,16 +123888,17 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:f8a4030fdfccacbf609e"
-          ],
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveRuntimeByName.$return.observationIdentity.acceptedName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:resolveRuntimeByName.$return.observationIdentity.configurationRevision",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:f8a4030fdfccacbf609e"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$method:resolveRuntimeByName.$return.observationIdentity.registrationId",
           "type": "string"
         },
@@ -124690,6 +124693,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "observationIdentity.acceptedName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "observationIdentity.configurationRevision",
           "type": "number"
         },
@@ -124910,6 +124918,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:a3cc771dbfd60e02c49d",
         "import:a5262c30ddde11b5716c",
         "import:c16b8a9635c61acf650f"
       ],
@@ -124918,6 +124927,13 @@
       "direction": "offered",
       "entrypoint": "types",
       "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:a5262c30ddde11b5716c"
+          ],
+          "fieldPath": "acceptedName",
+          "type": "string"
+        },
         {
           "consumerEdgeIds": [
             "import:a5262c30ddde11b5716c"
@@ -124936,12 +124952,19 @@
       "file": "packages/backend/src/modules/runtime-management/public/types.ts",
       "id": "public:runtime-management:types:RuntimeObservationIdentity",
       "members": [
+        "acceptedName",
         "configurationRevision",
         "registrationId"
       ],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/types.ts#RuntimeObservationIdentity",
       "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:a3cc771dbfd60e02c49d",
+          "file": "packages/backend/src/services/runner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file"
+        },
         {
           "context": "legacy",
           "edgeId": "import:a5262c30ddde11b5716c",
@@ -124961,7 +124984,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:ae2834e585031631462bcdb5109fd08131c85badc1a1eb4800dbc2f729941a66",
+      "signatureDigest": "sha256:b76a97c85d88e633c06b0eac636b15d2ade2dab4bad92137cc01cc942e8fcd27",
       "status": "target-context-current-surface",
       "symbol": "RuntimeObservationIdentity",
       "transaction": "none",
@@ -168288,7 +168311,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:60f3075ecd59dc84e313b9a2c78ebb35c65aaa8ee6245e3848f40d6c23716dd9",
+  "sourceDigest": "sha256:48ed2ae797d1516edc5063644eaee2c4c8bfa59767c6f9be607f92692da66c40",
   "targetContexts": [
     "collaboration",
     "development-automation",

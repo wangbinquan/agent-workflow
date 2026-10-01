@@ -42360,7 +42360,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:60f3075ecd59dc84e313b9a2c78ebb35c65aaa8ee6245e3848f40d6c23716dd9",
+  "sourceDigest": "sha256:48ed2ae797d1516edc5063644eaee2c4c8bfa59767c6f9be607f92692da66c40",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

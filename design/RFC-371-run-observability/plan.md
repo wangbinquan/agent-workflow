@@ -423,3 +423,10 @@ ef28b3a14d3d4e536096df4fea4f9c6468104622的CI36665459531终态47success/3failure
 修复提交 `edd56ebe33731cb05aa7491b292be294a3026521` 已推送，限定独立功能门PASS；[精确主CI36684248034](https://github.com/wangbinquan/agent-workflow/actions/runs/36684248034)50项全部成功，九种原默认定时配置25项全部成功，共10运行/75作业。WebKit两平台八分片、full四分片及route-hit对账、weekly/all PG五项均正常success；所有headSha一致、无取消，不改变schedule或门禁强度，本机无AW测试/类型/构建/服务。根因、修正祖先和逐运行退出证据见[CI修复记录](./ci-recovery.md#修复候选精确终态2026-09-30)。本批后继仅提交STATE及三份RFC文档，精确文档CI另行验证。
 
 AW-R01已关闭，AW-R02～12和CS的实际owner派发/完整清理/消费者/两级事实与真实联合验收继续，两RFC保持In Progress。CS源码d01ba8223已经六项CI成功、本机八组件Ready；b0f17691仅发布已复核consumer设计，生产开发采集仍OFF。并行resource-catalog四路径原样保留。
+
+
+## 2026-10-01 AW-R08 原受理名与运行时贡献第一批候选
+
+[第一批设计](./runtime-contributions.md)的独立设计门 PASS 后，22 个源码/回归路径已实施：注册名从原选择行一起冻结并沿用旧受理合同，旧/损坏名称不改注册身份或价格；同一已授权快照附每任务运行时贡献，五字段纯身份键跨前后端共用。页面使用公共 Dialog、Card、任务文字按钮、人民币、旧响应/部分结果说明，以及任务详情返回的范围、main/window/Dialog body 滚动和焦点恢复。
+
+本机仅运行精确 Prettier 与 ESLint（22 路径均通过），未运行 AW 测试、类型检查、构建或服务。四份 backend 回归、前端组件和 E2E 回归交给 hosted CI；E2E 的 48 运行时/48 行贡献数值为只读显示夹具，真实受理名另经 daemon API 校验，不冒充真实模型采集。官方 canonical 仅从已提交 HEAD 加本批候选内存生成，四个并行 skill 文件完全排除。八个真实 owner 新符号和一条既有 legacy caller 对公开身份类型的 type 边采用原账本单次增长规则逐项登记，不放宽断言或领取 RFC-294 wave 信用。独立实现门及精确提交 CI 尚待完成，AW-R08 和两个 RFC 保持未完成。

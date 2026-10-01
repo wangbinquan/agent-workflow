@@ -20,6 +20,7 @@ export function ObservationFilters({
       after: undefined,
       agent: undefined,
       quality: undefined,
+      runtime: undefined,
     })
   return (
     <FilterBar

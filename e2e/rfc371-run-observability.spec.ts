@@ -3,6 +3,7 @@ import { expect, test, type Page } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import type {
+  ObservationMetrics,
   ObservationOverview,
   ObservationTaskDetail,
   ObservationPriceHistory,
@@ -192,6 +193,17 @@ test('task, agents and attempt drill-down use real observations and standard car
   expect(detail.metrics.tokens.hasKnown).toBe(false)
   expect(detail.metrics.cost.knownAmount).toBeNull()
   expect(detail.metrics.cost.currency).toBe('CNY')
+  const directory = await api<{ runtimes: ObservationPricingRuntime[] }>(
+    '/api/observability/pricing/runtimes',
+  )
+  for (const runtime of detail.runtimes.filter(
+    (row) => row.authority === 'local' && row.registrationId !== null,
+  )) {
+    const original = directory.runtimes.find((row) => row.registrationId === runtime.registrationId)
+    expect(original).toBeDefined()
+    expect(runtime.acceptedNames).toEqual([original!.name])
+    expect(runtime.unnamedInvocations).toBe(0)
+  }
   await prime(page)
   await page.goto(`${daemon.baseUrl}/observability`)
   await expect(page.getByRole('heading', { name: 'Run observability', exact: true })).toBeVisible()
@@ -309,6 +321,226 @@ test('task, agents and attempt drill-down use real observations and standard car
   await expect(
     page.getByRole('button', { name: 'Observed parallel task', exact: true }),
   ).toBeVisible()
+})
+
+function displayRuntimeMetrics(
+  base: ObservationMetrics,
+  total: string,
+  amount: string,
+  calls = 1,
+): ObservationMetrics {
+  return {
+    ...base,
+    invocations: calls,
+    observedInvocations: calls,
+    records: calls,
+    tokens: {
+      known: { input: total, cacheRead: '0', cacheWrite: '0', output: '0' },
+      totalKnown: total,
+      hasKnown: true,
+      complete: true,
+      unknownBuckets: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
+    },
+    cost: {
+      currency: 'CNY',
+      knownAmount: amount,
+      complete: true,
+      pricedRecords: calls,
+      priceVersionIds: ['display-frozen-CNY'],
+      reasons: [],
+    },
+    authorities: ['local'],
+    truncated: false,
+  }
+}
+
+test('runtime last-row contributions preserve Dialog, URL, scroll and focus across task detail in both languages and themes', async ({
+  page,
+  browserName,
+}, testInfo) => {
+  const { task, workflow } = await seedTask()
+  let language: 'zh-CN' | 'en-US' = 'en-US',
+    theme: 'light' | 'dark' = 'light'
+  // Numeric/long-list read-only display fixture around an actual daemon task.
+  // Frozen-name persistence and authorization are verified by the real API and provider tests.
+  await page.route('**/api/config', async (route) => {
+    expect(route.request().method()).toBe('GET')
+    const response = await route.fetch(),
+      config = (await response.json()) as Record<string, unknown>
+    await route.fulfill({ response, json: { ...config, language, theme } })
+  })
+  await page.route('**/api/observability/overview?*', async (route) => {
+    const response = await route.fetch(),
+      data = (await response.json()) as ObservationOverview
+    const contribution = displayRuntimeMetrics(data.metrics, '100', '1.25')
+    const whole = displayRuntimeMetrics(data.metrics, '470100', '95.25', 48)
+    const tasks = Array.from({ length: 48 }, (_, i) => ({
+      task: {
+        ...data.tasks.find((row) => row.task.id === task.id)!.task,
+        id: i === 47 ? task.id : 'display-task-' + i,
+        name: i === 47 ? 'Observed parallel task' : 'Runtime display task ' + i,
+      },
+      metrics: i === 47 ? whole : contribution,
+      wallMs: 10000,
+      runningMs: 5000,
+    }))
+    const runtimes: ObservationOverview['runtimes'] = [
+      ...Array.from({ length: 47 }, (_, i) => ({
+        authority: 'local' as const,
+        sourceId: null,
+        registrationId: 'display-runtime-' + i,
+        configurationRevision: i,
+        protocol: 'opencode',
+        acceptedNames: ['accepted-runtime-' + i],
+        unnamedInvocations: 0,
+        metrics: displayRuntimeMetrics(data.metrics, '10000', '2'),
+        tasks: [{ taskId: task.id, metrics: displayRuntimeMetrics(data.metrics, '10000', '2') }],
+      })),
+      {
+        authority: 'local',
+        sourceId: null,
+        registrationId: 'display-last-runtime',
+        configurationRevision: 7,
+        protocol: 'opencode',
+        acceptedNames: ['original-last-runtime'],
+        unnamedInvocations: 0,
+        metrics: displayRuntimeMetrics(data.metrics, '4800', '60', 48),
+        tasks: tasks.map((row) => ({ taskId: row.task.id, metrics: contribution })),
+      },
+    ]
+    await route.fulfill({
+      response,
+      json: {
+        ...data,
+        metrics: displayRuntimeMetrics(data.metrics, '474800', '154', 95),
+        tasks,
+        runtimes,
+        partial: false,
+      },
+    })
+  })
+  await page.route('**/api/observability/tasks/' + task.id, async (route) => {
+    const response = await route.fetch(),
+      data = (await response.json()) as ObservationTaskDetail
+    await route.fulfill({
+      response,
+      json: { ...data, metrics: displayRuntimeMetrics(data.metrics, '470100', '95.25', 48) },
+    })
+  })
+  await prime(page)
+  const to = Date.now() + 1,
+    from = to - 7 * 86400000
+  const scope = new URLSearchParams({
+    from: String(from),
+    to: String(to),
+    period: 'custom',
+    tab: 'usage',
+    workflow: workflow.id,
+  })
+  const nextControl = process.platform === 'darwin' && browserName === 'webkit' ? 'Alt+Tab' : 'Tab'
+  for (language of ['zh-CN', 'en-US'] as const)
+    for (theme of ['light', 'dark'] as const)
+      for (const width of [1280, 390]) {
+        await page.setViewportSize({ width, height: 844 })
+        await page.goto(`${daemon.baseUrl}/observability?${scope.toString()}`)
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+        const prefix = language === 'zh-CN' ? '查看运行时贡献 · ' : 'View runtime contributions · '
+        const openers = page.locator('[data-observation-runtime]')
+        await expect(openers).toHaveCount(48)
+        await expectAnalysisSpacing(page)
+        await openers.nth(46).focus()
+        await page.keyboard.press(nextControl)
+        const opener = page.getByRole('button', {
+          name: prefix + 'original-last-runtime',
+          exact: true,
+        })
+        await expect(opener).toBeFocused()
+        await page.keyboard.press('Enter')
+        const dialog = page.getByRole('dialog', {
+          name:
+            (language === 'zh-CN' ? '运行时贡献 · ' : 'Runtime contributions · ') +
+            'original-last-runtime',
+          exact: true,
+        })
+        await expect(dialog).toBeVisible()
+        const cards = dialog.locator('.card'),
+          body = dialog.locator('.dialog__body')
+        await expect(cards).toHaveCount(2)
+        const boxes = await cards.evaluateAll((elements) =>
+          elements.map((element) => {
+            const box = element.getBoundingClientRect()
+            return { top: box.top, bottom: box.bottom }
+          }),
+        )
+        const gap = await dialog.evaluate(() =>
+          Number.parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue('--space-4'),
+          ),
+        )
+        expect(boxes[1]!.top - boxes[0]!.bottom).toBeCloseTo(gap, 0)
+        const taskButton = dialog.getByRole('button', {
+          name: 'Observed parallel task',
+          exact: true,
+        })
+        await taskButton.scrollIntoViewIfNeeded()
+        await taskButton.focus()
+        const row = taskButton.locator('xpath=ancestor::tr')
+        await expect(row).toContainText('100')
+        await expect(row).toContainText('¥1.25')
+        await expect(row).not.toContainText('470,100')
+        const main = page.getByTestId('app-shell-main')
+        const saved = {
+          main: await main.evaluate((element) => element.scrollTop),
+          body: await body.evaluate((element) => element.scrollTop),
+          window: await page.evaluate(() => scrollY),
+          url: page.url(),
+        }
+        expect(saved.body).toBeGreaterThan(100)
+        await page.keyboard.press(nextControl)
+        await expect(
+          dialog
+            .getByRole('button', { name: language === 'zh-CN' ? '关闭' : 'Close', exact: true })
+            .last(),
+        ).toBeFocused()
+        await taskButton.focus()
+        await page.keyboard.press('Enter')
+        await expect(
+          page.getByRole('heading', {
+            name: language === 'zh-CN' ? '任务整体' : 'Task total',
+            exact: true,
+          }),
+        ).toBeVisible()
+        await expect(page.locator('.observation-metrics').first()).toContainText('470,100')
+        await page
+          .getByRole('button', {
+            name: language === 'zh-CN' ? '返回统计分析' : 'Back to analysis',
+            exact: true,
+          })
+          .click()
+        await expect(dialog).toBeVisible()
+        await expect(page).toHaveURL(saved.url)
+        await expect(taskButton).toBeFocused()
+        expect(await body.evaluate((element) => element.scrollTop)).toBeCloseTo(saved.body, 0)
+        expect(await main.evaluate((element) => element.scrollTop)).toBeCloseTo(saved.main, 0)
+        expect(await page.evaluate(() => scrollY)).toBeCloseTo(saved.window, 0)
+        const box = await dialog.boundingBox()
+        expect(box!.x).toBeGreaterThanOrEqual(0)
+        expect(box!.x + box!.width).toBeLessThanOrEqual(width)
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),
+        ).toBeLessThanOrEqual(1)
+        await page.screenshot({
+          path: testInfo.outputPath(`runtime-contributions-${language}-${theme}-${width}.png`),
+          fullPage: true,
+        })
+        await page.keyboard.press('Escape')
+        await expect(dialog).toHaveCount(0)
+        await expect(opener).toBeFocused()
+        expect(new URL(page.url()).searchParams.has('runtime')).toBe(false)
+        await expect(
+          page.getByRole('button', { name: /CSV|Export|More filters|导出|更多筛选/ }),
+        ).toHaveCount(0)
+      }
 })
 
 test('overview omits attention, labels every token column and aligns collection facts', async ({

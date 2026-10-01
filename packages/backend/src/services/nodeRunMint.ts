@@ -347,6 +347,12 @@ function parseObservationIdentity(
     return {
       registrationId: identity.registrationId,
       configurationRevision: identity.configurationRevision!,
+      ...(typeof identity.acceptedName === 'string' &&
+      identity.acceptedName.length > 0 &&
+      identity.acceptedName.length <= 200 &&
+      identity.acceptedName.trim().length > 0
+        ? { acceptedName: identity.acceptedName }
+        : {}),
     }
   } catch {
     return undefined
