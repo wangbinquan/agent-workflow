@@ -1,3 +1,11 @@
+## 2026-10-01 RFC-370 独立功能门与事件多 source 补正
+
+按仓库明确的独立子代理备选，Intent 21 路径及任务操作配置14路径源码实现门有限 PASS；正式行为各待发布后的精确 CI。设计首轮发现共享 producer 不能只绑单 endpoint，已补一对多路由、完整目标集合冻结（含空集合）及逐目标持久恢复，补齐 MR受理后的持久待发布义务，八场景列入 B-T5，修订稿独立设计门已 PASS。ce8a6310a 的 CI36876744628 已 completed/success、50/50全部成功；现在精确发布已评审 Intent 候选，任务配置14路径留下一批；没有启动 CS adapter或部署，完整 A/H1～H8、A-G 与 M0～M4 继续。评审仅功能且只读，没有本机 AW 测试/类型检查/构建/服务。详见 RFC370 functional-gates，全部并行输出和历史保留。
+
+## 2026-10-01 RFC-370 CI 修复回执与 Intent 续批准备
+
+第二轮补正 ce8a6310adb9576559f4d5100d4916635a104720 已同步远端，主 CI 36876744628 进行中；前继 13f5b8e33 自动 cancelled，34 success／4 failure／12 cancelled，失败实际日志归因已记录，不记全绿。Intent 内容／scratch 21 路径候选与 scoped 官方 census 已准备，排除下一批任务配置在制内容，等待先恢复 CI 再发布。H1 任务操作配置已抽中立查询／local adapter，六处 mint 和 commit query 支持 await；driver 为子任务重绑所选能力，未写入继承配置；真实双 provider／双 runtime 与 fallback 回归待正式 CI。仅目标格式/lint和源码生成，无本机 AW 测试／类型检查／构建／服务；独立评审、全 A、CS 独立 adapter 和 M0～M4 仍继续，RFC 不关闭。下方并行输出与历史保留。
+
 ## 2026-10-01 RFC-370 资源包 CI 第二轮补正
 
 13f5b8e33 的 CI 36874167121 已有后端 failure，整体终态尚待回执；导入／类型／源码锁已通过。新包夹具 opId 与既有 op-<n> schema 不符，改 op-1；macOS 原 E9-C 固定50ms未等到 launch，并跨用例迟到，改等待明确 before-task／after-task 崩溃边界再推进租约，原单行／execution-1／零重复派发断言不变。仅两测试及证据，官方 scoped census 排除 Intent 在制源码，baseline 无增长；无本地 AW 测试／类型检查／构建，继续等修复确切 SHA CI。完整 RFC、切面余项与 CS 部署验收继续，下方 Intent 候选及全部并行输出保留。

@@ -4234,23 +4234,6 @@
       "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:0c35b083a3811f907c23",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin",
-      "toPath": "packages/backend/src/util/safePath.ts",
-      "toSymbol": "safeJoin",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/codeHostEventResponseDirectory.ts#$file",
@@ -12379,23 +12362,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/applyMaintenance.ts#$file",
-      "fromPath": "packages/backend/src/modules/intent/composition/applyMaintenance.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:23c4bea57badca93a251",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "rule": "temporary-internal-debt",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#composeLegacyIntentSkillArtifactCompat",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toSymbol": "composeLegacyIntentSkillArtifactCompat",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#$file",
       "fromPath": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
       "fromSymbol": "$file",
@@ -12969,23 +12935,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpProbes",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "mcpProbes",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:25760acde81738415925",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9-D",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/pluginInstaller.ts#installPlugin",
-      "toPath": "packages/backend/src/services/pluginInstaller.ts",
-      "toSymbol": "installPlugin",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -15726,6 +15675,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/intent/artifactOwners.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/application/intent/artifactOwners.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2dfc4741b5100765cc43",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction",
+      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toSymbol": "DatabaseTransaction",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#$file",
@@ -16064,23 +16030,6 @@
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts#$file",
-      "fromPath": "packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:2edaef90d113c3b9c8f8",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "rule": "temporary-internal-debt",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts#IntentApplyArtifact",
-      "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts",
-      "toSymbol": "IntentApplyArtifact",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
       "edgeKind": "type",
@@ -16539,23 +16488,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:3072cb4623a42f5710c5",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9-D",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/pluginInstaller.ts#plannedGenerationDir",
-      "toPath": "packages/backend/src/services/pluginInstaller.ts",
-      "toSymbol": "plannedGenerationDir",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -21304,23 +21236,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/applyMaintenance.ts#$file",
-      "fromPath": "packages/backend/src/modules/intent/composition/applyMaintenance.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:3e86bad2b46e373a07a3",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "rule": "temporary-internal-debt",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#composePostgresqlSkillArtifactCompensation",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toSymbol": "composePostgresqlSkillArtifactCompensation",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/reviewDecisionComposition.ts#$file",
       "fromPath": "packages/backend/src/services/reviewDecisionComposition.ts",
       "fromSymbol": "$file",
@@ -22489,6 +22404,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "tasks",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4305cdacf2d64c8aaa06",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/pluginInstaller.ts#installPlugin",
+      "toPath": "packages/backend/src/services/pluginInstaller.ts",
+      "toSymbol": "installPlugin",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -24092,6 +24024,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file",
+      "fromPath": "packages/backend/src/modules/intent/composition/apply.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:470f80d43417c3853b15",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W9-D",
+      "rule": "temporary-internal-debt",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
+      "toSymbol": "createFileIntentPluginArtifactOwner",
+      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/userIdentities.ts#$file",
       "fromPath": "packages/backend/src/services/userIdentities.ts",
       "fromSymbol": "$file",
@@ -24190,6 +24139,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "employeeAttentionBindings",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file",
+      "fromPath": "packages/backend/src/modules/intent/composition/apply.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:474812edc7dcf244fb88",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W9-D",
+      "rule": "temporary-internal-debt",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
+      "toSymbol": "createFileIntentSkillArtifactOwner",
+      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
       "edgeKind": "value",
@@ -28663,6 +28629,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:56ee7c039565590c3b2d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/pluginInstaller.ts#plannedGenerationDir",
+      "toPath": "packages/backend/src/services/pluginInstaller.ts",
+      "toSymbol": "plannedGenerationDir",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/resourceAclRepository.ts#$file",
@@ -32148,23 +32131,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file",
-      "fromPath": "packages/backend/src/modules/intent/composition/apply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:60d484316bfe723a49d8",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "rule": "temporary-internal-debt",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toSymbol": "createPostgresqlIntentSkillArtifactLifecycle",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#$file",
@@ -33913,6 +33879,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#removeWorktree",
       "toPath": "packages/backend/src/util/git.ts",
       "toSymbol": "removeWorktree",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts#$file",
+      "fromPath": "packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:66a284e93640443a1861",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin",
+      "toPath": "packages/backend/src/util/safePath.ts",
+      "toSymbol": "safeJoin",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -39898,23 +39881,6 @@
       "toPath": "packages/backend/src/auth/actor.ts",
       "toSymbol": "Actor",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file",
-      "fromPath": "packages/backend/src/modules/intent/composition/apply.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:79194f89bf487340f6b9",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "rule": "temporary-internal-debt",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file",
-      "toPath": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toSymbol": "createPostgresqlIntentPluginArtifactLifecycle",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
       "edgeKind": "value",
@@ -46447,6 +46413,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8dcbb7abb94ace7baa79",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin",
+      "toPath": "packages/backend/src/util/safePath.ts",
+      "toSymbol": "safeJoin",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationCommittedEvents.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/collaborationCommittedEvents.ts",
       "fromSymbol": "$file",
@@ -51186,23 +51169,6 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskExecutionEffects",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#$file",
-      "fromPath": "packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:9ceec84b4244b85fb07d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "rule": "temporary-internal-debt",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts#IntentApplyArtifact",
-      "toPath": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts",
-      "toSymbol": "IntentApplyArtifact",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
       "edgeKind": "value",
@@ -61441,23 +61407,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts#$file",
-      "fromPath": "packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:bce631c601b3fad26e8e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin",
-      "toPath": "packages/backend/src/util/safePath.ts",
-      "toSymbol": "safeJoin",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
       "fromSymbol": "$file",
@@ -69137,6 +69086,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
       "toPath": "packages/backend/src/db/query.ts",
       "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d390037180f325370234",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction",
+      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toSymbol": "DatabaseTransaction",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -84356,9 +84322,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4962,
+    "architectureExceptions": 4960,
     "implementationSccs": 0,
-    "observedEdges": 5585,
+    "observedEdges": 5590,
     "requiredPorts": 36,
     "targetEdges": 69
   },
@@ -88557,22 +88523,6 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#$file",
-      "id": "import:0c35b083a3811f907c23",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/safePath",
-      "syntax": "static-import",
-      "targetSymbol": "safeJoin",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/safePath.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin"
     },
     {
       "edgeKind": "type",
@@ -97280,22 +97230,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "intent",
-      "fromFile": "packages/backend/src/modules/intent/composition/applyMaintenance.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/applyMaintenance.ts#$file",
-      "id": "import:23c4bea57badca93a251",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "role": "temporary-internal-debt",
-      "specifier": "@/modules/resource-catalog/composition/intentApply",
-      "syntax": "static-import",
-      "targetSymbol": "composeLegacyIntentSkillArtifactCompat",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#composeLegacyIntentSkillArtifactCompat"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "identity-access",
       "fromFile": "packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/infrastructure/local/httpAuthentication.ts#$file",
@@ -97965,22 +97899,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#mcpProbes"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#$file",
-      "id": "import:25760acde81738415925",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9-D",
-      "role": "legacy-outbound",
-      "specifier": "@/services/pluginInstaller",
-      "syntax": "static-import",
-      "targetSymbol": "installPlugin",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/pluginInstaller.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/pluginInstaller.ts#installPlugin"
     },
     {
       "edgeKind": "value",
@@ -100255,6 +100173,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/ws/broadcaster.ts#tasksListBroadcaster"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/composition/apply.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file",
+      "id": "import:2c6b0c6487f2b678b102",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "IntentPluginArtifactOwner",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "source-control",
       "fromFile": "packages/backend/src/modules/source-control/application/repositoryPreparationCleanup.ts",
@@ -100799,6 +100733,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/application/intent/artifactOwners.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/intent/artifactOwners.ts#$file",
+      "id": "import:2dfc4741b5100765cc43",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseTransaction",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseTransaction",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
@@ -101133,22 +101083,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "intent",
-      "fromFile": "packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts#$file",
-      "id": "import:2edaef90d113c3b9c8f8",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "role": "temporary-internal-debt",
-      "specifier": "@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants",
-      "syntax": "static-import",
-      "targetSymbol": "IntentApplyArtifact",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts#IntentApplyArtifact"
     },
     {
       "edgeKind": "type",
@@ -101613,22 +101547,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/query.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#$file",
-      "id": "import:3072cb4623a42f5710c5",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9-D",
-      "role": "legacy-outbound",
-      "specifier": "@/services/pluginInstaller",
-      "syntax": "static-import",
-      "targetSymbol": "plannedGenerationDir",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/pluginInstaller.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/pluginInstaller.ts#plannedGenerationDir"
     },
     {
       "edgeKind": "value",
@@ -106656,22 +106574,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "intent",
-      "fromFile": "packages/backend/src/modules/intent/composition/applyMaintenance.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/applyMaintenance.ts#$file",
-      "id": "import:3e86bad2b46e373a07a3",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "role": "temporary-internal-debt",
-      "specifier": "@/modules/resource-catalog/composition/intentApply",
-      "syntax": "static-import",
-      "targetSymbol": "composePostgresqlSkillArtifactCompensation",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#composePostgresqlSkillArtifactCompensation"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/reviewDecisionComposition.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/reviewDecisionComposition.ts#$file",
@@ -107936,6 +107838,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#$file",
+      "id": "import:4305cdacf2d64c8aaa06",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/services/pluginInstaller",
+      "syntax": "static-import",
+      "targetSymbol": "installPlugin",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/pluginInstaller.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/pluginInstaller.ts#installPlugin"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/clarify/seal.ts#$file",
@@ -108157,6 +108075,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/execution/closure.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/execution/closure.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts#$file",
+      "id": "import:437fc74b15bdad43e0ce",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "IntentApplyArtifact",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -109600,6 +109534,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/composition/apply.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file",
+      "id": "import:470f80d43417c3853b15",
+      "owner": "intent",
+      "removeAfterWave": "W9-D",
+      "role": "temporary-internal-debt",
+      "specifier": "@/modules/resource-catalog/composition/intentApply",
+      "syntax": "static-import",
+      "targetSymbol": "createFileIntentPluginArtifactOwner",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/userIdentities.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/userIdentities.ts#$file",
@@ -109741,6 +109691,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#employeeAttentionBindings"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/composition/apply.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file",
+      "id": "import:474812edc7dcf244fb88",
+      "owner": "intent",
+      "removeAfterWave": "W9-D",
+      "role": "temporary-internal-debt",
+      "specifier": "@/modules/resource-catalog/composition/intentApply",
+      "syntax": "static-import",
+      "targetSymbol": "createFileIntentSkillArtifactOwner",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -114543,6 +114509,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#skills"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#$file",
+      "id": "import:56ee7c039565590c3b2d",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/services/pluginInstaller",
+      "syntax": "static-import",
+      "targetSymbol": "plannedGenerationDir",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/pluginInstaller.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/pluginInstaller.ts#plannedGenerationDir"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/resourceAclRepository.ts",
@@ -118271,22 +118253,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/mcpRuntimeTestPersistence.ts#$file"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "intent",
-      "fromFile": "packages/backend/src/modules/intent/composition/apply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file",
-      "id": "import:60d484316bfe723a49d8",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "role": "temporary-internal-debt",
-      "specifier": "@/modules/resource-catalog/composition/intentApply",
-      "syntax": "static-import",
-      "targetSymbol": "createPostgresqlIntentSkillArtifactLifecycle",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
@@ -120301,6 +120267,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/git.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#removeWorktree"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts#$file",
+      "id": "import:66a284e93640443a1861",
+      "owner": "intent",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/safePath",
+      "syntax": "static-import",
+      "targetSymbol": "safeJoin",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/safePath.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin"
     },
     {
       "edgeKind": "type",
@@ -126685,22 +126667,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/actor.ts",
       "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "intent",
-      "fromFile": "packages/backend/src/modules/intent/composition/apply.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file",
-      "id": "import:79194f89bf487340f6b9",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "role": "temporary-internal-debt",
-      "specifier": "@/modules/resource-catalog/composition/intentApply",
-      "syntax": "static-import",
-      "targetSymbol": "createPostgresqlIntentPluginArtifactLifecycle",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/composition/intentApply.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/intentApply.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -133584,6 +133550,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#$file",
+      "id": "import:8dcbb7abb94ace7baa79",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/safePath",
+      "syntax": "static-import",
+      "targetSymbol": "safeJoin",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/safePath.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/collaborationCommittedEvents.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationCommittedEvents.ts#$file",
@@ -138685,22 +138667,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskExecutionEffects"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "intent",
-      "fromFile": "packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#$file",
-      "id": "import:9ceec84b4244b85fb07d",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "role": "temporary-internal-debt",
-      "specifier": "@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants",
-      "syntax": "static-import",
-      "targetSymbol": "IntentApplyArtifact",
-      "toContext": "resource-catalog",
-      "toFile": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants.ts#IntentApplyArtifact"
     },
     {
       "edgeKind": "value",
@@ -149696,22 +149662,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "intent",
-      "fromFile": "packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts#$file",
-      "id": "import:bce631c601b3fad26e8e",
-      "owner": "intent",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/safePath",
-      "syntax": "static-import",
-      "targetSymbol": "safeJoin",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/safePath.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#safeJoin"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file",
@@ -150173,6 +150123,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workflows"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/application/intent/artifactOwners.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/intent/artifactOwners.ts#$file",
+      "id": "import:beb5a0d888d890bcb3e3",
+      "owner": "resource-catalog",
+      "removeAfterWave": null,
+      "role": "authority-type-only",
+      "specifier": "@/modules/identity-access/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "DirectAuthenticatedAuthority",
+      "toContext": "identity-access",
+      "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthenticatedAuthority"
     },
     {
       "edgeKind": "value",
@@ -153629,6 +153595,22 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#$file",
+      "id": "import:c87739a5161c1a689937",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "IntentApplyArtifact",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -157727,6 +157709,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#$file",
+      "id": "import:d390037180f325370234",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseTransaction",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseTransaction",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "memory",
       "fromFile": "packages/backend/src/modules/memory/infrastructure/skillMemoryFusionParticipant.ts",
@@ -158365,6 +158363,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/generationStore.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/generationStore.ts#readDatabaseGeneration"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/composition/apply.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file",
+      "id": "import:d53a2fa51dba296478f4",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "IntentSkillArtifactOwner",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -169679,6 +169693,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#databaseSessionFor"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts#$file",
+      "id": "import:f416b07275a099192185",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "IntentApplyArtifact",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/taskCollab.ts",
@@ -170877,6 +170907,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#createTaskDagCollaborationOperations"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/application/ports/intentArtifactContent.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentArtifactContent.ts#$file",
+      "id": "import:f8075369574a77c19cf4",
+      "owner": "intent",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/resource-catalog/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "IntentApplyArtifact",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -174523,7 +174569,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:42ddcaf19bd3f7f08469ab0949903f73f743c6e46a6e05555e4e27b3f9a63676",
+  "sourceDigest": "sha256:d29f2affb500eb024a5e0dc0a4f6031dd1bac1325b1da711d4887f2a8c4225cd",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

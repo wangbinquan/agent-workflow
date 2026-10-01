@@ -1,3 +1,17 @@
+import type {
+  IntentArtifactStage as StagedArtifactCapability,
+  IntentPluginPublication as PostgresqlIntentPluginInstallResult,
+  IntentPluginArtifactOwner as PostgresqlIntentPluginArtifactLifecycle,
+  IntentSkillPublication as PostgresqlIntentSkillStageResult,
+  IntentSkillArtifactOwner as PostgresqlIntentSkillArtifactLifecycle,
+} from '../../application/intent/artifactOwners'
+export type {
+  IntentPluginPublication as PostgresqlIntentPluginInstallResult,
+  IntentPluginArtifactOwner as PostgresqlIntentPluginArtifactLifecycle,
+  IntentSkillPublication as PostgresqlIntentSkillStageResult,
+  IntentSkillArtifactOwner as PostgresqlIntentSkillArtifactLifecycle,
+} from '../../application/intent/artifactOwners'
+import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { withAgentSidecarsFrom } from '../../domain/agentSidecarBackfill'
 import {
   privilegedNodeLensFor,
@@ -21,7 +35,6 @@ import {
   type Agent,
   type CreateAgent,
   type CreateMcp,
-  type PluginSourceKind,
   type Skill,
   type WorkflowDefinition,
   type WorkgroupDraftMember,
@@ -77,7 +90,6 @@ import {
 } from '../workgroupPersistence'
 import { workgroupFromRows } from '../workgroupRepository'
 import type {
-  IntentApplyArtifact,
   IntentApplyMutationPort,
   IntentApplyResourcePorts,
   IntentApplyResourceSessionOptions,
@@ -94,61 +106,6 @@ type ReceiptOf<K extends CatalogSelectorKind> = Extract<
   IntentResourceChangesetReceipt,
   { readonly kind: K }
 >
-
-interface StagedArtifactCapability<TResult> {
-  readonly artifact: IntentApplyArtifact
-  stage(): Promise<TResult>
-  compensate(): Promise<void>
-  rollForward(): Promise<void>
-  complete(): Promise<void>
-}
-
-export interface PostgresqlIntentPluginInstallResult {
-  readonly sourceKind: PluginSourceKind
-  readonly cachedPath: string
-  readonly resolvedVersion: string | null
-}
-
-/**
- * Filesystem/plugin owner capability. `planInstall` must not mutate the
- * filesystem: the returned artifact is journaled before `stage` is called.
- */
-export interface PostgresqlIntentPluginArtifactLifecycle {
-  planInstall(input: {
-    readonly pluginId: string
-    readonly operationId: string
-    readonly spec: string
-  }): Promise<StagedArtifactCapability<PostgresqlIntentPluginInstallResult>>
-}
-
-export interface PostgresqlIntentSkillStageResult {
-  readonly managedPath: string
-  readonly filesPath: string
-  readonly contentHash: string | null
-  commitInTransaction(
-    transaction: PostgresqlResourceCatalogTransaction,
-    versionIndex: number,
-  ): Promise<void>
-}
-
-/**
- * Managed-skill filesystem capability. Planning is side-effect free; the
- * Intent journal records `artifact` before the returned `stage` method acts.
- */
-export interface PostgresqlIntentSkillArtifactLifecycle {
-  planCreate(input: {
-    readonly authority: DirectAuthenticatedAuthority
-    readonly operationId: string
-    readonly skillId: string
-    readonly payload: PlanOf<'skill'>['payload']
-  }): Promise<StagedArtifactCapability<PostgresqlIntentSkillStageResult>>
-  planUpdate(input: {
-    readonly authority: DirectAuthenticatedAuthority
-    readonly operationId: string
-    readonly current: Skill
-    readonly payload: PlanOf<'skill'>['payload']
-  }): Promise<StagedArtifactCapability<PostgresqlIntentSkillStageResult>>
-}
 
 export interface PostgresqlIntentResourceCommitEvent {
   readonly kind: 'workflow' | 'workgroup'
@@ -919,7 +876,7 @@ function createSkillPort(
             `skill '${plan.payload.name}' already exists`,
           )
         }
-        await prepared.staged.commitInTransaction(transaction, 1)
+        await prepared.staged.commitInTransaction(transaction as unknown as DatabaseTransaction, 1)
         await transaction.insert(skills).values({
           id: plan.resourceId,
           name: plan.payload.name,
@@ -966,7 +923,10 @@ function createSkillPort(
           ? current.metaRevision
           : current.metaRevision + 1
       const updatedAt = monotonicNow(current.updatedAt)
-      await prepared.staged.commitInTransaction(transaction, versionIndex)
+      await prepared.staged.commitInTransaction(
+        transaction as unknown as DatabaseTransaction,
+        versionIndex,
+      )
       const changed = await transaction
         .update(skills)
         .set({

@@ -1130,3 +1130,10 @@ export interface SubmitMcpDiagnosticsTurnInput extends McpDiagnosticsSessionRef 
 export interface CancelMcpDiagnosticsTurnInput extends McpDiagnosticsSessionRef {
   readonly request: McpRuntimeTestCancelRequest
 }
+
+// Neutral content contracts consumed by Intent and its owner-specific adapters.
+export type {
+  IntentApplyArtifact,
+  IntentPluginArtifactOwner,
+  IntentSkillArtifactOwner,
+} from '../application/intent/artifactOwners'

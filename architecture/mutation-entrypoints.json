@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1781,
+    "entries": 1782,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -12615,30 +12615,6 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/intent/infrastructure/intentScratchFilesystem.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/intent/infrastructure/intentScratchFilesystem.ts#createIntentScratchFilesystem",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentScratchFilesystem.ts#createIntentScratchFilesystem",
-      "symbol": "createIntentScratchFilesystem",
-      "targetContext": "intent",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -12780,6 +12756,77 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentSqlProgramRunner.ts#execute",
       "symbol": "execute",
+      "targetContext": "intent",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts#createFileIntentArtifactContent",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts#createFileIntentArtifactContent",
+      "symbol": "createFileIntentArtifactContent",
+      "targetContext": "intent",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts#publishSkill",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts#publishSkill",
+      "symbol": "publishSkill",
+      "targetContext": "intent",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/infrastructure/local/fileIntentScratchStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/infrastructure/local/fileIntentScratchStore.ts#createFileIntentScratchStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/local/fileIntentScratchStore.ts#createFileIntentScratchStore",
+      "symbol": "createFileIntentScratchStore",
       "targetContext": "intent",
       "targetLayer": "infrastructure"
     },
@@ -16174,101 +16221,6 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#createPostgresqlIntentPluginArtifactLifecycle",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#createPostgresqlIntentPluginArtifactLifecycle",
-      "symbol": "createPostgresqlIntentPluginArtifactLifecycle",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#createPostgresqlIntentSkillArtifactLifecycle",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#createPostgresqlIntentSkillArtifactLifecycle",
-      "symbol": "createPostgresqlIntentSkillArtifactLifecycle",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": true
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#createSkillStage",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#createSkillStage",
-      "symbol": "createSkillStage",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#publishSkillStage",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyArtifactOwners.ts#publishSkillStage",
-      "symbol": "publishSkillStage",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
         "authorization": true,
         "event": true,
         "fenceOrOcc": false,
@@ -16466,30 +16418,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#createWorkgroupPort",
       "symbol": "createWorkgroupPort",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "internal-family",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#StagedArtifactCapability",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourcePorts.ts#StagedArtifactCapability",
-      "symbol": "StagedArtifactCapability",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -17865,6 +17793,101 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#saveWorkgroup",
       "symbol": "saveWorkgroup",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#createFileIntentPluginArtifactOwner",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#createFileIntentPluginArtifactOwner",
+      "symbol": "createFileIntentPluginArtifactOwner",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#createFileIntentSkillArtifactOwner",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#createFileIntentSkillArtifactOwner",
+      "symbol": "createFileIntentSkillArtifactOwner",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#createSkillStage",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#createSkillStage",
+      "symbol": "createSkillStage",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#publishSkillStage",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileIntentApplyArtifactOwners.ts#publishSkillStage",
+      "symbol": "publishSkillStage",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -42551,7 +42574,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:42ddcaf19bd3f7f08469ab0949903f73f743c6e46a6e05555e4e27b3f9a63676",
+  "sourceDigest": "sha256:d29f2affb500eb024a5e0dc0a4f6031dd1bac1325b1da711d4887f2a8c4225cd",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

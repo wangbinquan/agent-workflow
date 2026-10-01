@@ -205,7 +205,7 @@ CS RFC-029 的五种恢复请求必须由 aw recovery handler 消费：先根据
 
 拟新增 `POST /integrations/crewstation/events`，只挂在 CS 模式；契约为 CS EventDelivery v1，成功返回204。安装时将实际 eventType UUID 写到 Manifest subscriptions，handlerPath 固定为该入口；不是由 aw 为每个响应规则另造 CS 订阅。
 
-绑定键为 `(installationId, producerId)`，值含 provider、已批准的代码平台 instance／API base、仓库 allowlist 和 aw logical endpointId。source.project、payload URL 和 eventType 文本不能自行扩大权限。认证先验 sourceToken 的平台来源、aud 与配置，再对照 envelope 和 x-cs-delivery-id/type/attempt；EventProducer 身份取信封并检查已登记绑定，不把 producer 的 payload 当调用方身份。
+producer 来源配置键为 `(installationId, producerId)`，值含 provider、已批准的代码平台 instance／API base 和来源仓库集合；另设 `(installationId, producerId, logicalEndpointId)` 路由绑定，每项持有自己的仓库选择与 binding revision。同一 producer 可投递多个既有 aw endpoint，同一事件也可按显式绑定匹配多个 endpoint；保留每个 endpoint 的规则、MR stream 和观测作用域，不因共享 producer 合并业务 source。source.project、payload URL 和 eventType 文本不能自行扩大权限。认证先验 sourceToken 的平台来源、aud 与配置，再对照 envelope 和 x-cs-delivery-id/type/attempt；EventProducer 身份取信封并检查已登记绑定，不把 producer 的 payload 当调用方身份。
 
 CS 信封不携带原 webhook headers／签名字节，不能调用 githubVerify/gitlabVerify 重新“验上游签名”。该信任由已上线 producer 验签及 cs-events 服务来源承担。aw 增加 transport-specific 验证上下文；复用 provider normalize 时生成内部 HeaderBag，只表达事件种类及稳定身份，审计明确 `cs-delegated` 而非 `direct-signature`。
 
@@ -227,13 +227,15 @@ CS 信封不携带原 webhook headers／签名字节，不能调用 githubVerify
 
 ### 7.2 持久 ACK 与两层去重
 
-拟增 `cs_event_inbox`：主键 `(installationId, deliveryId)`，保存 eventId、producerId、eventTypeId、payloadDigest／payload、source binding revision、receivedAt、处理状态及 lastError。唯一事实键 `(installationId, producerId, eventId, logicalEndpointId)` 防止同一事件多订阅重复触发同一 source；同一 delivery ID 不同内容返回409并审计。
+拟增 `cs_event_inbox`：主键 `(installationId, deliveryId)`，保存 eventId、producerId、eventTypeId、payloadDigest／payload、receivedAt 及逻辑事件回执引用。逻辑事件路由回执以 `(installationId, producerId, eventId)` 唯一，首次接收时冻结来源配置 revision、全部匹配的 logicalEndpointId、逐项 binding revision 和路由结果；逐目标事实以 `(installationId, producerId, eventId, logicalEndpointId)` 唯一，保存处理 stage、规范化 deliveryId 和 lastError。父 inbox、逻辑路由回执与完整目标集合在同一接收事务中持久化。一个目标完成、另一个失败时只恢复未完成目标，不重复已完成 source 的观测或响应。合法已登记事件没有匹配仓库时，也保存明确的 ignored 路由结果与空目标集合。
 
-接收事务只做验证后入库／幂等命中，commit 后204。数据库失败503；签名／来源失败401/403；非法合同400；未知目录绑定422，不吞掉错误。ack不等待 workflow完成。commit 后丢ACK重投返回204；ACK后进程崩溃由 inbox worker恢复。
+同 delivery 重投，以及同 eventId 因多订阅产生的新 deliveryId，均引用首次冻结的目标集合；重投期间新增、修改或删除绑定不能给旧事件增加派发目标。绑定修改只影响新的逻辑事件，历史补发走显式业务 replay。目标 source 被删除时保留目标事实并记录可查询的终态原因，不重路由到其他 endpoint。同一 delivery ID 或逻辑 eventId 内容失配返回409并审计；永久回执不随绑定删除或业务失败清除。
 
-拥有 active fence 的 worker 从 inbox 归一化，调用 integration 现 verified-delivery 受理命令及 MR stream/effect 单事务语义，之后进入 `codeHostEventObservations` 的原 business + compatibility 两类观测。拟从 integration public/commands 精确暴露业务受理命令，不跨域 deep import persistence。原 event-center 幂等 observation／response intent 继续消费，不新增第二条 direct startTask 捷径。
+接收事务只做验证、路由结果与完整目标集合入库／幂等命中，commit 后204。数据库失败503；签名／来源失败401/403；非法合同400；新事件的未知目录绑定422，不吞掉错误。ack不等待归一化或 workflow完成。commit 后丢ACK重投返回204；ACK后进程崩溃由目标 worker恢复，不以单个目标成功宣称整个事件已处理。
 
-新的稳定 eventUuid 使用受绑定作用域保护的 CS eventId，**不使用 deliveryId／attempt**。当前legacy accept的重复查询会排除failed/rejected行，不能只把CS eventId塞入eventUuid便声称崩溃安全。CS分支必须有永久transport receipt键，独立于业务投递终态；将inbox stage完成、规范化deliveryId绑定、现MR stream/effect受理纳入integration-owned同一UnitOfWork事务。为此把现受理逻辑提为域内可复用事务参与者，由新的public命令组合，原直连显式replay策略保持。任意失败/取消终态都不能删除CS受理receipt后重新创建业务事实。payloadArtifactRef 保留原有 webhook-delivery读取面，另关联 transport receipt；JSON重序列化的字节不得伪称原HTTP raw bytes。永久归一化失败保留 `rejected` 和可查询错误，不算“业务已处理成功”。
+拥有 active fence 的 worker 按冻结目标逐项归一化，调用 integration 现 verified-delivery 受理命令及 MR stream/effect 单事务语义，之后进入 `codeHostEventObservations` 的原 business + compatibility 两类观测。每个目标的规范化 deliveryId 绑定、MR 受理及两类 observation 的持久待发布义务在同一事务提交；此时目标只进入 admitted／pending-publication，不能标为 completed。沿原 `codeHostEventObservations` 生成的两个稳定 observation key 和冻结输入补发布；各类 observe 幂等持久完成后逐项记录回执，两个回执均已提交才将目标标 completed。第一类成功、第二类失败，或任意一次 observe 提交后尚未写回目标便崩溃，均由 worker 补齐同一 key，不能跳过 admitted 目标，也不能重做 MR 受理。规范化被原有忽略／拒绝语义终结的目标保存明确结果，不伪造两类发布成功。不同 endpoint 保留各自的原有 dedupe/routing key。拟从 integration public/commands 精确暴露业务受理命令，不跨域 deep import persistence。原 event-center 幂等 observation／response intent 继续消费，不新增第二条 direct startTask 捷径。
+
+新的稳定 eventUuid 使用受绑定作用域保护的 CS eventId，**不使用 deliveryId／attempt**。当前legacy accept的重复查询会排除failed/rejected行，不能只把CS eventId塞入eventUuid便声称崩溃安全。CS分支必须有永久transport receipt键，独立于业务投递终态；将目标 admitted阶段、规范化deliveryId绑定、现MR stream/effect受理及待发布义务纳入integration-owned同一UnitOfWork事务。为此把现受理逻辑提为域内可复用事务参与者，由新的public命令组合，原直连显式replay策略保持。任意失败/取消终态都不能删除CS受理receipt后重新创建业务事实。payloadArtifactRef 保留原有 webhook-delivery读取面，另关联 transport receipt；JSON重序列化的字节不得伪称原HTTP raw bytes。永久归一化失败保留 `rejected` 和可查询错误，不算“业务已处理成功”。
 
 CS dead replay 是同一 transport delivery 的重试，不自动创造 aw 新业务执行。aw 用户“重新处理”是显式新业务命令，携带 replay request ID、原 observation及授权，沿用现 MR终态／replay控制。两个重放按钮显示不同对象。
 

@@ -1,3 +1,4 @@
+import type { IntentApplyArtifact } from '@/modules/resource-catalog/public/types'
 import {
   intentWorkflowInvalidMessage,
   validateResolvedBundleWorkflowGraphs,
@@ -43,10 +44,7 @@ import {
   intentProvenance,
   intentSessions,
 } from '@/db/schema'
-import type {
-  IntentApplyArtifact,
-  IntentApplyResourceSession,
-} from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
+import type { IntentApplyResourceSession } from '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants'
 import type { ResourceRequestContext } from '@/modules/resource-catalog/public/participants'
 import {
   databaseSessionFor,

@@ -67,7 +67,8 @@ const ARTIFACT_LIFECYCLE_SRC = resolve(
   'modules',
   'intent',
   'infrastructure',
-  'intentApplyArtifactLifecycle.ts',
+  'local',
+  'fileIntentArtifactContent.ts',
 )
 
 const actorOf = (id: string) =>
@@ -243,8 +244,8 @@ describe('T17 · plugin 半边的两条要害（源码层）', () => {
         'modules',
         'resource-catalog',
         'infrastructure',
-        'aggregateAdapters',
-        'intentApplyArtifactOwners.ts',
+        'local',
+        'fileIntentApplyArtifactOwners.ts',
       ),
       'utf8',
     )

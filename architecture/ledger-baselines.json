@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1781,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1782,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：createFileIntentArtifactContent 按原 create 规则增加一个存储效果工厂，1781→1782；Intent apply／journal 编排和原两种 RC 工件 owner 保持。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5585,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5590,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：Intent 消费 RC exact public 中立工件／owner 合同及 composition 选择产生真实符号边，5585→5590；原 lifecycle 的 RC 内部类型边销账，不新增跨域业务状态机。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,7 +873,7 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4962,
+      "baseline": 4960,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
@@ -881,8 +887,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1030,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1033,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：RC 已有工件／stage／publication／owner 合同下沉 application 并以三个有跨域消费者的中立类型从 public/types 提供，1030→1033；有 Intent 消费者，不公开 Postgresql provider 类型或 CS wire DTO。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -902,12 +911,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25573,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25587,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：中立工件合同、Intent 内容／scratch 端口、local 效果及 compatibility 出口／composition 输入的真实净符号变化，25573→25587；版本与 journal 规则继续归 AW。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:42ddcaf19bd3f7f08469ab0949903f73f743c6e46a6e05555e4e27b3f9a63676",
+    "sourceDigest": "sha256:d29f2affb500eb024a5e0dc0a4f6031dd1bac1325b1da711d4887f2a8c4225cd",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +932,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "13f5b8e33350ba6159f85edd6eec1810750ef2e4",
-    "contentDigest": "sha256:bf22ebea032d3218f95cbbdbc65a4bca92a4736450fcd377e133a78f9486d582",
+    "currentSnapshotSha": "ce8a6310adb9576559f4d5100d4916635a104720",
+    "contentDigest": "sha256:80e9e487950fbe1773bc1189e12ec63f0afd2adb4b345b99eceb5c74ddeaba28",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

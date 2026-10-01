@@ -14,9 +14,16 @@ import {
   composeLegacyIntentSkillArtifactCompat,
   composeIntentApplyResourceBinding,
   composePostgresqlSkillArtifactCompensation,
-  createPostgresqlIntentPluginArtifactLifecycle,
-  createPostgresqlIntentSkillArtifactLifecycle,
+  createFileIntentPluginArtifactOwner,
+  createFileIntentSkillArtifactOwner,
 } from '@/modules/resource-catalog/composition/intentApply'
+import type {
+  IntentPluginArtifactOwner,
+  IntentSkillArtifactOwner,
+} from '@/modules/resource-catalog/public/types'
+import type { IntentArtifactContentPort } from '../application/ports/intentArtifactContent'
+import type { LegacyIntentSkillArtifactCompat } from '../ports/skillArtifactCompensation'
+import { createFileIntentArtifactContent } from '../infrastructure/local/fileIntentArtifactContent'
 import { createResourceCatalogAclIdentityReadPort } from '@/modules/resource-catalog/infrastructure/aclReadRepository'
 import type { ResourceCatalogAclIdentityReadPort } from '@/modules/resource-catalog/application/ports/providerResourceCatalogPersistence'
 import { createMcpTransactionLifecycle } from '@/modules/resource-catalog/infrastructure/mcpTransactionLifecycle'
@@ -53,6 +60,10 @@ export interface IntentApplyCompositionDependencies {
   readonly aclIdentities?: ResourceCatalogAclIdentityReadPort
   /** 已装配好的工件生命周期；省略时按 `db` + `appHome` 现装一份。 */
   readonly artifacts?: IntentApplyArtifactLifecycle
+  readonly artifactContent?: IntentArtifactContentPort
+  readonly legacySkillArtifacts?: LegacyIntentSkillArtifactCompat
+  readonly pluginArtifacts?: IntentPluginArtifactOwner
+  readonly skillArtifacts?: IntentSkillArtifactOwner
   /**
    * 已装配好的资源会话绑定；省略时按 `db` + `appHome` + `aclIdentities` 现装一份。
    * 用例用它在真实会话外面包一层观测（例：在 `prepare` 返回后放行一个并发 apply）。
@@ -71,13 +82,24 @@ export interface IntentApplyCompositionDependencies {
 export function composeIntentApplyArtifactLifecycle(input: {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
+  readonly pluginsDir?: string
+  readonly content?: IntentArtifactContentPort
+  readonly legacySkillArtifacts?: LegacyIntentSkillArtifactCompat
 }): IntentApplyArtifactLifecycle {
+  const pluginsDir = input.pluginsDir ?? join(input.appHome, 'plugins')
+  const content =
+    input.content ??
+    createFileIntentArtifactContent({
+      appHome: input.appHome,
+      pluginsDir,
+      skillArtifacts: composePostgresqlSkillArtifactCompensation(),
+    })
   return createIntentApplyArtifactLifecycle({
     db: input.db,
     appHome: input.appHome,
-    pluginsDir: join(input.appHome, 'plugins'),
-    skillArtifacts: composePostgresqlSkillArtifactCompensation(),
-    legacySkillArtifacts: composeLegacyIntentSkillArtifactCompat(),
+    pluginsDir,
+    content,
+    legacySkillArtifacts: input.legacySkillArtifacts ?? composeLegacyIntentSkillArtifactCompat(),
   })
 }
 
@@ -93,16 +115,26 @@ export function composeIntentApplyOperations(
       composeIntentApplyResourceBinding({
         db: dependencies.db,
         mcpLifecycle: createMcpTransactionLifecycle(),
-        pluginArtifacts: createPostgresqlIntentPluginArtifactLifecycle({
-          pluginsDir: join(appHome, 'plugins'),
-        }),
-        skillArtifacts: createPostgresqlIntentSkillArtifactLifecycle({ appHome }),
+        pluginArtifacts:
+          dependencies.pluginArtifacts ??
+          createFileIntentPluginArtifactOwner({ pluginsDir: join(appHome, 'plugins') }),
+        skillArtifacts:
+          dependencies.skillArtifacts ?? createFileIntentSkillArtifactOwner({ appHome }),
         aclIdentities:
           dependencies.aclIdentities ?? createResourceCatalogAclIdentityReadPort(dependencies.db),
       }),
     artifacts:
       dependencies.artifacts ??
-      composeIntentApplyArtifactLifecycle({ db: dependencies.db, appHome }),
+      composeIntentApplyArtifactLifecycle({
+        db: dependencies.db,
+        appHome,
+        ...(dependencies.artifactContent === undefined
+          ? {}
+          : { content: dependencies.artifactContent }),
+        ...(dependencies.legacySkillArtifacts === undefined
+          ? {}
+          : { legacySkillArtifacts: dependencies.legacySkillArtifacts }),
+      }),
     ...(dependencies.graphValidation === undefined
       ? {}
       : { graphValidation: dependencies.graphValidation }),

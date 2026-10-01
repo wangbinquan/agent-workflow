@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:42ddcaf19bd3f7f08469ab0949903f73f743c6e46a6e05555e4e27b3f9a63676`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:d29f2affb500eb024a5e0dc0a4f6031dd1bac1325b1da711d4887f2a8c4225cd`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1939 |
+| backend production TS 文件 | 1945 |
 | `services/` 文件 | 295 |
-| `modules/**` 文件 / 非空 context | 1385 / 18 |
+| `modules/**` 文件 / 非空 context | 1391 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 500 |
-| `architectureExceptions` | 4962 |
+| `architectureExceptions` | 4960 |
 | `backgroundJobs` | 338 |
-| `crossContextImports` | 5585 |
+| `crossContextImports` | 5590 |
 | `facades` | 295 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25573 |
-| `mutationEntrypoints` | 1781 |
+| `moduleSymbolOwners` | 25587 |
+| `mutationEntrypoints` | 1782 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1030 |
+| `publicSurfaces` | 1033 |
 | `transactionExternalEffects` | 261 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -47,10 +47,10 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| resource-catalog / infrastructure | 121 |
+| resource-catalog / infrastructure | 122 |
 | task-execution / infrastructure | 109 |
 | task-execution / application | 101 |
-| resource-catalog / application | 74 |
+| resource-catalog / application | 75 |
 | task-execution / composition | 61 |
 | development-automation / application | 51 |
 | collaboration / infrastructure | 47 |
@@ -59,8 +59,8 @@
 | development-automation / domain | 33 |
 | development-automation / infrastructure | 33 |
 | task-execution / domain | 32 |
+| intent / application | 27 |
 | identity-access / application | 25 |
-| intent / application | 25 |
 | integration / application | 23 |
 | integration / infrastructure | 22 |
 | system-operations / infrastructure | 21 |
@@ -82,6 +82,7 @@
 | code-capability / domain | 11 |
 | memory / application | 11 |
 | resource-catalog / domain | 11 |
+| intent / infrastructure | 10 |
 | digital-employee / infrastructure | 9 |
 | memory / domain | 9 |
 | run-observability / application | 9 |
@@ -89,7 +90,6 @@
 | source-control / domain | 9 |
 | collaboration / composition | 8 |
 | event-center / application | 8 |
-| intent / infrastructure | 8 |
 | knowledge-evolution / domain | 8 |
 | run-observability / infrastructure | 8 |
 | development-automation / engine | 7 |
@@ -208,13 +208,13 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3280 |
+| legacy-outbound | 3282 |
 | legacy-inbound | 1495 |
 | infrastructure-external | 290 |
-| offered-consumption | 195 |
-| temporary-internal-debt | 92 |
+| offered-consumption | 201 |
+| temporary-internal-debt | 88 |
 | off-dag-offered | 83 |
-| authority-type-only | 77 |
+| authority-type-only | 78 |
 | required-implementation | 67 |
 | external-layer-debt | 4 |
 | provider-mirror | 2 |
@@ -223,9 +223,9 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3280 |
+| legacy-outbound | 3282 |
 | legacy-inbound | 1495 |
-| temporary-internal-debt | 92 |
+| temporary-internal-debt | 88 |
 | off-dag-offered | 83 |
 | no-circular | 6 |
 | external-layer-debt | 4 |
@@ -235,8 +235,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2712 |
-| W9-D | 801 |
+| W9 | 2714 |
+| W9-D | 797 |
 | W4-E1 | 658 |
 | W4 | 201 |
 | W4-B | 187 |
@@ -255,7 +255,7 @@
 
 | context | 数量 |
 | --- | --- |
-| resource-catalog | 234 |
+| resource-catalog | 237 |
 | task-execution | 212 |
 | collaboration | 122 |
 | source-control | 66 |
@@ -274,7 +274,7 @@
 | run-observability | 4 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1030）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1033）
 
 | context | 数量 |
 | --- | --- |

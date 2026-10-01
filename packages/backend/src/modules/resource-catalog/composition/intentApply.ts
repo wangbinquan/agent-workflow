@@ -62,6 +62,11 @@ export {
   createPostgresqlIntentSkillArtifactLifecycle,
 } from '../infrastructure/aggregateAdapters/intentApplyArtifactOwners'
 
+export {
+  createFileIntentPluginArtifactOwner,
+  createFileIntentSkillArtifactOwner,
+} from '../infrastructure/local/fileIntentApplyArtifactOwners'
+
 // RFC-355 T6 —— intent 恢复路径要的技能工件补偿原语，由 RC 提供、bootstrap 注入。
 //
 // intent 的 `ArtifactLifecycle` 负责编排「补偿 / 前滚」，但被补偿的对象是 RC 的技能工件。

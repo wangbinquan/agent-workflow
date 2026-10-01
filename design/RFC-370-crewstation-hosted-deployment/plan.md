@@ -297,3 +297,17 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - `13f5b8e33350ba6159f85edd6eec1810750ef2e4` 的 [CI 36874167121](https://github.com/wangbinquan/agent-workflow/actions/runs/36874167121) 已有后端失败，整体终态尚待回执；原三类导入／类型／源码锁遗漏已通过。Ubuntu 2/16 的真实包解析指出新夹具 opId 使用 `op-storage`，与既有 `op-<n>` schema 不符；改为 `op-1`，包解析、预检、storage 效果及原状态／等待断言均不变。未发布 Intent 同类夹具同步纠正，但不混入本次修复提交。
 - macOS 1/6 的既有 RFC294 E9-C 崩溃重放用例第一次在固定 50ms 后未进入 launch，第二次随后看到了延迟的 `execution-2`。改为等待 core 明确到达 before-task／after-task 对应崩溃位置，再推进租约时钟与重放；after-task 必须先完成真实任务行写入。保留所有 execution-1、单行、admission 与内核零重复调用断言，不增加重试或修改生产派发。
 - 两份修复测试精确格式／lint通过。官方 scoped census 从 HEAD 读取 Intent 在制内容，baseline 无增长；仅发布测试、文档与 provenance。正式结果以本次修复 SHA 的完整 hosted CI 为准，不把当前失败或可能被后继自动取消的 run 记成功。RFC 全部实施与部署持续，A-G 未关闭。
+
+### 配套 CI 回执与下一批边界（2026-10-01）
+
+- 第二轮夹具补正已发布 `ce8a6310adb9576559f4d5100d4916635a104720`，[CI 36876744628](https://github.com/wangbinquan/agent-workflow/actions/runs/36876744628) 进行中。前继 `13f5b8e33`／36874167121 因后继 push 自动取消，终态为 cancelled、34 success／4 failure／12 cancelled；三处后端失败均已取实际日志，分别为包 opId 和崩溃位置固定等待，不以部分绿关闭。没有手工取消 CI 或降低门禁。
+- Intent 内容／scratch 候选已经完整准备，scoped 官方 census 仅纳入其 21 个源码／回归路径；从 HEAD 读取下一批任务配置在制内容，未纳入其新增文件。正式发布等待上述 CI 修复完整终态通过，避免夹带后续 feature。原 `op-storage` 同类 Intent 夹具已经按实际 shared schema 改为 `op-1`。
+- H1 任务操作配置下一批候选：TE-owned `TaskOperationConfigurationQueries` 只提供当前 binary 路径与 commit exclude patterns。原文件读取包在独立 local adapter；AW 仍负责 mint-time 冻结、每次 operation 数组快照与读取失败时的 launch fallback。六个 node／wrapper／commit 冻结调用及 commit policy 调用均等待所选 query。
+- 所选配置能力由 driver 在每次 drive 注入，包括子任务；不进入持久 child run-config 包，原继承清单保持。legacy 文件路径入口仍选择原 live file adapter，所选 query 失败不回读本机。下一批新增真实双 provider／双 runtime 冻结回归、异步等待、配置修改后的旧快照／新节点、commit 数组与 fallback、无文件读取及继承边界回归；本地仅精确格式/lint，未发布或运行正式测试。
+- 任务启动 policy、上传限制、后台热读、CLI 生命周期及其余 H1～H8 仍继续收口；本节不关闭任何全切面或 A-G，CS adapter 与 M0～M4 顺序保持。
+
+### 独立功能门备选回执与 H8 多 source 补正（2026-10-01）
+
+按仓库明确的独立子代理备选完成两个精确候选实现门：Intent 21 路径、任务操作配置14路径均有限范围 PASS，未运行本机功能门禁，正式结果仍待各批 exact-SHA CI，不关闭全 H1/H6/A-G。设计首轮仅 H8 单 producer→单 endpoint 的一项功能遗漏；已补来源配置/多路由/逻辑事件完整冻结集合/逐目标持久受理，不合并原 endpoint 规则与观测。八个多 source、局部恢复、跨订阅、路由变更及 MR受理→两类观测间崩溃场景纳入 B-T5；修订稿独立设计门已 PASS，完整 A-G 尚未通过。详见[独立功能门记录](./functional-gates.md)。原工具不可用和历史门状态保留。
+
+资源包第二轮修复 `ce8a6310adb9576559f4d5100d4916635a104720` 的[主 CI 36876744628](https://github.com/wangbinquan/agent-workflow/actions/runs/36876744628)已 completed/success，50/50作业全部成功，headSha完全一致。前继13f的 cancelled/failure 历史不改写；本轮已恢复主 CI，再发布有有限独立功能 PASS 的 Intent 内容/scratch 候选及 H8 设计补正。下一批任务操作配置14路径保留且从本批官方census排除，不混入本批提交。

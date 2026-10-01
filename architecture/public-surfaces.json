@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 925,
+    "consumers": 932,
     "exactEntrypointFiles": 69,
     "governedFieldSurfaces": 5,
-    "methods": 1101,
+    "methods": 1112,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21277,
-    "symbols": 1030
+    "recursiveFields": 21386,
+    "symbols": 1033
   },
   "entries": [
     {
@@ -45856,6 +45856,7 @@
         "public:resource-catalog:queries:WorkflowValidationQueries",
         "public:resource-catalog:queries:WorkgroupQueries",
         "public:resource-catalog:queries:WorkgroupTaskRoomQueries",
+        "public:resource-catalog:types:IntentSkillArtifactOwner",
         "public:runtime-management:participants:RealtimeCredentialAccess",
         "public:runtime-management:participants:RealtimeIdentityAccess",
         "public:runtime-management:participants:RealtimeRuntime",
@@ -47481,6 +47482,7 @@
         "import:a664f6aa0428d1103bd6",
         "import:b45d3c7ac9ba7c8496c5",
         "import:ba1e3dfa291d7b7deafb",
+        "import:beb5a0d888d890bcb3e3",
         "import:d0e837f4f6a50c96ddeb",
         "import:f8d52dff892baba29ede",
         "import:ffeb63bdfdb7de4e4c02"
@@ -47727,6 +47729,12 @@
         },
         {
           "context": "resource-catalog",
+          "edgeId": "import:beb5a0d888d890bcb3e3",
+          "file": "packages/backend/src/modules/resource-catalog/application/intent/artifactOwners.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/intent/artifactOwners.ts#$file"
+        },
+        {
+          "context": "resource-catalog",
           "edgeId": "import:d0e837f4f6a50c96ddeb",
           "file": "packages/backend/src/modules/resource-catalog/infrastructure/agentImportQueries.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/agentImportQueries.ts#$file"
@@ -47788,6 +47796,7 @@
         "public:resource-catalog:queries:WorkflowValidationQueries",
         "public:resource-catalog:queries:WorkgroupQueries",
         "public:resource-catalog:queries:WorkgroupTaskRoomQueries",
+        "public:resource-catalog:types:IntentSkillArtifactOwner",
         "public:runtime-management:participants:RealtimeCredentialAccess",
         "public:runtime-management:participants:RealtimeIdentityAccess",
         "public:runtime-management:participants:RealtimeRuntime",
@@ -49696,6 +49705,7 @@
         "public:resource-catalog:queries:WorkflowValidationQueries",
         "public:resource-catalog:queries:WorkgroupQueries",
         "public:resource-catalog:queries:WorkgroupTaskRoomQueries",
+        "public:resource-catalog:types:IntentSkillArtifactOwner",
         "public:runtime-management:participants:RealtimeCredentialAccess",
         "public:runtime-management:participants:RealtimeIdentityAccess",
         "public:runtime-management:participants:RealtimeRuntime",
@@ -111330,6 +111340,809 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:437fc74b15bdad43e0ce",
+        "import:c87739a5161c1a689937",
+        "import:f416b07275a099192185",
+        "import:f8075369574a77c19cf4"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:437fc74b15bdad43e0ce",
+            "import:f416b07275a099192185"
+          ],
+          "fieldPath": "$variant:0.generationDir",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f416b07275a099192185"
+          ],
+          "fieldPath": "$variant:0.generationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:437fc74b15bdad43e0ce",
+            "import:c87739a5161c1a689937",
+            "import:f416b07275a099192185",
+            "import:f8075369574a77c19cf4"
+          ],
+          "fieldPath": "$variant:0.kind",
+          "type": "'plugin-install'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:f416b07275a099192185"
+          ],
+          "fieldPath": "$variant:0.pluginId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:437fc74b15bdad43e0ce",
+            "import:c87739a5161c1a689937",
+            "import:f416b07275a099192185",
+            "import:f8075369574a77c19cf4"
+          ],
+          "fieldPath": "$variant:1.kind",
+          "type": "'skill-stage'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:437fc74b15bdad43e0ce",
+            "import:c87739a5161c1a689937",
+            "import:f416b07275a099192185"
+          ],
+          "fieldPath": "$variant:1.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:437fc74b15bdad43e0ce",
+            "import:f416b07275a099192185"
+          ],
+          "fieldPath": "$variant:1.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:437fc74b15bdad43e0ce",
+            "import:f416b07275a099192185"
+          ],
+          "fieldPath": "$variant:1.stagingDirectory",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:437fc74b15bdad43e0ce",
+            "import:c87739a5161c1a689937",
+            "import:f416b07275a099192185",
+            "import:f8075369574a77c19cf4"
+          ],
+          "fieldPath": "$variant:2.kind",
+          "type": "'skill-version-stage'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:437fc74b15bdad43e0ce",
+            "import:c87739a5161c1a689937",
+            "import:f416b07275a099192185"
+          ],
+          "fieldPath": "$variant:2.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:437fc74b15bdad43e0ce",
+            "import:f416b07275a099192185"
+          ],
+          "fieldPath": "$variant:2.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:437fc74b15bdad43e0ce",
+            "import:f416b07275a099192185"
+          ],
+          "fieldPath": "$variant:2.stagingDirectory",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:437fc74b15bdad43e0ce",
+            "import:c87739a5161c1a689937",
+            "import:f416b07275a099192185",
+            "import:f8075369574a77c19cf4"
+          ],
+          "fieldPath": "$variant:2.version",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:437fc74b15bdad43e0ce",
+            "import:f416b07275a099192185"
+          ],
+          "fieldPath": "$variant:2.versionDirectory",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:IntentApplyArtifact",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "intent",
+          "edgeId": "import:437fc74b15bdad43e0ce",
+          "file": "packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/local/fileIntentArtifactContent.ts#$file"
+        },
+        {
+          "context": "intent",
+          "edgeId": "import:c87739a5161c1a689937",
+          "file": "packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyEngine.ts#$file"
+        },
+        {
+          "context": "intent",
+          "edgeId": "import:f416b07275a099192185",
+          "file": "packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentApplyArtifactLifecycle.ts#$file"
+        },
+        {
+          "context": "intent",
+          "edgeId": "import:f8075369574a77c19cf4",
+          "file": "packages/backend/src/modules/intent/application/ports/intentArtifactContent.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentArtifactContent.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:types:IntentPluginArtifactOwner",
+        "public:resource-catalog:types:IntentSkillArtifactOwner"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:5834c8b9606c8d02e32032ab3bed803f0c69add131d8b186c0a843481a05be8d",
+      "status": "target-context-current-surface",
+      "symbol": "IntentApplyArtifact",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:2c6b0c6487f2b678b102"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$parameter:input.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$parameter:input.pluginId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$parameter:input.spec",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.$method:compensate.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.$method:complete.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.$method:rollForward.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.$method:stage.$return",
+          "type": "TResult"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:0.generationDir",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:0.generationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:0.kind",
+          "type": "'plugin-install'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:0.pluginId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:1.kind",
+          "type": "'skill-stage'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:1.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:1.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:1.stagingDirectory",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:2.kind",
+          "type": "'skill-version-stage'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:2.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:2.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:2.stagingDirectory",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:2.version",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planInstall.$return.artifact.$variant:2.versionDirectory",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:IntentPluginArtifactOwner",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "compensate",
+          "signatureDigest": "sha256:76f8e6c83782cf7558a61ca703bd01a576b9fa030453ac886d584cac2d5fadf1"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "complete",
+          "signatureDigest": "sha256:e31f2a207ded147a3f2fb9df6bcbcb7965bbc1845e3e3d656493096286559b91"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "planInstall",
+          "signatureDigest": "sha256:1a8a2d05c3f7d3742b241f6a4f60d929f0971df339a96399f9578afd3d83b60a"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "rollForward",
+          "signatureDigest": "sha256:ea8b61ac7ca2cef31bf37a3d753053937c22b277a14fc394e937ea3220ac5c3e"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "stage",
+          "signatureDigest": "sha256:55c1a0fe9486b2e0026a51f41768931adb434b8b071c228be9e75db9fd9fa159"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "intent",
+          "edgeId": "import:2c6b0c6487f2b678b102",
+          "file": "packages/backend/src/modules/intent/composition/apply.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:8a06b6f925851db5d97ee4e707d939c05b25064694e04a06da22d290a258b902",
+      "status": "target-context-current-surface",
+      "symbol": "IntentPluginArtifactOwner",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 6,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 74,
+        "maxUnionVariants": 20
+      },
+      "consumerEdgeIds": [
+        "import:d53a2fa51dba296478f4"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d53a2fa51dba296478f4"
+          ],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.authority.userId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.payload",
+          "type": "SkillPlan['payload']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$parameter:input.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.$method:compensate.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.$method:complete.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.$method:rollForward.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.$method:stage.$return",
+          "type": "TResult"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:0.generationDir",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:0.generationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:0.kind",
+          "type": "'plugin-install'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:0.pluginId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:1.kind",
+          "type": "'skill-stage'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:1.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:1.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:1.stagingDirectory",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:2.kind",
+          "type": "'skill-version-stage'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:2.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:2.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:2.stagingDirectory",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:2.version",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planCreate.$return.artifact.$variant:2.versionDirectory",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.source",
+          "type": "Extract<PrincipalSource, 'session' | 'pat' | 'daemon'>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d53a2fa51dba296478f4"
+          ],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.authority.userId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.current",
+          "type": "z.infer<typeof SkillSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$parameter:input.payload",
+          "type": "SkillPlan['payload']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.$method:compensate.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.$method:complete.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.$method:rollForward.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.$method:stage.$return",
+          "type": "TResult"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:0.generationDir",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:0.generationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:0.kind",
+          "type": "'plugin-install'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:0.pluginId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:1.kind",
+          "type": "'skill-stage'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:1.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:1.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:1.stagingDirectory",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:2.kind",
+          "type": "'skill-version-stage'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:2.operationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:2.skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:2.stagingDirectory",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:2.version",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:planUpdate.$return.artifact.$variant:2.versionDirectory",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:IntentSkillArtifactOwner",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "compensate",
+          "signatureDigest": "sha256:76f8e6c83782cf7558a61ca703bd01a576b9fa030453ac886d584cac2d5fadf1"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "complete",
+          "signatureDigest": "sha256:e31f2a207ded147a3f2fb9df6bcbcb7965bbc1845e3e3d656493096286559b91"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "planCreate",
+          "signatureDigest": "sha256:bd83e70ea565c6c606e9d008b8208c3c5b0833cc7a23bb1204ed013ae96d9e67"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "planUpdate",
+          "signatureDigest": "sha256:9dc6bcc3f39a971e1dc164ae853399741a6d1c5f8efcf7a638e43731469cedb2"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "rollForward",
+          "signatureDigest": "sha256:ea8b61ac7ca2cef31bf37a3d753053937c22b277a14fc394e937ea3220ac5c3e"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "stage",
+          "signatureDigest": "sha256:55c1a0fe9486b2e0026a51f41768931adb434b8b071c228be9e75db9fd9fa159"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "intent",
+          "edgeId": "import:d53a2fa51dba296478f4",
+          "file": "packages/backend/src/modules/intent/composition/apply.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/intent/composition/apply.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:2e625f1a05bb6086f3b81c73f0239c5f08aaa9440d3fe9df72b51bed61b14fd9",
+      "status": "target-context-current-surface",
+      "symbol": "IntentSkillArtifactOwner",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Extract",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:2020946c274364f950e7"
       ],
       "context": "resource-catalog",
@@ -168329,7 +169142,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:42ddcaf19bd3f7f08469ab0949903f73f743c6e46a6e05555e4e27b3f9a63676",
+  "sourceDigest": "sha256:d29f2affb500eb024a5e0dc0a4f6031dd1bac1325b1da711d4887f2a8c4225cd",
   "targetContexts": [
     "collaboration",
     "development-automation",

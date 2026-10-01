@@ -169,14 +169,10 @@ describe('RFC-355 T6 —— intent 深取 resource-catalog 内部实现的账本
     // （它实现的是 RC 的端口、用的是 RC 自己的机制，见 T0 结论），文件在 intent 下已不存在；
     // 两个 ArtifactLifecycle 的运行时深取改为经 `ports/skillArtifactCompensation` 注入。
     //
-    // **剩下这 2 条是纯类型 import**：`IntentApplyArtifact` /
-    // `IntentApplyResourceSession` 是 RC 定义的工件与会话形状，intent 的 PostgreSQL
-    // 适配器按它们标注参数。把它们搬进 public 会让 `Postgresql*` 命名的 provider 类型出现在
-    // 公共面上（RFC-349 的 provider-cutover 账本「只能缩不能涨」正是防这件事），
-    // 所以按既有口径作为**已入账的纯类型边**留着，随 RC 自己的下一波收口。
-    'intentApplyArtifactLifecycle.ts': [
-      '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants',
-    ],
+    // RFC-370：中立工件合同已归 RC application，并从 exact public/types 提供；
+    // lifecycle 的那条类型边销账。engine 仍消费原 resource session 协议，保留其
+    // 一条已入账纯类型边，不将 provider 实现类型扩到 public 面。
+    'intentApplyArtifactLifecycle.ts': [],
     'intentApplyEngine.ts': [
       '@/modules/resource-catalog/infrastructure/aggregateAdapters/intentApplyResourceParticipants',
     ],

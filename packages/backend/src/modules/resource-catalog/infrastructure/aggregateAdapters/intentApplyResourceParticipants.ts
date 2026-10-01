@@ -1,3 +1,4 @@
+import type { IntentApplyArtifact } from '../../application/intent/artifactOwners'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import type {
   ResourceSummaryRevision,
@@ -29,27 +30,7 @@ export interface IntentApplyPrepareContext {
   readonly clientMutationId: string
 }
 
-export type IntentApplyArtifact =
-  | Readonly<{
-      readonly kind: 'plugin-install'
-      readonly pluginId: string
-      readonly generationId: string
-      readonly generationDir: string
-    }>
-  | Readonly<{
-      readonly kind: 'skill-stage'
-      readonly skillId: string
-      readonly operationId: string
-      readonly stagingDirectory: string
-    }>
-  | Readonly<{
-      readonly kind: 'skill-version-stage'
-      readonly skillId: string
-      readonly operationId: string
-      readonly version: number
-      readonly stagingDirectory: string
-      readonly versionDirectory: string
-    }>
+export type { IntentApplyArtifact } from '../../application/intent/artifactOwners'
 
 export interface IntentApplyPrestageContext {
   recordArtifact(artifact: IntentApplyArtifact): Promise<void>

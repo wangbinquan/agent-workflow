@@ -1,10 +1,8 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { createLogger, type Logger } from '@/util/log'
 import type { IntentMaintenancePersistence } from '../application/ports/intentPersistence'
-import {
-  createIntentScratchFilesystem,
-  type IntentScratchFilesystem,
-} from '../infrastructure/intentScratchFilesystem'
+import type { IntentScratchStore } from '../application/ports/intentScratchStore'
+import { createFileIntentScratchStore } from '../infrastructure/local/fileIntentScratchStore'
 import { createIntentPersistence } from '../infrastructure/intentPersistence'
 import type { IntentMaintenanceCommands } from '../public/commands'
 import type { IntentBootRecoveryInput, IntentScratchSweepInput } from '../public/commands'
@@ -29,7 +27,7 @@ export interface IntentMaintenanceLog {
 
 export interface IntentMaintenanceCompositionDependencies {
   readonly persistence: IntentMaintenancePersistence
-  readonly scratch: IntentScratchFilesystem
+  readonly scratch: IntentScratchStore
   readonly intentApplies: IntentApplyConvergence
   readonly resourcePackages: ResourcePackageApplyConvergence
   readonly log?: IntentMaintenanceLog
@@ -84,14 +82,14 @@ export function composeIntentMaintenanceCommands(
     scratch: Object.freeze({
       async sweep(input: IntentScratchSweepInput) {
         const cutoff = (input.now ?? Date.now()) - input.retentionHours * 3_600_000
-        const staleTurnIds = dependencies.scratch.staleTurnIds(cutoff)
+        const staleTurnIds = await dependencies.scratch.staleTurnIds(cutoff)
         const running = await dependencies.persistence.listRunningTurnIds(staleTurnIds)
         const failed: string[] = []
         let removed = 0
         for (const turnId of staleTurnIds) {
           if (running.has(turnId)) continue
           try {
-            dependencies.scratch.remove(turnId)
+            await dependencies.scratch.remove(turnId)
             removed += 1
             dependencies.log?.info('intent-scratch-swept', { turnId })
           } catch (error) {
@@ -142,20 +140,24 @@ export function composeIntentMaintenanceCommandsForAppHome(
   input: Omit<IntentMaintenanceCompositionDependencies, 'scratch'> & {
     readonly appHome: string
     readonly scratchDirectoryName: string
+    readonly scratch?: IntentScratchStore
   },
 ): IntentMaintenanceCommands {
   return composeIntentMaintenanceCommands({
     ...input,
-    scratch: createIntentScratchFilesystem({
-      appHome: input.appHome,
-      directoryName: input.scratchDirectoryName,
-    }),
+    scratch:
+      input.scratch ??
+      createFileIntentScratchStore({
+        appHome: input.appHome,
+        directoryName: input.scratchDirectoryName,
+      }),
   })
 }
 
 interface ProviderIntentMaintenanceCompositionInput {
   readonly appHome: string
   readonly scratchDirectoryName: string
+  readonly scratch?: IntentScratchStore
   readonly resourcePackages: ResourcePackageApplyConvergence
   readonly log?: Logger
 }
@@ -170,17 +172,26 @@ export function composeIntentMaintenanceCommandsForDatabase(
   input: ProviderIntentMaintenanceCompositionInput & {
     readonly db: ProviderNeutralDatabase
     readonly pluginsDir: string
-  },
+  } & Pick<
+      Parameters<typeof composeIntentApplyConvergence>[0],
+      'artifacts' | 'content' | 'legacySkillArtifacts'
+    >,
 ): IntentMaintenanceCommands {
   const log = input.log ?? createLogger('intentMaintenance')
   return composeIntentMaintenanceCommandsForAppHome({
     persistence: createIntentPersistence(input.db),
     appHome: input.appHome,
     scratchDirectoryName: input.scratchDirectoryName,
+    ...(input.scratch === undefined ? {} : { scratch: input.scratch }),
     intentApplies: composeIntentApplyConvergence({
       db: input.db,
       appHome: input.appHome,
       pluginsDir: input.pluginsDir,
+      ...(input.artifacts === undefined ? {} : { artifacts: input.artifacts }),
+      ...(input.content === undefined ? {} : { content: input.content }),
+      ...(input.legacySkillArtifacts === undefined
+        ? {}
+        : { legacySkillArtifacts: input.legacySkillArtifacts }),
       log,
     }),
     resourcePackages: input.resourcePackages,
