@@ -1131,7 +1131,7 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     const first = result.tasks.find((row) => row.task.id === 'first')!
     expect(first.metrics.tokens.totalKnown).toBe('7000000')
     expect(
-      (await f.queries.detail(reader, 'first'))!.runtimes.find(
+      (await f.queries.detail(reader, 'first'))!.runtimes!.find(
         (row) => row.registrationId === 'runtime',
       )!.acceptedNames,
     ).toEqual(['alpha'])

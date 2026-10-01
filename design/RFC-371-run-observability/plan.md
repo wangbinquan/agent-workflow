@@ -23,11 +23,11 @@
 | P0-T2 | usage/span/identity/coverage 合同与归一规则                  | T1       | 领域与协议 fixture 测试                                   |
 | P0-T3 | run-observability context、owner public contracts、架构清单  | T2       | 无跨域私有表读取，required/offered 对账                   |
 | P0-T4 | durable ingest、账本 / checkpoint、恢复与历史 legacy 回填    | T3       | SQLite/PG 幂等和故障注入                                  |
-| P0-T5 | 任务可见性 port、查询 / 缓存统一权限                  | T3       | 撤权与树状聚合负测                                        |
+| P0-T5 | 任务可见性 port、查询 / 缓存统一权限                         | T3       | 撤权与树状聚合负测                                        |
 | P1-T1 | 概览 / 任务 / Agent 聚合 API、明确窗口口径                   | P0       | 对账用例与性能预算                                        |
 | P1-T2 | 导航 / 总览 / 任务列表 / Agent 页面                          | P1-T1    | URL 筛选、双语、空/错误/部分状态                          |
 | P1-T3 | 公共 ExecutionTimeline、尝试详情与 Agent 汇总                | P1-T1    | 六 Agent 八次运行全链路、键盘/窄屏                        |
-| P1-T4 | 数据质量、来源能力与新鲜度                               | T2/T3    | 质量分级、采集水位与缺口恢复                                  |
+| P1-T4 | 数据质量、来源能力与新鲜度                                   | T2/T3    | 质量分级、采集水位与缺口恢复                              |
 | P2-T1 | 模型 / 工具 / runtime 内部 Agent spans                       | P0-T1    | 每个 driver 单独能力证据                                  |
 | P2-T2 | 运行时人民币单价/价格版本、模型成本归因、未定价              | P1       | 修订和历史重算对账                                        |
 | P2-T3 | 关键路径、执行对比、性能分布                                 | P2-T1    | DAG 正确性、缺依赖降级                                    |
@@ -350,16 +350,13 @@ c0849a0d2 的三个系统前端分片均指出同一个测试文案不匹配：�
 
 现有 CS 公开 v1 只同步 usage/valuation，完整空树证明尚不能传到 AW。下一增量见 [native-proof-sync](./native-proof-sync.md)：显式协商 v2、沿用同一持久水位分页、版本变化重建原子快照、原归属匹配及正式摘要。当前仅设计，未修改该增量生产代码，也不解除 RFC370 Phase A A–G 装配门槛。
 
-
 ## 33. 最新页面修正与范围收敛
 
 按用户要求删除关注卡片、CSV 入口/序列化/HTTP 合同，顶部只保留时间、名称/ID、状态和仓库；旧共享工作流 URL 仍显示当前范围且可清除。任务名复用公共任务列表无边框样式，采集说明用公共 detail-grid 对齐修饰，柱形直接显示完整整数（部分为 ≥、未知为 —）。新增界面负向断言、宽窄屏行中心和可视数字回归，删除已退役 CSV 专用测试，读页、Agent 下钻和 HTTP 404 继续覆盖。仅文件格式/lint及静态登记在本地执行，完整验证交精确 SHA hosted CI。
 
 本批独立静态功能门 PASS；修正第二个真实 daemon 场景的同名任务定位，以本次唯一 workflow 范围打开，保留原宽窄几何断言。12个TS/TSX文件格式/lint通过；移除CSV后的canonical与399→398叶子登记已同步，托管proof文档仅设计PASS。远端CI终态继续记录。
 
-
 33 节发布后回执：`30f8aa1bf79ab2c67bb545f964d779199a743a16` 的主 CI `36505345806` 终态 failure（44 成功，四个后端分片为同源登记失败，另有静态扫描和 required 汇总失败）；三平台前端、构建、全部10个 E2E 分片和真实 PG 通过，视觉 CI `36505345829` success。CSV 路由移除后漏删唯一旧 reason，且三份治理清单内容变化后仍保留旧摘要；现删除孤立说明，按官方 helper 仅更新 provenance SHA/digest，三个新摘要逐项等于 CI 期望值。独立功能复核 PASS，精确文件格式/lint通过；未执行本地 AW 测试，也未读取静态扫描日志。最终整体状态以本修正 SHA 的 hosted CI 为准。
-
 
 ## 34. 托管原生采集证明 v2 与完整空树
 
@@ -371,20 +368,17 @@ AW 显式请求 v2，并严格兼容旧 CS 的 v1 正文；导入采集摘要使
 
 前批 00de070ececc0ab3e7633fe163678fb5e0790763 的 CI 36507312687 功能/平台/浏览器/构建检查通过，Static scans 与 CI required 失败；未读取静态扫描日志，未以其声称全绿。CS 计量身份前置 ca2ff256317b8ebc5cb914c1310865f916996345 已推送，本地完整 4191/142 skip/0，通过独立功能门，远端 CI 36512613256 跟踪中。
 
-
 34 节第一轮发布回执：`f4d02c115d999262f97794b270c8cbff9a448fc9`，视觉 CI `36513591563` 成功；主 CI `36513591538` 暴露测试配套错误。联合版本 patch 改为原始对象后仍经生产严格 schema 解析，捕获项通过判别字段缩窄；原始 JSON 的深相等比较只解除测试 matcher 的类型窄化，不改变值断言。补登记平台 Dialog，并让根目录 E2E 直接从共享 schema 源路径导入运行时值，修复根包无 workspace 依赖的加载失败。四个文件格式/lint通过，完整验证交修正提交；静态扫描日志未读取。CS 前置 `ca2ff256` 的精确 CI `36512613256` 已成功，v2 服务端完整门禁仍运行。
 
 本轮四文件修正已通过独立只读功能复核 PASS：合同深相等、版本拒绝、Dialog 双向 AST 数量与移动端防护及真实浏览器几何断言均保留。
 
 34 节第二轮 CI 回执（2026-09-30）：`904ccfdaa0de41d63472d1a4c251a657a32857fa` 的主 CI [36514863155](https://github.com/wangbinquan/agent-workflow/actions/runs/36514863155) 终态 failure，视觉 [36514863164](https://github.com/wangbinquan/agent-workflow/actions/runs/36514863164) success。失败定位为 capture matcher 的三处联合类型、根目录 Node 加载 JSON 需要 import attribute，以及上批一次性 allowGrowth 应退役。修正增加显式 capture 判别守卫；用 `readFileSync(new URL(..., import.meta.url))` 解析原始夹具并继续严格 schema 校验；仅删除本 RFC 已消费的归属增长并用官方 helper 更新 ledger 摘要。所有数值、版本、权限及浏览器断言保留，生产代码未变。静态扫描仅记录失败，不读取日志；新的精确 SHA CI 仍须取得终态。剩余功能统一见 [清单](./remaining-work.md)。
 
-
 34 节第三轮 CI 回执（2026-09-30）：`8c6e9a0766a1a184170dec1e9685a07b580334e5` 的主 CI [36619139778](https://github.com/wangbinquan/agent-workflow/actions/runs/36619139778) 终态 failure，46 success / 4 failure。类型、后端、前端和构建通过；Ubuntu/macOS 的 2/3 浏览器分片同为平台轮次用例在加载完成前调用 `locator.all()`，卡片数读取为 0。修正只增加等待全部 30 个轮次入口渲染的断言，随后保留宽/窄屏间距、防溢出、末行 Dialog 与 Escape 焦点恢复；无固定延时、删断言或生产改动。改动文件格式/lint 与独立功能复核 PASS，完整测试继续由该修正发布后的精确 SHA CI 验证。静态扫描仅记录失败状态，不读取日志。CS v2 `94aabd6d` 精确 CI 36619175682 六项成功，已在本机部署且八组件 Ready；开发会话实际采集与双部署真实联动仍未完成，见两仓剩余清单。
 
 34 节最终功能 CI 回执（2026-09-30）：浏览器修复 `ee1af6da15b827e32ea0e15557f79ccd47e2f6b9` 已精确推送；当前 `fb53e21542e38e866cd508cfa6b105b50eea3895` 是其仅增文档的后继。[CI 36624953215](https://github.com/wangbinquan/agent-workflow/actions/runs/36624953215) 终态48成功/2失败，十个Playwright作业及功能检查成功，静态扫描和`CI required`失败仅记录状态，整体仍failure。此前加载竞态已验证，整体CI关闭依赖和真实来源/托管等余项按[剩余清单](./remaining-work.md)继续。
 
 关联CS开发数字链Stage 1已推送 `fc491a4d6b31c6476d3222209ced880810936c3e`：独立功能门PASS、完整4226/142skip/0、41路径指纹未变，[CI 36640100860](https://github.com/wangbinquan/CrewStation/actions/runs/36640100860)继续。仅底座，生产仍关闭，Session PG/owner/价格/排空及正式明细未接通，不能据此关闭AW-R02或两RFC。
-
 
 文档后继精确 CI 终态（2026-09-30）：`5681ca12055c654922db556aec906c9de6d19476` 自 fb53e215 仅修改 STATE/本计划/剩余清单，源码与浏览器加载修复 ee1af6da 一致；[CI 36641142819](https://github.com/wangbinquan/agent-workflow/actions/runs/36641142819) 已终态48success/2failure，十个Playwright及功能检查成功，静态扫描与CI required失败，整体failure。扫描只读取任务元数据，无日志检查或修复授权，不将功能通过等同整体CI关闭。CS Stage 1 `fc491a4d6b31c6476d3222209ced880810936c3e` 的 [CI 36640100860](https://github.com/wangbinquan/CrewStation/actions/runs/36640100860) 六项已success；Session数字PG/outbox继续实施，owner/CNY/生命周期/正式明细与实际托管验收仍未闭环，AW-R02及两RFC继续。
 
@@ -398,11 +392,9 @@ CS 双路径数字布局/固定元数据候选 `bc8522cb7c98a6ef308065a5b5821ce1
 
 AW-R02 仍需 RFC-370 owner 的托管准入及真实 CS→AW 对拍，不能由上述底座或测试自行关闭。AW-R03～12 与真实身份/模型授权依赖继续；不恢复 CSV、更多筛选、关注任务卡片或顶部工作流输入。两 RFC 保持 In Progress。
 
-
 ## AW-R01 提交与定时 CI 修复（2026-09-30）
 
 按本轮用户指令修复失败 CI，新增[逐项修复与定时验收记录](./ci-recovery.md)。根 pin 与锁文件 fast-uri 3.1.6→3.1.7；不修改审计接受列表、severity、测试强度、schedule 或必需汇总。历史 nightly JSON/Windows TS2769 修正已是当前 main 祖先，必须在新提交上验证主 CI和九个定时配置，精确发布与终态结果待回执。本机不运行 AW 测试/构建/类型/服务；与 CS 工作并行推进，完整 RFC不关闭。
-
 
 ### AW-R01 第二轮 CI 根因及修正候选
 
@@ -424,9 +416,12 @@ ef28b3a14d3d4e536096df4fea4f9c6468104622的CI36665459531终态47success/3failure
 
 AW-R01已关闭，AW-R02～12和CS的实际owner派发/完整清理/消费者/两级事实与真实联合验收继续，两RFC保持In Progress。CS源码d01ba8223已经六项CI成功、本机八组件Ready；b0f17691仅发布已复核consumer设计，生产开发采集仍OFF。并行resource-catalog四路径原样保留。
 
-
 ## 2026-10-01 AW-R08 原受理名与运行时贡献第一批候选
 
 [第一批设计](./runtime-contributions.md)的独立设计门 PASS 后，22 个源码/回归路径已实施：注册名从原选择行一起冻结并沿用旧受理合同，旧/损坏名称不改注册身份或价格；同一已授权快照附每任务运行时贡献，五字段纯身份键跨前后端共用。页面使用公共 Dialog、Card、任务文字按钮、人民币、旧响应/部分结果说明，以及任务详情返回的范围、main/window/Dialog body 滚动和焦点恢复。
 
 本机仅运行精确 Prettier 与 ESLint（22 路径均通过），未运行 AW 测试、类型检查、构建或服务。四份 backend 回归、前端组件和 E2E 回归交给 hosted CI；E2E 的 48 运行时/48 行贡献数值为只读显示夹具，真实受理名另经 daemon API 校验，不冒充真实模型采集。官方 canonical 仅从已提交 HEAD 加本批候选内存生成，四个并行 skill 文件完全排除。八个真实 owner 新符号和一条既有 legacy caller 对公开身份类型的 type 边采用原账本单次增长规则逐项登记，不放宽断言或领取 RFC-294 wave 信用。独立实现门及精确提交 CI 尚待完成，AW-R08 和两个 RFC 保持未完成。
+
+## 2026-10-01 运行时贡献新提交的 hosted 修复
+
+运行时原名/任务贡献 39 路径提交 `df87010886452d1b88b8c236869ea51b52fcb148` 已独立实现 v2 PASS 并远端同步。Windows `36822983873` 在真实 typecheck 发现无效名称夹具的 local 判别字段被拓宽，以及新增断言读取尚不存在的 TaskDetail.runtimes；原失败不改写。最小设计补充独立 PASS：保留所有无效名称断言，限定既有受理类型；向任务明细兼容提供自身原快照的运行时组；精确退役已消费的三项增长许可并用官方生成器同步摘要。本批没有降低 workflow、类型检查或任一断言，限定格式/lint 与静态生成之后继续独立实现复核及精确 SHA hosted CI。AW-R08 与两 RFC 整体仍继续。

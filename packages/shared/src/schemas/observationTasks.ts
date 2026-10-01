@@ -147,6 +147,8 @@ export interface ObservationTaskDetail extends ObservationTaskSummary {
   readonly projectionVersion: 1
   readonly taskScope: 'direct'
   readonly agents: readonly ObservationAgentSummary[]
+  /** Frozen per-runtime usage from this task's authorized snapshot; older responses may omit it. */
+  readonly runtimes?: readonly ObservationRuntimeSummary[]
   readonly attempts: readonly ObservationAttemptSummary[]
   readonly attemptsTruncated: boolean
   readonly intervals: {

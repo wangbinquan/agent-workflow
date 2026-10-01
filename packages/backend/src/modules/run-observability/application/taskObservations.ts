@@ -614,6 +614,7 @@ export function createTaskObservationQueries(input: {
           projectionVersion: 1,
           taskScope: 'direct',
           agents,
+          runtimes: usageDimensions(loaded).runtimes,
           attempts,
           attemptsTruncated: facts.truncated,
           intervals: {

@@ -209,7 +209,7 @@ describeEachProvider('RFC-371 invocation observation authority routing', (harnes
     })
     expect(legacy.authority).toEqual({ kind: 'local', runtime })
     for (const acceptedName of ['', ' ', 'x'.repeat(201)]) {
-      const bad = {
+      const bad: AcceptObservationInvocation = {
         ...original,
         invocationId: 'bad-name',
         authority: { kind: 'local', runtime: { ...runtime, acceptedName } },

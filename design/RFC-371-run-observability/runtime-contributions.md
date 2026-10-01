@@ -1,6 +1,6 @@
 # RFC-371 运行时受理原名与任务贡献
 
-状态：AW-R08 第一批独立设计门已 PASS（2026-10-01，冻结设计 SHA-256 `2fabe391604f416f3ce0c16fa618fe894e749e9bc736718ca7390689298350b6`）；22 路径的实现与回归候选已落地，精确格式/lint 通过，独立实现复核与 hosted 精确 SHA CI 待完成。沿用用户对完整 RFC 的实施、上库授权。服务端维度筛选、模型/用途下钻及最终验收仍继续，不以本批替代整个 AW-R08。
+状态：第一批设计及最小补充 PASS，实现 v1 FAIL 的三项 P2 保留，修正后的实现 v2 独立 PASS。39 路径已精确推送 `df87010886452d1b88b8c236869ea51b52fcb148`；Windows hosted CI `36822983873` 又发现新增夹具类型与 task detail 成员两类错误，最小修复设计已独立 PASS，修复候选另行验收。服务端维度筛选、模型/用途下钻及最终验收继续，AW-R08 不关闭。
 
 ## 用户看到的行为
 
@@ -56,7 +56,12 @@ runtime-management public/application 冻结注册事实；run-observability app
 
 先独立设计门，再源码与回归一起实施；完成独立实现门与精确格式/治理生成后精确提交推送，唯该 SHA 的 GitHub Actions 终态及 hosted E2E 作为 AW 权威验证。失败的门和原失败用例均保留，不降低 CI、断言或定时矩阵。
 
-
 ## 2026-10-01 最小补充与第一轮实现门
 
 独立实现 v1 为 FAIL，保留三项 P2：两个回归夹具的协议被推导成 string、新公共 Dialog 未登记双向清单、四份治理 JSON 内容摘要未刷新。最小设计补充独立 PASS 后，将 `overlay-ux-inventory.test.ts` 加为唯一第 22 个实施路径，精确登记 task-execution 族的一次 Dialog 调用；仅保留 fixture 协议字面量，产品 schema/扫描/断言不变。官方内存生成沿用 `--snapshot-sha 7886ac97b979bee331738a9c2486e6b4f3bac114` 的 provenance 分支，保存原 origin 与三条明确单次增长原因。修正后的实现 v2 与精确提交 hosted CI 另行验收，v1 失败不改写为成功。
+
+## 2026-10-01 hosted 类型失败修复
+
+Windows [36822983873](https://github.com/wangbinquan/agent-workflow/actions/runs/36822983873) 的 TS2345/TS2339/TS7006 保留为实际失败。无效名称 fixture 用现有 `AcceptObservationInvocation` 限定判别字段，全部 schema 拒绝、无持久行断言保留。TaskDetail 增加兼容的可选 `runtimes`，使用自身已授权 `loaded` 快照中的 `usageDimensions`；原名与精确组指标来自原受理，不联查当前目录，不增加数据库读取。原任务明细运行时断言继续验证真实返回的 alpha 原名。
+
+上一提交已经消费的三个 `allowGrowth` 精确退役，基线数量与所有无关记录保持；官方生成以 `df87010886452d1b88b8c236869ea51b52fcb148` 为 provenance 快照，只使用四个本批 TS 文件及明确账本种子。实现复核和修复提交的主 CI/相关定时矩阵待完成，本机没有运行测试、类型检查、构建或服务。

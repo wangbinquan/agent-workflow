@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1101,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21274,
+    "recursiveFields": 21275,
     "symbols": 1030
   },
   "entries": [
@@ -117841,7 +117841,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 157,
+        "maxTransitiveLeafFields": 158,
         "maxUnionVariants": 56
       },
       "consumerEdgeIds": [
@@ -118108,6 +118108,14 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:detail.$return.$variant:0.runningMs",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:detail.$return.$variant:0.runtimes",
+          "type": "readonly ObservationRuntimeSummary[]"
         },
         {
           "consumerEdgeIds": [
@@ -168311,7 +168319,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:48ed2ae797d1516edc5063644eaee2c4c8bfa59767c6f9be607f92692da66c40",
+  "sourceDigest": "sha256:bb91293f5e45addec9bd95e8c6ca07cc5d41af8fb498a5be5749513df6424c1e",
   "targetContexts": [
     "collaboration",
     "development-automation",
