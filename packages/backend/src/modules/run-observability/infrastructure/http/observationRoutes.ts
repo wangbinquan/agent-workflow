@@ -9,6 +9,7 @@ import { actorOf } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import { DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { ObservationPriceError } from '../../domain/priceError'
+import { parseObservationSelection } from '../../domain/analysisDimensions'
 import type { ObservationPricingCommands } from '../../ports/pricingCommands'
 import type { ObservationPricingQueries } from '../../ports/pricingQueries'
 import type { ObservationTaskQueries } from '../../public/queries'
@@ -28,6 +29,14 @@ async function mapped<T>(operation: () => Promise<T>): Promise<T> {
     throw new DomainError(error.code, error.message, status, error.details)
   }
 }
+function validateDimensionQuery(query: Readonly<Record<string, string>>): void {
+  try {
+    parseObservationSelection(query.selection)
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error
+    throw new DomainError('invalid-query', error.message, 400)
+  }
+}
 export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependencies): void {
   const readGate = { permissions: ['tasks:read'] as const, tokenAccess: 'allow' as const }
   registerRoute(
@@ -39,7 +48,9 @@ export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependen
       summary: 'Read visible task cohort totals, trends and agent/model/runtime distributions',
     },
     async (c) => {
-      const query = ObservationOverviewQuerySchema.safeParse(c.req.query())
+      const raw = c.req.query()
+      validateDimensionQuery(raw)
+      const query = ObservationOverviewQuerySchema.safeParse(raw)
       if (!query.success) throw new ValidationError('invalid-query', 'Invalid observation window')
       return c.json(await deps.tasks.overview(actorOf(c), query.data))
     },
@@ -53,7 +64,9 @@ export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependen
       summary: 'Read visible task lifecycle observation summaries',
     },
     async (c) => {
-      const query = ObservationTaskPageQuerySchema.safeParse(c.req.query())
+      const raw = c.req.query()
+      validateDimensionQuery(raw)
+      const query = ObservationTaskPageQuerySchema.safeParse(raw)
       if (!query.success) throw new ValidationError('invalid-query', 'Invalid observation query')
       try {
         return c.json(await deps.tasks.list(actorOf(c), query.data))

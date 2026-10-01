@@ -8,7 +8,9 @@ import type {
   ObservationOverview,
   ObservationTaskDetail,
   ObservationTaskPage,
+  ObservationDimensionSelection,
 } from '@agent-workflow/shared'
+import { ObservationDimensionSelectionSchema } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 import { Card } from '@/components/Card'
 import { Dialog } from '@/components/Dialog'
@@ -43,6 +45,8 @@ export interface ObservationSearch {
   readonly status?: TaskStatus
   readonly repository?: string
   readonly workflow?: string
+  readonly selection?: string
+  readonly model?: string
 }
 function TaskDetail({ data }: { data: ObservationTaskDetail }) {
   const { t, i18n } = useTranslation(),
@@ -253,6 +257,7 @@ export function RunObservability({
     ...(search.status ? { status: search.status } : {}),
     ...(search.repository ? { repository: search.repository } : {}),
     ...(search.workflow ? { workflow: search.workflow } : {}),
+    ...(search.selection ? { selection: search.selection } : {}),
   }
   const overview = useQuery({
     queryKey: ['run-observability', 'overview', window],
@@ -302,6 +307,8 @@ export function RunObservability({
       search.status,
       search.repository,
       search.workflow,
+      search.selection,
+      search.model,
     ]),
     search.task,
     pageRef,
@@ -310,6 +317,25 @@ export function RunObservability({
   const openTask = (task: string, trigger?: HTMLElement) => {
     captureReturn(task, trigger)
     onChange({ ...search, task })
+  }
+  const selectDimension = (patch: Partial<ObservationDimensionSelection>) => {
+    const previous = search.selection
+      ? ObservationDimensionSelectionSchema.parse(JSON.parse(search.selection))
+      : {}
+    const selection = JSON.stringify(
+      ObservationDimensionSelectionSchema.parse({ ...previous, ...patch }),
+    )
+    onChange({
+      ...search,
+      selection,
+      tab: 'tasks',
+      task: undefined,
+      after: undefined,
+      runtime: undefined,
+      model: undefined,
+      agent: undefined,
+      quality: undefined,
+    })
   }
   const refresh = () => {
     if (search.task) {
@@ -328,9 +354,12 @@ export function RunObservability({
       ...(search.status ? { status: search.status } : {}),
       ...(search.repository ? { repository: search.repository } : {}),
       ...(search.workflow ? { workflow: search.workflow } : {}),
+      ...(search.selection ? { selection: search.selection } : {}),
       ...(search.tab ? { tab: search.tab } : {}),
       ...(search.agent ? { agent: search.agent } : {}),
       ...(search.quality ? { quality: search.quality } : {}),
+      ...(search.runtime ? { runtime: search.runtime } : {}),
+      ...(search.model ? { model: search.model } : {}),
       from:
         search.period === 'all'
           ? 0
@@ -420,6 +449,7 @@ export function RunObservability({
               agent: undefined,
               quality: undefined,
               runtime: undefined,
+              model: undefined,
             })
           }
         />
@@ -442,10 +472,17 @@ export function RunObservability({
                   tab={tab}
                   selectedAgent={search.agent}
                   selectedRuntime={search.runtime}
+                  selectedModel={search.model}
+                  onModel={(model) =>
+                    onChange({ ...search, tab: 'usage', runtime: undefined, model })
+                  }
+                  onDimension={selectDimension}
                   quality={search.quality}
                   onQuality={(quality) => onChange({ ...search, quality })}
                   onAgent={(agent) => onChange({ ...search, tab: 'agents', agent })}
-                  onRuntime={(runtime) => onChange({ ...search, tab: 'usage', runtime })}
+                  onRuntime={(runtime) =>
+                    onChange({ ...search, tab: 'usage', model: undefined, runtime })
+                  }
                   onTask={openTask}
                   onBucket={(from, to) =>
                     onChange({
@@ -458,14 +495,33 @@ export function RunObservability({
                       agent: undefined,
                       quality: undefined,
                       runtime: undefined,
+                      model: undefined,
                     })
                   }
                 />
               )
             : list.data && (
                 <>
+                  {search.selection && (
+                    <NoticeBanner tone="info" size="compact">
+                      {t('runObservability.dimensionTimeHint')}
+                    </NoticeBanner>
+                  )}
+                  {(list.data.partial ||
+                    (list.data.scannedTasks !== undefined && list.data.nextCursor !== null)) && (
+                    <NoticeBanner tone="warning" size="compact">
+                      {t('runObservability.dimensionPageHint', {
+                        count: list.data.scannedTasks ?? 0,
+                        unresolved: list.data.unresolvedTasks ?? 0,
+                      })}
+                    </NoticeBanner>
+                  )}
                   {list.data.items.length === 0 ? (
-                    <EmptyState title={t('runObservability.empty')} />
+                    <EmptyState
+                      title={t(
+                        `runObservability.${list.data.partial || list.data.nextCursor ? 'dimensionBatchEmpty' : 'empty'}`,
+                      )}
+                    />
                   ) : (
                     <TableViewport label={t('runObservability.tasks')} minWidth="lg">
                       <table className="data-table data-table--compact">
@@ -493,6 +549,11 @@ export function RunObservability({
                                 >
                                   {row.task.name}
                                 </button>
+                                {row.dimensionMatch === 'unresolved' && (
+                                  <div className="muted">
+                                    {t('runObservability.dimensionUnresolved')}
+                                  </div>
+                                )}
                               </th>
                               <td>
                                 {t(`tasks.status.${row.task.status}`, {
@@ -507,7 +568,10 @@ export function RunObservability({
                               </td>
                               <td>{duration(row.wallMs)}</td>
                               <td>
-                                {row.metrics.observedInvocations} / {row.metrics.invocations}
+                                {row.dimensionMatch === 'unresolved' &&
+                                row.metrics.invocations === 0
+                                  ? '—'
+                                  : `${row.metrics.observedInvocations} / ${row.metrics.invocations}`}
                               </td>
                               <td>
                                 <Source metrics={row.metrics} />

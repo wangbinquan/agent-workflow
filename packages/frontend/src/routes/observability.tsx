@@ -1,5 +1,5 @@
 import { createRoute } from '@tanstack/react-router'
-import { TaskStatusSchema } from '@agent-workflow/shared'
+import { TaskStatusSchema, ObservationDimensionSelectionSchema } from '@agent-workflow/shared'
 import {
   RunObservability,
   type ObservationSearch,
@@ -20,12 +20,24 @@ export function validateObservationSearch(raw: Record<string, unknown>): Observa
   const q = text('q', 200),
     repository = text('repository', 4096),
     workflow = text('workflow', 200),
-    runtime = text('runtime', 2048)
+    runtime = text('runtime', 2048),
+    model = text('model', 2048),
+    selection = text('selection', 2048)
+  if (raw.selection !== undefined) {
+    try {
+      if (selection === undefined) throw new Error('invalid selection')
+      ObservationDimensionSelectionSchema.parse(JSON.parse(selection))
+    } catch {
+      throw new Error('Invalid observation dimension selection')
+    }
+  }
   return {
     ...(q === undefined ? {} : { q }),
     ...(repository === undefined ? {} : { repository }),
     ...(workflow === undefined ? {} : { workflow }),
     ...(runtime === undefined ? {} : { runtime }),
+    ...(model === undefined ? {} : { model }),
+    ...(selection === undefined ? {} : { selection }),
     ...(status.success ? { status: status.data } : {}),
     from,
     to,
@@ -69,6 +81,9 @@ function Page() {
           search.status === next.status &&
           search.repository === next.repository &&
           search.workflow === next.workflow &&
+          search.selection === next.selection &&
+          search.model === next.model &&
+          search.runtime === next.runtime &&
           search.after === next.after
         void navigate({
           search: next,

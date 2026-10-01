@@ -10,6 +10,12 @@ import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { aggregateObservationMetrics as aggregate } from '../domain/aggregateMetrics'
 import type { ObservationSnapshotSources } from '../ports/taskObservations'
+import {
+  boundedObservationSources,
+  ObservationReadBudgetReached,
+  OBSERVATION_READ_LIMITS as LIMITS,
+  readDimensionTasks,
+} from './dimensionTasks'
 
 type Agent = ObservationOverview['agents'][number]
 type Model = ObservationOverview['models'][number]
@@ -19,59 +25,14 @@ export interface ObservationAnalysisTask {
   readonly agents: readonly Omit<Agent, 'tasks'>[]
   readonly models: readonly Model[]
   readonly runtimes: readonly Runtime[]
+  readonly purposes?: NonNullable<ObservationOverview['purposes']>
+  readonly sources?: NonNullable<ObservationOverview['sources']>
   readonly collection: {
     readonly firstObservedAt: number | null
     readonly lastObservedAt: number | null
     readonly platforms: ObservationTaskDetail['sources']
   }
 }
-const LIMITS = { tasks: 200, invocations: 10_000, records: 20_000 } as const
-class ReadBudgetReached extends Error {}
-
-/** Bound a single snapshot's work. If a task cannot be read, omit that task rather than invent a subtotal. */
-function boundedSources(sources: ObservationSnapshotSources): ObservationSnapshotSources {
-  let invocations = LIMITS.invocations as number,
-    records = LIMITS.records as number
-  return {
-    ...sources,
-    async invocations(taskId) {
-      if (invocations === 0) throw new ReadBudgetReached()
-      const page = await sources.invocations(taskId)
-      if (page.items.length > invocations) throw new ReadBudgetReached()
-      invocations -= page.items.length
-      return page
-    },
-    local: {
-      async captures(ids) {
-        if (ids.length > records) throw new ReadBudgetReached()
-        const rows = await sources.local.captures(ids)
-        records -= rows.length
-        return rows
-      },
-      async records(taskId, query) {
-        if (records === 0) throw new ReadBudgetReached()
-        const page = await sources.local.records(taskId, {
-          ...query,
-          limit: Math.min(query.limit, records),
-        })
-        records -= page.items.length
-        return page
-      },
-    },
-    platform: {
-      async records(binding, query) {
-        if (records === 0) throw new ReadBudgetReached()
-        const page = await sources.platform.records(binding, {
-          ...query,
-          limit: Math.min(query.limit, records),
-        })
-        records -= page.items.length
-        return page
-      },
-    },
-  }
-}
-
 export async function readObservationOverview(input: {
   readonly actor: Actor
   readonly query: ObservationOverviewQuery
@@ -80,32 +41,51 @@ export async function readObservationOverview(input: {
   readonly summarize: (
     sources: ObservationSnapshotSources,
     task: ObservationTaskFacts,
-  ) => Promise<ObservationAnalysisTask>
+  ) => Promise<ObservationAnalysisTask | null>
+  readonly unresolved?: (task: ObservationTaskFacts) => ObservationAnalysisTask
 }): Promise<ObservationOverview> {
-  const sources = boundedSources(input.sources),
+  const sources = boundedObservationSources(input.sources),
     rows: ObservationAnalysisTask[] = []
   let after: string | undefined,
     partial = false
-  read: do {
-    const page = await sources.tasks.list({
+  let scannedTasks: number | undefined, unresolvedTasks: number | undefined
+  if (input.query.selection !== undefined) {
+    const unresolved = input.unresolved
+    if (!unresolved) throw new Error('Dimension observation unknown-task projection missing')
+    const selected = await readDimensionTasks({
       actor: input.actor,
-      query: { ...input.query, limit: 25, ...(after ? { after } : {}) },
+      query: { ...input.query, limit: 20 },
+      sources: input.sources,
+      matchLimit: LIMITS.tasks,
+      summarize: input.summarize,
+      unresolved,
     })
-    for (const task of page.items) {
-      if (rows.length === LIMITS.tasks) {
-        partial = true
-        break read
+    rows.push(...selected.rows)
+    partial = selected.partial || selected.nextCursor !== null
+    scannedTasks = selected.scannedTasks
+    unresolvedTasks = selected.unresolvedTasks
+  } else
+    read: do {
+      const page = await sources.tasks.list({
+        actor: input.actor,
+        query: { ...input.query, limit: 25, ...(after ? { after } : {}) },
+      })
+      for (const task of page.items) {
+        if (rows.length === LIMITS.tasks) {
+          partial = true
+          break read
+        }
+        try {
+          const row = await input.summarize(sources, task)
+          if (row) rows.push(row)
+        } catch (error) {
+          if (!(error instanceof ObservationReadBudgetReached)) throw error
+          partial = true
+          break read
+        }
       }
-      try {
-        rows.push(await input.summarize(sources, task))
-      } catch (error) {
-        if (!(error instanceof ReadBudgetReached)) throw error
-        partial = true
-        break read
-      }
-    }
-    after = page.nextCursor ?? undefined
-  } while (after)
+      after = page.nextCursor ?? undefined
+    } while (after)
   partial ||= rows.some((row) => row.summary.metrics.truncated)
   const tasks = rows.map((row) => row.summary)
   const backlog = new Map(
@@ -134,6 +114,8 @@ export async function readObservationOverview(input: {
   const agents = new Map<string, { value: Omit<Agent, 'tasks'>; tasks: Agent['tasks'][number][] }>()
   const models = new Map<string, Model[]>(),
     runtimes = new Map<string, Runtime[]>()
+  const purposes = new Map<string, NonNullable<ObservationOverview['purposes']>[number][]>(),
+    sourceGroups = new Map<string, NonNullable<ObservationOverview['sources']>[number][]>()
   for (const row of rows) {
     const task = row.summary.task
     statuses.set(task.status, (statuses.get(task.status) ?? 0) + 1)
@@ -151,7 +133,7 @@ export async function readObservationOverview(input: {
     for (const model of row.models) {
       const key = JSON.stringify([model.authority, model.sourceId, model.provider, model.model])
       const group = models.get(key) ?? []
-      group.push(model)
+      group.push({ ...model, tasks: [{ taskId: task.id, metrics: model.metrics }] })
       models.set(key, group)
     }
     for (const runtime of row.runtimes) {
@@ -159,6 +141,17 @@ export async function readObservationOverview(input: {
       const group = runtimes.get(key) ?? []
       group.push({ ...runtime, tasks: [{ taskId: task.id, metrics: runtime.metrics }] })
       runtimes.set(key, group)
+    }
+    for (const purpose of row.purposes ?? []) {
+      const group = purposes.get(purpose.purpose) ?? []
+      group.push({ ...purpose, tasks: [{ taskId: task.id, metrics: purpose.metrics }] })
+      purposes.set(purpose.purpose, group)
+    }
+    for (const source of row.sources ?? []) {
+      const key = JSON.stringify([source.authority, source.sourceId]),
+        group = sourceGroups.get(key) ?? []
+      group.push({ ...source, tasks: [{ taskId: task.id, metrics: source.metrics }] })
+      sourceGroups.set(key, group)
     }
   }
   const count = Math.min(30, Math.max(1, Math.ceil((input.query.to - input.query.from) / 86400000)))
@@ -197,6 +190,7 @@ export async function readObservationOverview(input: {
     taskScope: 'direct',
     filtersEcho: input.query,
     partial,
+    ...(scannedTasks === undefined ? {} : { scannedTasks, unresolvedTasks }),
     collection: {
       retainedRecords: collectionTasks.reduce((sum, row) => sum + row.retainedRecords, 0),
       pendingRecords: collectionTasks.reduce((sum, row) => sum + row.pendingRecords, 0),
@@ -225,6 +219,23 @@ export async function readObservationOverview(input: {
     })),
     models: [...models.values()].map((group) => ({
       ...group[0]!,
+      tasks: group.flatMap((row) => row.tasks ?? []),
+      metrics: aggregate(
+        group.map((row) => row.metrics),
+        partial,
+      ),
+    })),
+    purposes: [...purposes.values()].map((group) => ({
+      ...group[0]!,
+      tasks: group.flatMap((row) => row.tasks),
+      metrics: aggregate(
+        group.map((row) => row.metrics),
+        partial,
+      ),
+    })),
+    sources: [...sourceGroups.values()].map((group) => ({
+      ...group[0]!,
+      tasks: group.flatMap((row) => row.tasks),
       metrics: aggregate(
         group.map((row) => row.metrics),
         partial,

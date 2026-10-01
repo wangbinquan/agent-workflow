@@ -14,6 +14,7 @@ import type { UsageLedgerStore } from './usageLedger'
 export interface ObservationTaskSource {
   list(input: { readonly actor: Actor; readonly query: ObservationTaskPageQuery }): Promise<{
     readonly items: readonly ObservationTaskFacts[]
+    readonly positions: readonly { readonly taskId: string; readonly cursor: string }[]
     readonly nextCursor: string | null
   }>
   get(actor: Actor, taskId: string): Promise<ObservationTaskFacts | null>

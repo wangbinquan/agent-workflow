@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1130,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21496,
+    "recursiveFields": 21505,
     "symbols": 1044
   },
   "entries": [
@@ -118654,8 +118654,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 160,
-        "maxUnionVariants": 56
+        "maxTransitiveLeafFields": 169,
+        "maxUnionVariants": 58
       },
       "consumerEdgeIds": [
         "import:44a2cc15a17a1d4359b4",
@@ -118785,6 +118785,16 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:detail.$return.$variant:0.attemptsTruncated",
           "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:detail.$return.$variant:0.dimensionMatch.$variant:0",
+          "type": "'matched'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:detail.$return.$variant:0.dimensionMatch.$variant:1",
+          "type": "'unresolved'"
         },
         {
           "consumerEdgeIds": [],
@@ -119163,13 +119173,28 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return.partial",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:list.$return.projectionVersion",
           "type": "1"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return.scannedTasks",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:list.$return.taskScope",
           "type": "'direct'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return.unresolvedTasks",
+          "type": "number"
         },
         {
           "consumerEdgeIds": [],
@@ -119489,7 +119514,7 @@
             "import:fb61bc2532c019579cbd"
           ],
           "fieldPath": "$method:overview.$return.models",
-          "type": "readonly {\n    readonly authority: 'local' | 'crewstation'\n    readonly sourceId: string | null\n    readonly provider: string | null\n    readonly model: string | null\n    readonly metrics: ObservationMetrics\n  }[]"
+          "type": "readonly (ObservationModelIdentity & {\n    readonly metrics: ObservationMetrics\n    readonly tasks?: readonly { readonly taskId: string; readonly metrics: ObservationMetrics }[]\n  })[]"
         },
         {
           "consumerEdgeIds": [],
@@ -119503,6 +119528,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.purposes",
+          "type": "readonly {\n    readonly purpose: ObservationAgentSummary['purpose']\n    readonly metrics: ObservationMetrics\n    readonly tasks: readonly { readonly taskId: string; readonly metrics: ObservationMetrics }[]\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:overview.$return.quality",
           "type": "readonly {\n    readonly reason: string\n    readonly taskIds: readonly string[]\n  }[]"
         },
@@ -119513,6 +119543,19 @@
           ],
           "fieldPath": "$method:overview.$return.runtimes",
           "type": "readonly ObservationRuntimeSummary[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.scannedTasks",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:overview.$return.sources",
+          "type": "readonly {\n    readonly authority: 'local' | 'crewstation'\n    readonly sourceId: string | null\n    readonly metrics: ObservationMetrics\n    readonly tasks: readonly { readonly taskId: string; readonly metrics: ObservationMetrics }[]\n  }[]"
         },
         {
           "consumerEdgeIds": [],
@@ -119536,6 +119579,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:overview.$return.trend",
           "type": "readonly {\n    readonly from: number\n    readonly to: number\n    readonly taskCount: number\n    readonly metrics: ObservationMetrics\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.unresolvedTasks",
+          "type": "number"
         }
       ],
       "file": "packages/backend/src/modules/run-observability/public/queries.ts",
@@ -170333,7 +170381,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:599a69d0fb6c27ca8c67e496d0deb17cdcb4685067e90a4af541c499d730f19d",
+  "sourceDigest": "sha256:08703d62600043c1d2f33d719d8f1a21c2ef47ab48f859905282733bca005a01",
   "targetContexts": [
     "collaboration",
     "development-automation",

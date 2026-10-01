@@ -10,6 +10,8 @@ import type {
   ObservationTaskPage,
   ObservationTaskPageQuery,
   ObservationTaskSummary,
+  ObservationDimensionSelection,
+  ObservationModelIdentity,
 } from '@agent-workflow/shared'
 import { observationRuntimeKey } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
@@ -21,7 +23,14 @@ import { platformCaptureEvidence } from '../domain/platformCapture'
 import { summarizeTokenUsage, TOKEN_BUCKETS } from '../domain/tokenUsage'
 import { selectUsageContributions, type UsageContributionEvidence } from '../domain/usageSelection'
 import type { ObservationSnapshot, ObservationSnapshotSources } from '../ports/taskObservations'
-import { readObservationOverview } from './observationOverview'
+import { readObservationOverview, type ObservationAnalysisTask } from './observationOverview'
+import { readDimensionTasks } from './dimensionTasks'
+import {
+  parseObservationSelection,
+  invocationRuntimeIdentity,
+  invocationDimensionMatch,
+  modelDimensionMatch,
+} from '../domain/analysisDimensions'
 
 type Invocation = AcceptedObservationInvocation
 type PlatformUsage = Extract<PlatformObservation, { kind: 'usage' }>
@@ -344,6 +353,14 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
   return { invocations, truncated, sources: sourceStates, nativeCaptures, platformCaptures }
 }
 
+/** Token coverage is independent of a proven-empty tree's CNY visibility/readiness. */
+function invocationCoverageComplete(row: InvocationSummary): boolean {
+  return (
+    row.complete &&
+    row.reasons.every((reason) => row.knownZero && ['not-authorized', 'pending'].includes(reason))
+  )
+}
+
 function metrics(
   invocations: readonly InvocationSummary[],
   truncated: boolean,
@@ -355,11 +372,7 @@ function metrics(
     invocations.length > 0 &&
     observedInvocations === invocations.length &&
     !truncated &&
-    invocations.every(
-      (i) =>
-        i.complete &&
-        i.reasons.every((r) => i.knownZero && ['not-authorized', 'pending'].includes(r)),
-    )
+    invocations.every(invocationCoverageComplete)
   const amounts = rows.flatMap((r) => (r.amount === null ? [] : [r.amount]))
   return {
     invocations: invocations.length,
@@ -421,7 +434,7 @@ function metrics(
 }
 function taskSummary(
   task: ObservationTaskFacts,
-  loaded: Awaited<ReturnType<typeof loadTask>>,
+  loaded: Pick<Awaited<ReturnType<typeof loadTask>>, 'invocations' | 'truncated'>,
   asOf: number,
 ): ObservationTaskSummary {
   const end = Math.min(asOf, task.finishedAt ?? asOf)
@@ -473,29 +486,14 @@ function usageDimensions(loaded: Awaited<ReturnType<typeof loadTask>>) {
   const runtimes = new Map<string, { value: Runtime; rows: InvocationSummary[] }>()
   for (const row of loaded.invocations) {
     const authority = row.invocation.authority
-    const runtime = authority.kind === 'local' ? authority.runtime : null
-    const value: Runtime = {
-      authority: authority.kind,
-      sourceId: authority.kind === 'crewstation' ? authority.sourceId : null,
-      registrationId: runtime?.registrationId ?? null,
-      configurationRevision: runtime?.configurationRevision ?? null,
-      protocol: runtime?.protocol ?? null,
-    }
+    const value: Runtime = invocationRuntimeIdentity(row.invocation)
     const key = observationRuntimeKey(value),
       group = runtimes.get(key) ?? { value, rows: [] }
     group.rows.push(row)
     runtimes.set(key, group)
     const perModel = new Map<string, { value: Model; records: ValuedContribution[] }>()
     for (const record of row.records) {
-      const model: Model = {
-        authority: authority.kind,
-        sourceId: authority.kind === 'crewstation' ? authority.sourceId : null,
-        provider: authority.kind === 'local' ? (record.record.localModel?.provider ?? null) : null,
-        model:
-          authority.kind === 'local'
-            ? (record.record.localModel?.id ?? null)
-            : (record.record.platformUsage?.modelRef ?? null),
-      }
+      const model: Model = contributionModel(row, record)
       const modelKey = JSON.stringify(model),
         entry = perModel.get(modelKey) ?? { value: model, records: [] }
       entry.records.push(record)
@@ -546,6 +544,155 @@ function usageDimensions(loaded: Awaited<ReturnType<typeof loadTask>>) {
   }
 }
 
+function contributionModel(
+  row: InvocationSummary,
+  record: ValuedContribution,
+): ObservationModelIdentity {
+  const authority = row.invocation.authority
+  return {
+    authority: authority.kind,
+    sourceId: authority.kind === 'crewstation' ? authority.sourceId : null,
+    provider: authority.kind === 'local' ? (record.record.localModel?.provider ?? null) : null,
+    model:
+      authority.kind === 'local'
+        ? (record.record.localModel?.id ?? null)
+        : (record.record.platformUsage?.modelRef ?? null),
+  }
+}
+
+/** Filter only after the complete parent/child contribution selection and original valuation. */
+function selectTaskDimensions(
+  loaded: Awaited<ReturnType<typeof loadTask>>,
+  selection: ObservationDimensionSelection | null,
+) {
+  if (selection === null) return { loaded, matches: true, unresolved: false }
+  const invocations: InvocationSummary[] = []
+  let unresolved = loaded.truncated || loaded.invocations.length === 0
+  for (const row of loaded.invocations) {
+    const identity = invocationDimensionMatch(selection, row.invocation)
+    if (identity === 'excluded') continue
+    if (identity === 'unresolved') {
+      unresolved = true
+      invocations.push({
+        ...row,
+        records: [],
+        knownZero: false,
+        emptyCostVisible: false,
+        complete: false,
+        reasons: [...row.reasons, 'dimension-unresolved'],
+      })
+      continue
+    }
+    if (selection.model === undefined) {
+      invocations.push(row)
+      unresolved ||= !invocationCoverageComplete(row)
+      continue
+    }
+    const records = row.records.filter(
+      (record) => modelDimensionMatch(selection, contributionModel(row, record)) === 'matched',
+    )
+    // Complete numeric records do not close durable native/turn/revision capture gaps.
+    const uncertain =
+      !invocationCoverageComplete(row) ||
+      row.records.length === 0 ||
+      row.records.some(
+        (record) => modelDimensionMatch(selection, contributionModel(row, record)) === 'unresolved',
+      )
+    if (!records.length && !uncertain) continue
+    unresolved ||= uncertain
+    // An invocation-wide empty proof does not prove a particular actual model used zero.
+    invocations.push({
+      ...row,
+      records,
+      knownZero: false,
+      emptyCostVisible: false,
+      complete: row.complete && !uncertain,
+      reasons: uncertain ? [...row.reasons, 'dimension-unresolved'] : row.reasons,
+    })
+  }
+  return {
+    loaded: { ...loaded, invocations },
+    matches: invocations.length > 0 || unresolved,
+    unresolved,
+  }
+}
+
+function unresolvedAnalysisTask(task: ObservationTaskFacts, asOf: number): ObservationAnalysisTask {
+  return {
+    summary: {
+      ...taskSummary(task, { invocations: [], truncated: true }, asOf),
+      dimensionMatch: 'unresolved',
+    },
+    agents: [],
+    models: [],
+    runtimes: [],
+    purposes: [],
+    sources: [],
+    collection: { firstObservedAt: null, lastObservedAt: null, platforms: [] },
+  }
+}
+
+async function analysisTask(
+  sources: ObservationSnapshotSources,
+  task: ObservationTaskFacts,
+  asOf: number,
+  selection: ObservationDimensionSelection | null,
+): Promise<ObservationAnalysisTask | null> {
+  const original = await loadTask(sources, task.id),
+    selected = selectTaskDimensions(original, selection)
+  if (!selected.matches) return null
+  const loaded = selected.loaded,
+    observed = original.invocations
+      .flatMap((i) => i.records.map((r) => r.record.observedAt))
+      .filter((at) => Number.isSafeInteger(at) && at >= 0 && at <= asOf),
+    agents = agentSummaries(loaded),
+    purposeGroups = new Map<ObservationAgentSummary['purpose'], InvocationSummary[]>(),
+    sourceGroups = new Map<
+      string,
+      { authority: 'local' | 'crewstation'; sourceId: string | null; rows: InvocationSummary[] }
+    >()
+  for (const row of loaded.invocations) {
+    const purpose = row.invocation.purpose,
+      group = purposeGroups.get(purpose) ?? []
+    group.push(row)
+    purposeGroups.set(purpose, group)
+    const authority = row.invocation.authority,
+      sourceId = authority.kind === 'crewstation' ? authority.sourceId : null,
+      key = JSON.stringify([authority.kind, sourceId]),
+      source = sourceGroups.get(key) ?? { authority: authority.kind, sourceId, rows: [] }
+    source.rows.push(row)
+    sourceGroups.set(key, source)
+  }
+  return {
+    summary: {
+      ...taskSummary(task, loaded, asOf),
+      ...(selection === null
+        ? {}
+        : {
+            dimensionMatch: selected.unresolved ? ('unresolved' as const) : ('matched' as const),
+          }),
+    },
+    agents,
+    purposes: [...purposeGroups].map(([purpose, rows]) => ({
+      purpose,
+      metrics: metrics(rows, loaded.truncated),
+      tasks: [],
+    })),
+    sources: [...sourceGroups.values()].map(({ authority, sourceId, rows }) => ({
+      authority,
+      sourceId,
+      metrics: metrics(rows, loaded.truncated),
+      tasks: [],
+    })),
+    collection: {
+      firstObservedAt: observed.length ? Math.min(...observed) : null,
+      lastObservedAt: observed.length ? Math.max(...observed) : null,
+      platforms: original.sources,
+    },
+    ...usageDimensions(loaded),
+  }
+}
+
 export function createTaskObservationQueries(input: {
   readonly snapshot: ObservationSnapshot
   readonly now: () => number
@@ -559,28 +706,37 @@ export function createTaskObservationQueries(input: {
           query,
           asOf,
           sources,
-          summarize: async (sources, task) => {
-            const loaded = await loadTask(sources, task.id)
-            const observed = loaded.invocations
-              .flatMap((i) => i.records.map((r) => r.record.observedAt))
-              .filter((at) => Number.isSafeInteger(at) && at >= 0 && at <= asOf)
-            return {
-              summary: taskSummary(task, loaded, asOf),
-              agents: agentSummaries(loaded),
-              collection: {
-                firstObservedAt: observed.length ? Math.min(...observed) : null,
-                lastObservedAt: observed.length ? Math.max(...observed) : null,
-                platforms: loaded.sources,
-              },
-              ...usageDimensions(loaded),
-            }
-          },
+          summarize: (sources, task) =>
+            analysisTask(sources, task, asOf, parseObservationSelection(query.selection)),
+          unresolved: (task) => unresolvedAnalysisTask(task, asOf),
         })
       }),
     list: (actor: Actor, query: ObservationTaskPageQuery): Promise<ObservationTaskPage> =>
       input.snapshot.read(async (sources) => {
-        const asOf = input.now(),
-          page = await sources.tasks.list({ actor, query })
+        const asOf = input.now()
+        if (query.selection !== undefined) {
+          const selection = parseObservationSelection(query.selection)
+          const selected = await readDimensionTasks({
+            actor,
+            query,
+            sources,
+            summarize: (sources, task) => analysisTask(sources, task, asOf, selection),
+            unresolved: (task) => unresolvedAnalysisTask(task, asOf),
+          })
+          return {
+            items: selected.rows.map((row) => row.summary),
+            nextCursor: selected.nextCursor,
+            asOf,
+            projectionVersion: 1,
+            cohort: 'started',
+            taskScope: 'direct',
+            filtersEcho: query,
+            partial: selected.partial,
+            scannedTasks: selected.scannedTasks,
+            unresolvedTasks: selected.unresolvedTasks,
+          }
+        }
+        const page = await sources.tasks.list({ actor, query })
         const items: ObservationTaskSummary[] = []
         for (const task of page.items)
           items.push(taskSummary(task, await loadTask(sources, task.id), asOf))

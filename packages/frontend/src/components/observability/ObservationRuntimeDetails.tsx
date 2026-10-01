@@ -1,5 +1,6 @@
 import type { ReactNode, RefObject } from 'react'
 import type { ObservationRuntimeSummary } from '@agent-workflow/shared'
+import { observationRuntimeKey } from '@agent-workflow/shared'
 import { useTranslation } from 'react-i18next'
 import { Card } from '@/components/Card'
 import { Dialog } from '@/components/Dialog'
@@ -16,6 +17,7 @@ export function ObservationRuntimeDetails({
   triggerRef,
   fallbackRef,
   children,
+  onSelect,
 }: {
   open: boolean
   row: ObservationRuntimeSummary | undefined
@@ -25,6 +27,7 @@ export function ObservationRuntimeDetails({
   triggerRef: RefObject<HTMLElement | null>
   fallbackRef: RefObject<HTMLElement | null>
   children: ReactNode
+  onSelect?: () => void
 }) {
   const { t } = useTranslation()
   return (
@@ -41,7 +44,11 @@ export function ObservationRuntimeDetails({
         </button>
       }
     >
-      <div className="stack--md" data-observation-runtime-contributions>
+      <div
+        className="stack--md"
+        data-observation-runtime-contributions
+        data-observation-contributions={`runtime:${row ? observationRuntimeKey(row) : 'missing'}`}
+      >
         {row === undefined ? (
           <EmptyState title={t('runObservability.runtimeNotInSample')} size="compact" />
         ) : (
@@ -55,6 +62,11 @@ export function ObservationRuntimeDetails({
               </NoticeBanner>
             )}
             <Card title={t('runObservability.runtimeSummary')}>
+              {onSelect && (
+                <button type="button" className="btn btn--sm" onClick={onSelect}>
+                  {t('runObservability.relatedTasks')}
+                </button>
+              )}
               <Metrics value={row.metrics} />
               <dl className="detail-grid observation-metrics">
                 {row.authority === 'local' ? (

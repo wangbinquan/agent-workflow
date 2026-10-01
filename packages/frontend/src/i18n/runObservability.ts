@@ -1,4 +1,25 @@
 export const runObservabilityZh = {
+  relatedTasks: '查看关联任务',
+  dimension_runtime: '运行时范围',
+  dimension_model: '实际模型范围',
+  dimension_agent: 'Agent 范围',
+  dimension_purpose: '用途范围',
+  dimension_source: '采集来源范围',
+  clearDimension: '清除{{name}}',
+  clearDimensions: '清除维度范围',
+  dimensionUnresolved: '归属待确认',
+  dimensionBatchEmpty: '本批尚未确认匹配任务',
+  dimensionPageHint:
+    '本批已检查 {{count}} 个任务，{{unresolved}} 个归属待确认。数值只包含已确认贡献；有续页时可继续加载。',
+  dimensionTimeHint:
+    'Token 与人民币费用只汇总已选维度的贡献；执行时间和采集积压仍为任务全程事实。进入任务详情查看完整任务。',
+  dimensionContributionHint:
+    '只显示该实际模型对各任务的贡献，不使用默认模型分摊。完整任务详情保留其他模型、运行时及未知证据。',
+  modelContributions: '{{name}} · 任务贡献',
+  modelView: '查看模型 {{name}} 的任务贡献',
+  dimensionMissing: '该维度不在本次已读取范围中',
+  purposes: '按调用用途汇总',
+  sources: '按采集来源汇总',
   platformCaptureTitle: 'CrewStation 原生轮次采集',
   captureActions: '操作',
   nativeCaptureDetails: '查看轮次采集',
@@ -221,6 +242,27 @@ export const runObservabilityZh = {
 }
 export type RunObservabilityMessages = { [K in keyof typeof runObservabilityZh]: string }
 export const runObservabilityEn: RunObservabilityMessages = {
+  relatedTasks: 'View related tasks',
+  dimension_runtime: 'Runtime range',
+  dimension_model: 'Actual model range',
+  dimension_agent: 'Agent range',
+  dimension_purpose: 'Purpose range',
+  dimension_source: 'Capture source range',
+  clearDimension: 'Clear {{name}}',
+  clearDimensions: 'Clear dimension range',
+  dimensionUnresolved: 'Attribution unresolved',
+  dimensionBatchEmpty: 'No confirmed matches in this batch',
+  dimensionPageHint:
+    'Checked {{count}} tasks in this batch; {{unresolved}} have unresolved attribution. Values include confirmed contributions only. Continue when a next page is available.',
+  dimensionTimeHint:
+    'Tokens and CNY costs cover the selected contributions. Execution time and collection backlog remain whole-task facts. Task details show the complete task.',
+  dimensionContributionHint:
+    'Actual model contributions to each task, without allocation from a default model. Complete task details retain other models, runtimes and unknown evidence.',
+  modelContributions: '{{name}} · Task contributions',
+  modelView: 'View task contributions from model {{name}}',
+  dimensionMissing: 'This dimension is outside the loaded range',
+  purposes: 'Usage by invocation purpose',
+  sources: 'Usage by capture source',
   platformCaptureTitle: 'CrewStation native turn capture',
   captureActions: 'Actions',
   nativeCaptureDetails: 'View turn capture',

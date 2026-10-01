@@ -8,6 +8,8 @@ import type {
 import type { UsageLedgerRecord } from '../src/modules/run-observability/domain/usageLedger'
 import { buildActor } from '../src/auth/actor'
 import { aggregateObservationMetrics as aggregate } from '../src/modules/run-observability/domain/aggregateMetrics'
+import { createTaskObservationQueries } from '../src/modules/run-observability/application/taskObservations'
+import { readDimensionTasks } from '../src/modules/run-observability/application/dimensionTasks'
 import { readObservationOverview } from '../src/modules/run-observability/application/observationOverview'
 import type { ObservationSnapshotSources } from '../src/modules/run-observability/ports/taskObservations'
 
@@ -83,6 +85,10 @@ function fixture(count: number) {
         const start = Number(query.after ?? 0)
         return {
           items: tasks.slice(start, start + query.limit),
+          positions: tasks.slice(start, start + query.limit).map((task, index) => ({
+            taskId: task.id,
+            cursor: String(start + index + 1),
+          })),
           nextCursor: start + query.limit < tasks.length ? String(start + query.limit) : null,
         }
       },
@@ -306,4 +312,297 @@ test('shared invocation budget stops before an extra task contributes any metric
   expect(result.tasks).toHaveLength(10)
   expect(result.partial).toBe(true)
   expect(result.metrics.tokens.totalKnown).toBe('10')
+})
+
+function unresolvedTask(task: ObservationTaskFacts) {
+  return {
+    summary: {
+      task,
+      metrics: aggregate([], true),
+      wallMs: 1,
+      runningMs: 1,
+      dimensionMatch: 'unresolved' as const,
+    },
+    agents: [],
+    models: [],
+    runtimes: [],
+    collection: { firstObservedAt: null, lastObservedAt: null, platforms: [] },
+  }
+}
+
+test('dimension no-match scanning stops at raw task budget and continues beyond an empty partial batch', async () => {
+  const f = fixture(205),
+    query = { ...f.query, selection: JSON.stringify({ purpose: 'task' }), limit: 20 }
+  const input = {
+    ...f,
+    query,
+    unresolved: unresolvedTask,
+    summarize: async (sources: ObservationSnapshotSources, task: ObservationTaskFacts) =>
+      task.id === '204' ? f.summarize(sources, task) : null,
+  }
+  const first = await readDimensionTasks(input)
+  expect(first.rows).toHaveLength(0)
+  expect(first.scannedTasks).toBe(200)
+  expect(first.partial).toBe(true)
+  expect(first.nextCursor).not.toBeNull()
+  const second = await readDimensionTasks({
+    ...input,
+    query: { ...query, after: first.nextCursor! },
+  })
+  expect(second.rows.map((row) => row.summary.task.id)).toEqual(['204'])
+  expect(second.scannedTasks).toBe(5)
+  expect(second.nextCursor).toBeNull()
+})
+
+test('an oversized first dimension task advances only with its unresolved facts row and reaches a following match', async () => {
+  const f = fixture(2),
+    query = { ...f.query, selection: JSON.stringify({ purpose: 'task' }), limit: 1 },
+    record = {} as UsageLedgerRecord,
+    limits: number[] = []
+  f.sources.local.records = async (_task, request) => {
+    limits.push(request.limit)
+    return { items: Array.from({ length: request.limit }, () => record), nextCursor: 'more' }
+  }
+  const input = {
+    ...f,
+    query,
+    unresolved: unresolvedTask,
+    summarize: async (sources: ObservationSnapshotSources, task: ObservationTaskFacts) => {
+      if (task.id === '0') {
+        await sources.local.records(task.id, { limit: 10_000 })
+        await sources.local.records(task.id, { limit: 10_000, after: 'more' })
+        await sources.local.records(task.id, { limit: 1, after: 'still-more' })
+      }
+      return f.summarize(sources, task)
+    },
+  }
+  const first = await readDimensionTasks(input)
+  expect(limits).toEqual([10_000, 10_000])
+  expect(first.rows.map((row) => row.summary.task.id)).toEqual(['0'])
+  expect(first.rows[0]?.summary.dimensionMatch).toBe('unresolved')
+  expect(first.rows[0]?.summary.metrics.tokens.hasKnown).toBe(false)
+  expect(first.rows[0]?.summary.metrics.cost.knownAmount).toBeNull()
+  expect(first.partial).toBe(true)
+  expect(first.nextCursor).not.toBeNull()
+  const second = await readDimensionTasks({
+    ...input,
+    query: { ...query, after: first.nextCursor! },
+  })
+  expect(second.rows.map((row) => row.summary.task.id)).toEqual(['1'])
+  expect(second.nextCursor).toBeNull()
+})
+
+test('one remaining source record cannot create a half-read subtotal or prevent later dimension progress', async () => {
+  const f = fixture(3),
+    query = { ...f.query, selection: JSON.stringify({ purpose: 'task' }), limit: 20 },
+    record = {} as UsageLedgerRecord,
+    limits: number[] = []
+  f.sources.local.records = async (_task, request) => {
+    limits.push(request.limit)
+    return { items: Array.from({ length: request.limit }, () => record), nextCursor: 'more' }
+  }
+  const input = {
+    ...f,
+    query,
+    unresolved: unresolvedTask,
+    summarize: async (sources: ObservationSnapshotSources, task: ObservationTaskFacts) => {
+      if (task.id === '0') await sources.local.records(task.id, { limit: 19_999 })
+      if (task.id === '1') {
+        await sources.local.records(task.id, { limit: 2 })
+        await sources.local.records(task.id, { limit: 1, after: 'more' })
+      }
+      return f.summarize(sources, task)
+    },
+  }
+  const first = await readDimensionTasks(input)
+  expect(limits).toEqual([19_999, 1])
+  expect(first.rows.map((row) => row.summary.task.id)).toEqual(['0', '1'])
+  expect(first.rows[1]?.summary.dimensionMatch).toBe('unresolved')
+  expect(first.rows[1]?.summary.metrics.tokens.hasKnown).toBe(false)
+  const second = await readDimensionTasks({
+    ...input,
+    query: { ...query, after: first.nextCursor! },
+  })
+  expect(second.rows.map((row) => row.summary.task.id)).toEqual(['2'])
+  expect(second.nextCursor).toBeNull()
+})
+
+test('dimension projection rejects missing owner positions and preserves partial numeric state at true EOF', async () => {
+  const f = fixture(1),
+    query = { ...f.query, selection: JSON.stringify({ purpose: 'task' }), limit: 20 },
+    list = f.sources.tasks.list
+  f.sources.tasks.list = async (input) => ({ ...(await list(input)), positions: [] })
+  await expect(readDimensionTasks({ ...f, query, unresolved: unresolvedTask })).rejects.toThrow(
+    'positions missing',
+  )
+  f.sources.tasks.list = list
+  const result = await readDimensionTasks({
+    ...f,
+    query,
+    unresolved: unresolvedTask,
+    summarize: async (sources, task) => {
+      await sources.invocations(task.id)
+      return f.summarize(sources, task)
+    },
+  })
+  expect(result.nextCursor).toBeNull()
+  // An unknown row can be the actual last task without implying known zero or a fabricated next page.
+  f.sources.invocations = async () => ({
+    items: Array.from({ length: 10_001 }, () => ({}) as AcceptedObservationInvocation),
+    truncated: false,
+  })
+  const partial = await readDimensionTasks({
+    ...f,
+    query,
+    unresolved: unresolvedTask,
+    summarize: async (sources, task) => {
+      await sources.invocations(task.id)
+      return f.summarize(sources, task)
+    },
+  })
+  expect(partial.nextCursor).toBeNull()
+  expect(partial.partial).toBe(true)
+  expect(partial.rows[0]?.summary.metrics.tokens.hasKnown).toBe(false)
+})
+
+// Controlled source ports exercise the actual Task loader, not a callback that simulates a subtotal.
+// The real SQL authorization/continuations and durable valuations have separate provider tests.
+test('actual dimension Task loader handles one capture plus 10000 local and 10000 platform rows without stalling', async () => {
+  const f = fixture(2),
+    input = { ...f.query, selection: JSON.stringify({ purpose: 'task' }), limit: 20 },
+    counts = { input: '1', cacheRead: '0', cacheWrite: '0', output: '0' },
+    limits: number[] = []
+  const localInvocation = (taskId: string): AcceptedObservationInvocation => ({
+    invocationId: 'local-' + taskId,
+    taskId,
+    nodeRunId: null,
+    agentId: null,
+    agentRevision: null,
+    purpose: 'task',
+    acceptedAt: 1,
+    priceBookRevision: null,
+    nativeCaptureContract: 'opencode-child-steps-v1',
+    authority: { kind: 'local', runtime: null },
+  })
+  f.sources.invocations = async (taskId) => ({
+    items:
+      taskId === '0'
+        ? [
+            localInvocation(taskId),
+            {
+              ...localInvocation(taskId),
+              invocationId: 'hosted',
+              authority: {
+                kind: 'crewstation',
+                sourceId: 'installation',
+                projectId: 'project',
+                taskId: 'platform-task',
+                subtaskId: 'part',
+                executionResourceId: 'pod',
+                executionGeneration: 1,
+              },
+            },
+          ]
+        : [localInvocation(taskId)],
+    truncated: false,
+  })
+  f.sources.local.captures = async (ids) =>
+    ids.map(
+      (invocationId) =>
+        ({
+          invocationId,
+          taskId: invocationId.slice(-1),
+          priorRevisionGap: false,
+          capture: {
+            contract: 'opencode-child-steps-v1',
+            nativeSource: 'fixture',
+            rootSessionId: 'root',
+            state: 'complete',
+            baseline: { kind: 'fresh', fingerprint: null },
+            snapshotFingerprint: 'scan',
+            observedAt: 1,
+            scannedSessions: 1,
+            scannedSteps: 1,
+            issues: [],
+            priorRevisions: [],
+          },
+        }) as Awaited<ReturnType<ObservationSnapshotSources['local']['captures']>>[number],
+    )
+  f.sources.local.records = async (taskId, request) => {
+    const record: UsageLedgerRecord = {
+      sourceId: 'local',
+      observedRevision: 1,
+      contribution: counts,
+      complete: true,
+      issues: [],
+      measurement: {
+        schemaVersion: 1,
+        invocationId: 'local-' + taskId,
+        taskId,
+        nodeRunId: null,
+        agentId: null,
+        recordId: 'record',
+        revision: 1,
+        occurredAt: 1,
+        observedAt: 1,
+        model: { provider: 'provider', id: 'actual' },
+        adapterVersion: 'fixture',
+        reporting: 'delta',
+        inclusion: 'self',
+        coverage: 'complete',
+        validity: 'valid',
+        basis: { kind: 'invocation' },
+        usage: counts,
+      },
+    }
+    if (taskId === '1') return { items: [record] }
+    const start = Number(request.after ?? 0),
+      count = Math.min(request.limit, 10_000 - start)
+    limits.push(count)
+    return {
+      items: Array.from({ length: count }, () => record),
+      ...(start + count < 10_000 ? { nextCursor: String(start + count) } : {}),
+    }
+  }
+  f.sources.platform.records = async (_binding, request) => {
+    // Record values are never evaluated: the shared budget interrupts this task first.
+    const count = request.limit,
+      start = Number(request.after ?? 0)
+    limits.push(count)
+    return {
+      items: Array.from(
+        { length: count },
+        () =>
+          ({}) as Awaited<
+            ReturnType<ObservationSnapshotSources['platform']['records']>
+          >['items'][number],
+      ),
+      nextCursor: String(start + count),
+      state: {} as Awaited<ReturnType<ObservationSnapshotSources['platform']['records']>>['state'],
+    }
+  }
+  f.sources.value = async () => ({
+    currency: 'CNY',
+    availability: 'priced',
+    amountDecimal: '0.1',
+    priceVersionId: 'frozen',
+    completeness: 'complete',
+  })
+  const queries = createTaskObservationQueries({
+    now: () => 1000,
+    snapshot: { read: (work) => work(f.sources) },
+  })
+  const first = await queries.list(actor, input)
+  expect(limits.reduce((sum, count) => sum + count, 0)).toBe(19_999)
+  expect(limits.at(-1)).toBe(499)
+  expect(first.items.map((row) => row.task.id)).toEqual(['0'])
+  expect(first.items[0]?.dimensionMatch).toBe('unresolved')
+  expect(first.items[0]?.metrics.tokens.hasKnown).toBe(false)
+  expect(first.items[0]?.metrics.cost.knownAmount).toBeNull()
+  expect(first.nextCursor).not.toBeNull()
+  const second = await queries.list(actor, { ...input, after: first.nextCursor! })
+  expect(second.items.map((row) => row.task.id)).toEqual(['1'])
+  expect(second.items[0]?.metrics.tokens.totalKnown).toBe('1')
+  expect(second.items[0]?.metrics.cost.knownAmount).toBe('0.1')
+  expect(second.nextCursor).toBeNull()
 })

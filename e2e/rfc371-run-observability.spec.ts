@@ -565,6 +565,233 @@ test('runtime last-row contributions preserve Dialog, URL, scroll and focus acro
       }
 })
 
+test('model contributions restore the exact Dialog and scope before selecting an intersection at desktop, tablet and phone widths', async ({
+  page,
+  browserName,
+}, testInfo) => {
+  const { task, workflow } = await seedTask()
+  let language: 'zh-CN' | 'en-US' = 'en-US',
+    theme: 'light' | 'dark' = 'light'
+  // Read-only numeric/long-list presentation around a genuine basic-runtime task.
+  // These display values are not model usage evidence; real provider/API tests verify attribution.
+  await page.route('**/api/config', async (route) => {
+    expect(route.request().method()).toBe('GET')
+    const response = await route.fetch(),
+      config = (await response.json()) as Record<string, unknown>
+    await route.fulfill({ response, json: { ...config, language, theme } })
+  })
+  await page.route('**/api/observability/overview?*', async (route) => {
+    expect(route.request().method()).toBe('GET')
+    const response = await route.fetch(),
+      data = (await response.json()) as ObservationOverview
+    const contribution = displayRuntimeMetrics(data.metrics, '100', '1.25')
+    const tasks = Array.from({ length: 48 }, (_, i) => ({
+      task: {
+        ...data.tasks.find((row) => row.task.id === task.id)!.task,
+        id: i === 47 ? task.id : 'display-model-task-' + i,
+        name: i === 47 ? 'Observed parallel task' : 'Model display task ' + i,
+      },
+      metrics: i === 47 ? displayRuntimeMetrics(data.metrics, '470100', '95.25', 48) : contribution,
+      wallMs: 10000,
+      runningMs: 5000,
+    }))
+    const models: ObservationOverview['models'] = [
+      ...Array.from({ length: 47 }, (_, i) => ({
+        authority: 'local' as const,
+        sourceId: null,
+        provider: 'display-provider',
+        model: 'display-model-' + i,
+        metrics: displayRuntimeMetrics(data.metrics, '10000', '2'),
+        tasks: [{ taskId: task.id, metrics: displayRuntimeMetrics(data.metrics, '10000', '2') }],
+      })),
+      {
+        authority: 'local',
+        sourceId: null,
+        provider: 'display-provider',
+        model: 'original-last-model',
+        metrics: displayRuntimeMetrics(data.metrics, '4800', '60', 48),
+        tasks: tasks.map((row) => ({ taskId: row.task.id, metrics: contribution })),
+      },
+    ]
+    await route.fulfill({ response, json: { ...data, tasks, models, partial: false } })
+  })
+  await page.route('**/api/observability/tasks/' + task.id, async (route) => {
+    expect(route.request().method()).toBe('GET')
+    const response = await route.fetch(),
+      data = (await response.json()) as ObservationTaskDetail
+    await route.fulfill({
+      response,
+      json: { ...data, metrics: displayRuntimeMetrics(data.metrics, '470100', '95.25', 48) },
+    })
+  })
+  await prime(page)
+  const to = Date.now() + 1,
+    from = to - 7 * 86400000
+  const initialSelection = { purpose: 'task' as const }
+  const scope = new URLSearchParams({
+    from: String(from),
+    to: String(to),
+    period: 'custom',
+    tab: 'usage',
+    workflow: workflow.id,
+    q: 'Observed',
+    status: 'done',
+    selection: JSON.stringify(initialSelection),
+  })
+  const nextControl = process.platform === 'darwin' && browserName === 'webkit' ? 'Alt+Tab' : 'Tab'
+  for (language of ['zh-CN', 'en-US'] as const)
+    for (theme of ['light', 'dark'] as const)
+      for (const width of [1440, 768, 390]) {
+        await page.setViewportSize({ width, height: 844 })
+        await page.goto(`${daemon.baseUrl}/observability?${scope}`)
+        await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+        const openers = page.locator('[data-observation-model]')
+        await expect(openers).toHaveCount(48)
+        await expectAnalysisSpacing(page)
+        await openers.nth(46).focus()
+        await page.keyboard.press(nextControl)
+        const opener = page.getByRole('button', {
+          name:
+            language === 'zh-CN'
+              ? '查看模型 original-last-model 的任务贡献'
+              : 'View task contributions from model original-last-model',
+          exact: true,
+        })
+        await expect(opener).toBeFocused()
+        await page.keyboard.press('Enter')
+        const dialog = page.getByRole('dialog', {
+          name:
+            'original-last-model' +
+            (language === 'zh-CN' ? ' · 任务贡献' : ' · Task contributions'),
+          exact: true,
+        })
+        await expect(dialog).toBeVisible()
+        const cards = dialog.locator('.card'),
+          body = dialog.locator('.dialog__body')
+        await expect(cards).toHaveCount(2)
+        const geometry = await dialog.evaluate((element) => ({
+          cards: Array.from(element.querySelectorAll('.card')).map((card) => {
+            const box = card.getBoundingClientRect()
+            return { top: box.top, bottom: box.bottom }
+          }),
+          gap: Number.parseFloat(
+            getComputedStyle(document.documentElement).getPropertyValue('--space-4'),
+          ),
+          width: document.documentElement.scrollWidth - innerWidth,
+        }))
+        expect(geometry.cards[1]!.top - geometry.cards[0]!.bottom).toBeCloseTo(geometry.gap, 0)
+        expect(geometry.width).toBeLessThanOrEqual(1)
+        const taskButton = dialog.getByRole('button', {
+          name: 'Observed parallel task',
+          exact: true,
+        })
+        await taskButton.scrollIntoViewIfNeeded()
+        await taskButton.focus()
+        const row = taskButton.locator('xpath=ancestor::tr')
+        await expect(row).toContainText('100')
+        await expect(row).toContainText('¥1.25')
+        await expect(row).not.toContainText('470,100')
+        const main = page.getByTestId('app-shell-main'),
+          saved = {
+            main: await main.evaluate((element) => element.scrollTop),
+            body: await body.evaluate((element) => element.scrollTop),
+            window: await page.evaluate(() => scrollY),
+            url: page.url(),
+          }
+        expect(saved.body).toBeGreaterThan(100)
+        await page.keyboard.press('Enter')
+        await expect(
+          page.getByRole('heading', {
+            name: language === 'zh-CN' ? '任务整体' : 'Task total',
+            exact: true,
+          }),
+        ).toBeVisible()
+        await expect(page.locator('.observation-metrics').first()).toContainText('470,100')
+        const back = page.getByRole('button', {
+          name: language === 'zh-CN' ? '返回统计分析' : 'Back to analysis',
+          exact: true,
+        })
+        await expect(back).toHaveClass(/page__heading-back/)
+        const backBox = await back.boundingBox()
+        expect(backBox!.width).toBeLessThanOrEqual(180)
+        expect(backBox!.height).toBeLessThanOrEqual(44)
+        await back.click()
+        await expect(dialog).toBeVisible()
+        await expect(page).toHaveURL(saved.url)
+        await expect(taskButton).toBeFocused()
+        expect(await body.evaluate((element) => element.scrollTop)).toBeCloseTo(saved.body, 0)
+        expect(await main.evaluate((element) => element.scrollTop)).toBeCloseTo(saved.main, 0)
+        expect(await page.evaluate(() => scrollY)).toBeCloseTo(saved.window, 0)
+        await page.screenshot({
+          path: testInfo.outputPath(`model-contributions-${language}-${theme}-${width}.png`),
+          fullPage: true,
+        })
+        // Escape restores the exact model trigger; reopening can select a server range.
+        await page.keyboard.press('Escape')
+        await expect(dialog).toHaveCount(0)
+        await expect(opener).toBeFocused()
+        await opener.click()
+        const expectedSelection = {
+          ...initialSelection,
+          model: {
+            authority: 'local',
+            sourceId: null,
+            provider: 'display-provider',
+            model: 'original-last-model',
+          },
+        }
+        const responsePromise = page.waitForResponse((response) => {
+          const url = new URL(response.url())
+          return (
+            url.pathname === '/api/observability/tasks' &&
+            url.searchParams.get('selection') !== null
+          )
+        })
+        await dialog
+          .getByRole('button', {
+            name: language === 'zh-CN' ? '查看关联任务' : 'View related tasks',
+            exact: true,
+          })
+          .click()
+        const response = await responsePromise
+        expect(response.ok()).toBe(true)
+        const selectedUrl = new URL(page.url()),
+          requestUrl = new URL(response.url())
+        expect(JSON.parse(selectedUrl.searchParams.get('selection')!)).toEqual(expectedSelection)
+        expect(JSON.parse(requestUrl.searchParams.get('selection')!)).toEqual(expectedSelection)
+        for (const key of ['from', 'to', 'q', 'status', 'workflow']) {
+          expect(selectedUrl.searchParams.get(key)).toBe(scope.get(key))
+          expect(requestUrl.searchParams.get(key)).toBe(scope.get(key))
+        }
+        const result = (await response.json()) as { items: { metrics: ObservationMetrics }[] }
+        // Basic emits no usage; this journey must not turn the display fixture into facts.
+        expect(
+          result.items.some(
+            (item) => item.metrics.tokens.hasKnown || item.metrics.cost.knownAmount !== null,
+          ),
+        ).toBe(false)
+        await expect(dialog).toHaveCount(0)
+        await expect(
+          page.getByRole('tab', {
+            name: language === 'zh-CN' ? '任务追踪' : 'Task traces',
+            exact: true,
+          }),
+        ).toHaveAttribute('aria-selected', 'true')
+        await page
+          .getByRole('button', {
+            name: language === 'zh-CN' ? '清除实际模型范围' : 'Clear Actual model range',
+            exact: true,
+          })
+          .click()
+        await expect
+          .poll(() => JSON.parse(new URL(page.url()).searchParams.get('selection')!))
+          .toEqual(initialSelection)
+        await expect(
+          page.getByRole('button', { name: /CSV|Export|More filters|导出|更多筛选/ }),
+        ).toHaveCount(0)
+      }
+})
+
 test('overview omits attention, labels every token column and aligns collection facts', async ({
   page,
 }, testInfo) => {

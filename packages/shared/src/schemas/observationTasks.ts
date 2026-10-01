@@ -8,6 +8,72 @@ import { TaskStatusSchema } from './task'
 import type { ObservationPlatformNativeCapture } from './observationPlatform'
 
 const time = z.coerce.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)
+const identity = z.string().min(1).max(2048).nullable()
+const authority = z.enum(['local', 'crewstation'])
+export const ObservationDimensionSelectionSchema = z
+  .object({
+    runtime: z
+      .object({
+        authority,
+        sourceId: identity,
+        registrationId: identity,
+        configurationRevision: z
+          .number()
+          .int()
+          .nonnegative()
+          .max(Number.MAX_SAFE_INTEGER)
+          .nullable(),
+        protocol: identity,
+      })
+      .strict()
+      .refine((value) =>
+        value.authority === 'local'
+          ? value.sourceId === null
+          : value.registrationId === null &&
+            value.configurationRevision === null &&
+            value.protocol === null,
+      )
+      .optional(),
+    model: z
+      .object({ authority, sourceId: identity, provider: identity, model: identity })
+      .strict()
+      .refine((value) =>
+        value.authority === 'local' ? value.sourceId === null : value.provider === null,
+      )
+      .optional(),
+    agent: z
+      .object({
+        id: identity,
+        revision: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).nullable(),
+      })
+      .strict()
+      .optional(),
+    purpose: z.enum(['task', 'system', 'playground', 'memory']).optional(),
+    source: z
+      .object({ authority, sourceId: identity })
+      .strict()
+      .refine((value) => value.authority !== 'local' || value.sourceId === null)
+      .optional(),
+  })
+  .strict()
+  .refine((value) => Object.values(value).some((field) => field !== undefined), {
+    message: 'Empty observation dimension selection',
+  })
+export type ObservationDimensionSelection = z.infer<typeof ObservationDimensionSelectionSchema>
+const selection = z
+  .string()
+  .min(1)
+  .max(2048)
+  .refine(
+    (value) => {
+      try {
+        return ObservationDimensionSelectionSchema.safeParse(JSON.parse(value)).success
+      } catch {
+        return false
+      }
+    },
+    { message: 'Invalid observation dimension selection' },
+  )
 export const ObservationTaskPageQuerySchema = z
   .object({
     from: time,
@@ -17,6 +83,7 @@ export const ObservationTaskPageQuerySchema = z
     status: TaskStatusSchema.optional(),
     repository: z.string().trim().min(1).max(4096).optional(),
     workflow: z.string().trim().min(1).max(200).optional(),
+    selection: selection.optional(),
     limit: z.coerce.number().int().min(1).max(25).default(20),
     after: z.string().min(1).max(2048).optional(),
   })
@@ -40,7 +107,7 @@ export const ObservationOverviewQuerySchema = ObservationTaskPageQuerySchema.ref
   {
     message: 'Overview does not accept task pagination',
   },
-).transform(({ from, to, timezone, q, status, repository, workflow }) => ({
+).transform(({ from, to, timezone, q, status, repository, workflow, selection }) => ({
   from,
   to,
   timezone,
@@ -48,6 +115,7 @@ export const ObservationOverviewQuerySchema = ObservationTaskPageQuerySchema.ref
   ...(status === undefined ? {} : { status }),
   ...(repository === undefined ? {} : { repository }),
   ...(workflow === undefined ? {} : { workflow }),
+  ...(selection === undefined ? {} : { selection }),
 }))
 export type ObservationOverviewQuery = z.infer<typeof ObservationOverviewQuerySchema>
 
@@ -104,6 +172,8 @@ export interface ObservationTaskSummary {
   readonly metrics: ObservationMetrics
   readonly wallMs: number
   readonly runningMs: number
+  /** A selected contribution is incomplete or could not be assigned to this range. */
+  readonly dimensionMatch?: 'matched' | 'unresolved'
 }
 export interface ObservationTaskPage {
   readonly items: readonly ObservationTaskSummary[]
@@ -113,6 +183,9 @@ export interface ObservationTaskPage {
   readonly cohort: 'started'
   readonly taskScope: 'direct'
   readonly filtersEcho: ObservationTaskPageQuery
+  readonly partial?: boolean
+  readonly scannedTasks?: number
+  readonly unresolvedTasks?: number
 }
 export interface ObservationAgentSummary {
   readonly agentId: string | null
@@ -218,6 +291,16 @@ export interface ObservationRuntimeSummary extends ObservationRuntimeIdentity {
   readonly metrics: ObservationMetrics
 }
 
+export interface ObservationModelIdentity {
+  readonly authority: 'local' | 'crewstation'
+  readonly sourceId: string | null
+  readonly provider: string | null
+  readonly model: string | null
+}
+export function observationModelKey(model: ObservationModelIdentity): string {
+  return JSON.stringify([model.authority, model.sourceId, model.provider, model.model])
+}
+
 export interface ObservationOverview {
   readonly asOf: number
   readonly projectionVersion: 1
@@ -225,6 +308,8 @@ export interface ObservationOverview {
   readonly taskScope: 'direct'
   readonly filtersEcho: ObservationOverviewQuery
   readonly partial: boolean
+  readonly scannedTasks?: number
+  readonly unresolvedTasks?: number
   /** Collection evidence in this task cohort. No pending rows is not proof of complete capture. */
   readonly collection: ObservationCollectionStatus
   readonly limits: {
@@ -244,12 +329,20 @@ export interface ObservationOverview {
   readonly agents: readonly (ObservationAgentSummary & {
     readonly tasks: readonly { readonly taskId: string; readonly metrics: ObservationMetrics }[]
   })[]
-  readonly models: readonly {
+  readonly models: readonly (ObservationModelIdentity & {
+    readonly metrics: ObservationMetrics
+    readonly tasks?: readonly { readonly taskId: string; readonly metrics: ObservationMetrics }[]
+  })[]
+  readonly purposes?: readonly {
+    readonly purpose: ObservationAgentSummary['purpose']
+    readonly metrics: ObservationMetrics
+    readonly tasks: readonly { readonly taskId: string; readonly metrics: ObservationMetrics }[]
+  }[]
+  readonly sources?: readonly {
     readonly authority: 'local' | 'crewstation'
     readonly sourceId: string | null
-    readonly provider: string | null
-    readonly model: string | null
     readonly metrics: ObservationMetrics
+    readonly tasks: readonly { readonly taskId: string; readonly metrics: ObservationMetrics }[]
   }[]
   readonly runtimes: readonly ObservationRuntimeSummary[]
   readonly durations: {

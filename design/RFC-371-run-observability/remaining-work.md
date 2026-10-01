@@ -175,3 +175,53 @@ CS `85ee9254a175848d65105d16327e00afbc47cc08` 平台自测准入修复已推送�
 ### 2026-10-02 当前共享主干的精确 CI 边界
 
 后继 `2d65a16f` 主 CI 为 38 success / 12 failure；原 owner 的 `a4b706b942adfc9ca16c15e329ba1f7fa97f78f8` 已推送修正，本次记录时主 CI queued、实际 schedule 视觉回归 success，见 [后续守卫回执](./ci-recovery.md#2026-10-02-共享主干后续守卫失败与修正状态)。CE8 和 EEF 的既有成功仍只证明各自候选，当前主干不能提前写成全绿。CS 六份实采回执已发布为 `e15ca72238199eb59566dccfabfea4c452cbf9e5`，其 [精确 CI 36886631033](https://github.com/wangbinquan/CrewStation/actions/runs/36886631033) 六项 success；开发生产采集关闭、托管联合对拍及页面验收等未覆盖范围继续保留。
+
+## 2026-10-02 AW-R08 服务端维度范围设计
+
+[维度范围与下钻设计](./dimension-drilldown.md)冻结实际模型/运行时/Agent/用途/采集来源的交集、同快照贡献口径、未知归属及 Task owner 逐条 opaque continuation。既有 runtime Dialog URL 不改作筛选，顶部不恢复更多筛选/工作流/CSV；真实任务详情保留紧凑标题旁返回。原语 census 已完成，精确独立设计门待验，本片尚未改源码。共享 Task public query 的 RFC-370 在制输出保留，发布依赖准备度独立核验；AW-R08 与两个 RFC 不提前关闭。
+
+### AW-R08 设计 v2 的失败闭环
+
+v1 独立设计 FAIL 原记录保留。v2 为新模型 Dialog 精确登记公共调用并扩展原返回 hook；半读预算耗尽以不带 subtotal 的未确认 Task 行与真实 owner position 原子推进；官方生成的 RFC-294 status 与 12 份 JSON 同批冻结和提交。allowlist 38 路径、源码尚未改，待 v2 独立功能门通过后实施；不把设计修订当验收完成。
+
+### 2026-10-02 AW-R08 维度源码与回归候选
+
+独立设计 v2 PASS 后，Task owner 逐项 opaque continuation、维度交集和贡献投影已实施；半读预算返回原授权事实的未知行并原子推进，模型范围撤掉全调用零证明。新模型 Dialog 及原返回 hook/AST 登记同批更新，真实 SQLite/PG、组件与 390/768/1440 中英明暗 hosted 浏览器回归已写入。精确格式/lint通过，无本机 AW 测试/类型/构建/服务。共享 Task 配置 owner 尚有未提交依赖，完整官方登记、最终实现门、发布和 exact-SHA CI 继续等待依赖准备；全部并行输出保留，不把这次候选记作 AW-R08 完成。详见[候选边界](./dimension-drilldown.md#v2-设计通过与源码候选2026-10-02)。
+
+### AW-R08 源码复核 v1 失败与 v2 补正
+
+独立源码复核 v1 为 FAIL，原回执 `observability-aw-dimension-source-review-v1.json` SHA256 `b9684778b15aff88f349e6fc273e53331ab7877607e7b61a14acb081c6b57913` 保留。第一项 P2 是父子夹具已使用不同已知模型却仍断言覆盖扣除；修订为未知模型父汇总覆盖已知模型子项，同时另加两个明确不同模型互不扣除、原人民币分别完整计价的反例。生产覆盖规则不改。
+
+第二项 P2 是完整数字记录尚不能证明原生采集已闭合。维度判断现在同时保留持久 native/turn/revision 采集缺口，可能匹配的任务留作未确认，不借全任务 Token 或金额。新增本地缺证明、历史无采集契约和 CS 实际缺前轮投影的持久回归；原证明/前轮真正补齐后才允许排除非匹配模型。普通估值原因不替代采集覆盖判据。精确格式/lint通过；这些 AW 回归只写入，等待 hosted CI，不冒充本机执行通过。v2 继续独立源码复核；共享依赖、官方架构登记、最终实现门、远端 CI 和真实页面仍待完成，AW-R08 与两个 RFC 保持进行中。
+
+### AW-R08 源码复核 v2 失败与 v3 补正
+
+独立源码 v2 仍为 FAIL，原回执 `observability-aw-dimension-source-review-v2.json` SHA256 `860a1923714e78c448ed5f49be16b9f39b5bac7f03cef0dfaa78d20651c75b3d` 保留。v3 复用原 Token 完整度的覆盖判据，仅排除已证明空树自身的费用隐藏/待估值原因；真正 native、轮次、修订缺口仍未确认。增加来源、用途、Agent 修订、运行时和交集的实际持久零证明/隐藏人民币下钻断言，Token 保持完整已知零，金额保持未知；指定实际模型仍不能继承全树零。
+
+CS 缺前轮回归的 scoped usage 现在明确四桶覆盖水位为实际 turnIndex=1，以原严格 schema 和真实投影持久化进入缺轮/后补齐断言，不放宽解析或伪造闭合。本片仍只有精确格式/lint；没有本机 AW 测试/typecheck/build/服务，也未完成共享依赖、官方生成登记、完整实现门、远端 CI 或真实页面验收。v3 源码继续独立复核，v1/v2 失败不覆盖，AW-R08 和整体 RFC 不关闭。
+
+### AW-R08 源码 v3 PASS、共享依赖与官方登记（2026-10-02）
+
+限定源码 v3 的独立功能复核已 PASS，回执 observability-aw-dimension-source-review-v3.json SHA256 dcf2b9cb0a5cd75b8b4ce5081ce80f123fb1c11cf61b8793f6e2fc5700af29a5；v1/v2 原 FAIL 保留。该通过只覆盖源码与回归内容，不当作 hosted 执行或完整发布门。
+
+RFC-370 配置与后续来源查询由其原 owner 自行提交，包含观测 positions 的 Task 公共接口完整保留；截至 e3b656a10e2bae30c2c51994d565bbcc649efed6 两边 main 同步、共享索引为空。原 owner 的并行源码与架构登记准备好后，官方架构生成器基于真实已提交 HEAD 加本片精确候选运行；13 个登记产物全部生成、exit=0，生成期间 HEAD稳定。使用官方治理投影，无临时例外、无替代 checkout/index，也没有改其他会话文件。完整38路径候选仍待最终独立复核、精确上库及 hosted CI。
+
+已有真实原生任务按模型、运行时修订、来源、用途及交集在当前候选接口做只读核对，145项一致；三个闭合原生样本为 input 36,260 / cacheRead 8,832 / cacheWrite 0 / output 2,432，总47,524，验收人民币 ¥0.096392。较宽时间范围还包含原失败/部分验收，已知77,833 Token / ¥0.165830且完整度仍为partial，未把未采集调用当成零。任务贡献、分页EOF、趋势四桶和费用冻结互相对齐；filter echo按原合同是规范JSON字符串，首次验收脚本误用对象比较的原失败回执保留，修正比较后无源码变化。没有新模型调用、身份切换或本机AW测试/类型/构建/服务启动；实际新Dialog页面仍待当前锁屏解除。AW-R08与整体RFC尚未关闭。
+
+### AW-R08 最终清单 v1 FAIL 与精确生成 v4（2026-10-02）
+
+最终复核 v1 FAIL 已保留：原静态输入代理没有覆盖官方文件系统读点，漏了 `dimensionTasks.ts`、`analysisDimensions.ts`、`ObservationDimensionDetails.tsx`，且共享清单被另一个会话的 RFC-370 scope 再次生成。源码 v3 PASS 和真实只读 145 项对账仍有效；没有把旧清单成功退出当作最终候选通过。
+
+RFC-370 owner 已明确暂停共享清单/Git 发布，让 RFC-371 先完成短发布窗口；其 11 个 resume 源文件全部保留，本提交不收编。修正仅显式提供“已提交 e3b656a + 本片 25 路径”的内存文件系统视图，不建 checkout、不改 index、不读入并行未提交源文件；官方 AST/投影/来源摘要/状态渲染逻辑仍使用同一源码。私有静态生成 v3 和带实际增长登记的 v4 均退出 0，尚未运行 AW 本机测试、typecheck、build 或服务。
+
+完整生产语料为 2760 个文件，`sourceDigest=sha256:08703d62600043c1d2f33d719d8f1a21c2ef47ab48f859905282733bca005a01`，包含三个新文件。相对提交基线真实增长只有 observed imports 5613→5615、canonical exceptions 4982→4984、module symbol owners 25623→25648；两条现有 Actor/hash 边及三个文件的实际 owner 符号按 RFC-317 登记一次性 RFC-371 `allowGrowth` 理由，没有增加 wildcard、depcheck 豁免或 wave credit。后继提交须按实际增长/不增长清理一次性许可，不能带着 stale permit 抄旧清单。
+
+13 份官方输出与三份本 RFC 补充将作为最终候选 v2 再独立复核；精确 SHA hosted CI、正式 Dialog 的实机几何/焦点验收仍待完成，AW-R08 和 RFC-371 不标 Done。既有失败、并行漂移、只读窗口的部分覆盖，以及更早的实际模型验收历史均保留。
+
+### AW-R08 最终清单 v2 FAIL 与来源摘要刷新（2026-10-02）
+
+完整 2760 语料、13 份输出、真实 +2/+2/+25 增长及一次性 RFC 许可均已独立核对；v2 仍 FAIL，因为四份治理文件保留了旧 `provenance.contentDigest`。原官方入口仅在显式 `--snapshot-sha` 时刷新来源摘要，静态生成退出 0 不能替代这个条件。完整 v2 FAIL 已保留，源码 v3 PASS 没有撤销。
+
+静态生成 v5 使用同一官方 AST/投影入口与固定 `--snapshot-sha e3b656a10e2bae30c2c51994d565bbcc649efed6`，保留各自原 `originSha`，正式输出日志明确 provenance pinned。2760 及 `sourceDigest=sha256:08703d62600043c1d2f33d719d8f1a21c2ef47ab48f859905282733bca005a01` 保持；四项 payload 摘要另用独立 JSON 计算对拍全部一致。此 SHA 是当前已提交的生成基线，尚未把工作树称为已发布提交。
+
+修正后的完整候选 v3 将独立复核后精确提交、推送并等待本 SHA hosted CI。正式浏览器几何/焦点和整体 RFC 的其他条目仍继续；不把原静态失败、部分覆盖或未定价当零，生产开发采集不因此开启。

@@ -193,6 +193,7 @@ function fixture(
     empty?: boolean
     detail?: ObservationTaskDetail
     overview?: ObservationOverview
+    page?: Partial<ObservationTaskPage>
   } = {},
 ) {
   const paths: URL[] = [],
@@ -222,6 +223,7 @@ function fixture(
       cohort: 'started',
       taskScope: 'direct',
       filtersEcho: { ...search, timezone: 'UTC', limit: 20 },
+      ...state.page,
     }
     return Response.json(page)
   })
@@ -1061,4 +1063,177 @@ test('overview, task, runtime and Agent summaries show four classifications and 
   expect(document.querySelector('tbody tr')?.querySelectorAll('[data-token-bucket]')).toHaveLength(
     4,
   )
+})
+
+test('model contribution Dialog returns to its source and creates a server range without task-total fallback', async () => {
+  const selected = {
+    authority: 'local' as const,
+    sourceId: null,
+    provider: 'gateway',
+    model: 'actual-A',
+    metrics: runtimeMetrics('300', '1.25'),
+    tasks: [{ taskId: task.id, metrics: runtimeMetrics('300', '1.25') }],
+  }
+  const data: ObservationOverview = {
+    ...runtimeOverview(),
+    models: [selected, { ...selected, model: 'actual-B', metrics: runtimeMetrics('700', '7.75') }],
+  }
+  const f = fixture(
+    {
+      ...search,
+      period: 'custom',
+      tab: 'usage',
+      q: 'scope',
+      repository: '/repo',
+      workflow: 'linked',
+      selection: JSON.stringify({ purpose: 'task' }),
+    },
+    {
+      overview: data,
+      detail: { ...detail(), metrics: runtimeMetrics('1000', '9') },
+    },
+  )
+  const trigger = await screen.findByRole('button', { name: '查看模型 actual-A 的任务贡献' })
+  fireEvent.click(trigger)
+  let dialog = await screen.findByRole('dialog', { name: 'actual-A · 任务贡献' })
+  expect(dialog.textContent).toContain('300')
+  expect(dialog.textContent).toContain('¥1.25')
+  expect(dialog.textContent).not.toContain('¥9')
+  fireEvent.click(within(dialog).getByRole('button', { name: '真实任务' }))
+  await screen.findByRole('button', { name: '返回统计分析' })
+  expect(screen.getByRole('heading', { name: '真实任务', level: 1 })).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: '返回统计分析' }))
+  dialog = await screen.findByRole('dialog', { name: 'actual-A · 任务贡献' })
+  await waitFor(() =>
+    expect(document.activeElement?.getAttribute('data-observation-task')).toBe(task.id),
+  )
+  fireEvent.click(within(dialog).getByRole('button', { name: '查看关联任务' }))
+  await screen.findByRole('button', { name: '清除实际模型范围' })
+  const next = f.changes.at(-1)!
+  expect(next).toMatchObject({ q: 'scope', repository: '/repo', workflow: 'linked', tab: 'tasks' })
+  expect(next.model).toBeUndefined()
+  expect(next.after).toBeUndefined()
+  expect(JSON.parse(next.selection!)).toEqual({
+    purpose: 'task',
+    model: {
+      authority: 'local',
+      sourceId: null,
+      provider: 'gateway',
+      model: 'actual-A',
+    },
+  })
+  await waitFor(() =>
+    expect(
+      f.paths.some(
+        (url) =>
+          url.pathname === '/api/observability/tasks' &&
+          url.searchParams.get('selection') === next.selection,
+      ),
+    ).toBe(true),
+  )
+  fireEvent.click(screen.getByRole('button', { name: '清除实际模型范围' }))
+  expect(JSON.parse(f.changes.at(-1)!.selection!)).toEqual({ purpose: 'task' })
+  expect(f.changes.at(-1)?.q).toBe('scope')
+})
+
+test('runtime range uses frozen identity while legacy runtime URL remains only Dialog state', async () => {
+  const data = runtimeOverview(),
+    runtime = data.runtimes[0]!
+  const f = fixture(
+    { ...search, tab: 'usage', runtime: observationRuntimeKey(runtime) },
+    { overview: data },
+  )
+  const dialog = await screen.findByRole('dialog', { name: '运行时贡献 · original-name' })
+  expect(
+    f.paths
+      .find((url) => url.pathname === '/api/observability/overview')
+      ?.searchParams.has('selection'),
+  ).toBe(false)
+  fireEvent.click(within(dialog).getByRole('button', { name: '查看关联任务' }))
+  const selection = JSON.parse(f.changes.at(-1)!.selection!)
+  expect(selection).toEqual({
+    runtime: {
+      authority: 'local',
+      sourceId: null,
+      registrationId: 'opaque-registration-A',
+      configurationRevision: 7,
+      protocol: 'opencode',
+    },
+  })
+  expect(JSON.stringify(selection)).not.toContain('original-name')
+  expect(f.changes.at(-1)?.runtime).toBeUndefined()
+})
+
+test('purpose and capture-source actions share the server range without More or CSV controls', async () => {
+  const data: ObservationOverview = {
+    ...overview(),
+    purposes: [
+      { purpose: 'memory', metrics: metrics(), tasks: [{ taskId: task.id, metrics: metrics() }] },
+    ],
+    sources: [
+      {
+        authority: 'crewstation',
+        sourceId: 'original-installation',
+        metrics: metrics(),
+        tasks: [{ taskId: task.id, metrics: metrics() }],
+      },
+    ],
+  }
+  const f = fixture({ ...search, tab: 'usage' }, { overview: data })
+  const heading = await screen.findByRole('heading', { name: '按调用用途汇总' })
+  fireEvent.click(within(heading.closest('.card')!).getByRole('button', { name: '查看关联任务' }))
+  expect(JSON.parse(f.changes.at(-1)!.selection!)).toEqual({ purpose: 'memory' })
+  fireEvent.click(screen.getByRole('tab', { name: 'Token 与成本' }))
+  const source = await screen.findByRole('heading', { name: '按采集来源汇总' })
+  fireEvent.click(within(source.closest('.card')!).getByRole('button', { name: '查看关联任务' }))
+  expect(JSON.parse(f.changes.at(-1)!.selection!)).toEqual({
+    purpose: 'memory',
+    source: { authority: 'crewstation', sourceId: 'original-installation' },
+  })
+  expect(screen.queryByRole('button', { name: /更多筛选|CSV|导出/ })).toBeNull()
+})
+
+test('empty partial dimension batch keeps continuation and unknown counts without an empty-window claim', async () => {
+  const f = fixture(
+    { ...search, tab: 'tasks', selection: JSON.stringify({ purpose: 'task' }) },
+    {
+      page: {
+        items: [],
+        partial: true,
+        scannedTasks: 200,
+        unresolvedTasks: 0,
+        nextCursor: 'dimension-next',
+      },
+    },
+  )
+  await screen.findByText('本批尚未确认匹配任务')
+  expect(screen.queryByText('该时间范围内没有可见任务')).toBeNull()
+  const next = screen.getByRole('button', { name: '下一页' })
+  fireEvent.click(next)
+  await waitFor(() =>
+    expect(f.paths.some((url) => url.searchParams.get('after') === 'dimension-next')).toBe(true),
+  )
+  expect(f.changes.at(-1)?.selection).toBe(JSON.stringify({ purpose: 'task' }))
+})
+
+test('dimension URL validation and detail return preserve selection separately from model display state', async () => {
+  const selection = JSON.stringify({ purpose: 'memory' }),
+    model = '["local",null,"provider","actual"]'
+  expect(validateObservationSearch({ ...search, selection, model })).toMatchObject({
+    selection,
+    model,
+  })
+  for (const selection of ['{}', 'bad-json', 'x'.repeat(2049), { purpose: 'task' }])
+    expect(() => validateObservationSearch({ ...search, selection })).toThrow(
+      'Invalid observation dimension selection',
+    )
+  const f = fixture({ ...search, tab: 'tasks', selection, after: 'scope-cursor', q: 'name' })
+  fireEvent.click(await screen.findByRole('button', { name: '真实任务' }))
+  fireEvent.click(await screen.findByRole('button', { name: '返回任务消耗' }))
+  expect(f.changes.at(-1)).toMatchObject({
+    selection,
+    after: 'scope-cursor',
+    q: 'name',
+    tab: 'tasks',
+  })
 })

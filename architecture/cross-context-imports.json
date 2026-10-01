@@ -58566,6 +58566,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/application/dimensionTasks.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/application/dimensionTasks.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b3dfacce1a10a9e7c22f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor",
+      "toPath": "packages/backend/src/auth/actor.ts",
+      "toSymbol": "Actor",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workflowValidation.ts#$file",
@@ -71947,6 +71964,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/application/dimensionTasks.ts#$file",
+      "fromPath": "packages/backend/src/modules/run-observability/application/dimensionTasks.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:da2f3fb967e504918435",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/infrastructure/intentSqlPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/intent/infrastructure/intentSqlPersistence.ts",
       "fromSymbol": "$file",
@@ -84696,9 +84730,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 4982,
+    "architectureExceptions": 4984,
     "implementationSccs": 0,
-    "observedEdges": 5613,
+    "observedEdges": 5615,
     "requiredPorts": 36,
     "targetEdges": 69
   },
@@ -147091,6 +147125,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#ResourcePackageMutationReceipt"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/application/dimensionTasks.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/application/dimensionTasks.ts#$file",
+      "id": "import:b3dfacce1a10a9e7c22f",
+      "owner": "run-observability",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-outbound",
+      "specifier": "@/auth/actor",
+      "syntax": "static-import",
+      "targetSymbol": "Actor",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/auth/actor.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/workflowValidation.ts",
@@ -161105,6 +161155,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "run-observability",
+      "fromFile": "packages/backend/src/modules/run-observability/application/dimensionTasks.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/application/dimensionTasks.ts#$file",
+      "id": "import:da2f3fb967e504918435",
+      "owner": "run-observability",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
       "edgeKind": "type",
@@ -175311,7 +175377,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:599a69d0fb6c27ca8c67e496d0deb17cdcb4685067e90a4af541c499d730f19d",
+  "sourceDigest": "sha256:08703d62600043c1d2f33d719d8f1a21c2ef47ab48f859905282733bca005a01",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

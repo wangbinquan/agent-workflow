@@ -1,5 +1,9 @@
 import { useTranslation } from 'react-i18next'
-import { TASK_STATUS } from '@agent-workflow/shared'
+import {
+  TASK_STATUS,
+  ObservationDimensionSelectionSchema,
+  type ObservationDimensionSelection,
+} from '@agent-workflow/shared'
 import { FilterBar, FilterField } from '@/components/FilterBar'
 import { TextInput } from '@/components/Form'
 import { Select } from '@/components/Select'
@@ -13,6 +17,9 @@ export function ObservationFilters({
   onChange: (search: ObservationSearch) => void
 }) {
   const { t } = useTranslation()
+  const dimensions = search.selection
+    ? ObservationDimensionSelectionSchema.parse(JSON.parse(search.selection))
+    : null
   const update = (patch: Partial<ObservationSearch>) =>
     onChange({
       ...search,
@@ -21,12 +28,40 @@ export function ObservationFilters({
       agent: undefined,
       quality: undefined,
       runtime: undefined,
+      model: undefined,
     })
   return (
     <FilterBar
       ariaLabel={t('runObservability.filters')}
       trailing={
         <>
+          {dimensions &&
+            (Object.keys(dimensions) as (keyof ObservationDimensionSelection)[]).map((key) => (
+              <button
+                key={key}
+                type="button"
+                className="btn btn--sm btn--ghost"
+                aria-label={t('runObservability.clearDimension', {
+                  name: t(`runObservability.dimension_${key}`),
+                })}
+                onClick={() => {
+                  const next = { ...dimensions }
+                  delete next[key]
+                  update({ selection: Object.keys(next).length ? JSON.stringify(next) : undefined })
+                }}
+              >
+                {t(`runObservability.dimension_${key}`)} <span aria-hidden="true">×</span>
+              </button>
+            ))}
+          {dimensions && (
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => update({ selection: undefined })}
+            >
+              {t('runObservability.clearDimensions')}
+            </button>
+          )}
           {search.workflow && (
             <span className="muted">
               {t('runObservability.workflowActive', { id: search.workflow })}

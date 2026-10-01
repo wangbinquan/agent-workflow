@@ -433,12 +433,50 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     expect(pending.nativeCaptures).toMatchObject([
       { invocationId: 'capture', state: 'pending', proof: null },
     ])
+    const namedRange = {
+      ...query,
+      selection: JSON.stringify({
+        model: {
+          authority: 'local',
+          sourceId: null,
+          provider: 'gateway',
+          model: 'later-model',
+        },
+      }),
+    }
+    // Known complete data for another model cannot exclude uncaptured descendants.
+    const pendingPage = await f.queries.list(admin, namedRange)
+    expect(pendingPage.items).toHaveLength(1)
+    expect(pendingPage.items[0]?.dimensionMatch).toBe('unresolved')
+    expect(pendingPage.items[0]?.metrics.tokens.hasKnown).toBe(false)
+    expect(pendingPage.items[0]?.metrics.tokens.hasKnownBuckets).toEqual({
+      input: false,
+      cacheRead: false,
+      cacheWrite: false,
+      output: false,
+    })
+    expect(pendingPage.items[0]?.metrics.cost.knownAmount).toBeNull()
+    expect(pendingPage.partial).toBe(true)
+    expect(pendingPage.nextCursor).toBeNull()
+    const pendingOverview = await f.queries.overview(admin, namedRange)
+    expect(pendingOverview.tasks).toHaveLength(1)
+    expect(pendingOverview.metrics.tokens.hasKnown).toBe(false)
+    expect(pendingOverview.partial).toBe(true)
+    expect(pendingOverview.quality).toContainEqual({
+      reason: 'native-capture-pending',
+      taskIds: ['task'],
+    })
     await f.usage('capture', buckets('10'), { revision: 2 })
     const complete = (await f.queries.detail(admin, 'task'))!
     expect(complete.metrics.tokens).toMatchObject({ totalKnown: '10', complete: true })
     expect(complete.nativeCaptures).toMatchObject([
       { state: 'complete', proof: { scannedSessions: 1 } },
     ])
+    const closedPage = await f.queries.list(admin, namedRange)
+    expect(closedPage.items).toHaveLength(0)
+    expect(closedPage.partial).toBe(false)
+    expect(closedPage.nextCursor).toBeNull()
+    expect((await f.queries.overview(admin, namedRange)).partial).toBe(false)
   })
 
   test('historical root-only invocations do not claim native child completeness', async () => {
@@ -450,6 +488,21 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     expect(value.metrics.tokens).toMatchObject({ totalKnown: '10', complete: false })
     expect(value.metrics.cost.reasons).toContain('native-capture-unobserved')
     expect(value.nativeCaptures).toMatchObject([{ state: 'unobserved', proof: null }])
+    const selected = await f.queries.list(admin, {
+      ...query,
+      selection: JSON.stringify({
+        model: {
+          authority: 'local',
+          sourceId: null,
+          provider: 'gateway',
+          model: 'unproven-later-model',
+        },
+      }),
+    })
+    expect(selected.items[0]?.dimensionMatch).toBe('unresolved')
+    expect(selected.items[0]?.metrics.tokens.hasKnown).toBe(false)
+    expect(selected.items[0]?.metrics.cost.knownAmount).toBeNull()
+    expect(selected.partial).toBe(true)
   })
   test('native coverage depends on the accepted contract even when runtime metadata is absent', async () => {
     const f = await fixture()
@@ -739,6 +792,95 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
       asOf: new Date(NOW + 5000).toISOString(),
     })
   })
+  test('missing native CS turns retain a possible model until the actual prior turn is projected', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.accept('hosted-gap', { authority: platformAuthority })
+    const scope = {
+      level: 'request' as const,
+      root: 'native-root',
+      session: 'native-root',
+      parentSession: null,
+      ancestors: [],
+      turn: 'turn-one',
+      turnIndex: 1,
+    }
+    const usage = csUsage({
+      scope,
+      coveredThroughTurn: 1,
+      modelRef: 'known-other-model',
+      projection: {
+        projectionRevision: 1,
+        observedRevision: 1,
+        contribution: buckets('30'),
+        coveredThrough: { input: 1, cacheRead: 1, cacheWrite: 1, output: 1 },
+        complete: true,
+        issues: [],
+      },
+    })
+    const capture: PlatformObservation = {
+      ...nativeCapture,
+      kind: 'capture',
+      identity,
+      capture: {
+        ...nativeCapture.capture,
+        identity,
+        receivedSteps: 1,
+        proof: {
+          ...nativeCapture.capture.proof,
+          turn: scope.turn,
+          turnIndex: 1,
+          steps: 1,
+          emitted: 1,
+        },
+      },
+    } as PlatformObservation
+    await f.sync([usage, csValue(), capture], { schemaVersion: 2 })
+    const detail = (await f.queries.detail(admin, 'task'))!
+    expect(detail.metrics.tokens.totalKnown).toBe('30')
+    expect(detail.metrics.cost.reasons).toContain('native-turn-gap')
+    const selectedQuery = {
+      ...query,
+      selection: JSON.stringify({
+        model: {
+          authority: 'crewstation',
+          sourceId: binding.sourceId,
+          provider: null,
+          model: 'unproven-earlier-model',
+        },
+      }),
+    }
+    const page = await f.queries.list(admin, selectedQuery)
+    expect(page.items).toHaveLength(1)
+    expect(page.items[0]?.dimensionMatch).toBe('unresolved')
+    expect(page.items[0]?.metrics.tokens.hasKnown).toBe(false)
+    expect(page.items[0]?.metrics.cost.knownAmount).toBeNull()
+    expect(page.partial).toBe(true)
+    expect(page.nextCursor).toBeNull()
+    const overview = await f.queries.overview(admin, selectedQuery)
+    expect(overview.tasks).toHaveLength(1)
+    expect(overview.metrics.tokens.hasKnown).toBe(false)
+    expect(overview.quality).toContainEqual({ reason: 'native-turn-gap', taskIds: ['task'] })
+    const prior: PlatformObservation = {
+      ...nativeCapture,
+      kind: 'capture',
+      recordId: 'native-turn-zero',
+      identity,
+      capture: {
+        ...nativeCapture.capture,
+        id: 'native-turn-zero',
+        identity,
+        proof: { ...nativeCapture.capture.proof, turn: 'turn-zero' },
+      },
+    } as PlatformObservation
+    await f.sync([usage, csValue(), capture, prior], { schemaVersion: 2 })
+    expect((await f.queries.detail(admin, 'task'))!.metrics.tokens.complete).toBe(true)
+    const closed = await f.queries.list(admin, selectedQuery)
+    expect(closed.items).toHaveLength(0)
+    expect(closed.partial).toBe(false)
+    expect(closed.nextCursor).toBeNull()
+  })
+
   test('classified known zero survives a proven empty tree mixed with missing output, missing invocation and truncation', async () => {
     const f = await fixture()
     await f.task()
@@ -803,10 +945,81 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     })
     expect(result.platformCaptures).toHaveLength(1)
     expect(result.platformCaptures![0]!.capture?.id).toBe('native-empty')
+    const modelRange = await f.queries.list(admin, {
+      ...query,
+      selection: JSON.stringify({
+        model: {
+          authority: 'crewstation',
+          sourceId: binding.sourceId,
+          provider: null,
+          model: 'unproven-model',
+        },
+      }),
+    })
+    expect(modelRange.items[0]?.dimensionMatch).toBe('unresolved')
+    expect(modelRange.items[0]?.metrics.tokens.hasKnown).toBe(false)
+    expect(modelRange.items[0]?.metrics.tokens.hasKnownBuckets).toEqual({
+      input: false,
+      cacheRead: false,
+      cacheWrite: false,
+      output: false,
+    })
+    expect(modelRange.items[0]?.metrics.cost.knownAmount).toBeNull()
+
     await f.sync([capture], { schemaVersion: 2, costVisibility: 'hidden', visibilityRevision: 1 })
     result = (await f.queries.detail(admin, 'task'))!
     expect(result.metrics.tokens).toMatchObject({ hasKnown: true, complete: true })
     expect(result.metrics.cost).toMatchObject({ knownAmount: null, complete: false })
+    // CNY permission is separate from proven token coverage in every non-model range.
+    const sourceRange = { authority: 'crewstation', sourceId: binding.sourceId }
+    for (const selection of [
+      { purpose: 'task' },
+      { source: sourceRange },
+      { agent: { id: 'agent-hosted', revision: 2 } },
+      {
+        runtime: {
+          ...sourceRange,
+          registrationId: null,
+          configurationRevision: null,
+          protocol: null,
+        },
+      },
+      { source: sourceRange, purpose: 'task', agent: { id: 'agent-hosted', revision: 2 } },
+    ]) {
+      const scoped = { ...query, selection: JSON.stringify(selection) }
+      const page = await f.queries.list(admin, scoped)
+      expect(page.items).toHaveLength(1)
+      expect(page.items[0]?.dimensionMatch).toBe('matched')
+      expect(page.items[0]?.metrics.tokens).toMatchObject({
+        hasKnown: true,
+        totalKnown: '0',
+        complete: true,
+        hasKnownBuckets: { input: true, cacheRead: true, cacheWrite: true, output: true },
+      })
+      expect(page.items[0]?.metrics.cost).toMatchObject({ knownAmount: null, complete: false })
+      expect(page.items[0]?.metrics.cost.reasons).toContain('not-authorized')
+      expect(page.partial).toBe(false)
+      expect(page.unresolvedTasks).toBe(0)
+      expect(page.nextCursor).toBeNull()
+      const overview = await f.queries.overview(admin, scoped)
+      expect(overview.partial).toBe(false)
+      expect(overview.metrics.tokens).toMatchObject({
+        hasKnown: true,
+        totalKnown: '0',
+        complete: true,
+      })
+      expect(overview.metrics.cost).toMatchObject({ knownAmount: null, complete: false })
+      expect(overview.quality).not.toContainEqual({ reason: 'truncated', taskIds: ['task'] })
+    }
+    const hiddenModel = await f.queries.list(admin, {
+      ...query,
+      selection: JSON.stringify({
+        model: { ...sourceRange, provider: null, model: 'unproven-model' },
+      }),
+    })
+    expect(hiddenModel.items[0]?.dimensionMatch).toBe('unresolved')
+    expect(hiddenModel.items[0]?.metrics.tokens.hasKnown).toBe(false)
+    expect(hiddenModel.items[0]?.metrics.cost.knownAmount).toBeNull()
     await f.sync([capture, csUsage()], {
       schemaVersion: 2,
       costVisibility: 'hidden',
@@ -1017,6 +1230,21 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
       ['cs-a', '10'],
       ['cs-b', '20'],
     ])
+    const selected = await f.queries.list(admin, {
+      ...query,
+      selection: JSON.stringify({
+        model: {
+          authority: 'crewstation',
+          sourceId: 'cs-a',
+          provider: null,
+          model: 'model-1',
+        },
+      }),
+    })
+    expect(selected.items.map((row) => row.task.id)).toEqual(['cs-a'])
+    expect(selected.items[0]?.metrics.tokens.totalKnown).toBe('10')
+    expect(selected.items[0]?.metrics.cost.knownAmount).toBeNull()
+    expect(selected.items[0]?.metrics.cost.priceVersionIds).toEqual([])
   })
 
   test('overview agrees across tasks, agents, models, runtimes and start-time buckets', async () => {
@@ -1294,6 +1522,7 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     }
     const parent = csUsage({
       recordId: 'parent',
+      modelRef: null,
       inclusion: 'includes-descendants',
       scope: { ...scope, level: 'tree-total' },
       coveredThroughTurn: 0,
@@ -1309,6 +1538,7 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     })
     const child = csUsage({
       recordId: 'child',
+      modelRef: 'child-opaque',
       scope: { ...scope, level: 'request' },
       coveredThroughTurn: 0,
       projection: {
@@ -1331,6 +1561,89 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     expect(result.metrics.cost.knownAmount).toBe('1')
     expect(result.metrics.cost.complete).toBe(false)
     expect(result.metrics.cost.reasons).toContain('partial-allocation')
+    const modelPage = (model: string | null) =>
+      f.queries.list(admin, {
+        ...query,
+        selection: JSON.stringify({
+          model: { authority: 'crewstation', sourceId: binding.sourceId, provider: null, model },
+        }),
+      })
+    const childPage = await modelPage('child-opaque'),
+      parentPage = await modelPage(null)
+    // The parent already owns the child's input bucket. Filtering earlier would wrongly revive it.
+    expect(childPage.items[0]?.metrics.tokens.totalKnown).toBe('20')
+    expect(parentPage.items[0]?.metrics.tokens.totalKnown).toBe('10')
+    expect(childPage.items[0]?.metrics.cost.knownAmount).toBeNull()
+    expect(childPage.items[0]?.metrics.cost.reasons).toContain('partial-allocation')
+  })
+
+  test('different known models stay disjoint inside the same platform parent scope', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.accept('hosted', { authority: platformAuthority })
+    const scope = {
+      root: 'root',
+      session: 'root',
+      parentSession: null,
+      ancestors: [],
+      turn: 'turn',
+      turnIndex: 0,
+    }
+    const parent = csUsage({
+      recordId: 'parent',
+      modelRef: 'parent-opaque',
+      inclusion: 'includes-descendants',
+      scope: { ...scope, level: 'tree-total' },
+      coveredThroughTurn: 0,
+      coverage: 'partial',
+      projection: {
+        projectionRevision: 1,
+        observedRevision: 1,
+        contribution: { ...buckets('10'), output: null },
+        coveredThrough: { input: 0, cacheRead: 0, cacheWrite: 0, output: null },
+        complete: false,
+        issues: [],
+      },
+    })
+    const child = csUsage({
+      recordId: 'child',
+      modelRef: 'child-opaque',
+      scope: { ...scope, level: 'request' },
+      coveredThroughTurn: 0,
+      projection: {
+        projectionRevision: 1,
+        observedRevision: 1,
+        contribution: buckets('10', '20'),
+        coveredThrough: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
+        complete: true,
+        issues: [],
+      },
+    })
+    await f.sync([
+      parent,
+      child,
+      { ...csValue(), recordId: 'parent', amountDecimal: '1', completeness: 'partial' },
+      { ...csValue(), recordId: 'child', amountDecimal: '2' },
+    ])
+    const result = (await f.queries.detail(admin, 'task'))!
+    expect(result.metrics.tokens.totalKnown).toBe('40')
+    expect(result.metrics.cost.knownAmount).toBe('3')
+    expect(result.metrics.cost.complete).toBe(false)
+    expect(result.metrics.cost.reasons).not.toContain('partial-allocation')
+    const modelPage = (model: string) =>
+      f.queries.list(admin, {
+        ...query,
+        selection: JSON.stringify({
+          model: { authority: 'crewstation', sourceId: binding.sourceId, provider: null, model },
+        }),
+      })
+    const childPage = await modelPage('child-opaque'),
+      parentPage = await modelPage('parent-opaque')
+    // Distinct known models cannot cover each other's buckets even in the same tree/turn.
+    expect(childPage.items[0]?.metrics.tokens.totalKnown).toBe('30')
+    expect(parentPage.items[0]?.metrics.tokens.totalKnown).toBe('10')
+    expect(childPage.items[0]?.metrics.cost.knownAmount).toBe('2')
+    expect(childPage.items[0]?.metrics.cost.reasons).not.toContain('partial-allocation')
   })
 
   test('bounded invocation reads mark a subtotal explicitly and never manufacture measured zero', async () => {
@@ -1366,5 +1679,240 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
     expect(result.metrics.tokens.hasKnown).toBe(false)
     expect(result.metrics.cost.knownAmount).toBeNull()
     expect(result.metrics.cost.reasons).toContain('truncated')
+  })
+  test('owner positions are authorized same-window SQL continuations including equal-time ties', async () => {
+    const f = await fixture()
+    for (const id of ['a', 'b', 'c'])
+      await f.task(id, { name: 'scope ' + id, status: 'done', repoPath: '/scope' })
+    await f.task('hidden', {
+      name: 'scope hidden',
+      ownerUserId: 'other',
+      repoPath: '/scope',
+      status: 'done',
+    })
+    await f.task('deleted', {
+      name: 'scope deleted',
+      deletedAt: NOW,
+      repoPath: '/scope',
+      status: 'done',
+    })
+    await f.task('outside', {
+      name: 'scope outside',
+      startedAt: query.to,
+      repoPath: '/scope',
+      status: 'done',
+    })
+    const reader = { ...admin, permissions: new Set(['tasks:read', 'tasks:read:own'] as const) },
+      owner = createTaskObservationFacts(harness.db),
+      scope = {
+        ...query,
+        q: 'scope',
+        repository: '/scope',
+        workflow: 'workflow',
+        status: 'done' as const,
+        limit: 2,
+      }
+    const first = await owner.list({ actor: reader, query: scope })
+    expect(first.items.map((row) => row.id)).toEqual(['c', 'b'])
+    expect(first.positions.map((row) => row.taskId)).toEqual(['c', 'b'])
+    expect(first.nextCursor).toBe(first.positions[1]!.cursor)
+    const fromFirst = await owner.list({
+      actor: reader,
+      query: { ...scope, after: first.positions[0]!.cursor },
+    })
+    expect(fromFirst.items.map((row) => row.id)).toEqual(['b', 'a'])
+    const last = await owner.list({ actor: reader, query: { ...scope, after: first.nextCursor! } })
+    expect(last.items.map((row) => row.id)).toEqual(['a'])
+    expect(last.positions).toHaveLength(1)
+    expect(last.nextCursor).toBeNull()
+    await expect(
+      owner.list({
+        actor: reader,
+        query: { ...scope, q: 'changed', after: first.positions[0]!.cursor },
+      }),
+    ).rejects.toThrow('changed window')
+    expect(
+      await owner.list({ actor: { ...reader, permissions: new Set() }, query: scope }),
+    ).toEqual({ items: [], positions: [], nextCursor: null })
+  })
+
+  test('actual model range values only selected records at original CNY rates and retains full task clocks', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.price()
+    await f.accept('switch')
+    await f.usage('switch', buckets('1000000'), { recordId: 'original-model', revision: 1 })
+    await f.usage('switch', buckets('7000000'), {
+      recordId: 'changed-model',
+      revision: 2,
+      model: { provider: 'gateway', id: 'other-model' },
+    })
+    const selection = JSON.stringify({
+      model: { authority: 'local', sourceId: null, provider: 'gateway', model: 'model' },
+    })
+    const page = await f.queries.list(admin, { ...query, selection })
+    expect(page.items).toHaveLength(1)
+    expect(page.items[0]?.metrics.tokens.totalKnown).toBe('1000000')
+    expect(page.items[0]?.metrics.cost.knownAmount).toBe('1')
+    expect(page.items[0]?.metrics.cost.priceVersionIds).toEqual(['price-1'])
+    expect(page.items[0]?.wallMs).toBe(10000)
+    expect(page.items[0]?.runningMs).toBe(5000)
+    const overview = await f.queries.overview(admin, { ...query, selection })
+    expect(overview.metrics.tokens.totalKnown).toBe('1000000')
+    expect(overview.models).toHaveLength(1)
+    expect(overview.models[0]?.tasks?.[0]?.metrics.tokens.totalKnown).toBe('1000000')
+    expect(overview.purposes?.[0]?.metrics.tokens.totalKnown).toBe('1000000')
+    expect(overview.sources?.[0]?.metrics.cost.knownAmount).toBe('1')
+    expect((await f.queries.detail(admin, 'task'))?.metrics.tokens.totalKnown).toBe('8000000')
+  })
+
+  test('runtime, Agent revision and purpose intersection cannot borrow another accepted identity', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.price()
+    const runtime = {
+      registrationId: 'runtime',
+      configurationRevision: 0,
+      protocol: 'opencode',
+      acceptedName: 'original',
+    } as const
+    for (const [id, revision, purpose, count] of [
+      ['a', 2, 'task', '1000000'],
+      ['b', 3, 'task', '2000000'],
+      ['c', 2, 'memory', '4000000'],
+    ] as const) {
+      await f.accept(id, {
+        agentId: 'same-agent',
+        agentRevision: revision,
+        purpose,
+        authority: { kind: 'local', runtime },
+      })
+      await f.usage(id, buckets(count))
+    }
+    const selection = JSON.stringify({
+      runtime: {
+        authority: 'local',
+        sourceId: null,
+        registrationId: 'runtime',
+        configurationRevision: 0,
+        protocol: 'opencode',
+      },
+      agent: { id: 'same-agent', revision: 2 },
+      purpose: 'task',
+      source: { authority: 'local', sourceId: null },
+    })
+    const page = await f.queries.list(admin, { ...query, selection })
+    expect(page.items[0]?.metrics.tokens.totalKnown).toBe('1000000')
+    expect(page.items[0]?.metrics.cost.knownAmount).toBe('1')
+    const overview = await f.queries.overview(admin, { ...query, selection })
+    expect(overview.agents.map((row) => [row.agentRevision, row.purpose])).toEqual([[2, 'task']])
+    expect(overview.runtimes[0]?.acceptedNames).toEqual(['original'])
+    expect(overview.purposes?.map((row) => row.purpose)).toEqual(['task'])
+  })
+
+  test('unknown actual model retains a potential task without attributing its whole usage or inventing zero', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.price()
+    await f.accept('unknown')
+    await f.usage('unknown', buckets('4000000'), { model: null })
+    const page = await f.queries.list(admin, {
+      ...query,
+      selection: JSON.stringify({
+        model: {
+          authority: 'local',
+          sourceId: null,
+          provider: 'gateway',
+          model: 'model',
+        },
+      }),
+    })
+    expect(page.items).toHaveLength(1)
+    expect(page.items[0]?.dimensionMatch).toBe('unresolved')
+    expect(page.items[0]?.metrics.tokens.hasKnown).toBe(false)
+    expect(page.items[0]?.metrics.cost.knownAmount).toBeNull()
+    expect(page.partial).toBe(true)
+    expect(page.unresolvedTasks).toBe(1)
+    expect((await f.queries.detail(admin, 'task'))?.metrics.tokens.totalKnown).toBe('4000000')
+  })
+
+  test('dimension scans reach matches after two raw pages and reject every changed range', async () => {
+    const f = await fixture()
+    for (let index = 0; index < 56; index++) {
+      const id = 'scan-' + index.toString().padStart(2, '0')
+      await f.task(id, { startedAt: NOW + index })
+      await f.accept(id, { taskId: id, purpose: index === 0 || index === 1 ? 'memory' : 'task' })
+      await f.usage(id, buckets('1'), { taskId: id })
+    }
+    const selection = JSON.stringify({ purpose: 'memory' }),
+      first = await f.queries.list(admin, { ...query, selection, limit: 1 })
+    expect(first.items.map((row) => row.task.id)).toEqual(['scan-01'])
+    expect(first.scannedTasks).toBe(55)
+    expect(first.nextCursor).not.toBeNull()
+    const second = await f.queries.list(admin, {
+      ...query,
+      selection,
+      limit: 1,
+      after: first.nextCursor!,
+    })
+    expect(second.items.map((row) => row.task.id)).toEqual(['scan-00'])
+    expect(second.nextCursor).toBeNull()
+    for (const patch of [
+      { from: NOW - 1 },
+      { to: query.to + 1 },
+      { timezone: 'UTC' },
+      { q: 'changed' },
+      { status: 'done' as const },
+      { repository: '/other' },
+      { workflow: 'other' },
+      { selection: JSON.stringify({ purpose: 'task' }) },
+    ])
+      await expect(
+        f.queries.list(admin, {
+          ...query,
+          selection,
+          limit: 1,
+          after: first.nextCursor!,
+          ...patch,
+        }),
+      ).rejects.toThrow('changed scope')
+  })
+
+  test('strict dimension HTTP queries reject invalid JSON, identity combinations and unknown keys', async () => {
+    const f = await fixture()
+    await f.task()
+    const app = new Hono()
+    app.use('*', (async (c, next) => {
+      c.set('actor', admin)
+      await next()
+    }) satisfies MiddlewareHandler)
+    app.onError(errorHandler)
+    mountObservationRoutes(app, { ...f.pricing, tasks: f.queries })
+    for (const selection of [
+      'bad-json',
+      '{}',
+      '{"purpose":"other"}',
+      '{"purpose":"task","extra":1}',
+      JSON.stringify({ source: { authority: 'local', sourceId: 'installation' } }),
+      JSON.stringify({
+        model: { authority: 'crewstation', sourceId: null, provider: 'invented', model: 'opaque' },
+      }),
+      'x'.repeat(2049),
+    ]) {
+      for (const path of ['tasks', 'overview']) {
+        const args = new URLSearchParams({
+          from: String(query.from),
+          to: String(query.to),
+          selection,
+        })
+        expect((await app.request('/api/observability/' + path + '?' + args)).status).toBe(400)
+      }
+    }
+    const args = new URLSearchParams({
+      from: String(query.from),
+      to: String(query.to),
+      selection: JSON.stringify({ purpose: 'task' }),
+    })
+    expect((await app.request('/api/observability/tasks?' + args)).status).toBe(200)
   })
 })

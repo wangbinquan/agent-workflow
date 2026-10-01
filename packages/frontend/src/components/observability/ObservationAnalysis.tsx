@@ -4,8 +4,9 @@ import type {
   ObservationMetrics,
   ObservationOverview,
   ObservationTaskSummary,
+  ObservationDimensionSelection,
 } from '@agent-workflow/shared'
-import { observationRuntimeKey } from '@agent-workflow/shared'
+import { observationRuntimeKey, observationModelKey } from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
 import { TableViewport } from '@/components/TableViewport'
 import { EmptyState } from '@/components/EmptyState'
@@ -20,6 +21,7 @@ import {
 import './ObservationAnalysis.css'
 import { ObservationCollection } from './ObservationCollection'
 import { ObservationRuntimeDetails } from './ObservationRuntimeDetails'
+import { ObservationDimensionDetails } from './ObservationDimensionDetails'
 
 export type ObservationAnalysisTab = 'overview' | 'agents' | 'usage' | 'performance'
 export const observationAgentKey = (agent: ObservationOverview['agents'][number]) =>
@@ -93,6 +95,9 @@ function TaskRows({
                 >
                   {row.task.name}
                 </button>
+                {row.dimensionMatch === 'unresolved' && (
+                  <div className="muted">{t('runObservability.dimensionUnresolved')}</div>
+                )}
               </th>
               <td>{t(`tasks.status.${row.task.status}`, { defaultValue: row.task.status })}</td>
               <td>
@@ -291,6 +296,9 @@ export function ObservationAnalysis({
   tab,
   selectedAgent,
   selectedRuntime,
+  selectedModel,
+  onModel,
+  onDimension,
   quality,
   onQuality,
   onAgent,
@@ -302,6 +310,9 @@ export function ObservationAnalysis({
   tab: ObservationAnalysisTab
   selectedAgent?: string
   selectedRuntime?: string
+  selectedModel?: string
+  onModel?: (key?: string) => void
+  onDimension?: (selection: Partial<ObservationDimensionSelection>) => void
   quality?: string
   onQuality: (reason?: string) => void
   onAgent: (key?: string) => void
@@ -310,6 +321,9 @@ export function ObservationAnalysis({
   onBucket: (from: number, to: number) => void
 }) {
   const { t } = useTranslation()
+  const modelTrigger = useRef<HTMLElement | null>(null)
+  const modelFallback = useRef<HTMLDivElement | null>(null)
+  const model = data.models.find((row) => observationModelKey(row) === selectedModel)
   const runtimeTrigger = useRef<HTMLElement | null>(null)
   const runtimeFallback = useRef<HTMLDivElement | null>(null)
   const runtime = data.runtimes.find((row) => observationRuntimeKey(row) === selectedRuntime)
@@ -359,6 +373,11 @@ export function ObservationAnalysis({
   )
   return (
     <div className="stack--md">
+      {data.filtersEcho.selection && (
+        <NoticeBanner tone="info" size="compact">
+          {t('runObservability.dimensionTimeHint')}
+        </NoticeBanner>
+      )}
       {data.partial && (
         <NoticeBanner tone="warning" title={t('runObservability.analysisPartial')}>
           {t('runObservability.analysisLimit', data.limits)}
@@ -389,6 +408,18 @@ export function ObservationAnalysis({
                 </div>
                 <Card title={selected.agentId ?? t('runObservability.noAgent')}>
                   <Metrics value={selected.metrics} />
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    onClick={() =>
+                      onDimension?.({
+                        agent: { id: selected.agentId, revision: selected.agentRevision },
+                        purpose: selected.purpose,
+                      })
+                    }
+                  >
+                    {t('runObservability.relatedTasks')}
+                  </button>
                 </Card>
                 <Card title={t('runObservability.agentTasks')}>
                   <p className="muted">{t('runObservability.agentTasksHint')}</p>
@@ -424,28 +455,74 @@ export function ObservationAnalysis({
           </Card>
           <Card title={t('runObservability.models')}>
             <p className="muted">{t('runObservability.modelsHint')}</p>
-            <Distribution
-              label={t('runObservability.model')}
-              rows={data.models.map((row) => ({
-                key: JSON.stringify([row.authority, row.sourceId, row.provider, row.model]),
-                metrics: row.metrics,
-                label: (
-                  <>
-                    {row.model ?? t('runObservability.modelUnknown')}
-                    <div className="muted">
-                      {t(`runObservability.${row.authority}`)} ·{' '}
-                      {row.authority === 'crewstation'
-                        ? t('runObservability.platformModelRef')
-                        : (row.provider ?? '—')}
-                      {row.sourceId && (
-                        <div>{t('runObservability.platformSource', { id: row.sourceId })}</div>
-                      )}
-                    </div>
-                  </>
-                ),
-              }))}
-            />
+            <div ref={modelFallback} tabIndex={-1}>
+              <Distribution
+                label={t('runObservability.model')}
+                rows={data.models.map((row) => ({
+                  key: observationModelKey(row),
+                  metrics: row.metrics,
+                  label: (
+                    <>
+                      <button
+                        type="button"
+                        className="link link--button data-table__link task-operations__name"
+                        aria-label={t('runObservability.modelView', {
+                          name: row.model ?? t('runObservability.modelUnknown'),
+                        })}
+                        data-observation-model={observationModelKey(row)}
+                        ref={(button) => {
+                          if (selectedModel === observationModelKey(row) && button)
+                            modelTrigger.current = button
+                        }}
+                        onClick={(event) => {
+                          modelTrigger.current = event.currentTarget
+                          onModel?.(observationModelKey(row))
+                        }}
+                      >
+                        {row.model ?? t('runObservability.modelUnknown')}
+                      </button>
+                      <div className="muted">
+                        {t(`runObservability.${row.authority}`)} ·{' '}
+                        {row.authority === 'crewstation'
+                          ? t('runObservability.platformModelRef')
+                          : (row.provider ?? '—')}
+                        {row.sourceId && (
+                          <div>{t('runObservability.platformSource', { id: row.sourceId })}</div>
+                        )}
+                      </div>
+                    </>
+                  ),
+                }))}
+              />
+            </div>
           </Card>
+          <ObservationDimensionDetails
+            open={selectedModel !== undefined}
+            row={model}
+            partial={data.partial}
+            onClose={() => onModel?.()}
+            triggerRef={modelTrigger}
+            fallbackRef={modelFallback}
+            onSelect={() =>
+              model &&
+              onDimension?.({
+                model: {
+                  authority: model.authority,
+                  sourceId: model.sourceId,
+                  provider: model.provider,
+                  model: model.model,
+                },
+              })
+            }
+          >
+            <TaskRows
+              rows={data.tasks.filter((row) =>
+                model?.tasks?.some((entry) => entry.taskId === row.task.id),
+              )}
+              metrics={new Map(model?.tasks?.map((row) => [row.taskId, row.metrics]) ?? [])}
+              onTask={onTask}
+            />
+          </ObservationDimensionDetails>
           <Card title={t('runObservability.runtimes')}>
             <div ref={runtimeFallback} tabIndex={-1}>
               <Distribution
@@ -493,6 +570,20 @@ export function ObservationAnalysis({
             row={runtime}
             title={runtime ? runtimeTitle(runtime) : t('runObservability.runtime')}
             partial={data.partial}
+            onSelect={
+              runtime
+                ? () =>
+                    onDimension?.({
+                      runtime: {
+                        authority: runtime.authority,
+                        sourceId: runtime.sourceId,
+                        registrationId: runtime.registrationId,
+                        configurationRevision: runtime.configurationRevision,
+                        protocol: runtime.protocol,
+                      },
+                    })
+                : undefined
+            }
             onClose={() => onRuntime()}
             triggerRef={runtimeTrigger}
             fallbackRef={runtimeFallback}
@@ -505,6 +596,72 @@ export function ObservationAnalysis({
               onTask={onTask}
             />
           </ObservationRuntimeDetails>
+          <Card title={t('runObservability.purposes')}>
+            {data.purposes === undefined ? (
+              <p className="muted">{t('runObservability.runtimeContributionsUnavailable')}</p>
+            ) : (
+              <Distribution
+                label={t('runObservability.purpose')}
+                rows={data.purposes.map((row) => ({
+                  key: row.purpose,
+                  metrics: row.metrics,
+                  label: (
+                    <>
+                      {t(`runObservability.purpose_${row.purpose}`)}
+                      <div>
+                        <button
+                          type="button"
+                          className="link link--button"
+                          onClick={() => onDimension?.({ purpose: row.purpose })}
+                        >
+                          {t('runObservability.relatedTasks')}
+                        </button>
+                      </div>
+                    </>
+                  ),
+                }))}
+              />
+            )}
+          </Card>
+          <Card title={t('runObservability.sources')}>
+            {data.sources === undefined ? (
+              <p className="muted">{t('runObservability.runtimeContributionsUnavailable')}</p>
+            ) : (
+              <Distribution
+                label={t('runObservability.source')}
+                rows={data.sources.map((row) => ({
+                  key: JSON.stringify([row.authority, row.sourceId]),
+                  metrics: row.metrics,
+                  label: (
+                    <>
+                      {t(`runObservability.${row.authority}`)}
+                      {row.authority === 'crewstation' && (
+                        <div className="muted">
+                          {row.sourceId ?? t('runObservability.sourceUnbound')}
+                        </div>
+                      )}
+                      <div>
+                        <button
+                          type="button"
+                          className="link link--button"
+                          onClick={() =>
+                            onDimension?.({
+                              source: {
+                                authority: row.authority,
+                                sourceId: row.sourceId,
+                              },
+                            })
+                          }
+                        >
+                          {t('runObservability.relatedTasks')}
+                        </button>
+                      </div>
+                    </>
+                  ),
+                }))}
+              />
+            )}
+          </Card>
           <NoticeBanner tone="info">
             {t('runObservability.priceHint')}
             <p>{t('runObservability.currencyHint')}</p>

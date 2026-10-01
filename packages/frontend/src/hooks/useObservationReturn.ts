@@ -9,9 +9,10 @@ interface ReturnPosition {
   readonly windowY: number
   readonly dialogTop: number | null
   readonly dialogLeft: number | null
+  readonly dialogContainer: string | null
 }
 
-/** A task route temporarily unmounts its source table, including a runtime Dialog. */
+/** A task route temporarily unmounts its source table and contribution Dialog. */
 export function useObservationReturn(
   scope: string,
   task: string | undefined,
@@ -37,9 +38,12 @@ export function useObservationReturn(
         const body =
           saved.dialogTop === null
             ? null
-            : document
-                .querySelector('[data-observation-runtime-contributions]')
-                ?.closest<HTMLElement>('.dialog__body')
+            : (saved.dialogContainer === null
+                ? document.querySelector('[data-observation-runtime-contributions]')
+                : Array.from(
+                    document.querySelectorAll<HTMLElement>('[data-observation-contributions]'),
+                  ).find((node) => node.dataset.observationContributions === saved.dialogContainer)
+              )?.closest<HTMLElement>('.dialog__body')
         const container = saved.dialogTop === null ? pageRef.current : body
         const target = Array.from(
           container?.querySelectorAll<HTMLElement>('[data-observation-task]') ?? [],
@@ -67,9 +71,10 @@ export function useObservationReturn(
 
   return (taskId: string, trigger?: HTMLElement) => {
     const main = pageRef.current?.closest<HTMLElement>('main')
-    const body = trigger
-      ?.closest('[data-observation-runtime-contributions]')
-      ?.closest<HTMLElement>('.dialog__body')
+    const contributions = trigger?.closest<HTMLElement>(
+      '[data-observation-contributions], [data-observation-runtime-contributions]',
+    )
+    const body = contributions?.closest<HTMLElement>('.dialog__body')
     position.current = {
       scope,
       taskId,
@@ -79,6 +84,7 @@ export function useObservationReturn(
       windowY: window.scrollY,
       dialogTop: body?.scrollTop ?? null,
       dialogLeft: body?.scrollLeft ?? null,
+      dialogContainer: contributions?.dataset.observationContributions ?? null,
     }
   }
 }
