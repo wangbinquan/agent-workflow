@@ -1026,9 +1026,7 @@ test('overview, task, runtime and Agent summaries show four classifications and 
     tasks: [{ ...base.tasks[0]!, metrics: value }],
   }
   const f = fixture({ ...search, tab: 'overview' }, { overview: data })
-  const card = (await screen.findByRole('heading', { name: '已知 Token', exact: true })).closest(
-    '.card',
-  )!
+  const card = (await screen.findByRole('heading', { name: /^已知 Token$/ })).closest('.card')!
   const buckets = card.querySelectorAll('[data-token-bucket] dd')
   expect([...buckets].map((el) => el.textContent)).toEqual(['40', '30', '10', '20'])
   expect(card.textContent).toContain('输出包含推理 Token')

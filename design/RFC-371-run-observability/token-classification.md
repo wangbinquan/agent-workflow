@@ -39,3 +39,13 @@
 | sequential | 01M3VG8XWABNJ4FQ9JFXSM1G8P |      12941 |   5120 |      0 |       1484 | 19545 |      ¥0.040314 |
 
 原 parallel/sequential 复验曾被现有 watch daemon 重启中断；保留原故障，不把 partial 记为成功。本表两项是源码稳定后重新创建的验收任务，原流程和预算保持。单任务、双 Agent 并行和顺序形态的墙钟、累计区间和活动并集从真实 attempt 时间核对；并行累计不能当作任务墙钟。原先五个未定价调用在旧适配器下漏计 reasoning 的历史差额仍需原受理修订流程校正，不能宣称已补算。
+
+## 本批发布与首次 CI 修正记录
+
+分类实现已推送 `b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d`。真实浏览器已按同一查询核到三个 done 任务，四桶汇总为输入 36,260、缓存读取 8,832、缓存写入 0、输出 2,432，合计 47,524，人民币示例估值 ¥0.096392。该页面证据不替代 CI。
+
+首次 Windows 平台 CI [36853174865](https://github.com/wangbinquan/agent-workflow/actions/runs/36853174865) 在类型检查失败：测试的 `findByRole` 参数不支持 `exact`。修正为 `/^已知 Token$/` 保持原精确标题，分类数字及输出包含推理的原断言均保留。其他首次 CI、修正提交和后续精确 SHA 验证结果分开记录，不将失败提交追记为全绿。
+
+本批还有一项治理登记遗漏：相对父提交 `9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f`，官方普查在 `b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d` 将 `rfc294-module-symbol-owners` 从 25,545 调整到 25,547，未同时登记该次 `allowGrowth`。来源是分类展示增加 `OBSERVATION_TOKEN_BUCKETS`、`formatObservationBucket`、`TokenBuckets`，移除旧 `keys`，净增两个符号。这个历史遗漏保留为审计事实，不能在数量未增长的后继提交追加已过期许可，也不改写旧历史或降低守卫。
+
+并行会话的 `e1fc55ec5cd7e6d79ac0b0e3694a655ff50fb907` 已更新治理摘要和其自身架构普查，`d97f55dde9393464f4ca8f5cd5afdf1b7ffdee86` 清除已消费的增长许可。本次以完整并行输出为基础重新生成官方普查，保留其 25,565 高水位及其他账本内容；新提交的独立复核和精确 CI 只能证明新快照，不补写 `b446e48f8` 的历史准入结果。
