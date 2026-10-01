@@ -194,13 +194,11 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - Intent 请求配置续批 `345275ada20d9da042206da47494ac8480d8dda9` 已发布且远端同步；CI `36379106536` 的 check 作业已通过，整体仍在运行。前批 `f518f0373` CI `36378565660` 被后继发布取消，不作为完整通过证据；由包含它的后继 SHA 验证。
 - H1/H8 Webhook 配置续批：integration-owned WebhookConfigurationQuery 支持异步值，端点 URL 展示及触发器保存验证移除 configPath／文件读取。两 provider 根复用原 live file query；端点写入仍先持久化再补响应 URL，列表逐项读取且保持顺序，读取失败仍返回原 null／默认 runtime 回退。新增双 provider 真库用例覆盖等待、公开地址热更新、各写响应与轮换以及读取失败；CS EventDelivery／receipt／ACK 仍留 B/M3。
 
-
 - Webhook 配置续批 `3db623de22bd94c9fab82b5106d1e07a132191f1` 已发布并同步远端。CI `36379849533` 被后继 `640e4f4fb` 取消，不能记完整通过；包含提交的 CI `36379958665` 当前 Markdown 失败位于并行 RFC-371 demo 的本机地址链接，其余作业尚待终态，未改动该任务文件。
 - A-T2/H6 技能读取续批：抽出 resource-catalog-owned `SkillContentReader` 和独立 file adapter，技能正文／文件树／单文件读取支持异步替换；catalog 显式装配，原直接调用保留 file 默认实现。版本选择、availability、正文解析和 metadata／token 仍由 AW 控制；原快照优先、旧 live fallback、文件错误和树元数据保持。补双 provider 的真实目录／catalog 替换、异步期间 metadata 更新、无 home 读取、失败与消失行回归。写入、版本发布／恢复和导入导出仍待抽取，不关闭 H6，也不开放 CS 编辑。
 - H1 设计勘误：当前 `start` 已以前台运行，托管缺口是配置／安装元数据／控制文件和生命周期装配；复用现 `serveDaemon`，不另造 HTTP listener 或以消除 fork 作为本次成果。
 
 - 本批只做目标文件 Prettier／ESLint、diff 检查与源码派生 census，未运行本地测试；文件树遍历函数与迁移前逐字一致。实际账本新增一个只读工厂入口、九个 owner 项和三条净 util 引用／exception，均逐项记录一次性增长；不改扫描范围或判断规则。正式功能验证交给本批 GitHub CI。
-
 
 - 技能读取切面 `583820430aa05d1563a310d981c6fe411838679c` 已上库且远端同步；CI `36380693407` 被后继文档修复 `83ac30718` 取消，不能记成功。并行作者已修复 RFC-371 的本机 demo 链接，包含提交的 CI `36380839265` 尚待终态。
 - A-T2/H6 版本内容续批：新增 `SkillVersionContentStore`，版本存储按 plan／stage／capture／publish／abort／discard 接线，现存 DB 四阶段状态机继续拥有版本号、操作日志、空写决定和提交。正文／文件增删、版本恢复、初始归档及 ZIP 覆盖改用平台中立的声明式变更；file adapter 保留原复制／指纹／快照／发布效果，旧 callback 仅由本地兼容 API 消费。catalog 与 ZIP composition 共用所选 store，没有 CS DTO。
@@ -211,12 +209,10 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 
 - 版本内容切面 `9dec01277ac429240b91796e5cc16e83eebc45ec` 已上库并与远端同步，CI `36381850501` 已创建。发布后补查旧源码锁发现 `skill-version-atomic-publish` 仍把 swap 固定在 legacy 文件；续修同时锁定 AW→所选 store 的等待接线和 local adapter 的原子 swap，并在两处禁止非原子发布，不放宽原判据。此续修仅测试／记录和已消费增长声明退役，无生产变更。
 
-
 - A-T2/H6 首次创建续批：新增 `SkillCreationContentStore` 与独立 local 实现，普通新建／ZIP create 改传中立内容，catalog 同时为 repository 与 ZIP 选择 creation／version store。统一 file 写树函数复用原二进制及主文档行为，删除重复 ZIP 函数。预留前纯 plan，initialize／discard 等待异步完成；AW 原 reserve→ready 与初始归档顺序不变，提交前清理失败仍释放 DB 预留，提交后错误仍保留待恢复操作。
 - 新增双 provider 回归覆盖初始化／发布期间不可见、初始化失败等待清理及清理失败、计划失败零预留、post-commit 故障保留、bundle 阶段补偿，以及实际 catalog 普通新建／ZIP 与 live／snapshot 二进制字节。非文件 fixture 仅验证端口，不能替代 CS 持久化或真实部署验收。删除、history、backfill、boot recovery 和所有 bundle 调用者尚未收口，H6／A-G 仍未完成。
 - `954f91f2ee9c5ce7a1b03ad516c389a5c8391e46` 的 CI `36382025085` 已检出三类需修复测试：SkillContentReader 用 plain Actor 传入 DirectAuthenticatedAuthority（本批改为真库用户的正式 admission）；RFC-347 exact 源码锁仍指向旧 auth/session（本批改锁唯一 localCredentialAdmission 与 compatibility composition 的实际入口）；Intent invalid payload 原契约为 422 而新夹具误写 400（本批纠正并增加 intent-invalid code 断言，继续锁零 config IO）。不为这些失败更改生产身份或 HTTP 合同，旧失败 run 不记通过。
 - 本批目标 Prettier／ESLint 和源码 census 检查，未运行本地功能测试；实际 mutation 入口净增 1、owner 项净增 11，逐项声明一次性增长，其余账本按源码重采。正式功能结果仍以新候选精确 SHA 的 GitHub CI 为准。
-
 
 - 2026-09-28 用户要求优先修复 CI，新增适配暂停。创建切面 `a9cba5f7c` 的 CI `36383302845` 类型检查失败于 ZIP 夹具缺少 `encoding: base64`；该遗漏已由后继 `78e3e9cca` 补齐，当前主干 `6aeb271f6` 的检查任务 `108865765242` 已通过类型／lint／格式／shared／system-mocks。完整 CI 尚未结束，不能以此宣告全绿。
 - 当前 run `36403163358` 新失败为四份架构 provenance 摘要及 RFC-371 定价测试的四个历史幂等键误报。摘要由并行观测会话修复，本会话不重采含未完成历史读取重构的源码，也不接管其修改；仅按确切 commit/path/rule/line 登记已核实测试字面量。保留全仓扫描及既有判据，等待包含两项修复的最终 SHA 验证。
@@ -235,3 +231,12 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 新双 provider 用例覆盖真实 catalog 的异步正文／顺序双树等待、无本地内容目录、版本缺失先拒绝、存储错误传播、真实文件元数据／二进制及缺失快照；沿用全部版本发布与恢复回归。仅执行目标格式／lint 和源码架构生成；正式行为待发布后精确 SHA CI。
 - 初始版本 backfill、删除、boot recovery 与完整 bundle 路径仍依赖本地效果，本批不关闭 H6 或 A-G。独立评审工具在本会话仍不可用，未冒称门已通过。
 - 重新阅读 CS RFC-035 `integration-contract.md` 与 `acceptance.md`：平台已记录对象上传／任务输入、暂停留卷、finalize 归档后原卷回收及卷后下载实机证据。AW 接入应使用服务域对象客户端、不可变 objectId／摘要、持久引用及稳定 requestKey；小型元数据归 PG，任务工作区归 `/work` PVC，服务零 PVC。当前只记录平台合同可用，B3 的容量／迁移与 AW 自身持久化方案仍须在对应 B-T0 冻结并验收，不以平台单独通过替代 AW 联合部署证据。
+
+### H6 生命周期内容与操作恢复续批（2026-10-01）
+
+- 历史 reader 批次 `c60e49975dba08818fd7368d654b3cd6e6d0fd04` 的精确 CI `36839289539` 已终态 50/50 success；原 CI 优先修复已完成，不将取消或局部成功当成全绿。
+- 新增 `SkillLifecycleContentStore`、`SkillSnapshotInspector`、`SkillDeletionContentStore`、`SkillVersionRecoveryContentStore` 与独立 local adapter。初始归档、legacy 空壳清理、缺失 live 恢复、完整历史字节检查、删除暂存／补偿／回收、版本恢复的文件效果迁入 adapter；AW 保留版本和引用选择、完整历史判断、数据库阶段／authority、可用状态和锁释放。原路径、内容指纹、两次 rename 发布及既有错误判据保持。
+- catalog 与 boot composition 显式选择这些实现。身份迁移屏障透传已选恢复端口给原 recovery driver，预留回滚也可等待所选 creation store 的 discard；完整身份迁移／物理归属预检仍是本地实现，尚不能据此声称 boot 可在零 PVC 服务中运行。
+- 新增三组双 provider 回归，验证异步效果未完成时版本／可用性不提前发布、删除和恢复锁保留、失败后沿原操作及持久引用重试、元数据矛盾先拒绝、既有 live 手工编辑不覆盖、真实 local 内容恢复。额外通过真正 boot identity barrier 检验已选删除恢复 adapter 的等待和真实残留清理；原创建／发布／迁移回归保留。
+- 仅运行精确文件格式／lint及官方源码 census；生成时在内存使用 HEAD 中的并行源码，未修改或纳入 RFC-371 在制文件。新增四个 file 工厂按既有 create 规则计入入口，两个 recovery 名称按既有规则计入后台分母，owner 净增20；实际增长按两笔发布协议声明并退役，不修改扫描判据。正式功能结果等待本批精确 SHA hosted CI，独立评审工具仍不可用，A-G 未通过。
+- H6 仍有旧目录身份迁移、完整资源 bundle 及其余内容消费者；H1～H8 全切面收口、阶段 B 的 RFC035 对象方案冻结／独立 CS adapter、M0 与后续能力的联合实机验收继续。未部署本批、不关闭 H6 或整个 RFC。

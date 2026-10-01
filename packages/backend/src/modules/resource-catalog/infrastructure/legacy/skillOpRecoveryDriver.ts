@@ -43,6 +43,9 @@ import type {
   SkillOpKind,
   SkillOpPhase,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
+import type { SkillVersionRecoveryContentStore } from '../../application/skills/versionRecoveryContentStore'
+import type { SkillDeletionContentStore } from '../../application/skills/deletionContentStore'
+import type { SkillCreationContentStore } from '../../application/skills/creationContentStore'
 
 const log = createLogger('skill-op-recovery')
 
@@ -73,8 +76,12 @@ export interface OpRecoveryHandler {
 // The production registry itself is compile-time exhaustive via `satisfies
 // Record<SkillOpKind, OpRecoveryHandler>` in skillOpRegistry.ts.
 export type OpRecoveryRegistry = Partial<Record<SkillOpKind, OpRecoveryHandler>>
+
 export interface SkillOpFsOptions {
   appHome: string
+  deletionContent?: SkillDeletionContentStore
+  creationContent?: SkillCreationContentStore
+  versionRecovery?: SkillVersionRecoveryContentStore
 }
 
 export interface RecoveryReport {

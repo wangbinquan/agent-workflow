@@ -22,8 +22,6 @@ import type {
 } from '@agent-workflow/shared'
 import { structuredPatch } from 'diff'
 import { and, eq } from 'drizzle-orm'
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, type Dirent } from 'node:fs'
-import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { skills, skillVersions } from '@/db/schema'
@@ -44,12 +42,7 @@ import { NotFoundError, ValidationError, staleConflictError } from '@/util/error
 import { createLogger } from '@/util/log'
 import { tokenToVersionFence } from '@/modules/resource-catalog/infrastructure/legacy/skillToken'
 import { parseFrontmatter } from '@/util/frontmatter'
-import {
-  skillFilesAbs,
-  skillRootAbs,
-  skillVersionAbs,
-  skillVersionRelPath,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
+import { skillVersionRelPath } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
 
 import type {
   SkillVersionContentChange,
@@ -67,9 +60,16 @@ import type {
 } from '../../application/skills/versionContentReader'
 import { createFileSkillVersionContentReader } from '../local/fileSkillVersionContentReader'
 
+import type { SkillLifecycleContentStore } from '../../application/skills/lifecycleContentStore'
+import { createFileSkillLifecycleContentStore } from '../local/fileSkillLifecycleContentStore'
+
+import type { SkillDeletionContentStore } from '../../application/skills/deletionContentStore'
+
 export interface SkillVersionFsOptions {
   /** App home dir; managed skills live under `${appHome}/skills/{id}/...`. */
   appHome: string
+  lifecycleContent?: SkillLifecycleContentStore
+  deletionContent?: SkillDeletionContentStore
   versionContent?: SkillVersionContentStore
   versionReader?: SkillVersionContentReader
 }
@@ -105,10 +105,6 @@ export {
   hashDir,
   collectFiles,
   NUL,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
-import {
-  assertRegularFileTree,
-  hashRegularFileTree,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
 import {
   markSkillBootVerified,
@@ -213,14 +209,9 @@ export async function ensureInitialSkillVersion(
   const skill = await loadSkillRow(db, skillId)
   if (!skill) return
   if ((await versionRows(db, skillId)).length > 0) return
-  const filesDir = skillFilesAbs(opts.appHome, skillId)
-  if (!existsSync(join(filesDir, 'SKILL.md'))) return
-  assertRegularFileTree(filesDir)
-  const versionDir = skillVersionAbs(opts.appHome, skillId, 1)
-  rmSync(versionDir, { recursive: true, force: true })
-  mkdirSync(dirname(versionDir), { recursive: true })
-  cpSync(filesDir, versionDir, { recursive: true })
-  const hash = hashRegularFileTree(versionDir)
+  const content = opts.lifecycleContent ?? createFileSkillLifecycleContentStore(opts.appHome)
+  const hash = await content.captureInitial(skillId)
+  if (hash === null) return
   const now = Date.now()
   await databaseSessionFor(db).transaction(async (tx) => {
     await tx
@@ -253,29 +244,6 @@ export async function ensureInitialSkillVersion(
 }
 
 /**
- * Fail-safe content probe for the husk sweep: true ONLY when the directory
- * holds no files/symlinks at all (missing dir = no content). Any read error
- * (e.g. EACCES) counts as "has content" so the sweep never deletes what it
- * could not fully inspect.
- */
-function dirHasNoContent(root: string): boolean {
-  let entries: Dirent[]
-  try {
-    entries = readdirSync(root, { withFileTypes: true })
-  } catch (e) {
-    return (e as NodeJS.ErrnoException).code === 'ENOENT'
-  }
-  for (const d of entries) {
-    if (d.isDirectory()) {
-      if (!dirHasNoContent(join(root, d.name))) return false
-    } else {
-      return false // file / symlink / anything else counts as content
-    }
-  }
-  return true
-}
-
-/**
  * Boot-time legacy backfill + husk sweep (RFC-170 T4a; extracted from cli/start
  * so it is unit-testable). For every managed row still at
  * versionState='legacy-unbackfilled' AND reservationState='ready' — 'reserving'
@@ -302,6 +270,7 @@ export async function backfillLegacySkillVersions(
   opts: SkillVersionFsOptions,
 ): Promise<{ backfilled: number; husksRemoved: number }> {
   const log = createLogger('skill-version-backfill')
+  const content = opts.lifecycleContent ?? createFileSkillLifecycleContentStore(opts.appHome)
   const rows = (await db
     .select()
     .from(skills)
@@ -312,7 +281,7 @@ export async function backfillLegacySkillVersions(
   let husksRemoved = 0
   for (const row of rows) {
     try {
-      if (existsSync(join(skillFilesAbs(opts.appHome, row.id), 'SKILL.md'))) {
+      if (await content.hasLiveMain(row.id)) {
         await ensureInitialSkillVersion(db, opts, row.id)
         backfilled++
         continue
@@ -324,8 +293,7 @@ export async function backfillLegacySkillVersions(
         })
         continue
       }
-      const skillDir = skillRootAbs(opts.appHome, row.id)
-      if (!dirHasNoContent(skillDir)) {
+      if (!(await content.isRootEmpty(row.id))) {
         log.warn('legacy skill has no SKILL.md but its dir is not empty; leaving for repair', {
           name: row.name,
           id: row.id,
@@ -336,7 +304,7 @@ export async function backfillLegacySkillVersions(
         await tx.delete(skills).where(eq(skills.id, row.id))
         return null
       })
-      rmSync(skillDir, { recursive: true, force: true })
+      await content.removeRoot(row.id)
       husksRemoved++
       log.warn('removed orphaned skill husk (no content, no versions; was squatting the name)', {
         name: row.name,
@@ -916,19 +884,14 @@ export async function reconcileSkillLiveFiles(
   db: SkillVersionDb,
   opts: SkillVersionFsOptions,
 ): Promise<void> {
+  const content = opts.lifecycleContent ?? createFileSkillLifecycleContentStore(opts.appHome)
   const rows = (await db.select().from(skills)) as SkillRow[]
   for (const skill of rows) {
     try {
       await ensureInitialSkillVersion(db, opts, skill.id)
       const fresh = await loadSkillRow(db, skill.id)
       if (!fresh) continue
-      const filesDir = skillFilesAbs(opts.appHome, skill.id)
-      if (existsSync(join(filesDir, 'SKILL.md'))) continue // live present — never clobber
-      const versionDir = skillVersionAbs(opts.appHome, skill.id, fresh.contentVersion)
-      if (!existsSync(versionDir)) continue
-      rmSync(filesDir, { recursive: true, force: true })
-      mkdirSync(dirname(filesDir), { recursive: true })
-      cpSync(versionDir, filesDir, { recursive: true })
+      await content.restoreLiveIfMissing(skill.id, fresh.contentVersion)
     } catch {
       // best-effort per skill; never block startup
     }

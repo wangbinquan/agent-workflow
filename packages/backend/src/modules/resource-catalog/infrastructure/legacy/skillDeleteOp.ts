@@ -14,8 +14,6 @@
 // External skills have no managed directory: their deletion is a single-tx DB
 // row drop (atomic, no op needed) — handled by the caller, not here.
 
-import { lstatSync, mkdirSync, renameSync, rmSync } from 'node:fs'
-import { dirname, join, relative } from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { agents, skills } from '@/db/schema'
@@ -34,12 +32,8 @@ import type {
   OpRecoveryHandler,
   SkillOpFsOptions,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
-import {
-  decodeSkillOperationIdentity,
-  legacySkillRootAbs,
-  rebaseSkillOperationPath,
-  skillRootAbs,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
+import { decodeSkillOperationIdentity } from './skillIdentityPaths'
+import { createFileSkillDeletionContentStore } from '../local/fileSkillDeletionContentStore'
 import {
   findAgentsUsingManagedSkill,
   matchesManagedSkillReference,
@@ -47,13 +41,6 @@ import {
 } from '@/modules/resource-catalog/infrastructure/legacy/skillReferenceGuard'
 import { findAgentsReferencingIdInJsonColumn } from '@/modules/resource-catalog/infrastructure/legacy/resourceRefs'
 import { staleConflictError } from '@/util/errors'
-function trashPath(appHome: string, skillId: string, opId: string): string {
-  if (!/^[0-9A-HJKMNP-TV-Z]{26}$/.test(opId)) {
-    throw new Error(`delete operation has invalid op_id: ${opId}`)
-  }
-  return join(appHome, 'skills', '.trash', `${skillId}-${opId}`)
-}
-
 export interface SkillDeleteOpHooks {
   /**
    * RFC-359 AC-6：返回值放宽到 `Promise<void> | void` 并在三个调用点 await。
@@ -98,7 +85,7 @@ export async function deleteManagedSkillOp(
   expected?: SkillDeleteFence,
 ): Promise<void> {
   const session = databaseSessionFor(db)
-  const root = skillRootAbs(fsOpts.appHome, skill.id)
+  const content = fsOpts.deletionContent ?? createFileSkillDeletionContentStore(fsOpts.appHome)
 
   // ① intent (+lock) — durably record before any FS side effect.
   const opId = await session.transaction(async (tx) => {
@@ -109,21 +96,18 @@ export async function deleteManagedSkillOp(
       preconditionJson: JSON.stringify({ skillId: skill.id }),
     })
   })
-  const trash = trashPath(fsOpts.appHome, skill.id, opId)
+  const plan = content.plan({ skillId: skill.id, operationId: opId })
   await hooks.afterPhase?.('intent', skill.id)
 
   let committed = false
   try {
     // ② fs-staged — move the whole root aside (reversible). Ensure the .trash
     // parent exists so the rename can't ENOENT.
-    if (pathEntryExists(root)) {
-      mkdirSync(dirname(trash), { recursive: true })
-      renameSync(root, trash)
-    }
+    await content.stage(plan)
     await session.transaction(
       async (tx) =>
         await advancePhase(tx, opId, 'fs-staged', {
-          backupPath: relative(fsOpts.appHome, trash),
+          backupPath: plan.backupJournalRef,
         }),
     )
     await hooks.afterPhase?.('fs-staged', skill.id)
@@ -150,7 +134,7 @@ export async function deleteManagedSkillOp(
     await hooks.afterPhase?.('db-committed', skill.id)
 
     // done — drop the trash, release the lock.
-    rmSync(trash, { recursive: true, force: true })
+    await content.discard(plan)
     await session.transaction(async (tx) => await finishOperation(tx, opId))
   } catch (err) {
     // Once DELETE + db-committed is durable, NEVER restore the root or retire the
@@ -158,15 +142,7 @@ export async function deleteManagedSkillOp(
     // gone. Only a proven pre-commit rollback may abandon the op.
     if (!committed) {
       try {
-        const rootExists = pathEntryExists(root)
-        const trashExists = pathEntryExists(trash)
-        if (rootExists && trashExists) {
-          throw new Error(`delete rollback collision for skill ${skill.id}`)
-        }
-        if (!rootExists && !trashExists) {
-          throw new Error(`delete rollback lost both root and trash for skill ${skill.id}`)
-        }
-        if (trashExists) renameSync(trash, root)
+        await content.rollback(plan, false)
         await session.transaction(async (tx) => await abandonOperation(tx, opId))
       } catch {
         // Preserve the active op + lock when rollback itself cannot be proven.
@@ -211,48 +187,23 @@ async function assertDeleteFence(
 
 /** §6a recovery for a crashed `delete` op (registered into the boot driver). */
 export const deleteRecoveryHandler: OpRecoveryHandler = {
-  // phase < db-committed: the row still exists; restore the root from trash.
-  rollbackFs: (fsOpts: SkillOpFsOptions, op: SkillOperationRow) => {
+  rollbackFs: async (fsOpts: SkillOpFsOptions, op: SkillOperationRow) => {
     const identity = decodeSkillOperationIdentity(op.preconditionJson, op.skillId)
-    const root =
-      identity.legacyName === undefined
-        ? skillRootAbs(fsOpts.appHome, identity.skillId)
-        : legacySkillRootAbs(fsOpts.appHome, identity.legacyName)
-    const backup = trashPath(fsOpts.appHome, op.skillId, op.opId)
-    assertDeleteBackupPath(fsOpts.appHome, op, backup)
-    const rootExists = pathEntryExists(root)
-    const backupExists = pathEntryExists(backup)
-    if (rootExists && backupExists) {
-      throw new Error(`delete recovery collision for skill ${op.skillId}`)
-    }
-    if (!rootExists && !backupExists) {
-      throw new Error(`delete recovery lost both root and trash for skill ${op.skillId}`)
-    }
-    if (backupExists) renameSync(backup, root)
+    const content = fsOpts.deletionContent ?? createFileSkillDeletionContentStore(fsOpts.appHome)
+    const plan = content.plan({
+      ...identity,
+      operationId: op.opId,
+      recordedBackupRef: op.backupPath,
+    })
+    await content.rollback(plan, true)
   },
-  // phase ≥ db-committed: the row is gone; the root is no longer needed.
-  rollForwardFs: (fsOpts: SkillOpFsOptions, op: SkillOperationRow) => {
-    const backup = trashPath(fsOpts.appHome, op.skillId, op.opId)
-    assertDeleteBackupPath(fsOpts.appHome, op, backup)
-    rmSync(backup, { recursive: true, force: true })
+  rollForwardFs: async (fsOpts: SkillOpFsOptions, op: SkillOperationRow) => {
+    const content = fsOpts.deletionContent ?? createFileSkillDeletionContentStore(fsOpts.appHome)
+    const plan = content.plan({
+      skillId: op.skillId,
+      operationId: op.opId,
+      recordedBackupRef: op.backupPath,
+    })
+    await content.discard(plan)
   },
-}
-
-function assertDeleteBackupPath(appHome: string, op: SkillOperationRow, expected: string): void {
-  // intent can legitimately predate the rename/backupPath phase patch.
-  if (op.backupPath === null) return
-  const rebased = rebaseSkillOperationPath(appHome, op.backupPath, '.trash')
-  if (rebased !== expected) {
-    throw new Error(`delete operation ${op.opId} backup path does not match its op identity`)
-  }
-}
-
-function pathEntryExists(path: string): boolean {
-  try {
-    lstatSync(path)
-    return true
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false
-    throw err
-  }
 }

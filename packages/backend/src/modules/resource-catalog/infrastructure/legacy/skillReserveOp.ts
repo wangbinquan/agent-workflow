@@ -27,8 +27,12 @@ import {
 
 export const reserveRecoveryHandler: OpRecoveryHandler = {
   // phase < db-committed: discard the never-published files.
-  rollbackFs: (fsOpts: SkillOpFsOptions, op: SkillOperationRow) => {
+  rollbackFs: async (fsOpts: SkillOpFsOptions, op: SkillOperationRow) => {
     const identity = decodeSkillOperationIdentity(op.preconditionJson, op.skillId)
+    if (fsOpts.creationContent) {
+      await fsOpts.creationContent.discard(fsOpts.creationContent.plan(identity.skillId))
+      return
+    }
     const root =
       identity.legacyName === undefined
         ? skillRootAbs(fsOpts.appHome, identity.skillId)

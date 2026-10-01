@@ -30,11 +30,18 @@ import type { SkillCatalogModule } from '../public/operations'
 import type { SkillOperationContext } from '../public/participants'
 import type { SkillZipImportParticipant } from '../public/participants'
 
+import type { SkillLifecycleContentStore } from '../application/skills/lifecycleContentStore'
+import type { SkillDeletionContentStore } from '../application/skills/deletionContentStore'
+import { createFileSkillLifecycleContentStore } from '../infrastructure/local/fileSkillLifecycleContentStore'
+import { createFileSkillDeletionContentStore } from '../infrastructure/local/fileSkillDeletionContentStore'
+
 export interface SkillCatalogCompositionDependencies {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly content?: SkillContentReader
   readonly versionReader?: SkillVersionContentReader
+  readonly lifecycleContent?: SkillLifecycleContentStore
+  readonly deletionContent?: SkillDeletionContentStore
   readonly versionContent?: SkillVersionContentStore
   readonly creationContent?: SkillCreationContentStore
   /**
@@ -102,6 +109,9 @@ export function composeSkillCatalog(
       appHome: input.appHome,
       content: input.content ?? createFileSkillContentReader(input.appHome),
       versionReader: input.versionReader ?? createFileSkillVersionContentReader(input.appHome),
+      lifecycleContent:
+        input.lifecycleContent ?? createFileSkillLifecycleContentStore(input.appHome),
+      deletionContent: input.deletionContent ?? createFileSkillDeletionContentStore(input.appHome),
       versionContent,
       creationContent,
     },

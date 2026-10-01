@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:a17ccee07ec1031e6e69dfb86e6413b68847fefe1eaa2bd2bf5d99079fe1b88e`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:6bf3e6dcd1db36342ab24cc89045414e4541b9a901216804b21c39c48777d493`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,15 +10,15 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1924 |
+| backend production TS 文件 | 1931 |
 | `services/` 文件 | 295 |
-| `modules/**` 文件 / 非空 context | 1370 / 18 |
+| `modules/**` 文件 / 非空 context | 1377 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
 | production ambient wiring seam | 500 |
-| background work entries | 335 |
+| background work entries | 337 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 76 |
 | RFC-317 boundary census（inbound / outbound） | 255 / 31 |
@@ -31,12 +31,12 @@
 | --- | --- |
 | `ambientWiring` | 500 |
 | `architectureExceptions` | 4958 |
-| `backgroundJobs` | 335 |
+| `backgroundJobs` | 337 |
 | `crossContextImports` | 5581 |
 | `facades` | 295 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25525 |
-| `mutationEntrypoints` | 1774 |
+| `moduleSymbolOwners` | 25545 |
+| `mutationEntrypoints` | 1778 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1030 |
 | `transactionExternalEffects` | 261 |
@@ -47,10 +47,10 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| resource-catalog / infrastructure | 113 |
+| resource-catalog / infrastructure | 117 |
 | task-execution / infrastructure | 109 |
 | task-execution / application | 101 |
-| resource-catalog / application | 67 |
+| resource-catalog / application | 70 |
 | task-execution / composition | 61 |
 | development-automation / application | 51 |
 | collaboration / infrastructure | 47 |

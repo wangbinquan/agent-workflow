@@ -21,19 +21,11 @@
 // Production activates it before any consumer/HTTP can observe persisted rows.
 
 import { and, eq, inArray } from 'drizzle-orm'
-import { lstatSync } from 'node:fs'
-import { join } from 'node:path'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { skills, skillVersions } from '@/db/schema'
-import { hashRegularFileTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
-import {
-  realDirectoryChainState,
-  skillFilesAbs,
-  skillRootAbs,
-  skillVersionAbs,
-  skillVersionRelPath,
-} from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
+import type { SkillSnapshotInspector } from '../../application/skills/lifecycleContentStore'
+import { createFileSkillSnapshotInspector } from '../local/fileSkillSnapshotInspector'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('skill-boot-verify')
@@ -123,6 +115,7 @@ type VerifyOutcome = 'verified' | 'quarantined' | 'superseded'
 
 interface BootVerifyOptions {
   appHome: string
+  snapshotInspector?: SkillSnapshotInspector
   /** Test-only race seam, after filesystem inspection and before generation CAS. */
   __beforeFinalizeForTest?: (event: {
     skillId: string
@@ -251,7 +244,6 @@ async function inspectManagedSnapshot(
 ): Promise<{ ok: true } | { ok: false; reason: string }> {
   const reject = (reason: string): { ok: false; reason: string } => ({ ok: false, reason })
   try {
-    const root = skillRootAbs(opts.appHome, skill.id)
     const versions = (await db
       .select({
         versionIndex: skillVersions.versionIndex,
@@ -275,36 +267,23 @@ async function inspectManagedSnapshot(
     ) {
       return reject('version history is not the complete 1..contentVersion sequence')
     }
+    const selected: { version: number; reference: string; contentHash: string }[] = []
     for (const version of versions) {
-      if (version.filesPath !== skillVersionRelPath(skill.id, version.versionIndex)) {
-        return reject(`version ${version.versionIndex} path is not canonical`)
-      }
       if (version.contentHash === null) {
         return reject(`version ${version.versionIndex} has no content hash`)
       }
-      const dir = skillVersionAbs(opts.appHome, skill.id, version.versionIndex)
-      if (realDirectoryChainState(root, dir) !== 'real-directory') {
-        return reject(`version ${version.versionIndex} directory missing`)
-      }
-      const main = lstatSync(join(dir, 'SKILL.md'))
-      if (!main.isFile() || main.isSymbolicLink()) {
-        return reject(`version ${version.versionIndex} SKILL.md missing`)
-      }
-      if (hashRegularFileTree(dir) !== version.contentHash) {
-        return reject(`version ${version.versionIndex} hash mismatch (tampered/corrupt)`)
-      }
+      selected.push({
+        version: version.versionIndex,
+        reference: version.filesPath,
+        contentHash: version.contentHash,
+      })
     }
-
-    // Runtime staging consumes live files/, so a green snapshot alone is not
-    // enough. Live must be the byte-identical current committed version.
-    const live = skillFilesAbs(opts.appHome, skill.id)
-    if (realDirectoryChainState(root, live) !== 'real-directory') {
-      return reject('canonical live files directory missing')
-    }
-    if (hashRegularFileTree(live) !== current.contentHash) {
-      return reject('canonical live tree differs from current committed version')
-    }
-    return { ok: true }
+    const inspector = opts.snapshotInspector ?? createFileSkillSnapshotInspector(opts.appHome)
+    return await inspector.inspect({
+      skillId: skill.id,
+      currentVersion: skill.contentVersion,
+      versions: selected,
+    })
   } catch (err) {
     return reject(
       `snapshot verification I/O failed: ${err instanceof Error ? err.message : String(err)}`,

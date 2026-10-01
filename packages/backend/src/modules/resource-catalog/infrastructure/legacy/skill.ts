@@ -563,7 +563,7 @@ export async function deleteSkill(
   try {
     await deleteManagedSkillOp(
       db,
-      { appHome: opts.appHome },
+      { appHome: opts.appHome, deletionContent: opts.deletionContent },
       { id: existing.id },
       hooks,
       deleteFence,

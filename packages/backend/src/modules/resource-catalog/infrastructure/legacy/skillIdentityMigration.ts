@@ -24,7 +24,10 @@ import {
   type SkillIdentityMigrationHooks,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillMigrateOp'
 import { SKILL_OP_RECOVERY_REGISTRY } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRegistry'
-import { recoverSkillOperations } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
+import {
+  recoverSkillOperations,
+  type SkillOpFsOptions,
+} from '@/modules/resource-catalog/infrastructure/legacy/skillOpRecoveryDriver'
 import { recoveryDirection } from '@/modules/resource-catalog/infrastructure/legacy/skillOpRecovery'
 import { listActiveOps } from '@/modules/resource-catalog/infrastructure/legacy/skillOperations'
 import type {
@@ -43,8 +46,7 @@ export interface SkillIdentityMigrationReport {
 
 export async function runSkillIdentityMigrationBarrier(
   db: ProviderNeutralDatabase,
-  opts: {
-    appHome: string
+  opts: SkillOpFsOptions & {
     hooks?: SkillIdentityMigrationHooks
     /** Test-only fault seam after husk DB deletion, before empty-root cleanup. */
     __beforeHuskFsCleanupForTest?: (skillId: string) => void
@@ -62,11 +64,7 @@ export async function runSkillIdentityMigrationBarrier(
   // Legacy reserve/delete/version-write operations must settle while their
   // name-keyed directories still exist. A missing handler throws and preserves
   // both the active row and lock; it must never degrade into "release and boot".
-  const recovered = await recoverSkillOperations(
-    db,
-    { appHome: opts.appHome },
-    SKILL_OP_RECOVERY_REGISTRY,
-  )
+  const recovered = await recoverSkillOperations(db, opts, SKILL_OP_RECOVERY_REGISTRY)
   await assertNoActiveOperations(db)
   await preflightPhysicalOwnershipGraph(db, await loadIdentityRows(db), [], opts.appHome)
   const removedHusks = await sweepMissingLegacyHusks(

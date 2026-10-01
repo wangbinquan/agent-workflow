@@ -5520,9 +5520,9 @@
   "denominator": {
     "ambientWiring": 500,
     "disabled": 9,
-    "entries": 335,
+    "entries": 337,
     "executionLocal": 41,
-    "longRunning": 78,
+    "longRunning": 80,
     "managed": 11,
     "periodic": 207
   },
@@ -7367,9 +7367,7 @@
       "targetContext": "resource-catalog"
     },
     {
-      "dependencies": [
-        "db"
-      ],
+      "dependencies": [],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillDeleteOp.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillDeleteOp.ts#deleteRecoveryHandler",
@@ -7592,6 +7590,27 @@
       "targetContext": "resource-catalog"
     },
     {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersionOp.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersionOp.ts#selectedRecovery",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersionOp.ts#selectedRecovery",
+      "phase": "unknown",
+      "symbol": "selectedRecovery",
+      "targetContext": "resource-catalog"
+    },
+    {
       "dependencies": [
         "db"
       ],
@@ -7633,6 +7652,27 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/askerKey.ts#wgClarifyAskerKeyForRound",
       "phase": "unknown",
       "symbol": "wgClarifyAskerKeyForRound",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionRecoveryContentStore.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionRecoveryContentStore.ts#createFileSkillVersionRecoveryContentStore",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionRecoveryContentStore.ts#createFileSkillVersionRecoveryContentStore",
+      "phase": "unknown",
+      "symbol": "createFileSkillVersionRecoveryContentStore",
       "targetContext": "resource-catalog"
     },
     {
@@ -12910,5 +12950,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a17ccee07ec1031e6e69dfb86e6413b68847fefe1eaa2bd2bf5d99079fe1b88e"
+  "sourceDigest": "sha256:6bf3e6dcd1db36342ab24cc89045414e4541b9a901216804b21c39c48777d493"
 }
