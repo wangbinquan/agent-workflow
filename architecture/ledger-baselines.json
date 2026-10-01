@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1782,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：createFileIntentArtifactContent 按原 create 规则增加一个存储效果工厂，1781→1782；Intent apply／journal 编排和原两种 RC 工件 owner 保持。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -850,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5590,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：Intent 消费 RC exact public 中立工件／owner 合同及 composition 选择产生真实符号边，5585→5590；原 lifecycle 的 RC 内部类型边销账，不新增跨域业务状态机。"
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -888,10 +882,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1033,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：RC 已有工件／stage／publication／owner 合同下沉 application 并以三个有跨域消费者的中立类型从 public/types 提供，1030→1033；有 Intent 消费者，不公开 Postgresql provider 类型或 CS wire DTO。"
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -912,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25587,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：中立工件合同、Intent 内容／scratch 端口、local 效果及 compatibility 出口／composition 输入的真实净符号变化，25573→25587；版本与 journal 规则继续归 AW。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -932,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ce8a6310adb9576559f4d5100d4916635a104720",
-    "contentDigest": "sha256:80e9e487950fbe1773bc1189e12ec63f0afd2adb4b345b99eceb5c74ddeaba28",
+    "currentSnapshotSha": "497149ad2ad04b42fbc4d7902036b019be8ed880",
+    "contentDigest": "sha256:9c0456ad351435e770271ea000db667dc28d6917ffd28829142a814d6cd1efed",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
