@@ -60,8 +60,12 @@ export interface IntentSkillPublication {
   readonly filesPath: string
   readonly contentHash: string | null
   /** Consume the confirmed stage in AW's transaction; async storage effects
-   * belong to stage/publication rather than this transaction callback. */
-  commitInTransaction(transaction: DatabaseTransaction, versionIndex: number): Promise<void>
+   * belong to stage/publication rather than this transaction callback. The
+   * callback handle is derived from the neutral transaction, not its client. */
+  commitInTransaction(
+    transaction: Parameters<Parameters<DatabaseTransaction['transaction']>[0]>[0],
+    versionIndex: number,
+  ): Promise<void>
 }
 
 /**

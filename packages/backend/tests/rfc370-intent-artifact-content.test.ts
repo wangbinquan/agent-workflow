@@ -33,11 +33,11 @@ import {
   encodeIntentJournalArtifacts,
   type IntentJournalArtifactV1,
 } from '@/modules/intent/domain/journalArtifacts'
+import type { IntentApplyArtifact } from '@/modules/resource-catalog/public/types'
 import type {
-  IntentApplyArtifact,
   IntentPluginArtifactOwner,
   IntentSkillArtifactOwner,
-} from '@/modules/resource-catalog/public/types'
+} from '@/modules/resource-catalog/public/participants'
 import type { IntentArtifactStage } from '@/modules/resource-catalog/application/intent/artifactOwners'
 import { encodeSkillToken } from '@/modules/resource-catalog/application/skills/skillToken'
 import { createLogger } from '@/util/log'

@@ -20,7 +20,7 @@ import {
 import type {
   IntentPluginArtifactOwner,
   IntentSkillArtifactOwner,
-} from '@/modules/resource-catalog/public/types'
+} from '@/modules/resource-catalog/public/participants'
 import type { IntentArtifactContentPort } from '../application/ports/intentArtifactContent'
 import type { LegacyIntentSkillArtifactCompat } from '../ports/skillArtifactCompensation'
 import { createFileIntentArtifactContent } from '../infrastructure/local/fileIntentArtifactContent'

@@ -311,3 +311,10 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 按仓库明确的独立子代理备选完成两个精确候选实现门：Intent 21 路径、任务操作配置14路径均有限范围 PASS，未运行本机功能门禁，正式结果仍待各批 exact-SHA CI，不关闭全 H1/H6/A-G。设计首轮仅 H8 单 producer→单 endpoint 的一项功能遗漏；已补来源配置/多路由/逻辑事件完整冻结集合/逐目标持久受理，不合并原 endpoint 规则与观测。八个多 source、局部恢复、跨订阅、路由变更及 MR受理→两类观测间崩溃场景纳入 B-T5；修订稿独立设计门已 PASS，完整 A-G 尚未通过。详见[独立功能门记录](./functional-gates.md)。原工具不可用和历史门状态保留。
 
 资源包第二轮修复 `ce8a6310adb9576559f4d5100d4916635a104720` 的[主 CI 36876744628](https://github.com/wangbinquan/agent-workflow/actions/runs/36876744628)已 completed/success，50/50作业全部成功，headSha完全一致。前继13f的 cancelled/failure 历史不改写；本轮已恢复主 CI，再发布有有限独立功能 PASS 的 Intent 内容/scratch 候选及 H8 设计补正。下一批任务操作配置14路径保留且从本批官方census排除，不混入本批提交。
+
+
+### Intent 配套 CI 六类遗漏修复（2026-10-01）
+
+Intent 源提交 `497149ad2ad04b42fbc4d7902036b019be8ed880`、账本后继 `2d65a16f5152936ec93de1f0fd362a671e89e44d` 已精确同步远端；[CI 36882578362](https://github.com/wangbinquan/agent-workflow/actions/runs/36882578362) 终态 failure、38 success／12 failure，报六类配套遗漏，暂停后续 feature 发布。将两个 owner 移到 participants 出口，artifact 数据留 types；publication 只接现有 neutral transaction callback，移除两处强转，保留同一事务与 effect 主体。更新移动函数路径、下沉合同的类型依赖和两工厂改名后真实语料下限（函数66／adapter62），原扫描、零孪生、生产消费者及 fixtures 不变。十路径独立有限功能实现门 PASS，详见 functional-gates；正式结果继续等修复 SHA CI。
+
+官方 census 只读取已提交源码加十路径修复，排除任务配置／后台配置18路径候选和其他并行内容。owner／public 等基线没有新增长，observed import 5590→5589、exception4960→4959；仅源码生成与精确格式/lint，无本机 AW 功能测试／类型检查／构建／服务。完整 RFC 和部署继续，A-G 未关闭。

@@ -1,3 +1,7 @@
+## 2026-10-01 RFC-370 Intent 配套 CI 修复
+
+Intent 已发布497149ad2源／2d65a16f5账本，CI36882578362已终态failure、38success／12failure，未记全绿。六类兼容遗漏已修：owner从participants出口、publication接原中立事务callback而非强转client、移动函数路径、类型依赖及两个改名工厂的两份语料登记。原功能主体与断言保留，十路径独立有限功能门PASS；scoped官方census排除任务／后台配置18路径在制内容，基线无新增长，仅格式/lint／源码生成。继续以修复确切SHA CI验收，无本机AW测试／类型检查／构建／服务。后续feature暂停发布但切面候选继续；A-G、CS独立adapter与M0～M4仍未完成，RFC不关闭。全部并行输出和下方历史保留。
+
 ## 2026-10-01 RFC-370 独立功能门与事件多 source 补正
 
 按仓库明确的独立子代理备选，Intent 21 路径及任务操作配置14路径源码实现门有限 PASS；正式行为各待发布后的精确 CI。设计首轮发现共享 producer 不能只绑单 endpoint，已补一对多路由、完整目标集合冻结（含空集合）及逐目标持久恢复，补齐 MR受理后的持久待发布义务，八场景列入 B-T5，修订稿独立设计门已 PASS。ce8a6310a 的 CI36876744628 已 completed/success、50/50全部成功；现在精确发布已评审 Intent 候选，任务配置14路径留下一批；没有启动 CS adapter或部署，完整 A/H1～H8、A-G 与 M0～M4 继续。评审仅功能且只读，没有本机 AW 测试/类型检查/构建/服务。详见 RFC370 functional-gates，全部并行输出和历史保留。

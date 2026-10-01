@@ -167,7 +167,7 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     ],
     homonyms: [
       {
-        path: `${B}modules/intent/infrastructure/intentApplyArtifactLifecycle.ts`,
+        path: `${B}modules/intent/infrastructure/local/fileIntentArtifactContent.ts`,
         why: '同名异物：走 `pathInside` 判定、抛 `intent-apply-maintenance-path-outside-managed-root`，属于 intent 上下文自己的托管根合同。合它要新开一条 intent → resource-catalog 的内部边，而两个上下文的「托管根」本来就不是同一个根。',
       },
     ],

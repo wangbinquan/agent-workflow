@@ -27,6 +27,12 @@ import type {
   TaskExecutionResourceRequest,
 } from './types'
 
+// Content owners participate in Intent apply; their contracts are capabilities.
+export type {
+  IntentPluginArtifactOwner,
+  IntentSkillArtifactOwner,
+} from '../application/intent/artifactOwners'
+
 /** Opaque request context minted by identity-access; never an Actor-shaped bag. */
 export type ResourceRequestContext = RequestAuthority
 /** Branded current-user authority consumed by exact Agent aggregate operations. */

@@ -172,7 +172,9 @@ describe('RFC-359 W5 —— 函数体逐字相同的 provider 孪生必须为零
       // RFC-359 AC-1（第 14 刀）：69 → 67。源终止参与者与它的装配各自合一，
       // `createPostgresqlTaskSourceTerminationParticipant` / `composePostgresqlTaskSourceTermination`
       // 退役。**是合一不是删覆盖**。
-    ).toBeGreaterThanOrEqual(67)
+      // RFC-370 内容 owner：最低门槛67 → 66，实际语料68 → 66。两个既有工厂
+      // 改名为 `createFileIntent{Skill,Plugin}ArtifactOwner`；文件实现与覆盖保留。
+    ).toBeGreaterThanOrEqual(66)
   })
 
   test('零孪生：没有任何一对 provider 函数的函数体逐字相同', () => {

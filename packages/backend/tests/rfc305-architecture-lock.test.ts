@@ -347,6 +347,7 @@ describe('RFC-305 identity-access architecture', () => {
       'packages/backend/src/modules/memory/infrastructure/memoryCatalogOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/memory/public/catalog.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/agents/importPorts.ts -> @/modules/identity-access/public/participants',
+      'packages/backend/src/modules/resource-catalog/application/intent/artifactOwners.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/mcps/diagnosticsOperations.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/package/packageApplication.ts -> @/modules/identity-access/public/participants',
       'packages/backend/src/modules/resource-catalog/application/package/ports.ts -> @/modules/identity-access/public/participants',

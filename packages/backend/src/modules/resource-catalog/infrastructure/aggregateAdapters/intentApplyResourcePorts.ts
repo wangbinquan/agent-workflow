@@ -11,7 +11,6 @@ export type {
   IntentSkillPublication as PostgresqlIntentSkillStageResult,
   IntentSkillArtifactOwner as PostgresqlIntentSkillArtifactLifecycle,
 } from '../../application/intent/artifactOwners'
-import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { withAgentSidecarsFrom } from '../../domain/agentSidecarBackfill'
 import {
   privilegedNodeLensFor,
@@ -876,7 +875,7 @@ function createSkillPort(
             `skill '${plan.payload.name}' already exists`,
           )
         }
-        await prepared.staged.commitInTransaction(transaction as unknown as DatabaseTransaction, 1)
+        await prepared.staged.commitInTransaction(transaction, 1)
         await transaction.insert(skills).values({
           id: plan.resourceId,
           name: plan.payload.name,
@@ -923,10 +922,7 @@ function createSkillPort(
           ? current.metaRevision
           : current.metaRevision + 1
       const updatedAt = monotonicNow(current.updatedAt)
-      await prepared.staged.commitInTransaction(
-        transaction as unknown as DatabaseTransaction,
-        versionIndex,
-      )
+      await prepared.staged.commitInTransaction(transaction, versionIndex)
       const changed = await transaction
         .update(skills)
         .set({
