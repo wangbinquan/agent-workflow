@@ -1,5 +1,9 @@
 ## 2026-10-02 RFC-370 CI 恢复与任务配置续批
 
+## 2026-10-02 RFC-370 H3 工作区维护切面
+
+六路径候选沿用原 SC maintenance effects 与独立 Node adapter，异步 exists／列举／物化保护均 await，composition 可选所用 filesystem。独立首门发现旧不存在回执可抢在新清理 ACK 前 heal；SQL 现原子核对清理状态、终态、deleted、路径和既有 lifecycle revision，并补真实双 provider 过期快照与两实例 ACK success/failure／持久重试回归，修正后有限 PASS。目标格式/lint与 scoped 官方语料通过、ledger无数值增长，无本机 AW test/typecheck/build/service。CI 修复 `c028b22c4a9a5281aa9013d4fac058c343f3a4f3`／36928636248 已 completed/success、50/50 job success，现独立发布此批，正式行为待本批 exact-SHA CI；恢复存在查询及其他在制代码排除。完整 RFC、A-G、CS adapter 和 M0～M4 持续推进，不关闭；下方全部并行输出保留。
+
 ## 2026-10-02 RFC-370 任务配置 CI 配套修复
 
 CI36924136910 已终态 failure，41 success／9 failure。本批改完整 SchedulerDriverPort 夹具，保留并补提共享 Task query 的 RFC371 positions 配套6行，另加真实双 provider 分页合同回归；旧 policy/getter source oracle 与两处 INSERT 行号登记跟随实际位置，原断言／三血缘列／扫描规则保持。五条默认 file composition 精确兼容边登记 why/owner/A-T7 退役，所有 ledger 数值不变。最后新增失败补 TE 导出 ReturnType 两字段、真实 continuation/effect started 同步及完整迁移历史单用例20秒上限，原全部断言保持。仅格式/lint与 scoped 官方生成，正式结果等待修复确切 SHA CI；本机无 AW test/typecheck/build/service。H3维护候选及其他RFC371工作不混入；其异步存在查询竞态正在修正，完整切面、A-G、CS adapter 和 M0～M4 持续推进，RFC不关闭。下方全部并行输出保留。

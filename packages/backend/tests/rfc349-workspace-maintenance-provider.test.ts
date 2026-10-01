@@ -89,6 +89,7 @@ describe('RFC-349 Source Control workspace maintenance provider', () => {
             workspace_pruning_at: null,
             workspace_prune_cause: null,
             workspace_pruned_at: null,
+            lifecycle_event_revision: 1,
           },
         ])
       }

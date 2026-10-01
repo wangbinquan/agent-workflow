@@ -32,6 +32,7 @@ interface RawWorkspaceTaskRow extends Record<string, unknown> {
   readonly workspace_pruning_at: number | null
   readonly workspace_prune_cause: string | null
   readonly workspace_pruned_at: number | null
+  readonly lifecycle_event_revision: number
 }
 
 interface RawWorkspaceRepositoryRow extends Record<string, unknown> {
@@ -54,7 +55,8 @@ const taskProjection = sql`
   ${tasks.finishedAt} AS finished_at,
   ${tasks.workspacePruningAt} AS workspace_pruning_at,
   ${tasks.workspacePruneCause} AS workspace_prune_cause,
-  ${tasks.workspacePrunedAt} AS workspace_pruned_at
+  ${tasks.workspacePrunedAt} AS workspace_pruned_at,
+  ${tasks.lifecycleEventRevision} AS lifecycle_event_revision
 `
 
 const terminalStatuses = sql.join(
@@ -84,6 +86,7 @@ function mapTask(row: RawWorkspaceTaskRow): WorkspaceTaskRecord {
     workspacePruningAt: row.workspace_pruning_at === null ? null : Number(row.workspace_pruning_at),
     workspacePruneCause: row.workspace_prune_cause,
     workspacePrunedAt: row.workspace_pruned_at === null ? null : Number(row.workspace_pruned_at),
+    lifecycleEventRevision: Number(row.lifecycle_event_revision),
   }
 }
 
@@ -242,31 +245,49 @@ export class WorkspaceMaintenanceSqlStore implements WorkspaceMaintenanceStore {
     )
   }
 
-  async healMissingWorkspace(taskId: string, now: number): Promise<boolean> {
+  async healMissingWorkspace(
+    taskId: string,
+    now: number,
+    expected: Pick<WorkspaceTaskRecord, 'worktreePath' | 'lifecycleEventRevision'>,
+  ): Promise<boolean> {
     const rows = await this.executor.all<{ readonly id: string } & Record<string, unknown>>(sql`
       UPDATE ${tasks}
       SET ${sql.identifier(tasks.workspacePrunedAt.name)} = ${now}
       WHERE ${tasks.id} = ${taskId}
         AND ${tasks.workspacePrunedAt} IS NULL
+        AND ${tasks.workspacePruningAt} IS NULL
+        AND ${tasks.status} IN (${terminalStatuses})
+        AND ${tasks.deletedAt} IS NULL
+        AND ${tasks.worktreePath} = ${expected.worktreePath}
+        AND ${tasks.lifecycleEventRevision} = ${expected.lifecycleEventRevision}
       RETURNING ${tasks.id} AS id
     `)
     return rows.length === 1
   }
 
   async listUnstampedTerminalWorkspaces(): Promise<
-    readonly { readonly id: string; readonly worktreePath: string }[]
+    readonly Pick<WorkspaceTaskRecord, 'id' | 'worktreePath' | 'lifecycleEventRevision'>[]
   > {
     const rows = await this.executor.all<
-      { readonly id: string; readonly worktree_path: string } & Record<string, unknown>
+      {
+        readonly id: string
+        readonly worktree_path: string
+        readonly lifecycle_event_revision: number
+      } & Record<string, unknown>
     >(sql`
-      SELECT ${tasks.id} AS id, ${tasks.worktreePath} AS worktree_path
+      SELECT ${tasks.id} AS id, ${tasks.worktreePath} AS worktree_path,
+        ${tasks.lifecycleEventRevision} AS lifecycle_event_revision
       FROM ${tasks}
       WHERE ${tasks.status} IN (${terminalStatuses})
         AND ${tasks.workspacePrunedAt} IS NULL
         AND ${tasks.workspacePruningAt} IS NULL
         AND ${tasks.worktreePath} <> ''
     `)
-    return rows.map((row) => ({ id: row.id, worktreePath: row.worktree_path }))
+    return rows.map((row) => ({
+      id: row.id,
+      worktreePath: row.worktree_path,
+      lifecycleEventRevision: Number(row.lifecycle_event_revision),
+    }))
   }
 
   async listStaleWebhookClaims(

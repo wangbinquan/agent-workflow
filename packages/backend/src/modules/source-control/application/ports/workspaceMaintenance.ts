@@ -20,6 +20,7 @@ export interface WorkspaceTaskRecord {
   readonly workspacePruningAt: number | null
   readonly workspacePruneCause: string | null
   readonly workspacePrunedAt: number | null
+  readonly lifecycleEventRevision: number
 }
 
 export interface WorkspaceTaskRepositoryRecord {
@@ -45,11 +46,15 @@ export interface WorkspaceMaintenanceStore {
   reclaimWebhookWorkspace(taskId: string, expectedAt: number, now: number): Promise<boolean>
   finalizeWorkspace(taskId: string, now: number): Promise<boolean>
   releaseIsoClaim(taskId: string, expectedAt?: number): Promise<boolean>
-  healMissingWorkspace(taskId: string, now: number): Promise<boolean>
+  healMissingWorkspace(
+    taskId: string,
+    now: number,
+    expected: Pick<WorkspaceTaskRecord, 'worktreePath' | 'lifecycleEventRevision'>,
+  ): Promise<boolean>
   listStaleWebhookClaims(staleBefore: number): Promise<readonly WebhookWorkspaceClaimRecord[]>
   /** 终态、无 tombstone、也没有在途认领、却仍记着 worktree 路径的任务（RFC-165 之前被 GC 删掉目录的历史行）。 */
   listUnstampedTerminalWorkspaces(): Promise<
-    readonly { readonly id: string; readonly worktreePath: string }[]
+    readonly Pick<WorkspaceTaskRecord, 'id' | 'worktreePath' | 'lifecycleEventRevision'>[]
   >
 }
 
@@ -79,17 +84,21 @@ export interface WorkspaceTerminalMaintenance {
 }
 
 export interface WorkspaceMaintenanceFilesystem {
-  exists(path: string): boolean
-  isMaterializingTask(taskId: string): boolean
+  exists(path: string): boolean | Promise<boolean>
+  isMaterializingTask(taskId: string): boolean | Promise<boolean>
   removeWorkspace(
     task: WorkspaceTaskRecord,
     repositories: readonly WorkspaceTaskRepositoryRecord[],
   ): Promise<boolean>
   removeIsoContainer(task: WorkspaceTaskRecord | null, taskId: string): Promise<boolean>
   isMerged(worktreePath: string, baseBranch: string, branch: string): Promise<boolean>
-  listScratchDirectories(): readonly { readonly taskId: string; readonly path: string }[]
-  listWorktreeLeaves(): readonly { readonly taskId: string; readonly path: string }[]
-  listIsoTaskIds(): readonly string[]
+  listScratchDirectories():
+    | readonly { readonly taskId: string; readonly path: string }[]
+    | Promise<readonly { readonly taskId: string; readonly path: string }[]>
+  listWorktreeLeaves():
+    | readonly { readonly taskId: string; readonly path: string }[]
+    | Promise<readonly { readonly taskId: string; readonly path: string }[]>
+  listIsoTaskIds(): readonly string[] | Promise<readonly string[]>
   removeAgedPath(path: string, now: number, minAgeMs: number): Promise<boolean>
   runPartialCloneGc(
     now: number,

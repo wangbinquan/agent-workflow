@@ -258,11 +258,14 @@ export function createWorkspaceMaintenanceCommand(input: {
         skipped += 1
         continue
       }
-      if (lacksMaterializedWorkspace(task.worktreePath) || !filesystem.exists(task.worktreePath)) {
+      if (
+        lacksMaterializedWorkspace(task.worktreePath) ||
+        !(await filesystem.exists(task.worktreePath))
+      ) {
         if (task.workspacePruningAt !== null) {
           await finishClaimedWorkspace(task.id, now)
         } else if (!lacksMaterializedWorkspace(task.worktreePath)) {
-          await store.healMissingWorkspace(task.id, now)
+          await store.healMissingWorkspace(task.id, now, task)
         }
         skipped += 1
         continue
@@ -309,7 +312,7 @@ export function createWorkspaceMaintenanceCommand(input: {
   }
 
   async function runIso(input: WorkspaceGcInput, now: number): Promise<WorkspaceGcReceipt> {
-    const taskIds = filesystem.listIsoTaskIds()
+    const taskIds = await filesystem.listIsoTaskIds()
     if (taskIds.length === 0) return emptyReceipt()
     const active = new Set(input.activeTaskIds)
     const tasks = new Map((await store.listTasks(taskIds)).map((task) => [task.id, task]))
@@ -399,7 +402,7 @@ export function createWorkspaceMaintenanceCommand(input: {
   }
 
   async function runScratch(now: number, active: ReadonlySet<string>): Promise<WorkspaceGcReceipt> {
-    const directories = filesystem.listScratchDirectories()
+    const directories = await filesystem.listScratchDirectories()
     if (directories.length === 0) return emptyReceipt()
     const anchored = await store.anchoredTaskIds(directories.map(({ taskId }) => taskId))
     let removed = 0
@@ -408,7 +411,7 @@ export function createWorkspaceMaintenanceCommand(input: {
       if (
         active.has(directory.taskId) ||
         anchored.has(directory.taskId) ||
-        filesystem.isMaterializingTask(directory.taskId)
+        (await filesystem.isMaterializingTask(directory.taskId))
       ) {
         skipped += 1
         continue
@@ -431,7 +434,7 @@ export function createWorkspaceMaintenanceCommand(input: {
   }
 
   async function runOrphan(now: number, active: ReadonlySet<string>): Promise<WorkspaceGcReceipt> {
-    const leaves = filesystem.listWorktreeLeaves()
+    const leaves = await filesystem.listWorktreeLeaves()
     if (leaves.length === 0) return emptyReceipt()
     const anchored = await store.anchoredTaskIds(leaves.map(({ taskId }) => taskId))
     let removed = 0
@@ -440,7 +443,7 @@ export function createWorkspaceMaintenanceCommand(input: {
       if (
         anchored.has(leaf.taskId) ||
         active.has(leaf.taskId) ||
-        filesystem.isMaterializingTask(leaf.taskId)
+        (await filesystem.isMaterializingTask(leaf.taskId))
       ) {
         skipped += 1
         continue
@@ -516,8 +519,8 @@ export function createWorkspaceMaintenanceCommand(input: {
     // reconcileLegacyPrunedWorkspaces 做这件事。
     let healed = 0
     for (const row of await store.listUnstampedTerminalWorkspaces()) {
-      if (filesystem.exists(row.worktreePath)) continue
-      if (await store.healMissingWorkspace(row.id, now)) healed += 1
+      if (await filesystem.exists(row.worktreePath)) continue
+      if (await store.healMissingWorkspace(row.id, now, row)) healed += 1
     }
     if (healed > 0) log.info('reconciled legacy pruned workspaces', { healed })
     return { completed, failed, skipped, healed }

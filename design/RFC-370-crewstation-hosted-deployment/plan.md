@@ -337,3 +337,11 @@ Intent 源提交 `497149ad2ad04b42fbc4d7902036b019be8ed880`、账本后继 `2d65
 最后四个后端分片还报告 RFC287 T14 导出类型旧位置、RFC332 两处单微任务假设，以及 macOS RFC363 完整迁移历史超过默认5秒（5048.83ms）。导出合同断言移动到 TE 类型并加 legacy ReturnType 两字段检查；两个测试改等真实 continuation/effect started 事件，原未结算／顺序／释放断言不变；只给该迁移用例20秒明确上限，完整历史和拒绝判据保持。
 
 H3 工作区维护6路径候选仍在制。独立复核发现异步 exists 旧快照可绕过新 pruning claim 提前 heal；将修正 shared SQL 原子条件并补真实双 provider 交错回归，再单独复核／发布。本次修复不提交该在制候选，完整 RFC、A-G 及 CS M0～M4 继续。
+
+### H3 工作区维护异步切面（2026-10-02）
+
+沿用原 SC WorkspaceMaintenanceFilesystem、Node adapter、SQL store 与终态清理状态机，开放所选 filesystem；exists、三个列举和 materializing 可异步，全部调用点先 await 再使用，所选 adapter 不回退到本机。原回收年龄、活跃任务／物化保护、失败 claim 和完成顺序保持。
+
+独立首门发现旧 recovery exists 快照与前台 resume／取消／finalize 交错：远端物理删除尚未确认时，旧 false 结果可提前 heal。补写 SQL 现在原子核对无 pruning claim、仍终态／未删除、同一 worktreePath 与 lifecycleEventRevision；两个应用调用点传枚举快照，复用已有生命周期 revision，不新增迁移或第二种 authority。六路径修正后由独立 `/root/intent_functional_gate` 有限 PASS，指纹 `51e83940efeca6a06c7ef9b3fe2b939ef3c18b0df45ba449ff3c3a1100e010c6`。
+
+新增真实双 provider 回归含异步 false／异常重试、四种过期快照与两实例清理 ACK 成功／失败交错：确认前及失败后 pruned=null、claim=claimed，真正持久重试确认后才完成。保留原 selected listing／materializing／iso active 判据及真实 local 维护测试。官方 scoped census 只纳入此六路径，所有 ledger 数值不变；本机仅目标格式/lint及静态语料生成。修复 `c028b22c4a9a5281aa9013d4fac058c343f3a4f3` 的 [CI36928636248](https://github.com/wangbinquan/agent-workflow/actions/runs/36928636248) 已 completed/success，50/50 job success；现发布本批，行为继续交本批 exact-SHA hosted CI，不以有限复核替代正式行为。其他 H3／A-G、CS adapter、M0～M4 仍继续。

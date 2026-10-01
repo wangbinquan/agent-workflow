@@ -115,3 +115,7 @@ apply、boot/hourly convergence 与旧格式恢复均可选择同一内容能力
 33路径候选增加 TE-owned operation／background／launch 三个 query 与对应 local file adapter。operation 固定六处 mint 等待和 commit patterns 按次复制；background 对所选启动／tick 配置全部 await，启动 Promise 与 detached auto-resume/drain 边界保持；launch 保留原三段独立读／catch、零值／过滤和同步兼容入口。selected source 对 optional 删值及读失败采用本次结果，不能借 boot launch 值；宿主依赖保留。
 
 HTTP multipart 的 upload limit 可异步读取；驱动在 attach 后等待 runtime，失败与等待期间取消都释放。此批已补真实双 provider 回归和本地文件热读，原投影 AST token 对拍相等；正式类型／行为等待 exact-SHA CI，完整 H1 和 A-G 尚未完成。上方 Intent CI 恢复已由 `8d7e078e31527a3b70c5058af9fb25c4b23ff1f4`／36890491336 的全部50作业 success 验证，原修复 run 的取消仍保留。
+
+## H3 工作区维护续批
+
+现有 SC-owned maintenance effects 直接开放 selected adapter，exists／列举／物化保护可 await；local Node adapter 不重复包装。原 terminal claim 与 SQL store 保持 authority，远端读取期间的旧快照只允许原子匹配 lifecycle revision／路径／无新清理 claim 时补写历史 tombstone。六路径有限复核 PASS 与双 provider 回归见 plan／functional-gates，正式行为仍交本批 exact-SHA CI。恢复任务的存在查询、其他 workspace／Git 全调用者、完整 A-G 和 CS 效果尚未闭合。
