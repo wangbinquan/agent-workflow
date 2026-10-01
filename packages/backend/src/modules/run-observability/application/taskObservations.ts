@@ -372,6 +372,20 @@ function metrics(
         invocations.some((i) => i.knownZero) ||
         rows.some((r) => TOKEN_BUCKETS.some((b) => r.record.contribution[b] !== null)),
       complete,
+      hasKnownBuckets: {
+        input:
+          invocations.some((i) => i.knownZero) ||
+          rows.some((r) => r.record.contribution.input !== null),
+        cacheRead:
+          invocations.some((i) => i.knownZero) ||
+          rows.some((r) => r.record.contribution.cacheRead !== null),
+        cacheWrite:
+          invocations.some((i) => i.knownZero) ||
+          rows.some((r) => r.record.contribution.cacheWrite !== null),
+        output:
+          invocations.some((i) => i.knownZero) ||
+          rows.some((r) => r.record.contribution.output !== null),
+      },
       unknownBuckets: tokens.unknownBuckets,
     },
     cost: {

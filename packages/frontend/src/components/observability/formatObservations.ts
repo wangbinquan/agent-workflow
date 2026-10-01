@@ -1,3 +1,21 @@
+import type { ObservationMetrics } from '@agent-workflow/shared'
+
+export const OBSERVATION_TOKEN_BUCKETS = ['input', 'cacheRead', 'cacheWrite', 'output'] as const
+
+/** Per-bucket evidence proves known zero; query completeness controls the lower-bound prefix. */
+export function formatObservationBucket(
+  metrics: ObservationMetrics,
+  bucket: (typeof OBSERVATION_TOKEN_BUCKETS)[number],
+  locale?: string,
+): string | null {
+  const value = metrics.tokens.known[bucket]
+  const hasKnown =
+    metrics.tokens.hasKnown &&
+    (metrics.tokens.hasKnownBuckets?.[bucket] ?? (metrics.tokens.complete || BigInt(value) > 0n))
+  if (!hasKnown) return null
+  return `${metrics.tokens.complete ? '' : '≥ '}${BigInt(value).toLocaleString(locale)}`
+}
+
 /** Format exact CNY decimals without a floating-point conversion, including tiny nonzero values. */
 export function formatObservationCny(amount: string | null, exact = false): string {
   if (amount === null) return '—'

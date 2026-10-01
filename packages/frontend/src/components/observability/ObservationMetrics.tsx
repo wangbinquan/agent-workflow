@@ -2,9 +2,11 @@ import { Fragment } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { ObservationMetrics } from '@agent-workflow/shared'
 import { StatusChip } from '@/components/StatusChip'
-import { formatObservationCny } from './formatObservations'
-
-const keys = ['input', 'cacheRead', 'cacheWrite', 'output'] as const
+import {
+  formatObservationCny,
+  formatObservationBucket,
+  OBSERVATION_TOKEN_BUCKETS as keys,
+} from './formatObservations'
 const reasonKeys: Readonly<Record<string, string>> = {
   'not-observed': 'unknown',
   unpriced: 'unpriced',
@@ -47,7 +49,33 @@ const reasonKeys: Readonly<Record<string, string>> = {
   'native-output-incomplete': 'nativeOutputIncomplete',
   'native-step-unfinished': 'nativeOutputIncomplete',
 }
-export function Tokens({ metrics }: { metrics: ObservationMetrics }) {
+export function TokenBuckets({ metrics }: { metrics: ObservationMetrics }) {
+  const { t, i18n } = useTranslation()
+  return (
+    <dl
+      className="observation-token-buckets"
+      data-token-buckets
+      aria-label={t('runObservability.buckets')}
+    >
+      {keys.map((bucket) => (
+        <div key={bucket} data-token-bucket={bucket}>
+          <dt>{t(`runObservability.${bucket}`)}</dt>
+          <dd>
+            {formatObservationBucket(metrics, bucket, i18n.language) ??
+              t('runObservability.unknown')}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  )
+}
+export function Tokens({
+  metrics,
+  breakdown = true,
+}: {
+  metrics: ObservationMetrics
+  breakdown?: boolean
+}) {
   const { t, i18n } = useTranslation()
   return (
     <>
@@ -61,6 +89,7 @@ export function Tokens({ metrics }: { metrics: ObservationMetrics }) {
           {t(`runObservability.${metrics.tokens.hasKnown ? 'partial' : 'unknown'}`)}
         </StatusChip>
       )}
+      {breakdown && <TokenBuckets metrics={metrics} />}
     </>
   )
 }
@@ -93,19 +122,13 @@ export function Metrics({ value }: { value: ObservationMetrics }) {
     <dl className="detail-grid observation-metrics">
       <dt>{t('runObservability.tokens')}</dt>
       <dd>
-        <Tokens metrics={value} />
+        <Tokens metrics={value} breakdown={false} />
       </dd>
       {keys.map((key) => (
         <Fragment key={key}>
           <dt>{t(`runObservability.${key}`)}</dt>
           <dd>
-            {(
-              value.records === 0
-                ? !value.tokens.hasKnown
-                : value.tokens.unknownBuckets[key] === value.records
-            )
-              ? '—'
-              : BigInt(value.tokens.known[key]).toLocaleString(i18n.language)}
+            {formatObservationBucket(value, key, i18n.language) ?? t('runObservability.unknown')}
           </dd>
         </Fragment>
       ))}

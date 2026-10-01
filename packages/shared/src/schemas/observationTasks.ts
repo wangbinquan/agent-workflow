@@ -83,6 +83,8 @@ export interface ObservationMetrics {
     readonly known: Readonly<Record<keyof ObservationTokenUsage, string>>
     readonly totalKnown: string
     readonly hasKnown: boolean
+    /** Known zero needs affirmative per-bucket evidence, including proven empty captures. */
+    readonly hasKnownBuckets?: Readonly<Record<keyof ObservationTokenUsage, boolean>>
     readonly complete: boolean
     readonly unknownBuckets: Readonly<Record<keyof ObservationTokenUsage, number>>
   }

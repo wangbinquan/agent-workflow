@@ -121,3 +121,30 @@ describe('parseEvent token delta == accumulateTokens (RFC-111 PR-A + RFC-103)', 
     })
   }
 })
+
+// RFC-371 real tasks: the legacy budget and observation bucket share native semantics.
+it('includes native OpenCode reasoning once while generic completion totals remain unchanged', () => {
+  expect(
+    parseEvent(
+      JSON.stringify({ type: 'step_finish', tokens: { input: 9013, output: 53, reasoning: 1 } }),
+    )?.tokens?.output,
+  ).toBe(54)
+  expect(
+    parseEvent(JSON.stringify({ type: 'step_finish', usage: { output_tokens: 54, reasoning: 1 } }))
+      ?.tokens?.output,
+  ).toBe(54)
+  expect(
+    parseEvent(
+      JSON.stringify({
+        type: 'step_finish',
+        usage: { output: null, output_tokens: 54, reasoning: 1 },
+      }),
+    )?.tokens?.output,
+  ).toBe(54)
+  const totals: RuntimeTokenUsage = { input: 0, output: 0, cacheRead: 0, cacheCreate: 0, total: 0 }
+  accumulateTokens(
+    { type: 'step_finish', tokens: { input: 9013, output: 53, reasoning: 1 } },
+    totals,
+  )
+  expect(totals.output).toBe(54)
+})

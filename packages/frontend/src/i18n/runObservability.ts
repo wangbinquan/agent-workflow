@@ -183,6 +183,8 @@ export const runObservabilityZh = {
   noAgents: '尚无已受理的运行时调用',
   priceHint: '独立 AW：设置 → 运行时 → Token 成本。CS 托管：CS 系统管理 → 算力档位 → Token 成本。',
   currencyHint: '金额为人民币估值；混合来源仅合并互斥执行贡献，不代表平台采购账单。',
+  buckets: 'Token 分类消耗',
+  bucketHint: '输入不含缓存；输出包含推理 Token。四类相加为总量。',
   input: '非缓存输入',
   cacheRead: '缓存读取',
   cacheWrite: '缓存写入',
@@ -415,6 +417,9 @@ export const runObservabilityEn: RunObservabilityMessages = {
     'Standalone AW: Settings → Runtimes → Token cost. CS hosted: CS Administration → Compute profiles → Token cost.',
   currencyHint:
     'Amounts are CNY valuations. Mixed sources combine disjoint executions and do not represent the platform procurement bill.',
+  buckets: 'Token breakdown',
+  bucketHint:
+    'Input excludes cached tokens. Output includes reasoning. The four buckets sum to the total.',
   input: 'Uncached input',
   cacheRead: 'Cache read',
   cacheWrite: 'Cache write',

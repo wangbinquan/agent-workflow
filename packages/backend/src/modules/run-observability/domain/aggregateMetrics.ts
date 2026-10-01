@@ -26,6 +26,30 @@ export function aggregateObservationMetrics(
       known,
       totalKnown: TOKEN_BUCKETS.reduce((n, bucket) => n + BigInt(known[bucket]), 0n).toString(),
       hasKnown: rows.some((row) => row.tokens.hasKnown),
+      hasKnownBuckets: {
+        input: rows.some(
+          (row) =>
+            row.tokens.hasKnownBuckets?.input ??
+            (row.tokens.hasKnown && (row.tokens.complete || BigInt(row.tokens.known.input) > 0n)),
+        ),
+        cacheRead: rows.some(
+          (row) =>
+            row.tokens.hasKnownBuckets?.cacheRead ??
+            (row.tokens.hasKnown &&
+              (row.tokens.complete || BigInt(row.tokens.known.cacheRead) > 0n)),
+        ),
+        cacheWrite: rows.some(
+          (row) =>
+            row.tokens.hasKnownBuckets?.cacheWrite ??
+            (row.tokens.hasKnown &&
+              (row.tokens.complete || BigInt(row.tokens.known.cacheWrite) > 0n)),
+        ),
+        output: rows.some(
+          (row) =>
+            row.tokens.hasKnownBuckets?.output ??
+            (row.tokens.hasKnown && (row.tokens.complete || BigInt(row.tokens.known.output) > 0n)),
+        ),
+      },
       complete: rows.length > 0 && !truncated && rows.every((row) => row.tokens.complete),
       unknownBuckets,
     },

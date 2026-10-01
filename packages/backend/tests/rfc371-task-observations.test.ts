@@ -57,7 +57,7 @@ const query: ObservationTaskPageQuery = {
   timezone: 'Asia/Shanghai',
   limit: 20,
 }
-const buckets = (input: string | null, output = '0') => ({
+const buckets = (input: string | null, output: string | null = '0') => ({
   input,
   output,
   cacheRead: '0',
@@ -738,6 +738,46 @@ describeEachProvider('RFC-371 mounted task observation snapshot', (harness) => {
       status: 'failed',
       asOf: new Date(NOW + 5000).toISOString(),
     })
+  })
+  test('classified known zero survives a proven empty tree mixed with missing output, missing invocation and truncation', async () => {
+    const f = await fixture()
+    await f.task()
+    await f.accept('hosted', { authority: platformAuthority, agentId: 'empty-agent' })
+    await f.accept('local', { agentId: 'partial-agent' })
+    await f.usage('local', buckets('10', null))
+    const capture: PlatformObservation = {
+      ...nativeCapture,
+      kind: 'capture',
+      identity,
+      capture: { ...nativeCapture.capture, identity },
+    } as PlatformObservation
+    await f.sync([capture], { schemaVersion: 2, costVisibility: 'hidden' })
+    let result = (await f.queries.detail(admin, 'task'))!
+    expect(result.metrics.tokens).toMatchObject({
+      totalKnown: '10',
+      complete: false,
+      hasKnownBuckets: { input: true, cacheRead: true, cacheWrite: true, output: true },
+    })
+    expect(result.metrics.tokens.unknownBuckets.output).toBe(1)
+    expect(result.metrics.records).toBe(1)
+    expect(
+      result.agents.find((row) => row.agentId === 'partial-agent')!.metrics.tokens.hasKnownBuckets!
+        .output,
+    ).toBe(false)
+    expect(
+      result.agents.find((row) => row.agentId === 'empty-agent')!.metrics.tokens.hasKnownBuckets!
+        .output,
+    ).toBe(true)
+    await f.accept('missing', { agentId: 'missing-agent' })
+    result = (await f.queries.detail(admin, 'task'))!
+    expect(result.metrics.tokens.hasKnownBuckets!.output).toBe(true)
+    expect(result.metrics.tokens.complete).toBe(false)
+    expect(result.metrics.cost.complete).toBe(false)
+    const overview = await f.queries.overview(admin, query)
+    expect(overview.metrics.tokens.hasKnownBuckets).toEqual(result.metrics.tokens.hasKnownBuckets)
+    const truncated = aggregateObservationMetrics([result.metrics], true)
+    expect(truncated.tokens.hasKnownBuckets!.output).toBe(true)
+    expect(truncated.tokens.complete).toBe(false)
   })
   test('only complete v2 empty proofs establish zero; late usage and hidden CNY remain separate', async () => {
     const f = await fixture()

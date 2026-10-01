@@ -39,9 +39,14 @@ const counter = (value: unknown) => {
 function step(row: PartRow, ancestors: readonly string[], issues: Set<string>): NativeUsageStep {
   const tokens = record(JSON.parse(row.tokens ?? 'null')),
     cache = record(tokens.cache)
+  const output = counter(tokens.output),
+    reasoning = counter(tokens.reasoning)
   const usage: ObservationTokenUsage = {
     input: counter(tokens.input),
-    output: counter(tokens.output),
+    output:
+      output === null || reasoning === null
+        ? null
+        : counter((BigInt(output) + BigInt(reasoning)).toString()),
     cacheRead: counter(cache.read),
     cacheWrite: counter(cache.write),
   }

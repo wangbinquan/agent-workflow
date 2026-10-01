@@ -20,7 +20,10 @@ import {
   RunObservability,
   type ObservationSearch,
 } from '../src/components/observability/RunObservability'
-import { formatObservationCny } from '../src/components/observability/formatObservations'
+import {
+  formatObservationCny,
+  formatObservationBucket,
+} from '../src/components/observability/formatObservations'
 import { ExecutionSwimlane } from '../src/components/ExecutionSwimlane'
 import { ObservationPlatformCapture } from '../src/components/observability/ObservationPlatformCapture'
 import { Metrics } from '../src/components/observability/ObservationMetrics'
@@ -526,7 +529,7 @@ test.each(['zh-CN', 'en-US'])(
     const dialog = await screen.findByRole('dialog')
     expect(dialog.textContent).toContain('opaque-registration-A')
     const table = within(dialog).getByRole('table')
-    expect(within(table).getByText('300')).toBeTruthy()
+    expect(within(table).getByText('300', { selector: 'strong' })).toBeTruthy()
     expect(within(table).getByText('¥1.25')).toBeTruthy()
     expect(within(dialog).queryByText('1,000')).toBeNull()
     expect(within(dialog).queryByText('¥9')).toBeNull()
@@ -657,7 +660,7 @@ test('trend columns scale exact large totals and expose focused interval details
   expect(detail.textContent).toContain('2 个任务')
   expect(detail.textContent).toContain('¥9007199254740993.9999999')
   fireEvent.mouseEnter(columns[3]!)
-  expect(within(detail).getByText('未观测')).toBeTruthy()
+  expect(within(detail).getAllByText('未观测')).toHaveLength(5)
   fireEvent.click(columns[1]!)
   await waitFor(() =>
     expect(f.changes.at(-1)).toMatchObject({
@@ -937,7 +940,7 @@ test('platform turn details use the shared dialog and return focus to the last r
   }
 })
 
-test('an empty proven tree displays all four zero buckets while unobserved usage keeps dashes', () => {
+test('an empty proven tree displays all four zero buckets while unobserved usage stays explicit', () => {
   const value = metrics({
     records: 0,
     observedInvocations: 1,
@@ -960,5 +963,104 @@ test('an empty proven tree displays all four zero buckets while unobserved usage
   for (const key of ['input', 'output', 'cacheRead', 'cacheWrite'])
     expect(
       screen.getByText(i18n.t('runObservability.' + key)).nextElementSibling?.textContent,
-    ).toBe('—')
+    ).toBe(i18n.t('runObservability.unknown'))
+})
+
+// Latest acceptance: classification is visible before drilling down, and exact buckets retain their own coverage.
+test('classified token counts preserve exact integers, known zero and missing output independently', () => {
+  const base = runtimeMetrics('0', '0')
+  const value: ObservationMetrics = {
+    ...base,
+    records: 2,
+    tokens: {
+      ...base.tokens,
+      known: { input: '9007199254740993', cacheRead: '0', cacheWrite: '0', output: '3' },
+      totalKnown: '9007199254740996',
+      complete: false,
+      hasKnownBuckets: { input: true, cacheRead: true, cacheWrite: true, output: true },
+      unknownBuckets: { input: 0, cacheRead: 0, cacheWrite: 0, output: 1 },
+    },
+  }
+  expect(formatObservationBucket(value, 'input', 'en-US')).toBe('≥ 9,007,199,254,740,993')
+  expect(formatObservationBucket(value, 'cacheRead', 'en-US')).toBe('≥ 0')
+  expect(formatObservationBucket(value, 'output', 'en-US')).toBe('≥ 3')
+  const missing: ObservationMetrics = {
+    ...value,
+    tokens: {
+      ...value.tokens,
+      known: { ...value.tokens.known, output: '0' },
+      hasKnownBuckets: { input: true, cacheRead: true, cacheWrite: true, output: false },
+      unknownBuckets: { ...value.tokens.unknownBuckets, output: 2 },
+    },
+  }
+  expect(formatObservationBucket(missing, 'output', 'en-US')).toBeNull()
+  expect(
+    formatObservationBucket(
+      {
+        ...missing,
+        tokens: {
+          ...missing.tokens,
+          hasKnownBuckets: { input: true, cacheRead: true, cacheWrite: true, output: true },
+          unknownBuckets: { ...missing.tokens.unknownBuckets, output: 1 },
+        },
+      },
+      'output',
+      'en-US',
+    ),
+  ).toBe('≥ 0')
+})
+test('overview, task, runtime and Agent summaries show four classifications and keyboard-selected stacked trend values', async () => {
+  const base = runtimeOverview(),
+    initial = runtimeMetrics('100', '0.1')
+  const value: ObservationMetrics = {
+    ...initial,
+    tokens: {
+      ...initial.tokens,
+      known: { input: '40', cacheRead: '30', cacheWrite: '10', output: '20' },
+    },
+  }
+  const data: ObservationOverview = {
+    ...base,
+    metrics: value,
+    trend: [{ from: search.from, to: search.to, taskCount: 1, metrics: value }],
+    tasks: [{ ...base.tasks[0]!, metrics: value }],
+  }
+  const f = fixture({ ...search, tab: 'overview' }, { overview: data })
+  const card = (await screen.findByRole('heading', { name: '已知 Token', exact: true })).closest(
+    '.card',
+  )!
+  const buckets = card.querySelectorAll('[data-token-bucket] dd')
+  expect([...buckets].map((el) => el.textContent)).toEqual(['40', '30', '10', '20'])
+  expect(card.textContent).toContain('输出包含推理 Token')
+  expect(
+    document
+      .querySelector('[data-observation-task]')
+      ?.closest('tr')
+      ?.querySelectorAll('[data-token-bucket]'),
+  ).toHaveLength(4)
+  const column = within(screen.getByRole('list', { name: '任务用量趋势' })).getByRole('button')
+  expect(
+    [...column.querySelectorAll<HTMLElement>('.observation-trend__segment')].map(
+      (el) => el.style.height,
+    ),
+  ).toEqual(['40%', '30%', '10%', '20%'])
+  expect(column.getAttribute('aria-label')).toContain('缓存读取 30')
+  fireEvent.focus(column)
+  expect(
+    [
+      ...screen
+        .getByRole('group', { name: '当前趋势区间' })
+        .querySelectorAll('[data-token-bucket] dd'),
+    ].map((el) => el.textContent),
+  ).toEqual(['40', '30', '10', '20'])
+  fireEvent.click(screen.getByRole('tab', { name: 'Token 与成本' }))
+  await waitFor(() => expect(f.changes.at(-1)?.tab).toBe('usage'))
+  expect(
+    screen.getByText('original-name').closest('tr')?.querySelectorAll('[data-token-bucket]'),
+  ).toHaveLength(4)
+  fireEvent.click(screen.getByRole('tab', { name: 'Agent 分析' }))
+  await waitFor(() => expect(f.changes.at(-1)?.tab).toBe('agents'))
+  expect(document.querySelector('tbody tr')?.querySelectorAll('[data-token-bucket]')).toHaveLength(
+    4,
+  )
 })

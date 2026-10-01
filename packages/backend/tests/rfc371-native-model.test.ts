@@ -51,7 +51,7 @@ const raw = (input = 10) => ({
     id: 'step',
     sessionID: 'session',
     messageID: 'message',
-    tokens: { input, output: 3, cache: { read: 2, write: 0 } },
+    tokens: { input, output: 3, reasoning: 0, cache: { read: 2, write: 0 } },
   },
 })
 

@@ -15,7 +15,10 @@ test('numeric evidence freezes revision, clock and identity while keeping the ac
   const capture = createInvocationUsageCapture({ ...identity, normalize: opencode })
   const line = JSON.stringify({
     type: 'step_finish',
-    part: { id: 'step', tokens: { input: 20, output: 5, cache: { read: 0, write: 0 } } },
+    part: {
+      id: 'step',
+      tokens: { input: 20, output: 5, reasoning: 0, cache: { read: 0, write: 0 } },
+    },
   })
   const first = capture(line, 'native', 100)!,
     second = capture(line, 'native', 101)!

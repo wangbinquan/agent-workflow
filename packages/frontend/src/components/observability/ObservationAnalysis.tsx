@@ -11,8 +11,12 @@ import { TableViewport } from '@/components/TableViewport'
 import { EmptyState } from '@/components/EmptyState'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { formatDurationMs } from '@/lib/duration'
-import { Tokens, Cost, Metrics, observationReasonKey } from './ObservationMetrics'
-import { formatObservationCny } from './formatObservations'
+import { Tokens, TokenBuckets, Cost, Metrics, observationReasonKey } from './ObservationMetrics'
+import {
+  formatObservationCny,
+  formatObservationBucket,
+  OBSERVATION_TOKEN_BUCKETS,
+} from './formatObservations'
 import './ObservationAnalysis.css'
 import { ObservationCollection } from './ObservationCollection'
 import { ObservationRuntimeDetails } from './ObservationRuntimeDetails'
@@ -37,6 +41,7 @@ function SummaryCards({ data }: { data: ObservationOverview }) {
         <div className="observation-summary__value">
           <Tokens metrics={data.metrics} />
         </div>
+        <p className="muted observation-token-hint">{t('runObservability.bucketHint')}</p>
       </Card>
       <Card title={t('runObservability.cost')}>
         <div className="observation-summary__value">
@@ -191,11 +196,23 @@ function Trend({
           <span>{t('runObservability.trendScale')}</span>
           <span>{max.toLocaleString(i18n.language)}</span>
         </div>
+        <div className="observation-token-legend" aria-label={t('runObservability.buckets')}>
+          {OBSERVATION_TOKEN_BUCKETS.map((bucket) => (
+            <span key={bucket}>
+              <i data-token-color={bucket} aria-hidden="true" />
+              {t(`runObservability.${bucket}`)}
+            </span>
+          ))}
+        </div>
         <TableViewport label={t('runObservability.trend')}>
           <ol className="observation-trend" aria-label={t('runObservability.trend')}>
             {data.trend.map((row) => {
               const tokens = row.metrics.tokens
               const label = `${date(row.from)} → ${date(row.to)} · ${t('runObservability.taskCount', { count: row.taskCount })} · ${tokens.hasKnown ? tokens.totalKnown : t('runObservability.unknown')} Token${tokens.hasKnown && !tokens.complete ? ` · ${t('runObservability.partial')}` : ''} · ${formatObservationCny(row.metrics.cost.knownAmount, true)}${row.metrics.cost.complete ? '' : ` · ${t('runObservability.partial')}`}`
+              const bucketLabel = OBSERVATION_TOKEN_BUCKETS.map(
+                (bucket) =>
+                  `${t(`runObservability.${bucket}`)} ${formatObservationBucket(row.metrics, bucket, i18n.language) ?? t('runObservability.unknown')}`,
+              ).join(' · ')
               return (
                 <li key={row.from}>
                   <button
@@ -204,8 +221,8 @@ function Trend({
                     onClick={() => onBucket(row.from, row.to)}
                     onFocus={() => setActiveFrom(row.from)}
                     onMouseEnter={() => setActiveFrom(row.from)}
-                    aria-label={label}
-                    title={label}
+                    aria-label={`${label} · ${bucketLabel}`}
+                    title={`${label} · ${bucketLabel}`}
                   >
                     <span className="observation-trend__value" aria-hidden="true">
                       {tokens.hasKnown
@@ -220,7 +237,19 @@ function Trend({
                         style={{
                           height: `${Number((BigInt(tokens.totalKnown) * 10000n) / (max > 0n ? max : 1n)) / 100}%`,
                         }}
-                      />
+                      >
+                        {OBSERVATION_TOKEN_BUCKETS.map((bucket) => (
+                          <span
+                            key={bucket}
+                            className="observation-trend__segment"
+                            data-token-color={bucket}
+                            data-token-bucket={bucket}
+                            style={{
+                              height: `${Number((BigInt(tokens.known[bucket]) * 1000000n) / (BigInt(tokens.totalKnown) || 1n)) / 10000}%`,
+                            }}
+                          />
+                        ))}
+                      </span>
                     </span>
                     <span className="observation-trend__label" aria-hidden="true">
                       {new Date(row.from).toLocaleDateString(i18n.language, {
@@ -244,10 +273,12 @@ function Trend({
             <span className="muted">
               {date(active.from)} → {date(active.to)}
             </span>
-            <span>
+            <div>
               {t('runObservability.taskCount', { count: active.taskCount })} ·{' '}
-              <Tokens metrics={active.metrics} /> Token · <Cost metrics={active.metrics} exact />
-            </span>
+              <Tokens metrics={active.metrics} breakdown={false} /> Token ·{' '}
+              <Cost metrics={active.metrics} exact />
+            </div>
+            <TokenBuckets metrics={active.metrics} />
           </div>
         )}
       </div>

@@ -42,11 +42,29 @@ function opencode(
     },
     diagnostics,
   )
+  // OpenCode subtracts reasoning from native output; the canonical output bucket
+  // includes both. Missing reasoning remains unknown, never an assumed zero.
+  const reasoning = readUsage(
+    { input: 0, output: tokens?.reasoning, cacheRead: 0, cacheWrite: 0 },
+    diagnostics,
+  ).output
+  usage.output =
+    usage.output === null || reasoning === null
+      ? null
+      : readUsage(
+          {
+            input: 0,
+            output: (BigInt(usage.output) + BigInt(reasoning)).toString(),
+            cacheRead: 0,
+            cacheWrite: 0,
+          },
+          diagnostics,
+        ).output
   return [
     {
       ...common(c, raw),
       recordId: 'opencode:step:' + id,
-      adapterVersion: 'opencode-step-finish/1.15.5@1',
+      adapterVersion: 'opencode-step-finish/1.15.5-1.18.31@2',
       reporting: 'delta',
       inclusion: 'self',
       model: model(c, c.actualModel),

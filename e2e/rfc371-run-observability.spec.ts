@@ -580,6 +580,12 @@ test('overview omits attention, labels every token column and aligns collection 
             tokens: {
               ...row.metrics.tokens,
               hasKnown: i !== 2,
+              known: {
+                input: ['800', '1600', '0'][i],
+                cacheRead: ['200', '400', '0'][i],
+                cacheWrite: ['50', '100', '0'][i],
+                output: ['200', '400', '0'][i],
+              },
               totalKnown: ['1250', '2500', '0'][i],
               complete: i === 0,
             },
@@ -592,6 +598,15 @@ test('overview omits attention, labels every token column and aligns collection 
   await page.goto(`${daemon.baseUrl}/observability?workflow=${workflow.id}`)
   const chart = page.getByRole('list', { name: 'Task usage trend' })
   await expect(chart.locator('.observation-trend__value')).toHaveText(['1,250', '≥ 2,500', '—'])
+  await expect(chart.locator('.observation-trend__segment')).toHaveCount(12)
+  await chart.getByRole('button').first().focus()
+  const selectedBuckets = page
+    .getByRole('group', { name: 'Current trend interval' })
+    .locator('[data-token-bucket]')
+  await expect(selectedBuckets.locator('dd')).toHaveText(['800', '200', '50', '200'])
+  await expect(chart.getByRole('button').first()).toHaveAccessibleName(
+    /Uncached input 800.*Cache read 200.*Cache write 50.*Output 200/,
+  )
   await expect(page.getByRole('region', { name: 'Tasks needing attention' })).toHaveCount(0)
   await page.getByRole('tab', { name: 'Task traces', exact: true }).click()
   const name = page.getByRole('button', { name: 'Observed parallel task', exact: true })

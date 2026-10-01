@@ -358,3 +358,76 @@ test('unregistered runtime reports unavailable usage without invoking another pr
     diagnostics: ['runtime-usage-unsupported'],
   })
 })
+
+// Real GLM-5.2 OpenCode 1.18.31 steps exposed omitted reasoning in RFC-371.
+test('OpenCode native output includes reasoning once, matching five real task steps', () => {
+  const samples = [
+    { input: 9013, output: 53, reasoning: 1, read: 0, total: '9067' },
+    { input: 9014, output: 81, reasoning: 209, read: 0, total: '9304' },
+    { input: 9000, output: 77, reasoning: 170, read: 0, total: '9247' },
+    { input: 9018, output: 55, reasoning: 317, read: 0, total: '9390' },
+    { input: 3911, output: 63, reasoning: 228, read: 5120, total: '9322' },
+  ]
+  const rows = samples.map((sample, index) => {
+    const { input, output, reasoning, read } = sample
+    const frame = normalizeRuntimeUsage(
+      'opencode',
+      {
+        type: 'step_finish',
+        part: {
+          id: 'real-step-' + index,
+          tokens: { input, output, reasoning, cache: { read, write: 0 } },
+        },
+      },
+      context,
+    )
+    expect(frame.measurements[0]?.usage.output).toBe(String(output + reasoning))
+    expect(selectUsageContributions(ledger(frame.measurements)).summary.totalKnown).toBe(
+      sample.total,
+    )
+    return frame.measurements[0]!
+  })
+  expect(selectUsageContributions(ledger(rows)).summary.totalKnown).toBe('46330')
+  expect(selectUsageContributions(ledger(rows.slice(1, 3))).summary.totalKnown).toBe('18551')
+  expect(selectUsageContributions(ledger(rows.slice(3))).summary.totalKnown).toBe('18712')
+})
+test('reasoning uses exact decimal arithmetic and absent or invalid fields keep output unknown', () => {
+  const step = (output: unknown, reasoning: unknown) => ({
+    type: 'step_finish',
+    part: {
+      id: 'reasoning-step',
+      tokens: { input: 0, output, reasoning, cache: { read: 0, write: 0 } },
+    },
+  })
+  expect(
+    normalizeRuntimeUsage('opencode', step('9007199254740993', '2'), context).measurements[0]?.usage
+      .output,
+  ).toBe('9007199254740995')
+  expect(normalizeRuntimeUsage('opencode', step(3, 0), context).measurements[0]?.usage.output).toBe(
+    '3',
+  )
+  for (const reasoning of [undefined, null, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, 'not-a-count']) {
+    const frame = normalizeRuntimeUsage('opencode', step(3, reasoning), context)
+    expect(frame.measurements[0]?.usage.output).toBeNull()
+    expect(frame.measurements[0]?.coverage).toBe('partial')
+  }
+  expect(
+    normalizeRuntimeUsage('opencode', step('9'.repeat(60), '9'.repeat(60)), context).measurements[0]
+      ?.usage.output,
+  ).toBeNull()
+})
+test('a late reasoning correction replaces one native record rather than adding a second charge', () => {
+  const raw = (reasoning: number) => ({
+    type: 'step_finish',
+    part: {
+      id: 'same-step',
+      tokens: { input: 10, output: 3, reasoning, cache: { read: 2, write: 0 } },
+    },
+  })
+  const before = normalizeRuntimeUsage('opencode', raw(0), context).measurements
+  const after = normalizeRuntimeUsage('opencode', raw(7), { ...context, revision: 2 }).measurements
+  expect(after[0]?.recordId).toBe(before[0]?.recordId)
+  const total = selectUsageContributions(ledger([...before, ...after, ...after]))
+  expect(total.summary.totalKnown).toBe('22')
+  expect(total.records).toHaveLength(1)
+})

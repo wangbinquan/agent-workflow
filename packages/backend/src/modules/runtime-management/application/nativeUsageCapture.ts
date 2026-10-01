@@ -119,7 +119,7 @@ export function createNativeUsageCapture(
             occurredAt: row.occurredAt,
             observedAt,
             model: row.model,
-            adapterVersion: 'opencode-native-child/1.15.5@1',
+            adapterVersion: 'opencode-native-child/1.15.5-1.18.31@2',
             reporting: 'delta',
             inclusion: 'self',
             coverage: Object.values(row.usage).every((n) => n !== null) ? 'complete' : 'partial',

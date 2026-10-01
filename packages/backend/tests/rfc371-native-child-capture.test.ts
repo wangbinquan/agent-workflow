@@ -28,6 +28,7 @@ function fixture() {
     sessionId: string,
     input: unknown = 10,
     model: string | null = 'actual-model',
+    reasoning: unknown = 0,
   ) => {
     db.query('INSERT OR REPLACE INTO message VALUES (?,?,?)').run(
       'message-' + id,
@@ -41,7 +42,7 @@ function fixture() {
       1234,
       JSON.stringify({
         type: 'step-finish',
-        tokens: { input, output: 3, cache: { read: 2, write: 0 } },
+        tokens: { input, output: 3, reasoning, cache: { read: 2, write: 0 } },
       }),
     )
   }
@@ -404,4 +405,27 @@ test('more than 500 steps are chunked before the single durable completion proof
   expect(frames.map((row) => row.measurements.length)).toEqual([500, 1, 0])
   expect(frames.filter((row) => row.capture)).toHaveLength(1)
   expect(frames.at(-1)!.capture!.state).toBe('complete')
+})
+
+// RFC-371 real task regression: native final capture must agree with stdout output+reasoning.
+test('native roots and children include reasoning exactly and unknown reasoning stays partial', () => {
+  const f = fixture()
+  f.session('child', 'root')
+  f.step('root-step', 'root', 10, 'actual-model', 1)
+  f.step('child-step', 'child', 10, 'actual-model', '9007199254740993')
+  const value = readOpencodeUsageSnapshot(f.path, 'root')
+  expect(value.steps.map((step) => step.usage.output)).toEqual(['4', '9007199254740996'])
+  const capture = f.capture()
+  capture.begin()
+  expect(
+    capture
+      .finish('root', 9000)
+      .flatMap((frame) => frame.measurements)
+      .map((row) => row.usage.output),
+  ).toEqual(['4', '9007199254740996'])
+  f.step('root-step', 'root', 10, 'actual-model', null)
+  const partial = readOpencodeUsageSnapshot(f.path, 'root')
+  expect(partial.steps[0]?.usage.output).toBeNull()
+  expect(partial.issues).toContain('native-token-bucket-unknown')
+  f.db.close()
 })

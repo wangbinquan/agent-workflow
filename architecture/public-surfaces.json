@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1101,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21275,
+    "recursiveFields": 21277,
     "symbols": 1030
   },
   "entries": [
@@ -117841,7 +117841,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 158,
+        "maxTransitiveLeafFields": 160,
         "maxUnionVariants": 56
       },
       "consumerEdgeIds": [
@@ -118068,6 +118068,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:detail.$return.$variant:0.metrics.tokens.hasKnown",
           "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:detail.$return.$variant:0.metrics.tokens.hasKnownBuckets",
+          "type": "Record<keyof ObservationTokenUsage, boolean>"
         },
         {
           "consumerEdgeIds": [],
@@ -118639,6 +118644,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:overview.$return.metrics.tokens.hasKnown",
           "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:overview.$return.metrics.tokens.hasKnownBuckets",
+          "type": "Record<keyof ObservationTokenUsage, boolean>"
         },
         {
           "consumerEdgeIds": [],
@@ -168319,7 +168329,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e8aec5cb562cbe85c8ff5856fbc0e83ac347fbacc743231637237597bee8b4c2",
+  "sourceDigest": "sha256:32e7d2a10ed5b398946152d4c0b711a58f21932e908489562a7b08c5d12d722a",
   "targetContexts": [
     "collaboration",
     "development-automation",
