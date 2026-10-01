@@ -1,3 +1,7 @@
+## 2026-10-01 RFC-370 H6 历史读取切面继续
+
+CI 修复已获 8a509ffbc / 36411046837 的 50 项成功；恢复原阶段 A。技能历史正文及版本 diff 通过中立 reader 和独立 file adapter 接线，新增双 provider 异步与真实文件回归；目标格式/lint通过，正式结果等待本批精确 SHA hosted CI。CS RFC035 对象/归档/回收合同已有平台实机记录，但 AW 尚未完成 A-G、CS adapter 或部署。backfill、删除、启动恢复与其他 H1～H8 收口继续，详见 RFC370 plan 本日续批。下方并行观测记录完整保留。
+
 ## 2026-10-01 RFC-371 当前主 CI 与九种定时配置全部成功
 
 修复提交 `a241fcf48420c363cf5c1255b4100a5dd113dd93` 的主 CI 与九种原默认定时配置全部终态 success，共 10 个运行、75 个作业成功；每个运行的 headSha 严格相同。主 CI 50 项，full E2E 四分片加真实覆盖对账 5 项，WebKit Ubuntu/macOS 八分片，weekly/all PostgreSQL 5 项，以及 Windows、维护、2 GiB evidence、Git 协议、OpenCode 集成和视觉矩阵均成功。九种定时配置通过 workflow_dispatch 验证原默认矩阵；不冒充本周实际 cron，未改 schedule、并发策略、重试或必需检查。本机无 AW 测试/类型检查/构建/服务；并行 resource-catalog 四路径保留。独立功能复核 PASS，卡片同一快照和完整迁移历史单用例的明确预算均已在该提交验证；原失败、取消和后继 48/2 失败记录保留。详见[精确终态回执](design/RFC-371-run-observability/ci-recovery.md#2026-10-01-最终修复的主-ci-与九种定时配置终态)。AW-R08 服务端筛选/模型用途下钻及 AW/CS 其他剩余项继续，两个 RFC 保持 In Progress。CS 准入回执设计四文档 `7370ea97` 已发布，限定实现继续，producer OFF。后继纯文档提交的精确主 CI 单独验证，不因文档变化重跑已成功源码矩阵。下方为历史记录。

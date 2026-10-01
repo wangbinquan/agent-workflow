@@ -13,7 +13,6 @@
 // direction only.
 
 import type {
-  FileNode,
   ResourceVisibility,
   SkillContent,
   SkillVersion,
@@ -23,16 +22,7 @@ import type {
 } from '@agent-workflow/shared'
 import { structuredPatch } from 'diff'
 import { and, eq } from 'drizzle-orm'
-import {
-  cpSync,
-  existsSync,
-  mkdirSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  type Dirent,
-} from 'node:fs'
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, type Dirent } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -44,7 +34,6 @@ import {
 
 /** RFC-359 W4-D23b：版本机器改吃中立句柄，两个 provider 共用同一套发布阶梯。 */
 type SkillVersionDb = ProviderNeutralDatabase
-import { realpathInside } from '@/util/safePath'
 import {
   abandonOperation,
   advancePhase,
@@ -72,10 +61,17 @@ import {
   createFileSkillVersionContentStore,
 } from '../local/fileSkillVersionContentStore'
 
+import type {
+  SkillVersionContentReader,
+  SkillVersionTreeEntry as TreeEntry,
+} from '../../application/skills/versionContentReader'
+import { createFileSkillVersionContentReader } from '../local/fileSkillVersionContentReader'
+
 export interface SkillVersionFsOptions {
   /** App home dir; managed skills live under `${appHome}/skills/{id}/...`. */
   appHome: string
   versionContent?: SkillVersionContentStore
+  versionReader?: SkillVersionContentReader
 }
 
 type SkillRow = typeof skills.$inferSelect
@@ -112,14 +108,12 @@ export {
 } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
 import {
   assertRegularFileTree,
-  collectFiles,
   hashRegularFileTree,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
 import {
   markSkillBootVerified,
   unmarkSkillBootVerified,
 } from '@/modules/resource-catalog/infrastructure/legacy/skillBootVerify'
-import { sha256Hex } from '@/util/hash'
 
 import { readSkillVersionCompositeLive } from '../skillVersionCommitParticipant'
 import {
@@ -127,26 +121,7 @@ import {
   skillVersionCompositeFenceRequested,
 } from '../../domain/skillVersionCommit'
 
-/** A file in a version snapshot: utf-8 text, or a binary file keyed by hash. */
-export type TreeEntry = { kind: 'text'; content: string } | { kind: 'binary'; hash: string }
-
-/** Read a files/ tree into a path→entry map (binary detected by NUL byte). */
-function readTree(dir: string): Map<string, TreeEntry> {
-  const out = new Map<string, TreeEntry>()
-  if (!existsSync(dir)) return out
-  const rels: string[] = []
-  collectFiles(dir, '', rels)
-  for (const rel of rels) {
-    const buf = readFileSync(join(dir, rel))
-    out.set(
-      rel,
-      buf.includes(0)
-        ? { kind: 'binary', hash: sha256Hex(buf) }
-        : { kind: 'text', content: buf.toString('utf-8') },
-    )
-  }
-  return out
-}
+export type { SkillVersionTreeEntry as TreeEntry } from '../../application/skills/versionContentReader'
 
 function sameEntry(a: TreeEntry | undefined, b: TreeEntry | undefined): boolean {
   if (a === undefined || b === undefined) return false
@@ -160,7 +135,10 @@ function sameEntry(a: TreeEntry | undefined, b: TreeEntry | undefined): boolean 
  * `diff --git a/<p> b/<p>` blocks so the frontend DiffViewer (splitByFile)
  * renders it like any worktree diff. Binary changes are noted, not shown.
  */
-export function gitStyleDirDiff(a: Map<string, TreeEntry>, b: Map<string, TreeEntry>): string {
+export function gitStyleDirDiff(
+  a: ReadonlyMap<string, TreeEntry>,
+  b: ReadonlyMap<string, TreeEntry>,
+): string {
   const paths = Array.from(new Set([...a.keys(), ...b.keys()])).sort()
   const blocks: string[] = []
   for (const p of paths) {
@@ -779,30 +757,6 @@ async function requireVersionRow(
   return row
 }
 
-function fileTreeOf(absRoot: string): FileNode[] {
-  if (!existsSync(absRoot)) return []
-  const out: FileNode[] = []
-  const rels: string[] = []
-  // Reuse collectFiles to enumerate files; add dir nodes by inference.
-  const seenDirs = new Set<string>()
-  collectFiles(absRoot, '', rels)
-  rels.sort()
-  for (const rel of rels) {
-    const parts = rel.split('/')
-    let acc = ''
-    for (let i = 0; i < parts.length - 1; i++) {
-      acc = acc ? `${acc}/${parts[i]}` : (parts[i] as string)
-      if (!seenDirs.has(acc)) {
-        seenDirs.add(acc)
-        out.push({ path: acc, type: 'dir' })
-      }
-    }
-    const st = statSync(join(absRoot, rel))
-    out.push({ path: rel, type: 'file', size: st.size, modifiedAt: Math.floor(st.mtimeMs) })
-  }
-  return out
-}
-
 export async function getSkillVersionContent(
   db: SkillVersionDb,
   opts: SkillVersionFsOptions,
@@ -815,13 +769,11 @@ export async function getSkillVersionContent(
   }
   await ensureInitialSkillVersion(db, opts, skillId)
   await requireVersionRow(db, skillId, v)
-  const versionDir = skillVersionAbs(opts.appHome, skillId, v)
-  const skillMdPath = join(versionDir, 'SKILL.md')
+  const reader = opts.versionReader ?? createFileSkillVersionContentReader(opts.appHome)
+  const snapshot = await reader.readSnapshot({ skillId, version: v })
   let content: SkillContent
-  if (existsSync(skillMdPath)) {
-    // RFC-170 G3-1 (security): a historical SKILL.md may be a symlink escaping the
-    // version dir; contain it so `/versions/:v/content` can't leak host files.
-    const parsed = parseFrontmatter(readFileSync(realpathInside(versionDir, skillMdPath), 'utf-8'))
+  if (snapshot.main !== null) {
+    const parsed = parseFrontmatter(snapshot.main)
     const { name: _n, description: descRaw, ...rest } = parsed.data
     content = {
       name: skill.name,
@@ -832,7 +784,7 @@ export async function getSkillVersionContent(
   } else {
     content = { name: skill.name, description: '', bodyMd: '', frontmatterExtra: {} }
   }
-  return { versionIndex: v, content, files: fileTreeOf(versionDir) }
+  return { versionIndex: v, content, files: [...snapshot.files] }
 }
 
 export async function diffSkillVersions(
@@ -848,8 +800,9 @@ export async function diffSkillVersions(
   await ensureInitialSkillVersion(db, opts, skillId)
   await requireVersionRow(db, skillId, from)
   await requireVersionRow(db, skillId, to)
-  const a = readTree(skillVersionAbs(opts.appHome, skillId, from))
-  const b = readTree(skillVersionAbs(opts.appHome, skillId, to))
+  const reader = opts.versionReader ?? createFileSkillVersionContentReader(opts.appHome)
+  const a = await reader.readTree({ skillId, version: from })
+  const b = await reader.readTree({ skillId, version: to })
   return { from, to, diff: gitStyleDirDiff(a, b) }
 }
 

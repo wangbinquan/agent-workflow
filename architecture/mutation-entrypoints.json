@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1773,
+    "entries": 1774,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -17937,6 +17937,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillCreationContentStore.ts#createFileSkillCreationContentStore",
       "symbol": "createFileSkillCreationContentStore",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts#createFileSkillVersionContentReader",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts#createFileSkillVersionContentReader",
+      "symbol": "createFileSkillVersionContentReader",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -42360,7 +42385,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bb91293f5e45addec9bd95e8c6ca07cc5d41af8fb498a5be5749513df6424c1e",
+  "sourceDigest": "sha256:a17ccee07ec1031e6e69dfb86e6413b68847fefe1eaa2bd2bf5d99079fe1b88e",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

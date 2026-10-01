@@ -16,6 +16,8 @@ import type {
 } from '../application/skills/ports'
 import type { SkillRestoreMembershipPort } from '../infrastructure/legacy/skillVersion'
 import { createSkillRepository } from '../infrastructure/skillRepository'
+import type { SkillVersionContentReader } from '../application/skills/versionContentReader'
+import { createFileSkillVersionContentReader } from '../infrastructure/local/fileSkillVersionContentReader'
 import type { SkillContentReader } from '../application/skills/contentReader'
 import type { SkillCreationContentStore } from '../application/skills/creationContentStore'
 import { createFileSkillCreationContentStore } from '../infrastructure/local/fileSkillCreationContentStore'
@@ -32,6 +34,7 @@ export interface SkillCatalogCompositionDependencies {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly content?: SkillContentReader
+  readonly versionReader?: SkillVersionContentReader
   readonly versionContent?: SkillVersionContentStore
   readonly creationContent?: SkillCreationContentStore
   /**
@@ -98,6 +101,7 @@ export function composeSkillCatalog(
     {
       appHome: input.appHome,
       content: input.content ?? createFileSkillContentReader(input.appHome),
+      versionReader: input.versionReader ?? createFileSkillVersionContentReader(input.appHome),
       versionContent,
       creationContent,
     },

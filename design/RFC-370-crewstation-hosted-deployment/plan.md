@@ -227,3 +227,11 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 ### CI 分片精确登记补齐（2026-09-28）
 
 93f360dec / CI 36408910757 的 root-test-entrypoint 检查仍锁 Ubuntu 12 片；同步为已发布的 16 片，保留每片唯一、完整发现集、OS 与覆盖上传断言。RFC349 的分片和 schema 用例名引用由并行 RFC371 会话修正。本批另删除上一提交已消费的 MCP ledger allowGrowth，并用既有 provenance 函数更新摘要；基线仍为 395，不重跑含未提交适配代码的 census。正式验证继续只认最终包含提交的 GitHub CI。
+
+### H6 历史内容读取续批（2026-10-01）
+
+- 上轮 CI 修复已在包含提交 `8a509ffbc1ddd7693e7e788d3dd84653a9d982ec` 的 CI `36411046837` 取得 50/50 success。当前恢复阶段 A；本批不夹带 CS 生产 adapter。
+- `SkillVersionContentReader` 承担指定历史版本的正文／文件树与 diff 字节读取，独立 file adapter 保留原快照路径、文件元数据与 NUL 二进制判定；catalog 显式注入。AW 继续选择和验证版本、解析 frontmatter、使用技能当前名称、计算原 git-style diff；不存在的历史内容不回退 live。
+- 新双 provider 用例覆盖真实 catalog 的异步正文／顺序双树等待、无本地内容目录、版本缺失先拒绝、存储错误传播、真实文件元数据／二进制及缺失快照；沿用全部版本发布与恢复回归。仅执行目标格式／lint 和源码架构生成；正式行为待发布后精确 SHA CI。
+- 初始版本 backfill、删除、boot recovery 与完整 bundle 路径仍依赖本地效果，本批不关闭 H6 或 A-G。独立评审工具在本会话仍不可用，未冒称门已通过。
+- 重新阅读 CS RFC-035 `integration-contract.md` 与 `acceptance.md`：平台已记录对象上传／任务输入、暂停留卷、finalize 归档后原卷回收及卷后下载实机证据。AW 接入应使用服务域对象客户端、不可变 objectId／摘要、持久引用及稳定 requestKey；小型元数据归 PG，任务工作区归 `/work` PVC，服务零 PVC。当前只记录平台合同可用，B3 的容量／迁移与 AW 自身持久化方案仍须在对应 B-T0 冻结并验收，不以平台单独通过替代 AW 联合部署证据。

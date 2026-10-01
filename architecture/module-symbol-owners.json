@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1922,
+    "backendFiles": 1924,
     "frontendFiles": 641,
     "legacyFiles": 554,
-    "moduleFiles": 1368,
-    "productionFiles": 2723,
+    "moduleFiles": 1370,
+    "productionFiles": 2725,
     "sharedFiles": 160,
-    "symbolsIncludingFileRoots": 25519
+    "symbolsIncludingFileRoots": 25525
   },
   "entries": [
     {
@@ -79783,6 +79783,66 @@
       "currentContext": "resource-catalog",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/versionContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/versionContentReader.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/versionContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/versionContentReader.ts#SkillVersionContentReader",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillVersionContentReader",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/versionContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/versionContentReader.ts#SkillVersionReadReference",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillVersionReadReference",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/versionContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/versionContentReader.ts#SkillVersionSnapshotContent",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillVersionSnapshotContent",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/skills/versionContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/versionContentReader.ts#SkillVersionTreeEntry",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SkillVersionTreeEntry",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/application/skills/versionContentStore.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/skills/versionContentStore.ts#$file",
       "removeAfterWave": null,
@@ -94146,18 +94206,6 @@
     {
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#fileTreeOf",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "fileTreeOf",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#getSkillVersionContent",
@@ -94236,18 +94284,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "publishStagedSkillVersion",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#readTree",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "readTree",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -94416,18 +94452,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "stageSkillVersion",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "resource-catalog",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
-      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#TreeEntry",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "TreeEntry",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -96720,6 +96744,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "writeFileSkillTree",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts#createFileSkillVersionContentReader",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileSkillVersionContentReader",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts#fileTreeOf",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "fileTreeOf",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts#readTree",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "readTree",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -306960,5 +307032,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bb91293f5e45addec9bd95e8c6ca07cc5d41af8fb498a5be5749513df6424c1e"
+  "sourceDigest": "sha256:a17ccee07ec1031e6e69dfb86e6413b68847fefe1eaa2bd2bf5d99079fe1b88e"
 }

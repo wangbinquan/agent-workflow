@@ -58330,23 +58330,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:b401547383f0457e56b7",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
-      "toPath": "packages/backend/src/util/hash.ts",
-      "toSymbol": "sha256Hex",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -65657,6 +65640,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c991bd71fdb42b5f630b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#realpathInside",
+      "toPath": "packages/backend/src/util/safePath.ts",
+      "toSymbol": "realpathInside",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts#$file",
       "fromPath": "packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts",
       "fromSymbol": "$file",
@@ -70655,23 +70655,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#$file",
-      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:d7a0a479570cb3e928ed",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#realpathInside",
-      "toPath": "packages/backend/src/util/safePath.ts",
-      "toSymbol": "realpathInside",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
       "fromSymbol": "$file",
@@ -73846,6 +73829,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workflows",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "workflows",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts#$file",
+      "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e0aeda176f954d340d36",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -146411,22 +146411,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workflows"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#$file",
-      "id": "import:b401547383f0457e56b7",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/hash",
-      "syntax": "static-import",
-      "targetSymbol": "sha256Hex",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/hash.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/application/adapters/event-center-adapter.ts",
@@ -154028,6 +154012,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts#$file",
+      "id": "import:c991bd71fdb42b5f630b",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/safePath",
+      "syntax": "static-import",
+      "targetSymbol": "realpathInside",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/safePath.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#realpathInside"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/integration/infrastructure/verifiedWebhookDeliveryPersistence.ts#$file",
@@ -159212,22 +159212,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "resource-catalog",
-      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillVersion.ts#$file",
-      "id": "import:d7a0a479570cb3e928ed",
-      "owner": "resource-catalog",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/safePath",
-      "syntax": "static-import",
-      "targetSymbol": "realpathInside",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/safePath.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/safePath.ts#realpathInside"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#$file",
@@ -162665,6 +162649,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workflows"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "resource-catalog",
+      "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionContentReader.ts#$file",
+      "id": "import:e0aeda176f954d340d36",
+      "owner": "resource-catalog",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
       "edgeKind": "value",
@@ -174391,7 +174391,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:bb91293f5e45addec9bd95e8c6ca07cc5d41af8fb498a5be5749513df6424c1e",
+  "sourceDigest": "sha256:a17ccee07ec1031e6e69dfb86e6413b68847fefe1eaa2bd2bf5d99079fe1b88e",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

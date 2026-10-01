@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1773,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1774,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：历史读取 file adapter 的 createFileSkillVersionContentReader 工厂由现有 create 前缀规则计入；1773 → 1774，实际由 catalog 和 legacy 默认接线消费，不增加业务写入。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -902,12 +905,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25519,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25525,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：历史读取端口四个中立类型与文件根、独立 file reader 工厂和文件根，迁移两个原树读取函数并复用类型别名，owner 净增 6；25519 → 25525。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:bb91293f5e45addec9bd95e8c6ca07cc5d41af8fb498a5be5749513df6424c1e",
+    "sourceDigest": "sha256:a17ccee07ec1031e6e69dfb86e6413b68847fefe1eaa2bd2bf5d99079fe1b88e",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +926,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "df87010886452d1b88b8c236869ea51b52fcb148",
-    "contentDigest": "sha256:4b6a301b5c892b1152331bbdde0cefdbac01961c394da79bd74451c6a36a46fb",
+    "currentSnapshotSha": "e89a95720b833b98cc813393e2c9b5d53220e7ef",
+    "contentDigest": "sha256:fc11f93a0aa941ea2697695e4b4635e91df48a2879838ae271d31e03ed92a7e7",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
