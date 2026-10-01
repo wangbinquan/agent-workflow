@@ -863,7 +863,7 @@ test('an initial missing observation stays a dash in English, with a platform ex
   expect(screen.getByText('Awaiting initial sync')).toBeTruthy()
 })
 test('read failures have a retry and the empty state remains explicit', async () => {
-  const f = fixture(search, { error: true })
+  const f = fixture(search, { error: true, page: { nextCursor: null } })
   const retry = await screen.findByRole('button', { name: '重试' })
   f.state.error = false
   f.state.empty = true
@@ -1100,8 +1100,7 @@ test('model contribution Dialog returns to its source and creates a server range
   expect(dialog.textContent).toContain('¥1.25')
   expect(dialog.textContent).not.toContain('¥9')
   fireEvent.click(within(dialog).getByRole('button', { name: '真实任务' }))
-  await screen.findByRole('button', { name: '返回统计分析' })
-  expect(screen.getByRole('heading', { name: '真实任务', level: 1 })).toBeTruthy()
+  expect(await screen.findByRole('heading', { name: '真实任务', level: 1 })).toBeTruthy()
   fireEvent.click(screen.getByRole('button', { name: '返回统计分析' }))
   dialog = await screen.findByRole('dialog', { name: 'actual-A · 任务贡献' })
   await waitFor(() =>

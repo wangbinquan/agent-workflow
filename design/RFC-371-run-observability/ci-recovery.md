@@ -198,3 +198,9 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 共享 RFC-370 后继 `2d65a16f5152936ec93de1f0fd362a671e89e44d` 的 [主 CI 36882578362](https://github.com/wangbinquan/agent-workflow/actions/runs/36882578362) 终态 failure，38 success / 12 failure。Ubuntu 1/16 的实际失败是 `rfc294-architecture-preflight.test.ts` 的 capability ownership 精确登记对比多出一项；数据库竞争反例输出中的 ERROR 不是这一分片的失败根因。同 SHA 的 [evidence soak 36885455310](https://github.com/wangbinquan/agent-workflow/actions/runs/36885455310) success，不能替代主 CI。
 
 原 owner 已提交 `a4b706b942adfc9ca16c15e329ba1f7fa97f78f8` 的参与者合同及 CI 登记修正；[主 CI 36886742257](https://github.com/wangbinquan/agent-workflow/actions/runs/36886742257) 在本次记录时 queued，尚无成功结论。同 SHA 实际 schedule 触发的 [视觉回归 36887644155](https://github.com/wangbinquan/agent-workflow/actions/runs/36887644155) 已 success。观测会话保留并行源码及原失败，不重复启动本机测试或已通过的 EEF 定时矩阵；新主干精确终态继续跟进。
+
+## 2026-10-02 明细下钻候选 CI 回归
+
+`c2c96cef469ce550529a52fbeefaa89a952f0417` 的明细下钻源码已精确提交上库，原源级 v3 和完整集成 v4 静态功能回执保留。[主 CI 36938431472](https://github.com/wangbinquan/agent-workflow/actions/runs/36938431472) 整体终态 cancelled，`CI required` 为 failure，不能算通过。前端 Ubuntu 3/3 实际为 2504 pass、2 fail，均在观测回归内；后继的并行架构修复与账本许可退役仍由其 owner 负责，未收编其在制源码。
+
+两处修正保留原验证：读取失败后返回完整空页的夹具明确 `nextCursor: null`，与真实 EOF 合同一致；有续页的空批次仍必须显示“本批尚未确认匹配任务”，已有单独断言不变。模型贡献 Dialog 进入整任务明细时，等待真实任务标题加载后再判断返回行为；顶部返回按钮在加载期间已存在，不能充当数据就绪信号。没有固定延时、删测试、跳过或更改生产逻辑。精确格式与 lint 已通过；本机未运行 AW 测试、构建或服务。新的精确提交主 CI 与适用定时矩阵、真实页面 Dialog 验收仍待，两个 RFC 保持 In Progress。
