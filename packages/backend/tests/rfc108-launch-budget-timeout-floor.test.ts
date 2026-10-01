@@ -58,7 +58,10 @@ describe('RFC-108 T4 源码层接线断言（floor 覆盖全部 StartTaskDeps �
   const src = (rel: string): string => readFileSync(join(import.meta.dir, '../src', rel), 'utf8')
 
   test('共享 resolver 读 defaultPerNodeTimeoutMs', () => {
-    expect(src('services/launchRuntimeConfig.ts')).toContain('cfg.defaultPerNodeTimeoutMs')
+    expect(src('modules/task-execution/application/launchConfiguration.ts')).toContain(
+      'cfg.defaultPerNodeTimeoutMs',
+    )
+    expect(src('services/launchRuntimeConfig.ts')).toContain('resolveTaskLaunchRuntimeFromReader')
   })
 
   test('continuous human-gate continuation + fusion 都透传 resolveLaunchRuntimeConfig', () => {

@@ -3,10 +3,10 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-09-04",
-    "inboundEdges": 255,
+    "inboundEdges": 260,
     "outboundEdges": 31,
     "registeredFindings": 79,
-    "recordedAtShaNote": "RFC-366（2026-09-21）：inbound 边 252→253。执行结束记忆提炼把 agent 运行结束观察者装进 task-execution 自己的 composition，由 legacy `services/task.ts` 的 runtimeConfigOpts 消费；条目文本由 RFC-366 作者提供。\n\nRFC-367（2026-09-21）：outbound 边 27→31。记忆蒸馏器改用共享的 `runSystemAgent` 运行原语，让候选解析与会话页记录同源于一条规范化事件流（此前两条 reader 各解析一次同一段输出，漂移过两次、静默丢光候选）。四条新边分别是 memory→`@/services/systemAgentRun`（type+value）、memory 的 distill 端口→`@/services/sessionEventSink`（type）、以及候选解析改用公共 envelope 解析件带来的 memory→`@/services/envelope`（value）。三个目标都仍在 legacy `services/` 下，本 RFC 只做最小扩展不顺手迁位；随 RFC-294 W4-C / W4-E1 归位时一并销账。\n\nRFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged.\n\nRFC-360 T3: register eight exact temporary forwarding imports/exports for the relocated single registry. Remove these with the named compatibility consumers in T6; no directory or scanner exemption is added.\n\nRFC-370 H2：auth/session 兼容门面指向 identity-access composition 的 type/value import/export 四条边精确登记；WS 传输和两个 HTTP bootstrap 已注入 participant，剩余兼容调用者在 A-T7 逐项收口。"
+    "recordedAtShaNote": "RFC-366（2026-09-21）：inbound 边 252→253。执行结束记忆提炼把 agent 运行结束观察者装进 task-execution 自己的 composition，由 legacy `services/task.ts` 的 runtimeConfigOpts 消费；条目文本由 RFC-366 作者提供。\n\nRFC-367（2026-09-21）：outbound 边 27→31。记忆蒸馏器改用共享的 `runSystemAgent` 运行原语，让候选解析与会话页记录同源于一条规范化事件流（此前两条 reader 各解析一次同一段输出，漂移过两次、静默丢光候选）。四条新边分别是 memory→`@/services/systemAgentRun`（type+value）、memory 的 distill 端口→`@/services/sessionEventSink`（type）、以及候选解析改用公共 envelope 解析件带来的 memory→`@/services/envelope`（value）。三个目标都仍在 legacy `services/` 下，本 RFC 只做最小扩展不顺手迁位；随 RFC-294 W4-C / W4-E1 归位时一并销账。\n\nRFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged.\n\nRFC-360 T3: register eight exact temporary forwarding imports/exports for the relocated single registry. Remove these with the named compatibility consumers in T6; no directory or scanner exemption is added.\n\nRFC-370 H2：auth/session 兼容门面指向 identity-access composition 的 type/value import/export 四条边精确登记；WS 传输和两个 HTTP bootstrap 已注入 participant，剩余兼容调用者在 A-T7 逐项收口。\n\nRFC-370 H1：五条配置 local composition 的 exact compatibility 入边补记，255→260；selected query 与 policy 从 public 出口消费，默认兼容边于 A-T7 逐入口收口，原 scanner/fixtures 不变。"
   },
   "entries": [
     {
@@ -2590,6 +2590,29 @@
     },
     {
       "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/execution/runtimeConfigFreeze.ts",
+      "to": "packages/backend/src/modules/task-execution/composition",
+      "specifier": "@/modules/task-execution/composition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-370 H1：保留既有 standalone 同步或按次读取入口，默认 local 配置 adapter 由 TE composition 构造；仅此精确兼容边，业务策略经 exact public queries，所选配置不回读文件。随原调用者接入 bootstrap 的配置能力在 A-T7 清偿，不增加目录或 scanner 豁免。",
+      "introducedByRFC": "RFC-370 A-T2 H1",
+      "removeAfterWave": "RFC-370 A-T7 / RFC-294 W4-E task-execution legacy callers",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:fd41e100119f2591fee8"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/execution/runtimeConfigFreeze.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/composition.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/execution/runtimeConfigFreeze.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/execution/startupVerificationRead.ts",
       "to": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels",
       "specifier": "@/modules/task-execution/infrastructure/taskExecutionReadModels",
@@ -3230,6 +3253,52 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/isolatedAgentRun.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/launchMultipart.ts",
+      "to": "packages/backend/src/modules/task-execution/composition/launchConfiguration",
+      "specifier": "@/modules/task-execution/composition/launchConfiguration",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-370 H1：保留既有 standalone 同步或按次读取入口，默认 local 配置 adapter 由 TE composition 构造；仅此精确兼容边，业务策略经 exact public queries，所选配置不回读文件。随原调用者接入 bootstrap 的配置能力在 A-T7 清偿，不增加目录或 scanner 豁免。",
+      "introducedByRFC": "RFC-370 A-T2 H1",
+      "removeAfterWave": "RFC-370 A-T7 / RFC-294 W4-E task-execution legacy callers",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:1fe468092a6c557cf526"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/launchMultipart.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/composition/launchConfiguration.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/launchMultipart.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/launchRuntimeConfig.ts",
+      "to": "packages/backend/src/modules/task-execution/composition/launchConfiguration",
+      "specifier": "@/modules/task-execution/composition/launchConfiguration",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-370 H1：保留既有 standalone 同步或按次读取入口，默认 local 配置 adapter 由 TE composition 构造；仅此精确兼容边，业务策略经 exact public queries，所选配置不回读文件。随原调用者接入 bootstrap 的配置能力在 A-T7 清偿，不增加目录或 scanner 豁免。",
+      "introducedByRFC": "RFC-370 A-T2 H1",
+      "removeAfterWave": "RFC-370 A-T7 / RFC-294 W4-E task-execution legacy callers",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:d86e0f6ec9f9bf1f497f"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/launchRuntimeConfig.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/composition/launchConfiguration.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/launchRuntimeConfig.ts"
       ]
     },
     {
@@ -4373,6 +4442,29 @@
     },
     {
       "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/scheduler.ts",
+      "to": "packages/backend/src/modules/task-execution/composition",
+      "specifier": "@/modules/task-execution/composition",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-370 H1：保留既有 standalone 同步或按次读取入口，默认 local 配置 adapter 由 TE composition 构造；仅此精确兼容边，业务策略经 exact public queries，所选配置不回读文件。随原调用者接入 bootstrap 的配置能力在 A-T7 清偿，不增加目录或 scanner 豁免。",
+      "introducedByRFC": "RFC-370 A-T2 H1",
+      "removeAfterWave": "RFC-370 A-T7 / RFC-294 W4-E task-execution legacy callers",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:f46918010b65ada7e149"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/composition.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/scheduler.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/shutdown.ts",
       "to": "packages/backend/src/modules/task-execution/application/ports/taskExecutionShutdownOperations",
       "specifier": "@/modules/task-execution/application/ports/taskExecutionShutdownOperations",
@@ -4506,6 +4598,29 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/source-control/composition.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/startTaskDeps.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/startTaskDeps.ts",
+      "to": "packages/backend/src/modules/task-execution/composition/launchConfiguration",
+      "specifier": "@/modules/task-execution/composition/launchConfiguration",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "why": "RFC-370 H1：保留既有 standalone 同步或按次读取入口，默认 local 配置 adapter 由 TE composition 构造；仅此精确兼容边，业务策略经 exact public queries，所选配置不回读文件。随原调用者接入 bootstrap 的配置能力在 A-T7 清偿，不增加目录或 scanner 豁免。",
+      "introducedByRFC": "RFC-370 A-T2 H1",
+      "removeAfterWave": "RFC-370 A-T7 / RFC-294 W4-E task-execution legacy callers",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:f7f5b9080faa870ccbaf"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/composition/launchConfiguration.ts#$file"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/startTaskDeps.ts"
@@ -7922,15 +8037,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:0772f84ed8cec4e5f6981a617269c72ec8180c241c14f1b91fb2f652dc649d0c",
+    "sourceDigest": "sha256:bc8f60bee217bad4a4246a48cc02ce1fd50c6affdcb0d1eb5f7cf831f7bc6bf5",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "8d7e078e31527a3b70c5058af9fb25c4b23ff1f4",
-    "contentDigest": "sha256:2a389de081f73fcba7f4a87b524551216d86fc782c84794abf1e25a5ea789709",
+    "currentSnapshotSha": "dd94236a4cdbf08ad41881332db55e94316bcfe6",
+    "contentDigest": "sha256:405c80975ebe4e58eccc46c1eb785f10da55789eca085e31ea944d91dc626511",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -93,7 +93,7 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
     },
     async list({ actor, query }) {
       const after = continuation(query)
-      if (!canRead(actor)) return { items: [], nextCursor: null }
+      if (!canRead(actor)) return { items: [], positions: [], nextCursor: null }
       const engine = engineOf(db)
       const search = query.q === undefined ? null : engine.likeEscape(query.q)
       const rows = await db
@@ -149,6 +149,10 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
         last = items.at(-1)
       return {
         items,
+        positions: items.map((task) => ({
+          taskId: task.id,
+          cursor: JSON.stringify([1, scope(query), task.startedAt, task.id]),
+        })),
         nextCursor:
           rows.length > query.limit && last
             ? JSON.stringify([1, scope(query), last.startedAt, last.id])

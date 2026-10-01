@@ -100,7 +100,15 @@ describe('RFC-287 T13 — 取消真杀 git', () => {
 describe('RFC-287 T13 — gitCloneTimeoutMs 接线到启动路径', () => {
   test('漏斗把 config.gitCloneTimeoutMs 映射成下游入参名 cloneTimeoutMs', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'launchRuntimeConfig.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'application',
+        'launchConfiguration.ts',
+      ),
       'utf8',
     )
     expect(src).toMatch(/cfg\.gitCloneTimeoutMs[\s\S]{0,80}out\.cloneTimeoutMs/)

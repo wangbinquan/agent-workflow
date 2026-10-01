@@ -76,9 +76,11 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
     // 「每次 drive 现读一次」——长驻协调器（daemon 的路由启动）把配置冻在 boot 那一刻，
     // 会让设置页改完默认运行时之后的新任务照旧按老档案派发（e2e CFG-45）。判据仍钉
     // 「唯一解析点」这一点：`resolveRuntime()` 只有一个定义，协调器只从它取值。
-    expect(src).toContain('const resolveRuntime = (): taskDriveComposition.ResolvedTaskDriveConfig')
+    expect(src.match(/const resolveRuntime = \(/g)).toHaveLength(1)
     expect(src.match(/return resolveTaskDriveConfig\(\{/g)).toHaveLength(1)
-    expect(src).toContain('return frozen ?? resolveRuntime()')
+    expect(src).toContain('return frozen ?? currentRuntime()')
+    expect(src).toContain('return resolveRuntime({ ...fresh, subagentLiveCapture }, true)')
+    expect(src).toContain('fresh.then(resolveRuntime) : resolveRuntime(fresh)')
     // 构造时解析一次的旧形状不许回来。
     expect(src).not.toContain('const runtime = resolveTaskDriveConfig({')
   })

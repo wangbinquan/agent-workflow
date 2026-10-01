@@ -23,6 +23,9 @@ function rehash(step: PostgresqlIndexUpgrade): PostgresqlIndexUpgrade {
   return { ...body, digest: postgresqlMigrationDigest(body) }
 }
 
+// RFC-370 CI recovery: macOS recorded 5048.83ms while replaying and validating
+// the complete migration history. Keep all integrity assertions with one bounded
+// budget, matching the existing full-history test rather than skipping history.
 test('RFC-363 expands the published prefix by exactly four empty active tables', async () => {
   const history = await loadPostgresqlMigrationHistory()
   const index = history.steps.findIndex(
@@ -88,4 +91,4 @@ test('RFC-363 expands the published prefix by exactly four empty active tables',
       rehash({ ...step, logicalTables: [{ position: 0, table: prefix.head.contract.tables[0]! }] }),
     ]),
   ).toThrow('duplicates an existing table')
-})
+}, 20_000)

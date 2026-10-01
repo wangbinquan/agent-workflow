@@ -327,3 +327,13 @@ Intent 源提交 `497149ad2ad04b42fbc4d7902036b019be8ed880`、账本后继 `2d65
 协调器在 attach 后等待异步 runtime；读取失败报告并释放，等待期间取消则释放而不进入 admission／准备／执行。独立复核发现所选 source 删除 optional 配置时 boot deps 残留；现只使用本次 launch 投影，并保留宿主 binary override／configPath／memory participant。双 provider 回归覆盖带 boot 配置的删值与三段独立失败。原三个策略投影的 AST runtime token 等价；目标格式/lint通过，真实双 provider／双 runtime 新回归正式结果交本批 exact-SHA hosted CI，本机未运行 AW 测试／类型检查／构建／服务。
 
 官方 census 从已提交源码加33路径候选生成，排除并行 RFC371 内容。真实计数：mutation 1782→1787、observed imports 5589→5608、对应 exception 4959→4978、public symbol 1033→1043、owner 25587→25619；各增长按原 ledger 规则记录 RFC370 一次性依据并于后继账本提交退役，不改扫描规则或现有门槛。此批不关闭全 H1、A-T2 或 A-G；H3～H7、完整入口普查和 CS adapter／M0～M4 按已批准顺序继续。
+
+### 任务配置 CI 配套修复（2026-10-02）
+
+本批源 `4f8244883a30bdbb4e17e431161cb2b96848f72f`／账本 `dd94236a4cdbf08ad41881332db55e94316bcfe6` 的 CI36924136910 已终态 failure，41 success／9 failure，保留原完整回执，不写全绿。新 launch 测试在 standalone buildStartTaskDeps 用 drive-only 夹具，遗漏 SchedulerDriverPort 三个必需方法，改用原完整 createNoopSchedulerDriver。共享 public/queries 完整文件还保留了并行 RFC371 的 positions 合同，该配套 Task owner 实现先前漏提；本修复保留其当前完整6行并行输出并补独立双 provider 同时间／逐项游标／空 cohort 回归，不剥离已提交合同。
+
+另三处旧源码 oracle 仍锚移动前 resolver 或旧协调器 getter，现移到实际 TE 策略／单一解析点，保留字段／类型／唯一 spread／禁止 boot 冻结断言并加 selected 与 legacy 两臂。任务 INSERT 四站点及三血缘列均完整，只更新两个漂移行号。五条 local composition 兼容入边按原 R1 exact 规则记录 why/owner/A-T7 退役，255→260；不增加目录豁免或放宽 scanner/fixtures。官方 scoped census 只纳入10个修复源码／测试和精确登记，H3新候选及其他 RFC371 WIP排除，所有 ledger 数值不变。正式效果继续由修复确切 SHA hosted CI 验证，本机没有 AW 测试／类型检查／构建／服务。
+
+最后四个后端分片还报告 RFC287 T14 导出类型旧位置、RFC332 两处单微任务假设，以及 macOS RFC363 完整迁移历史超过默认5秒（5048.83ms）。导出合同断言移动到 TE 类型并加 legacy ReturnType 两字段检查；两个测试改等真实 continuation/effect started 事件，原未结算／顺序／释放断言不变；只给该迁移用例20秒明确上限，完整历史和拒绝判据保持。
+
+H3 工作区维护6路径候选仍在制。独立复核发现异步 exists 旧快照可绕过新 pruning claim 提前 heal；将修正 shared SQL 原子条件并补真实双 provider 交错回归，再单独复核／发布。本次修复不提交该在制候选，完整 RFC、A-G 及 CS M0～M4 继续。

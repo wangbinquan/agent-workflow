@@ -9,6 +9,7 @@ import { describe, expect, test, beforeEach } from 'bun:test'
 import { describeEachProvider } from './helpers/eachProvider'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import type { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
 import {
   ensureChildTaskBudget,
   setChildTaskBudgetCapacity,
@@ -100,18 +101,39 @@ describe('RFC-287 T14 — 配置漏斗的导出类型必须声明新字段', () 
   // 能满足它，等于没锁住。这里改成锁**导出函数的返回类型**那一段。
   test('resolveLaunchRuntimeConfig 的返回类型含 cloneTimeoutMs 与 gitBaselineSyncWindowMs', () => {
     const src = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'application',
+        'launchConfiguration.ts',
+      ),
+      'utf8',
+    )
+    const start = src.indexOf('export type TaskLaunchRuntimeConfiguration = {')
+    expect(start).toBeGreaterThan(0)
+    // RFC-370 moves the policy into its owner. Lock the exported contract, not
+    // a private projection, and prove the legacy entry retains that return type.
+    const bodyStart = src.indexOf('\n}', start)
+    expect(bodyStart).toBeGreaterThan(start)
+    const returnType = src.slice(start, bodyStart)
+    expect(returnType).toContain('cloneTimeoutMs?: number')
+    expect(returnType).toContain('gitBaselineSyncWindowMs?: number')
+    expect(src).toMatch(
+      /export function resolveTaskLaunchRuntimeFromReader\([\s\S]*?\): TaskLaunchRuntimeConfiguration/,
+    )
+    const legacy = readFileSync(
       resolve(import.meta.dir, '..', 'src', 'services', 'launchRuntimeConfig.ts'),
       'utf8',
     )
-    const start = src.indexOf('export function resolveLaunchRuntimeConfig')
-    expect(start).toBeGreaterThan(0)
-    // 返回类型从签名的 `): {` 起，到第一个顶格 `} {`（函数体开始）止。
-    const sigStart = src.indexOf('): {', start)
-    const bodyStart = src.indexOf('\n} {', sigStart)
-    expect(sigStart).toBeGreaterThan(0)
-    expect(bodyStart).toBeGreaterThan(sigStart)
-    const returnType = src.slice(sigStart, bodyStart)
-    expect(returnType).toContain('cloneTimeoutMs?: number')
-    expect(returnType).toContain('gitBaselineSyncWindowMs?: number')
+    expect(legacy).toContain('return resolveTaskLaunchRuntimeFromReader(')
+    const exposed = {
+      cloneTimeoutMs: 1000,
+      gitBaselineSyncWindowMs: 2000,
+    } satisfies ReturnType<typeof resolveLaunchRuntimeConfig>
+    expect(exposed.cloneTimeoutMs).toBe(1000)
+    expect(exposed.gitBaselineSyncWindowMs).toBe(2000)
   })
 })

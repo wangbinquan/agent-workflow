@@ -29,6 +29,7 @@ import { resolveUploadLimits } from '@/services/launchMultipart'
 import { DEFAULT_UPLOAD_LIMITS } from '@/services/upload'
 import { createTaskDriveCoordinator } from '@/services/task'
 import { describeEachProvider } from './helpers/eachProvider'
+import { createNoopSchedulerDriver } from './helpers/taskExecutionTestTopology'
 
 const directories: string[] = []
 afterEach(() => {
@@ -233,7 +234,7 @@ describeEachProvider('RFC-370 launch configuration adapters', (harness) => {
     expect(resolveCommitPushConfig(configPath)?.lang).toBe('zh-CN')
     expect(resolveSubagentLiveCapture(configPath)).toEqual(current.subagentLiveCapture)
     expect(resolveUploadLimits(configPath)).toEqual(current.uploadLimits)
-    const deps = buildStartTaskDeps(harness.db, { async drive() {} }, configPath, 'owner')
+    const deps = buildStartTaskDeps(harness.db, createNoopSchedulerDriver(), configPath, 'owner')
     expect(deps.defaultRuntime).toBe('runtime-live')
     expect(deps.subagentLiveCapture).toEqual(current.subagentLiveCapture)
     writeFileSync(

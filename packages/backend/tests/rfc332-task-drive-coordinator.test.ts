@@ -166,11 +166,13 @@ describe('RFC-332 T9 — TaskDriveCoordinator', () => {
 
   test('background receipt waits for admitted continuation but not for engine settlement', async () => {
     const continuationGate = deferred<void>()
+    const continuationStarted = deferred<void>()
     const engineGate = deferred<void>()
     const fixture = applicationFixture({
       admittedContinuation: {
         async run(context) {
           fixture.events.push(`continuation-start:${context.taskId}`)
+          continuationStarted.resolve()
           await continuationGate.promise
           fixture.events.push(`continuation-end:${context.taskId}`)
           return { kind: 'ready' }
@@ -194,7 +196,7 @@ describe('RFC-332 T9 — TaskDriveCoordinator', () => {
         receiptSettled = true
         return value
       })
-    await Promise.resolve()
+    await continuationStarted.promise
     expect(receiptSettled).toBe(false)
     expect(fixture.events).toEqual([
       'attach:task-continuation:intent-continuation',
@@ -216,11 +218,13 @@ describe('RFC-332 T9 — TaskDriveCoordinator', () => {
 
   test('background receipt waits for gate-continuation effects before phase 0 and engine', async () => {
     const effectGate = deferred<void>()
+    const effectStarted = deferred<void>()
     const engineGate = deferred<void>()
     const fixture = applicationFixture({
       gateContinuationPreDrive: {
         async run(context) {
           fixture.events.push(`gate-effect-start:${context.taskId}`)
+          effectStarted.resolve()
           await effectGate.promise
           fixture.events.push(`gate-effect-end:${context.taskId}`)
           return { kind: 'ready' }
@@ -244,7 +248,7 @@ describe('RFC-332 T9 — TaskDriveCoordinator', () => {
         receiptSettled = true
         return value
       })
-    await Promise.resolve()
+    await effectStarted.promise
     expect(receiptSettled).toBe(false)
     expect(fixture.events).toEqual([
       'attach:task-gate-effect:intent-gate-effect',
