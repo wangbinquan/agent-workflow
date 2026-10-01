@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1778,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：新增 fileSkillLifecycleContentStore、fileSkillSnapshotInspector、fileSkillDeletionContentStore、fileSkillVersionRecoveryContentStore 四个被原 create 前缀规则计入的工厂，1774→1778；原 adoption、删除及恢复效果机械迁入 owner-local adapter，没有新增业务写入口或放宽扫描判据。"
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -836,10 +833,7 @@
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 337,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：既有 recovery 名称匹配规则将 selectedRecovery 与 createFileSkillVersionRecoveryContentStore 两个新符号计入分母，335→337；沿用原启动恢复调度，没有新增 timer 或 worker，不修改分类判据。"
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -909,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25545,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 H6：七个中立 port/local adapter 文件及其接口、工厂与迁移后的 helper 逐符号登记，owner 分母净增20（25525→25545）；旧文件效果已移除，保留完整实际 owner 清单。"
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -929,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "c60e49975dba08818fd7368d654b3cd6e6d0fd04",
-    "contentDigest": "sha256:155bc951c7b23757a417da2a1f2285123ef185976d84e474aea484923efa7189",
+    "currentSnapshotSha": "37387cd645af2785f987ba0e372803befc8be724",
+    "contentDigest": "sha256:baebfeab6241666bd54ebb8bc837d8eb9ba1bd4fcebd328400dc2241c5b89d9e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
