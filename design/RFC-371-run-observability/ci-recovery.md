@@ -107,3 +107,27 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 只提交本任务精确路径，并行 resource-catalog 四个路径完整保留；本机没有运行 AW 测试、类型检查、构建或服务。后继只写回本页、STATE、plan、remaining-work 四份文档；对应精确文档提交 CI 另外验证，不把文档变化当作重新执行九个源码矩阵的理由。
 
 此回执只关闭 AW-R01。AW-R02～12 与 CS 的 owner派发/清理、消费者、两级正式开发明细及真实联合验收继续，两个 RFC 保持 In Progress。CS 已部署源码 d01ba8223 的六项 CI 成功；b0f17691 仅发布已复核的消费者设计和剩余文档，未启用生产开发采集。
+
+## 2026-10-01 新运行时贡献批次的 CI 回归
+
+此前 `edd56ebe` 的主 CI 与九种定时配置成功回执保持不变。新功能提交 `df87010886452d1b88b8c236869ea51b52fcb148` 出现新的真实失败，不能以此前成功代替本批验证：
+
+| 工作流                    | 精确运行                                                                              | 原终态与根因                                                                                             |
+| ------------------------- | ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| CI                        | [36822841154](https://github.com/wangbinquan/agent-workflow/actions/runs/36822841154) | 41 success / 7 failure / 2 cancelled，后继 push 自动取消；类型与任务详情字段缺失，macOS 另有几何测量失败 |
+| e2e-full-nightly          | [36822977430](https://github.com/wangbinquan/agent-workflow/actions/runs/36822977430) | failure，4/4 分片读取缺失的 runtimes；覆盖对账拒绝不完整分片                                             |
+| e2e-webkit-nightly        | [36822981198](https://github.com/wangbinquan/agent-workflow/actions/runs/36822981198) | failure，两平台 4/4 同一字段缺失，六个其他分片成功                                                       |
+| windows-platform          | [36822983873](https://github.com/wangbinquan/agent-workflow/actions/runs/36822983873) | failure，新增 fixture 判别类型与 TaskDetail 成员类型错误                                                 |
+| postgresql-evidence       | [36822986709](https://github.com/wangbinquan/agent-workflow/actions/runs/36822986709) | success，原 weekly/all 五项；workflow_dispatch，未冒称实际周定时触发                                     |
+| visual-regression-nightly | [36822841163](https://github.com/wangbinquan/agent-workflow/actions/runs/36822841163) | success，一项                                                                                            |
+| integration-opencode      | [36822841353](https://github.com/wangbinquan/agent-workflow/actions/runs/36822841353) | success，两项                                                                                            |
+
+类型与真实任务详情返回已由独立 PASS 的 `ed2cd483dc74c5f73bfba9e6530f7f64d1e09a98` 修复，其主 CI [36825750653](https://github.com/wangbinquan/agent-workflow/actions/runs/36825750653) 已终态 failure（48 success / 2 failure）：上述类型与所有十个浏览器分片已成功，唯一功能失败是 macOS 后端迁移历史用例超过隐式 5 秒预算，另一项为 CI required 汇总。消除卡片 helper 两次 boundingBox 之间的测量缺口：一次 evaluate 同步读取全部矩形、标题、公共间距和溢出；保留所有相邻对的 16px 标准/原容差、可见尺寸、宽窄屏及焦点断言。首轮 macOS 69px 的具体移动来源未被 trace 证明，不将其写成已经确认的产品布局 bug。
+
+最终修复提交将验证主 CI 和全部九种原定时配置，沿用 full、WebKit 双平台、Windows、真实覆盖对账、2 GiB evidence soak、原维护与 weekly/all PG 默认矩阵。只有精确 SHA 的终态成功才能收口，不改 cron、并发取消策略或隔离，不降低性能门槛或删减矩阵/断言；迁移历史完整性单用例预算补正如下。本机继续不运行 AW 测试、类型检查、构建或服务；四个并行 skill 文件保留。完整 AW/CS RFC 仍继续。
+
+### 完整迁移历史用例的明确预算
+
+`ed2cd483` 的 macOS 后端 3/6 在 `rfc349-postgresql-migration-history.test.ts` 报 5772.89ms、`this test timed out after 5000ms`。源码正向用例先完整 load，再 verify 原 historical plan，再 verify 被清空 statement 的非法 plan；每次都扫描/重放完整历史并核对当前 projection，因此该用例包含三轮完整校验，而不是单条 SQL 或性能门禁。
+
+仅此一条功能完整性用例给出 20 秒上限，正向 contractDigest/planDigest/statementCount 与非法 plan 的漂移拒绝断言原样保留；同文件其他六个用例、真实 PG 性能门槛及全部 workflow 预算不变。不通过重跑旧 SHA、跳过或取暖缓存宣称修复。该测试修正与几何快照修正共同提交，最终精确 SHA 的主 CI 和九种定时配置另取终态回执。

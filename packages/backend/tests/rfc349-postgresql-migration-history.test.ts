@@ -33,6 +33,9 @@ afterEach(() => {
 })
 
 describe('RFC-349 PostgreSQL migration history admission', () => {
+  // RFC-371 CI recovery: this case verifies the full history three times, including
+  // a rejected historical plan. macOS recorded 5772.89ms against Bun's 5s default;
+  // give only this integrity test a bounded budget, preserving every assertion.
   test('accepts an exact historical plan only after the complete current history is verified', async () => {
     const history = await loadPostgresqlMigrationHistory()
     await expect(
@@ -45,7 +48,7 @@ describe('RFC-349 PostgreSQL migration history admission', () => {
     await expect(
       verifyPostgresqlMigrationHistory({ plan: { ...history.root.plan, statements: [] } }),
     ).rejects.toMatchObject({ code: 'postgresql-migration-history-drift' })
-  })
+  }, 20_000)
 
   test('retains the exact explicit flat custom-baseline contract', async () => {
     const history = await loadPostgresqlMigrationHistory()

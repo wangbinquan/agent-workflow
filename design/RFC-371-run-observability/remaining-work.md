@@ -88,7 +88,7 @@
 
 ### AW-R08 分析维度与可理解下钻〔分布已有，筛选链路待补；P1-T1/T2、P2-T2〕
 
-- 第一批原受理名/运行时任务贡献的实现 v2 独立 PASS，39 路径精确推送 `df87010886452d1b88b8c236869ea51b52fcb148`；[Windows 36822983873](https://github.com/wangbinquan/agent-workflow/actions/runs/36822983873) 的新增夹具类型及 task detail 运行时成员错误正在按独立 PASS 的最小设计修复，修复实现/新 SHA CI 待验。公共 Dialog、原范围和滚动焦点返回、双 provider/hosted 浏览器回归保留；TaskDetail 运行时组复用同一已授权原快照。名称不读可变目录，旧响应不借任务总量。[第一批设计](./runtime-contributions.md)记录范围与真实失败；`runtime` URL 只控制弹窗，服务端维度筛选与模型/用途下钻尚未完成，AW-R08 不关闭。
+- 第一批原受理名/运行时任务贡献的实现 v2 独立 PASS，39 路径精确推送 `df87010886452d1b88b8c236869ea51b52fcb148`；[Windows 36822983873](https://github.com/wangbinquan/agent-workflow/actions/runs/36822983873) 的新增夹具类型及 task detail 运行时成员错误已按独立 PASS 的最小设计修复并推送 `ed2cd483dc74c5f73bfba9e6530f7f64d1e09a98`；新主 CI 为 48 success / 2 failure，类型与十个浏览器分片已通过；迁移历史单用例默认预算补正、卡片几何同快照修正及最终 SHA 的九种定时配置继续验收。公共 Dialog、原范围和滚动焦点返回、双 provider/hosted 浏览器回归保留；TaskDetail 运行时组复用同一已授权原快照。名称不读可变目录，旧响应不借任务总量。[第一批设计](./runtime-contributions.md)记录范围与真实失败；`runtime` URL 只控制弹窗，服务端维度筛选与模型/用途下钻尚未完成，AW-R08 不关闭。
 - 核对并补齐运行时注册项/修订、实际模型、采集来源、用途等维度的服务端筛选与任务贡献下钻；当前名称/状态/仓库查询保留。
 - 通过相关图表或明细的直接操作进入范围，不恢复顶部工作流输入或“更多筛选”折叠。人民币配置复用现有入口，不再建一套价目表。
 - 退出证据：URL 往返、清除范围、双语、未知名称/模型、删除档位后历史归因、分页总数与当前可见范围一致。

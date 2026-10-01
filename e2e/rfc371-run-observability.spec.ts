@@ -121,23 +121,40 @@ async function prime(page: Page) {
 }
 
 async function expectCardSpacing(page: Page) {
-  const cards = await page.locator('.page .card').all()
-  expect(cards.length).toBeGreaterThanOrEqual(3)
-  const expectedGap = await page
-    .locator('html')
-    .evaluate((el) => Number.parseFloat(getComputedStyle(el).getPropertyValue('--space-4')))
-  for (let i = 1; i < cards.length; i++) {
-    const before = await cards[i - 1]!.boundingBox(),
-      after = await cards[i]!.boundingBox()
-    expect(before).not.toBeNull()
-    expect(after).not.toBeNull()
-    expect(after!.y - before!.y - before!.height).toBeCloseTo(expectedGap, 0)
-  }
-  const width = await page.locator('.page').evaluate((el) => ({
+  // RFC-371: separate boundingBox awaits can span scrolling or a layout update.
+  // Keep every rectangle, spacing token and overflow bound in one browser snapshot.
+  const geometry = await page.locator('.page').evaluate((el) => ({
+    cards: Array.from(el.querySelectorAll('.card')).map((card) => {
+      const rect = card.getBoundingClientRect()
+      return {
+        title: card.querySelector('.card__title')?.textContent,
+        box:
+          card.getClientRects().length && getComputedStyle(card).visibility !== 'hidden'
+            ? { y: rect.y, width: rect.width, height: rect.height }
+            : null,
+      }
+    }),
+    gap: Number.parseFloat(
+      getComputedStyle(document.documentElement).getPropertyValue('--space-4'),
+    ),
     scroll: el.scrollWidth,
     client: el.clientWidth,
   }))
-  expect(width.scroll).toBeLessThanOrEqual(width.client + 1)
+  expect(geometry.cards.length).toBeGreaterThanOrEqual(3)
+  for (const card of geometry.cards) {
+    expect(card.box, card.title ?? 'Untitled card').not.toBeNull()
+    expect(card.box!.width).toBeGreaterThan(0)
+    expect(card.box!.height).toBeGreaterThan(0)
+  }
+  for (let i = 1; i < geometry.cards.length; i++) {
+    const before = geometry.cards[i - 1]!,
+      after = geometry.cards[i]!
+    expect(
+      after.box!.y - before.box!.y - before.box!.height,
+      JSON.stringify({ before, after, expectedGap: geometry.gap }),
+    ).toBeCloseTo(geometry.gap, 0)
+  }
+  expect(geometry.scroll).toBeLessThanOrEqual(geometry.client + 1)
 }
 
 async function expectAnalysisSpacing(page: Page) {

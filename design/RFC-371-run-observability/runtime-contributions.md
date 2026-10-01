@@ -1,6 +1,6 @@
 # RFC-371 运行时受理原名与任务贡献
 
-状态：第一批设计及最小补充 PASS，实现 v1 FAIL 的三项 P2 保留，修正后的实现 v2 独立 PASS。39 路径已精确推送 `df87010886452d1b88b8c236869ea51b52fcb148`；Windows hosted CI `36822983873` 又发现新增夹具类型与 task detail 成员两类错误，最小修复设计已独立 PASS，修复候选另行验收。服务端维度筛选、模型/用途下钻及最终验收继续，AW-R08 不关闭。
+状态：第一批独立实现 v2 PASS，39 路径已推送 `df87010886452d1b88b8c236869ea51b52fcb148`；hosted 类型与 TaskDetail 运行时组的最小修复已独立 PASS 并推送 `ed2cd483dc74c5f73bfba9e6530f7f64d1e09a98`。主 CI [36825750653](https://github.com/wangbinquan/agent-workflow/actions/runs/36825750653) 为 48 success / 2 failure，类型和十个浏览器分片已通过；唯一后端迁移历史用例超过默认 5 秒，现仅为其完整三轮验证给出 20 秒上限。卡片同快照修正已独立 PASS，两项共同候选继续复核。原失败保留，全部九种定时配置将验证最终修复 SHA。服务端维度筛选、模型/用途下钻及最终验收继续，AW-R08 不关闭。
 
 ## 用户看到的行为
 
@@ -65,3 +65,11 @@ runtime-management public/application 冻结注册事实；run-observability app
 Windows [36822983873](https://github.com/wangbinquan/agent-workflow/actions/runs/36822983873) 的 TS2345/TS2339/TS7006 保留为实际失败。无效名称 fixture 用现有 `AcceptObservationInvocation` 限定判别字段，全部 schema 拒绝、无持久行断言保留。TaskDetail 增加兼容的可选 `runtimes`，使用自身已授权 `loaded` 快照中的 `usageDimensions`；原名与精确组指标来自原受理，不联查当前目录，不增加数据库读取。原任务明细运行时断言继续验证真实返回的 alpha 原名。
 
 上一提交已经消费的三个 `allowGrowth` 精确退役，基线数量与所有无关记录保持；官方生成以 `df87010886452d1b88b8c236869ea51b52fcb148` 为 provenance 快照，只使用四个本批 TS 文件及明确账本种子。实现复核和修复提交的主 CI/相关定时矩阵待完成，本机没有运行测试、类型检查、构建或服务。
+
+## 2026-10-01 卡片几何检查的快照修正
+
+旧 full E2E 和 Ubuntu/macOS WebKit 失败均为 TaskDetail.runtimes 缺失，full 覆盖对账随后拒绝不完整分片；Windows E2E 同样失败。上述实际返回与类型问题已由 `ed2cd483` 修复。旧主 CI 的 macOS 平台轮次用例另记录期望 16px、实际 69px；首轮只留视频/error-context，重试 trace 成功，不能据此断定具体一次滚动或重排是唯一原因。
+
+卡片 helper 原本两次 await boundingBox 读取相邻矩形，存在跨页面移动的测量缺口。限定测试修正一次同步 evaluate 读取全部卡片、公共 --space-4、可见尺寸及页面溢出；每对仍严格 toBeCloseTo(token, 0)，不增加等待、重试或容差。30 行、390/1280px、末行 Dialog 和焦点返回断言完整保留。生产布局与所有 workflow 不改；独立复核、精确推送及最终主 CI/九种原定时矩阵回执待完成。
+
+迁移历史用例的实际失败、完整三轮校验依据与单用例 20 秒预算见 [CI 修复记录](./ci-recovery.md#完整迁移历史用例的明确预算)；不改变本功能生产逻辑、实际 Token/CNY 或采集能力。最终精确 CI 和九种定时配置待验。

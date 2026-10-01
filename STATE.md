@@ -1,3 +1,7 @@
+## 2026-10-01 RFC-371 新功能 CI 回归与定时矩阵接续
+
+运行时贡献 `df870108` 的旧 full/WebKit/Windows 已终态失败，真实任务详情字段与新增类型问题已独立 PASS 并推送 `ed2cd483dc74c5f73bfba9e6530f7f64d1e09a98`；主 CI 36825750653 已终态 48 success/2 failure：类型与十个浏览器分片通过，唯一功能失败为 macOS 完整迁移历史用例超过默认5秒；仅给其三轮完整验证20秒上限，所有断言保留。macOS 卡片 helper 存在跨两次 boundingBox 的测量缺口，现限定为一次同步浏览器快照，保留16px/可见尺寸/横溢出及全部末行宽窄屏/焦点断言；具体53px移动来源未确证，不改生产布局。独立复核、最终修复 SHA 主 CI 与九种原定时配置待完成，原失败见 [CI 修复记录](design/RFC-371-run-observability/ci-recovery.md)。本机无 AW 测试/类型检查/构建/服务，四条并行 resource-catalog WIP 保留；两 RFC 剩余实施与 CS 准入原回执设计继续。
+
 ## 2026-10-01 RFC-371 运行时贡献第一批实现候选
 
 AW-R01 已关闭，原精确主 CI 与九种定时配置保持完整回执；AW-R08 原受理名称与运行时任务贡献的独立设计门 PASS 后，22 源码/回归路径已落地且精确 Prettier/lint 通过，等待独立实现门和精确 SHA hosted CI。名称随同原注册 ID/配置冻结，公共 Dialog 只展示该运行时对任务的贡献，并保留详情返回范围、滚动和焦点；旧响应不借任务整体量。官方治理仅从 HEAD 加精确候选内存生成，四个并行 skill 文件原样保留；本机无 AW 测试/构建/服务。CS 完整组合 557cb50c5b6800771a5d016526d7a4d49d61eb77 已实际部署八组件 Ready，consumer 与两级事实页面接通；回执提交 1d896ab777b9dbe133a4db79f98d585fb5600831 六项 CI 成功，生产 producer 仍 OFF。服务端维度筛选、CS 全删除/全部 writer 封口与其他剩余项继续，两个 RFC 保持 In Progress。下方保留历史。
