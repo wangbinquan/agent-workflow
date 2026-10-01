@@ -1,6 +1,8 @@
 import type { OwnCodeHostPushCredentialList } from '@agent-workflow/shared'
 import type { OwnRepositoryCredentialSubject } from './types'
 
+export type { WorkspacePresenceQueries } from '../application/ports/workspacePresence'
+
 export interface OwnRepositoryTransportCredentialQueries {
   list(subject: OwnRepositoryCredentialSubject): Promise<OwnCodeHostPushCredentialList>
 }

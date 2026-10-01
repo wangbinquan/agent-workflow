@@ -124,6 +124,8 @@ import {
 } from '@/modules/task-execution/composition/providerRuntime'
 import { createDatabaseTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import { composeWorktreeResumePreflight } from '@/modules/task-execution/public/participants'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/application/adapters/task-catalog-adapter'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
@@ -376,6 +378,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly daemonInfoPath: string
   readonly lockPath: string
   readonly secretBox: SecretBox
+  readonly workspacePresence?: WorkspacePresenceQueries
   /** RFC-349 T10 — see `DatabaseSourceWriteWindow`; bootstrap supplies the live one. */
   readonly sourceWriteWindow?: DatabaseSourceWriteWindow
   readonly databaseMigration: DatabaseMigrationModule
@@ -1228,6 +1231,8 @@ export async function composePostgresqlApplication(
       assertResumable: composeWorktreeResumePreflight({
         getTask: (taskId) => taskExecutionProvider.routes.tasks.get(taskId),
         taskRecoveryOperations: taskExecutionProvider.recovery,
+        worktreeExists: (reference) =>
+          (input.workspacePresence ?? createFileWorkspacePresenceQueries()).exists(reference),
       }),
       // 驱动仍交给 daemon 的 `human-gate-continuation` worker 轮询认领（start.ts 注册）：
       // 「谁驱动这个任务」才是真按部署形态分的那一半，预检不是。

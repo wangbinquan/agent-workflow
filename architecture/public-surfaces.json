@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 942,
+    "consumers": 945,
     "exactEntrypointFiles": 69,
     "governedFieldSurfaces": 5,
-    "methods": 1129,
+    "methods": 1130,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21493,
-    "symbols": 1043
+    "recursiveFields": 21496,
+    "symbols": 1044
   },
   "entries": [
     {
@@ -131126,6 +131126,85 @@
       "version": 1
     },
     {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:5672dbaf6a562489e6e1",
+        "import:dd2849eb6c2fa387b771",
+        "import:e03451da52da660032b2"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:exists.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:exists.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:exists.$return.$variant:1",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/queries.ts",
+      "id": "public:source-control:queries:WorkspacePresenceQueries",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:5672dbaf6a562489e6e1",
+            "import:dd2849eb6c2fa387b771",
+            "import:e03451da52da660032b2"
+          ],
+          "name": "exists",
+          "signatureDigest": "sha256:8bdc57e427da19cee4eb24cd71e5bbc25bd92381dec8cfa4300a68c4197379af"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:5672dbaf6a562489e6e1",
+          "file": "packages/backend/src/modules/task-execution/application/worktreeResumePreflight.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/worktreeResumePreflight.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:dd2849eb6c2fa387b771",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:e03451da52da660032b2",
+          "file": "packages/backend/src/services/task.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:3a71988122399d2f5534d37c2364283826fa2373028625f5435c72cf522d0331",
+      "status": "target-context-current-surface",
+      "symbol": "WorkspacePresenceQueries",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
       "authority": "none",
       "budget": {
         "maxMethods": 5,
@@ -170254,7 +170333,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d6487bb8b0962d4fb074a8a2cf8f3370fc7d8507ee1a0bf31bee1e7e06996228",
+  "sourceDigest": "sha256:599a69d0fb6c27ca8c67e496d0deb17cdcb4685067e90a4af541c499d730f19d",
   "targetContexts": [
     "collaboration",
     "development-automation",

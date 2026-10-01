@@ -12,7 +12,9 @@ import {
   withWorkspaceCleanupReport,
   type PlannedSpaceLayout,
   materializeSpaceWithProvider,
+  createFileWorkspacePresenceQueries,
 } from '@/modules/source-control/composition'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 // Task service — start / list / get.
 // Cancel/resume/retry land in P-1-15 + M3 (P-3-08, P-3-09).
 
@@ -449,6 +451,8 @@ export interface StartTaskDeps {
   /** Provider-selected recovery reads used by resume/retry preflight. The
    * worktree admission path fails closed when bootstrap omitted it. */
   taskRecoveryOperations?: TaskRecoveryOperations
+  /** Physical references are interpreted by the selected workspace adapter. */
+  workspacePresence?: WorkspacePresenceQueries
   /** Provider-selected cached repository/group persistence. Legacy direct
    * fixtures may omit it and receive the explicit SQLite adapter below. */
   repositoryWorkspace?: RepositoryWorkspaceStore
@@ -3157,18 +3161,21 @@ export async function wakeHumanGateContinuation(
  * 注入的是空操作，由 daemon 的 `human-gate-continuation` worker 轮询认领。
  */
 export function composeWorkgroupTaskRoomContinuationDriver(input: {
-  readonly db: LegacySqliteTaskDatabase
+  readonly db: LegacyProviderNeutralDatabase
   readonly configPath: string
   readonly schedulerDriver: StartTaskDeps['schedulerDriver']
   readonly taskRecoveryOperations: TaskRecoveryOperations
+  readonly workspacePresence?: WorkspacePresenceQueries
 }): Readonly<{
   assertResumable: (taskId: string, verb: string) => Promise<void>
   driveAfterCommit: (continuation: Readonly<{ taskId: string; intentId: string }>) => Promise<void>
 }> {
+  const workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
   const resumeDeps = (): StartTaskDeps => ({
     db: input.db,
     schedulerDriver: input.schedulerDriver,
     taskRecoveryOperations: input.taskRecoveryOperations,
+    workspacePresence,
     appHome: Paths.root,
     configPath: input.configPath,
     ...resolveLaunchRuntimeConfig(input.configPath),
@@ -3178,7 +3185,9 @@ export function composeWorkgroupTaskRoomContinuationDriver(input: {
       const task = await getTask(input.db, taskId)
       // 任务不存在不归这里管：房间的可见性判据已经先跑过，会给出 404/403。
       if (task === null) return
-      await assertWorktreePresentForResume(input.taskRecoveryOperations, task, verb)
+      await assertWorktreePresentForResume(input.taskRecoveryOperations, task, verb, (reference) =>
+        workspacePresence.exists(reference),
+      )
     },
     async driveAfterCommit(continuation) {
       // 与合一前同一条路：意图已在房间事务里准入，这里只认领并驱动它，不做第二次生命周期转移、
@@ -3351,7 +3360,13 @@ async function resumeKick(
     if (deps.taskRecoveryOperations === undefined) {
       throw new Error('task-recovery-operations-not-composed')
     }
-    await assertWorktreePresentForResume(deps.taskRecoveryOperations, task, opts.verb)
+    await assertWorktreePresentForResume(
+      deps.taskRecoveryOperations,
+      task,
+      opts.verb,
+      (reference) =>
+        (deps.workspacePresence ?? createFileWorkspacePresenceQueries()).exists(reference),
+    )
   }
 
   // RFC-097 command admission — the pending CAS moves BEFORE the git rollback

@@ -689,7 +689,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-371: task observation queries bind the selected DB and TE facts inside one read snapshot.
       // RFC-370: selected package owners make the local installer optional; its two
       // method parameter types use NonNullable. Runtime statements/order are unchanged.
-      'feea6d7df4f2173c7705bf2bd98e3f4bc1bc231290b96710e22a01e866116f4b',
+      // RFC-370: the existing workgroup preflight binds the selected presence
+      // adapter (local by default). All 166 statements/order remain unchanged.
+      'faf37d206be4636a78a0a75e0a30e8b51e605c08addd974a32be515b75233da2',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

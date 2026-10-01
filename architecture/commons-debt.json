@@ -4769,6 +4769,7 @@
         "import:11e4b63b4f9f4226637f",
         "import:133faf21e37bbcc8ce21",
         "import:41c8ee752dc430e2e37b",
+        "import:55d54b42a1519315bea3",
         "import:852c99d2af011dd70920",
         "import:9bd06af00c9c1e373b90",
         "import:de17d18a53431aaefb1a",
@@ -8037,15 +8038,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d6487bb8b0962d4fb074a8a2cf8f3370fc7d8507ee1a0bf31bee1e7e06996228",
+    "sourceDigest": "sha256:599a69d0fb6c27ca8c67e496d0deb17cdcb4685067e90a4af541c499d730f19d",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "c028b22c4a9a5281aa9013d4fac058c343f3a4f3",
-    "contentDigest": "sha256:16e249b7dcc726c2874fb3f9ee286cb601aa4e22aa2cab9e28ae5a1c880b8ca4",
+    "currentSnapshotSha": "65db0c7710ed527663010112385b93c38f3e3323",
+    "contentDigest": "sha256:a5b4c2d1713ce01ddab1df61961cc54f97ea16dd039b38272a4fff0480aabe3e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

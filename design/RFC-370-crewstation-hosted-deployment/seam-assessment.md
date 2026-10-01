@@ -119,3 +119,5 @@ HTTP multipart 的 upload limit 可异步读取；驱动在 attach 后等待 run
 ## H3 工作区维护续批
 
 现有 SC-owned maintenance effects 直接开放 selected adapter，exists／列举／物化保护可 await；local Node adapter 不重复包装。原 terminal claim 与 SQL store 保持 authority，远端读取期间的旧快照只允许原子匹配 lifecycle revision／路径／无新清理 claim 时补写历史 tombstone。六路径有限复核 PASS 与双 provider 回归见 plan／functional-gates，正式行为仍交本批 exact-SHA CI。恢复任务的存在查询、其他 workspace／Git 全调用者、完整 A-G 和 CS 效果尚未闭合。
+
+H3 存在查询续批：独立 SC WorkspacePresenceQueries/file adapter 已接 legacy resumeKick 与两个工作组 preflight，异步事实等待不改变 AW 状态判定；十路径有限功能复核 PASS。普通 `/api/tasks`/auto-resume/子任务经共用 lifecycle admission 的直接 FS 尚待下一批，不能关闭整个恢复检查或 H3。

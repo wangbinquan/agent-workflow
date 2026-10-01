@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1787,
+    "entries": 1788,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -23244,6 +23244,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileWorkspacePresence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/fileWorkspacePresence.ts#createFileWorkspacePresenceQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileWorkspacePresence.ts#createFileWorkspacePresenceQueries",
+      "symbol": "createFileWorkspacePresenceQueries",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
@@ -42697,7 +42722,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d6487bb8b0962d4fb074a8a2cf8f3370fc7d8507ee1a0bf31bee1e7e06996228",
+  "sourceDigest": "sha256:599a69d0fb6c27ca8c67e496d0deb17cdcb4685067e90a4af541c499d730f19d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -45175,8 +45200,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#2462:tasks",
-        "line": 2462,
+        "id": "task-authority:packages/backend/src/services/task.ts#2466:tasks",
+        "line": 2466,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -45191,8 +45216,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#2590:taskExecutionIntents",
-        "line": 2590,
+        "id": "task-authority:packages/backend/src/services/task.ts#2594:taskExecutionIntents",
+        "line": 2594,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -45207,8 +45232,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#2648:tasks",
-        "line": 2648,
+        "id": "task-authority:packages/backend/src/services/task.ts#2652:tasks",
+        "line": 2652,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -45223,8 +45248,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4497:tasks",
-        "line": 4497,
+        "id": "task-authority:packages/backend/src/services/task.ts#4512:tasks",
+        "line": 4512,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

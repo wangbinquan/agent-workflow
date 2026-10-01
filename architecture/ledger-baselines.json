@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1787,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1788,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 H3：独立 file workspace presence 工厂按既有规则登记，1787→1788；只移动物理存在查询，未新增工作区业务规则。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5608,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5613,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 H3：SC owned presence 查询、local composition 与三个实际消费方新增真实引用，5608→5613；TE 仅依赖 SC public query，CS DTO 尚未进入。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +873,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4978,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4982,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 H3：legacy task 类型与默认装配以及 SC query 旧 Task 依赖等四个实际兼容引用登记，4978→4982；沿原规则保留 owner 和退役责任。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -881,8 +890,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1043,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1044,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 H3：WorkspacePresenceQueries 是有实际 TE 消费者的 SC public 查询合同，1043→1044；效果与 AW 恢复决定分离。"
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -902,12 +914,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25619,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25623,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 H3：SC 查询接口、exists 合同、独立 local 工厂及参数真实净增四项，25619→25623；没有影子引擎或业务状态。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d6487bb8b0962d4fb074a8a2cf8f3370fc7d8507ee1a0bf31bee1e7e06996228",
+    "sourceDigest": "sha256:599a69d0fb6c27ca8c67e496d0deb17cdcb4685067e90a4af541c499d730f19d",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +935,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "c028b22c4a9a5281aa9013d4fac058c343f3a4f3",
-    "contentDigest": "sha256:8cd899986c3623a30733c7648ec9137c9d6021c94b20c08b82c2e04115d47ae8",
+    "currentSnapshotSha": "65db0c7710ed527663010112385b93c38f3e3323",
+    "contentDigest": "sha256:f8a27a38d61c94c45fdf009c50d8c725d5f47f0254138963278d8b064770bc08",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

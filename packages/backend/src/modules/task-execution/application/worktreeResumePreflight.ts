@@ -18,10 +18,9 @@
 // 注意 `hasRepoPrepRow` 直接吃 port，不经 `services/taskWorkspacePhase` 那层包装——模块内部
 // 反向 import legacy 层是 RFC-317 T23 的红。
 
-import { existsSync } from 'node:fs'
-
 import { taskWorkspacePhase, type Task } from '@agent-workflow/shared'
 import { ConflictError, DomainError } from '@/util/errors'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 
 import type { TaskRecoveryOperations } from './ports/taskRecoveryOperations'
 
@@ -29,8 +28,8 @@ export interface WorktreeResumePreflightDependencies {
   /** 任务行（neutral 读；两个 provider 的 `routes.tasks.get` 都满足）。 */
   readonly getTask: (taskId: string) => Promise<Task | null>
   readonly taskRecoveryOperations: TaskRecoveryOperations
-  /** 文件系统探测；默认 `existsSync`，测试可注入。 */
-  readonly worktreeExists?: (path: string) => boolean
+  /** Selected physical presence query; bootstrap supplies the local adapter. */
+  readonly worktreeExists: WorkspacePresenceQueries['exists']
 }
 
 /**
@@ -62,7 +61,7 @@ export async function assertWorktreePresentForResume(
   operations: TaskRecoveryOperations,
   task: Task,
   verb: string,
-  worktreeExists: (path: string) => boolean = existsSync,
+  worktreeExists: WorkspacePresenceQueries['exists'],
 ): Promise<void> {
   const gone = (msg: string): never => {
     throw new DomainError(
@@ -88,16 +87,21 @@ export async function assertWorktreePresentForResume(
   // deletes the dir), so an existence check is the right gate — and it does not
   // false-fire on tasks whose worktree dir is present but not (yet) a git repo
   // (a per-repo "source moved" edge that the diff path handles separately).
-  if (!worktreeExists(task.worktreePath)) {
+  if (!(await worktreeExists(task.worktreePath))) {
     gone(`worktree '${task.worktreePath}' does not exist`)
   }
   // Multi-repo: the container survived but every per-repo worktree was reclaimed.
-  if (
-    task.repoCount > 1 &&
-    task.repos.length > 0 &&
-    !task.repos.some((r) => worktreeExists(r.worktreePath))
-  ) {
-    gone(`task '${task.id}' has no remaining repo worktree (all reclaimed by gc)`)
+  if (task.repoCount > 1 && task.repos.length > 0) {
+    let anyRepoPresent = false
+    for (const repo of task.repos) {
+      if (await worktreeExists(repo.worktreePath)) {
+        anyRepoPresent = true
+        break
+      }
+    }
+    if (!anyRepoPresent) {
+      gone(`task '${task.id}' has no remaining repo worktree (all reclaimed by gc)`)
+    }
   }
 }
 

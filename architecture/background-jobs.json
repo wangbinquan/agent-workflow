@@ -3,9 +3,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:564",
+      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:567",
       "kind": "register-call",
-      "line": 564,
+      "line": 567,
       "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlApplication",
@@ -12404,7 +12404,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:401",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:403",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -12418,7 +12418,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:401",
+      "symbol": "$setTimeout:403",
       "targetContext": "task-execution"
     },
     {
@@ -12427,7 +12427,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:4253",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:4268",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -12441,7 +12441,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:4253",
+      "symbol": "$setTimeout:4268",
       "targetContext": "task-execution"
     },
     {
@@ -12971,5 +12971,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d6487bb8b0962d4fb074a8a2cf8f3370fc7d8507ee1a0bf31bee1e7e06996228"
+  "sourceDigest": "sha256:599a69d0fb6c27ca8c67e496d0deb17cdcb4685067e90a4af541c499d730f19d"
 }

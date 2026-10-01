@@ -1,3 +1,7 @@
+## 2026-10-02 RFC-370 H3 恢复预检存在查询
+
+十路径 SC 中立 exists/local adapter 候选有限实现门PASS，异步 false/reject、多仓顺序/短路、409 先拒绝及工作组 composer 的 this 接线由真实双 provider 回归覆盖；PG 全体AST仅新查询绑定不同，原W29与INSERT判据保留。维护已上库65db0c771，其CI36931610730仍待终态，本批行为交新的完整hosted CI；无本机AW test/typecheck/build/service。普通API resume经另一条共用lifecycle admission，其direct FS下一批继续，H3/A-G/CS adapter/M0～M4仍未关闭。全部下方并行输出保留。
+
 ## 2026-10-02 RFC-370 CI 恢复与任务配置续批
 
 ## 2026-10-02 RFC-370 H3 工作区维护切面

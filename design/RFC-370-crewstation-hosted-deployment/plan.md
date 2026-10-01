@@ -345,3 +345,11 @@ H3 工作区维护6路径候选仍在制。独立复核发现异步 exists 旧�
 独立首门发现旧 recovery exists 快照与前台 resume／取消／finalize 交错：远端物理删除尚未确认时，旧 false 结果可提前 heal。补写 SQL 现在原子核对无 pruning claim、仍终态／未删除、同一 worktreePath 与 lifecycleEventRevision；两个应用调用点传枚举快照，复用已有生命周期 revision，不新增迁移或第二种 authority。六路径修正后由独立 `/root/intent_functional_gate` 有限 PASS，指纹 `51e83940efeca6a06c7ef9b3fe2b939ef3c18b0df45ba449ff3c3a1100e010c6`。
 
 新增真实双 provider 回归含异步 false／异常重试、四种过期快照与两实例清理 ACK 成功／失败交错：确认前及失败后 pruned=null、claim=claimed，真正持久重试确认后才完成。保留原 selected listing／materializing／iso active 判据及真实 local 维护测试。官方 scoped census 只纳入此六路径，所有 ledger 数值不变；本机仅目标格式/lint及静态语料生成。修复 `c028b22c4a9a5281aa9013d4fac058c343f3a4f3` 的 [CI36928636248](https://github.com/wangbinquan/agent-workflow/actions/runs/36928636248) 已 completed/success，50/50 job success；现发布本批，行为继续交本批 exact-SHA hosted CI，不以有限复核替代正式行为。其他 H3／A-G、CS adapter、M0～M4 仍继续。
+
+### H3 恢复预检存在查询切面（2026-10-02）
+
+SC-owned `WorkspacePresenceQueries` 与独立 file adapter 只提供同步或异步物理存在事实。TE preflight 逐项 await；保留准备未完成409、无任务不探测、多仓任一存在即短路和原410。Legacy resumeKick、SQLite 工作组 continuation 与 PG 工作组 continuation 可使用所选查询；包装调用保留 adapter 的 this。普通 `/api/tasks` resume 另经共用 child lifecycle admission，其物理检查仍未切换，下一批沿实际 bootstrap 接线，不能据本批关闭全 resume/H3。
+
+十路径由独立 `/root/task_config_functional_gate` 有限 PASS，指纹 `ada4b1d9492b69d8aae8bd62ba362ca97d64eadd4fa81664e5b2d3f12c049e15`。新真实双 provider 回归检验 pending/false/reject、409 不探测、多仓順序/短路和真正 workgroup composer；local adapter 真实文件存在/缺失/空引用保持。PG 166 statements/order 的全体 AST 除唯一 worktreeExists 绑定外逐字等价，W29 原逆变换摘要精确迁移，SQLite 两摘要不变；INSERT 血缘四站点只跟随实际行号2467，全部列判据保持。
+
+官方 scoped census 仅纳入这十路径，mutation +1、imports +5、exception +4、public +1、owner +4，各按原账本协议登记并后继退役。仅目标格式/lint与静态源码生成，无本机 AW test/typecheck/build/service。维护前批 `65db0c7710ed527663010112385b93c38f3e3323` 的 CI36931610730 尚待终态；本批行为交新的完整 hosted CI，取消/失败记录分别保留。A-G、CS adapter、M0～M4 仍未完成，RFC 持续。
