@@ -184,3 +184,17 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 主 CI 的中英文 / 明暗主题 / 1280 与 390 宽度返回矩阵和全夜间趋势证据位、WG-32 真实 UI 路径均通过；Windows guard 保留原两条各一次许可。原失败与取消历史继续保留，未降低预算、删除断言或更改定时配置。源代码候选不再重跑已通过矩阵；本页后继仅为文档，其精确主 CI 单独记录。
 
 该回执关闭本次 CI 修复与按钮几何验收，AW-R02～12 / CS 联动、服务端维度和其他 RFC 剩余事项仍继续，不宣告整个观测能力完成。
+
+## 文档后继与共享主干 CI 的实际终态（2026-10-01）
+
+观测回执两文档提交 `993ab7ce694988536ecf600d9e4a874901e5ea41` 的 [主 CI 36871878934](https://github.com/wangbinquan/agent-workflow/actions/runs/36871878934) 被后继 push 取消，作业为 35 success / 6 failure / 9 cancelled，不能写成绿色。可定位失败属于共享 RFC-370 配套：不存在的 `buildPackagePreview` 导出、两个类型文本改变后的 AST digest、旧 reader 三参数断言。原 owner 随 `13f5b8e3` 修正，其 [CI 36874167121](https://github.com/wangbinquan/agent-workflow/actions/runs/36874167121) 为 34 success / 4 failure / 12 cancelled，另暴露测试 opId 不符合 `op-<n>` 与崩溃夹具未等待实际派发边界；失败历史保留。
+
+原 owner 继续提交 `ce8a6310adb9576559f4d5100d4916635a104720`，保留断言并改为合法 op-1 和实际 crashBoundary。该 SHA 的 [主 CI 36876744628](https://github.com/wangbinquan/agent-workflow/actions/runs/36876744628) 50 / 50 completed / success；[OpenCode 集成 36878130169](https://github.com/wangbinquan/agent-workflow/actions/runs/36878130169) 与 [Git 协议 36880609673](https://github.com/wangbinquan/agent-workflow/actions/runs/36880609673) 同 SHA 也 success。独立只读诊断保留五类具体根因，没有由观测会话改写并行源码或降低守卫。
+
+分类 / 紧凑返回源码的十运行 / 75 作业成功证据仍绑定 `eef12e25`；这条 CE8 共享主干回执不冒充九种定时配置都在 CE8 重跑。两文档回执在 CE8 祖先中，原取消 / 失败、原默认调度和 EEF 矩阵保持。
+
+## 2026-10-02 共享主干后续守卫失败与修正状态
+
+共享 RFC-370 后继 `2d65a16f5152936ec93de1f0fd362a671e89e44d` 的 [主 CI 36882578362](https://github.com/wangbinquan/agent-workflow/actions/runs/36882578362) 终态 failure，38 success / 12 failure。Ubuntu 1/16 的实际失败是 `rfc294-architecture-preflight.test.ts` 的 capability ownership 精确登记对比多出一项；数据库竞争反例输出中的 ERROR 不是这一分片的失败根因。同 SHA 的 [evidence soak 36885455310](https://github.com/wangbinquan/agent-workflow/actions/runs/36885455310) success，不能替代主 CI。
+
+原 owner 已提交 `a4b706b942adfc9ca16c15e329ba1f7fa97f78f8` 的参与者合同及 CI 登记修正；[主 CI 36886742257](https://github.com/wangbinquan/agent-workflow/actions/runs/36886742257) 在本次记录时 queued，尚无成功结论。同 SHA 实际 schedule 触发的 [视觉回归 36887644155](https://github.com/wangbinquan/agent-workflow/actions/runs/36887644155) 已 success。观测会话保留并行源码及原失败，不重复启动本机测试或已通过的 EEF 定时矩阵；新主干精确终态继续跟进。

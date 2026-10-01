@@ -165,3 +165,13 @@ ef28b3a14d3d4e536096df4fea4f9c6468104622的CI36665459531终态47success/3failure
 ## 2026-10-01 分类 Token 与返回入口精确 CI
 
 `eef12e256408a54d5e52c351c23e4ebea9fdeb32` 的主 CI、Windows 与八条定时工作流的原默认手动矩阵均终态 success（十运行 / 75 作业），见 [CI 修复回执](./ci-recovery.md#分类-token--紧凑返回入口的精确-ci-收口)。返回使用公共 PageHeader.back + 小型 ghost 按钮，实机返回保留原自定义时间 / 搜索 / 状态；CI 的返回几何矩阵已通过。分类趋势夹具未知 / 部分 / 完整证据均保留。此前失败和取消历史不覆盖，九种定时配置的源码不变。AW-R02～12 与两个 RFC 继续；CS 专用档位真实分类 / 人民币验收被平台自测哨兵归属问题阻断，修复与六项 CI / 本机部署后续单独验收。
+
+## 2026-10-01 共享主干 CI 与 CS 实采对账更新
+
+观测回执 `993ab7ce` 的主 CI 取消 / 失败历史保留；共享 RFC-370 配套两轮修正后，`ce8a6310adb9576559f4d5100d4916635a104720` 的 [主 CI 36876744628](https://github.com/wangbinquan/agent-workflow/actions/runs/36876744628) 50 项全部 success，同 SHA OpenCode 集成及 Git 协议亦 success，见 [共享后继终态](./ci-recovery.md#文档后继与共享主干-ci-的实际终态2026-10-01)。分类 / 紧凑返回的 EEF 十运行 / 75 作业证据保持独立，未以旧绿替代新 SHA。
+
+CS `85ee9254a175848d65105d16327e00afbc47cc08` 平台自测准入修复已推送、自身六项 CI success 并本机部署；专用 revision4 的标准自测及三次真实模型分类 / 人民币 / 时间对账通过：输入 5,917、缓存读取 17,728、缓存写入 0、输出 778，总 24,423、验收人民币 ¥0.026922，任务 / Agent / 算力 / 项目 / 系统 / 趋势一致。此前系统提示 false / 412 与命令验收脚本字段误读保留；同镜像 / 同修订的新标准自测证明能力后才调用模型。项目费用政策保持隐藏，真实页面复验待解锁。这是 CS 原生业务实采，不是 CS→AW 托管装配对拍；AW-R02～12 和两个 RFC 继续。
+
+### 2026-10-02 当前共享主干的精确 CI 边界
+
+后继 `2d65a16f` 主 CI 为 38 success / 12 failure；原 owner 的 `a4b706b942adfc9ca16c15e329ba1f7fa97f78f8` 已推送修正，本次记录时主 CI queued、实际 schedule 视觉回归 success，见 [后续守卫回执](./ci-recovery.md#2026-10-02-共享主干后续守卫失败与修正状态)。CE8 和 EEF 的既有成功仍只证明各自候选，当前主干不能提前写成全绿。CS 六份实采回执已发布为 `e15ca72238199eb59566dccfabfea4c452cbf9e5`，其 [精确 CI 36886631033](https://github.com/wangbinquan/CrewStation/actions/runs/36886631033) 六项 success；开发生产采集关闭、托管联合对拍及页面验收等未覆盖范围继续保留。
