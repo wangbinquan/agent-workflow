@@ -65,7 +65,7 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 
 - [ ] 完整入口普查：Task、node、wrapper、workgroup、系统Agent、独立MCP测试台、Git／脚本和后台worker。
 - [ ] Runtime能力矩阵：原支持内容全部具备等价证据；能力收缩逐项获批且正反例覆盖。
-- [ ] 持久性：PG事务、内容chunk、配置/密钥、工作卷、重建、历史cursor／归档都对账。
+- [ ] 持久性：PG 元数据／效果日志、对象 ready／pin／域引用、配置/密钥、任务工作卷、跨副本／重建、历史 cursor／归档都对账。
 - [ ] 身份：用户／服务token严格区分，ACL、首次admin、WS和现有权限／撤权验证。
 - [ ] 稳定requestKey与副作用日志覆盖所有远程POST；每个崩溃窗口至多一个实际执行。
 - [ ] 事件：producer类型穷尽矩阵、provider normalize、ACK后崩溃、MR乱序、transport迁移和两个重放语义。
@@ -248,3 +248,14 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 删除回归先断言仅有一个已暂存计划，再核对同一个确定首项；boot 源码锁精确更新为 `selected` 并补四个默认 local adapter 的接线，保留唯一中立状态机／禁止 provider 孪生的原断言。没有改生产行为或减弱回归。
 - 查明先前 fs 对象替换未影响 Bun 加载的 named import。修复仅在临时内存加载器接入官方 census 的 source read/readdir，按 HEAD 字节读取所有并行在制源码；仓库生成器、规则与他人文件不修改。生成后 `sourceDigest=sha256:e8aec5cb562cbe85c8ff5856fbc0e83ac347fbacc743231637237597bee8b4c2`，与远端失败日志自行计算的确切已提交语料一致；误混入的 opencode 清单标记同步恢复为 HEAD 的真实投影。
 - 各 baseline 无增长，无新增 allowGrowth；只用原 provenance 生成协议更新摘要。两份回归的格式/lint通过，未运行本地 AW 测试/类型检查/构建。完整终态仍须修复提交 hosted CI；独立评审工具未恢复，不据此关闭 A-G 或 RFC。
+
+
+### H6 身份迁移存储切面与 RFC-035 对齐（2026-10-01）
+
+- 生命周期修复 `9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f` 的精确 CI `36849001678` 已终态 50/50 success。恢复后续适配；原失败 run 仍保留为失败证据。
+- 新增 `SkillIdentityContentStore`／`SkillIdentityInspector` 和独立 local adapter。迁移的源指纹／rename／回滚／完成，以及启动时目录归属、空壳清理、reserve／delete 内容检查和末尾目录证明由所选端口承担；AW 保留 metadata 选择、operation 判定、数据库阶段、引用、锁与孤儿行检查。既有本地效果和判据机械迁移，没有新增检查或 provider 孪生状态机。
+- boot composition 同时选择两端口；身份迁移与 recovery driver 透传整个选择，等待所有异步效果后才提交下一阶段或释放锁。双 provider 回归覆盖无本地 home 的真实 boot participant、迁移未完成／失败、两种重启方向、DB 删除后空壳清理等待和 reserve v1 证明等待。原真实文件迁移／备份恢复回归保留。
+- 静态对比确认 `assertOperationDbAuthority` 与 `writeCanonicalPaths` 迁移前后 token 相同；目标格式／lint通过，未执行本地 AW 测试、类型检查、构建或服务。正式结果交发布后的精确 SHA hosted CI。独立功能评审工具仍不可用，不记 A-G PASS。
+- 按 CS 已落地 RFC-035 更新 proposal／design／B3／持久性清单，并补 [存储接入设计](./rfc035-storage.md)：对象字节由 CS 保存，元数据／域引用／效果日志由 AW PG 保存；区分 tree contentHash 与归档 sha256，先 ready／pin 再发布，未知写结果沿稳定键恢复。任务输入与活跃卷动态写入分别验收。M0 先部署、后续逐项收编的顺序保持。
+- 完整 bundle／插件／其余内容消费者及 H1～H8 收口继续；本批不宣称 H6、A-G、CS adapter 或部署完成。
+- 官方 census 记录本批真实分母：两个 create 工厂使 mutation +2；既有 sweep 名称规则使 background +1，没有新增定时器；两个原 ValidationError 引用使 observed import／exception 各 +2；owner 净 +18。逐项声明一次性增长，并在随后 ledger-only 提交退役；扫描范围和判据保持。

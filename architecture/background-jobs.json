@@ -5520,11 +5520,11 @@
   "denominator": {
     "ambientWiring": 500,
     "disabled": 9,
-    "entries": 337,
+    "entries": 338,
     "executionLocal": 41,
     "longRunning": 80,
     "managed": 11,
-    "periodic": 207
+    "periodic": 208
   },
   "entries": [
     {
@@ -7444,7 +7444,7 @@
         "readiness": false,
         "run": true,
         "start": false,
-        "state": true,
+        "state": false,
         "stop": false
       },
       "lifetime": "daemon",
@@ -7652,6 +7652,27 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/askerKey.ts#wgClarifyAskerKeyForRound",
       "phase": "unknown",
       "symbol": "wgClarifyAskerKeyForRound",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityInspector.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityInspector.ts#prepareHuskSweep",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityInspector.ts#prepareHuskSweep",
+      "phase": "unknown",
+      "symbol": "prepareHuskSweep",
       "targetContext": "resource-catalog"
     },
     {
@@ -12950,5 +12971,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:32e7d2a10ed5b398946152d4c0b711a58f21932e908489562a7b08c5d12d722a"
+  "sourceDigest": "sha256:d9447ab306c0d38c73ea4a34911b95d9d0f3664e0659a12cea6019c1d7996c89"
 }

@@ -1,7 +1,5 @@
 // RFC-223 PR-5 — crash-safe skills/{name} -> skills/{id} migration operation.
 
-import { closeSync, fsyncSync, lstatSync, openSync, renameSync } from 'node:fs'
-import { dirname } from 'node:path'
 import { and, eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
@@ -9,7 +7,7 @@ import {
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 import { skills, skillVersions } from '@/db/schema'
-import { fingerprintTree } from '@/modules/resource-catalog/infrastructure/legacy/skillHash'
+import { createFileSkillIdentityContentStore } from '../local/fileSkillIdentityContentStore'
 import {
   legacySkillRootAbs,
   skillFilesRel,
@@ -47,10 +45,9 @@ export async function migrateSkillIdentityOp(
   hooks: SkillIdentityMigrationHooks = {},
 ): Promise<void> {
   const session = databaseSessionFor(db)
-  const oldRoot = legacySkillRootAbs(fsOpts.appHome, skill.name)
-  const newRoot = skillRootAbs(fsOpts.appHome, skill.id)
-  const samePath = oldRoot === newRoot || pathsShareEntry(oldRoot, newRoot)
-  const fingerprint = requireMigrationRoot(oldRoot, newRoot, 'legacy', null)
+  const content = fsOpts.identityContent ?? createFileSkillIdentityContentStore(fsOpts.appHome)
+  const plan = content.plan({ skillId: skill.id, legacyName: skill.name })
+  const fingerprint = await content.captureSource(plan)
   const opId = await session.transaction(
     async (tx) =>
       await beginOperation(tx, {
@@ -65,8 +62,7 @@ export async function migrateSkillIdentityOp(
   )
   hooks.afterPhase?.('intent', skill.id)
 
-  if (!samePath) renameAndSyncParent(oldRoot, newRoot)
-  requireMigrationRoot(oldRoot, newRoot, 'canonical', fingerprint)
+  await content.move(plan, fingerprint)
   hooks.afterPhase?.('fs-moved', skill.id)
   await session.transaction(async (tx) => await advancePhase(tx, opId, 'fs-staged'))
   hooks.afterPhase?.('fs-staged', skill.id)
@@ -82,32 +78,15 @@ export async function migrateSkillIdentityOp(
 }
 
 export const migrateRecoveryHandler: OpRecoveryHandler = {
-  rollbackFs: (fsOpts, op) => {
+  rollbackFs: async (fsOpts, op) => {
     const identity = decodeMigratePrecondition(op)
-    const oldRoot = legacySkillRootAbs(fsOpts.appHome, identity.legacyName)
-    const newRoot = skillRootAbs(fsOpts.appHome, identity.skillId)
-    if (oldRoot === newRoot || pathsShareEntry(oldRoot, newRoot)) {
-      requireMigrationRoot(oldRoot, newRoot, 'legacy', op.candidateFingerprint)
-      return
-    }
-    const state = rootState(oldRoot, newRoot)
-    if (state === 'legacy') {
-      requireMigrationRoot(oldRoot, newRoot, 'legacy', op.candidateFingerprint)
-      return
-    }
-    if (state === 'canonical') {
-      requireMigrationRoot(oldRoot, newRoot, 'canonical', op.candidateFingerprint)
-      renameAndSyncParent(newRoot, oldRoot)
-      requireMigrationRoot(oldRoot, newRoot, 'legacy', op.candidateFingerprint)
-      return
-    }
-    throw migrationRootError(state)
+    const content = fsOpts.identityContent ?? createFileSkillIdentityContentStore(fsOpts.appHome)
+    await content.rollback(content.plan(identity), op.candidateFingerprint!)
   },
-  rollForwardFs: (fsOpts, op) => {
+  rollForwardFs: async (fsOpts, op) => {
     const identity = decodeMigratePrecondition(op)
-    const oldRoot = legacySkillRootAbs(fsOpts.appHome, identity.legacyName)
-    const newRoot = skillRootAbs(fsOpts.appHome, identity.skillId)
-    requireMigrationRoot(oldRoot, newRoot, 'canonical', op.candidateFingerprint)
+    const content = fsOpts.identityContent ?? createFileSkillIdentityContentStore(fsOpts.appHome)
+    await content.rollForward(content.plan(identity), op.candidateFingerprint!)
   },
   recoverDb: async (tx, op, dir) => {
     if (dir === 'rollforward') await writeCanonicalPaths(tx, op.skillId)
@@ -169,116 +148,4 @@ export function decodeMigratePrecondition(op: SkillOperationRow): MigratePrecond
   skillRootAbs('/', obj.skillId)
   legacySkillRootAbs('/', obj.legacyName)
   return { skillId: obj.skillId, legacyName: obj.legacyName }
-}
-
-type RootState = 'legacy' | 'canonical' | 'both' | 'missing'
-
-function rootState(oldRoot: string, newRoot: string): RootState {
-  if (oldRoot === newRoot || pathsShareEntry(oldRoot, newRoot)) {
-    return pathEntryExists(oldRoot) ? 'canonical' : 'missing'
-  }
-  const oldExists = pathEntryExists(oldRoot)
-  const newExists = pathEntryExists(newRoot)
-  if (oldExists && newExists) return 'both'
-  if (oldExists) return 'legacy'
-  if (newExists) return 'canonical'
-  return 'missing'
-}
-
-function requireMigrationRoot(
-  oldRoot: string,
-  newRoot: string,
-  expected: 'legacy' | 'canonical',
-  fingerprint: string | null,
-): string {
-  if (oldRoot === newRoot || pathsShareEntry(oldRoot, newRoot)) {
-    if (!pathEntryExists(oldRoot)) throw migrationRootError('missing')
-    assertRealDirectory(oldRoot)
-    const actual = fingerprintTree(oldRoot)
-    if (fingerprint !== null && actual !== fingerprint) {
-      throw new ValidationError(
-        'skill-migration-fingerprint-mismatch',
-        'skill directory changed while its identity migration was in flight',
-      )
-    }
-    return actual
-  }
-  const state = rootState(oldRoot, newRoot)
-  if (state !== expected) throw migrationRootError(state)
-  const root = expected === 'legacy' ? oldRoot : newRoot
-  assertRealDirectory(root)
-  const actual = fingerprintTree(root)
-  if (fingerprint !== null && actual !== fingerprint) {
-    throw new ValidationError(
-      'skill-migration-fingerprint-mismatch',
-      'skill directory changed while its identity migration was in flight',
-    )
-  }
-  return actual
-}
-
-function pathEntryExists(path: string): boolean {
-  try {
-    lstatSync(path)
-    return true
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false
-    throw err
-  }
-}
-
-function pathsShareEntry(a: string, b: string): boolean {
-  if (a === b) return pathEntryExists(a)
-  try {
-    const left = lstatSync(a)
-    const right = lstatSync(b)
-    return left.dev === right.dev && left.ino === right.ino
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return false
-    throw err
-  }
-}
-
-function assertRealDirectory(path: string): void {
-  const stat = lstatSync(path)
-  if (!stat.isDirectory() || stat.isSymbolicLink()) {
-    throw new ValidationError(
-      'skill-migration-root-invalid',
-      `skill migration root is not a real directory: ${path}`,
-    )
-  }
-}
-
-function migrationRootError(state: RootState): ValidationError {
-  return new ValidationError(
-    state === 'both' ? 'skill-migration-root-collision' : 'skill-migration-root-missing',
-    state === 'both'
-      ? 'both legacy-name and canonical-id skill directories exist'
-      : 'neither the expected legacy-name nor canonical-id skill directory exists',
-  )
-}
-
-function renameAndSyncParent(from: string, to: string): void {
-  renameSync(from, to)
-  // The two roots are siblings. Persist the directory entry update before the
-  // following phase commit so a power loss cannot leave SQLite claiming
-  // fs-staged while the rename only lived in the filesystem cache.
-  //
-  // RFC-254: best-effort — Windows (and some other platforms) reject fsync on a
-  // directory fd with EPERM, and openSync of a directory can itself throw there.
-  // The rename is atomic regardless, so tolerate a failed parent-dir sync rather
-  // than aborting the whole migration (mirrors restore.ts `fsyncDir`). Without
-  // this the RFC-223 skill-identity barrier — run on every boot and inside
-  // restore's post-swap chain — dies on Windows before any skill can migrate.
-  const parent = dirname(to)
-  try {
-    const fd = openSync(parent, 'r')
-    try {
-      fsyncSync(fd)
-    } finally {
-      closeSync(fd)
-    }
-  } catch {
-    /* best-effort durability — see comment above */
-  }
 }

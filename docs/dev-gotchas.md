@@ -8532,3 +8532,10 @@ SQLite 专有的东西。判据是整份源码 `not.toContain('sqlite')`，**注
 连接关闭语义不同，同一条 `rfc349-postgresql-target-faults` 在本机报 `close()` 的 `Connection closed`、在 CI 报
 注入落空——两处看到的根本不是同一个失败。不想动全局安装时，装一份到临时目录直接用：
 `npm i --prefix <tmp> bun@1.4.0 && <tmp>/node_modules/.bin/bun test <file>`。
+
+
+## 2026-10-01：Bun 源码 census 的 named fs import 与并行候选
+
+RFC-370 生命周期清单曾混入并行未提交源码：只替换 `node:fs` 对象并调用 `syncBuiltinESMExports()`，没有让当前 Bun 环境中 census 的 named import 使用该读取函数。不能据此认为清单已按 HEAD 排除 WIP。
+
+仅在需要限定共享候选时，用临时内存加载器将官方 census 的 source read/readdir 接到候选字节读取；保留生成器、扫描范围和判据，其他路径从 `git show HEAD:path` 取原始字节，不能 trim。生成后比对 sourceDigest 与已提交语料的正式 CI 重算值。本批身份切面生成时没有并行 dirty 源码，直接使用官方命令。完整回执见 RFC-370 plan 的生命周期 CI 配套修复。

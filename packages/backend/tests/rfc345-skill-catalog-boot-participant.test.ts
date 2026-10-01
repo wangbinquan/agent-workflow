@@ -86,6 +86,8 @@ describe('RFC-345 provider-owned Skill Catalog boot participant', () => {
       'snapshotInspector',
       'deletionContent',
       'versionRecovery',
+      'identityContent',
+      'identityInspector',
     ]) {
       expect(adapter).toContain(`input.${port} ?? createFileSkill`)
     }

@@ -2,6 +2,8 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { createSkillCatalogBootParticipant } from '../application/skills/skillCatalogBootParticipant'
 import { createSkillCatalogBootAdapter } from '../infrastructure/skillCatalogBootAdapter'
 import type { SkillVersionRecoveryContentStore } from '../application/skills/versionRecoveryContentStore'
+import type { SkillIdentityContentStore } from '../application/skills/identityContentStore'
+import type { SkillIdentityInspector } from '../application/skills/identityInspector'
 import type { SkillCreationContentStore } from '../application/skills/creationContentStore'
 import type { SkillDeletionContentStore } from '../application/skills/deletionContentStore'
 import type {
@@ -26,6 +28,8 @@ export function composeSkillCatalogBoot(input: {
   readonly deletionContent?: SkillDeletionContentStore
   readonly creationContent?: SkillCreationContentStore
   readonly versionRecovery?: SkillVersionRecoveryContentStore
+  readonly identityContent?: SkillIdentityContentStore
+  readonly identityInspector?: SkillIdentityInspector
 }): SkillCatalogBootParticipant {
   return createSkillCatalogBootParticipant(createSkillCatalogBootAdapter(input))
 }

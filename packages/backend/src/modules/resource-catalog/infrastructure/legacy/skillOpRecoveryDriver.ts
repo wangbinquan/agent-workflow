@@ -46,6 +46,8 @@ import type {
 import type { SkillVersionRecoveryContentStore } from '../../application/skills/versionRecoveryContentStore'
 import type { SkillDeletionContentStore } from '../../application/skills/deletionContentStore'
 import type { SkillCreationContentStore } from '../../application/skills/creationContentStore'
+import type { SkillIdentityContentStore } from '../../application/skills/identityContentStore'
+import type { SkillIdentityInspector } from '../../application/skills/identityInspector'
 
 const log = createLogger('skill-op-recovery')
 
@@ -82,6 +84,8 @@ export interface SkillOpFsOptions {
   deletionContent?: SkillDeletionContentStore
   creationContent?: SkillCreationContentStore
   versionRecovery?: SkillVersionRecoveryContentStore
+  identityContent?: SkillIdentityContentStore
+  identityInspector?: SkillIdentityInspector
 }
 
 export interface RecoveryReport {

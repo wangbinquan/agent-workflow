@@ -8,8 +8,12 @@ import type {
 } from '../application/skills/lifecycleContentStore'
 import type { SkillDeletionContentStore } from '../application/skills/deletionContentStore'
 import type { SkillVersionRecoveryContentStore } from '../application/skills/versionRecoveryContentStore'
+import type { SkillIdentityContentStore } from '../application/skills/identityContentStore'
+import type { SkillIdentityInspector } from '../application/skills/identityInspector'
 import type { SkillCreationContentStore } from '../application/skills/creationContentStore'
 import { createFileSkillVersionRecoveryContentStore } from './local/fileSkillVersionRecoveryContentStore'
+import { createFileSkillIdentityContentStore } from './local/fileSkillIdentityContentStore'
+import { createFileSkillIdentityInspector } from './local/fileSkillIdentityInspector'
 import { createFileSkillLifecycleContentStore } from './local/fileSkillLifecycleContentStore'
 import { createFileSkillSnapshotInspector } from './local/fileSkillSnapshotInspector'
 import { createFileSkillDeletionContentStore } from './local/fileSkillDeletionContentStore'
@@ -24,9 +28,13 @@ export function createSkillCatalogBootAdapter(input: {
   readonly deletionContent?: SkillDeletionContentStore
   readonly creationContent?: SkillCreationContentStore
   readonly versionRecovery?: SkillVersionRecoveryContentStore
+  readonly identityContent?: SkillIdentityContentStore
+  readonly identityInspector?: SkillIdentityInspector
 }): SkillCatalogBootAdapter {
   const selected = {
     ...input,
+    identityContent: input.identityContent ?? createFileSkillIdentityContentStore(input.appHome),
+    identityInspector: input.identityInspector ?? createFileSkillIdentityInspector(input.appHome),
     lifecycleContent: input.lifecycleContent ?? createFileSkillLifecycleContentStore(input.appHome),
     snapshotInspector: input.snapshotInspector ?? createFileSkillSnapshotInspector(input.appHome),
     deletionContent: input.deletionContent ?? createFileSkillDeletionContentStore(input.appHome),

@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1778,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1780,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：两个身份内容/检查 local 工厂按原 create 前缀计数，1778→1780；renameAndSyncParent 从 legacy 移入 local，原效果未增加。"
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -832,8 +835,11 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 337,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 338,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：原名称分类将移出的 prepareHuskSweep 计入，337→338；仅重命名并抽取既有空壳清理准备，没有新增 timer/worker。"
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -846,8 +852,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5581,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5583,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：两份新 local adapter 继续使用同一 ValidationError，实际 util 引用净增2，5581→5583；不新增转发桥或改判据。"
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +876,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4958,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 4960,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：与上述两个真实 util 引用对应的精确 exception 净增2，4958→4960；原 util 清退责任不关闭。"
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +914,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25547,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25565,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 H6：四个身份 port/local 文件、工厂、inventory 选择及迁移 helper 净增18个 owner，25547→25565；按真实源码登记，父 RFC 波次不关闭。"
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:32e7d2a10ed5b398946152d4c0b711a58f21932e908489562a7b08c5d12d722a",
+    "sourceDigest": "sha256:d9447ab306c0d38c73ea4a34911b95d9d0f3664e0659a12cea6019c1d7996c89",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +935,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "00367b19eb3d091bca9e83eac1b0b35bf2ca2835",
-    "contentDigest": "sha256:e3977ad50629a90bdc29ed368f68615d09bdb6797e470859990473991a83c0ce",
+    "currentSnapshotSha": "b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d",
+    "contentDigest": "sha256:e3307c762d311eca9c4286fc8c5bd2dc7a82800eed09babe309f15642d715bd4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

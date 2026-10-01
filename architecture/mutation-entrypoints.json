@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1778,
+    "entries": 1780,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -17298,7 +17298,7 @@
         "authority": "system",
         "authorization": true,
         "event": false,
-        "fenceOrOcc": true,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts",
@@ -17307,33 +17307,11 @@
       "missingControls": [
         "audit",
         "event",
+        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts#runSkillIdentityMigrationBarrier",
       "symbol": "runSkillIdentityMigrationBarrier",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts#renameAndSyncParent",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillMigrateOp.ts#renameAndSyncParent",
-      "symbol": "renameAndSyncParent",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -17961,6 +17939,76 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillDeletionContentStore.ts#createFileSkillDeletionContentStore",
       "symbol": "createFileSkillDeletionContentStore",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityContentStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityContentStore.ts#createFileSkillIdentityContentStore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityContentStore.ts#createFileSkillIdentityContentStore",
+      "symbol": "createFileSkillIdentityContentStore",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityContentStore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityContentStore.ts#renameAndSyncParent",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityContentStore.ts#renameAndSyncParent",
+      "symbol": "renameAndSyncParent",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityInspector.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityInspector.ts#createFileSkillIdentityInspector",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityInspector.ts#createFileSkillIdentityInspector",
+      "symbol": "createFileSkillIdentityInspector",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -42478,7 +42526,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:32e7d2a10ed5b398946152d4c0b711a58f21932e908489562a7b08c5d12d722a",
+  "sourceDigest": "sha256:d9447ab306c0d38c73ea4a34911b95d9d0f3664e0659a12cea6019c1d7996c89",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

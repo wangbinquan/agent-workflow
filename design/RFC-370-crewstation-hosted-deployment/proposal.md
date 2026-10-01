@@ -33,7 +33,7 @@
 | H3   | 工作区与 Git 效果       | 来源封存、分支／worktree／merge 规则、写入串行化   | persistent 工作卷、command 效果、版本化文件读取         |
 | H4   | Agent／command 执行传输 | NodeRun／系统执行判定、信封、预算与业务终态        | v3 子任务、取消／消息、事件／结果／原生 session         |
 | H5   | Runtime 配置与执行材料  | 资源选择、快照、能力要求、声明与实际核验           | 获准的 profile／image／MCP／Secret、不可变材料          |
-| H6   | 非工作区文件与产物存储  | 技能、插件内容、快照、归档、附件的所有权／保留策略 | CS 管理的业务 PG；服务磁盘只作可重建缓存                |
+| H6   | 非工作区文件与产物存储  | 技能、插件内容、快照、归档、附件的所有权／保留策略 | CS 对象空间保存不可变内容；AW PG 保存引用和操作日志      |
 | H7   | 执行权、发布交接与恢复  | 调度／后台任务所有者、业务恢复和提交 fence         | v3 claim／renew／activate、migration／handoff、恢复请求 |
 | H8   | CS 事件受理             | provider 归一化、MR 控制、规则匹配、幂等 launch    | EventDelivery、来源校验、持久 ACK、重投及死信关联       |
 

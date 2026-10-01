@@ -1,3 +1,7 @@
+## 2026-10-01 RFC-370 身份迁移存储切面与 RFC-035 对齐
+
+CI 修复 `9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f`／`36849001678` 已 50/50 success，继续阶段 A。本批将技能身份迁移、物理归属及恢复检查接到两个 owner 端口与 local adapter，AW 数据库 authority／阶段／引用／锁保持；补双 provider 异步真实 boot 接线回归，正式测试交 hosted CI。RFC-035 已有平台对象合同，RFC-370 更新为 CS 对象字节／AW PG 元数据与日志／任务 PVC 工作区，详见 [存储接入](design/RFC-370-crewstation-hosted-deployment/rfc035-storage.md)。完整 bundle、其余切面和 CS adapter／M0～M4 仍继续，A-G 独立评审未取得，不关闭 RFC；下方历史和并行记录保留。
+
 ## 2026-10-01 RFC-370 生命周期 CI 修复
 
 `00367b19eb3d091bca9e83eac1b0b35bf2ca2835` 的 CI `36846302858` 已终态 45 success／5 failure，原因是类型、boot 接线旧断言及 canonical 读取污染，不记全绿。本批给删除夹具补已暂存计划数量断言与确定首项类型；原四条 boot 精确绑定改锁所选端口并补默认 adapter 接线。Bun 的 named fs import 未使用先前替换，导致 canonical 混入并行观测源码；现只在内存接入官方 census 的读取端口，重生摘要与 CI 已计算的真实提交语料完全一致，原规则／基线不变。目标格式/lint通过，无本地 AW 功能测试；正式结果继续等待修复 SHA hosted CI。暂停后续适配，先恢复 CI；并行 WIP 原样保留，完整 RFC／A-G／部署仍未完成。

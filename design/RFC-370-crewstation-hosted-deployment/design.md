@@ -39,7 +39,7 @@ H1～H8 是职责清单，不是现有八个插件接口。先按下表普查每
 | H3 工作区       | 已有 Task／SC 读取与准备合同；物理 Git／FS 效果需继续收口         | SC-owned workspace／Git 效果端口与 local adapter；Task 继续依赖 SC public 合同                                         | SC 远程工作卷、命令、文件读写 adapter                           |
 | H4 执行         | 现 AgentProcessRequest 仍暴露 cmd／cwd／env／PID                  | task-execution 拥有中立执行效果合同；本地 spawn、PID、管道和终止树封装入 local adapter，业务／系统执行入口全部接线     | CS 原生 agent／command、收据、流、取消与恢复 adapter            |
 | H5 Runtime 材料 | 已有两种 RuntimeDriver，但 buildSpawn／文件物化与协议职责交织     | runtime-management 拥有冻结配置／能力需求；两种协议职责保留，分离本地启动物化与执行目标材料转换                        | profile／image 绑定、CS 材料编译与能力翻译                      |
-| H6 内容         | Paths 下技能／插件／快照等本地事实尚未统一经内容合同访问          | 各域拥有内容引用与保留规则；platform 提供中立存储机制，原文件目录由 filesystem adapter 实现                            | 中立 PG 内容实现与 hosted 装配，不另造 CS SQL provider          |
+| H6 内容         | Paths 下技能／插件／快照等本地事实尚未统一经内容合同访问          | 各域拥有内容引用与保留规则；platform 提供中立存储机制，原文件目录由 filesystem adapter 实现                            | 各 owner 的 CS 对象 adapter；AW PG 只存元数据、引用与效果日志    |
 | H7 执行权／恢复 | 现单实例与 owner 规则存在，后台效果和启动恢复尚需统一接线         | system-operations 拥有执行权生命周期合同；local 实现保留现单实例／重启语义，各域消费必要 authority／恢复合同           | CS lease／handoff／recovery adapter；业务恢复仍归原域           |
 | H8 事件入站     | 已有 verified webhook 受理、持久化与归一化；需分离 transport 信封 | integration 收口 transport-neutral 受理输入／事务参与者；GitLab／GitHub 直连入站 adapter 保持验签、去重、MR 与事件语义 | CS EventDelivery 入站 adapter、来源绑定及独立 transport receipt |
 
@@ -61,7 +61,7 @@ packages/backend/src/
     composition.ts                    # 仅向 bootstrap 导出精确装配入口
     public/                           # 既有受控跨域合同
   platform/crewstation/                # 阶段 B：中立 HTTP、wire codec、SSE 机制
-  platform/storage/                   # 中立 filesystem／PG 内容存储机制
+  platform/storage/                   # 中立字节传输机制；域引用及恢复留各 owner
   bootstrap/                          # 按部署配置选择并注入实现
 deploy/crewstation/                   # 仓库根目录：镜像、Manifest、发布材料
 ```
@@ -126,7 +126,7 @@ Manifest 使用 `crewstation/v3` DigitalWorker、服务 replicas=1、startup/rea
 
 一个 aw 根执行作用域绑定一个 persistent CS business task／volume，子任务是否共享工作区由现 call／fusion／wrapper 语义决定，不能一律按 aw task 行新建卷。隔离 node／fan-out 的 worktree 在卷内各自拥有稳定目录；merge 仍由 aw 现写锁和新 fence 串行裁决。多仓 URL、认证引用、分支、resolved commit 和准备 receipt 保留 RFC-363 的归属及两条 launch lane。
 
-Git／脚本／工作区写入经 v3 command 调用镜像中固定的 `aw-workspace-tool`，只消费 schema 校验后的命令材料，保留既有脚本节点本身的执行语义。CS DTO 没有通用文件上传入口：设计采用分块上传的应用协议，通过 argv 传有界 base64 chunk（单块原始内容≤16KiB，编码后单参数低于当前32768字符上限，请求总长低于2MiB），卷内工具按 operationId、digest、offset 幂等写临时文件，校验总摘要后 atomic rename。发布前对 actual body／argv 限额、二进制、执行位、断点和非法路径做实测；这不是当前 CS 已有的 upload API。
+新任务的文件输入先发布到 RFC-035 对象空间，再随任务创建传入 `inputObjects[{objectId,sha256,path}]`；CS 持久 pin 并物化到任务卷。对象输入不是活跃卷的任意文件写 API。Git／脚本以及任务创建后的动态工作区写入经 v3 command 调用镜像中固定的 `aw-workspace-tool`，保留既有脚本节点本身的执行语义。确需动态传字节时，应用协议通过 argv 传有界 base64 chunk（单块原始内容≤16KiB，编码后单参数低于当前32768字符上限，请求总长低于2MiB），卷内工具按 operationId、digest、offset 写临时文件并在总摘要一致后 atomic rename。发布前对 actual body／argv 限额、二进制、执行位和断点做实测；不把新任务输入合同当成这条动态写入协议已通过。
 
 读取使用 `/v3/business-tasks/:taskId/file` 和 `/files` 的版本化分页，续读必须带 version；Git diff／merge／checkout 等走远程命令而非下载全仓到服务容器。每个命令 outcome、输出工件 digest 与工作区 generation 持久关联，超时不能当“没执行过”重发新键。旧 generation 回执不能更新当前工作区。
 
@@ -136,9 +136,9 @@ Git／脚本／工作区写入经 v3 command 调用镜像中固定的 `aw-worksp
 
 aw 还有 skills、plugins、snapshots、runs、attachments、archives 等本地事实。CS serviceSpec 没有持久服务卷字段，不能通过未声明 hostPath/PVC 偷补。
 
-本稿选定业务 PG 作为托管版耐久内容库，standalone 文件实现不变。拟议 `ContentStore` 只提供机制：按 digest 的 put/get(range)/stat/delete，域引用及 ACL 仍由原 owner 保存。新增中立持久适配：`hosted_content_objects`（digest、size、mediaType、state）、`hosted_content_chunks`（digest、index、bytes）、域内引用与保留记录。分块≤1MiB；上传先 staged，完成总摘要校验后与引用原子发布；无引用内容按延迟 GC，正在上传／读取的租约不可回收。
+CS RFC-035 已提供服务域对象合同。本稿选定 CS 对象空间保存不可变 skills／plugins 版本、附件和归档内容，AW PG 保存配置、域版本、objectId／摘要、引用及持久效果日志，standalone 文件实现不变。原 PG 内容字节／chunk 方案不再作为实施目标。各 owner 的读／写／生命周期／恢复端口保持独立，在本模块 `infrastructure/crewstation/` 翻译对象协议；共同客户端只提供传输机制，不拥有 AW 的版本发布、保留或恢复决定。详细合同与阶段边界见 [RFC-035 存储接入](./rfc035-storage.md)。
 
-缓存路径可重新物化但不是源事实；插件的目录、二进制文件、mode 位一并进清单，链接不能逃逸。Secret 不存普通内容块；现有加密记录依赖的主密钥需由 H1 稳定提供。大历史量的数据库体积、备份时间、吞吐必须在试点量级下验收；不达标就为对象存储提出明确后继方案，不假定 CS 已有对象存储 API。
+对象 ready 并完成域引用／pin 后才发布可消费版本。AW 原 canonical tree `contentHash` 与归档字节 `sha256` 分别保存，目录、二进制文件、mode 位保持原语义。对象操作和 AW PG 提交不是单一事务；稳定 requestKey、operationId、uploadId 与阶段记录支持丢回执后沿原操作恢复，不因未知写结果换键重复上传。缓存可重建；Secret／主密钥仍由 H1 稳定提供。M0 验证已开放编辑路径跨服务副本及 Pod 重建的耐久性；大历史容量、对象备份和活跃任务卷恢复在对应里程碑验收，平台单独 acceptance 不替代 AW 联合证明。
 
 ## 5. H4/H5：执行传输、材料与 Runtime 能力
 
@@ -180,7 +180,7 @@ aw 冻结自身 Agent／workflow／runtime 资源快照；安装绑定表把 run
 | 私有 binary／模型／extraArgs／provider 网关                     | 管理员 compute profile／运行镜像               | 逐值映射；没有等价配置则预检阻塞，不用 command 伪装平台 Agent                                          |
 | 插件任意内容及 per-run 激活、AW startup inventory／子会话完整性 | 当前 materials/capabilities 未直接声明等价字段 | 阻塞 B1：先证明可由受控镜像+材料得到等价效果和取证；否则需要 CS 配套 RFC／合同增补                     |
 | 任意 stdio MCP 或 aw task-scoped callback                       | connectionId 和授权 MCP 材料                   | 阻塞 B2：证明自定义服务、AW scoped token、撤权、依赖 Agent传播与回连网络可用；不能用平台管理员凭据代替 |
-| 工作区上传与持久内容                                            | v3 command + 文件读；业务 PG                   | 验证 H3 分块工具和 H6 内容库；不能虚构 CS 文件写／对象存储接口                                         |
+| 工作区输入、动态写入与持久内容                                  | RFC-035 对象／inputObjects；v3 command／文件读 | 验证 ready／pin／任务输入与 H3 动态写入；对象合同不等于活跃卷通用文件写 API                            |
 | profile inventory、模型列表、probe／测试台                      | v3 capability 不等于现 aw 全部管理接口         | CS 模式 UI 显示实际平台绑定和只读能力，原编辑流须有明确迁移入口；不造成功 probe                        |
 
 用户已选择完整接入。B1/B2未消除时试点只能算中间验证，AC03/AC05不得关闭，不能作为缩减范围的最终交付。需要的平台合同变更归 CS RFC，aw 不私改 Runner 内部协议。
@@ -248,7 +248,7 @@ CS dead replay 是同一 transport delivery 的重试，不自动创造 aw 新�
 | task-execution                  | hosted effect intent／execution binding／运行 cursor | 原 execution identity + logical attempt + operation；CS ID 不覆盖 aw ULID |
 | source-control                  | remote workspace binding／准备及 chunk receipt       | workspaceRef + generation + operationId；继承现来源封存                   |
 | runtime-management              | runtime/profile/image binding                        | aw runtime snapshot + platform revision；变更影响新 run                   |
-| 各资源 owner + platform storage | durable object/chunks + domain references            | digest/index 唯一；引用和完成态事务化                                     |
+| 各资源 owner + platform storage | object binding／域引用／持久效果日志；字节在 CS       | 稳定操作键；ready／pin 后发布；跨 CS／AW 提交沿原日志恢复                 |
 | integration                     | cs_event_inbox／producer source binding              | delivery 唯一、event事实唯一、stage 可重放                                |
 
 这些是逻辑表合同，阶段 B 各增量任务冻结所需schema与迁移编号后再编码；不能把多域 writer 合并进一个“CrewStationService”万能模块。新增 schema 必须遵循双 provider 迁移／测试基线；standalone 不启用托管 workers，但迁移不能破坏旧库。ULID、CS UUIDv7、上游仓库/评论ID及 native sessionId 保持各自命名空间。
@@ -275,7 +275,7 @@ CS dead replay 是同一 transport delivery 的重试，不自动创造 aw 新�
 | ---------------------------------------------- | ---------------------------- | ------------------------------------------------------------------- |
 | B1 完整材料／插件／inventory／session取证等价  | aw runtime + CS Agent合同    | 实际可映射矩阵与失败用例；若不能等价，先给CS配套设计并补齐后再验收  |
 | B2 MCP自定义入口及task-scoped回连／Git认证网络 | aw integration + CS授权/网络 | 授权、撤权、Secret、回连和私有仓访问证据；不借用管理员会话          |
-| B3 H6 PG内容库存储量与H3文件写入协议           | aw storage／SC               | 实测上限、分页/中断恢复／备份预算；失败则替代设计，不把临时盘持久化 |
+| B3 对象消费／域引用恢复与H3输入／动态写入      | aw storage／SC + CS 对象合同 | 冻结 binding／pin／效果日志；实测当期容量、丢回执恢复与任务输入／动态写入，不以平台通过替代 AW 验收 |
 | B4 托管身份迁移与PAT调用者                     | 用户／aw identity            | 批准业务管理员名单和旧自动化客户端替代方案                          |
 
 架构目标无新增豁免；存量PID/FS/driver耦合在本次触及范围必须收敛到端口，未触及的RFC-294债务不顺带宣称清零。CS合同已具备的部分与以上待验证差异分开记账。
