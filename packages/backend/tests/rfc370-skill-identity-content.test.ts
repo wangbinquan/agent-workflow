@@ -334,6 +334,7 @@ describeEachProvider('RFC-370 skill identity content', (harness) => {
         .where(eq(skillVersions.skillId, skillId))
         .limit(1)
     )[0]!
+    expect(version.hash).not.toBeNull()
     const opId = await databaseSessionFor(harness.db).transaction(async (tx) => {
       const id = await beginOperation(tx, {
         kind: 'reserve',
@@ -350,7 +351,7 @@ describeEachProvider('RFC-370 skill identity content', (harness) => {
       releaseProof = barrier()
     remote.state.canonical = true
     remote.inspector.assertPublishedReserve = async (input) => {
-      expect(input).toEqual({ skillId, operationId: opId, contentHash: version.hash })
+      expect(input).toEqual({ skillId, operationId: opId, contentHash: version.hash! })
       proving.release()
       await releaseProof.pending
     }

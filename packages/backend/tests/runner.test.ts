@@ -296,7 +296,10 @@ describeEachProvider('runNode', (harness) => {
     const step = {
       type: 'step_finish',
       sessionID: 'usage-native',
-      part: { id: 'step', tokens: { input: 100, output: 10, cache: { read: 20, write: 0 } } },
+      part: {
+        id: 'step',
+        tokens: { input: 100, output: 10, reasoning: 0, cache: { read: 20, write: 0 } },
+      },
     }
     const result = await withEnv(
       {

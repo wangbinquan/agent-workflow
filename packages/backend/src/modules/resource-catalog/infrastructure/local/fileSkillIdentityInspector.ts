@@ -342,7 +342,7 @@ function preflightPhysicalOwnershipGraph(
   rows: readonly SkillIdentityInventoryRow[],
   active: readonly SkillIdentityOperationInspection[],
   appHome: string,
-): Promise<void> {
+): void {
   const claims = new Map<string, PhysicalClaim>()
   const rootClaims = new Map<string, PhysicalClaim>()
   const canonicalLogicalClaims = new Map<string, PhysicalClaim>()

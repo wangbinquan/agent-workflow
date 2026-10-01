@@ -259,3 +259,10 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 - 按 CS 已落地 RFC-035 更新 proposal／design／B3／持久性清单，并补 [存储接入设计](./rfc035-storage.md)：对象字节由 CS 保存，元数据／域引用／效果日志由 AW PG 保存；区分 tree contentHash 与归档 sha256，先 ready／pin 再发布，未知写结果沿稳定键恢复。任务输入与活跃卷动态写入分别验收。M0 先部署、后续逐项收编的顺序保持。
 - 完整 bundle／插件／其余内容消费者及 H1～H8 收口继续；本批不宣称 H6、A-G、CS adapter 或部署完成。
 - 官方 census 记录本批真实分母：两个 create 工厂使 mutation +2；既有 sweep 名称规则使 background +1，没有新增定时器；两个原 ValidationError 引用使 observed import／exception 各 +2；owner 净 +18。逐项声明一次性增长，并在随后 ledger-only 提交退役；扫描范围和判据保持。
+
+
+### 身份切面 CI 配套修复（2026-10-01）
+
+- `d97f55dde9393464f4ca8f5cd5afdf1b7ffdee86`／CI `36854974478` 检出两处本批类型遗漏：机械移出的同步 graph helper 残留 `Promise<void>` 声明，reserve 夹具的已发布摘要仍被推为 nullable。改为真实 void 返回，先断言摘要非空再比较完整输入；不改变效果或数据库阶段。
+- 同 run 还检出 RFC-371 的前端 exact 选项及 runner 观测夹具。前端由并行作者在 `f512dc321932e6be0b3453dfc6cc1b69c9bb9dd9` 修复，输出完整保留。本批 runner 的“独立投影”夹具显式报告 `reasoning: 0`，对应它原本断言的已知 output=10；保留全部输出、持久受理与不等待投影断言。生产归一化继续将缺失 reasoning 表示为未知，没有放宽判据。
+- 格式／lint通过；通过 scoped source transport 仅生成 HEAD＋本次 inspector 修复的候选，未混入下一批 package reader 的未提交代码。全部 baseline 无增长、allowGrowth 为空，原扫描规则保持。后续适配暂停发布，完整终态由包含修复及并行输出的精确 SHA CI 给出。

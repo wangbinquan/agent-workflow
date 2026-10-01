@@ -1,3 +1,7 @@
+## 2026-10-01 RFC-370 身份切面 CI 修复
+
+本批两处类型遗漏已修正：同步 graph helper 返回 void，reserve 夹具先证明非空摘要。CI `36854974478` 同时发现并行观测夹具问题；前端修正在 `f512dc321`，本批为原已知 output=10 的 runner 夹具显式报告 reasoning=0，原持久投影及数值断言保持。scoped census 排除下一批资源包 reader 在制源码，基线无增长；仅目标格式/lint，正式行为等待包含提交 hosted CI。暂停后续发布、保留资源包 WIP，RFC-370／A-G／部署仍继续，未宣称完成。
+
 ## 2026-10-01 RFC-370 身份迁移存储切面与 RFC-035 对齐
 
 CI 修复 `9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f`／`36849001678` 已 50/50 success，继续阶段 A。本批将技能身份迁移、物理归属及恢复检查接到两个 owner 端口与 local adapter，AW 数据库 authority／阶段／引用／锁保持；补双 provider 异步真实 boot 接线回归，正式测试交 hosted CI。RFC-035 已有平台对象合同，RFC-370 更新为 CS 对象字节／AW PG 元数据与日志／任务 PVC 工作区，详见 [存储接入](design/RFC-370-crewstation-hosted-deployment/rfc035-storage.md)。完整 bundle、其余切面和 CS adapter／M0～M4 仍继续，A-G 独立评审未取得，不关闭 RFC；下方历史和并行记录保留。
