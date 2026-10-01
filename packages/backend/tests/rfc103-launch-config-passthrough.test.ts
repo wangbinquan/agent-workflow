@@ -309,7 +309,7 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   // RFC-266: 防第四次漏接线 —— 三个并发键都必须出现在 config→deps 的那一级里。
   test('RFC-266: 三个并发键都被 resolveLaunchRuntimeConfig 从 config 读出', () => {
     const launchSrc = readFileSync(
-      join(import.meta.dir, '../src/services/launchRuntimeConfig.ts'),
+      join(import.meta.dir, '../src/modules/task-execution/application/launchConfiguration.ts'),
       'utf8',
     )
     for (const key of [
@@ -327,7 +327,7 @@ describe('RFC-103 T2 源码层接线断言（防再漂）', () => {
   //（rfc284-t20 登记表）。任何一环回退即红。
   test('RFC-284 T30: scriptInterpreters / scriptDepsInstallTimeoutMs 从 config 读出且 deps 类型在场', () => {
     const launchSrc = readFileSync(
-      join(import.meta.dir, '../src/services/launchRuntimeConfig.ts'),
+      join(import.meta.dir, '../src/modules/task-execution/application/launchConfiguration.ts'),
       'utf8',
     )
     for (const key of ['scriptInterpreters', 'scriptDepsInstallTimeoutMs']) {

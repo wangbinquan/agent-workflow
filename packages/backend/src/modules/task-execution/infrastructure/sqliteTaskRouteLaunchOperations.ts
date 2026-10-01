@@ -1,3 +1,5 @@
+import { resolveTaskUploadLimits } from '../application/launchConfiguration'
+import { DEFAULT_UPLOAD_LIMITS } from '@/services/upload'
 import type { Actor } from '@/auth/actor'
 import type { DbClient } from '@/db/client'
 import type { TaskExecutionResourceAuthority } from '../application/ports/taskExecutionResourceSnapshots'
@@ -61,7 +63,10 @@ export function createSqliteTaskRouteLaunchOperations(
   }
   return Object.freeze({
     agent: Object.freeze({
-      uploadLimits: () => resolveUploadLimits(input.configPath),
+      uploadLimits: () =>
+        input.launchConfiguration === undefined
+          ? resolveUploadLimits(input.configPath)
+          : resolveTaskUploadLimits(input.launchConfiguration, DEFAULT_UPLOAD_LIMITS),
       assertReplayVisible,
       // RFC-359 AC-1（plan §5hn 批次一）：单代理启动改走**与 PostgreSQL 同一份**编排
       // （`createAgentRouteLaunch`，终端是根启动内核）。此前这里转

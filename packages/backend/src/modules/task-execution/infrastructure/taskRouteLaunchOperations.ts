@@ -1,3 +1,6 @@
+import type { TaskLaunchConfigurationQueries } from '../application/ports/taskLaunchConfiguration'
+import { resolveTaskUploadLimits } from '../application/launchConfiguration'
+import { DEFAULT_UPLOAD_LIMITS } from '@/services/upload'
 import { launchTask } from '../application/launch/launchTask'
 import type { TaskWorkspaceLaunchLane } from '../application/ports/workspaceLaunch'
 import {
@@ -282,6 +285,7 @@ export interface WorkgroupRouteLaunchResources {
 }
 
 export interface RootTaskLaunchDependencies {
+  readonly launchConfiguration?: TaskLaunchConfigurationQueries
   readonly db: ProviderNeutralDatabase
   readonly gitCommitIdentity: Readonly<{
     execute(userId: string): Promise<GitCommitIdentity>
@@ -1336,7 +1340,10 @@ export function createTaskRouteLaunchOperations(
 
   return Object.freeze({
     agent: Object.freeze({
-      uploadLimits: () => resolveUploadLimits(dependencies.configPath),
+      uploadLimits: () =>
+        dependencies.launchConfiguration === undefined
+          ? resolveUploadLimits(dependencies.configPath)
+          : resolveTaskUploadLimits(dependencies.launchConfiguration, DEFAULT_UPLOAD_LIMITS),
       assertReplayVisible,
       async launch(actor: Actor, command: AgentLaunchCommand) {
         return await arms.launchAgent({
@@ -1492,7 +1499,13 @@ export function createTaskExecutionLaunchParticipant(
                     parts: input.uploads.parts,
                     // 上传声明取自**冻结快照**——与落库的那一份同源，路由读到的另一份不算数。
                     definitions: collectUploadInputDefs(snapshot.workflow.definition.inputs),
-                    limits: resolveUploadLimits(dependencies.configPath),
+                    limits:
+                      dependencies.launchConfiguration === undefined
+                        ? resolveUploadLimits(dependencies.configPath)
+                        : await resolveTaskUploadLimits(
+                            dependencies.launchConfiguration,
+                            DEFAULT_UPLOAD_LIMITS,
+                          ),
                   },
                 }),
             task: parsed.data,

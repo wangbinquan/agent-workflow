@@ -19,6 +19,11 @@ import {
 import { engineOf, type DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { assertWorktreePresentForResume } from '@/modules/task-execution/public/participants'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
+import {
+  resolveTaskLaunchRuntimeConfiguration,
+  resolveTaskSubagentLiveCapture,
+  type TaskLaunchConfigurationQueries,
+} from '@/modules/task-execution/public/queries'
 import type {
   ScriptLanguage,
   PlannedDirectoryNode,
@@ -1232,13 +1237,17 @@ export function createTaskDriveCoordinator(input: {
    * `DefaultTaskDriveCoordinator.contextFor` 每次 drive 读一次）。
    * 每次请求现建一台的短命协调器不需要它——那种形态的「构造时」就是「请求时」。
    */
-  readonly refreshLaunchConfig?: () => Partial<TaskDriveCoordinatorDependencies>
+  readonly refreshLaunchConfig?: () =>
+    | Partial<TaskDriveCoordinatorDependencies>
+    | Promise<Partial<TaskDriveCoordinatorDependencies>>
+  /** A selected source wins over the legacy file refresher on every submit. */
+  readonly launchConfiguration?: TaskLaunchConfigurationQueries
 }): taskDriveComposition.DefaultTaskDriveCoordinator {
-  const resolveRuntime = (): taskDriveComposition.ResolvedTaskDriveConfig => {
-    const deps: TaskDriveCoordinatorDependencies = {
-      ...input.deps,
-      ...(input.refreshLaunchConfig?.() ?? {}),
-    }
+  const resolveRuntime = (
+    fresh?: Partial<TaskDriveCoordinatorDependencies>,
+    selectedLaunchConfiguration = false,
+  ): taskDriveComposition.ResolvedTaskDriveConfig => {
+    const deps: TaskDriveCoordinatorDependencies = { ...input.deps, ...fresh }
     return resolveTaskDriveConfig({
       appHome: input.appHome,
       ...(deps.binaryOverride !== undefined ? { binaryOverride: deps.binaryOverride } : {}),
@@ -1246,16 +1255,37 @@ export function createTaskDriveCoordinator(input: {
       ...(deps.subagentLiveCapture !== undefined
         ? { subagentLiveCapture: deps.subagentLiveCapture }
         : {}),
-      ...runtimeConfigOpts(deps),
+      ...runtimeConfigOpts(
+        selectedLaunchConfiguration
+          ? { ...fresh, memoryDistillEnqueuer: input.deps.memoryDistillEnqueuer }
+          : deps,
+      ),
       log,
       ...(input.ensureWorkspaceProfiles === true ? { ensureWorkspaceProfiles: true } : {}),
     })
   }
   // 没给 refresher 的调用方保持原语义：解析一次、之后每次 drive 都是同一份。
-  const frozen = input.refreshLaunchConfig === undefined ? resolveRuntime() : null
+  const currentRuntime = ():
+    | taskDriveComposition.ResolvedTaskDriveConfig
+    | Promise<taskDriveComposition.ResolvedTaskDriveConfig> => {
+    if (input.launchConfiguration !== undefined) {
+      const source = input.launchConfiguration
+      return (async () => {
+        const fresh = await resolveTaskLaunchRuntimeConfiguration(source)
+        const subagentLiveCapture = await resolveTaskSubagentLiveCapture(source)
+        return resolveRuntime({ ...fresh, subagentLiveCapture }, true)
+      })()
+    }
+    const fresh = input.refreshLaunchConfig?.()
+    return fresh instanceof Promise ? fresh.then(resolveRuntime) : resolveRuntime(fresh)
+  }
+  const frozen =
+    input.refreshLaunchConfig === undefined && input.launchConfiguration === undefined
+      ? resolveRuntime()
+      : null
   return new DefaultTaskDriveCoordinator({
     get runtime() {
-      return frozen ?? resolveRuntime()
+      return frozen ?? currentRuntime()
     },
     lifecycle: createDatabaseTaskDriverLifecyclePort({
       db: input.deps.db,

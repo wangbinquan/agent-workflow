@@ -5,7 +5,8 @@
 // at daemon boot), so scheduled launches don't drift from manual ones after a config
 // edit (design.md finding 4). `db` is a required dep (not derivable from configPath),
 // so it is an explicit parameter (design.md R2-e).
-import { loadConfig } from '@/config'
+import { createFileTaskLaunchConfigurationQueries } from '@/modules/task-execution/composition/launchConfiguration'
+import { resolveTaskSubagentLiveCaptureFromReader } from '@/modules/task-execution/public/queries'
 import type { SecretBox } from '@/auth/secretBox'
 import type { LegacyProviderNeutralDatabase } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
 import { resolveLaunchRuntimeConfig } from '@/services/launchRuntimeConfig'
@@ -22,12 +23,9 @@ import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/co
 export function resolveSubagentLiveCapture(
   configPath: string,
 ): { pollMs: number; consecutiveFailureLimit: number } | undefined {
-  try {
-    const cfg = loadConfig(configPath)
-    return cfg.subagentLiveCapture
-  } catch {
-    return undefined
-  }
+  return resolveTaskSubagentLiveCaptureFromReader(
+    createFileTaskLaunchConfigurationQueries(configPath).read,
+  )
 }
 
 /**

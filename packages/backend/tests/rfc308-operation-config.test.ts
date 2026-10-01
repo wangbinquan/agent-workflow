@@ -12,7 +12,7 @@ afterEach(() => {
 })
 
 describe('RFC-308 operation config projection', () => {
-  test('a saved rule applies to the next operation, while one read stays immutable', () => {
+  test('a saved rule applies to the next operation, while one read stays immutable', async () => {
     const root = mkdtempSync(join(tmpdir(), 'aw-rfc308-config-'))
     roots.push(root)
     const configPath = join(root, 'config.json')
@@ -24,12 +24,12 @@ describe('RFC-308 operation config projection', () => {
       commitPushExcludePatterns: ['launch-fallback/**'],
     }
 
-    const first = readCommitExcludePatterns(opts)
+    const first = await readCommitExcludePatterns(opts)
     applyConfigPatch(configPath, { taskCommitExcludePatterns: ['second/**'] })
     expect(first).toEqual(['first/**'])
-    expect(readCommitExcludePatterns(opts)).toEqual(['second/**'])
+    expect(await readCommitExcludePatterns(opts)).toEqual(['second/**'])
 
     writeFileSync(configPath, '{broken json')
-    expect(readCommitExcludePatterns(opts)).toEqual(['launch-fallback/**'])
+    expect(await readCommitExcludePatterns(opts)).toEqual(['launch-fallback/**'])
   })
 })

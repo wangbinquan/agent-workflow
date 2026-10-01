@@ -387,7 +387,7 @@ export interface TaskRouteMultipartFilePart {
 
 /** TaskExecution-owned launch boundary consumed by the Agent route. */
 export interface AgentRouteTaskLaunchOperations {
-  uploadLimits(): TaskRouteUploadLimits
+  uploadLimits(): TaskRouteUploadLimits | Promise<TaskRouteUploadLimits>
   assertReplayVisible(actor: Actor, sourceTaskId: string): Promise<void>
   launch(
     actor: Actor,

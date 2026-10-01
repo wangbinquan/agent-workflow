@@ -359,7 +359,7 @@ export async function executeWorkgroupHostMechanics(
           injection.spec.agent.runtime,
           opts.defaultRuntime,
           null,
-          freezeBinaryConfig(opts.configPath),
+          await freezeBinaryConfig(opts.configPath, opts.operationConfiguration),
         )
         // Round-trip a human's answered clarify back to the workgroup LEADER.
         // When the leader host run is a `clarify-answer` rerun — it asked a human
@@ -1125,7 +1125,7 @@ export async function resolveMergeConflicts(
         observationIdentity: rt.observationIdentity,
       },
       // Codex impl-gate P1-2: same config-head fold as the commit-session site.
-      freezeBinaryConfig(state.opts.configPath),
+      await freezeBinaryConfig(state.opts.configPath, state.opts.operationConfiguration),
     )
     const envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(sessionRunId)
     const mergeAgent = buildMergeAgent()
@@ -4498,7 +4498,7 @@ export async function runAgentSingleNode(
         agent.runtime,
         state.opts.defaultRuntime,
         inheritedRuntime,
-        freezeBinaryConfig(state.opts.configPath),
+        await freezeBinaryConfig(state.opts.configPath, state.opts.operationConfiguration),
       )
       lastResult = await runNode({
         taskId,

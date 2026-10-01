@@ -109,3 +109,9 @@ apply、boot/hourly convergence 与旧格式恢复均可选择同一内容能力
 资源包原有 plan／stage／install／compensate／rollForward／afterCommitted 合同从 infrastructure 下沉到 `application/package/artifactOwners.ts`，旧名称只作类型兼容出口；不是第二套发布机器。文件实现独立位于 `infrastructure/local/fileResourcePackageArtifacts.ts`，composition 可选择技能与插件工件 owner；选择插件 owner 时无需提供本机 installer。恢复 composition 复用原 `ResourcePackageApplyArtifactRecoveryPort`，未选择时完整保留统一格式／legacy 格式回落。
 
 持久 journal 的 directory 命名字段保留兼容，只有所选 adapter 将其解释为路径或不透明引用。AW 原事务、record-before-act、提交、幂等重放与补偿顺序不变。新双 provider 回归经真实 package apply 和 journal recovery 验证等待、字节与引用、提交前补偿和提交后恢复；非文件 fixture 不代表 CS 对象存储验收。plugin 常规 CRUD／内容／runtime 物化、任务归档及其他消费者仍待接线，不记 H6 或 A-G 完成。
+
+## H1 任务操作、后台及启动配置续批
+
+33路径候选增加 TE-owned operation／background／launch 三个 query 与对应 local file adapter。operation 固定六处 mint 等待和 commit patterns 按次复制；background 对所选启动／tick 配置全部 await，启动 Promise 与 detached auto-resume/drain 边界保持；launch 保留原三段独立读／catch、零值／过滤和同步兼容入口。selected source 对 optional 删值及读失败采用本次结果，不能借 boot launch 值；宿主依赖保留。
+
+HTTP multipart 的 upload limit 可异步读取；驱动在 attach 后等待 runtime，失败与等待期间取消都释放。此批已补真实双 provider 回归和本地文件热读，原投影 AST token 对拍相等；正式类型／行为等待 exact-SHA CI，完整 H1 和 A-G 尚未完成。上方 Intent CI 恢复已由 `8d7e078e31527a3b70c5058af9fb25c4b23ff1f4`／36890491336 的全部50作业 success 验证，原修复 run 的取消仍保留。

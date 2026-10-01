@@ -14,7 +14,8 @@
 //     when reclaiming the not-yet-owned workspace also fails.
 
 import { UploadInputSchema, type WorkflowInput } from '@agent-workflow/shared'
-import { loadConfig } from '@/config'
+import { createFileTaskLaunchConfigurationQueries } from '@/modules/task-execution/composition/launchConfiguration'
+import { resolveTaskUploadLimitsFromReader } from '@/modules/task-execution/public/queries'
 import {
   DEFAULT_UPLOAD_LIMITS,
   type UploadFile,
@@ -197,20 +198,10 @@ export function collectUploadInputDefs(
  * narrow so the multipart handlers stay declarative.
  */
 export function resolveUploadLimits(configPath: string): UploadLimits {
-  try {
-    const cfg = loadConfig(configPath)
-    const u = cfg.uploadLimits
-    if (u !== undefined) {
-      return {
-        perFile: u.perFile,
-        perRequest: u.perRequest,
-        perCount: u.perCount,
-      }
-    }
-  } catch {
-    // unreadable config → defaults
-  }
-  return { ...DEFAULT_UPLOAD_LIMITS }
+  return resolveTaskUploadLimitsFromReader(
+    createFileTaskLaunchConfigurationQueries(configPath).read,
+    DEFAULT_UPLOAD_LIMITS,
+  )
 }
 
 /**

@@ -20,6 +20,7 @@ import type { DynamicWorkflowPersistence } from '@/modules/task-execution/applic
 import type { DynamicWorkflowValidationContextSource } from '@/services/dynamicWorkflowRunner'
 import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTurnsOperations'
 import type { ChildExecutionLaunchOperations } from '../application/ports/childExecutionLaunchOperations'
+import type { TaskOperationConfigurationQueries } from '../application/ports/taskOperationConfiguration'
 
 export interface RunTaskOptions {
   taskId: string
@@ -80,6 +81,9 @@ export interface RunTaskOptions {
   /** Daemon config path — config.opencodePath/claudeCodePath fold into the
    *  FROZEN binary at mint time (RFC-282 C1-2; RFC-111 D15 alignment). */
   configPath?: string
+  /** Bootstrap supplies the same live configuration capability at every drive,
+   * including children; it is never serialized in a child run-config bag. */
+  operationConfiguration?: TaskOperationConfigurationQueries
   log?: Logger
   /**
    * When aborted, any node currently running is SIGTERMed via runNode and the

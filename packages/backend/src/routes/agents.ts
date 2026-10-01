@@ -334,7 +334,7 @@ export function mountAgentRoutes(app: Hono, module: AgentRouteDependencies): voi
       if (ct.toLowerCase().startsWith('multipart/form-data')) {
         const parsedForm = await parseMultipartLaunch(c.req.raw)
         body = parsedForm.payloadJson
-        uploads = { parts: parsedForm.parts, limits: module.taskLaunch.uploadLimits() }
+        uploads = { parts: parsedForm.parts, limits: await module.taskLaunch.uploadLimits() }
       } else {
         try {
           body = await c.req.raw.json()

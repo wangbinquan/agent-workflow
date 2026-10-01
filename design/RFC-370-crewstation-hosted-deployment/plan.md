@@ -312,9 +312,18 @@ B1～B4 的能力调查和必要 CS 配套 RFC 跟随具体消费者推进；平
 
 资源包第二轮修复 `ce8a6310adb9576559f4d5100d4916635a104720` 的[主 CI 36876744628](https://github.com/wangbinquan/agent-workflow/actions/runs/36876744628)已 completed/success，50/50作业全部成功，headSha完全一致。前继13f的 cancelled/failure 历史不改写；本轮已恢复主 CI，再发布有有限独立功能 PASS 的 Intent 内容/scratch 候选及 H8 设计补正。下一批任务操作配置14路径保留且从本批官方census排除，不混入本批提交。
 
-
 ### Intent 配套 CI 六类遗漏修复（2026-10-01）
 
 Intent 源提交 `497149ad2ad04b42fbc4d7902036b019be8ed880`、账本后继 `2d65a16f5152936ec93de1f0fd362a671e89e44d` 已精确同步远端；[CI 36882578362](https://github.com/wangbinquan/agent-workflow/actions/runs/36882578362) 终态 failure、38 success／12 failure，报六类配套遗漏，暂停后续 feature 发布。将两个 owner 移到 participants 出口，artifact 数据留 types；publication 只接现有 neutral transaction callback，移除两处强转，保留同一事务与 effect 主体。更新移动函数路径、下沉合同的类型依赖和两工厂改名后真实语料下限（函数66／adapter62），原扫描、零孪生、生产消费者及 fixtures 不变。十路径独立有限功能实现门 PASS，详见 functional-gates；正式结果继续等修复 SHA CI。
 
 官方 census 只读取已提交源码加十路径修复，排除任务配置／后台配置18路径候选和其他并行内容。owner／public 等基线没有新增长，observed import 5590→5589、exception4960→4959；仅源码生成与精确格式/lint，无本机 AW 功能测试／类型检查／构建／服务。完整 RFC 和部署继续，A-G 未关闭。
+
+### Intent CI 恢复终态与 H1 任务配置续批（2026-10-02）
+
+修复 `a4b706b942adfc9ca16c15e329ba1f7fa97f78f8` 的 [CI 36886742257](https://github.com/wangbinquan/agent-workflow/actions/runs/36886742257) 因并行文档 push 自动取消，终态48 success／1 cancelled／1 failure（汇总），不能写全绿。包含修复的后继 `8d7e078e31527a3b70c5058af9fb25c4b23ff1f4` 的 [CI 36890491336](https://github.com/wangbinquan/agent-workflow/actions/runs/36890491336) 已 completed/success，全部50个作业 success；祖先及两份 RFC371 文档差异已核对，修复源码没有改变。原失败和取消回执保留。
+
+本次 H1 候选覆盖33个精确源码／测试路径：任务操作配置的六处异步 mint 冻结及 commit patterns 热读；任务后台的启动、四类 tick 热读与 startup/drain；任务 launch 的 commit/runtime/child 三次独立读取、subagent 和 upload 限制。三个 owner port 与三个独立 local file adapter 由 composition 选择，AW 保留每段投影、过滤、默认和失败回退；所选 source 不回读文件。同步 standalone helper 和原25处同步启动回调保持。
+
+协调器在 attach 后等待异步 runtime；读取失败报告并释放，等待期间取消则释放而不进入 admission／准备／执行。独立复核发现所选 source 删除 optional 配置时 boot deps 残留；现只使用本次 launch 投影，并保留宿主 binary override／configPath／memory participant。双 provider 回归覆盖带 boot 配置的删值与三段独立失败。原三个策略投影的 AST runtime token 等价；目标格式/lint通过，真实双 provider／双 runtime 新回归正式结果交本批 exact-SHA hosted CI，本机未运行 AW 测试／类型检查／构建／服务。
+
+官方 census 从已提交源码加33路径候选生成，排除并行 RFC371 内容。真实计数：mutation 1782→1787、observed imports 5589→5608、对应 exception 4959→4978、public symbol 1033→1043、owner 25587→25619；各增长按原 ledger 规则记录 RFC370 一次性依据并于后继账本提交退役，不改扫描规则或现有门槛。此批不关闭全 H1、A-T2 或 A-G；H3～H7、完整入口普查和 CS adapter／M0～M4 按已批准顺序继续。

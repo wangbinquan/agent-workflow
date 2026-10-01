@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 932,
+    "consumers": 942,
     "exactEntrypointFiles": 69,
     "governedFieldSurfaces": 5,
-    "methods": 1112,
+    "methods": 1129,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21386,
-    "symbols": 1033
+    "recursiveFields": 21493,
+    "symbols": 1043
   },
   "entries": [
     {
@@ -141516,8 +141516,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 46,
-        "maxUnionVariants": 20
+        "maxTransitiveLeafFields": 49,
+        "maxUnionVariants": 22
       },
       "consumerEdgeIds": [
         "import:210b76a3a60b867a82f4"
@@ -141754,17 +141754,32 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:uploadLimits.$return.perCount",
+          "fieldPath": "$method:uploadLimits.$return.$variant:0.perCount",
           "type": "number"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:uploadLimits.$return.perFile",
+          "fieldPath": "$method:uploadLimits.$return.$variant:0.perFile",
           "type": "number"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:uploadLimits.$return.perRequest",
+          "fieldPath": "$method:uploadLimits.$return.$variant:0.perRequest",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:uploadLimits.$return.$variant:1.perCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:uploadLimits.$return.$variant:1.perFile",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:uploadLimits.$return.$variant:1.perRequest",
           "type": "number"
         }
       ],
@@ -141795,7 +141810,7 @@
             "import:210b76a3a60b867a82f4"
           ],
           "name": "uploadLimits",
-          "signatureDigest": "sha256:e04cf2c0fc301f4947ec427b249e68990fbb1819fae001a9641126c14f82a928"
+          "signatureDigest": "sha256:899afca8fe6269379b8ff5c8bcd5be379118b99409a0f8811aff40ab80314aa7"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#AgentRouteTaskLaunchOperations",
@@ -141810,7 +141825,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:2defddd88091577dd70555e907ac75d49f8be91fa792393c0031e5a66247d663",
+      "signatureDigest": "sha256:5e1ff42b27d4f9b4298352b5d5fa30e4b0e32c2a3949801cfdd469e6f82f9720",
       "status": "target-context-current-surface",
       "symbol": "AgentRouteTaskLaunchOperations",
       "transaction": "own-tx",
@@ -162479,6 +162494,142 @@
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 20
+      },
+      "consumerEdgeIds": [
+        "import:a4b9f375870533a8b70f"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:0.claudeCodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:0.claudeCodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:0.opencodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:0.opencodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:1.claudeCodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:1.claudeCodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:1.opencodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:1.opencodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readCommitExcludePatterns.$return.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readCommitExcludePatterns.$return.$variant:1",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:1",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0.claudeCodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0.claudeCodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0.opencodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:0.opencodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$variant:1",
+          "type": "undefined"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:freezeRuntimeBinaryConfiguration",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:411387efd42f96150d997ac3dc937978221718f94216d73eb3cdf237765d8f69"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "readBinaryPaths",
+          "signatureDigest": "sha256:3dc836395058034f9301308b6526b3257c5ac9d69860df9cb2f9987c632f4b37"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "readCommitExcludePatterns",
+          "signatureDigest": "sha256:ab53605e6a73428d40a847d63135cb952b69846fbad7c574f98423fc89803940"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:a4b9f375870533a8b70f",
+          "file": "packages/backend/src/services/execution/runtimeConfigFreeze.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/execution/runtimeConfigFreeze.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:2fb21d8a5017c62723fcb118ac10abdac3898bc6bbdb4c72e035ff0b4c42fc0d",
+      "status": "target-context-current-surface",
+      "symbol": "freezeRuntimeBinaryConfiguration",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [],
@@ -162834,6 +162985,129 @@
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 14
+      },
+      "consumerEdgeIds": [
+        "import:97607e255c4e2f14a9dc"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:launchFallback",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:0.claudeCodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:0.claudeCodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:0.opencodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:0.opencodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:1.claudeCodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:1.claudeCodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:1.opencodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readBinaryPaths.$return.$variant:1.opencodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readCommitExcludePatterns.$return.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:0.$method:readCommitExcludePatterns.$return.$variant:1",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$variant:1",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "readonly string[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:readTaskCommitExcludePatterns",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:83503b9adccb8b9abe11df3a419a26b6d20793811e5147d59e34b51f8d233fca"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "readBinaryPaths",
+          "signatureDigest": "sha256:3dc836395058034f9301308b6526b3257c5ac9d69860df9cb2f9987c632f4b37"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:97607e255c4e2f14a9dc"
+          ],
+          "name": "readCommitExcludePatterns",
+          "signatureDigest": "sha256:ab53605e6a73428d40a847d63135cb952b69846fbad7c574f98423fc89803940"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:97607e255c4e2f14a9dc",
+          "file": "packages/backend/src/services/scheduler.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:5c9a10d8d4bd6b93b1d9eb3789b4ac7e778ff590e45ef0e08e6bc7e01c03df23",
+      "status": "target-context-current-surface",
+      "symbol": "readTaskCommitExcludePatterns",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
@@ -163161,6 +163435,672 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": [
+        "import:c1bb1c90a0d7b05f2fec"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:read.$return",
+          "type": "Pick<\n  Config,\n  | 'codeHostRequestTimeoutMs'\n  | 'codeHostResponseMaxBytes'\n  | 'commitPushDiffMaxBytes'\n  | 'commitPushLang'\n  | 'commitPushMaxRepairRetries'\n  | 'commitPushModel'\n  | 'commitPushRuntime'\n  | 'defaultNodeRetries'\n  | 'defaultPerNodeTimeoutMs'\n  | 'defaultRuntime'\n  | 'gitBaselineSyncWindowMs'\n  | 'gitCloneTimeoutMs'\n  | 'maxActiveChildTasks'\n  | 'maxConcurrentCodeHostCalls'\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxInvocationDepth'\n  | 'mergeAgentModel'\n  | 'mergeAgentRuntime'\n  | 'multiProcessSubprocessConcurrency'\n  | 'scriptDepsInstallTimeoutMs'\n  | 'scriptInterpreters'\n  | 'sessionRestartBudget'\n  | 'subagentLiveCapture'\n  | 'taskCommitExcludePatterns'\n  | 'uploadLimits'\n>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:resolveTaskCommitPushFromReader",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:4cbd8b6c5cbcbfe49b8071f15f6e1ac0260863856c4f7c6556a46f510c07f6e6"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:c1bb1c90a0d7b05f2fec",
+          "file": "packages/backend/src/services/launchRuntimeConfig.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/launchRuntimeConfig.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:9ffb9a144c29a452a39039dde8badfd4c04c1c5aac6b3b7936831e20c343c1be",
+      "status": "target-context-current-surface",
+      "symbol": "resolveTaskCommitPushFromReader",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Pick"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 28,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:7fa9fc4f023202cada4a"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$method:read.$return.$variant:0",
+          "type": "Pick<\n  Config,\n  | 'codeHostRequestTimeoutMs'\n  | 'codeHostResponseMaxBytes'\n  | 'commitPushDiffMaxBytes'\n  | 'commitPushLang'\n  | 'commitPushMaxRepairRetries'\n  | 'commitPushModel'\n  | 'commitPushRuntime'\n  | 'defaultNodeRetries'\n  | 'defaultPerNodeTimeoutMs'\n  | 'defaultRuntime'\n  | 'gitBaselineSyncWindowMs'\n  | 'gitCloneTimeoutMs'\n  | 'maxActiveChildTasks'\n  | 'maxConcurrentCodeHostCalls'\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxInvocationDepth'\n  | 'mergeAgentModel'\n  | 'mergeAgentRuntime'\n  | 'multiProcessSubprocessConcurrency'\n  | 'scriptDepsInstallTimeoutMs'\n  | 'scriptInterpreters'\n  | 'sessionRestartBudget'\n  | 'subagentLiveCapture'\n  | 'taskCommitExcludePatterns'\n  | 'uploadLimits'\n>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$method:read.$return.$variant:1",
+          "type": "Pick<\n  Config,\n  | 'codeHostRequestTimeoutMs'\n  | 'codeHostResponseMaxBytes'\n  | 'commitPushDiffMaxBytes'\n  | 'commitPushLang'\n  | 'commitPushMaxRepairRetries'\n  | 'commitPushModel'\n  | 'commitPushRuntime'\n  | 'defaultNodeRetries'\n  | 'defaultPerNodeTimeoutMs'\n  | 'defaultRuntime'\n  | 'gitBaselineSyncWindowMs'\n  | 'gitCloneTimeoutMs'\n  | 'maxActiveChildTasks'\n  | 'maxConcurrentCodeHostCalls'\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxInvocationDepth'\n  | 'mergeAgentModel'\n  | 'mergeAgentRuntime'\n  | 'multiProcessSubprocessConcurrency'\n  | 'scriptDepsInstallTimeoutMs'\n  | 'scriptInterpreters'\n  | 'sessionRestartBudget'\n  | 'subagentLiveCapture'\n  | 'taskCommitExcludePatterns'\n  | 'uploadLimits'\n>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.cloneTimeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.codeHostRequestTimeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.codeHostResponseMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.commitPush.diffMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.commitPush.excludePatterns",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.commitPush.lang",
+          "type": "z.infer<typeof LanguageSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.commitPush.maxRepairRetries",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.commitPush.model",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.commitPush.runtime",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.defaultNodeRetries",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.defaultPerNodeTimeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.defaultRuntime",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.gitBaselineSyncWindowMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.maxActiveChildTasks",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.maxConcurrentCodeHostCalls",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.maxConcurrentNodes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.maxConcurrentScriptNodes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.maxInvocationDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.mergeAgent.model",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.mergeAgent.runtime",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.multiProcessSubprocessConcurrency",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.scriptDepsInstallTimeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.scriptInterpreters.bash",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.scriptInterpreters.node",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.scriptInterpreters.python",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "fieldPath": "$call.$return.sessionRestartBudget",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:resolveTaskLaunchRuntimeConfiguration",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:36be235fd2d811a42cd0b62ffff37428548257872d3879b21e9359380f9db868"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7fa9fc4f023202cada4a"
+          ],
+          "name": "read",
+          "signatureDigest": "sha256:89c162749644c1e03c6f7290336d28c08ac1805bc09aa0ae244894122aecf8b7"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:7fa9fc4f023202cada4a",
+          "file": "packages/backend/src/services/task.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:b62bf48146b32947011f27620585aea04d7f41d99af7dc0b02b64c431215265e",
+      "status": "target-context-current-surface",
+      "symbol": "resolveTaskLaunchRuntimeConfiguration",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Pick",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 27,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:4bc6cbe748365f4d53d8"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:read.$return",
+          "type": "Pick<\n  Config,\n  | 'codeHostRequestTimeoutMs'\n  | 'codeHostResponseMaxBytes'\n  | 'commitPushDiffMaxBytes'\n  | 'commitPushLang'\n  | 'commitPushMaxRepairRetries'\n  | 'commitPushModel'\n  | 'commitPushRuntime'\n  | 'defaultNodeRetries'\n  | 'defaultPerNodeTimeoutMs'\n  | 'defaultRuntime'\n  | 'gitBaselineSyncWindowMs'\n  | 'gitCloneTimeoutMs'\n  | 'maxActiveChildTasks'\n  | 'maxConcurrentCodeHostCalls'\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxInvocationDepth'\n  | 'mergeAgentModel'\n  | 'mergeAgentRuntime'\n  | 'multiProcessSubprocessConcurrency'\n  | 'scriptDepsInstallTimeoutMs'\n  | 'scriptInterpreters'\n  | 'sessionRestartBudget'\n  | 'subagentLiveCapture'\n  | 'taskCommitExcludePatterns'\n  | 'uploadLimits'\n>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.cloneTimeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.codeHostRequestTimeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.codeHostResponseMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.commitPush.diffMaxBytes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.commitPush.excludePatterns",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.commitPush.lang",
+          "type": "z.infer<typeof LanguageSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.commitPush.maxRepairRetries",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.commitPush.model",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4bc6cbe748365f4d53d8"
+          ],
+          "fieldPath": "$call.$return.commitPush.runtime",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.defaultNodeRetries",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.defaultPerNodeTimeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.defaultRuntime",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.gitBaselineSyncWindowMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.maxActiveChildTasks",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.maxConcurrentCodeHostCalls",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.maxConcurrentNodes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.maxConcurrentScriptNodes",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.maxInvocationDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.mergeAgent.model",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4bc6cbe748365f4d53d8"
+          ],
+          "fieldPath": "$call.$return.mergeAgent.runtime",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.multiProcessSubprocessConcurrency",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.scriptDepsInstallTimeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.scriptInterpreters.bash",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.scriptInterpreters.node",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.scriptInterpreters.python",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.sessionRestartBudget",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:resolveTaskLaunchRuntimeFromReader",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:124bf287fdea84456907f4984d48db3eed72f2a8eb06a8adaa16d0f934e09dc7"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:4bc6cbe748365f4d53d8",
+          "file": "packages/backend/src/services/launchRuntimeConfig.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/launchRuntimeConfig.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:50cf54bdc645025d3bc59bf438e3a8c92cafd79e6e044808bb92920700f416f3",
+      "status": "target-context-current-surface",
+      "symbol": "resolveTaskLaunchRuntimeFromReader",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Pick",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:ee406674ce0faec7c103"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$method:read.$return.$variant:0",
+          "type": "Pick<\n  Config,\n  | 'codeHostRequestTimeoutMs'\n  | 'codeHostResponseMaxBytes'\n  | 'commitPushDiffMaxBytes'\n  | 'commitPushLang'\n  | 'commitPushMaxRepairRetries'\n  | 'commitPushModel'\n  | 'commitPushRuntime'\n  | 'defaultNodeRetries'\n  | 'defaultPerNodeTimeoutMs'\n  | 'defaultRuntime'\n  | 'gitBaselineSyncWindowMs'\n  | 'gitCloneTimeoutMs'\n  | 'maxActiveChildTasks'\n  | 'maxConcurrentCodeHostCalls'\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxInvocationDepth'\n  | 'mergeAgentModel'\n  | 'mergeAgentRuntime'\n  | 'multiProcessSubprocessConcurrency'\n  | 'scriptDepsInstallTimeoutMs'\n  | 'scriptInterpreters'\n  | 'sessionRestartBudget'\n  | 'subagentLiveCapture'\n  | 'taskCommitExcludePatterns'\n  | 'uploadLimits'\n>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:queries.$method:read.$return.$variant:1",
+          "type": "Pick<\n  Config,\n  | 'codeHostRequestTimeoutMs'\n  | 'codeHostResponseMaxBytes'\n  | 'commitPushDiffMaxBytes'\n  | 'commitPushLang'\n  | 'commitPushMaxRepairRetries'\n  | 'commitPushModel'\n  | 'commitPushRuntime'\n  | 'defaultNodeRetries'\n  | 'defaultPerNodeTimeoutMs'\n  | 'defaultRuntime'\n  | 'gitBaselineSyncWindowMs'\n  | 'gitCloneTimeoutMs'\n  | 'maxActiveChildTasks'\n  | 'maxConcurrentCodeHostCalls'\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxInvocationDepth'\n  | 'mergeAgentModel'\n  | 'mergeAgentRuntime'\n  | 'multiProcessSubprocessConcurrency'\n  | 'scriptDepsInstallTimeoutMs'\n  | 'scriptInterpreters'\n  | 'sessionRestartBudget'\n  | 'subagentLiveCapture'\n  | 'taskCommitExcludePatterns'\n  | 'uploadLimits'\n>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:resolveTaskSubagentLiveCapture",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:9c03d7ce2b162db759ce5e3de7b26256a1f5c77a51bea06d0edb3b6c53c7c031"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ee406674ce0faec7c103"
+          ],
+          "name": "read",
+          "signatureDigest": "sha256:89c162749644c1e03c6f7290336d28c08ac1805bc09aa0ae244894122aecf8b7"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:ee406674ce0faec7c103",
+          "file": "packages/backend/src/services/task.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:c79cd69b91fd352509f90323b8b37b374ea621fe442711bfdc6b5e97a0c3743d",
+      "status": "target-context-current-surface",
+      "symbol": "resolveTaskSubagentLiveCapture",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Pick"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:99ba2b838c9a422fc0c4"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:read.$return",
+          "type": "Pick<\n  Config,\n  | 'codeHostRequestTimeoutMs'\n  | 'codeHostResponseMaxBytes'\n  | 'commitPushDiffMaxBytes'\n  | 'commitPushLang'\n  | 'commitPushMaxRepairRetries'\n  | 'commitPushModel'\n  | 'commitPushRuntime'\n  | 'defaultNodeRetries'\n  | 'defaultPerNodeTimeoutMs'\n  | 'defaultRuntime'\n  | 'gitBaselineSyncWindowMs'\n  | 'gitCloneTimeoutMs'\n  | 'maxActiveChildTasks'\n  | 'maxConcurrentCodeHostCalls'\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxInvocationDepth'\n  | 'mergeAgentModel'\n  | 'mergeAgentRuntime'\n  | 'multiProcessSubprocessConcurrency'\n  | 'scriptDepsInstallTimeoutMs'\n  | 'scriptInterpreters'\n  | 'sessionRestartBudget'\n  | 'subagentLiveCapture'\n  | 'taskCommitExcludePatterns'\n  | 'uploadLimits'\n>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:resolveTaskSubagentLiveCaptureFromReader",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:9840cbc3858873a8aee75d17923a6a9ec5c1c8500c1a2868da83b6be0f8eb934"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:99ba2b838c9a422fc0c4",
+          "file": "packages/backend/src/services/startTaskDeps.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/startTaskDeps.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:4394812511e8a3c041192d3f95b4d47b33f0b21c505573ff10d4e861e1d3e6c4",
+      "status": "target-context-current-surface",
+      "symbol": "resolveTaskSubagentLiveCaptureFromReader",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Pick"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:a1e6a7f8539f3f7415f4"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:fallback",
+          "type": "TaskLaunchConfigurationSnapshot['uploadLimits']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:read.$return",
+          "type": "Pick<\n  Config,\n  | 'codeHostRequestTimeoutMs'\n  | 'codeHostResponseMaxBytes'\n  | 'commitPushDiffMaxBytes'\n  | 'commitPushLang'\n  | 'commitPushMaxRepairRetries'\n  | 'commitPushModel'\n  | 'commitPushRuntime'\n  | 'defaultNodeRetries'\n  | 'defaultPerNodeTimeoutMs'\n  | 'defaultRuntime'\n  | 'gitBaselineSyncWindowMs'\n  | 'gitCloneTimeoutMs'\n  | 'maxActiveChildTasks'\n  | 'maxConcurrentCodeHostCalls'\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxInvocationDepth'\n  | 'mergeAgentModel'\n  | 'mergeAgentRuntime'\n  | 'multiProcessSubprocessConcurrency'\n  | 'scriptDepsInstallTimeoutMs'\n  | 'scriptInterpreters'\n  | 'sessionRestartBudget'\n  | 'subagentLiveCapture'\n  | 'taskCommitExcludePatterns'\n  | 'uploadLimits'\n>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "TaskLaunchConfigurationSnapshot['uploadLimits']"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:resolveTaskUploadLimitsFromReader",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:f6f3e6a33990fb1468bc85935d013d0087e0a2860ca14c30d0da10616b157998"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:a1e6a7f8539f3f7415f4",
+          "file": "packages/backend/src/services/launchMultipart.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/launchMultipart.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:c529366596b2059599e7284cb7c2724a1e62d3914fb79d278856ad9fbd01dd74",
+      "status": "target-context-current-surface",
+      "symbol": "resolveTaskUploadLimitsFromReader",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Pick"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": [],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -163246,7 +164186,70 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 59,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:6b8e88f3dd0afdcc4a69"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:read.$return.$variant:0",
+          "type": "Pick<\n  Config,\n  | 'codeHostRequestTimeoutMs'\n  | 'codeHostResponseMaxBytes'\n  | 'commitPushDiffMaxBytes'\n  | 'commitPushLang'\n  | 'commitPushMaxRepairRetries'\n  | 'commitPushModel'\n  | 'commitPushRuntime'\n  | 'defaultNodeRetries'\n  | 'defaultPerNodeTimeoutMs'\n  | 'defaultRuntime'\n  | 'gitBaselineSyncWindowMs'\n  | 'gitCloneTimeoutMs'\n  | 'maxActiveChildTasks'\n  | 'maxConcurrentCodeHostCalls'\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxInvocationDepth'\n  | 'mergeAgentModel'\n  | 'mergeAgentRuntime'\n  | 'multiProcessSubprocessConcurrency'\n  | 'scriptDepsInstallTimeoutMs'\n  | 'scriptInterpreters'\n  | 'sessionRestartBudget'\n  | 'subagentLiveCapture'\n  | 'taskCommitExcludePatterns'\n  | 'uploadLimits'\n>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:read.$return.$variant:1",
+          "type": "Pick<\n  Config,\n  | 'codeHostRequestTimeoutMs'\n  | 'codeHostResponseMaxBytes'\n  | 'commitPushDiffMaxBytes'\n  | 'commitPushLang'\n  | 'commitPushMaxRepairRetries'\n  | 'commitPushModel'\n  | 'commitPushRuntime'\n  | 'defaultNodeRetries'\n  | 'defaultPerNodeTimeoutMs'\n  | 'defaultRuntime'\n  | 'gitBaselineSyncWindowMs'\n  | 'gitCloneTimeoutMs'\n  | 'maxActiveChildTasks'\n  | 'maxConcurrentCodeHostCalls'\n  | 'maxConcurrentNodes'\n  | 'maxConcurrentScriptNodes'\n  | 'maxInvocationDepth'\n  | 'mergeAgentModel'\n  | 'mergeAgentRuntime'\n  | 'multiProcessSubprocessConcurrency'\n  | 'scriptDepsInstallTimeoutMs'\n  | 'scriptInterpreters'\n  | 'sessionRestartBudget'\n  | 'subagentLiveCapture'\n  | 'taskCommitExcludePatterns'\n  | 'uploadLimits'\n>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:TaskLaunchConfigurationQueries",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:6b8e88f3dd0afdcc4a69"
+          ],
+          "name": "read",
+          "signatureDigest": "sha256:89c162749644c1e03c6f7290336d28c08ac1805bc09aa0ae244894122aecf8b7"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:6b8e88f3dd0afdcc4a69",
+          "file": "packages/backend/src/services/task.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:queries:resolveTaskLaunchRuntimeConfiguration",
+        "public:task-execution:queries:resolveTaskSubagentLiveCapture"
+      ],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:a6238ea6da471c0d582cef5f102b8c3caa3ebe5233c31b04dfce441c956c87f8",
+      "status": "target-context-current-surface",
+      "symbol": "TaskLaunchConfigurationQueries",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Pick"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 60,
         "maxUnionVariants": 32
       },
       "consumerEdgeIds": [
@@ -163573,6 +164576,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:list.$return.positions",
+          "type": "readonly { readonly taskId: string; readonly cursor: string }[]"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:sourceBacklog.$parameter:taskIds",
           "type": "readonly string[]"
         },
@@ -163609,7 +164617,7 @@
             "import:c82e310dedf362bdf079"
           ],
           "name": "list",
-          "signatureDigest": "sha256:ade54b4f985386b294077066543cf7273cb47113f41dd5b24402f9e3c38e5b6f"
+          "signatureDigest": "sha256:66ce3a683e7192324fe815820f62eece01115e37ed1fd37f289335abf2284397"
         },
         {
           "consumerEdgeIds": [],
@@ -163635,13 +164643,117 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:306eade5e6e924334fcb14e34b2a5040a31bd3ac7cd4f0821cf2a15773fd50a5",
+      "signatureDigest": "sha256:f8ceb0f2b2464e1e80780f43487c653fe3d34eb0a8611a034540c8c33a22e08c",
       "status": "target-context-current-surface",
       "symbol": "TaskObservationFactsQuery",
       "transaction": "none",
       "unresolvedTypeRefs": [
         "z.infer"
       ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:6875734b9d704176fa0a"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readBinaryPaths.$return.$variant:0.claudeCodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readBinaryPaths.$return.$variant:0.claudeCodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readBinaryPaths.$return.$variant:0.opencodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readBinaryPaths.$return.$variant:0.opencodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readBinaryPaths.$return.$variant:1.claudeCodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readBinaryPaths.$return.$variant:1.claudeCodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readBinaryPaths.$return.$variant:1.opencodePath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readBinaryPaths.$return.$variant:1.opencodePath.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readCommitExcludePatterns.$return.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readCommitExcludePatterns.$return.$variant:1",
+          "type": "readonly string[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:TaskOperationConfigurationQueries",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "readBinaryPaths",
+          "signatureDigest": "sha256:3dc836395058034f9301308b6526b3257c5ac9d69860df9cb2f9987c632f4b37"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "readCommitExcludePatterns",
+          "signatureDigest": "sha256:ab53605e6a73428d40a847d63135cb952b69846fbad7c574f98423fc89803940"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:6875734b9d704176fa0a",
+          "file": "packages/backend/src/services/execution/runtimeConfigFreeze.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/execution/runtimeConfigFreeze.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:queries:freezeRuntimeBinaryConfiguration",
+        "public:task-execution:queries:readTaskCommitExcludePatterns"
+      ],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:423f95a5f9ac1fd23120fa058cc0e372b906089be27cd97245945bbcf29661da",
+      "status": "target-context-current-surface",
+      "symbol": "TaskOperationConfigurationQueries",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -169142,7 +170254,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5efd6a81820fd7dee3765eae5b45b9130cc5274ee3d8da97a3b1d185e8aca32a",
+  "sourceDigest": "sha256:0772f84ed8cec4e5f6981a617269c72ec8180c241c14f1b91fb2f652dc649d0c",
   "targetContexts": [
     "collaboration",
     "development-automation",

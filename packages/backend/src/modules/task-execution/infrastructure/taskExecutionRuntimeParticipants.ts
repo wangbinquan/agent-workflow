@@ -21,6 +21,7 @@ import type {
   TaskExecutionRuntimeParticipants,
 } from '../application/ports/taskExecutionRuntimeParticipants'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
+import type { TaskOperationConfigurationQueries } from '../application/ports/taskOperationConfiguration'
 import type { TaskExecutionTopologyLogger } from '../application/ports/taskExecutionTopology'
 import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTurnsOperations'
 import { composeExecutionMergeRecovery } from '../composition/executionMergeRecovery'
@@ -68,6 +69,7 @@ export interface TaskExecutionRuntimeParticipantsInput {
   /** 运行时**档案**注册表（`getRuntime(name)`）——与下面的 `stop` 同名不同物。 */
   readonly runtimeRegistry: RuntimeExecutionQueries
   readonly nodeRunRuntime: NodeRunRuntimePersistence
+  readonly operationConfiguration?: TaskOperationConfigurationQueries
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics
   readonly workgroupTurns: WorkgroupTurnsOperations
@@ -125,6 +127,9 @@ export function createTaskExecutionRuntimeParticipants(
           runtimeSessionLeases: input.runtimeSessionLeases,
           runtimeRegistry: input.runtimeRegistry,
           nodeRunRuntime: input.nodeRunRuntime,
+          ...(input.operationConfiguration === undefined
+            ? {}
+            : { operationConfiguration: input.operationConfiguration }),
           taskDagCollaboration: input.taskDagCollaboration,
           collaborationRuntime: input.collaborationRuntime,
           workgroupTurns: input.workgroupTurns,

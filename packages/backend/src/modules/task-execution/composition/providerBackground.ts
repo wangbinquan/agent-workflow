@@ -4,7 +4,8 @@ import {
   PROVIDER_SESSION_PAUSE_ABORT_REASON,
 } from '@agent-workflow/shared'
 
-import { loadConfig } from '@/config'
+import { createFileTaskBackgroundConfigurationQuery } from '../infrastructure/local/fileTaskBackgroundConfiguration'
+import type { TaskBackgroundConfigurationQuery } from '../application/ports/taskBackgroundConfiguration'
 import { findStalledRunningChildren, runHeartbeatKillOnce } from '@/services/autoKill'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { reconcileDeadRunningRuns } from '@/services/orphanReconcile'
@@ -35,18 +36,19 @@ interface RestartableLoop {
 }
 
 export interface TaskExecutionProviderBackgroundStartDependencies {
-  readonly configPath: string
+  readonly configPath?: string
+  readonly configuration?: TaskBackgroundConfigurationQuery
   readonly scheduled: Readonly<{
     readonly operations: ScheduledTaskOperations
     readonly identityAccess: ScheduleAuthorityRuntime
-    readonly loadConfig?: () => Config
+    readonly loadConfig?: () => Config | Promise<Config>
     readonly onAutoDisable?: (id: string) => void
   }>
 }
 
 export interface TaskExecutionProviderBackgroundControl {
   /** Bind and start every TaskExecution-owned provider-session loop exactly once. */
-  start(dependencies: TaskExecutionProviderBackgroundStartDependencies): void
+  start(dependencies: TaskExecutionProviderBackgroundStartDependencies): Promise<void>
   /** Reversible admission freeze; waits for loop work and runtime handles to drain. */
   pause(): Promise<void>
   /** Re-arm the same provider-bound loops and execution module. */
@@ -158,14 +160,20 @@ function createRestartableLoop(input: {
 function createProviderLoops(
   runtime: ProviderBackgroundRuntime,
   dependencies: TaskExecutionProviderBackgroundStartDependencies,
+  configuration: TaskBackgroundConfigurationQuery,
 ): readonly RestartableLoop[] {
-  const config = dependencies.scheduled.loadConfig ?? (() => loadConfig(dependencies.configPath))
+  // A selected source supplies every loop. The scheduled-only legacy override
+  // remains compatible when the caller has not selected a shared source.
+  const scheduledConfig =
+    dependencies.configuration === undefined && dependencies.scheduled.loadConfig !== undefined
+      ? dependencies.scheduled.loadConfig
+      : () => configuration.read()
 
   const autoRepair = createRestartableLoop({
     name: 'auto-repair',
     delayMs: () => DAEMON_CADENCE.autoRepair,
     async run() {
-      const current = loadConfig(dependencies.configPath)
+      const current = await configuration.read()
       const enabled = current.autoRepair ?? {}
       if (!Object.values(enabled).some((value) => value === true)) return
       await runtime.lifecycleRepair.run({
@@ -182,7 +190,7 @@ function createProviderLoops(
     name: 'heartbeat-kill',
     delayMs: () => DAEMON_CADENCE.autoKill,
     async run() {
-      const current = loadConfig(dependencies.configPath)
+      const current = await configuration.read()
       if (current.autoKillStalledChild !== true) return
       const occurredAt = Date.now()
       await runHeartbeatKillOnce({
@@ -219,7 +227,7 @@ function createProviderLoops(
     async run() {
       const now = Date.now()
       const due = isPeriodicReconcileDue({
-        configuredMs: loadConfig(dependencies.configPath).periodicOrphanReconcileMs,
+        configuredMs: (await configuration.read()).periodicOrphanReconcileMs,
         lastReconcileAt,
         now,
       })
@@ -237,7 +245,7 @@ function createProviderLoops(
     name: 'scheduled-task',
     delayMs: () => SCHEDULE_TICK_MS,
     async run() {
-      const current = config()
+      const current = await scheduledConfig()
       if (current.scheduledTasksEnabled === false) return
       await runDueSchedulesOnce(dependencies.scheduled.operations, {
         buildLaunch: runtime.buildScheduleLaunch,
@@ -302,31 +310,46 @@ export function composeTaskExecutionProviderBackground(
   }
 
   return Object.freeze({
-    start(dependencies: TaskExecutionProviderBackgroundStartDependencies) {
+    async start(dependencies: TaskExecutionProviderBackgroundStartDependencies) {
       if (started) throw new Error('task-execution-provider-background-already-started')
       if (stopped) throw new Error('task-execution-provider-background-stopped')
       started = true
-      loops = createProviderLoops(runtime, dependencies)
-      const current = loadConfig(dependencies.configPath)
-      if (current.autoResumeOnBoot) {
-        const run = runtime.autoResume
-          .run({
-            breaker: {
-              maxPerWindow: current.maxAutoRecoveriesPerWindow,
-              windowMs: current.autoRecoveryWindowMs,
-            },
-          })
-          .then(() => undefined)
-          .catch((error) => {
-            log.warn('boot auto-resume failed', {
-              error: error instanceof Error ? error.message : String(error),
+      const configuration =
+        dependencies.configuration ??
+        (dependencies.configPath === undefined
+          ? undefined
+          : createFileTaskBackgroundConfigurationQuery(dependencies.configPath))
+      if (configuration === undefined) throw new Error('task-background-configuration-required')
+      loops = createProviderLoops(runtime, dependencies, configuration)
+      // Startup reads are part of the same drain boundary as auto-resume. Pause
+      // and stop cannot overtake a pending selected configuration read.
+      const currentRead = (async () => await configuration.read())()
+      const run = currentRead
+        .then(async (current) => {
+          if (!current.autoResumeOnBoot) return
+          await runtime.autoResume
+            .run({
+              breaker: {
+                maxPerWindow: current.maxAutoRecoveriesPerWindow,
+                windowMs: current.autoRecoveryWindowMs,
+              },
             })
-          })
-          .finally(() => {
-            if (startupRun === run) startupRun = null
-          })
-        startupRun = run
-      }
+            .then(() => undefined)
+            .catch((error) => {
+              log.warn('boot auto-resume failed', {
+                error: error instanceof Error ? error.message : String(error),
+              })
+            })
+        })
+        .catch(() => undefined)
+        .finally(() => {
+          if (startupRun === run) startupRun = null
+        })
+      startupRun = run
+      // Startup must know the selected settings, but auto-resume keeps its
+      // original detached behavior; the full run remains tracked for draining.
+      // A read failure propagates here; the drain promise observes it as well.
+      await currentRead
     },
     async pause() {
       await queue(async () => {

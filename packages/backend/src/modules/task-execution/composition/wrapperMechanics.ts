@@ -803,7 +803,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
           injection.spec.agent.runtime,
           opts.defaultRuntime,
           null,
-          freezeBinaryConfig(opts.configPath),
+          await freezeBinaryConfig(opts.configPath, opts.operationConfiguration),
         )
         const iso = shardIso as IsoHandle
         const result = await runNode({
@@ -1302,7 +1302,7 @@ async function dispatchFanoutAggregatorAttempt(
           injection.spec.agent.runtime,
           opts.defaultRuntime,
           null,
-          freezeBinaryConfig(opts.configPath),
+          await freezeBinaryConfig(opts.configPath, opts.operationConfiguration),
         )
         const iso = aggIso as IsoHandle
         const result = await runNode({

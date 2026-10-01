@@ -12,7 +12,8 @@ import {
   isDaemonInterruptionAbortReason,
 } from '@agent-workflow/shared'
 // RFC-253 — script node execution.
-import { loadConfig } from '@/config'
+import { readTaskCommitExcludePatterns } from '@/modules/task-execution/public/queries'
+import { createFileTaskOperationConfiguration } from '@/modules/task-execution/composition'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
 import { resolveSyntheticTaskExecutionInjection } from '@/services/execution/taskExecutionResources'
@@ -62,16 +63,14 @@ export type InheritableRunConfig = ReturnType<typeof pickInheritableRunConfig>
 export type { RunTaskOptions } from '@/services/execution/taskEngineRuntimeOptions'
 
 /** RFC-308: one immutable settings slice per commit/freeze operation. */
-export function readCommitExcludePatterns(opts: RunTaskOptions): readonly string[] {
-  if (opts.configPath !== undefined && opts.configPath !== '') {
-    try {
-      return [...loadConfig(opts.configPath).taskCommitExcludePatterns]
-    } catch {
-      // Launch-time snapshot is the safe fallback when a concurrent manual
-      // edit leaves config temporarily unreadable.
-    }
-  }
-  return [...(opts.commitPushExcludePatterns ?? [])]
+export function readCommitExcludePatterns(opts: RunTaskOptions): Promise<readonly string[]> {
+  return readTaskCommitExcludePatterns(
+    opts.operationConfiguration ??
+      (opts.configPath === undefined || opts.configPath === ''
+        ? undefined
+        : createFileTaskOperationConfiguration(opts.configPath)),
+    opts.commitPushExcludePatterns ?? [],
+  )
 }
 
 // -----------------------------------------------------------------------------
@@ -220,7 +219,7 @@ export async function maybeRunCommitPush(
           },
           // Codex impl-gate P1-2: profile binaryPath NULL + config head set used
           // to reach this spawn via opts.opencodeCmd; fold it into the freeze.
-          freezeBinaryConfig(state.opts.configPath),
+          await freezeBinaryConfig(state.opts.configPath, state.opts.operationConfiguration),
         )
         const envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(sessionRunId)
         const commitAgent = buildCommitAgent()
@@ -307,7 +306,7 @@ export async function maybeRunCommitPush(
         maxRepairRetries:
           state.opts.commitPushMaxRepairRetries ?? DEFAULT_COMMIT_PUSH_MAX_REPAIR_RETRIES,
         diffMaxBytes: state.opts.commitPushDiffMaxBytes ?? DEFAULT_COMMIT_PUSH_DIFF_MAX_BYTES,
-        excludePatterns: readCommitExcludePatterns(state.opts),
+        excludePatterns: await readCommitExcludePatterns(state.opts),
         // RFC-076 C4: capture the staged snapshot only when no writer node is
         // mid-write. Writers hold this same Semaphore(1) for their whole run, so
         // under the race loop this serializes the commit's `git add` against

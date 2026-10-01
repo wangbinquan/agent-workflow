@@ -1,4 +1,8 @@
-import { loadConfig } from '@/config'
+import {
+  freezeRuntimeBinaryConfiguration,
+  type TaskOperationConfigurationQueries,
+} from '@/modules/task-execution/public/queries'
+import { createFileTaskOperationConfiguration } from '@/modules/task-execution/composition'
 
 /**
  * Read the current binary fallbacks at node-mint time. The resulting values
@@ -6,12 +10,12 @@ import { loadConfig } from '@/config'
  */
 export function freezeBinaryConfig(
   configPath: string | undefined,
-): { opencodePath?: string | null; claudeCodePath?: string | null } | undefined {
-  if (configPath === undefined || configPath === '') return undefined
-  try {
-    const cfg = loadConfig(configPath)
-    return { opencodePath: cfg.opencodePath ?? null, claudeCodePath: cfg.claudeCodePath ?? null }
-  } catch {
-    return undefined
-  }
+  configuration?: TaskOperationConfigurationQueries,
+): Promise<{ opencodePath?: string | null; claudeCodePath?: string | null } | undefined> {
+  return freezeRuntimeBinaryConfiguration(
+    configuration ??
+      (configPath === undefined || configPath === ''
+        ? undefined
+        : createFileTaskOperationConfiguration(configPath)),
+  )
 }

@@ -1,4 +1,5 @@
 import { createTaskWorkspaceQueries } from './application/workspaceRead'
+export { createFileTaskOperationConfiguration } from './infrastructure/local/fileTaskOperationConfiguration'
 import {
   bindTaskWorkspaceReadScope,
   type TaskWorkspaceReadDependencies,

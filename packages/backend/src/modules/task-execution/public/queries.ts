@@ -1,4 +1,9 @@
 import { decodeWrapperProgress } from '../domain/wrapperProgress'
+export type { TaskOperationConfigurationQueries } from '../application/ports/taskOperationConfiguration'
+export {
+  freezeRuntimeBinaryConfiguration,
+  readTaskCommitExcludePatterns,
+} from '../application/operationConfiguration'
 import type { Actor } from '@/auth/actor'
 import { parseLoopExitCondition, type OverviewTasks } from '@agent-workflow/shared'
 import type { WorktreeTreeEntry } from '@agent-workflow/shared'
@@ -13,6 +18,8 @@ import type {
 export interface TaskObservationFactsQuery {
   list(input: { readonly actor: Actor; readonly query: ObservationTaskPageQuery }): Promise<{
     readonly items: readonly ObservationTaskFacts[]
+    /** Opaque owner continuations for each authorized item, from this same query. */
+    readonly positions: readonly { readonly taskId: string; readonly cursor: string }[]
     readonly nextCursor: string | null
   }>
   get(actor: Actor, taskId: string): Promise<ObservationTaskFacts | null>
@@ -94,3 +101,13 @@ export interface LoopExitConditionCandidate {
 export function isValidLoopExitCondition(value: LoopExitConditionCandidate): boolean {
   return parseLoopExitCondition(value) !== null
 }
+
+export type { TaskLaunchConfigurationQueries } from '../application/ports/taskLaunchConfiguration'
+export {
+  resolveTaskCommitPushFromReader,
+  resolveTaskLaunchRuntimeFromReader,
+  resolveTaskLaunchRuntimeConfiguration,
+  resolveTaskSubagentLiveCapture,
+  resolveTaskSubagentLiveCaptureFromReader,
+  resolveTaskUploadLimitsFromReader,
+} from '../application/launchConfiguration'

@@ -75,7 +75,7 @@ export interface TaskDriveFailureReporter {
 }
 
 export interface DefaultTaskDriveCoordinatorOptions {
-  readonly runtime: ResolvedTaskDriveConfig
+  readonly runtime: ResolvedTaskDriveConfig | Promise<ResolvedTaskDriveConfig>
   readonly lifecycle: TaskDriverLifecyclePort
   readonly admittedContinuation?: AdmittedContinuationStep
   readonly gateContinuationPreDrive?: GateContinuationPreDriveStep
@@ -105,7 +105,23 @@ export class DefaultTaskDriveCoordinator implements TaskDriveCoordinator {
       return { kind: 'not-attached' as const, taskId: input.taskId }
     }
 
-    const context = this.contextFor(input.taskId, controller, attached.attachment)
+    let context: TaskDriveContext
+    try {
+      context = await this.contextFor(input.taskId, controller, attached.attachment)
+    } catch (error) {
+      try {
+        await this.reportFailure(input, attached.attachment, 'drive', error)
+      } finally {
+        await this.options.lifecycle.releaseAndFinalize({ taskId: input.taskId, controller })
+      }
+      throw error
+    }
+    if (controller.signal.aborted) {
+      await this.options.lifecycle.releaseAndFinalize({ taskId: input.taskId, controller })
+      return input.completionMode === 'background'
+        ? { kind: 'accepted' as const, taskId: input.taskId }
+        : { kind: 'settled' as const, taskId: input.taskId }
+    }
     if (this.options.admittedContinuation !== undefined) {
       try {
         const outcome = await runWithTaskExecutionContext(
@@ -198,16 +214,16 @@ export class DefaultTaskDriveCoordinator implements TaskDriveCoordinator {
     }
   }
 
-  private contextFor(
+  private async contextFor(
     taskId: string,
     controller: AbortController,
     attachment: TaskDriveAttachment,
-  ): TaskDriveContext {
+  ): Promise<TaskDriveContext> {
     return Object.freeze({
       taskId,
       execution: attachment.execution,
       signal: controller.signal,
-      runtime: this.options.runtime,
+      runtime: await this.options.runtime,
     })
   }
 

@@ -1,3 +1,7 @@
+## 2026-10-02 RFC-370 CI 恢复与任务配置续批
+
+Intent 修复源码包含于 `8d7e078e31527a3b70c5058af9fb25c4b23ff1f4`，CI36890491336已50/50 success；该后继仅两份并行文档差异。a4 原运行48 success／1 cancelled／1 failure 的终态保留。本批33源码／测试路径抽出 TE operation／background／launch 配置与独立 local adapter，保持同步 standalone 兼容、每段 AW policy、热读及 fallback；协调器等待异步配置并在失败／等待取消时释放，所选配置删除字段不带回 boot 旧值。双 provider／双 runtime 回归随改动，原三策略 AST token 等价；正式结果待本批 exact-SHA CI。本机仅目标格式/lint和官方 scoped census，无 AW 测试／类型检查／构建／服务。全切面、A-G、CS adapter 与 M0～M4 继续，RFC不关闭。下方并行输出完整保留。
+
 ## 2026-10-01 RFC-370 Intent 配套 CI 修复
 
 Intent 已发布497149ad2源／2d65a16f5账本，CI36882578362已终态failure、38success／12failure，未记全绿。六类兼容遗漏已修：owner从participants出口、publication接原中立事务callback而非强转client、移动函数路径、类型依赖及两个改名工厂的两份语料登记。原功能主体与断言保留，十路径独立有限功能门PASS；scoped官方census排除任务／后台配置18路径在制内容，基线无新增长，仅格式/lint／源码生成。继续以修复确切SHA CI验收，无本机AW测试／类型检查／构建／服务。后续feature暂停发布但切面候选继续；A-G、CS独立adapter与M0～M4仍未完成，RFC不关闭。全部并行输出和下方历史保留。
@@ -457,9 +461,9 @@ AC-1–AC-21 对账，查出三类欠账并已补齐（Codex 实现门仍未跑�
    投递漏登记 bug 写进同一处——不抹掉。
 
 两条踩坑：①单测把两半各自锁死 ≠ 锁住两半接在一起，而唯一验证接合的用例若只在 nightly 跑，
-push 档等于没有守卫；②**`STATE.md` 在 repo 根，不在 format 门禁的 `packages/**` 范围内**，
-对它跑 `prettier --write` 会整份重排、吞掉所有人的历史段落（本次实撞 265 行，已 checkout 还原）。
-根目录与 `design/` 下的 md 只手写、不格式化。
+push 档等于没有守卫；②**`STATE.md` 在 repo 根，不在 format 门禁的 `packages/**`范围内**，
+对它跑`prettier --write`会整份重排、吞掉所有人的历史段落（本次实撞 265 行，已 checkout 还原）。
+根目录与`design/` 下的 md 只手写、不格式化。
 
 ## 2026-09-21 修复：四条 nightly 红（一条真 bug + 一条真 UX 回归 + 三条按新语义收口）
 
@@ -470,7 +474,7 @@ push 档等于没有守卫；②**`STATE.md` 在 repo 根，不在 format 门禁
 1. **真 bug —— RFC-366 的 task-run 消费者没登记进投递名单**：`task-terminal-distill-enqueue` 建了定义、
    daemon 里也注册了、单测全绿，但没进 `TASK_LIFECYCLE_DURABLE_CONSUMER_MANIFEST`；而提交
    `task.lifecycle-transitioned.v1` 时写进事件行的投递名单**正是这张 manifest**（`consumers:
-   taskLifecycleDurableConsumers(eventType)`）→ 事件照常提交、任务照常 done，队列里什么都不多且不报错。
+taskLifecycleDurableConsumers(eventType)`）→ 事件照常提交、任务照常 done，队列里什么都不多且不报错。
    `rfc366-execution-end-distill` 的 e2e（只在 nightly 跑）抓到；`rfc359-w16` 的精确投递名单断言随之更新。
    新增结构律守卫 `committed-event-consumer-delivery-parity`：按 (id, eventTypes, deliveryClass) 对账
    「建出来的定义」与「名单条目」（task / collaboration 两家族都跑，含判据自证）。
@@ -505,7 +509,7 @@ push 档等于没有守卫；②**`STATE.md` 在 repo 根，不在 format 门禁
   记为残债 / C3 退役 `spawnFn` 测试缝 / C4 claude-code 蒸馏捕获为纯增益。
 - **记账**：proposal Draft→Done、`design/plan.md` 索引 Done、plan.md 验收清单 7 项补勾（AC-13
   证据为 `rfc367-distill-followup-loop.test.ts:328`，T9b 为 `5b98bd061` 重采 + 当前守卫全绿，
-  盯 CI 为 `271b99aaa` / `7707a74a3` 两轮 46/46）。rfc367-* 测试 58 → 61。
+  盯 CI 为 `271b99aaa` / `7707a74a3` 两轮 46/46）。rfc367-\* 测试 58 → 61。
 - **`5f33e7ee3` 推红一处的修复**：新测试文件名命中 `GUARD_FILE_NAME_PATTERN`（含 `invariants`），
   被 `guard-manifest.json` 两向钉死判成未登记守卫（`rfc317-architecture-ledgers` +
   `rfc317-guard-negative-fixture` 红）。按 dev-gotchas §「新增守卫测试必须同时登记」append 一条
@@ -634,9 +638,9 @@ design.md §11.1，实现期不要把 AC 改成断言 `memories` 表。
   `memoryDistillerEnabled / Runtime / Model / SourceContext / TimeoutMs` 五项在两种部署上
   一致热生效（用户确认的行为变更）。
 - 测试：backend `memory-distill-timeout-config`（默认值 / 覆盖 / 调度器透传，已对 120s 旧值验红）
-  + `memory-distill-timeout-wiring`（两条部署路径的源码层守卫，已对旧 start.ts 验红）；
-  frontend `settings-memory-distill-timeout`（渲染 / 边界 / **保存后 PUT body 带这个键**，
-  已对「漏登记 scope 白名单」验红）。架构普查已重采并按 `424feffc3` 重钉 provenance。
+  - `memory-distill-timeout-wiring`（两条部署路径的源码层守卫，已对旧 start.ts 验红）；
+    frontend `settings-memory-distill-timeout`（渲染 / 边界 / **保存后 PUT body 带这个键**，
+    已对「漏登记 scope 白名单」验红）。架构普查已重采并按 `424feffc3` 重钉 provenance。
 
 ## 进行中 RFC
 
@@ -716,7 +720,6 @@ scratch 使用无 SC repository operation 的 Task artifact journal，并复用�
 同步准备在 Git/FS 前保存 Task plan/SC operation，上传仍在 Task INSERT 前；artifact 与 Task 同事务接受。原 orphan worker 双库接入 Task-owned 未绑定 plan 补偿，沿用 24 小时阈值与现 preparation lease 活动快照，SC 保持 Git identity/CAS 清理。新增同步/上传/回滚/重建/GC 双库测试等待 hosted 验收。
 前批 `c610e30db` Main `35505842902` 暴露夹具资源/authority 装配、legacy private import 与债务计数漂移，本批修正，不弱化行为断言。RFC363 仍待 scratch/sourceTaskId/call/fusion/DE adapters、public URL seal 和 facade 收口；RFC364 待最终托管验收；RFC365 仅 T1。
 
-
 ## 2026-09-20 RFC-363 deferred Task 接线候选与 RFC-364 守卫修复
 
 Task admission 同事务保存 SC frozen source/operation 与 Task plan，现 owner 驱动 phase-0，receipt 与工作区投影同事务接受；SQLite/PG retry/cancel 复用 journal，避免旧 stale cleanup 删除可恢复产物。双库实际 kernel/Git/回滚/owner/group/receipt 测试随批提交，等待 hosted 验收。同步/上传/call/fusion/DE 的 pre-materialized journal 与剩余 facade 仍待 T5/T7，RFC363 不标 Done。
@@ -748,27 +751,22 @@ SC 清理复用现 Git registry lock 和原 expected-old CAS，记录部分失�
 本批以持久化 worktree intent/result 恢复真实 Git；已建树按 HEAD/branch/common-dir 验证后复用，未附着的已准备分支按原 CAS 凭据继续，改变后的分支报告冲突。SC offered preparation participant 的作用域与同进程 single-flight 已实现，仍未接入 Task 生产启动，launch declared debt 不销账。
 新增真实 SQLite 文件 / PostgreSQL 跨进程 kill-restart tests，包含远端分支后移、已建树标记保留、工作分支 CAS 和外部修改冲突；证据待本批 CI。Task cancel/补偿、两 lane admission/重试、全部根切换与 RFC364 仍需继续，不能标记 RFC363 完成。
 
-
 ## 2026-09-20 RFC-363 固定 commit 与持久化驱动候选
 
 物理 owner/reader 修复批已发布 `5663a01a66a9dde578e651b0ca8408e9758f2bce`，Main `35500245004` 已见一处 Task INSERT 行号 oracle 因物理提取漂移，本批精确同步；尚未全绿。
 SC application driver 先落 concrete commit JSON 再执行物化，物理 checkpoint 用同一 operation version CAS；重放读取 durable operation，不用进程结果 Map。物化机制支持冻结 group layout/完整 source 集与 concrete commits，同时保留原 baseBranch 显示和占用校验语义。
 新增双库驱动故障窗口及真实 Git 分支移动/组缺失测试；目前仅为候选基础，完整物理 crash recovery、公开 effect capability 和 Task 启动接线仍未完成，不注销 launch 声明。RFC364 继续待实施；RFC365 保持 T1 范围。
 
-
-
 ## 2026-09-20 RFC-363 T4 物理 owner 归位候选
 
 reader 批已发布 `958b078d24e5d94c4af9ee5630c8d43b1542a992`，Main `35499425739` 正在执行。Git source resolution、single/group/scratch materializer 与 cleanup 已迁入 SC infrastructure；11 个函数体 AST 对拍未改变行为，Task DB/ownership/writer 留原 owner。
 本批保留有 T4/T7 退出责任的 service 转发，尚未完成 durable effect、Task 两 lane 与 T7 收口；不把移文件记成 launch participant 已完成。RFC364 仍待继续，RFC365 T1 的兼容报告已上库，T2+ 待决策。
-
 
 ## 2026-09-20 RFC-363 工作区 reader 生产接线候选
 
 第二批 source/snapshot 与 RFC365 T1 已推送 `5ca700bb7d49cc550175abc8f4253d585368d95e`；Main `35498701132` 的三个类型错误已定位并随 reader 批修复，尚未验收全绿。
 两种 provider 的工作区 HTTP reader 已经由 Task application → required read port → SC content participant 执行，保留原权限、绑定、目录 cap 与 UTF-8/oversized wire。新增完整分页、原始字节与 scope 生命周期测试；旧 worktreeFiles service 删除。
 只清 reader 的 6 个 public 声明与 1 个 required debt，launch 的 16 项声明仍待 T4/T5/T7。RFC363 仍 In Progress，RFC364 后续实施、RFC365 T2+ 兼容合同决策均未冒充完成。
-
 
 ## 2026-09-20 RFC-363 第二批候选与 RFC-365 T1 兼容报告
 
@@ -784,7 +782,6 @@ RFC-365 T1 报告与 characterization tests 已落档：现有输入按 UTF-16 �
 本轮保留共享 system-mocks CLI executable mode WIP；生产批次均在主 checkout main exact-stage/push、逐 SHA 验证。
 首批 T1/T2 候选已具备四表 journal、PostgreSQL additive history 和旧备份恢复兼容；生产 launch 尚未切换，T3–T8 与 RFC-364/RFC-365 T1 继续推进。测试随代码提交，托管证据待采。
 
-
 ## 2026-09-20 进行中 RFC：363 / 364 / 365 后继设计落档（Draft）
 
 用户要求按 RFC-294 下一步推荐推进。本批仅新增三件套与当前源码指纹，生产代码、schema 和 canonical 未改；三项均未获具体设计实施批准，不记实现进度。
@@ -796,7 +793,6 @@ RFC-365 T1 报告与 characterization tests 已落档：现有输入按 UTF-16 �
 
 基线 `cae3e4ea2579bc1d13ff34008fa011d4073d8b59`，Main CI [35493428853](https://github.com/wangbinquan/agent-workflow/actions/runs/35493428853) 46/46 success；仅为本批设计输入，不是新实现验收。
 共享 system-mocks CLI executable mode WIP 保留且不提交。后继具体设计批准后才开始生产实现。
-
 
 ## 2026-09-20 RFC-360 / RFC-361 / RFC-362 完成批准范围
 
@@ -823,7 +819,6 @@ Windows 原生流程 `35491113835` 在祖先 `59c1fff1c` success；证据范围�
 本批补四个 public 项和 TaskWorkspaceReadPort 的 declared-debt，明确 W4-E1/W5 后继，不添加假生产接线。
 新增 canonical 反例验证 owner/removeWave 不可省略；生产代码与上一候选一致，三个 RFC 仍等待最终 Main CI。
 
-
 ## 2026-09-20 RFC-362 合同准备候选与 360/361 CI 修复
 
 SC offered 与 Task required 合同、引用 codec、真实双库/Git 测试适配及后继切换清单已落档。
@@ -833,7 +828,6 @@ SC offered 与 Task required 合同、引用 codec、真实双库/Git 测试适�
 RFC360/361/362 均仍 In Progress，等待本批最终 exact-SHA CI；system-mocks CLI mode WIP 原样保留。
 `45cf0f4ba` 的目标用例已确认：旧三项失败通过，RM/EC 与 RFC362 SQLite 行为通过；
 该轮 typecheck 的 branded-ref 测试比较错误已修为字符串 round-trip，双库与全 CI 终态继续由后继 SHA 验收。
-
 
 ## 2026-09-20 RFC-361 provider 归位候选
 
@@ -849,14 +843,12 @@ RFC-360/361/362 均仍 In Progress；RFC-362 尚待实施。
 第三批 SHA `a5e70f94d` Main CI `35487858387` 为 failure；已定位问题随本批修复，最终验收等待新 SHA。
 RFC-360 仍 In Progress，RFC-361/362 尚待实施；保留他人的 system-mocks CLI mode WIP。
 
-
 ## 2026-09-20 RFC-360 第三批：首次执行选择与冻结进入同一事务
 
 第二批已推送 `9ec05084a`；CI 已定位的 canonical facade 精确清单遗漏随本批补齐。
 Task 持有 live transaction / NodeRun / owner 围栏能力，调用 RM offered selection participant；首次选择与三列快照一起提交或回滚。
 保留已冻结恢复与 binary/configDir/params 兼容规则；新增双库回滚、并发首次冻结、事务能力到期用例，等待托管 CI。
 RFC-360 T6 的剩余 consumer/根/转发清理仍在继续，RFC-361/362 尚未实施，均不标记 Done。
-
 
 ## 2026-09-20 RFC-360 管理首批已推送；注册表归位继续推进
 
@@ -880,8 +872,6 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 同时迁移原源码测试的调用位置；registry 单一持久化和 per-NodeRun selection 尚未迁位。
 本批推进 RFC-360 T2/T4，三个 RFC 仍 In Progress；不领取完整 E4b/E9/E1 完成信用。
 
-
-
 ## 2026-09-20 RFC-294 后续推进：文档对账与三份独立草案
 
 进行中 RFC：RFC-294 继续 In Progress；新增 [RFC-360](design/RFC-360-runtime-management-context-cutover/proposal.md)、
@@ -898,12 +888,12 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 - 本批仅文档；未修改 production/test/canonical。共享树原有 `packages/system-mocks/src/cli.ts` executable mode 变化保留，
   不纳入本批发布。文档发布 SHA 与其托管 CI 以 Git / Actions 为准，不能把 Draft 三件套记成已实施。
 
-
 > 这份文件让新 session 能立刻接上进度。每完成一批 issue 就更新它，与远端同步推送。
 
 > ## ✅ RFC-359 **已完工**（2026-09-18 收口，12 / 12 条 AC 全部达成）
 >
 > **收口 SHA `55676871ccb3afc4bfe54e759652ce325d401a91`**
+>
 > - **AC-9**：CI run `35392000678` 终态 success，**46/46 作业全绿**（该 run 自己终态 success、未被取消）。
 >   后端 × 真 PostgreSQL（ubuntu 12 分片 + postgres:17）**23,018 pass / 0 fail**，`[postgresql]` 身份 **6,271**；
 >   后端 × SQLite（macOS 6 分片）**16,740 pass / 0 fail**；前端三 OS、Playwright 四 OS 13 分片、
@@ -930,25 +920,25 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >
 > 用户要求「把所有类型的 ci 修好」+「都改好之后重跑这些 ci 到全绿」。**收口 SHA `a5d0081e7`**：
 >
-> | 工作流 | 状态 | 取证 sha |
-> | --- | --- | --- |
-> | `CI` | ✅ | `a5d0081e7` |
-> | `e2e-full-nightly` | ✅ | `a520adee6`（此前自 2026-09-06 起连红 13 晚） |
-> | `e2e-webkit-nightly` | ✅ | `a520adee6`（同上） |
-> | `maintenance-soak-nightly` | ✅ | `9bef03c4b`（`53d7a4346` 起连绿三笔） |
-> | 其余 7 条（evidence-soak / git-protocols / integration-opencode / postgresql-evidence / visual-regression / windows-platform / release） | ✅ | 各自最近一次 run |
+> | 工作流                                                                                                                                   | 状态 | 取证 sha                                      |
+> | ---------------------------------------------------------------------------------------------------------------------------------------- | ---- | --------------------------------------------- |
+> | `CI`                                                                                                                                     | ✅   | `a5d0081e7`                                   |
+> | `e2e-full-nightly`                                                                                                                       | ✅   | `a520adee6`（此前自 2026-09-06 起连红 13 晚） |
+> | `e2e-webkit-nightly`                                                                                                                     | ✅   | `a520adee6`（同上）                           |
+> | `maintenance-soak-nightly`                                                                                                               | ✅   | `9bef03c4b`（`53d7a4346` 起连绿三笔）         |
+> | 其余 7 条（evidence-soak / git-protocols / integration-opencode / postgresql-evidence / visual-regression / windows-platform / release） | ✅   | 各自最近一次 run                              |
 >
 > **六个用户可见缺陷，全部是 RFC-359 AC-1 合一的伤亡，且全部只被 `@nightly` 覆盖**——推送档看不见，
 > 所以红了两周没人认领。这是本轮最该记住的一条：**合一类改动的判据必须落在推送档的双引擎测试上**。
 >
-> | 缺陷 | 用户可见后果 | 判据（推送档） |
-> | --- | --- | --- |
-> | 代理删除的五档引用闸取了弱的一半（`a507b13ea`） | 跑着任务的代理能被删（任务当场失去定义）、被定时任务引用的代理能被删（到点无人值守失败）、拒绝理由不点名拦路者 | `rfc359-w4-d14-d15-regressions` ③（双引擎，五处变异各红一条） |
-> | 停用插件的拒绝退化成 `agent-resources-invalid` | 用户对着读不懂的报错，不知道该去开哪个开关 | 同上 ④ |
-> | `POST /api/tasks/archive` 对**每个非管理员**都 404（Hono 的 `*` 匹配零个段，可见性中间件吞掉兄弟字面路由） | 设置页「按条件批量归档」对非管理员整个不可用，且报一个无从解释的 404 | `rfc311-task-archive-route-reachability`（双引擎） |
-> | 长驻协调器把 17 个运行期旋钮冻在装配时（**三个组合根**，`server.ts` 是 e2e 单二进制走的那个） | 「设为默认」只改界面，新任务照旧按老运行时的模型/参数跑；执行预算同理 | `rfc319-cfg45-default-runtime-hot-read`（枚举三个组合根，不点名） |
-> | 仓库准备重试把发起人写死成 SYSTEM ⇒ 授权不了重放 | 「重试准备」永远被拒，提示「use a manual resume/retry/sync command」——而用户用的就是那条 | `rfc319-task27-de28-manual-retry-and-host-anchor` |
-> | 数字员工宿主工作流锚行的播种被删（`c932bc8e8`） | 人工评审页只剩「Review not found.」，案例一直等着评审、评审人打不开 | 同上（宿主锚那条走双引擎） |
+> | 缺陷                                                                                                       | 用户可见后果                                                                                                   | 判据（推送档）                                                    |
+> | ---------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------- |
+> | 代理删除的五档引用闸取了弱的一半（`a507b13ea`）                                                            | 跑着任务的代理能被删（任务当场失去定义）、被定时任务引用的代理能被删（到点无人值守失败）、拒绝理由不点名拦路者 | `rfc359-w4-d14-d15-regressions` ③（双引擎，五处变异各红一条）     |
+> | 停用插件的拒绝退化成 `agent-resources-invalid`                                                             | 用户对着读不懂的报错，不知道该去开哪个开关                                                                     | 同上 ④                                                            |
+> | `POST /api/tasks/archive` 对**每个非管理员**都 404（Hono 的 `*` 匹配零个段，可见性中间件吞掉兄弟字面路由） | 设置页「按条件批量归档」对非管理员整个不可用，且报一个无从解释的 404                                           | `rfc311-task-archive-route-reachability`（双引擎）                |
+> | 长驻协调器把 17 个运行期旋钮冻在装配时（**三个组合根**，`server.ts` 是 e2e 单二进制走的那个）              | 「设为默认」只改界面，新任务照旧按老运行时的模型/参数跑；执行预算同理                                          | `rfc319-cfg45-default-runtime-hot-read`（枚举三个组合根，不点名） |
+> | 仓库准备重试把发起人写死成 SYSTEM ⇒ 授权不了重放                                                           | 「重试准备」永远被拒，提示「use a manual resume/retry/sync command」——而用户用的就是那条                       | `rfc319-task27-de28-manual-retry-and-host-anchor`                 |
+> | 数字员工宿主工作流锚行的播种被删（`c932bc8e8`）                                                            | 人工评审页只剩「Review not found.」，案例一直等着评审、评审人打不开                                            | 同上（宿主锚那条走双引擎）                                        |
 >
 > 另修两条与产品无关的判据缺陷：soak 的事务判据还留着 2026-09-01 已被否定的单样本尾部门形状；
 > `describeEachProvider` 的 SQLite 泳道与 `task-questions-board-ui` 的 `beforeAll` 吃默认预算，
@@ -965,11 +955,11 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 用户明令「把所有类型的 ci 修好」+「都改好之后重跑这些 ci 到全绿」。除推送档 `CI` 之外，
 > 三条工作流长期红着（**推送档一直绿，所以两周没人看见**）：
 >
-> | 工作流 | 状态 | 处置 |
-> | --- | --- | --- |
-> | `maintenance-soak-nightly` | 在 `934c31af9` 红 | 事务判据补上 2026-09-01 那次改造的另一半 → `53d7a4346` 绿 |
-> | `e2e-full-nightly` | 自 2026-09-06 起连红 13 晚 | 见下（已修 5 类，待重跑复核） |
-> | `e2e-webkit-nightly` | 同上 | 同上（同一批 spec） |
+> | 工作流                     | 状态                       | 处置                                                      |
+> | -------------------------- | -------------------------- | --------------------------------------------------------- |
+> | `maintenance-soak-nightly` | 在 `934c31af9` 红          | 事务判据补上 2026-09-01 那次改造的另一半 → `53d7a4346` 绿 |
+> | `e2e-full-nightly`         | 自 2026-09-06 起连红 13 晚 | 见下（已修 5 类，待重跑复核）                             |
+> | `e2e-webkit-nightly`       | 同上                       | 同上（同一批 spec）                                       |
 >
 > **夜跑的红按「每晚都红」与「某晚才红」分开看，这一步是关键**：每晚必红的只有
 > AGENT-09~12 + RES-X3（shard 2）与 EVENT-X5（shard 3）；其余都是某天才出现的新回归。
@@ -1068,7 +1058,8 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 最后一份 `postgresqlTaskRouteOperations.ts`（2416 行，22 个导出里 **15 个被 SQLite 侧直接消费**）。
 > 按实际比例反过来做更省：**把装配搬出去，实现留在原地改名**——
 > `taskRouteOperations.ts`（2273 行，共用实现）+ `postgresqlTaskRouteOperations.ts`（215 行，PG 绑定）
-> + 未动的 `sqliteTaskRouteOperations.ts`。形状对称：**一份实现，两个绑定**。
+>
+> - 未动的 `sqliteTaskRouteOperations.ts`。形状对称：**一份实现，两个绑定**。
 >
 > 顺带修掉两处过紧标注（形参标 PG 句柄、函数体只用中立面）、新增中立依赖面类型，
 > 以及**一处过松判据**：`rfc359-w8` 的 `implementsPort` 认任何 `: Port`，于是**依赖面里的字段声明**
@@ -1434,14 +1425,14 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >
 > ①**手动修复这一对双引擎零对拍**。SQLite 侧 513 行由 **13 个** `lifecycle-repair-*.test.ts`
 > 覆盖（没有一个是 `describeEachProvider`）；PG 侧 1546 行**有**覆盖，但只覆盖 `automaticRepair`
->（11 条，也是单引擎）——**手动的两个路由动词在 PostgreSQL 上零行为覆盖**。
+> （11 条，也是单引擎）——**手动的两个路由动词在 PostgreSQL 上零行为覆盖**。
 > 这正是 `dual-provider-parity-audit-2026-09-04` 那 12 条 P0 的孵化形态。
 >
 > ②**t19d 看不见这处倒挂**。它按 `sqliteFoo.ts` / `postgresqlFoo.ts` 的文件名前缀配对，
 > 而这一对是 `taskLifecycleRepair.ts`（靠目录 `platform/persistence/sqlite/`，不是文件名前缀）
 > 对 `postgresqlTaskRouteRepairOperations.ts`——**基名对不上，`classify()` 配不出**，
 > 于是这处倒挂从来没进过账本。**这是账本自己的缺口**，与「按名字筛棘轮」是同一类脆弱性
->（本轮已因后者连推红三次）。合并这一对时**一并修守卫**：给 t19d 加一份显式手工配对表。
+> （本轮已因后者连推红三次）。合并这一对时**一并修守卫**：给 t19d 加一份显式手工配对表。
 >
 > 门序两侧逐条一致；差异面在**修复选项注册表**与各自的 preflight——选项集合 / 标签 key /
 > `available` 判据 / `previewSteps` / 两个标记是否逐条相同，**目前没有任何东西在盯**。
@@ -1459,7 +1450,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 工作区已回收是确定的「这条路走不通」，让它往下走才报，错误来得更晚、现场更难读。
 >
 > **又一格零覆盖**：前置门里的 `isActive` 变异掉不红——与第 6 刀预览那两道门**同一类盲区**
->（「一侧有、另一侧没有」的门在 A/B 结构里两边都不进）。补 A23 后变异在两个引擎上同时红。
+> （「一侧有、另一侧没有」的门在 A/B 结构里两边都不进）。补 A23 后变异在两个引擎上同时红。
 > **连着两刀在同一个盲区上抓到东西**，所以 gotchas 那条的反向用法值得每刀都做：
 > 合并前对着 B 段清单问一句「有没有哪一侧的门根本没进这张表」。
 >
@@ -1485,7 +1476,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 「唯一那份预览必须委托共用实现、且不得回退成可启动性」；`converged-twins` 的消费者白名单两个收成一个。
 >
 > 一处过渡态增长已声明 allowGrowth：`cross-context-observed-imports` 5081 → 5083
->（共用实现住在 PG 命名的文件里，两条边新出现，而 SQLite 侧因 `syncWorkflow` 还在用故没减少），
+> （共用实现住在 PG 命名的文件里，两条边新出现，而 SQLite 侧因 `syncWorkflow` 还在用故没减少），
 > **随写侧那一刀回落**。
 >
 > `loadVisibleWorkflow` / `builtinCandidateWorkflow` **不退役**——续 69 判断错了，
@@ -1498,7 +1489,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 分叉集中在两处：①**B4**（`workspace_pruned_at`，PG 的门认、SQLite 不认，§5u 登记的既有差异，
 > 倾向取 PG——与 `delete` 同一条判据：先报永久性主因，工作区已回收就是「这条路走不通」，
 > 让它走到 resumeKick 才报，错误来得更晚、现场更难读）；②**准入链的形状**
->（SQLite 的 CAS + resumeKick vs PG 的 `withSerializableTaskExecution` + `children.resume`）
+> （SQLite 的 CAS + resumeKick vs PG 的 `withSerializableTaskExecution` + `children.resume`）
 > ——这一格与 `resume` / `retry` 是同一套机制，**应当与它们同一刀处理**。
 >
 > 所以第 7 刀的合理范围是**只合前置门**，主体留给 `resume` / `retry` 那一刀。
@@ -1511,7 +1502,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >
 > **挂了三刀的那条观察已裁决**：`rfc359-w18` 的 `[postgresql] > old and indexed count reads …`
 > 在 CI 的 PostgreSQL lane 上实测 `(pass)`。判定成立——本机 macOS + docker 的驱动层差异
->（事务体按预期抛错后 `rollback` 这条语句本身失败，固定 ~5.1s），不是产品缺陷，不立项。
+> （事务体按预期抛错后 `rollback` 这条语句本身失败，固定 ~5.1s），不是产品缺陷，不立项。
 > 已写进 `docs/dev-gotchas.md`，并附一句：**本地遇到它可以按环境跳过，但每次都要按 CI 的同名
 > 结果复核**——它和真缺陷长得一模一样，唯一的区别就是 CI 那一格的颜色。
 >
@@ -1529,7 +1520,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 自己的源码给的：它不得不在前面插一道内置工作流预检，注释原话是「内置工作流在那里就被挡住，
 > 异常被 catch 兜成 `workflow-deleted`——横幅内容直接是错的」。预览回答的是「同步会发生什么」，
 > 不是「我现在能不能启动它」；换成可见性之后那道前置门自然不需要
->（`computeWorkflowSyncPreview` 第一件事就是判 `workflow.builtin`）。
+> （`computeWorkflowSyncPreview` 第一件事就是判 `workflow.builtin`）。
 > 合并后 PG 的 `loadVisibleWorkflow` / `builtinCandidateWorkflow` 一并退役。
 >
 > 细节见 plan「第 6 刀的勘察」。
@@ -1547,7 +1538,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > **第 5 刀正题**：`delete` 两个引擎共用 `services/taskDelete.ts`，PG 那侧 184 行内联实现退役。
 > 三处分叉三个判据：①前置门次序取 PG（`task-internal` 先于 `task-active`——「永远不能删」
 > 是主因，「先取消再来」是次因，与 `diff` 的 409/410 同一条判据）；②活跃度改成**注入的参与者**
->（装配点收成一个 `composeLegacyTaskActivityParticipant`，行为不变）；③提交后广播由共用实现自己做，
+> （装配点收成一个 `composeLegacyTaskActivityParticipant`，行为不变）；③提交后广播由共用实现自己做，
 > `deletionEvents` 端口与它 15 行的绑定一并删除。
 >
 > **合并解锁了两格覆盖**：A19 原来缺 `task-active`（SQLite 侧读模块全局、对拍驱不动）。
@@ -1571,13 +1562,13 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > ## 📌 RFC-359 最新一段（2026-09-17 续 67，**第 5 刀的前置：`taskDelete` 中立化 + 分叉勘察**）
 >
 > `services/taskDelete.ts` 的库句柄从 bun:sqlite 专有类型放宽到中立别名。卡住它的只有**五处 `.get()`**
->（bun:sqlite 独有的同步终结符），改写成 `await … .limit(1)` 之后整份实现就是普通 drizzle 查询 +
+> （bun:sqlite 独有的同步终结符），改写成 `await … .limit(1)` 之后整份实现就是普通 drizzle 查询 +
 > 中立事务原语了。这是把 `delete` 两个引擎合成一份的必要前提。
 >
 > **勘察结论（三处分叉，判据已定）**：①前置门次序——SQLite 是 `not-terminal → active → internal`，
 > PG 是 `not-terminal → internal → 树循环里 isActive`；一个「既是框架内部、又有活进程」的任务两侧
 > 给出不同 code。**取 PG 的次序**：先报永久性主因（这个任务永远不能直接删）再报暂时性次因
->（先取消再来），把用户引向死路比引向一次重试更糟——与 `diff` 那一刀同一条判据。
+> （先取消再来），把用户引向死路比引向一次重试更糟——与 `diff` 那一刀同一条判据。
 > ②活跃度从哪里读——SQLite 读模块全局 `isTaskActive`，PG 读注入的参与者端口。取 PG 的，
 > 而且**只有注入版本才能在两个引擎上被测**（这正是 A19 至今缺 `task-active` 那一格的原因）。
 > ③提交后通知——SQLite 直接广播，PG 走 `deletionEvents` 端口；与第 4 刀的 `membershipEvents` 同形，
@@ -1606,7 +1597,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > **第 4 刀正题**：`assertVisible` / `requireOperator` / `assertReplayVisible` / `getMembers` /
 > `replaceMembers` 合一（两个 reviewers 动词本来就同一行转发）。取 `taskCollab` 那一份——它严格更全：
 > RFC-324 观察者只读文案、与评审写同一把任务 FIFO 锁、锁内重读任务行。聚合根行锁两份都有
->（同一对原语、同一条 W9 的 22.9% 实测），**不丢 PG 的并发性质**。
+> （同一对原语、同一条 W9 的 22.9% 实测），**不丢 PG 的并发性质**。
 >
 > **销账两笔**：B1（拒绝时的错误码——对「是成员但只读」的人说「你不是成员」是错的答案）、
 > B2（任务不存在时的门——一道对不存在的 id 说「行」的门在别的调用方手里就是个谎，统一 404）。
@@ -1628,7 +1619,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 本段待推：盘点后的第 3 刀。基线不用新立——W7 的 A1–A5 就是这三件的双引擎对拍，一直在跑。
 >
 > **销的账是 B6**：行投影的严格度。合并前 PG 走 `TaskSchema.parse`，枚举外的 `space_kind`
->（只会由裸 SQL / 手工修复写进去，该列没有库级 CHECK）让整条详情 500；SQLite 不解析、原样上线。
+> （只会由裸 SQL / 手工修复写进去，该列没有库级 CHECK）让整条详情 500；SQLite 不解析、原样上线。
 > `get` 共用 `loadTaskProjection` 之后它自己红了，改成相等断言——**取严格那一档**，
 > 静默上线比响亮失败更糟：前端会落进默认分支，渲染成一个看不出错的错。
 >
@@ -2024,10 +2015,10 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 悬空状态的路径；删被引用的工作流会 409 `workflow-in-use`）实测：**两个引擎都拒**，
 > 差的是哪一道门先响：
 >
-> | | HTTP | code | `issues[]` |
-> | --- | --- | --- | --- |
-> | SQLite | 422 | `workflow-invalid` | **有**（带节点 pointer） |
-> | PostgreSQL | 422 | `workflow-call-ref-missing` | **无** |
+> |            | HTTP | code                        | `issues[]`               |
+> | ---------- | ---- | --------------------------- | ------------------------ |
+> | SQLite     | 422  | `workflow-invalid`          | **有**（带节点 pointer） |
+> | PostgreSQL | 422  | `workflow-call-ref-missing` | **无**                   |
 >
 > 已钉进 `rfc359-w5hn-workflow-route-launch-provider-parity`。销账时要回答「统一到哪一侧」，
 > 主要论据是 `issues[]`——工作流编辑器的校验面板靠它高亮出错节点，PG 那条不带，前端指不到。
@@ -2130,10 +2121,10 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > **最该带走的一句：同一个「远端拉不动」的场景，SQLite 用户看到一行可重试的任务，
 > PostgreSQL 用户什么都看不到——而且它落在 `POST /api/tasks` 这条最主要的启动路上。**
 >
-> | | JSON `POST /api/tasks` | 定时 run-now |
-> | --- | --- | --- |
-> | SQLite | **201**，`tasks` 一行 `pending`（可重试） | **201**，一行 `pending` |
-> | PostgreSQL | **400 `repo-clone-failed`**，**零行** | **400**，零行 |
+> |            | JSON `POST /api/tasks`                    | 定时 run-now            |
+> | ---------- | ----------------------------------------- | ----------------------- |
+> | SQLite     | **201**，`tasks` 一行 `pending`（可重试） | **201**，一行 `pending` |
+> | PostgreSQL | **400 `repo-clone-failed`**，**零行**     | **400**，零行           |
 >
 > 成因：`grep -rln deferRepoPreparation src` 交出的四个文件**全在 SQLite 那一侧**；
 > 根启动内核在插入任务行之前无条件全量物化，没有延后分支。RFC-287 G7 是**已定的产品行为**
@@ -2537,11 +2528,11 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > **最该带走的一句：判别式负责捞嫌疑，是不是真的一对得人读一眼。**
 > 本轮三次被自己的判别式带偏，每次都是不同的限度：
 >
-> | 限度 | 撞在哪 |
-> | --- | --- |
-> | 名字相同 ≠ 同一层 | §5gb：一个收端口、一个收 db，是同一族的**两层**，判别式把它们配成了「一对 provider 实现」 |
-> | 配对配得对，修法也可能不是二选一 | §5gc：中立那份把下层 helper 的三行**又抄了一遍**，处方是让抄的那份去调它抄的东西 |
-> | 别名有两种写法 | §5gf：§5fu 只认 `export const X = Y`，漏了 `export function X(a){ return Y(a) }` |
+> | 限度                             | 撞在哪                                                                                    |
+> | -------------------------------- | ----------------------------------------------------------------------------------------- |
+> | 名字相同 ≠ 同一层                | §5gb：一个收端口、一个收 db，是同一族的**两层**，判别式把它们配成了「一对 provider 实现」 |
+> | 配对配得对，修法也可能不是二选一 | §5gc：中立那份把下层 helper 的三行**又抄了一遍**，处方是让抄的那份去调它抄的东西          |
+> | 别名有两种写法                   | §5gf：§5fu 只认 `export const X = Y`，漏了 `export function X(a){ return Y(a) }`          |
 >
 > 还有一次是**机械信号把裁决下反了**（§5fv → §5gg）：粗筛说「无下层品牌依赖、可直接合」，
 > 读源码发现三条其实命中 §5fq ②（doctor 要在 daemon 没起来时开**文件**、两条迁移链是两套落盘工件）。
@@ -2553,6 +2544,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > **把真实覆盖缺口洗成绿数字，正是本 RFC 要防的事。**
 >
 > **剩下的不是零碎，是两个架构波次**：
+>
 > - **组合根签名对齐**——`createApp` 的 `db` 写死 `DbClient`，两个根装配签名不对称
 >   → 挡 AC-6 的 7 条 + AC-1 的 `server.ts` 两条（§5gh / §5bg）；
 > - **启动面合一**——`services/task` 的 legacy `startExecution`（12 处同步游标）
@@ -2613,6 +2605,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 下一个人看一眼就知道去动谁。
 >
 > 本段另落两笔：
+>
 > - **§5fp（AC-1 第一条真合一）**：执行合同资源读取两份实现合一。合之前把两份接到**同一个真
 >   PostgreSQL 库**上量差异，量出两处——sidecar 泄漏（潜伏）与坏 definition 的错误型别
 >   （**活的**：同一份坏数据，用户看到的错误码取决于管理员选了哪种数据库）。
@@ -2646,10 +2639,10 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 两份实现都落到同一个 `…FromLookup`，只是「怎么把行读出来」各写各的。把两份**接到同一个
 > 真 PostgreSQL 库、喂同一批行**，量出两处差异：
 >
-> | | 中立那份 | PostgreSQL 那份 |
-> | --- | --- | --- |
-> | A. 交给 `implicitAgentDeclarations` 的 `frontmatterExtra` 键 | `["digitalEmployeeTemplate"]` | `["digitalEmployeeTemplate","role"]` |
-> | B. `definition` 存成坏 JSON 时抛什么 | `ValidationError/workflow-definition-corrupt` | 裸 `SyntaxError` |
+> |                                                              | 中立那份                                      | PostgreSQL 那份                      |
+> | ------------------------------------------------------------ | --------------------------------------------- | ------------------------------------ |
+> | A. 交给 `implicitAgentDeclarations` 的 `frontmatterExtra` 键 | `["digitalEmployeeTemplate"]`                 | `["digitalEmployeeTemplate","role"]` |
+> | B. `definition` 存成坏 JSON 时抛什么                         | `ValidationError/workflow-definition-corrupt` | 裸 `SyntaxError`                     |
 >
 > A 是 sidecar 泄漏（四个已提升为 `Agent` 一等字段的键从窄投影那条路漏回 extra），
 > **今天还没咬到人**——两个消费者读的都不是 sidecar 键；据实说是**潜伏**，不吹成活 bug。
@@ -2680,16 +2673,17 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > **最该带走的一句：同一个账本条目，销账方式取决于「那个分叉到底在问什么」。**
 > 十一波用了**六种**处方，硬套任何一种都会走偏：
 >
-> | 处方 | 用在哪 |
-> | --- | --- |
+> | 处方                               | 用在哪                                                                                                              |
+> | ---------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
 > | ①品牌换能力（traits **声明答案**） | `migrationRole` / `serverVersionFallback` / `failureRecoveryHint` / `offlineCompaction` / `absentLocalStoreMessage` |
-> | ②删恒假 / 摆设标签 | frameBackfill 的 provider 标签、`postgresqlProviderBackup` 的恒假条件 |
-> | ③按 provider 查表 | `PRE_OPEN_STAGED_RESTORE` / `ENGINE_HEALTH_CHECKS` / `LOCAL_SYSTEM_OPERATIONS_COMPOSERS` |
-> | ④装配方交答案 | `openAdmissionStore` / `startSupervisor` / `databaseInit` |
-> | ⑤搬进白名单层 | `requireDatabaseConfig`（`cli/start.ts` → `platform/persistence/`） |
-> | ⑥各自收敛到强的一侧 | §5fb，**唯一一条真改了用户可见行为的** |
+> | ②删恒假 / 摆设标签                 | frameBackfill 的 provider 标签、`postgresqlProviderBackup` 的恒假条件                                               |
+> | ③按 provider 查表                  | `PRE_OPEN_STAGED_RESTORE` / `ENGINE_HEALTH_CHECKS` / `LOCAL_SYSTEM_OPERATIONS_COMPOSERS`                            |
+> | ④装配方交答案                      | `openAdmissionStore` / `startSupervisor` / `databaseInit`                                                           |
+> | ⑤搬进白名单层                      | `requireDatabaseConfig`（`cli/start.ts` → `platform/persistence/`）                                                 |
+> | ⑥各自收敛到强的一侧                | §5fb，**唯一一条真改了用户可见行为的**                                                                              |
 >
 > 两条硬边界值得单记：
+>
 > - **traits 放答案、不放机械**。`cli/start.ts` 的暂存恢复答案不是一句话、是一段 SQLite 恢复机械，
 >   所以走查表而**不是** traits——塞进 traits 只会让那张表开始 import 引擎实现。
 > - **查表比穷尽性围栏更进一步**。`satisfies Record<DatabaseProvider, …>` 把「少一个 provider」
@@ -2748,7 +2742,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > `beforeCas` 注入点，**变异验证两引擎共 4 格红**）、`rfc291-closure-call-edges`
 > （被 `freezeCallClosure(db: DbClient)` 这个**残留品牌标注**钉住 ⇒ 形参放宽即解，
 > 零生产调用点改动，9 例 → 17 例）。
-> 原文：**AC-6 的「95」已过期——实测 `OPEN_MIGRATION_DEBT`**（守卫 8 pass / 0 fail，账本与源码逐字相等）。销账只有「真迁到 `describeEachProvider`」或「证明落进 sanctioned 类」两条路，账本明写不许为单个文件量身定做豁免。抽查 `rfc097-task-status-cas.test.ts`：被测 helper 本身中立、**可迁**，但 CAS 竞态用例要在 SELECT 与 UPDATE 之间插竞争写者，迁过去须重对齐两引擎并发语义——是真工作。**按体量抽了四条逐条查根因（§5fj）：四条、四种不同的真阻塞，没有一条是「转换器跑一下就行」**——`start-task-deps` 卡在`buildStartTaskDeps(db: LegacySqliteTaskDatabase)` 的品牌签名；`rfc349-…-read-models-postgresql-adapter` 的「PG 覆盖」是**脚本化假池**（断言发出的 SQL 文本），迁到真库是重写；`rfc221-login-policy-routes` 其实已迁大半，只剩一例卡在 `createApp` 入参（源码已标「独立一刀，见 §5bg」）。⇒ **AC-6 的销账节奏由 AC-1 决定**，在「完工线」裁决前硬压只会逼出量身定做豁免或把假池抄本当双引擎覆盖。另有 
+> 原文：**AC-6 的「95」已过期——实测 `OPEN_MIGRATION_DEBT`**（守卫 8 pass / 0 fail，账本与源码逐字相等）。销账只有「真迁到 `describeEachProvider`」或「证明落进 sanctioned 类」两条路，账本明写不许为单个文件量身定做豁免。抽查 `rfc097-task-status-cas.test.ts`：被测 helper 本身中立、**可迁**，但 CAS 竞态用例要在 SELECT 与 UPDATE 之间插竞争写者，迁过去须重对齐两引擎并发语义——是真工作。**按体量抽了四条逐条查根因（§5fj）：四条、四种不同的真阻塞，没有一条是「转换器跑一下就行」**——`start-task-deps` 卡在`buildStartTaskDeps(db: LegacySqliteTaskDatabase)` 的品牌签名；`rfc349-…-read-models-postgresql-adapter` 的「PG 覆盖」是**脚本化假池**（断言发出的 SQL 文本），迁到真库是重写；`rfc221-login-policy-routes` 其实已迁大半，只剩一例卡在 `createApp` 入参（源码已标「独立一刀，见 §5bg」）。⇒ **AC-6 的销账节奏由 AC-1 决定**，在「完工线」裁决前硬压只会逼出量身定做豁免或把假池抄本当双引擎覆盖。另有
 > AC-8 / AC-9（收口 SHA 的终态取证）、AC-11（新中位数判据还缺一次 `scale=full`——
 > 判据原文要求在**收口 SHA** 上取，所以本段**刻意没有**提前 dispatch
 > `postgresql-evidence.yml`，那会花掉一次 210 分钟预算却拿到一个不是收口的 SHA）。
@@ -2759,13 +2753,13 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 五波各自的处方**不相同**——这是本段最该带走的东西：同一个账本条目，销账方式取决于
 > 「那个分叉到底在问什么」。
 >
-> | 波次 | 文件 | 处方 |
-> | --- | --- | --- |
-> | §5fb | `taskExecutionPersistence.ts` 2 → 0 | 两个引擎**各有一处比对方弱**，各自收敛到强的一侧 |
-> | §5fc | `maintenanceService.ts` 2 → 0 | 判别联合 → **装配方交答案**（两个工厂）；顺带补上零覆盖 |
-> | §5fd | `cli/start.ts` 2 → 0 | 一处**按 provider 查表**（traits 放答案不放机械），一处**搬家**到 `platform/persistence/` |
-> | §5fd 续 | `system-operations/composition.ts` 2 → 1 | 复用上一格搬家出来的 `requireDatabaseConfig` |
-> | §5fe | `cli/doctor.ts` 1 → 0 | 查表；**连手写的 never 汇一起消失**（forcing function 由类型系统自带） |
+> | 波次    | 文件                                     | 处方                                                                                      |
+> | ------- | ---------------------------------------- | ----------------------------------------------------------------------------------------- |
+> | §5fb    | `taskExecutionPersistence.ts` 2 → 0      | 两个引擎**各有一处比对方弱**，各自收敛到强的一侧                                          |
+> | §5fc    | `maintenanceService.ts` 2 → 0            | 判别联合 → **装配方交答案**（两个工厂）；顺带补上零覆盖                                   |
+> | §5fd    | `cli/start.ts` 2 → 0                     | 一处**按 provider 查表**（traits 放答案不放机械），一处**搬家**到 `platform/persistence/` |
+> | §5fd 续 | `system-operations/composition.ts` 2 → 1 | 复用上一格搬家出来的 `requireDatabaseConfig`                                              |
+> | §5fe    | `cli/doctor.ts` 1 → 0                    | 查表；**连手写的 never 汇一起消失**（forcing function 由类型系统自带）                    |
 >
 > **§5fb 是本 RFC 第一条真正改了用户可见行为的合一**，也是最该记住的一条：账面是 1 个分派，
 > 逐方法对下来是 **4 条差异，而且方向相反**——两条让 SQLite 更弱（终态化写回行数不校验、
@@ -2802,11 +2796,11 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > CI 种子是 `(GITHUB_RUN_NUMBER*10+shard)%2147483647`——**每个 run 顺序都不同**，所以这些脆点
 > 是轮流现形。三次都追到根因，没有一次用「重跑就过了」收场：
 >
-> | | 表征 | 根因 | 处置 |
-> | --- | --- | --- | --- |
-> | 1 | `rfc311-events-archive-scale` 超时 7355ms | 重用例吃 bun 默认 **5s**，本机 ~2s 只有 2.5× 余量 | 两条重用例都给显式预算（**没有只修红的那条**） |
-> | 2 | `rfc359-w4-d19c [postgresql]` 插入失败 | **40001 重试预算被耗尽**（真 bug） | 查到底并落账，处置呈用户 |
-> | 3 | `rfc257-webhook-ingress [postgresql]` 读到 1 | 固定 `setTimeout(r,10)` 等 fire-and-forget | 四处全换 `helpers/eventually`（**同样不只修红的那条**） |
+> |     | 表征                                         | 根因                                              | 处置                                                    |
+> | --- | -------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------- |
+> | 1   | `rfc311-events-archive-scale` 超时 7355ms    | 重用例吃 bun 默认 **5s**，本机 ~2s 只有 2.5× 余量 | 两条重用例都给显式预算（**没有只修红的那条**）          |
+> | 2   | `rfc359-w4-d19c [postgresql]` 插入失败       | **40001 重试预算被耗尽**（真 bug）                | 查到底并落账，处置呈用户                                |
+> | 3   | `rfc257-webhook-ingress [postgresql]` 读到 1 | 固定 `setTimeout(r,10)` 等 fire-and-forget        | 四处全换 `helpers/eventually`（**同样不只修红的那条**） |
 >
 > 第 2 条查了三轮才对：先怀疑我自己的 AC-11 围栏折叠（查日志 `generation fence` **0 次**，排除）；
 > 再怀疑「`serializable()` 复用帧时跳过重试」（**自相矛盾**——若最外层是 `transaction()` 就不是
@@ -2818,9 +2812,9 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >
 > **两个决定呈用户（都是「改不改用户可见行为」）**：
 > ① `taskExecutionPersistence` 那 2 处的 SQLite 宽判据 / PG 窄判据不对称——合并等于裁掉
->    「开机孤儿终态化用哪条判据」（`rfc359-w17-boot-orphan-terminalization` 正锁着它）；
+> 「开机孤儿终态化用哪条判据」（`rfc359-w17-boot-orphan-terminalization` 正锁着它）；
 > ② 40001 三选一：让同一 task 回合不并发（吞吐/交错用户可见地变）／缩小 SERIALIZABLE 覆盖面
->    （不改用户可见行为但要逐段重证不变量）／只加大预算（**不推荐**，结构性争用加预算只是拖延）。
+> （不改用户可见行为但要逐段重证不变量）／只加大预算（**不推荐**，结构性争用加预算只是拖延）。
 >
 > 顺带：全仓还有约 **33 处**同形短固定睡分布在 7 个测试文件里，**没有一把梭**（未必都在等
 > fire-and-forget），已在 `docs/dev-gotchas.md` 写明「改到它们时顺手换掉」。
@@ -2829,21 +2823,21 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >
 > 落档 plan §5fa（逐刀记录）。第一波之后又走了四刀：
 > · `cli/database.ts` / `cli/doctor.ts` 各一部分 → 新增 `serverVersionFallback` /
->   `failureRecoveryHint` 两个 traits 字段；`--to` 从比字面量改成问 `migrationRole`。
+> `failureRecoveryHint` 两个 traits 字段；`--to` 从比字面量改成问 `migrationRole`。
 > · `cli/dbCompact.ts` 清零 + `doctor` 再减一 → `storage` 这一档**也不算终点**（它在本仓只有
->   两个取值、与品牌一一对应，仍是同一张真值表的另一种拼法）；终点是**字段本身就是答案**：
->   `offlineCompaction`（不能压缩就连要说的话一起给）、`absentLocalStoreMessage`。
+> 两个取值、与品牌一一对应，仍是同一张真值表的另一种拼法）；终点是**字段本身就是答案**：
+> `offlineCompaction`（不能压缩就连要说的话一起给）、`absentLocalStoreMessage`。
 > · `cli/migrate.ts` 清零 → 回话改在 `prepareDatabaseProviderForBoot`（品牌已知处）定稿；
->   源码锁随之**变强**（从「数出恰好两处 close」变成「恰好一处、且必须在 finally 里」）。
+> 源码锁随之**变强**（从「数出恰好两处 close」变成「恰好一处、且必须在 finally 里」）。
 > · `main.ts` 清零 → 那条分叉里藏着一次**算完就丢**的求值：SQLite 支 `await
->   resolveMigrationsFolder()` 的结果根本没被用（prepare 阶段早已用同一个值开库并 adopt，
->   `openClient(input)` 此时不看 `input`）。改由白名单层交出 `openBootstrapClient()`。
+  resolveMigrationsFolder()` 的结果根本没被用（prepare 阶段早已用同一个值开库并 adopt，
+> `openClient(input)` 此时不看 `input`）。改由白名单层交出 `openBootstrapClient()`。
 > · WAL checkpoint 那道闸 → 顺带拆掉「中立后台服务 import sqlite 专属模块」这条层间依赖。
 >
 > **两条与「数字」有关的自我提醒**：
 > ① 账本只是**下界**——`MaintenanceServiceOptions` 的 `provider?: 'sqlite'` + `?? 'sqlite'`
->    是标准的「静默落进 else」，但守卫只数等值比较/switch/条件类型，**看不见它**（已改必填，
->    编译器当场顶出唯一依赖默认的调用点）。
+> 是标准的「静默落进 else」，但守卫只数等值比较/switch/条件类型，**看不见它**（已改必填，
+> 编译器当场顶出唯一依赖默认的调用点）。
 > ② 站点数减少 ≠ 条目数减少——checkpoint 那一刀把一行的站点数 3 → 2，条目数不变。
 >
 > **剩 10 处，三类，都不宜无网硬上**：`taskExecutionPersistence` 2 处（两分支行为不等价，
@@ -3022,16 +3016,16 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 而每个认证请求固定带两笔这样的写。`reviews-pending` 这种只读端点 11 条语句里 8 条是认证记账。
 >
 > · **第一刀**：`d275618a5` 给**会话**加了 `last_used_at` 写节流，那一刀**只改了会话**——
->   同一个文件里的 `resolvePatByHash` 至今每请求无条件写，而性能语料正是用 PAT 认证的。
->   纳入同一条窗口（常量改名 `AUTH_LAST_USED_WRITE_INTERVAL_MS`），两引擎同时受益。
->   **坑**：PAT 的 `last_used_at` 可空而会话侧不可空，照抄会得到 `NaN >= 1000` 恒假，
->   从未使用过的 PAT 将**永远记不下首次使用**；空值必须单独放行。
+> 同一个文件里的 `resolvePatByHash` 至今每请求无条件写，而性能语料正是用 PAT 认证的。
+> 纳入同一条窗口（常量改名 `AUTH_LAST_USED_WRITE_INTERVAL_MS`），两引擎同时受益。
+> **坑**：PAT 的 `last_used_at` 可空而会话侧不可空，照抄会得到 `NaN >= 1000` 恒假，
+> 从未使用过的 PAT 将**永远记不下首次使用**；空值必须单独放行。
 > · **第二刀**（推翻我自己前一刀的判断）：我判过「`token_audit` 插入是 `void` 派发的、不在关键
->   路径上，不值得动」——**实测推翻**。关掉它 PG p95 18.11ms → 5.57ms（−69%），SQLite 只 −19%：
->   `void` 派发不占**延迟**，占**并发度**（reserve 一条池连接跑四个往返，把后面的请求挡在池外）。
->   处置是把世代围栏折进 INSERT 自己（`insert … select … where exists (世代活跃)`），
->   单语句本身原子，`changes === 0` 与围栏失败一一对应。**只吃最窄的一类**，其余原路走。
->   结果：PG 每请求 awaited 语句数 7 → **3**，p95 18.11 → **4.96ms（−73%）**，PG/SQLite 4.8× → **1.69×**。
+> 路径上，不值得动」——**实测推翻**。关掉它 PG p95 18.11ms → 5.57ms（−69%），SQLite 只 −19%：
+> `void` 派发不占**延迟**，占**并发度**（reserve 一条池连接跑四个往返，把后面的请求挡在池外）。
+> 处置是把世代围栏折进 INSERT 自己（`insert … select … where exists (世代活跃)`），
+> 单语句本身原子，`changes === 0` 与围栏失败一一对应。**只吃最窄的一类**，其余原路走。
+> 结果：PG 每请求 awaited 语句数 7 → **3**，p95 18.11 → **4.96ms（−73%）**，PG/SQLite 4.8× → **1.69×**。
 >
 > **AC-11 验收现状（未闭）**：`scale=full` 同 SHA 跑两遍，**红的是同一组六个端点**——绝对值在两遍
 > 之间能摆动 3×（p95 取 n=20 的第 19 个样本，是最差离群值统计），但**方向稳定**：PG 在 <2ms 的
@@ -3064,7 +3058,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 另记一条**与本 RFC 无关但同进程即炸**的存量缺陷（已落 `docs/audit-backlog.md`）：
 > 操作目录的**声明集是进程全局**（靠 import 副作用累积）、**挂载集属于单个 app**，
 > 两个 provider 根一起进同一个进程就抛 `get-database-runtime.v1: declared operation has no
-> mounted binding`。CI 分片跑才一直没红，分片一变就会红。
+mounted binding`。CI 分片跑才一直没红，分片一变就会红。
 
 > ## 📌 RFC-359 最新一段（2026-09-14 续 24，**四路并行**迁移 13 个文件 + 两条账本校准）
 >
@@ -3612,6 +3606,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 就是应用自己装配的那一份，而这正是这些用例需要的那一份（另建 box 解同一批加密行会解成乱码）。
 >
 > 三件值得记的：
+>
 > 1. **配置覆盖必须走 `open({ config })`**：原用例往自建 tmp 目录写 `config.json` 再塞路径给
 >    `createApp`，而作用域里应用读的是它**现建**的那个 configPath，自写的那份会被整份绕开。
 > 2. **`beforeAll` 里不能碰 `harness`**：本文件原有 `beforeAll(() => realApp())`（只为把生产路由表
@@ -3961,11 +3956,11 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >
 > ### 5. 剩下 460 条按**该不该双引擎**分层（plan §5co，含一条对我自己的更正）
 >
-> | 类别 | 文件 | 该不该 |
-> | --- | --- | --- |
-> | `migration-*` | 97 | **不该**（判的是 SQLite 迁移链本身，对账归 W5-T19g） |
-> | 测 **SQLite 执行引擎**（`resumeTask`/`retryNode`/`cancelTask`/`startTask`/执行拓扑） | 85 | **不该** |
-> | 其余 | 278 | **该**，真正的迁移面 |
+> | 类别                                                                                 | 文件 | 该不该                                               |
+> | ------------------------------------------------------------------------------------ | ---- | ---------------------------------------------------- |
+> | `migration-*`                                                                        | 97   | **不该**（判的是 SQLite 迁移链本身，对账归 W5-T19g） |
+> | 测 **SQLite 执行引擎**（`resumeTask`/`retryNode`/`cancelTask`/`startTask`/执行拓扑） | 85   | **不该**                                             |
+> | 其余                                                                                 | 278  | **该**，真正的迁移面                                 |
 >
 > 第二类是本段最重要的一条更正：我一度把 `services/task.ts` 排成「最大的单点」并定了 T-TASK1/2/3，
 > **方向是错的**——本 plan 早已把 `TaskRouteOperations` 判为「不该合」（两台执行引擎），
@@ -4135,7 +4130,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >
 >    HTTP 形状的欠债还剩 **41 个文件**，其中最大的一簇是 **WS 的 11 个**（见下）。
 >
-> 5. ~~下一刀建议：写 WS 作用域~~ **已经写了**（plan §5bt）：
+> 4. ~~下一刀建议：写 WS 作用域~~ **已经写了**（plan §5bt）：
 >    `tests/helpers/providerWebSocketScope.ts` 的 `describeEachProviderWebSocketApplication`
 >    一次交出 **provider 应用 + 实时运行时 + ws 适配器 + 活的 server**（`url` / `httpUrl`）。
 >    已迁 `ws-repo-imports`(8×2) 与 `rfc152-ws-frame-gates`(5×2)——**本仓 WebSocket 用例第一次
@@ -4151,23 +4146,23 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >    下面这段是当初的分析（保留）：
 >    11 个 WS 文件都被 `composeTestSqliteRealtimeRuntime` 钉住，但那只是**第一层**：
 >    · 第一层可解且**不必动生产**——底下 `DrizzleRealtimeStore` 收的本来就是中立句柄，
->      两个 `composeXxxRealtimeRuntime` 函数体逐字相同，资源目录那边 `composeResourceCatalogFor`
->      本身就是中立导出；测试侧按 `applicationBinding` 判别式分派即可
->      （`rfc359-w12-realtime-composition.test.ts` 已经是这么写的）。我写过一版、tsc 干净。
+>    两个 `composeXxxRealtimeRuntime` 函数体逐字相同，资源目录那边 `composeResourceCatalogFor`
+>    本身就是中立导出；测试侧按 `applicationBinding` 判别式分派即可
+>    （`rfc359-w12-realtime-composition.test.ts` 已经是这么写的）。我写过一版、tsc 干净。
 >    · **第二层才是真拦路石**：WS 用例自建 `Bun.serve`，把 `ws.tryUpgrade` 与
->      **`app.fetch` 的 HTTP 回落**接在一起，而那个 `app` 来自 `createApp`（SQLite 根）。
->      解掉实时运行时之后**应用仍是单引擎的**。
+>    **`app.fetch` 的 HTTP 回落**接在一起，而那个 `app` 来自 `createApp`（SQLite 根）。
+>    解掉实时运行时之后**应用仍是单引擎的**。
 >    所以要的是一个交出「活 server + 已接好的 ws 适配器 + provider 应用」的作用域，写一次迁 11 个；
 >    否则每个文件都要重拼一遍 `Bun.serve` + 适配器 + 应用——正是共用作用域当初要消灭的那 18 份拷贝。
 >    探路的改动已全部 revert（helper 没有消费者就是死代码）。
 >
-> 4. 原第 2 条的形态调查（保留）：
+> 5. 原第 2 条的形态调查（保留）：
 >    它们**不是**路由依赖类型上的字段（`grep`：`server.ts` 各 8 / 3 处，PG 根 **0** 处），
 >    而是被 `server.ts` 以条件展开喂进**模块装配**（`server.ts:2014-2023` / `:2750-2752`）。
 >    所以形态更接近 `buildScheduleLaunch`（转发进一个被装配的服务），不是
 >    `runtimeDiagnosticTestDependencies` 那种纯路由透传——照后者抄会找不到落点。
-> 2. `helpers/taskRecoveryOperations` 那层 bun:sqlite 专有夹具（`dbTxSync` + 同步终结符）仍未动。
-> 3. 单个覆盖口只解锁 1 个文件的那些（`databaseTelemetry` / `executionContracts` /
+> 6. `helpers/taskRecoveryOperations` 那层 bun:sqlite 专有夹具（`dbTxSync` + 同步终结符）仍未动。
+> 7. 单个覆盖口只解锁 1 个文件的那些（`databaseTelemetry` / `executionContracts` /
 >    `codeHostFetch` / `repositoryTransport` …），逐个按同样的判据处理。
 
 > ## 📌 RFC-359 最新一段（2026-09-12 下半场，AC-6 账本 **581 → 551**，又照出三条 PG 缺陷）
@@ -4251,7 +4246,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >    **生产输入类型一个只服务测试的字段都没加**。W29 用 `APPENDED_EXPOSURES` 名单看住这一点。
 > 4. **同一段夹具抄三份以上**：先提注册器再迁；提完 native 那条路往往自己就空了
 >    （`rfc193` 抄了**六份**，提完净删 100+ 行）。
-> 另记：**PG 备份路径今天零覆盖**且不能靠迁 `backup.test.ts` 来补，见 `docs/audit-backlog.md`。
+>    另记：**PG 备份路径今天零覆盖**且不能靠迁 `backup.test.ts` 来补，见 `docs/audit-backlog.md`。
 
 > ## 📌 RFC-359 本轮进展（2026-09-12 上半场，AC-6 账本 **625 → 581**，含三条已修 PG 缺陷）
 >
@@ -4273,11 +4268,11 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >
 > ### 记账：三条「不是还没迁，是今天迁不了」
 >
-> | 项 | 实质 | 在哪 |
-> | --- | --- | --- |
-> | 无 secretBox 部署 | `AppDeps.secretBox` 可选、`PostgresqlApplicationInput.secretBox` **必填**——这个部署形态在 PG 上按构造不存在 | plan §5v |
-> | PG 的 `task-active` 删除闸门 | 产品判据同形，但测试注入项 `__setActiveTaskForTesting` 只有 SQLite 那侧读 ⇒ **PG 侧这条闸门零覆盖** | plan §5z |
-> | WebSocket 两个文件 | 底下是 `composeSqliteRealtimeRuntime` / PG 双声明，**登记在册的成对实现**，要先合这一对 | plan §5z |
+> | 项                           | 实质                                                                                                        | 在哪     |
+> | ---------------------------- | ----------------------------------------------------------------------------------------------------------- | -------- |
+> | 无 secretBox 部署            | `AppDeps.secretBox` 可选、`PostgresqlApplicationInput.secretBox` **必填**——这个部署形态在 PG 上按构造不存在 | plan §5v |
+> | PG 的 `task-active` 删除闸门 | 产品判据同形，但测试注入项 `__setActiveTaskForTesting` 只有 SQLite 那侧读 ⇒ **PG 侧这条闸门零覆盖**         | plan §5z |
+> | WebSocket 两个文件           | 底下是 `composeSqliteRealtimeRuntime` / PG 双声明，**登记在册的成对实现**，要先合这一对                     | plan §5z |
 >
 > 三条都**显式留成单引擎并在块内写明理由**，没有用条件 skip（`test-suite-policy` 盯的就是静默弱化）。
 >
@@ -4296,6 +4291,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > `expect(src).not.toContain('createApp(')` 这类**源码断言**也数进来，实际有 2 个是这种；
 > 其余差额是此后已迁的。判据用「该文件是否存在一行含 `createApp(` 且不含 `expect`/`toContain`」），
 > **但「83」不是可迁量**。按两道筛子实测分层（2026-09-12）：
+>
 > - **40 个**：`createApp` 选项标准 **且** 不碰 SQLite 绑定的测试基建 —— 这才是真正的省力入口；
 > - **18 个**：基建干净但带非标准 `createApp` 选项（`AppDeps` 独有的注入缝，见下）；
 > - **25 个**：卡在**SQLite 绑定的测试基建**上——`createTaskExecutionTestTopology` /
@@ -4304,6 +4300,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >   以及自己 `db.$client.close()` 的用例。这一层**不是迁移问题，是那些夹具/契约本身还没中立化**。
 >
 > 筛子命令（可复跑）：
+>
 > ```sh
 > grep -qE "composeSqlite|composeTestSqlite|LegacySqlite|StartTaskDeps|createTaskExecutionTestTopology|runTaskWithRealTestTopology|\$client" "$f"
 > ```
@@ -4336,17 +4333,17 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > 本轮就按那条往下走，**方法固定为一句话**：对每个同步孪生先问「**src 侧还有调用方吗**」。
 > 答案几乎总是「没有」——它们的宿主早被前几波迁走，只剩夹具挡着。
 >
-> | 提交 | 退役的东西 | 判据怎么处理 |
-> | --- | --- | --- |
-> | `9a29602cb` | `taskLifecycleEventParticipant.ts`（3 个同步 append）+ public 再导出 | 「同步解释保持同步返回」锁的是**实现机制**，随机制删；承重的事务内顺序 + 回滚在双引擎判据里逐条对应 |
-> | `c16ff9f4e` | `collaborationCommittedEventParticipant` / `sqliteCommittedEventStore` / `sqlite/existingTransactionScope` / `legacy/mcpRuntimeTestTransitions`（各整文件） | `rfc341` 的 cutover 判据是**产品行为**，改走中立追加口并搬进 `describeEachProvider`；`rfc305` 两条锁的是桥自己的机制，随桥删 |
-> | `a92b7a8c3` | （流水线）p0-mutations 指纹清单 + 夜跑 `paths:` | 新增守卫①②（见下） |
-> | `a3e4482a1` | `sqliteTaskOwnership` + 端口；死码 `markTaskExecutionShutdownSurvivor` | 组合根出 `ownershipFor(db)`；`rfc294Canonical` 的 `daemon-shutdown` 权威**改指新实现而不是删条目**（删了普查直接报 `control subtype is empty`） |
-> | `3652cd50b` | `sqliteTaskExecutionEffect` + 端口；`sqliteTaskExecutionIntentAdmission` + `composition/continuationAdmission` + public 的 `submitTaskContinuationTx` | 夹具改用同文件已有的 `effectsOf(db)`；准入判据改走 `submitTaskContinuationInTransaction`（签名逐字相同） |
-> | `94dda3b37` | `sqliteTaskExecutionIntent` + 两个端口；零消费者的 `canEditResourceInTx` | 夹具改走 `submitCanonicalTaskExecutionIntent` |
-> | `c4965ab5b` | `sqliteTerminalizeExecutionIntent` + 转发层；`humanGateTaskLifecycleTransaction`（含**重复第二份** `HumanGateTaskTransition` 定义与零实现接口） | w17 那个 describe **搬进 `describeEachProvider`**（做过变异验证：epoch 6→7 两引擎各红一条）；联合收成一份走 `public/types`——先写成直接 import 模块内部，被 `RFC-317 T22` 当场拦下，按它指的方向改走 public 才过 |
-> | `9fbfdf284` | `sqliteNodeRunMintParticipant` + `mintLegacySqliteNodeRunInTx` + `mintNodeRunTx` | `rfc349` 那条用例的两半（SQLite / PG）**现在是同一形状同一 program**；`rfc326` AC-19 的等价判据改成「独立入口 ≡ 在调用方事务里铸行」；`rfc144` 源码锁**加强一格**（新增钉事务内工厂不得自己抄 insert） |
-> | `feb3ab46c` | `legacySqliteTransportMechanisms` 的 `dbTxSync` / `LegacySqliteTaskTransaction` 转出；`legacySqliteTaskDatabase` 的同名别名 | w47「一个 program 两种解释」的同步一面改由判据自己用公共驱动器组装，不再依赖生产里的同步参与者 |
+> | 提交        | 退役的东西                                                                                                                                                  | 判据怎么处理                                                                                                                                                                                                    |
+> | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | `9a29602cb` | `taskLifecycleEventParticipant.ts`（3 个同步 append）+ public 再导出                                                                                        | 「同步解释保持同步返回」锁的是**实现机制**，随机制删；承重的事务内顺序 + 回滚在双引擎判据里逐条对应                                                                                                             |
+> | `c16ff9f4e` | `collaborationCommittedEventParticipant` / `sqliteCommittedEventStore` / `sqlite/existingTransactionScope` / `legacy/mcpRuntimeTestTransitions`（各整文件） | `rfc341` 的 cutover 判据是**产品行为**，改走中立追加口并搬进 `describeEachProvider`；`rfc305` 两条锁的是桥自己的机制，随桥删                                                                                    |
+> | `a92b7a8c3` | （流水线）p0-mutations 指纹清单 + 夜跑 `paths:`                                                                                                             | 新增守卫①②（见下）                                                                                                                                                                                              |
+> | `a3e4482a1` | `sqliteTaskOwnership` + 端口；死码 `markTaskExecutionShutdownSurvivor`                                                                                      | 组合根出 `ownershipFor(db)`；`rfc294Canonical` 的 `daemon-shutdown` 权威**改指新实现而不是删条目**（删了普查直接报 `control subtype is empty`）                                                                 |
+> | `3652cd50b` | `sqliteTaskExecutionEffect` + 端口；`sqliteTaskExecutionIntentAdmission` + `composition/continuationAdmission` + public 的 `submitTaskContinuationTx`       | 夹具改用同文件已有的 `effectsOf(db)`；准入判据改走 `submitTaskContinuationInTransaction`（签名逐字相同）                                                                                                        |
+> | `94dda3b37` | `sqliteTaskExecutionIntent` + 两个端口；零消费者的 `canEditResourceInTx`                                                                                    | 夹具改走 `submitCanonicalTaskExecutionIntent`                                                                                                                                                                   |
+> | `c4965ab5b` | `sqliteTerminalizeExecutionIntent` + 转发层；`humanGateTaskLifecycleTransaction`（含**重复第二份** `HumanGateTaskTransition` 定义与零实现接口）             | w17 那个 describe **搬进 `describeEachProvider`**（做过变异验证：epoch 6→7 两引擎各红一条）；联合收成一份走 `public/types`——先写成直接 import 模块内部，被 `RFC-317 T22` 当场拦下，按它指的方向改走 public 才过 |
+> | `9fbfdf284` | `sqliteNodeRunMintParticipant` + `mintLegacySqliteNodeRunInTx` + `mintNodeRunTx`                                                                            | `rfc349` 那条用例的两半（SQLite / PG）**现在是同一形状同一 program**；`rfc326` AC-19 的等价判据改成「独立入口 ≡ 在调用方事务里铸行」；`rfc144` 源码锁**加强一格**（新增钉事务内工厂不得自己抄 insert）          |
+> | `feb3ab46c` | `legacySqliteTransportMechanisms` 的 `dbTxSync` / `LegacySqliteTaskTransaction` 转出；`legacySqliteTaskDatabase` 的同名别名                                 | w47「一个 program 两种解释」的同步一面改由判据自己用公共驱动器组装，不再依赖生产里的同步参与者                                                                                                                  |
 >
 > **账本刻度**：`PROVIDER_NAMED_FILE_DEBT` **55 → 49**（AC-12）；带 `DbTxSync` 的 src 文件
 > **32 → 14**（去注释后的真实引用 62 处）；`UNCONSUMED_PUBLIC_SYMBOL_DEBT` **141 → 137**；
@@ -4354,10 +4351,10 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >
 > ### 🛡 「删文件」三条守卫（今天同一个类栽了三次，各堵一半）
 >
-> | 形态 | 症状 | 守卫 |
-> | --- | --- | --- |
-> | `scripts/*.ts` 里硬写的源文件清单 | 只在 CI 独有的 lane 里 ENOENT | `rfc359-w14-p0-mutation-verdict` |
-> | workflow `paths:` 触发器指着旧路径 | **永远不红**，只是覆盖面静默消失 | `test-suite-policy`「字面仓内路径都存在」 |
+> | 形态                                                    | 症状                               | 守卫                                                               |
+> | ------------------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------ |
+> | `scripts/*.ts` 里硬写的源文件清单                       | 只在 CI 独有的 lane 里 ENOENT      | `rfc359-w14-p0-mutation-verdict`                                   |
+> | workflow `paths:` 触发器指着旧路径                      | **永远不红**，只是覆盖面静默消失   | `test-suite-policy`「字面仓内路径都存在」                          |
 > | 测试在**模块顶层** `readFileSync(resolve(base,'x.ts'))` | typecheck 看不见；不长成完整字面量 | `test-suite-policy`「模块作用域读的源码路径都存在」（`99c7c7822`） |
 >
 > **三条都不在 `tests/architecture/` 下**，按主题挑波及面也捞不到。**任何删 / 搬源文件的提交，
@@ -4365,18 +4362,20 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 > `bun test tests/rfc359-w14-p0-mutation-verdict.test.ts tests/test-suite-policy.test.ts`
 >
 > ### 其它落进 `docs/dev-gotchas.md` 的坑
+>
 > - 给 eslint 的清单混进**已删除路径** → 它一条都不 lint 还退 0（用 `grep -vE '^ ?D'` + `$NF`）。
 > - 按 SHA 查 CI 必须用**完整 40 位**：`head_sha=<短 sha>` 返回空列表而不是错误。
 > - triage 大扫时 `fail` 与 `error` 两个计数都要对上——bun 把模块顶层的 ENOENT 印成
 >   `# Unhandled error between tests`，既不带 `(fail)` 也不带 `error:`，只在汇总行多一个 `1 error`。
 >
 > ### ⚠️ 两条未归因、已进 `docs/audit-backlog.md` 的雷
+>
 > 1. `retry-cascade-kind-matrix` 跑满取消预算那条，CI 耗时**随分片内排位放大 60 倍**（第 87 位 58ms，
 >    第 60 位同一提交两次 5166ms 红 / 3797ms 绿）。已排除代码回归 / 事件循环饥饿 / 前置 pragma 泄漏 /
 >    整段前缀复跑。已给显式 60s 预算，承重判据 `cancelCasAttempts === 8` 原样保留。
 > 2. `resetRouteMetaRegistry()` 毒化同进程后续每个建 app 的测试（15 个测试文件在 hook 里调它），
 >    CI 因分片把它们分开而一直看不见。复现：`bun test tests/rfc305-architecture-lock.test.ts
->    tests/rfc104-builtin-readonly.test.ts` → 17 fail，各自单跑全绿。
+tests/rfc104-builtin-readonly.test.ts` → 17 fail，各自单跑全绿。
 >
 > **下一刀**：剩下 14 个 `DbTxSync` 文件**没有零消费者孤岛了**，全部落在 resource-catalog 的
 > `legacy*` ↔ `postgresql*` 聚合适配器分叉上（intent-apply 与 resource-package 两条，账本自己
@@ -4410,7 +4409,7 @@ SQLite/PG bootstrap 使用同一 management factory 与各自已注入的 regist
 >    `transitionNodeRunStatusTx` / `cancelOpenNodeRunsTx` / `transitionHumanGateTaskTx`，
 >    以及 `sqliteTaskOwnership.ts` 的 `claimPendingIntent` / `withOwnedTaskTx` / `revokeExactTx`）。
 >    **所以 AC-6 的真正前置是把 RFC-333 那条人工门参与者链也搬到中立事务**，不是再多合几对。
-> 3.5. ~~**同步事务面收口**~~ ✅ **2026-09-11 清零**：账本 `SYNC_TRANSACTION_DEBT`
+>    3.5. ~~**同步事务面收口**~~ ✅ **2026-09-11 清零**：账本 `SYNC_TRANSACTION_DEBT`
 >    **4 个文件 → 0**，全仓 `src/` 里 `dbTxSync(` / `withOwnedTaskTx(` 调用点一个不剩。
 >    四刀依次是 `sqliteTaskExecutionIntent`（夹具平移）→ `sqliteTaskExecutionEffect`（同上 +
 >    `onSettledTx` 改走具名变体）→ `sqlite/taskLifecycle`（根刀，写序列一字未改、只换解释器）→
@@ -4939,128 +4938,111 @@ closeOutcomeUnknownAndRelease`，两个适配器都只委托；PG successor 恢�
 > 融合三步（provenance 修复 fail-closed / 决定恢复 / 资源播种）、定时载荷治愈、数字员工模板、demo 播种、webhook 投递恢复
 > 全部按 `cli/start.ts` 同序接进 `postgresqlDaemonApplication.ts`（runtime 注册表 boot 在 PG 路径由 provider 会话建立时
 > 跑过一次，不重复）。`rfc359-w3-t15-boot-step-parity.test.ts` 锁两个入口同组标记、同相对顺序。
-> **W3-T15-B（终态维护恢复其余四步）已修**：归档恢复上 `TaskArchiveMaintenanceCommand.recover`（`.tmp-*` 提升 / 丢弃 /
-> 放回规则合一为 `infrastructure/archiveTempDirectorySweep.ts`，PG 侧补齐 io-complete 的 tmp→final 提升）；工作区四步走
-> 既有中立 `WorkspaceMaintenanceCommand.recover`（新增 `webhookClaims: 'all'` 让 boot 接管全部 webhook-terminal 认领、
-> `healed` 回填 RFC-165 前被删目录的幽灵工作区）；两个 daemon 入口同序调用，SQLite boot 不再调 `recoverInterruptedArchives`
-> / `recoverInterruptedWorkspaceGc` / `runClaimedWebhookWorkspacePrunes` / `reconcileLegacyPrunedWorkspaces`。
-> `rfc359-w3-t15b-terminal-maintenance-recovery.test.ts` 五个场景两引擎各绿。
-> **W1-T7（P0-1 / P0-2 两道 owner 围栏）已修**：PG 的八处 owner 围栏（节点执行投影 / node_run 生命周期 / wrapper /
-> merge state / 工作区 profile / 任务状态 / collaboration 两处）此前把「未显式传 executionContext」当无主，drive 里
-> 节点的第一次写就被自己 claimed 的 owner 拒掉——改为与 SQLite 同规则：显式上下文缺席时读
-> `currentTaskExecutionContext(taskId)`，真无主才走无主围栏；PG effect 账本私有 `assertOwner` 去掉对 attach 时冻结
-> token 的 revision / leaseUntil 等值与租约过期判定（首次心跳后所有 effect 写入被拒），只留身份 + epoch + claimed。
-> `rfc359-t7-owner-fences.test.ts` 三个场景两引擎各绿 + 源码锁。
-> **T5（P0-5）确认已修**：seal 随 T2b 合一后 node_run 翻转是 CAS 条件 UPDATE，PG 不再 409；`rfc359-t2b` 新增两引擎用例锁住。
-> **T6（P0-6 坏定义工作流删除）已修**：PG 仓库删除路径只用原始行 ACL 身份与版本（不解析 definition），补齐 PG 从未有的
-> 非终态任务引用 / 定时任务引用两道删除守卫；SQLite stale 分支同改。`rfc359-t6-corrupt-workflow-delete.test.ts` 两引擎各绿。
-> **T3（F-H2-2 development mission launcher）已修**：agent / script 动作执行器合一为
-> `composition/actionExecutionRunners.ts`（校验 → 宿主快照合成 → `launchHostTask` → 终态观察 / 取消 / 结果读取），
-> provider 只在 `actionExecutionEnvironment.ts` 提供「借用工作区上启动宿主任务」与「取消」（SQLite = `startTask` /
-> `cancelTask`，PG = 根启动内核 + 取消命令；`borrowedPostgresqlWorkspace` 从数字员工执行搬来共用），
-> `agentActionExecution.ts` / `scriptActionExecution.ts` 退成薄 composer；PG daemon 接上
-> `composePostgresqlAgentActionExecution` / `composePostgresqlScriptActionExecution` 与
-> `createPostgresqlDevelopmentMissionExecutionTerminalObserver`（与 `cli/start.ts` 同一个 ref-box 形态）。
-> `rfc359-t3-action-execution-runners.test.ts` 两引擎各绿 + 源码锁。
-> **W2-T11d（2026-09-05，CI 实撞 `6efee254f` 后补，见 `docs/dev-gotchas.md`）**：SQLite 统一事务改在新的事件循环任务里开始
-> （旁观者隔离），旁观者语句守卫扩到全部语句，事务体跨宏任务记 error 日志；runtime registry 两阶段停机
-> （`release` / `settle`），driver 释放序列在库里 owner 行转移后再唤醒等待者。**教训**：2026-09-04 13:24 `902a5def5`
-> 之后没有一个 CI run 真正跑完（全被 supersede 取消），四条驱动释放竞速红从 T7b 起潜伏到深夜——连推之间要等一次完整 CI；
-> 本地守卫清单补 `tests/architecture/rfc317-module-boundary.test.ts`。
-> **W3-T14 已修（2026-09-05）**：监听器与关机序列合一为 `serveDaemon`（两个 provider 共用），SQLite 的四步显式收尾改为会话
-> 关闭参与者、与 PG 同一组 id 同一顺序；`rfc359-w3-t14-serve-daemon.test.ts` 源码锁。
-> **W3-T16 已修（2026-09-05）**：SQLite 内联装配抽成 `composeSqliteProviderSession`，`startCommand` 无 provider 执行分支，
-> 会话装配按 `DatabaseProvider` 查表、运行时收窄在 platform/persistence；T14 锁扩成 T16 守卫。文件拆分留作 W4 的纯搬家。
-> **CI 54e560a1b 红的收尾（2026-09-05）**：RFC-301 startTask 允许表改指 actionExecutionEnvironment.ts；bootstrap
-> 不再 import `services/agent` 门面（Agent 查询走目录查询面 + admitDaemonIdentity）；runtime registry 的 `hasTask`
-> 改为「driver 在跑」（release 后即 false；token 仍在、successor 仍被拒、`awaitReleasedSettled` 供 attach 前等 settle）——
-> 否则终态已落库的任务在 owner 行转移那几毫秒里会被 resume/retry 拒成 task-not-resumable（RFC-287 AC-10 / AC-16）。
-> **W4-B1 批 1 已落（2026-09-05）**：task-execution 三对逐字相同的适配器合一（taskOverviewQuery / branchTraceSnapshotReader /
-> taskRollbackQueries），六个 provider 文件删除；`rfc359-w4-b1-identical-adapters.test.ts` 两引擎各跑。剩 39 对，
-> 按相似度从高到低推进（read models 0.99 / gate continuation effect 0.95 / activation snapshot 0.93 / ws projection 0.89 …）。
-> **CI fc231e26f 红的收尾（2026-09-05）**：①serve 序列合一后 `bootstrap.stop()` 先停会话句柄，driver 收到的是
-> `provider-session-paused` 而不是关机原因，整任务被记成 canceled（e2e crash-recovery / RFC-294 oracle）——shared
-> `lifecycle.ts` 新增 `isDaemonInterruptionAbortReason`（关机 / 会话暂停 / 会话关闭三种 daemon 层中断），六处
-> `=== DAEMON_SHUTDOWN_ABORT_REASON` 改判它；②`hasTask` 改「在跑」后准入放行早于 intent 终结，continuation intent 撞
-> `task-continuation-conflict`（RFC-097 / RFC-287 / RFC-294）——resume / retry / sync 准入前
-> `awaitReleasedSettled`，SQLite 与 PG（`ActiveTaskExecutionParticipant.awaitReleasedSettled`）同做；③RFC-199 清单改指
-> actionExecutionRunners.ts。
-> **W4-B1 批 2a 已落**：五对只差客户端类型 / 同步异步形态的适配器合一（gateContinuationEffectPersistence /
-> nodeActivationSnapshotReader / taskArtifactPathQueries / dynamicWorkflowPersistence / frameBackfillStore，
-> 后者改走统一事务原语），十个 provider 文件删除；`settleGateRollback` 上端口；`rfc359-w4-b1-batch2a-adapters.test.ts`
-> 两引擎各跑。
-> **W4-B1 批 2b 已落**：读模型 / WS 投影 / 子任务预算三对合一（`taskExecutionReadModels` / `taskLifecycleWsProjection` /
-> `childTaskBudgetQueries`），六个 provider 文件删除；`services/execution/*` 四处 legacy 消费面改指中立实现，RFC-349 cutover 账本
-> 四条边退役（62 → 58）；`rfc359-w4-b1-batch2b-adapters.test.ts` 两引擎各跑。
-> **W4-B1 批 2c 已落**：中立「统一写事务 + owner 围栏」原语 `infrastructure/ownedTaskExecution.ts`（PG READ COMMITTED、
-> 围栏规则两引擎同一：显式上下文 > 环境上下文 > 无主围栏），wrapper run / node-run runtime / scheduler completion /
-> idle timeout 四对合到它上面，八个 provider 文件删除；`rfc359-w4-b1-batch2c-adapters.test.ts` 两引擎各跑。剩 26 对。
-> **W4-B1 批 2d 已落**：runtime session capture / gate pre-drive / merge state / task engine application 四对合到同一原语上，
-> 八个 provider 文件删除；SQLite 统一事务补回 `BEGIN IMMEDIATE` 的跨进程写锁重试（复用 `retrySqliteWrite`）；
-> `rfc359-w4-b1-batch2d-adapters.test.ts` 两引擎各跑。剩 22 对。
-> **W4-B1 批 2e 已落**：TaskRecoveryOperations 两份约千行合成一份（四条状态迁移由 provider 装配面注入），
-> `rfc359-w4-b1-batch2e-adapters.test.ts` 两引擎各跑。剩 21 对。
-> **W4-B1 批 2f 已落**：node run 执行投影（最热写路径，聚合根行锁改由能力矩阵表达）/ 任务列表页绑定 / 目录源装配三对合一，
-> `rfc359-w4-b1-batch2f-adapters.test.ts` 两引擎各跑。剩 18 对，下一步合 lifecycle 内核四对。
-> **W4-B1 批 2g 已落**：lifecycle 内核四对（task runtime lifecycle / node run lifecycle / intent / intent terminal）合一，八个
-> provider 文件删除；`rfc359-w4-b1-batch2g-adapters.test.ts` 两引擎各跑。剩 14 对。**批 2f 推上 main 后 CI 全红（教训）**：
-> 两笔同步写合成两笔异步事务后暴露 born-done 行「先可见、后有输出」的缝（scheduler 多边并入丢输入）+ 只包 BEGIN 的 SQLite
-> 写锁重试兜不住 insert 上的 BUSY；修法：`NodeRunMintInput.outputs`（行与初始输出同一事务）+ SQLite 统一事务整笔重跑。
-> 合一批次**必须**把 `scheduler*.test.ts` / `runner*.test.ts` 大套件跑进本地自查，不能只跑消费面文件。
-> **W4-B1 批 2h 已落**：停机幸存者处置一对合一（`taskExecutionShutdownOperations.ts`，控制面 CAS 不过围栏），
-> `rfc359-w4-b1-batch2h-adapters.test.ts` 两引擎各跑。剩 14 对（全部是薄壳套 legacy 同步内核 vs PG 整份实现，随 dbTxSync 归零一起合）。
-> **W4-B2 批 a 已落**：resource-catalog 写事务统一原语 `resourceCatalogTransaction.ts` + 演示种子 / MCP 探测存储 / 插件 GC 引用 /
-> agent 库存四对合一，`rfc359-w4-b2a-adapters.test.ts` 两引擎各跑。B2 剩 25 对。
-> **W4-B2 批 b 已落**：ACL 表注册 + 可见性谓词 + grant 读端口一份（`resourceVisibility.ts`），目录概览 / 目录摘要查询合一
-> （搜索谓词两方言同一句 `instr(lower(…))`），`rfc359-w4-b2b-adapters.test.ts` 两引擎各跑。B2 剩 21 对。
-> **W4-B2 批 c 已落**：MCP playground 持久化（约两千行）+ 原生会话租约两对合一，`rfc359-w4-b2c-adapters.test.ts` 两引擎各跑。B2 剩 19 对。
-> **W4-B3 批 a 已落**：collaboration 六对（反馈存储 / 评审人存储 / 任务可见性 ×2 / continuation 恢复 / 终态清扫）合一，`rfc359-w4-b3a-adapters.test.ts` 两引擎各跑；PG daemon 直连 collaboration infrastructure 的一条 R1 债还清。B3 剩 13 对。
-> **W4-B4 批 a 已落**：identity-access / memory / integration 七对合一（含 webhook 执行器调用面），`rfc359-w4-b4a-adapters.test.ts` 两引擎各跑；真 PG 抓到并修掉记忆注入读存储的顶层列捕获缺陷。同批把 RFC-359 中立句柄纳入 PG 执行面判据（三条 RFC-349 陷阱守卫此前对中立文件全盲），处置 10 处。B4 剩 18 对。
-> **W4-B4 批 b 已落**：integration 四对合一（事件响应目录 / 派发持久化 / 投递审计读模型 / MR 守卫与终态 effect，advisory lock 走引擎能力矩阵），`rfc359-w4-b4b-adapters.test.ts` 两引擎各跑。B4 剩 14 对。
-> **W4-B4 批 c 已落**：OIDC provider 仓库（serializable 走统一原语）与记忆蒸馏工作存储（含会话捕获 sink）两对合一，`rfc359-w4-b4c-adapters.test.ts` 两引擎各跑。B4 剩 12 对。
-> **W4-B6 批 a 已落**：source-control 工作区维护 / 仓库工作区存储 + event-center 事件响应规则 / 自定义事件源四对合一；能力矩阵新增 `indexHint` 与 `reclaimScrubbedStorage`，PG 的 `LOCK TABLE` 改走 `advisoryLock`。`rfc359-w4-b6a-adapters.test.ts` 两引擎各跑。B6 剩 3 对。
-> **W4-B6 批 b 已落**：event-center 事件存储（1377 行孪生对）合一，`rfc359-w4-b6b-adapters.test.ts` 两引擎各跑。B6 剩 2 对。
-> **W4-B6 批 c 已落**：source-control 仓库传输凭据仓库合一，`rfc359-w4-b6c-adapters.test.ts` 两引擎各跑。B6 剩 1 对（fusionRepository，随 dbTxSync 归零）。
-> **W4-B5 批 a 已落**：code-capability 七对 + development-automation 两对机械合一（十八个 provider 文件删除），`rfc359-w4-b5a-adapters.test.ts` 两引擎各跑；rfc349 cutover 账本 55 → 54、rfc317 表归属账本 19 → 17。B5 剩 14 对（按 hunk 数从小到大逐批，先对账再合）。
-> **W4-B5 批 b 已落**：code-capability 四对（评审人解析 / 工作项投影 / 投递链 / 模板上游持久化——锁定读走能力矩阵 `lockAggregateRoot`）+ digital-employee 反应轮次查询合一，十个 provider 文件删除，`rfc359-w4-b5b-adapters.test.ts` 两引擎各跑。B5 剩 9 对（1 对随 dbTxSync 归零，8 对深差异按 hunk 数逐批）。
-> **W4-B5 批 c 已落**：development-automation reconciler 读侧 / admission 查找 / 上传计划存储三对合一（上传计划落库改为调用方事务句柄上的异步写，PG mission store 内联落库改用它），六个 provider 文件删除，`rfc359-w4-b5c-adapters.test.ts` 两引擎各跑。B5 剩 6 对，全部随各 context 的 dbTxSync 归零一起合。
-> **W4-D1 已落（dbTxSync 归零·integration 触发器链）**：digital-employee 触发器参与者 / resource-catalog 资源快照读取器与工厂 / integration 定时任务持久化与资源加载合一，九个 provider 文件删除，SQLite 装配改交中立快照工厂（不再传同步 ACL / 同步参与者），`rfc359-w4-d1-adapters.test.ts` 两引擎各跑。dbTxSync 归零按依赖链从叶到根推进（见 plan.md「dbTxSync 归零路线」）。
-> **W4-D2 已落（integration webhook 投递链）**：投递持久化 + 已验证投递接收合一（MR 流序列化锁经能力矩阵 advisoryLock），同步接收命令退役，四个 provider 文件删除，`rfc359-w4-d2-adapters.test.ts` 两引擎各跑。integration 只剩 `developmentAdapterStore`（须先把 application 命令改异步）。
-> **D2 顺带修掉 PG 功能缺口**：`webhook_deliveries` 两条部分唯一索引只在 SQLite 迁移里、没进 drizzle 声明 → PG 没有去重键。已补声明并重采 PG 基线（已部署 PG 目标须重做 RFC-349 cutover）；系统性对账守卫记 W5-T19g，PG 增量迁移记 W5-T19h。
-> **W4-D3 已落（resource-catalog ACL 内核）**：目录自有 ACL 类型的读 / 写 / owner-name 预检端口合一（PG 三个文件删除），两条装配路径装同一份；默认 ACL 路径改走统一事务原语，带同步参与者的调用仍走 SQLite 路径直到各 owner 归零。`rfc359-w4-d3-adapters.test.ts` 两引擎各跑。
-> **W4-D4 已落（memory 目录链）**：memory 目录 / 融合 participant / 蒸馏运行时解析、resource-catalog 的 scope 访问 participant、source-control 的仓库 scope 读取器合一；SQLite 专属目录 `sqliteMemoryCatalog.ts` 与 legacy facade `services/memory.ts` 退役，十四个测试改经 `MemoryCatalogOperations` 合同；九个文件删除，`rfc359-w4-d4-adapters.test.ts` 两引擎各跑。有意偏离一处：搜索词里的 `%` / `*` 改按字面匹配。memory 的 dbTxSync 只剩 KE 同步融合提交那一处。
+> **W3-T15-B（终态维护恢复其余四步）已修**：归档恢复上 `TaskArchiveMaintenanceCommand.recover`（`.tmp-*`提升 / 丢弃 /
+放回规则合一为`infrastructure/archiveTempDirectorySweep.ts`，PG 侧补齐 io-complete 的 tmp→final 提升）；工作区四步走
+既有中立 `WorkspaceMaintenanceCommand.recover`（新增 `webhookClaims: 'all'`让 boot 接管全部 webhook-terminal 认领、`healed`回填 RFC-165 前被删目录的幽灵工作区）；两个 daemon 入口同序调用，SQLite boot 不再调`recoverInterruptedArchives`/`recoverInterruptedWorkspaceGc`/`runClaimedWebhookWorkspacePrunes`/`reconcileLegacyPrunedWorkspaces`。
+`rfc359-w3-t15b-terminal-maintenance-recovery.test.ts`五个场景两引擎各绿。
+**W1-T7（P0-1 / P0-2 两道 owner 围栏）已修**：PG 的八处 owner 围栏（节点执行投影 / node_run 生命周期 / wrapper /
+merge state / 工作区 profile / 任务状态 / collaboration 两处）此前把「未显式传 executionContext」当无主，drive 里
+节点的第一次写就被自己 claimed 的 owner 拒掉——改为与 SQLite 同规则：显式上下文缺席时读`currentTaskExecutionContext(taskId)`，真无主才走无主围栏；PG effect 账本私有 `assertOwner`去掉对 attach 时冻结
+token 的 revision / leaseUntil 等值与租约过期判定（首次心跳后所有 effect 写入被拒），只留身份 + epoch + claimed。`rfc359-t7-owner-fences.test.ts` 三个场景两引擎各绿 + 源码锁。
+**T5（P0-5）确认已修**：seal 随 T2b 合一后 node_run 翻转是 CAS 条件 UPDATE，PG 不再 409；`rfc359-t2b` 新增两引擎用例锁住。
+**T6（P0-6 坏定义工作流删除）已修**：PG 仓库删除路径只用原始行 ACL 身份与版本（不解析 definition），补齐 PG 从未有的
+非终态任务引用 / 定时任务引用两道删除守卫；SQLite stale 分支同改。`rfc359-t6-corrupt-workflow-delete.test.ts`两引擎各绿。
+**T3（F-H2-2 development mission launcher）已修**：agent / script 动作执行器合一为`composition/actionExecutionRunners.ts`（校验 → 宿主快照合成 → `launchHostTask`→ 终态观察 / 取消 / 结果读取），
+provider 只在`actionExecutionEnvironment.ts`提供「借用工作区上启动宿主任务」与「取消」（SQLite =`startTask`/`cancelTask`，PG = 根启动内核 + 取消命令；`borrowedPostgresqlWorkspace`从数字员工执行搬来共用），`agentActionExecution.ts`/`scriptActionExecution.ts`退成薄 composer；PG daemon 接上`composePostgresqlAgentActionExecution`/`composePostgresqlScriptActionExecution`与`createPostgresqlDevelopmentMissionExecutionTerminalObserver`（与 `cli/start.ts`同一个 ref-box 形态）。`rfc359-t3-action-execution-runners.test.ts`两引擎各绿 + 源码锁。
+**W2-T11d（2026-09-05，CI 实撞`6efee254f`后补，见`docs/dev-gotchas.md`）**：SQLite 统一事务改在新的事件循环任务里开始
+（旁观者隔离），旁观者语句守卫扩到全部语句，事务体跨宏任务记 error 日志；runtime registry 两阶段停机
+（`release`/`settle`），driver 释放序列在库里 owner 行转移后再唤醒等待者。**教训**：2026-09-04 13:24 `902a5def5`之后没有一个 CI run 真正跑完（全被 supersede 取消），四条驱动释放竞速红从 T7b 起潜伏到深夜——连推之间要等一次完整 CI；
+本地守卫清单补`tests/architecture/rfc317-module-boundary.test.ts`。
+**W3-T14 已修（2026-09-05）**：监听器与关机序列合一为 `serveDaemon`（两个 provider 共用），SQLite 的四步显式收尾改为会话
+关闭参与者、与 PG 同一组 id 同一顺序；`rfc359-w3-t14-serve-daemon.test.ts`源码锁。
+**W3-T16 已修（2026-09-05）**：SQLite 内联装配抽成`composeSqliteProviderSession`，`startCommand`无 provider 执行分支，
+会话装配按`DatabaseProvider`查表、运行时收窄在 platform/persistence；T14 锁扩成 T16 守卫。文件拆分留作 W4 的纯搬家。
+**CI 54e560a1b 红的收尾（2026-09-05）**：RFC-301 startTask 允许表改指 actionExecutionEnvironment.ts；bootstrap
+不再 import`services/agent`门面（Agent 查询走目录查询面 + admitDaemonIdentity）；runtime registry 的`hasTask`
+改为「driver 在跑」（release 后即 false；token 仍在、successor 仍被拒、`awaitReleasedSettled` 供 attach 前等 settle）——
+否则终态已落库的任务在 owner 行转移那几毫秒里会被 resume/retry 拒成 task-not-resumable（RFC-287 AC-10 / AC-16）。
+**W4-B1 批 1 已落（2026-09-05）**：task-execution 三对逐字相同的适配器合一（taskOverviewQuery / branchTraceSnapshotReader /
+taskRollbackQueries），六个 provider 文件删除；`rfc359-w4-b1-identical-adapters.test.ts`两引擎各跑。剩 39 对，
+按相似度从高到低推进（read models 0.99 / gate continuation effect 0.95 / activation snapshot 0.93 / ws projection 0.89 …）。
+**CI fc231e26f 红的收尾（2026-09-05）**：①serve 序列合一后`bootstrap.stop()`先停会话句柄，driver 收到的是`provider-session-paused`而不是关机原因，整任务被记成 canceled（e2e crash-recovery / RFC-294 oracle）——shared`lifecycle.ts`新增`isDaemonInterruptionAbortReason`（关机 / 会话暂停 / 会话关闭三种 daemon 层中断），六处
+`=== DAEMON*SHUTDOWN_ABORT_REASON` 改判它；②`hasTask`改「在跑」后准入放行早于 intent 终结，continuation intent 撞`task-continuation-conflict`（RFC-097 / RFC-287 / RFC-294）——resume / retry / sync 准入前
+`awaitReleasedSettled`，SQLite 与 PG（`ActiveTaskExecutionParticipant.awaitReleasedSettled`）同做；③RFC-199 清单改指
+actionExecutionRunners.ts。
+**W4-B1 批 2a 已落**：五对只差客户端类型 / 同步异步形态的适配器合一（gateContinuationEffectPersistence /
+nodeActivationSnapshotReader / taskArtifactPathQueries / dynamicWorkflowPersistence / frameBackfillStore，
+后者改走统一事务原语），十个 provider 文件删除；`settleGateRollback` 上端口；`rfc359-w4-b1-batch2a-adapters.test.ts`
+两引擎各跑。
+**W4-B1 批 2b 已落**：读模型 / WS 投影 / 子任务预算三对合一（`taskExecutionReadModels`/`taskLifecycleWsProjection`/`childTaskBudgetQueries`），六个 provider 文件删除；`services/execution/*` 四处 legacy 消费面改指中立实现，RFC-349 cutover 账本
+四条边退役（62 → 58）；`rfc359-w4-b1-batch2b-adapters.test.ts`两引擎各跑。
+**W4-B1 批 2c 已落**：中立「统一写事务 + owner 围栏」原语`infrastructure/ownedTaskExecution.ts`（PG READ COMMITTED、
+围栏规则两引擎同一：显式上下文 > 环境上下文 > 无主围栏），wrapper run / node-run runtime / scheduler completion /
+idle timeout 四对合到它上面，八个 provider 文件删除；`rfc359-w4-b1-batch2c-adapters.test.ts`两引擎各跑。剩 26 对。
+**W4-B1 批 2d 已落**：runtime session capture / gate pre-drive / merge state / task engine application 四对合到同一原语上，
+八个 provider 文件删除；SQLite 统一事务补回`BEGIN IMMEDIATE`的跨进程写锁重试（复用`retrySqliteWrite`）；
+`rfc359-w4-b1-batch2d-adapters.test.ts`两引擎各跑。剩 22 对。
+**W4-B1 批 2e 已落**：TaskRecoveryOperations 两份约千行合成一份（四条状态迁移由 provider 装配面注入），`rfc359-w4-b1-batch2e-adapters.test.ts`两引擎各跑。剩 21 对。
+**W4-B1 批 2f 已落**：node run 执行投影（最热写路径，聚合根行锁改由能力矩阵表达）/ 任务列表页绑定 / 目录源装配三对合一，`rfc359-w4-b1-batch2f-adapters.test.ts` 两引擎各跑。剩 18 对，下一步合 lifecycle 内核四对。
+**W4-B1 批 2g 已落**：lifecycle 内核四对（task runtime lifecycle / node run lifecycle / intent / intent terminal）合一，八个
+provider 文件删除；`rfc359-w4-b1-batch2g-adapters.test.ts` 两引擎各跑。剩 14 对。**批 2f 推上 main 后 CI 全红（教训）**：
+两笔同步写合成两笔异步事务后暴露 born-done 行「先可见、后有输出」的缝（scheduler 多边并入丢输入）+ 只包 BEGIN 的 SQLite
+写锁重试兜不住 insert 上的 BUSY；修法：`NodeRunMintInput.outputs`（行与初始输出同一事务）+ SQLite 统一事务整笔重跑。
+合一批次**必须**把 `scheduler*.test.ts`/`runner*.test.ts` 大套件跑进本地自查，不能只跑消费面文件。
+**W4-B1 批 2h 已落**：停机幸存者处置一对合一（`taskExecutionShutdownOperations.ts`，控制面 CAS 不过围栏），
+`rfc359-w4-b1-batch2h-adapters.test.ts`两引擎各跑。剩 14 对（全部是薄壳套 legacy 同步内核 vs PG 整份实现，随 dbTxSync 归零一起合）。
+**W4-B2 批 a 已落**：resource-catalog 写事务统一原语`resourceCatalogTransaction.ts` + 演示种子 / MCP 探测存储 / 插件 GC 引用 /
+agent 库存四对合一，`rfc359-w4-b2a-adapters.test.ts` 两引擎各跑。B2 剩 25 对。
+**W4-B2 批 b 已落**：ACL 表注册 + 可见性谓词 + grant 读端口一份（`resourceVisibility.ts`），目录概览 / 目录摘要查询合一
+（搜索谓词两方言同一句 `instr(lower(…))`），`rfc359-w4-b2b-adapters.test.ts` 两引擎各跑。B2 剩 21 对。
+**W4-B2 批 c 已落**：MCP playground 持久化（约两千行）+ 原生会话租约两对合一，`rfc359-w4-b2c-adapters.test.ts` 两引擎各跑。B2 剩 19 对。
+**W4-B3 批 a 已落**：collaboration 六对（反馈存储 / 评审人存储 / 任务可见性 ×2 / continuation 恢复 / 终态清扫）合一，`rfc359-w4-b3a-adapters.test.ts` 两引擎各跑；PG daemon 直连 collaboration infrastructure 的一条 R1 债还清。B3 剩 13 对。
+**W4-B4 批 a 已落**：identity-access / memory / integration 七对合一（含 webhook 执行器调用面），`rfc359-w4-b4a-adapters.test.ts` 两引擎各跑；真 PG 抓到并修掉记忆注入读存储的顶层列捕获缺陷。同批把 RFC-359 中立句柄纳入 PG 执行面判据（三条 RFC-349 陷阱守卫此前对中立文件全盲），处置 10 处。B4 剩 18 对。
+**W4-B4 批 b 已落**：integration 四对合一（事件响应目录 / 派发持久化 / 投递审计读模型 / MR 守卫与终态 effect，advisory lock 走引擎能力矩阵），`rfc359-w4-b4b-adapters.test.ts` 两引擎各跑。B4 剩 14 对。
+**W4-B4 批 c 已落**：OIDC provider 仓库（serializable 走统一原语）与记忆蒸馏工作存储（含会话捕获 sink）两对合一，`rfc359-w4-b4c-adapters.test.ts`两引擎各跑。B4 剩 12 对。
+**W4-B6 批 a 已落**：source-control 工作区维护 / 仓库工作区存储 + event-center 事件响应规则 / 自定义事件源四对合一；能力矩阵新增`indexHint`与`reclaimScrubbedStorage`，PG 的 `LOCK TABLE`改走`advisoryLock`。`rfc359-w4-b6a-adapters.test.ts` 两引擎各跑。B6 剩 3 对。
+**W4-B6 批 b 已落**：event-center 事件存储（1377 行孪生对）合一，`rfc359-w4-b6b-adapters.test.ts` 两引擎各跑。B6 剩 2 对。
+**W4-B6 批 c 已落**：source-control 仓库传输凭据仓库合一，`rfc359-w4-b6c-adapters.test.ts` 两引擎各跑。B6 剩 1 对（fusionRepository，随 dbTxSync 归零）。
+**W4-B5 批 a 已落**：code-capability 七对 + development-automation 两对机械合一（十八个 provider 文件删除），`rfc359-w4-b5a-adapters.test.ts`两引擎各跑；rfc349 cutover 账本 55 → 54、rfc317 表归属账本 19 → 17。B5 剩 14 对（按 hunk 数从小到大逐批，先对账再合）。
+**W4-B5 批 b 已落**：code-capability 四对（评审人解析 / 工作项投影 / 投递链 / 模板上游持久化——锁定读走能力矩阵`lockAggregateRoot`）+ digital-employee 反应轮次查询合一，十个 provider 文件删除，`rfc359-w4-b5b-adapters.test.ts` 两引擎各跑。B5 剩 9 对（1 对随 dbTxSync 归零，8 对深差异按 hunk 数逐批）。
+**W4-B5 批 c 已落**：development-automation reconciler 读侧 / admission 查找 / 上传计划存储三对合一（上传计划落库改为调用方事务句柄上的异步写，PG mission store 内联落库改用它），六个 provider 文件删除，`rfc359-w4-b5c-adapters.test.ts` 两引擎各跑。B5 剩 6 对，全部随各 context 的 dbTxSync 归零一起合。
+**W4-D1 已落（dbTxSync 归零·integration 触发器链）**：digital-employee 触发器参与者 / resource-catalog 资源快照读取器与工厂 / integration 定时任务持久化与资源加载合一，九个 provider 文件删除，SQLite 装配改交中立快照工厂（不再传同步 ACL / 同步参与者），`rfc359-w4-d1-adapters.test.ts` 两引擎各跑。dbTxSync 归零按依赖链从叶到根推进（见 plan.md「dbTxSync 归零路线」）。
+**W4-D2 已落（integration webhook 投递链）**：投递持久化 + 已验证投递接收合一（MR 流序列化锁经能力矩阵 advisoryLock），同步接收命令退役，四个 provider 文件删除，`rfc359-w4-d2-adapters.test.ts`两引擎各跑。integration 只剩`developmentAdapterStore`（须先把 application 命令改异步）。
+**D2 顺带修掉 PG 功能缺口**：`webhook_deliveries` 两条部分唯一索引只在 SQLite 迁移里、没进 drizzle 声明 → PG 没有去重键。已补声明并重采 PG 基线（已部署 PG 目标须重做 RFC-349 cutover）；系统性对账守卫记 W5-T19g，PG 增量迁移记 W5-T19h。
+**W4-D3 已落（resource-catalog ACL 内核）**：目录自有 ACL 类型的读 / 写 / owner-name 预检端口合一（PG 三个文件删除），两条装配路径装同一份；默认 ACL 路径改走统一事务原语，带同步参与者的调用仍走 SQLite 路径直到各 owner 归零。`rfc359-w4-d3-adapters.test.ts`两引擎各跑。
+**W4-D4 已落（memory 目录链）**：memory 目录 / 融合 participant / 蒸馏运行时解析、resource-catalog 的 scope 访问 participant、source-control 的仓库 scope 读取器合一；SQLite 专属目录`sqliteMemoryCatalog.ts`与 legacy facade`services/memory.ts`退役，十四个测试改经`MemoryCatalogOperations` 合同；九个文件删除，`rfc359-w4-d4-adapters.test.ts`两引擎各跑。有意偏离一处：搜索词里的`%`/`*` 改按字面匹配。memory 的 dbTxSync 只剩 KE 同步融合提交那一处。
 **W4-D5 已落（knowledge-evolution 融合链）**：融合仓库与技能版本提交 participant 各一份实现（跨聚合两半经 tx-bound participant 工厂注入，操作锁撞库经能力矩阵归类），memory / resource-catalog 的 SQLite 同步融合写入面退役，四个 provider 文件删除，KE 的 dbTxSync 归零；`rfc359-w4-d5-adapters.test.ts` 两引擎各跑。同步残余只剩 legacy 技能回滚一条，随技能仓库对合一退。
-**W4-D6a 已落（development adapter 链 + foreign-owner ACL 端口）**：resource-catalog 的 ACL identity persistence 改成绑定目录写事务的异步端口，中立 ACL 读 / 写端口多一条 foreign-owner 分支，`composeForeignResourceAclFor` 给两个 bootstrap 同一条路径；integration 的 adapter store / 命令 / 配置装配 / 三处运行器装配各一份，PG 内联配置实现退役，三个 provider 文件删除，integration dbTxSync 归零；`rfc359-w4-d6a-adapters.test.ts`两引擎各跑。employee_* owner 仍用同步形态与 PG foreign ACL，随 D6b/c 退。
-**W4-D6b 已落（development-automation 配置族）**：action template / verification profile 持久化、digital employee / automation policy 的 identity + revision（publish 先`lockAggregateRoot`再 CAS）、assignment、员工 publish lookup、legacy 迁移落库各一份实现，六个 provider 文件删除、同步`ConfigResourceStore` 端口退役，`sqliteDigitalEmployeeStore`的函数面搬到`tests/helpers/digitalEmployeeStore.ts`；`rfc359-w4-d6b-adapters.test.ts`两引擎各跑。employee_* 的 foreign ACL 与`Sync*` 形态随 D6c（digital-employee AuthoringStore）退。
-**W4-D6c 已落（digital-employee 作者面 + foreign ACL 收尾）**：类型包 / 工具 / 岗位模版 / 员工定义 / 全局执行策略持久化一份实现（`authoringStore.ts`，publish 与员工定义更新先判 identity、`ensureExecutionPolicy`先`lockAggregateRoot`），端口只剩异步形态，employee\_* 的 ACL identity 面改成与目录同形的异步端口并在两个 bootstrap 都走 `composeForeignResourceAclFor`；`postgresqlForeignResourceAcl.ts` 与目录的 `SyncResourceAclIdentity*` 形态退役，三个 provider 文件删除；`rfc359-w4-d6c-adapters.test.ts` 两引擎各跑。
-> **W4-D7a 已落（digital-employee 临时上传 + writer cutover）**：`inputUploadStore.ts` / `writerCutoverPersistence.ts` 各一份（writer 的读—改—写先 `lockAggregateRoot`，快照读改逐语句、S-10 裸事务账本归零），装配单一入口，一个 provider 文件删除；`rfc359-w4-d7a-adapters.test.ts` 两引擎各跑。下一刀 D7b：digital-employee RuntimeStore 对。
-> **W4-D7b 已落（digital-employee 运行时案件持久化）**：`runtimeStore.ts` 一份（14 处事务走统一原语、计量 / 成员替换先 `lockAggregateRoot`、搜索与 NULL 排序走能力矩阵），两个 provider 文件（~4000 行）删除、digital-employee dbTxSync 归零；`rfc359-w4-d7b-adapters.test.ts` 两引擎各跑。下一刀 D8：identity-access 两对大 PG 底。
-> **W4-D6c 补（启动期并发注册幂等）**：作者面存储改异步后两份装配同拍注册同一类型包撞主键、daemon 起不来（8f89a3ee4 / d03fc3694 CI 全红）；`ensureTypePackage` 改 ON CONFLICT DO NOTHING + 回读比 digest、`ensureExecutionPolicy` 先 advisory lock、service `ready()` 启动屏障；`rfc359-w4-d6c-bootstrap-idempotency.test.ts` 两引擎各跑。
-> **W4-D8 已落（identity-access 账户 / 授权持久化 + OIDC）**：`userAccessPersistence.ts` / `oidcIdentityCrossContext.ts` 各一份（读集 → 同步决策 → serializable 落库；围栏走能力矩阵新项 `readRowSync`，唯一冲突走 `uniqueViolationTarget`），五个 provider 文件 + 两个假 PG 测试删除，TransactionScope 认领桥与 `InitialUserAccessProvisioner` 退役，schema 补 `user_identities_provider_subject_unique` 并重采 PG 基线；`rfc359-w4-d8-adapters.test.ts` 两引擎各跑。下一刀 D9：auth persistence 对。
-> **W4-D9 已落（auth 认证持久化 + PAT 审计）**：`auth/infrastructure/authPersistence.ts` / `tokenCallAudit.ts` 各一份（读—改—写先锁聚合根，会话 / PAT 解析热路径不再开事务，唯一冲突走能力矩阵），四个 provider 文件 + 假 PG 测试删除，`createAuthRuntimeFor` / `createTokenCallAudit` 中立入口；`rfc359-w4-d9-adapters.test.ts` 两引擎各跑。下一刀 D10：development-automation 剩余 store 对与 resource-catalog legacy 对。
-> **W4-D10 已落（development-automation Mission 持久化 + 读模型；列 facade 修根）**：`development-automation/infrastructure/missionStore.ts` / `missionReadModels.ts` 各一份（`createMissionPersistence` / `createMissionReadModelQueries`），三个 provider 文件 + 只跑 SQLite 的 pr2 测试删除，32 个 rfc310 / rfc311 测试改 await；PG 上列表页游标 `createdAt` 回字符串的根因是模块加载期捕获的列对象固定在 SQLite 投影——`db/providerSchema.ts` 把列也做成访问时解析的 facade，`rfc359-provider-schema-column-facade.test.ts` 双引擎锁住；`rfc359-w4-d10-adapters.test.ts` 两引擎各跑。下一刀 D11：`PlaybookSagaStore` 对 + upload store，再到 resource-catalog legacy 对。
-> **W4-D11 已落（development-automation Playbook saga 持久化 + 上传会话 store）**：`infrastructure/playbookSagaStore.ts` / `uploadSessionStore.ts` 各一份（`createPlaybookSagaPersistence` / `createUploadSessionPersistence`；`claimUploadSessions(tx, …)` 是唯一的上传认领原语，launch 事务直接复用），`missionInputUploadPersistence.ts` 两份薄适配、`composeMissionInputUploadOperations` 一个装配；三个 provider 文件 + 只跑 SQLite 的 pr3-upload-session 测试删除，五个测试改 await，predicate-drift 基线 7 → 5；`rfc359-w4-d11-adapters.test.ts` 两引擎各跑。下一刀 D12：development-automation 剩余 provider 对（retentionSweeper / repositoryFactsCollector / uploadPublicationReceipt / uploadPlacementPersistence / requirementBundleRef / repositoryLocationRead / admissionLookup），再到 resource-catalog legacy 对。
-> **W4-D12 已落（development-automation 剩余六个 infrastructure 对 + 三组装配对）**：uploadPlacement / uploadPublicationReceipt / requirementBundleRef / repositoryLocationRead / repositoryFactsCollector / retentionSweeper 各一份中立实现（保留期清扫改成带子查询的单语句 + RETURNING 计数），`composeDevelopmentAdmissionLookup` / `composeDevelopmentAutomationMaintenanceCommands` / `composeDevelopmentAutomation` / `composeDevelopmentMissionOperations` 各一份，五个 `composeSqlite*` / `composePostgresql*` 孪生删除，消费者改接；`rfc359-w4-d12-adapters.test.ts` 两引擎各跑。下一刀 D13：`employeePlatformWorkItemPersistence` / `developmentDeliveryProvider` 文件内分支 + composition/ 下三组装配对，再到 resource-catalog legacy 对。
-> **W4-D13 已落（development-automation 最后三组 provider 对）**：`employeePlatformWorkItemPersistence` / `developmentDeliveryProvider` / `legacyMissionDrain` 各一份中立实现（volatile 仓库 URL 回退两引擎同有），`createDevelopmentEmployeeCaseWorkspaceDetailReader` / `composeDevelopmentEmployeeWorkspace` / `composeDevelopmentEmployeePlatformWorkItems` 各一份，六个孪生删除、消费者与七个测试改接；`rfc359-w4-d13-adapters.test.ts` 两引擎各跑。development-automation 的 provider 孪生清零。下一刀 D14：resource-catalog legacy 对。
-> **W4-D14 已落（resource-catalog · Agent 聚合）**：异步仓库 / 语义层 / import 快照成为唯一实现（`agentRepository.ts` / `agentPersistenceSemantics.ts` / `agentImportQueries.ts`；唯一冲突经能力矩阵映射），`composeAgentCatalog` 等装配各一份，server.ts / start.ts 的 SQLite 装配切到与 PG daemon 同一套；五个 provider 文件 + SQLite 专属同步围栏删除；`rfc359-w4-d14-adapters.test.ts` 两引擎各跑。留债：`legacy/agent.ts` 同步服务仍被门面 / task-execution 等消费，随消费方切到 AgentCatalogModule 后再删。下一刀 D15：Skill / Workflow 聚合同法合一。
-> **W4-D15 已落（resource-catalog · Workflow 聚合）**：`workflowRepository.ts` / `workflowPersistenceSemantics.ts` / `workflowValidation.ts` 各一份中立实现，managed skill 可用性判据只有一份（`skillContentAvailability.ts`），`composeDatabaseWorkflowCatalog` 一份装配（含广播事件），server.ts / start.ts 切过去；合一时补齐两处 PG 缺口（删除广播受众、RFC-264 改名门）；五个 provider 文件删除；`rfc359-w4-d15-adapters.test.ts` 两引擎各跑。留债：动态工作流校验上下文两边拼法不同、`legacy/workflow.ts` 仍被门面消费。下一刀 D16：Skill 聚合。
-> **W4-D16 已落（resource-catalog · Mcp 聚合）**：`mcpRepository.ts` / `mcpRuntimeTestTransitions.ts` / `mcpTransactionLifecycle.ts` 各一份中立实现（运行时测试会话的配置变更 / 停用 / 删除 / ACL 变更转换全在仓库事务里，ACL 转换此前只有 SQLite 有），`composeMcpCatalog` + `mcpAclRuntimeTestLifecycle()` 一份装配，三个 bootstrap 同一套；三个 provider 文件 + 零消费门面 `services/mcpRuntimeTestTransitions.ts` 删除；`rfc359-w4-d16-adapters.test.ts` 两引擎各跑。同批修掉 D14 / D15 的 CI 回归（RFC-228 预检次序、provider 路径 ACL 写入后的实时订阅唤醒、RFC-310 清单路径），`rfc359-w4-d14-d15-regressions.test.ts` 两引擎锁。留债：`legacy/mcpRuntimeTestTransitions.ts` 同步版仍被 runtime-registry 写点与 `mcpPersistence.ts` 消费。下一刀 D17：Plugin 聚合。
-> **W4-D17 已落（resource-catalog · Plugin 聚合）**：`pluginRepository.ts` 一份中立仓库（publish / 改名 / 删除全在统一事务里，唯一冲突经能力矩阵映射），`composePluginCatalog` / `composePluginGenerationGcCommand` 各一份装配，三个 bootstrap 与维护 worker 同一套；两个 provider 文件删除；`rfc359-w4-d17-adapters.test.ts` 两引擎各跑。下一刀 D18：Workgroup 聚合。
-> **W4-D18 已落（resource-catalog · Workgroup 聚合）**：`workgroupRepository.ts` / `referenceUsability.ts` 各一份中立实现（创建 / 复制 / save / 删除全在统一事务里，引用可用性预检与同事务终检同一份），`composeWorkgroupCatalog` 一份装配（仓库依赖由 `workgroupRepositoryDependencies` 一处装配），三个 bootstrap 同一套，四个 PG-only 聚合适配器改读中立行映射；四个 provider 文件删除；`rfc359-w4-d18-adapters.test.ts` 两引擎各跑。留债：任务房 / 回合的不对称对随 legacy workgroup engine 退役单独一刀。下一刀 D19：Workgroup 任务房 / 回合合一。
-> **W4-D19a 已落（工作组任务房的事务内参与者）**：Collaboration 的反问参与者与 TaskExecution 的任务参与者各一份中立实现 + 各一份装配（事务类型收敛到 `DatabaseTransaction`），`assertPostgresqlTaskOwnerlessTx` 这份逐字重复删除、六个消费方改指中立的 `assertTaskOwnerlessTx`；三个 provider 文件删除；`rfc359-w4-d19a-adapters.test.ts` 两引擎各跑，零行为变更。勘察结论：任务房 / 回合是最后一对且最不对称——SQLite 走 legacy engine（13 个行为套件盯着），PG 走中立驱动（只有 3 个、多是形状锁），故拆成 D19a 结构 / D19b 任务房本体 / D19c 回合引擎三刀。下一刀 D19b。
-> **W4-D19b 已落（任务房本体合一 + legacy 任务房退役）**：三份中立房间文件 + 一份装配 `composeWorkgroupTaskRoom`，两个 bootstrap 装同一份；四个 provider 文件与 legacy 那四个动作文件（1749 行）全部删除。**PostgreSQL 房间路径第一次拿到行为覆盖。**「恢复执行」按**部署形态**（daemon 是否与 API 同进程，不是数据库）注入 `WorkgroupTaskRoomContinuationDriver`：单进程做工作树预检（不可恢复 → 410，闸门 / holder / 消息随事务整体回滚）+ 提交后就地认领意图并驱动；多进程两件皆空操作，交给 daemon 的 `human-gate-continuation` worker。合一时抓到并按「合一前 SQLite 行为为准」修回四条差异：①confirm 的 410 与 dw-confirm 的原子换挡 / 相位复位（预检排在合法性复核之后、写入之前）；②`continueTask` 的意图类别写成了没人认领的 `resume`，改回 `gate-continuation` + 两键载荷（这一类里还住着 RFC-333 人工门的富载荷，多一个键就 `invalid-human-gate-continuation-payload`）；③加成员时解析不到的引用错误码回归 `acl-missing-refs`；④遣散最后一个人类成员后的补跑（立刻一次 + 2.5s 后一次，接住慢一拍才提交的 park）。九把按文件名点名的清单锁改指中立实现，6 个测试消费者改接新的 `tests/helpers/workgroupTaskRoom.ts` 装配。同批修掉两处守卫脆弱点：路由错误码守卫的语料用 `trackedFiles`——新测试在 `git add` 之前不在语料里，本地绿、提交之后才红（288a8f888 把 main 推红即此）；rfc345 的 schema 导入扫描在三份源码拼接后贪婪匹配，正文里出现「tasks」这个词就被误判。下一刀 D19c（回合引擎）。
-> **W4-D19c 已落（工作组回合引擎合一）**：持久化适配器 / 宿主账本参与者中立化，装配收成一份，三个 bootstrap 同一条；SQLite 的 legacy 薄壳与 `services/workgroup/engine.ts` 门面删除，回合操作改由 bootstrap 注入（能力矩阵新增 `greatest`，两方言各取 `GREATEST` / `max`）。**关键发现**：13 个「SQLite 行为套件」全都直接调 `runWorkgroupEngine`、一条都没经过中立驱动——PostgreSQL 跑的那条路几乎没有行为覆盖。把 5 个套件（约 88 条断言）改接 `tests/helpers/workgroupTurns.ts` 的 shim 后一次照出 8 处差异，逐条按「合一前 SQLite 为准」修回：①整套提示词是降级版（无 charter 围栏 / goal 块 / 能力卡名册 / 领队账本 / 三段切片 / 闸门打回反馈块）——legacy 的 `prompts.ts` + `context.ts` 搬进 application 层；②协议重提示块是另一套更短的文案；③失败重试对任何失败都重试并贴原始 errorMessage（正典走 FOLLOWUP_POLICY 表 + 按原因裁剪的指引）；④瞬时运行时故障没有单独预算；⑤反问被硬压制没有专门分支；⑥17 处系统消息各手写正文、与模板渲染器不同；⑦标题去重丢弃没有系统告警（改由提交回执带回被跳过的操作键）；⑧fc 机械收敛的闸门说明恒为空。十把点名清单锁改指中立实现；`rfc359-w4-d19c-adapters.test.ts` 两引擎各跑。**留下的债（D19c-tail，独立一刀）**：legacy engine 约 4500 行现在生产零消费者、只剩测试引用；删它要逐个判定 8 个模块 25 个被测试直接消费的符号（`decideAssignmentReconcile` / `deriveWakeSet` / `deriveLeaderClarifyPark` / `resolveWgClarifyAllowed` / `executeTurn` / `casAssignmentStatus`…）在中立驱动里的对应判据，不是机械 sweep；`state` / `launch` / `constants` / `askerKey` 仍有真实生产消费者，不在退役范围。
-> **W4-D24 已落（运行时会话租约）**：乙类里取证已完成的那一对合成一份实现。三处差别逐条收掉：事务原语改用新增的中立 `withTaskExecutionSerializable`（**没有改隔离级别**——PG 仍 SERIALIZABLE + 40001 重放，SQLite 仍 BEGIN IMMEDIATE，于是「能不能降级」这个待裁决问题不必回答）、owner 围栏委派给中立 `fenceTaskWrite`（环境上下文至此只在 `ownedTaskExecution.ts` 读一次）、驱动错误形状走能力矩阵 `classifyError`。三个 bootstrap 改从装配层取（直连 infrastructure 会新增 R1 越界边）。四把锁改指中立实现，其中三条是销账。`rfc359-w4-d24-adapters.test.ts` 两引擎各跑，含并发 `claimNew` 恰好一个成功的验收。
-> **W4-D22 已落（数字员工岗位模版目录）**：SQLite 的 59 行 legacy 薄壳与 PG 的 390 行原生实现合成一份中立写面 + 一份装配，三个 bootstrap 共用。正典取 PG 那份——它本来就按 builtin 模版语义写（系统 owner + builtin 双条件定位、public+builtin 落库、改名与更新过 updatedAt + aclRevision 双 OCC），SQLite 那条借道普通 Agent 写面、带着面向用户输入的 ACL / 闭包校验，对「代码自有、daemon 铸造」的模版既不适用也拦不住什么；合一顺带把 `legacy/agent.ts` 从这条链上摘掉。唯一冲突经能力矩阵 `uniqueViolationTarget` 映射。`rfc359-w4-d22-adapters.test.ts` 两引擎各跑。
-> **RFC-359 剩余工作（2026-09-06 勘察，按建议顺序）**：①**Skill 聚合**（最大一块，见 plan.md「Skill 聚合的勘察结论」）——SQLite 是薄适配器套成熟的崩溃安全机器（legacy/skill* 共 5882 行、28 处 `dbTxSync`、耦合文件系统），PG 是 3342 行原生重写，归一化相似度**只有 7%**，测试覆盖 52 : 6 倒挂；拆 D23a 勘察对账 / D23b 把 legacy 机器迁到 `DatabaseSession`（即账本里挂着的 W9-E）/ D23c 合一三刀。②`ResourcePackageMaintenance`（293 / 379，相似度 26%，同样是两套实现）。③task-execution 十对。④乙类：~~`RuntimeSessionLeaseOperations`~~（**W4-D24 已合**——而且不必降级：中立会话本来就有 `serializable`，两个引擎各取所需；并发 `claimNew` 的双引擎验收已补）、~~`HumanGateTaskLifecyclePersistence`~~（**W4-D25 已合**——连同 collaboration 的 `HumanGateOpenParticipant`、`ClarifyQuestionSnapshotReader` 与整条 legacy 同步停靠路一起退役；PG 侧顺带补齐了提交 / 完成的幂等重放与工件状态校验，此前它自己内联的那套更弱）、`SourceTerminationParticipant`、`TaskExecutionRuntimeParticipants`、~~`TaskExecutionResourceSnapshots`~~（**W4-D27 已合**——异步冻结与同步版逐语句同构，覆盖成立）、Intent 上下文的同步半。⑤D19c-tail：legacy workgroup engine 退役。
-> **W4-D20 已落（Intent 上下文授权读取 + 资源包读模型）**：两对**对称**适配器各合成一份中立实现，同批清掉两处死代码（SQLite 的 Intent 异步工厂零生产消费、资源包两个零消费导出），`sqlitePackageResourceRows.ts` 缩到只剩 legacy 提交路径的同步助手；三个 provider 文件删除；`rfc359-w4-d20-adapters.test.ts` 两引擎各跑。同时把剩余 provider 对做了形态普查并写进 plan.md：对称对已清空，剩下的全是「SQLite 是 legacy 薄壳、PG 原生、覆盖倒挂」的薄壳对（任务房 / 回合 / Skill 三对 / ResourcePackageMaintenance / DigitalEmployeeAgentTemplateCatalog），都要先裁「哪份是正典」再动手。
-> **W4-D25 已落（human-gate 停靠原子）**：`humanGateOpenParticipant.ts` / `humanGateTaskLifecyclePersistence.ts` / `clarifyQuestionSnapshotReader.ts` 三份中立实现替代六份 provider 文件，并整条退役 legacy 同步停靠路（`sqliteTaskParkTransaction` / `sqliteManualQuestionParkTransaction` / `taskExecutionHumanGateAdapter` / 同步 `HumanGateOpenParticipant` 端口）。**关键发现**：PG 那份参与者自己内联了一套**更弱**的门操作记账（不认幂等重放、不校工件状态、只从 prepared 起跳），而 SQLite 语义早有中立副本 `DatabaseHumanGateOperationJournal`——合一直接用它，PG 侧顺带补齐这三条。又是「按端口数覆盖、不是按实现数」：RFC-333 的 15 个停靠 test 全部直接 new SQLite 那几个类、PG 侧零行为覆盖，改接中立端口后一次全绿；新增 `rfc359-w4-d25-adapters.test.ts` 九条两引擎各绿。留债当场清掉：**W4-D26 已落（手工提问写面）**——`sqlite|postgresqlManualQuestionOpenWriter.ts` 并成一份（PG 那份同样把 journal 的 begin / markPrepared 内联重写成裸 INSERT + UPDATE，少了幂等回放 / claimEpoch 分配 / requestHash 比对三条，合一即补齐），它是 `SqliteHumanGateOperationStore` 的最后一个消费者，那 825 行整份删除，同步接口与零消费者的 `createHumanGateOperationStore` 桥一并退役。`rfc333-human-gate-operation-store.test.ts` 的 store 断言早被双引擎的 `rfc359-t1-human-gate-journal.test.ts` 接管，该文件只留纯函数部分；新增 `rfc359-w4-d26-adapters.test.ts` 九条两引擎各绿。
-> **W4-D27 已落（任务执行资源快照）**：相似度表最高的那一对（0.59）合成一份读面 + 一份绑定，四个 provider 文件删除。三处差异各取中立形态：`DatabaseSession` 新增 `snapshotRead`（**两个引擎的边界一格未改**——SQLite 仍 BEGIN IMMEDIATE、PG 仍 REPEATABLE READ READ ONLY；中立 `transaction()` 在 PG 上是 READ COMMITTED，会让闭包递归取数失去一致视图，所以按能力矩阵补这条）、可见性走新的中立 `canViewResourceForTx`、行映射改用同 context 的 `*Persistence`映射器（与 legacy 的`rowToAgent`/`rowToWorkflowDetail`/`rowToWorkgroup` 逐字段对过账，含 sidecar 提升、runtime 列与快照哈希）。挂了很久的「异步闭包冻结能否覆盖同步版」当场有答案：两者逐语句同构、只多一个 await，可以。`rfc359-w4-d27-adapters.test.ts`九条两引擎各绿。
+**W4-D6a 已落（development adapter 链 + foreign-owner ACL 端口）**：resource-catalog 的 ACL identity persistence 改成绑定目录写事务的异步端口，中立 ACL 读 / 写端口多一条 foreign-owner 分支，`composeForeignResourceAclFor` 给两个 bootstrap 同一条路径；integration 的 adapter store / 命令 / 配置装配 / 三处运行器装配各一份，PG 内联配置实现退役，三个 provider 文件删除，integration dbTxSync 归零；`rfc359-w4-d6a-adapters.test.ts`两引擎各跑。employee*_ owner 仍用同步形态与 PG foreign ACL，随 D6b/c 退。
+> **W4-D6b 已落（development-automation 配置族）**：action template / verification profile 持久化、digital employee / automation policy 的 identity + revision（publish 先`lockAggregateRoot`再 CAS）、assignment、员工 publish lookup、legacy 迁移落库各一份实现，六个 provider 文件删除、同步`ConfigResourceStore` 端口退役，`sqliteDigitalEmployeeStore`的函数面搬到`tests/helpers/digitalEmployeeStore.ts`；`rfc359-w4-d6b-adapters.test.ts`两引擎各跑。employee\__ 的 foreign ACL 与`Sync*` 形态随 D6c（digital-employee AuthoringStore）退。
+> **W4-D6c 已落（digital-employee 作者面 + foreign ACL 收尾）**：类型包 / 工具 / 岗位模版 / 员工定义 / 全局执行策略持久化一份实现（`authoringStore.ts`，publish 与员工定义更新先判 identity、`ensureExecutionPolicy`先`lockAggregateRoot`），端口只剩异步形态，employee\__ 的 ACL identity 面改成与目录同形的异步端口并在两个 bootstrap 都走 `composeForeignResourceAclFor`；`postgresqlForeignResourceAcl.ts` 与目录的 `SyncResourceAclIdentity_` 形态退役，三个 provider 文件删除；`rfc359-w4-d6c-adapters.test.ts` 两引擎各跑。
+**W4-D7a 已落（digital-employee 临时上传 + writer cutover）**：`inputUploadStore.ts`/`writerCutoverPersistence.ts`各一份（writer 的读—改—写先`lockAggregateRoot`，快照读改逐语句、S-10 裸事务账本归零），装配单一入口，一个 provider 文件删除；`rfc359-w4-d7a-adapters.test.ts` 两引擎各跑。下一刀 D7b：digital-employee RuntimeStore 对。
+**W4-D7b 已落（digital-employee 运行时案件持久化）**：`runtimeStore.ts`一份（14 处事务走统一原语、计量 / 成员替换先`lockAggregateRoot`、搜索与 NULL 排序走能力矩阵），两个 provider 文件（~4000 行）删除、digital-employee dbTxSync 归零；`rfc359-w4-d7b-adapters.test.ts` 两引擎各跑。下一刀 D8：identity-access 两对大 PG 底。
+**W4-D6c 补（启动期并发注册幂等）**：作者面存储改异步后两份装配同拍注册同一类型包撞主键、daemon 起不来（8f89a3ee4 / d03fc3694 CI 全红）；`ensureTypePackage` 改 ON CONFLICT DO NOTHING + 回读比 digest、`ensureExecutionPolicy`先 advisory lock、service`ready()` 启动屏障；`rfc359-w4-d6c-bootstrap-idempotency.test.ts` 两引擎各跑。
+**W4-D8 已落（identity-access 账户 / 授权持久化 + OIDC）**：`userAccessPersistence.ts`/`oidcIdentityCrossContext.ts`各一份（读集 → 同步决策 → serializable 落库；围栏走能力矩阵新项`readRowSync`，唯一冲突走 `uniqueViolationTarget`），五个 provider 文件 + 两个假 PG 测试删除，TransactionScope 认领桥与 `InitialUserAccessProvisioner`退役，schema 补`user_identities_provider_subject_unique` 并重采 PG 基线；`rfc359-w4-d8-adapters.test.ts` 两引擎各跑。下一刀 D9：auth persistence 对。
+**W4-D9 已落（auth 认证持久化 + PAT 审计）**：`auth/infrastructure/authPersistence.ts`/`tokenCallAudit.ts` 各一份（读—改—写先锁聚合根，会话 / PAT 解析热路径不再开事务，唯一冲突走能力矩阵），四个 provider 文件 + 假 PG 测试删除，`createAuthRuntimeFor`/`createTokenCallAudit` 中立入口；`rfc359-w4-d9-adapters.test.ts` 两引擎各跑。下一刀 D10：development-automation 剩余 store 对与 resource-catalog legacy 对。
+**W4-D10 已落（development-automation Mission 持久化 + 读模型；列 facade 修根）**：`development-automation/infrastructure/missionStore.ts`/`missionReadModels.ts` 各一份（`createMissionPersistence`/`createMissionReadModelQueries`），三个 provider 文件 + 只跑 SQLite 的 pr2 测试删除，32 个 rfc310 / rfc311 测试改 await；PG 上列表页游标 `createdAt` 回字符串的根因是模块加载期捕获的列对象固定在 SQLite 投影——`db/providerSchema.ts` 把列也做成访问时解析的 facade，`rfc359-provider-schema-column-facade.test.ts` 双引擎锁住；`rfc359-w4-d10-adapters.test.ts` 两引擎各跑。下一刀 D11：`PlaybookSagaStore` 对 + upload store，再到 resource-catalog legacy 对。
+**W4-D11 已落（development-automation Playbook saga 持久化 + 上传会话 store）**：`infrastructure/playbookSagaStore.ts`/`uploadSessionStore.ts` 各一份（`createPlaybookSagaPersistence`/`createUploadSessionPersistence`；`claimUploadSessions(tx, …)` 是唯一的上传认领原语，launch 事务直接复用），`missionInputUploadPersistence.ts` 两份薄适配、`composeMissionInputUploadOperations` 一个装配；三个 provider 文件 + 只跑 SQLite 的 pr3-upload-session 测试删除，五个测试改 await，predicate-drift 基线 7 → 5；`rfc359-w4-d11-adapters.test.ts` 两引擎各跑。下一刀 D12：development-automation 剩余 provider 对（retentionSweeper / repositoryFactsCollector / uploadPublicationReceipt / uploadPlacementPersistence / requirementBundleRef / repositoryLocationRead / admissionLookup），再到 resource-catalog legacy 对。
+**W4-D12 已落（development-automation 剩余六个 infrastructure 对 + 三组装配对）**：uploadPlacement / uploadPublicationReceipt / requirementBundleRef / repositoryLocationRead / repositoryFactsCollector / retentionSweeper 各一份中立实现（保留期清扫改成带子查询的单语句 + RETURNING 计数），`composeDevelopmentAdmissionLookup`/`composeDevelopmentAutomationMaintenanceCommands`/`composeDevelopmentAutomation`/`composeDevelopmentMissionOperations`各一份，五个`composeSqlite*`/`composePostgresql*` 孪生删除，消费者改接；`rfc359-w4-d12-adapters.test.ts` 两引擎各跑。下一刀 D13：`employeePlatformWorkItemPersistence`/`developmentDeliveryProvider` 文件内分支 + composition/ 下三组装配对，再到 resource-catalog legacy 对。
+**W4-D13 已落（development-automation 最后三组 provider 对）**：`employeePlatformWorkItemPersistence`/`developmentDeliveryProvider`/`legacyMissionDrain` 各一份中立实现（volatile 仓库 URL 回退两引擎同有），`createDevelopmentEmployeeCaseWorkspaceDetailReader`/`composeDevelopmentEmployeeWorkspace`/`composeDevelopmentEmployeePlatformWorkItems` 各一份，六个孪生删除、消费者与七个测试改接；`rfc359-w4-d13-adapters.test.ts` 两引擎各跑。development-automation 的 provider 孪生清零。下一刀 D14：resource-catalog legacy 对。
+**W4-D14 已落（resource-catalog · Agent 聚合）**：异步仓库 / 语义层 / import 快照成为唯一实现（`agentRepository.ts`/`agentPersistenceSemantics.ts`/`agentImportQueries.ts`；唯一冲突经能力矩阵映射），`composeAgentCatalog` 等装配各一份，server.ts / start.ts 的 SQLite 装配切到与 PG daemon 同一套；五个 provider 文件 + SQLite 专属同步围栏删除；`rfc359-w4-d14-adapters.test.ts` 两引擎各跑。留债：`legacy/agent.ts` 同步服务仍被门面 / task-execution 等消费，随消费方切到 AgentCatalogModule 后再删。下一刀 D15：Skill / Workflow 聚合同法合一。
+**W4-D15 已落（resource-catalog · Workflow 聚合）**：`workflowRepository.ts`/`workflowPersistenceSemantics.ts`/`workflowValidation.ts` 各一份中立实现，managed skill 可用性判据只有一份（`skillContentAvailability.ts`），`composeDatabaseWorkflowCatalog` 一份装配（含广播事件），server.ts / start.ts 切过去；合一时补齐两处 PG 缺口（删除广播受众、RFC-264 改名门）；五个 provider 文件删除；`rfc359-w4-d15-adapters.test.ts` 两引擎各跑。留债：动态工作流校验上下文两边拼法不同、`legacy/workflow.ts` 仍被门面消费。下一刀 D16：Skill 聚合。
+**W4-D16 已落（resource-catalog · Mcp 聚合）**：`mcpRepository.ts`/`mcpRuntimeTestTransitions.ts`/`mcpTransactionLifecycle.ts` 各一份中立实现（运行时测试会话的配置变更 / 停用 / 删除 / ACL 变更转换全在仓库事务里，ACL 转换此前只有 SQLite 有），`composeMcpCatalog`+`mcpAclRuntimeTestLifecycle()`一份装配，三个 bootstrap 同一套；三个 provider 文件 + 零消费门面`services/mcpRuntimeTestTransitions.ts` 删除；`rfc359-w4-d16-adapters.test.ts` 两引擎各跑。同批修掉 D14 / D15 的 CI 回归（RFC-228 预检次序、provider 路径 ACL 写入后的实时订阅唤醒、RFC-310 清单路径），`rfc359-w4-d14-d15-regressions.test.ts` 两引擎锁。留债：`legacy/mcpRuntimeTestTransitions.ts`同步版仍被 runtime-registry 写点与`mcpPersistence.ts` 消费。下一刀 D17：Plugin 聚合。
+**W4-D17 已落（resource-catalog · Plugin 聚合）**：`pluginRepository.ts` 一份中立仓库（publish / 改名 / 删除全在统一事务里，唯一冲突经能力矩阵映射），`composePluginCatalog`/`composePluginGenerationGcCommand` 各一份装配，三个 bootstrap 与维护 worker 同一套；两个 provider 文件删除；`rfc359-w4-d17-adapters.test.ts` 两引擎各跑。下一刀 D18：Workgroup 聚合。
+**W4-D18 已落（resource-catalog · Workgroup 聚合）**：`workgroupRepository.ts`/`referenceUsability.ts` 各一份中立实现（创建 / 复制 / save / 删除全在统一事务里，引用可用性预检与同事务终检同一份），`composeWorkgroupCatalog`一份装配（仓库依赖由`workgroupRepositoryDependencies` 一处装配），三个 bootstrap 同一套，四个 PG-only 聚合适配器改读中立行映射；四个 provider 文件删除；`rfc359-w4-d18-adapters.test.ts`两引擎各跑。留债：任务房 / 回合的不对称对随 legacy workgroup engine 退役单独一刀。下一刀 D19：Workgroup 任务房 / 回合合一。
+**W4-D19a 已落（工作组任务房的事务内参与者）**：Collaboration 的反问参与者与 TaskExecution 的任务参与者各一份中立实现 + 各一份装配（事务类型收敛到`DatabaseTransaction`），`assertPostgresqlTaskOwnerlessTx`这份逐字重复删除、六个消费方改指中立的`assertTaskOwnerlessTx`；三个 provider 文件删除；`rfc359-w4-d19a-adapters.test.ts`两引擎各跑，零行为变更。勘察结论：任务房 / 回合是最后一对且最不对称——SQLite 走 legacy engine（13 个行为套件盯着），PG 走中立驱动（只有 3 个、多是形状锁），故拆成 D19a 结构 / D19b 任务房本体 / D19c 回合引擎三刀。下一刀 D19b。
+**W4-D19b 已落（任务房本体合一 + legacy 任务房退役）**：三份中立房间文件 + 一份装配`composeWorkgroupTaskRoom`，两个 bootstrap 装同一份；四个 provider 文件与 legacy 那四个动作文件（1749 行）全部删除。**PostgreSQL 房间路径第一次拿到行为覆盖。**「恢复执行」按**部署形态**（daemon 是否与 API 同进程，不是数据库）注入 `WorkgroupTaskRoomContinuationDriver`：单进程做工作树预检（不可恢复 → 410，闸门 / holder / 消息随事务整体回滚）+ 提交后就地认领意图并驱动；多进程两件皆空操作，交给 daemon 的 `human-gate-continuation` worker。合一时抓到并按「合一前 SQLite 行为为准」修回四条差异：①confirm 的 410 与 dw-confirm 的原子换挡 / 相位复位（预检排在合法性复核之后、写入之前）；②`continueTask`的意图类别写成了没人认领的`resume`，改回 `gate-continuation`+ 两键载荷（这一类里还住着 RFC-333 人工门的富载荷，多一个键就`invalid-human-gate-continuation-payload`）；③加成员时解析不到的引用错误码回归 `acl-missing-refs`；④遣散最后一个人类成员后的补跑（立刻一次 + 2.5s 后一次，接住慢一拍才提交的 park）。九把按文件名点名的清单锁改指中立实现，6 个测试消费者改接新的 `tests/helpers/workgroupTaskRoom.ts`装配。同批修掉两处守卫脆弱点：路由错误码守卫的语料用`trackedFiles`——新测试在 `git add`之前不在语料里，本地绿、提交之后才红（288a8f888 把 main 推红即此）；rfc345 的 schema 导入扫描在三份源码拼接后贪婪匹配，正文里出现「tasks」这个词就被误判。下一刀 D19c（回合引擎）。
+**W4-D19c 已落（工作组回合引擎合一）**：持久化适配器 / 宿主账本参与者中立化，装配收成一份，三个 bootstrap 同一条；SQLite 的 legacy 薄壳与`services/workgroup/engine.ts`门面删除，回合操作改由 bootstrap 注入（能力矩阵新增`greatest`，两方言各取 `GREATEST`/`max`）。**关键发现**：13 个「SQLite 行为套件」全都直接调 `runWorkgroupEngine`、一条都没经过中立驱动——PostgreSQL 跑的那条路几乎没有行为覆盖。把 5 个套件（约 88 条断言）改接 `tests/helpers/workgroupTurns.ts`的 shim 后一次照出 8 处差异，逐条按「合一前 SQLite 为准」修回：①整套提示词是降级版（无 charter 围栏 / goal 块 / 能力卡名册 / 领队账本 / 三段切片 / 闸门打回反馈块）——legacy 的`prompts.ts`+`context.ts` 搬进 application 层；②协议重提示块是另一套更短的文案；③失败重试对任何失败都重试并贴原始 errorMessage（正典走 FOLLOWUP_POLICY 表 + 按原因裁剪的指引）；④瞬时运行时故障没有单独预算；⑤反问被硬压制没有专门分支；⑥17 处系统消息各手写正文、与模板渲染器不同；⑦标题去重丢弃没有系统告警（改由提交回执带回被跳过的操作键）；⑧fc 机械收敛的闸门说明恒为空。十把点名清单锁改指中立实现；`rfc359-w4-d19c-adapters.test.ts` 两引擎各跑。**留下的债（D19c-tail，独立一刀）**：legacy engine 约 4500 行现在生产零消费者、只剩测试引用；删它要逐个判定 8 个模块 25 个被测试直接消费的符号（`decideAssignmentReconcile`/`deriveWakeSet`/`deriveLeaderClarifyPark`/`resolveWgClarifyAllowed`/`executeTurn`/`casAssignmentStatus`…）在中立驱动里的对应判据，不是机械 sweep；`state`/`launch`/`constants`/`askerKey`仍有真实生产消费者，不在退役范围。
+**W4-D24 已落（运行时会话租约）**：乙类里取证已完成的那一对合成一份实现。三处差别逐条收掉：事务原语改用新增的中立`withTaskExecutionSerializable`（**没有改隔离级别**——PG 仍 SERIALIZABLE + 40001 重放，SQLite 仍 BEGIN IMMEDIATE，于是「能不能降级」这个待裁决问题不必回答）、owner 围栏委派给中立 `fenceTaskWrite`（环境上下文至此只在 `ownedTaskExecution.ts`读一次）、驱动错误形状走能力矩阵`classifyError`。三个 bootstrap 改从装配层取（直连 infrastructure 会新增 R1 越界边）。四把锁改指中立实现，其中三条是销账。`rfc359-w4-d24-adapters.test.ts`两引擎各跑，含并发`claimNew`恰好一个成功的验收。
+**W4-D22 已落（数字员工岗位模版目录）**：SQLite 的 59 行 legacy 薄壳与 PG 的 390 行原生实现合成一份中立写面 + 一份装配，三个 bootstrap 共用。正典取 PG 那份——它本来就按 builtin 模版语义写（系统 owner + builtin 双条件定位、public+builtin 落库、改名与更新过 updatedAt + aclRevision 双 OCC），SQLite 那条借道普通 Agent 写面、带着面向用户输入的 ACL / 闭包校验，对「代码自有、daemon 铸造」的模版既不适用也拦不住什么；合一顺带把`legacy/agent.ts`从这条链上摘掉。唯一冲突经能力矩阵`uniqueViolationTarget` 映射。`rfc359-w4-d22-adapters.test.ts`两引擎各跑。
+**RFC-359 剩余工作（2026-09-06 勘察，按建议顺序）**：①**Skill 聚合**（最大一块，见 plan.md「Skill 聚合的勘察结论」）——SQLite 是薄适配器套成熟的崩溃安全机器（legacy/skill* 共 5882 行、28 处`dbTxSync`、耦合文件系统），PG 是 3342 行原生重写，归一化相似度**只有 7%**，测试覆盖 52 : 6 倒挂；拆 D23a 勘察对账 / D23b 把 legacy 机器迁到 `DatabaseSession`（即账本里挂着的 W9-E）/ D23c 合一三刀。②`ResourcePackageMaintenance`（293 / 379，相似度 26%，同样是两套实现）。③task-execution 十对。④乙类：~~`RuntimeSessionLeaseOperations`~~（**W4-D24 已合**——而且不必降级：中立会话本来就有 `serializable`，两个引擎各取所需；并发 `claimNew` 的双引擎验收已补）、~~`HumanGateTaskLifecyclePersistence`~~（**W4-D25 已合**——连同 collaboration 的 `HumanGateOpenParticipant`、`ClarifyQuestionSnapshotReader` 与整条 legacy 同步停靠路一起退役；PG 侧顺带补齐了提交 / 完成的幂等重放与工件状态校验，此前它自己内联的那套更弱）、`SourceTerminationParticipant`、`TaskExecutionRuntimeParticipants`、~~`TaskExecutionResourceSnapshots`~~（**W4-D27 已合**——异步冻结与同步版逐语句同构，覆盖成立）、Intent 上下文的同步半。⑤D19c-tail：legacy workgroup engine 退役。
+**W4-D20 已落（Intent 上下文授权读取 + 资源包读模型）**：两对**对称**适配器各合成一份中立实现，同批清掉两处死代码（SQLite 的 Intent 异步工厂零生产消费、资源包两个零消费导出），`sqlitePackageResourceRows.ts` 缩到只剩 legacy 提交路径的同步助手；三个 provider 文件删除；`rfc359-w4-d20-adapters.test.ts` 两引擎各跑。同时把剩余 provider 对做了形态普查并写进 plan.md：对称对已清空，剩下的全是「SQLite 是 legacy 薄壳、PG 原生、覆盖倒挂」的薄壳对（任务房 / 回合 / Skill 三对 / ResourcePackageMaintenance / DigitalEmployeeAgentTemplateCatalog），都要先裁「哪份是正典」再动手。
+**W4-D25 已落（human-gate 停靠原子）**：`humanGateOpenParticipant.ts`/`humanGateTaskLifecyclePersistence.ts`/`clarifyQuestionSnapshotReader.ts` 三份中立实现替代六份 provider 文件，并整条退役 legacy 同步停靠路（`sqliteTaskParkTransaction`/`sqliteManualQuestionParkTransaction`/`taskExecutionHumanGateAdapter`/ 同步`HumanGateOpenParticipant`端口）。**关键发现**：PG 那份参与者自己内联了一套**更弱**的门操作记账（不认幂等重放、不校工件状态、只从 prepared 起跳），而 SQLite 语义早有中立副本`DatabaseHumanGateOperationJournal`——合一直接用它，PG 侧顺带补齐这三条。又是「按端口数覆盖、不是按实现数」：RFC-333 的 15 个停靠 test 全部直接 new SQLite 那几个类、PG 侧零行为覆盖，改接中立端口后一次全绿；新增 `rfc359-w4-d25-adapters.test.ts` 九条两引擎各绿。留债当场清掉：**W4-D26 已落（手工提问写面）**——`sqlite|postgresqlManualQuestionOpenWriter.ts`并成一份（PG 那份同样把 journal 的 begin / markPrepared 内联重写成裸 INSERT + UPDATE，少了幂等回放 / claimEpoch 分配 / requestHash 比对三条，合一即补齐），它是`SqliteHumanGateOperationStore`的最后一个消费者，那 825 行整份删除，同步接口与零消费者的`createHumanGateOperationStore` 桥一并退役。`rfc333-human-gate-operation-store.test.ts`的 store 断言早被双引擎的`rfc359-t1-human-gate-journal.test.ts`接管，该文件只留纯函数部分；新增`rfc359-w4-d26-adapters.test.ts` 九条两引擎各绿。
+**W4-D27 已落（任务执行资源快照）**：相似度表最高的那一对（0.59）合成一份读面 + 一份绑定，四个 provider 文件删除。三处差异各取中立形态：`DatabaseSession`新增`snapshotRead`（**两个引擎的边界一格未改**——SQLite 仍 BEGIN IMMEDIATE、PG 仍 REPEATABLE READ READ ONLY；中立 `transaction()`在 PG 上是 READ COMMITTED，会让闭包递归取数失去一致视图，所以按能力矩阵补这条）、可见性走新的中立`canViewResourceForTx`、行映射改用同 context 的 `_Persistence`映射器（与 legacy 的`rowToAgent`/`rowToWorkflowDetail`/`rowToWorkgroup` 逐字段对过账，含 sidecar 提升、runtime 列与快照哈希）。挂了很久的「异步闭包冻结能否覆盖同步版」当场有答案：两者逐语句同构、只多一个 await，可以。`rfc359-w4-d27-adapters.test.ts`九条两引擎各绿。
 **W4-D23a 已落（技能目录取证基线）**：技能是剩余最大的一块分叉、也是覆盖最倒挂的一块（52 : 6，PG 侧装配此前没有任何测试**活着构造**过）。合一动手前先按「按端口数覆盖」取证：新增双引擎夹具 + 八场景一致性套件（16 条两引擎各绿）。**结论是端口面已经一致**——建/读/列、内容与文件树、重名、保存推进版本、陈旧 token、文件写入读回、受保护主文件、删除收场逐条同形同码；风险收窄到崩溃安全机器本身（boot 验证 / 操作恢复 / 身份迁移 / 发布 staging 阶梯），D23b 的验收面应照着那一层补。同批照出一条与 RFC-359 无关的存量问题：全部 skill 套件同进程跑会红两条`skill-not-found`（去掉新文件照红，CI 靠分片才没暴露），已记进 `docs/audit-backlog.md`。
 **W4-D19c-tail 四刀已落（2026-09-06）**：legacy workgroup engine 的行为套件逐组重指中立驱动（唤醒集 8 套件 159 条 / 领队反问停靠 / 派单卡转移表 / 房间消息与回合账本），判据逐条保留，只调命名差。**第四刀照出一处真缺口并已修**：RFC-274 的「系统署名消息要么带模板 key、要么显式声明 `localization: 'original'`」判据在合一时连同分类字段一起被丢掉，**两个 provider 都少了这道关**（平台手写英文兜底文案可直接落进房间且无从本地化），已补回并由 rfc274 锁住三态。岛上还剩九处引用，收干净才能删；其中 `isLeaderWrapUpContinuation`的 legacy`>=`与中立`===`+`capExceeded`回答的是**两个不同问题**，改指时不能直接对拍。
 **RFC-359 交接点（2026-09-06 本轮收尾）**：本轮落了 D25（human-gate 停靠）/ D26（手工提问写面 + 同步 gate store 退役）/ D27（任务执行资源快照 + 中立只读快照事务）/ D23a（技能目录取证基线），CI 在`c8c3beca5` 全绿。**下一轮从这里起手**：①**D23b** 是剩余最大的一块，也是唯一还有真实「一个引擎好一个不好」风险的地方——D23a 已证端口面一致，所以 D23b 的验收面要照**崩溃安全机器**去补（boot 验证 / 操作恢复 / 身份迁移 / 发布 staging 阶梯），不是再堆端口场景；②`ResourcePackageMaintenance`**不是独立一刀**——两侧的`preparedArtifactsJson`是两种不同的 on-disk 形状，分别由`legacyResourcePackageBundleApply.ts`与`postgresqlResourcePackageAtomicApply.ts` 写出，要先合上游那对；③剩余 task-execution 对（相似度 ≤0.31）不再是机械改写——`TaskExecutionRuntimeParticipants` 那对的分叉在**谁来装配**（SQLite 全由 bootstrap 交进来，PG 自己 compose 一半），先裁装配边界再动手；④**D19c-tail** 是纯删除，但要逐条重指 12 个行为套件（wake / lifecycle / strategies 等），中立驱动里的对应符号目前是模块私有，要先按需导出。
-**W4-D19c-tail ✅ 完工（2026-09-06，第五～第十二刀）**：legacy workgroup 引擎岛（`engine`/`turnExecution`/`memberTurns`/`messages`/`prompts`/`rounds`/`lifecycle`/`wake`/`hooks`/`strategies/*`，共 **4112 行**）整片删除，两个 provider 只剩一条回合实现；`askerKey`/`constants`/`launch`/`state`是全仓复用的共享件，留下。删之前把**所有**还指向它的判据逐条重指到生产那份——这个动作连续照出**五处**合一时丢掉的行为，每一处都是用户可见的，全部先红后绿补回：①系统署名房间消息的分类判据（第四刀）；②收尾轮丢派单在房间里没有任何说明（第八刀，模板早在、没有调用方）；③重启杀掉的「已回答澄清」续跑不再按血缘重铸，人的回答再也注不回提示词（第十刀，RFC-187 T13 原地复发）；④流中断的重跑撞同一个`retryIndex`、还挂主 cause，破坏 node_run 身份且**白吃掉一整轮**轮次预算（第十一刀）；⑤房间消息 id 退回普通 `ulid()`，而成员游标按字典序判「我没看过的」，同毫秒两条消息之间没有稳定序，游标落在较大那条上时另一条对该成员**永远不再出现**（第十二刀，RFC-186 §3-4 原地复发）。找全引用要用**两种**形态：`import`与按路径段拼的`readFileSync(resolve(dir,'..','src',…,'engine.ts'))`——后者 `tests-referencing.sh`找不到，要按被删文件的 basename 加引号 grep，这一步又找出八个套件。
-**W4-D23b ✅ 落地（2026-09-06/07）**：一度判定阻塞（技能提交面被 bundle apply 的**同步**大事务调用，body 里 await 不了），**解法是先拆那堵墙**：①把`legacyResourcePackageBundleApply.ts` 的大事务换成中立会话（边界一格未变，`.changes`判据换成`affectedRows()`），链上其余同步 `*InTx`成员由`bindApplyTx`内一个具名`syncTx`重新窄化——**不是强转谎话**，SQLite 会话交出的句柄就是`DbClient` 本身（`createSqliteDatabaseSession`），适配器只是把平台层已经依赖的身份在类型上说一遍，且带退役条件；②整套技能机器（op 原语 / reserve / delete / migrate / version-op / recovery-driver / skillVersion / skill / identityMigration / bootVerify）改吃中立事务，两阶段提交的阶段边界、锁生命周期、崩溃恢复判据、发布阶梯顺序逐条不变，唯一冲突判别换成引擎能力面；③清掉三处「只为同步路径存在」的副本（同步复合栅栏 / 同步解融合核心 / 同步回滚协调器），三个 bootstrap 从此接同一个异步协调器。**判据面 322 条全绿**（崩溃恢复矩阵、身份迁移屏障、发布 staging 阶梯、boot 重验、包应用重放）。同步事务面账本 **41 → 32 个文件、124 → 83 个调用点**。过程中**九处**撞上「漏 await 静默通过类型检查」（删除没删掉 / 两条幂等尾没 mark / 意图应用的提交面没提交 / ZIP 覆盖的并发钩子没落地 / 多处断言拿到 Promise），全部按 `docs/dev-gotchas.md`记的办法找出——其中意图应用那条要连它的大事务一起换成中立会话（与 bundle apply 同形）才修得掉。**D23c**（SQLite 装配切到这套机器、PG 那 3342 行原生实现退役）是下一刀。
+**W4-D19c-tail ✅ 完工（2026-09-06，第五～第十二刀）**：legacy workgroup 引擎岛（`engine`/`turnExecution`/`memberTurns`/`messages`/`prompts`/`rounds`/`lifecycle`/`wake`/`hooks`/`strategies/_`，共 **4112 行**）整片删除，两个 provider 只剩一条回合实现；`askerKey`/`constants`/`launch`/`state`是全仓复用的共享件，留下。删之前把**所有**还指向它的判据逐条重指到生产那份——这个动作连续照出**五处**合一时丢掉的行为，每一处都是用户可见的，全部先红后绿补回：①系统署名房间消息的分类判据（第四刀）；②收尾轮丢派单在房间里没有任何说明（第八刀，模板早在、没有调用方）；③重启杀掉的「已回答澄清」续跑不再按血缘重铸，人的回答再也注不回提示词（第十刀，RFC-187 T13 原地复发）；④流中断的重跑撞同一个`retryIndex`、还挂主 cause，破坏 node_run 身份且**白吃掉一整轮**轮次预算（第十一刀）；⑤房间消息 id 退回普通 `ulid()`，而成员游标按字典序判「我没看过的」，同毫秒两条消息之间没有稳定序，游标落在较大那条上时另一条对该成员**永远不再出现**（第十二刀，RFC-186 §3-4 原地复发）。找全引用要用**两种**形态：`import`与按路径段拼的`readFileSync(resolve(dir,'..','src',…,'engine.ts'))`——后者 `tests-referencing.sh`找不到，要按被删文件的 basename 加引号 grep，这一步又找出八个套件。
+**W4-D23b ✅ 落地（2026-09-06/07）**：一度判定阻塞（技能提交面被 bundle apply 的**同步**大事务调用，body 里 await 不了），**解法是先拆那堵墙**：①把`legacyResourcePackageBundleApply.ts` 的大事务换成中立会话（边界一格未变，`.changes`判据换成`affectedRows()`），链上其余同步 `\*InTx`成员由`bindApplyTx`内一个具名`syncTx`重新窄化——**不是强转谎话**，SQLite 会话交出的句柄就是`DbClient` 本身（`createSqliteDatabaseSession`），适配器只是把平台层已经依赖的身份在类型上说一遍，且带退役条件；②整套技能机器（op 原语 / reserve / delete / migrate / version-op / recovery-driver / skillVersion / skill / identityMigration / bootVerify）改吃中立事务，两阶段提交的阶段边界、锁生命周期、崩溃恢复判据、发布阶梯顺序逐条不变，唯一冲突判别换成引擎能力面；③清掉三处「只为同步路径存在」的副本（同步复合栅栏 / 同步解融合核心 / 同步回滚协调器），三个 bootstrap 从此接同一个异步协调器。**判据面 322 条全绿**（崩溃恢复矩阵、身份迁移屏障、发布 staging 阶梯、boot 重验、包应用重放）。同步事务面账本 **41 → 32 个文件、124 → 83 个调用点**。过程中**九处**撞上「漏 await 静默通过类型检查」（删除没删掉 / 两条幂等尾没 mark / 意图应用的提交面没提交 / ZIP 覆盖的并发钩子没落地 / 多处断言拿到 Promise），全部按 `docs/dev-gotchas.md`记的办法找出——其中意图应用那条要连它的大事务一起换成中立会话（与 bundle apply 同形）才修得掉。**D23c**（SQLite 装配切到这套机器、PG 那 3342 行原生实现退役）是下一刀。
 **RFC-359 交接点（2026-09-06 第二轮收尾）**：本轮落了 D19c-tail 全部八刀（含删岛）+ 五处缺口修复，另把「生命周期修复那一对是能力缺口」的旧记载**订正**为「重复实现、无用户可见缺口」（v1 里`autoApplyEligible`的选项只有`S4.kick-task`一个，两边自动修复能力等价；人工修复面 PG 也是全的）。**下一轮第一件事是裁决 D23b 的两条路线**，其余顺序不变：剩余 task-execution 对（先裁装配边界）、Intent 上下文同步半。
 **W4 机械阶段收尾（2026-09-06 普查）**：能机械合的 provider 对已清空。全仓剩 176 个 provider 命名文件 / 约 39 对，全部落进两类：**甲类薄壳对**（SQLite 是 legacy 壳、PG 原生、测试覆盖倒挂——任务房 / 回合 / Skill 三对 / ResourcePackageMaintenance / DigitalEmployeeAgentTemplateCatalog / task-execution 十对），要先裁「哪份实现是正典」，D19b 已实证硬合会撞出用户可见回归；**乙类同一判据两种写法**（端口本来就是全异步、调用方能 await，初稿记成「同步宿主」已更正）：卡在逐对语义判断上——PG 的 SERIALIZABLE 能否降到中立事务原语的 READ COMMITTED（RuntimeSessionLease 卡在这条）、异步闭包冻结能否覆盖同步版（TaskExecutionResourceSnapshots）、真同步宿主只有 Intent 上下文那半。另有`assertPostgresqlTaskOwnerTx`与中立`assertTaskOwnerTx`的逐字重复已由 **D21** 去重（owner CAS 围栏至此只有`ownedTaskExecution.ts`一处定义）。逐对明细见`design/RFC-359-.../plan.md` §W4 机械阶段收尾。
 

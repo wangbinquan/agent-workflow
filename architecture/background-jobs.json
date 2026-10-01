@@ -8548,7 +8548,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/composition/providerBackground.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$setTimeout:113",
+      "id": "background:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$setTimeout:115",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8562,7 +8562,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerBackground.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:113",
+      "symbol": "$setTimeout:115",
       "targetContext": "task-execution"
     },
     {
@@ -12404,7 +12404,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:396",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:401",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -12418,7 +12418,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:396",
+      "symbol": "$setTimeout:401",
       "targetContext": "task-execution"
     },
     {
@@ -12427,7 +12427,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:4223",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:4253",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -12441,7 +12441,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:4223",
+      "symbol": "$setTimeout:4253",
       "targetContext": "task-execution"
     },
     {
@@ -12971,5 +12971,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5efd6a81820fd7dee3765eae5b45b9130cc5274ee3d8da97a3b1d185e8aca32a"
+  "sourceDigest": "sha256:0772f84ed8cec4e5f6981a617269c72ec8180c241c14f1b91fb2f652dc649d0c"
 }
