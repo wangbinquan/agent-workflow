@@ -265,3 +265,11 @@ mixed report 原丢失根因仍未确证。复验已恢复最初的 reject POST 
 本修订只显式消费初始化重配返回值：旧入口的配置读取仍同步，新异步入口仍先 await 初始快照后才启动；不改变重配、停止和排空语义，不移除并行 RFC-370 实现，也不放宽规则。静态格式核对及独立 SOURCE 复核后精确发布，最终判断仍等待修订自身的完整托管 CI。
 
 `81d6d54f567dd3d871062cd15e6587b5291dceac` 默认定时矩阵已全部终态：完整 E2E `36990114153`、PostgreSQL `36990174841` 各 5 项成功，WebKit `36990131501` 的8项成功，OpenCode／Git压测／证据保留／视觉检查也成功，共7次成功运行、23项成功job。维护、Windows、主CI的3次取消历史完整保留；整套矩阵仍未关闭，后续补核本修订固定SHA的默认矩阵，不把部分成功当全绿。原终态汇总在 `/private/tmp/observability-aw-81d6-default-nightly-matrix-v1.json`。
+
+## 2026-10-02 当前主 CI 的两项精确修正
+
+`3bf8cc6c6364773f251b4fae9ea0399b2be349c8` 的原主 CI `36995661723` 终态 cancelled，九类默认定时检查全部 completed/success、25 个成功作业。取消原回执完整保留；这 25 个成功作业不等于主 CI 已通过。后继 `ba47e5d24c4f8f95f27defb82545ea1766b0e7a9` 是其远端祖先链上的同内容候选，[主 CI 36997889808](https://github.com/wangbinquan/agent-workflow/actions/runs/36997889808) completed/failure、46/50 作业成功。
+
+两个后端分片唯一失败都在 RFC-359 W5 原型别守卫：`submoduleRefresh.ts` 的初始化 `reconfigure()` 返回类型为 `boolean | Promise<boolean>`，直接 `void` 丢弃把新的无拒绝处理站点计入账本。原“只有同步值”的说明不足。当前共享文件已加入对 Promise 分支的明确拒绝处理及错误日志；提交保留这份并行输出的完整文件。旧同步入口保持同步、异步初始读取继续由调用者 await；热重配的失败仍传播、停止和在途排空断言保留。W5 账本、扫描算法、预算及断言不放宽，既有 `rfc370-submodule-refresh-configuration.test.ts` 和 W5 实际托管执行负责回归验证。
+
+另一个失败来自 gitleaks：`rfc370-config-applied-ack.test.ts` 第 20 行是用来隔离监听器的测试命名空间，未用于鉴权或外部请求；其历史提交为 `6f7bd418ceb831009291ca41e6c062d86701e973`。仅此原提交/路径/规则/行的指纹加入既有精确历史清单，当前原行加同行标注，测试值与同步/异步 ACK 全部断言保持。没有文件级、规则级或仓库级豁免，继续扫描完整历史。源码复核、修订自身主 CI 仍待；本机未运行 AW 测试、类型、构建或服务，两 RFC 继续 In Progress。

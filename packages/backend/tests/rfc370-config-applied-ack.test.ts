@@ -17,7 +17,7 @@ function barrier() {
 
 describe('RFC-370 configuration hot-apply acknowledgements', () => {
   test('legacy void callbacks with implicit synchronous return values keep notify synchronous', () => {
-    const key = 'rfc370-implicit-void-notification'
+    const key = 'rfc370-implicit-void-notification' // gitleaks:allow -- listener namespace, not a credential
     const calls: string[] = []
     const implicitNumber: (config: Config) => void = () => calls.push('number')
     const implicitNull: (config: Config) => void = () => null

@@ -87,3 +87,8 @@ a9fa45ed1f5ad5ecfee49b67023b4971527876db:packages/backend/tests/rfc371-pricing-p
 a9fa45ed1f5ad5ecfee49b67023b4971527876db:packages/backend/tests/rfc371-pricing-provider.test.ts:generic-api-key:68
 a9fa45ed1f5ad5ecfee49b67023b4971527876db:packages/backend/tests/rfc371-pricing-provider.test.ts:generic-api-key:73
 a9fa45ed1f5ad5ecfee49b67023b4971527876db:packages/backend/tests/rfc371-pricing-provider.test.ts:generic-api-key:122
+
+# RFC-371 CI recovery: a published listener-namespace fixture was detected as
+# a generic API key. It carries no credential and is now marked inline.
+# Preserve scanning; exempt only this exact historical commit/path/rule/line.
+6f7bd418ceb831009291ca41e6c062d86701e973:packages/backend/tests/rfc370-config-applied-ack.test.ts:generic-api-key:20
