@@ -1,3 +1,7 @@
+## 2026-10-02 RFC-371 当前主 CI 全绿，原审批时序诊断接续
+
+main/origin 已同步 d185ebfe8332c9951e1ad6416a9a2447417b2931，主 CI36961953982 completed/success 50/50，同 SHA 默认 WebKit36962140176 completed/success 8/8。原 mixed report 失败仍保留且业务原因未确证；恢复诊断中的首次拒绝 POST 原时序，身份断言复用已有 afterRejectRuns，不增加 GET/固定延时/重试/预算，所有原流程和断言保留。该候选仅目标格式/lint及独立 SOURCE，精确 hosted 验证待推送。其他默认定时 SHA 与失败记录按 RFC371 ci-recovery 保留；CS producer/全退出集成及 AW-in-CS 联动继续，两 RFC 不关闭。共享 STATE 下方并行 RFC-370 候选与全部历史逐字保留。
+
 ## 2026-10-02 RFC-370 八组48路径发布候选
 
 journaled preparation6、员工local4、插件安装6、generation GC3、附件异步完成5、终态 presence 真根10、提交预览 index6、归档内容8，共48个不同源码/回归路径；八组原有限功能 PASS 和完整指纹均保持，首门 findings 与所有历史 CI failure/cancelled 保留。按八个源码小提交、官方 scoped canonical/docs及五项已消费增长回执的后继退役发布，正式行为交本批 exact-SHA hosted CI。

@@ -1170,10 +1170,6 @@ test('mixed wrappers + humans: clarified decision survives review rejection befo
 
   await waitForTask(task.id, (row) => row.status === 'awaiting_review' || row.status === 'failed')
   const firstReview = await waitForReview(task.id)
-  const firstReviewRuns = await nodeRuns(task.id)
-  expect(firstReviewRuns.runs.find((run) => run.id === firstReview.nodeRunId)?.nodeId).toBe(
-    'draft_review',
-  )
   const reject = await apiFetch(`/api/reviews/${firstReview.nodeRunId}/decision`, {
     method: 'POST',
     body: JSON.stringify({
@@ -1211,6 +1207,9 @@ test('mixed wrappers + humans: clarified decision survives review rejection befo
       outputs: afterRejectRuns.outputs,
     }),
   ).toBe('awaiting_review')
+  expect(afterRejectRuns.runs.find((run) => run.id === firstReview.nodeRunId)?.nodeId).toBe(
+    'draft_review',
+  )
   const secondReview = await waitForReview(task.id, firstReview.reviewIteration + 1)
   const revised = afterRejectRuns
   const writerRuns = runsFor(revised, 'mixed_writer').sort((a, b) => a.id.localeCompare(b.id))

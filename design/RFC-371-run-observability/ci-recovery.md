@@ -2,6 +2,14 @@
 
 更新：2026-09-30。本页属于 AW-R01 的 CI 关闭证据；两 RFC 的产品剩余范围继续按 remaining-work.md 实施。用户本轮明确要求修复 AW CI 和定时 CI，因此本轮读取失败步骤与日志定位根因；此前仅记录扫描元数据的历史保留。
 
+## 2026-10-02 当前提交与原审批时序验收
+
+`d185ebfe8332c9951e1ad6416a9a2447417b2931` 的[主 CI 36961953982](https://github.com/wangbinquan/agent-workflow/actions/runs/36961953982) 已 completed/success，50/50 作业成功；同一 SHA 的[默认 WebKit 36962140176](https://github.com/wangbinquan/agent-workflow/actions/runs/36962140176) 已 completed/success，Ubuntu/macOS 八分片均成功。该 SHA 包含 `bbb545851a5dc4c5328ff005a82b196cdedf5d28` 的 mixed workflow 失败 lineage 诊断与 RFC-370 会话修复的精确 composition 17/16 数量基线；正式规则与强度保持。其他八种默认定时配置此前的成功回执分别属于其记录的 SHA，不能写成全部在 d185ebfe 重新运行。
+
+原 `e4d7dba7` 的 Chromium 与 `02940128` 的 WebKit 曾出现 mixed summary 缺少聚合报告；原失败保留。d185ebfe 的通过不能证明报告丢失根因已修复。诊断曾在首次 review 拒绝 POST 前增加一次 NodeRun GET，这可能改变实际触发时序。本次将相同的首轮 draft_review 身份断言移到原拒绝结果等待之后，复用既有 afterRejectRuns，不添加 GET、延时、重试或预算；所有失败 lineage/outputs、原流程、writer 次数、Prior Output、报告和最终审批断言保持。这个候选只恢复原触发顺序，仍须其精确 hosted CI 与默认 WebKit 验证，不作为业务修复。
+
+无本机 AW 测试、类型检查、构建或服务。完整产品与 CS 托管实机联动仍按 remaining-work.md 的 owner 依赖推进，两个 RFC 仍 In Progress。
+
 ## 首轮基线与根因
 
 - 当前基线 `f3bfc548fb25edfa95994e262730186820148f03`。[提交 CI 36658830125](https://github.com/wangbinquan/agent-workflow/actions/runs/36658830125) 终态 failure，48 success/2 failure。失败源是 dependency audit gate 的两条 fast-uri high 公告，CI required 随之失败；其余功能检查通过。
