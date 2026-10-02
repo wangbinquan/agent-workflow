@@ -391,3 +391,20 @@ journaled repository preparation 七路径和员工 local 内容四路径各获�
 前三路径有限 PASS 后，将后两类遗漏补入六路径修复，完整候选独立有限 PASS。narrow SC composition 精确导出原 file factory，TE 只改变默认 import；所选实例、默认行为和业务状态机不改。官方 scoped 只包含六路径，TE value SCC 为零，public1047→1045、owner25670→25671，其他数值保持；新文件的唯一真实 owner 增长原协议记录一次并后继退役，正式恢复必须新 exact-SHA CI 全部终态。
 
 附件五路径的首次错误夹具已按真实 intake schema 修正并有限 PASS；启动根十路径的 missing 场景按原410语义修正且独立复读有限 PASS。这些候选和 SC7/员工local4/插件6/GC3不纳入 CI 修复 canonical。恢复后发布这些已复核 owner 切面，再继续 remaining-a 全组／A-G，然后 B/M0～M4；无本机 AW test/typecheck/build/service，RFC 保持 In Progress。
+
+
+### 2026-10-02 七组40路径候选与 CI 接续
+
+- 六路径修复/许可退役已精确发布02940128f；主CI36951130717 completed/failure、47 success/3 failure，同SHA Windows36951130688 completed/success。原五类错误已通过，两个后端同一既有架构守卫仍失败、汇总失败；只记录状态和源码位置，完整恢复继续。原失败历史保留。
+- 七组40路径各获独立有限功能PASS，暂不发布：journaled preparation6、员工local4、插件安装6/GC3、附件完成5、终态presence真根10、提交预览index6。原体、selected async/receiver/first-failure/重试与真实回归保持；准备工厂去未消费public转出口后测试import P2已只改到真实应用合同，首门FAIL保留。各完整指纹见functional-gates.md；此记录不关闭A1～A8/A-G。
+- 官方scope仅HEAD加此40路径，六项真实插件R1兼容记录有owner/退役条件，public1045与TE零value SCC保持；五项实际增长许可按原协议登记，发布后精确退役。后续归档内容/恢复、A4其他Git/工作区、A5真实材料/执行、A6/A7/A8继续，CS独立adapter和M0～M4未完成。无本机AW test/typecheck/build/service，不纳入其他WIP。
+
+
+### 2026-10-02 任务归档内容切面有限 PASS
+
+七路径所选内容端口/独立 local/共享协调器/精确兼容出口和真实双 provider 回归完成有限功能 PASS（4d9650ac2082344a27779947ee3830d9cff079601ed8d888be12f6e632bdb344）。原认领、2000行 JSONL、manifest、恢复、删库规则的纯 AST 对拍及目标格式/lint通过；运行结论待发布后的 exact-SHA CI，真 boot roots 另批，不关闭 A2/A-G。此七路径独立排除原40候选 canonical。并行 e4d7dba7d 的 CI36955843850 终态46 success/4 failure，数量判据和复杂 workflow 上下文修复继续；无本机 AW test/typecheck/build/service，原全部历史保持。
+
+
+### 2026-10-02 归档八路径与 CI 既有数量补正
+
+原归档7路径保持，RFC349源码键定位真实查询后扩为8路径有限 PASS（31c06684b6c2028f4604e6906c9bee7f4bed2663ffd505427412d7f0f2b7e116），原 SQL 排序判据/why/断言不变。共享 main 已承接 bbb545851 的 E2E lineage 诊断；CI 补正只纳入已提交 HEAD 的源码/治理 seed，48源码候选指纹保持并排除，原候选生成证据留待源发布前重生。仅按确切 CI 的既有数量17/基线16同步一项计数和一次性回执，其他正文/数值/规则/断言不动；有限功能门后单独发布并退役，正式 exact-SHA CI 与原 E2E 功能修复持续，无本机 AW test/typecheck/build/service，不关闭完整 A2/A-G/RFC。

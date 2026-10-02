@@ -2,6 +2,32 @@
 
 2026-10-01。按 `CLAUDE.md` 的双门及 `docs/dev-gotchas.md` 的独立子代理备选执行；openai-codex 插件工具本会话未提供。评审均在既有 primary checkout/main 按精确路径只读完成，未创建隔离 checkout，未运行本机 AW 测试、类型检查、构建或服务。仅审功能；正式行为、完整 A-G 和实际 CS 联合验收单独记录。
 
+## 已提交源码 CI 数量补正候选（2026-10-02）
+
+并行 E2E 失败 lineage 诊断已发布 bbb545851a5dc4c5328ff005a82b196cdedf5d28，main/origin 精确同步。官方 census 的源码输入与治理 seed 都是已提交 HEAD；原40候选和归档8候选全部排除且指纹保持。其未发布生成证据保留，未来源提交前重新生成，不把五项待发布许可写成已消费退役。
+
+确切 CI36955843850 的纯数量元数据为既有项实际17、基线16。生成器保留此旧基线，因此只将该 scalar16→17并按原协议登记一项一次性增长回执；官方 provenance helper 同步正文 hash。四份实际治理候选中，其余三份只有现有 provenance 变化；ledger 在逆变换此唯一数量和回执、移除 provenance 后与 HEAD 全文数据相等。全部其他数量、登记正文、规则、源码和断言保持。候选独立有限功能检视后按短临界区发布、后继精确退役，再验证 exact-SHA hosted CI；E2E 的既有 mixed_summary 缺失报告继续，历史 failure 不改记绿色，无本机 AW test/typecheck/build/service，不关闭 A-G/RFC。
+
+## 任务归档内容七路径有限实现门（2026-10-02）
+
+`/root/intent_functional_gate` 完整复读七路径，有限 PASS，末次有序指纹 `4d9650ac2082344a27779947ee3830d9cff079601ed8d888be12f6e632bdb344`。TaskArchiveContentPort 接受所选引用和 sync/Promise 内容效果，独立 local 包持有原文件机制；共享协调器保留全部 AW 归档规则，composition 选择能力，旧 factory/constants 出口保持。只逆变换精确 IO/参数/await 后，原协调器38个声明及 sweep3声明的全部非 trivia token 相同；原 legacy restore 函数只改名称后同样完全一致。该证据只加载 TypeScript parser 和源码，不执行 AW 应用/数据库/测试/服务。
+
+新的真实双 provider 回归覆盖三处完成屏障（JSONL、manifest、最终移动），等待时在线行/claim/审计原状，完成后同 claim 结算；append 拒绝后重建 JSONL，最终移动已完成但 ACK 丢失时由正式内容继续恢复且不重复导出。2001条事件按原 `[2000,1]` 分批并保持全部顺序，legacy runs/logs 两次恢复先等完成再判断丢弃。屏障位于所选方法内，成员调用保留 this，finally 释放并收完操作；默认文件机制与既有归档规则兼容。目标格式/lint通过；未跑本机 AW test/typecheck/build/service，正式行为交发布后的 hosted exact-SHA CI。
+
+后续必要下游沿读发现 RFC349 的 PROVABLY_NULL_FREE 键仍定位旧工厂文件，而 finishedAt 查询原体已移到 taskArchiveContentCoordinator.ts。仅把这个键定位到真实实现，原 why 与全部判据/断言不变；`/root/intent_functional_gate` 扩为八路径复读有限 PASS，末次指纹 `31c06684b6c2028f4604e6906c9bee7f4bed2663ffd505427412d7f0f2b7e116`，原七路径字节与 PASS 保留。独立全文比较确认唯一键替换；实际中立 db 类型、PG/provider 与 maintenance worker 可达新查询，原 lte(finishedAt, cutoff) 排除 NULL 的规则保持。
+
+本门只覆盖 A2 归档内容切面，真 boot-root 注入另批，不关闭完整 A2/A-G/RFC。原七组40候选指纹不变，现有 scoped canonical 不纳入归档八路径。并行补正后的 e4d7dba7d/[CI36955843850](https://github.com/wangbinquan/agent-workflow/actions/runs/36955843850) completed/failure、46 success/4 failure，数量判据和 mixed_summary 上下文缺失保持真实失败记录，完整恢复继续。
+
+## 七组40路径冻结候选与修复 CI 终态（2026-10-02）
+
+六路径修复已连同 scoped canonical/唯一许可退役发布为 `02940128ffd4918b19b998a23a5e27650d6d097b`。其 [CI36951130717](https://github.com/wangbinquan/agent-workflow/actions/runs/36951130717) completed/failure，47 success/3 failure；原五类错误相关作业已通过，macOS/backend4 与 Ubuntu/backend16 为同一既有架构守卫失败，另为汇总。该项只读取失败状态与源码位置；原断言保持，完整恢复继续。同 SHA [Windows36951130688](https://github.com/wangbinquan/agent-workflow/actions/runs/36951130688) completed/success。原失败与有限门均不改记全绿。
+
+journaled preparation 原七路径 `a256a3c48fcd5df6d54ca8383211d61d6642ba0302777a6a748e92458fbb5e58` 有限 PASS 保留。官方清单发现本候选新增 RepositoryPreparationEffectFactory public 转出口没有生产消费者；移除它后六路径 `6cddeac77ba53045d947e7fe4e6728e2402bb064c129489da5a31cfe63bc6856` 首门 FAIL/P2，唯一 finding 为测试仍导入已无的 public 类型。只把测试 import 改到实际 application/ports 合同后，`/root/rfc370_design_gate` 复读六路径有限 PASS，指纹 `158d28d35c88b7f6f46052b1ea8896b8183b790f658ae4529513124b0009a49d`；其余五文件不变，public 文件与 HEAD 相同。原 async factory/receiver/prepare/replay/补偿重试/幂等行为及所有断言保留，不扩张零消费者账本。
+
+提交预览 index 六路径由 `/root/task_config_functional_gate` 有限 PASS，首读 `6d53d01d1d99df3dcf61b7a74d610abc05d21053427f28a686b8bdd42b667f62`，补正原 binder 捕获时点后末次 `5e2022324378b36f331c02079aea79e2bd414a0e27a666161ca142d3edd7e7ac`。RepositoryPreviewIndexPort 提供绑定 scope 和 async withIndex，AW 原 read-tree→prepare selection→diff/receipt/错误仍在 application；独立 local adapter 保留原临时目录、index 覆盖、逐次 env、signal/timeout、literal reset 和 finally。composition 的默认/所选能力均接线，原输入绑定值不会因 bind 后替换而漂移。新增所选获取/释放屏障、first-failure/原错误传播/this/no fallback 与真实 Git index/options/清理回归，原 RFC308 全断言保持。必要消费者和源码 oracle 已沿读；该门不代表完整 Git/工作区远程切面或 A4/A-G。
+
+以上六路径与原员工local4/插件安装6/GC3/附件5/终态真根10 共七组40路径，清单顺序指纹逐项复核且无交集。官方 scoped HEAD 加此40路径，原规则不变；public1045、TE value SCC 空，imports5627→5660、exception4991→5023、owner25671→25685、entry1792→1795、background338→339。插件两条目标路径按实际 type/value import/export 登记六条 R1（261→267），owner RC、A-T7 退役；五项实际增长许可待发布后精确退役。正式行为交该批发布后的 exact-SHA hosted CI；现无本机 AW 测试/类型检查/构建/服务，无 CS adapter 或部署，不关闭完整 A-G/RFC。
+
 ## 最新 CI 恢复与后续插件有限候选（2026-10-02）
 
 八批发布 tip `165bb447dc0a8bc4f8e0e8ce9698512791a7477d` 的主 [CI36948285794](https://github.com/wangbinquan/agent-workflow/actions/runs/36948285794) 已 completed/failure，43 success/7 failure；同 SHA 的 [maintenance36948285743](https://github.com/wangbinquan/agent-workflow/actions/runs/36948285743) completed/success。失败为 Typecheck 一项、Ubuntu/backend4/11/14、macOS/backend3/6 五分片与汇总；日志已按功能失败收齐，有限 PASS 不代表该发布全绿。

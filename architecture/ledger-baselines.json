@@ -293,8 +293,11 @@
       "id": "rfc328-cross-context-provider-bridge-debt",
       "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
       "symbol": "CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT",
-      "baseline": 16,
-      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。"
+      "baseline": 17,
+      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。",
+      "allowGrowth": {
+        "why": "Record the single exact standalone workspace-presence composition dependency already published in e4d7dba7d8902b7374048492d643c09791ae9b20. Exact CI36955843850 reports 17 existing entries against the prior baseline 16. All scanner code, assertions, and other quantities remain unchanged. This receipt covers only that published structural quantity and is retired after the matching baseline commit. Unpublished RFC-370 source candidates and their generated evidence are excluded and preserved."
+      }
     },
     {
       "id": "rfc329-mcp-surface-exemptions",
@@ -920,8 +923,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "264b43bd253bc303982a0ca9f76390fbe46ff883",
-    "contentDigest": "sha256:620d47d1b0b0a86b6bfb1a721953d987f2c648803ede64af9b34354a3016e7e0",
+    "currentSnapshotSha": "bbb545851a5dc4c5328ff005a82b196cdedf5d28",
+    "contentDigest": "sha256:83acf92ecf3978df9246e5389417a371d76cf097513e133fe73f45022ceee57e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

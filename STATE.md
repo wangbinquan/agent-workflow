@@ -1,10 +1,14 @@
+## 2026-10-02 RFC-370 CI 既有数量补正候选
+
+共享 main/origin 同步到 bbb545851a5dc4c5328ff005a82b196cdedf5d28，已承接并行的 E2E 失败 lineage 诊断。官方 census 只纳入已提交 HEAD，未发布40路径与归档8路径全部排除，八组源码指纹逐一保持；原40路径生成证据和实际六条 R1/五项待发布增长依据保留，随该批源发布前重生，未被冒称消费退役。四份治理候选只同步现有 provenance，唯一正文变化为 CI36955843850 实际数量17/旧基线16所对应的单项16→17及原协议一次性回执；其余数值、正文、源码、扫描规则和所有断言保持。独立有限功能检视后单独发布并后继退役此回执，正式结果仍等修复 exact-SHA CI，mixed_summary 的既有真实功能失败继续处理。无本机 AW test/typecheck/build/service，不关闭 RFC-370/A-G；下方全部并行/历史内容保留。
+
 ## 2026-10-02 观测交付的 CI 真实失败追踪
 
 `e4d7dba7d8902b7374048492d643c09791ae9b20` 的 CI36955843850 已终态 failure。原 RFC-328 漏登记反例不再失败，但 RFC-317 高水位检查报告实际桥接登记 17、基线仍 16；共享 `architecture/ledger-baselines.json` 正含 RFC-370 尚未发布的其他登记与依赖，需协调完整文件的提交顺序，不能剥离其并行输出。默认九类定时 CI 的修正版中八类已 success，WebKit36953035986 为真实 failure：与本次主 CI 的 Chromium shard 3/3 同在 mixed wrapper/human 用例的 review rejection 后，`mixed_summary` 缺失 `aggregated-fanout-report`。当前只加强该公共 API 回归的初始 review 身份断言与错误 lineage/端口/prompt 诊断，以确定原报告在何处丢失；原状态、报告与人工审批断言、fixture、模型 stub、重试预算及超时保持。没有本机 AW test/typecheck/build/service；功能修复、基线协调、精确 hosted CI、定时 CI 和完整 RFC-371 继续，不写成完成。下方并行输出完整保留。
 
 ## 2026-10-02 RFC-370 归档内容切面有限 PASS
 
-任务归档七路径由独立只读功能门复读 PASS，顺序指纹 `4d9650ac2082344a27779947ee3830d9cff079601ed8d888be12f6e632bdb344`。原共享协调器的选择、认领、导出表/JSONL、manifest、恢复、删库规则保持，只有内容 IO 接独立端口并 await；默认 local 恢复函数原体保持。新双 provider 回归覆盖 append/manifest/最终提交 ACK、写失败同 claim 重试、提交已完成但 ACK 丢失后恢复、2000行分批和 legacy restore 完成事实。纯源码 AST 对拍、目标格式/lint通过，未运行本机 AW test/typecheck/build/service，实际运行仍待发布后的 exact-SHA CI；真 boot roots 注入与完整 A2/A-G 尚未完成。
+任务归档原七路径由独立只读功能门复读 PASS，顺序指纹 `4d9650ac2082344a27779947ee3830d9cff079601ed8d888be12f6e632bdb344`。必要下游沿读后只更新 RFC349 的 NULL-free 查询源码键到真实的新协调器，原判据/why/断言完整保留；扩为八路径再复读有限 PASS，指纹 `31c06684b6c2028f4604e6906c9bee7f4bed2663ffd505427412d7f0f2b7e116`，原七路径字节不变。原共享协调器的选择、认领、导出表/JSONL、manifest、恢复、删库规则保持，只有内容 IO 接独立端口并 await；默认 local 恢复函数原体保持。新双 provider 回归覆盖 append/manifest/最终提交 ACK、写失败同 claim 重试、提交已完成但 ACK 丢失后恢复、2000行分批和 legacy restore 完成事实。纯源码 AST 对拍、目标格式/lint通过，未运行本机 AW test/typecheck/build/service，实际运行仍待发布后的 exact-SHA CI；真 boot roots 注入与完整 A2/A-G 尚未完成。
 
 原七组40源码候选逐项复算仍相同，归档七路径独立在制并排除其现有 canonical。并行补正 e4d7dba7d 已同步 main/origin；[CI36955843850](https://github.com/wangbinquan/agent-workflow/actions/runs/36955843850) completed/failure，46 success/4 failure：两后端同为既有条目数量判据，Ubuntu E2E 的 mixed_summary 缺少 aggregated-fanout-report，另为汇总。保留全部历史/并行内容，不把有限门记成正式全绿，RFC 继续。
 
