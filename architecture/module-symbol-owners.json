@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1993,
+    "backendFiles": 1995,
     "frontendFiles": 642,
     "legacyFiles": 554,
-    "moduleFiles": 1439,
-    "productionFiles": 2795,
+    "moduleFiles": 1441,
+    "productionFiles": 2797,
     "sharedFiles": 160,
-    "symbolsIncludingFileRoots": 25752
+    "symbolsIncludingFileRoots": 25762
   },
   "entries": [
     {
@@ -64195,6 +64195,42 @@
       "currentContext": "intent",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/intent/application/queuedNotifications.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/queuedNotifications.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/queuedNotifications.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/queuedNotifications.ts#createQueuedIntentNotifications",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createQueuedIntentNotifications",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/application/queuedNotifications.ts",
+      "id": "owner:packages/backend/src/modules/intent/application/queuedNotifications.ts#QueuedIntentNotifications",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "QueuedIntentNotifications",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/intent/application/queuedResumption.ts",
       "id": "owner:packages/backend/src/modules/intent/application/queuedResumption.ts#$file",
       "removeAfterWave": null,
@@ -65940,6 +65976,18 @@
       "removeAfterWave": "W9-D",
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "intent",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/intent/composition/queuedResumption.ts",
+      "id": "owner:packages/backend/src/modules/intent/composition/queuedResumption.ts#composeIntentQueuedNotifications",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "composeIntentQueuedNotifications",
       "targetContext": "intent",
       "targetLayer": "application"
     },
@@ -118628,6 +118676,66 @@
       "currentContext": "system-operations",
       "currentLayer": "composition",
       "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/daemonDatabase.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/daemonDatabase.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/daemonDatabase.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/daemonDatabase.ts#DaemonDatabaseInstallationPort",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "DaemonDatabaseInstallationPort",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/daemonDatabase.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/daemonDatabase.ts#FilePreparation",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "FilePreparation",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/daemonDatabase.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/daemonDatabase.ts#prepareDaemonDatabaseProviderForBoot",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "prepareDaemonDatabaseProviderForBoot",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/daemonDatabase.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/daemonDatabase.ts#PreparedDaemonDatabase",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "PreparedDaemonDatabase",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
       "file": "packages/backend/src/modules/system-operations/composition/databaseMigration.ts",
       "id": "owner:packages/backend/src/modules/system-operations/composition/databaseMigration.ts#$file",
       "removeAfterWave": "W9-D",
@@ -136612,6 +136720,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "TaskFailureDetail",
+      "targetContext": "task-execution",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/domain/taskEngine.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/domain/taskEngine.ts#TaskScopeHandoffSignal",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskScopeHandoffSignal",
       "targetContext": "task-execution",
       "targetLayer": "domain"
     },
@@ -309756,5 +309876,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5c2084587ac8cd07c4b2745d0fc626ade15adfb721effa79d86200596b608314"
+  "sourceDigest": "sha256:d37cb5442dd22693190d66992a93c96e9417133908338709b8e501eba587b75a"
 }

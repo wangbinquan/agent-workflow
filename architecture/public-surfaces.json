@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 956,
+    "consumers": 955,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
     "methods": 1132,
@@ -139083,7 +139083,6 @@
         "import:895a17e9e2d5e8cbe05a",
         "import:8af559537e34d29da303",
         "import:a4f4590d8176bddfb8de",
-        "import:bd8f67057f893f82fe62",
         "import:bf9232dca3b26fd2bff4",
         "import:c678160f4a66661ac419",
         "import:c8df23c62f146ffc951b",
@@ -139123,7 +139122,6 @@
             "import:895a17e9e2d5e8cbe05a",
             "import:8af559537e34d29da303",
             "import:a4f4590d8176bddfb8de",
-            "import:bd8f67057f893f82fe62",
             "import:bf9232dca3b26fd2bff4",
             "import:c678160f4a66661ac419",
             "import:c8df23c62f146ffc951b",
@@ -139185,12 +139183,6 @@
           "edgeId": "import:a4f4590d8176bddfb8de",
           "file": "packages/backend/src/routes/publicOrigin.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/publicOrigin.ts#$file"
-        },
-        {
-          "context": "intent",
-          "edgeId": "import:bd8f67057f893f82fe62",
-          "file": "packages/backend/src/modules/intent/composition/queuedResumption.ts",
-          "ownerEntryId": "owner:packages/backend/src/modules/intent/composition/queuedResumption.ts#$file"
         },
         {
           "context": "legacy",
@@ -170540,7 +170532,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5c2084587ac8cd07c4b2745d0fc626ade15adfb721effa79d86200596b608314",
+  "sourceDigest": "sha256:d37cb5442dd22693190d66992a93c96e9417133908338709b8e501eba587b75a",
   "targetContexts": [
     "collaboration",
     "development-automation",
