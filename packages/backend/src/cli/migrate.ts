@@ -4,25 +4,15 @@
 // a failed migration that needs inspection.
 
 import { unhandledDatabaseProvider } from '@/platform/persistence/databaseProviders'
-import { loadConfig } from '@/config'
-import { prepareDatabaseProviderForBoot } from '@/modules/system-operations/composition'
-import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { resolveMigrationsFolder } from '@/util/migrationsFolder'
-import { Paths } from '@/util/paths'
+import {
+  prepareManualDatabaseMigration,
+  type ManualDatabaseMigrationOptions,
+} from '@/modules/system-operations/composition/manualDatabaseMigration'
 
-export async function migrateCommand(): Promise<{ output: string }> {
-  const config = loadConfig(Paths.config)
-  const contract = buildLogicalSchemaContract()
-  const prepared = await prepareDatabaseProviderForBoot({
-    config: config.database,
-    sqlitePath: Paths.db,
-    generationPointerPath: Paths.databaseGenerationPointer,
-    operationsRoot: Paths.databaseMigrationsDir,
-    contract,
-    configPath: Paths.config,
-    lockPath: Paths.lock,
-    sqliteOptions: { migrationsFolder: await resolveMigrationsFolder() },
-  })
+export async function migrateCommand(
+  options?: ManualDatabaseMigrationOptions,
+): Promise<{ output: string }> {
+  const prepared = await prepareManualDatabaseMigration(options)
   const provider = prepared.runtime
   // Residual fence: a third variant on ResolvedDatabaseProviderRuntime widens
   // this and stops compiling, instead of falling into the SQLite path below.

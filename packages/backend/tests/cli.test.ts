@@ -117,7 +117,7 @@ describe('CLI subcommands (P-1-05)', () => {
     // 现在两条路径合成一条：消息在 `prepareDatabaseProviderForBoot` 里就定稿，这里只剩
     // 「拿来输出」，于是关闭**只有一处、且在 `finally` 里**——这同时覆盖了原来的两件事
     //（拼消息途中抛也要关；返回给调用方之前一定已经关）。
-    const openAt = source.indexOf('await prepareDatabaseProviderForBoot(')
+    const openAt = source.indexOf('await prepareManualDatabaseMigration(')
     expect(openAt).toBeGreaterThan(-1)
     // ① 恰好一处关闭——多出一处就说明又长出了一条分支路径。
     expect(source.match(/await provider\.close\(\)/g)).toHaveLength(1)
