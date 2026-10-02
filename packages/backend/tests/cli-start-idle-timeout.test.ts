@@ -25,7 +25,16 @@ import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
 const START_TS = resolve(import.meta.dir, '..', 'src', 'cli', 'start.ts')
-const INSTALLER_TS = resolve(import.meta.dir, '..', 'src', 'services', 'pluginInstaller.ts')
+const INSTALLER_TS = resolve(
+  import.meta.dir,
+  '..',
+  'src',
+  'modules',
+  'resource-catalog',
+  'infrastructure',
+  'local',
+  'filePluginInstallation.ts',
+)
 
 describe('cli/start.ts — Bun.serve idleTimeout', () => {
   test('Bun.serve passes an explicit idleTimeout that covers the install timeout', () => {

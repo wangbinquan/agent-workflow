@@ -104,7 +104,18 @@ describe('RFC-254 npm shim unwrapping', () => {
     // trap is already recorded from the real-machine acceptance — and this test
     // walked straight back into it, which is why the repo prefers the resolve
     // form everywhere.
-    const source = Bun.file(resolve(import.meta.dir, '..', 'src', 'services', 'pluginInstaller.ts'))
+    const source = Bun.file(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'local',
+        'filePluginInstallation.ts',
+      ),
+    )
     return source.text().then((raw) => {
       // Strip comments first. The module's own documentation NAMES both of the
       // things it must not do — that is the point of the documentation — and a

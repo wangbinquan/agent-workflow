@@ -25,7 +25,16 @@ import { installPlugin } from '@/services/pluginInstaller'
 describe('RFC-254 T31 — file:// plugin install path conversion', () => {
   test('source anchor: installFilePlugin uses fileURLToPath, never URL.pathname', () => {
     const text = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'pluginInstaller.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'local',
+        'filePluginInstallation.ts',
+      ),
       'utf8',
     )
     expect(text).toContain('fileURLToPath(spec)')

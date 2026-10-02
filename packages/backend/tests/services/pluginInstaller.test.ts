@@ -253,7 +253,17 @@ describe('installPlugin — immutable generations', () => {
 describe('installer source — regression anchors', () => {
   test('source contains literal "--prefix" (do NOT switch to cwd)', async () => {
     const src = await readFile(
-      resolve(import.meta.dir, '..', '..', 'src', 'services', 'pluginInstaller.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'local',
+        'filePluginInstallation.ts',
+      ),
       'utf-8',
     )
     // npm install --prefix <dir> is what isolates installs to the plugin dir;
@@ -264,7 +274,17 @@ describe('installer source — regression anchors', () => {
 
   test('source contains redactSensitiveString call before surfacing stderr', async () => {
     const src = await readFile(
-      resolve(import.meta.dir, '..', '..', 'src', 'services', 'pluginInstaller.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        '..',
+        'src',
+        'modules',
+        'resource-catalog',
+        'infrastructure',
+        'local',
+        'filePluginInstallation.ts',
+      ),
       'utf-8',
     )
     expect(src).toContain('redactSensitiveString(stderr')
