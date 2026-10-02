@@ -4,10 +4,10 @@
 
 import type { TaskStatus } from '@agent-workflow/shared'
 import { and, eq, isNull } from 'drizzle-orm'
-import { existsSync } from 'node:fs'
 
 import { tasks } from '@/db/schema'
 import type { ProviderNeutralDatabase } from '@/db/query'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { publishCommittedEventsAfterCommit } from '@/platform/events/committed/runtime'
 import {
   ConcurrentTaskTransition,
@@ -40,6 +40,7 @@ type LifecycleRow = Readonly<{
   workspacePrunedAt: number | null
   sourceTerminationFence: 'closed' | 'merged' | null
   errorSummary: string | null
+  lifecycleEventRevision: number
 }>
 
 type TaskRuntimeLifecycleWriteInput = Omit<
@@ -73,7 +74,10 @@ export async function writeTaskRuntimeLifecycleInTx(
 }
 
 export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecyclePersistence {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(
+    private readonly db: ProviderNeutralDatabase,
+    private readonly workspacePresence: WorkspacePresenceQueries,
+  ) {}
 
   async trySet(input: Parameters<TaskRuntimeLifecyclePersistence['trySet']>[0]): Promise<boolean> {
     try {
@@ -142,20 +146,33 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
           `task ${input.taskId} workspace is being reclaimed by GC right now; retry after it finishes (${input.reason})`,
         )
       }
-      if (snapshot.worktreePath !== '' && !existsSync(snapshot.worktreePath)) {
-        await withTaskExecutionWrite(this.db, async (tx) => {
+      if (
+        snapshot.worktreePath !== '' &&
+        !(await this.workspacePresence.exists(snapshot.worktreePath))
+      ) {
+        const changed = await withTaskExecutionWrite(this.db, async (tx) => {
           await this.fence(tx, input)
-          await tx
+          return await tx
             .update(tasks)
             .set({ workspacePrunedAt: input.now })
             .where(
               and(
                 eq(tasks.id, input.taskId),
+                eq(tasks.status, snapshot.status),
+                eq(tasks.worktreePath, snapshot.worktreePath),
+                eq(tasks.lifecycleEventRevision, snapshot.lifecycleEventRevision),
+                isNull(tasks.deletedAt),
+                isNull(tasks.sourceTerminationFence),
                 isNull(tasks.workspacePruningAt),
                 isNull(tasks.workspacePrunedAt),
               ),
             )
+            .returning({ id: tasks.id })
+            .all()
         })
+        if (changed.length === 0) {
+          throw new ConcurrentTaskTransition(input.taskId, input.allowedFrom, input.reason)
+        }
         throw new DomainError(
           'workspace-pruned',
           `task ${input.taskId} workspace '${snapshot.worktreePath}' no longer exists (reclaimed before tombstones existed); cannot ${input.reason}`,
@@ -181,6 +198,12 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
         ...input,
         from,
         isRevival,
+        ...(isRevival
+          ? {
+              expectedLifecycleRevision: snapshot.lifecycleEventRevision,
+              expectedWorktreePath: snapshot.worktreePath,
+            }
+          : {}),
         workspacePruneDecision: prune,
         previousErrorSummary: snapshot.errorSummary,
       })
@@ -203,6 +226,7 @@ export class DrizzleTaskRuntimeLifecyclePersistence implements TaskRuntimeLifecy
         workspacePrunedAt: tasks.workspacePrunedAt,
         sourceTerminationFence: tasks.sourceTerminationFence,
         errorSummary: tasks.errorSummary,
+        lifecycleEventRevision: tasks.lifecycleEventRevision,
       })
       .from(tasks)
       .where(eq(tasks.id, taskId))

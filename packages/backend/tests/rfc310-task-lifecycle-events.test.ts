@@ -1,3 +1,4 @@
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 
@@ -29,7 +30,12 @@ async function setTaskStatus({
 }: Parameters<DrizzleTaskRuntimeLifecyclePersistence['trySet']>[0] & {
   readonly db: ProviderNeutralDatabase
 }): Promise<void> {
-  if (!(await new DrizzleTaskRuntimeLifecyclePersistence(db).trySet(input))) {
+  if (
+    !(await new DrizzleTaskRuntimeLifecyclePersistence(
+      db,
+      createFileWorkspacePresenceQueries(),
+    ).trySet(input))
+  ) {
     throw new Error('task-lifecycle-fixture-transition-lost-cas')
   }
 }

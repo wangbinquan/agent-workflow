@@ -1,5 +1,6 @@
 // RFC-359 W12: run these user-visible atom predicates against both existing
 // participants before extracting their duplicated per-target implementation.
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import { afterEach, expect, spyOn, test } from 'bun:test'
 import { TERMINAL_TASK_STATUSES } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
@@ -247,7 +248,10 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
   test('existing lifecycle guard still runs before the CAS and keeps default event metadata', async () => {
     const { taskId } = await seed(harness.db, { errorSummary: 'previous summary' })
     await harness.db.delete(taskExecutionOwners).where(eq(taskExecutionOwners.taskId, taskId))
-    const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(harness.db)
+    const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(
+      harness.db,
+      createFileWorkspacePresenceQueries(),
+    )
     let observedStatus: string | undefined
     expect(
       await lifecycle.trySetWithGuard(
@@ -301,7 +305,10 @@ describeEachProvider('RFC-359 W12 source termination atom', (harness) => {
     const { taskId } = await seed(harness.db)
     await harness.db.delete(taskExecutionOwners).where(eq(taskExecutionOwners.taskId, taskId))
     const before = await rows(harness.db, taskId)
-    const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(harness.db)
+    const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(
+      harness.db,
+      createFileWorkspacePresenceQueries(),
+    )
     expect(
       await lifecycle.trySetWithGuard(
         { taskId, to: 'failed', allowedFrom: ['running'], now: 1_000, reason: 'atom-baseline' },

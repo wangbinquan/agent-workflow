@@ -36,7 +36,7 @@ import {
   withTaskExecutionSerializable,
   type TaskExecutionTransaction,
 } from './ownedTaskExecution'
-import { DrizzleTaskRuntimeLifecyclePersistence } from './taskRuntimeLifecyclePersistence'
+import type { DrizzleTaskRuntimeLifecyclePersistence } from './taskRuntimeLifecyclePersistence'
 
 class ManualQuestionPending extends Error {}
 
@@ -66,7 +66,10 @@ function gatesIn(tx: TaskExecutionTransaction): DatabaseHumanGateOpenParticipant
 }
 
 export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskLifecycle {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(
+    private readonly db: ProviderNeutralDatabase,
+    private readonly runtimeLifecycle: DrizzleTaskRuntimeLifecyclePersistence,
+  ) {}
 
   async parkPrepared(
     input: Parameters<HumanGateTaskLifecycle['parkPrepared']>[0],
@@ -174,13 +177,10 @@ export class DatabaseHumanGateTaskLifecyclePersistence implements HumanGateTaskL
     input: Parameters<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']>[0],
   ): ReturnType<HumanGateTaskLifecycle['trySetWhenNoManualQuestionParks']> {
     try {
-      const won = await new DrizzleTaskRuntimeLifecyclePersistence(this.db).trySetWithGuard(
-        input,
-        async (tx) => {
-          const pending = await gatesIn(tx).listPreparedManualQuestionParksTx(input.taskId)
-          if (pending.length > 0) throw new ManualQuestionPending()
-        },
-      )
+      const won = await this.runtimeLifecycle.trySetWithGuard(input, async (tx) => {
+        const pending = await gatesIn(tx).listPreparedManualQuestionParksTx(input.taskId)
+        if (pending.length > 0) throw new ManualQuestionPending()
+      })
       return { kind: 'settled', won }
     } catch (error) {
       if (error instanceof ManualQuestionPending) return { kind: 'manual-question-pending' }

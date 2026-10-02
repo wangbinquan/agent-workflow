@@ -1,4 +1,6 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { DatabaseTaskDecisionPersistence } from '../infrastructure/taskDecisionParticipant'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
@@ -48,9 +50,11 @@ import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSes
  * 收敛后这四个方法一个 provider 名都不问，`createTaskExecutionPersistence` 的分派三元也就
  * 没有存在理由了。
  */
-function createRecoveryAdministration(db: ProviderNeutralDatabase) {
+function createRecoveryAdministration(
+  db: ProviderNeutralDatabase,
+  taskLifecycle: DrizzleTaskRuntimeLifecyclePersistence,
+) {
   const nodeLifecycle = new DrizzleNodeRunLifecyclePersistence(db)
-  const taskLifecycle = new DrizzleTaskRuntimeLifecyclePersistence(db)
   const runtimeLeaseOperations = createRuntimeSessionLeaseOperationsInternal(db)
   return createTaskRecoveryOperations(db, {
     async interruptBootOrphanTask(input) {
@@ -117,10 +121,26 @@ function createRecoveryAdministration(db: ProviderNeutralDatabase) {
  * 一旦相同就被 `rfc359-w5-identical-provider-twins` 当场咬住，处方就是收成这一份）。
  * 第三个 provider 在这里什么都不用加。
  */
+export interface TaskExecutionPersistenceDependencies {
+  readonly workspacePresence?: WorkspacePresenceQueries
+}
+
+export function createTaskRuntimeLifecyclePersistence(
+  db: ProviderNeutralDatabase,
+  dependencies: TaskExecutionPersistenceDependencies = {},
+): DrizzleTaskRuntimeLifecyclePersistence {
+  return new DrizzleTaskRuntimeLifecyclePersistence(
+    db,
+    dependencies.workspacePresence ?? createFileWorkspacePresenceQueries(),
+  )
+}
+
 export function createTaskExecutionPersistence(
   db: ProviderNeutralDatabase,
+  dependencies: TaskExecutionPersistenceDependencies = {},
 ): TaskExecutionPersistence {
   const effects = new DrizzleTaskExecutionEffectPersistence(db)
+  const runtimeLifecycle = createTaskRuntimeLifecyclePersistence(db, dependencies)
   return Object.freeze({
     drive: new DrizzleTaskEngineApplicationPersistence(db),
     ownership: new DrizzleTaskOwnershipPersistence(db),
@@ -137,13 +157,13 @@ export function createTaskExecutionPersistence(
     mergeStates: new DrizzleMergeStateLifecyclePersistence(db),
     artifactPaths: new DrizzleTaskArtifactPathQueries(db),
     wrapperRuns: new DrizzleWrapperRunPersistence(db),
-    runtimeLifecycle: new DrizzleTaskRuntimeLifecyclePersistence(db),
+    runtimeLifecycle,
     intentTerminalization: new DrizzleTaskExecutionIntentTerminalPersistence(db),
     recovery: new DrizzleTaskExecutionRecoveryPersistence(db),
     humanGateDecisions: new DatabaseTaskDecisionPersistence(databaseSessionFor(db)),
-    humanGateLifecycle: new DatabaseHumanGateTaskLifecyclePersistence(db),
+    humanGateLifecycle: new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle),
     reads: createTaskExecutionReadModels(db),
-    recoveryAdministration: createRecoveryAdministration(db),
+    recoveryAdministration: createRecoveryAdministration(db, runtimeLifecycle),
     shutdown: new DrizzleTaskExecutionShutdownOperations(db),
     runtimeSessionCapture: createRuntimeSessionCapturePersistence(db),
   })

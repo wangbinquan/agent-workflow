@@ -2,6 +2,7 @@
 // transaction with domain projections, the canonical lifecycle event, exactly
 // one continuation intent, and the linked pre-drive rollback effect.
 
+import { createTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { DrizzleTaskExecutionIntentPersistence } from '@/modules/task-execution/infrastructure/taskExecutionIntentPersistence'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { expect, test } from 'bun:test'
@@ -280,7 +281,10 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
     module.claimGate.leave(claimed.permit)
     const opening = await prepareOpenOperation({ db, taskId })
     const prepared = opening.prepared
-    const parked = await new DatabaseHumanGateTaskLifecyclePersistence(db).parkPrepared({
+    const parked = await new DatabaseHumanGateTaskLifecyclePersistence(
+      db,
+      createTaskRuntimeLifecyclePersistence(db),
+    ).parkPrepared({
       prepared,
       token: claimed.token,
       now: NOW + 2,
@@ -364,7 +368,10 @@ describeEachProvider('RFC-333 T5 TaskParkTx', (harness) => {
 
     try {
       await expect(
-        new DatabaseHumanGateTaskLifecyclePersistence(db).parkPrepared({
+        new DatabaseHumanGateTaskLifecyclePersistence(
+          db,
+          createTaskRuntimeLifecyclePersistence(db),
+        ).parkPrepared({
           prepared,
           token: claimed.token,
           now: NOW + 2,
@@ -500,7 +507,10 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     })
     expect((await db.select().from(tasks).where(eq(tasks.id, taskId)))[0]?.status).toBe('running')
 
-    const settled = await new DatabaseHumanGateTaskLifecyclePersistence(db)
+    const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
+      db,
+      createTaskRuntimeLifecyclePersistence(db),
+    )
       .settleManualQuestionParks({ taskId, token: claimed.token, now: NOW + 20 })
       .then(settleShape)
     expect(settled).toEqual({ consumed: 1, parked: true })
@@ -528,7 +538,10 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       .set({ dispatchedAt: NOW + 11, dispatchedBy: 'user-rfc333' })
       .where(eq(taskQuestions.id, created.questionId))
 
-    const settled = await new DatabaseHumanGateTaskLifecyclePersistence(db)
+    const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
+      db,
+      createTaskRuntimeLifecyclePersistence(db),
+    )
       .settleManualQuestionParks({ taskId, now: NOW + 20 })
       .then(settleShape)
     expect(settled).toEqual({ consumed: 1, parked: false })
@@ -557,7 +570,10 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       .set({ autoDispatchDeferredAt: NOW + 11 })
       .where(eq(taskQuestions.id, created.questionId))
 
-    const settled = await new DatabaseHumanGateTaskLifecyclePersistence(db)
+    const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
+      db,
+      createTaskRuntimeLifecyclePersistence(db),
+    )
       .settleManualQuestionParks({ taskId, now: NOW + 20 })
       .then(settleShape)
 
@@ -583,7 +599,10 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
       .set({ status: 'running', lifecycleEventRevision: sql`${tasks.lifecycleEventRevision} + 3` })
       .where(eq(tasks.id, taskId))
 
-    const settled = await new DatabaseHumanGateTaskLifecyclePersistence(db)
+    const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
+      db,
+      createTaskRuntimeLifecyclePersistence(db),
+    )
       .settleManualQuestionParks({ taskId, now: NOW + 30 })
       .then(settleShape)
     expect(settled).toEqual({ consumed: 1, parked: true })
@@ -608,6 +627,7 @@ describeEachProvider('RFC-333 T7 manual-question durable park obligation', (harn
     await createManual(db, taskId)
     const outcome = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
+      createTaskRuntimeLifecyclePersistence(db),
     ).trySetWhenNoManualQuestionParks({
       taskId,
       to: 'done',

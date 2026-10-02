@@ -10,6 +10,7 @@
 // 正典取合一前的 SQLite 语义：门操作先消费、任务再跃迁、提交后才发事件；停靠成功后 clarify round 与
 // question 行一次落定，操作行走到 completed。
 
+import { createTaskRuntimeLifecyclePersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -96,7 +97,10 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
     const taskId = await seedRunningTask(db)
     const opening = await prepareClarifyGate(db, taskId)
 
-    const parked = await new DatabaseHumanGateTaskLifecyclePersistence(db).parkPrepared({
+    const parked = await new DatabaseHumanGateTaskLifecyclePersistence(
+      db,
+      createTaskRuntimeLifecyclePersistence(db),
+    ).parkPrepared({
       prepared: opening.prepared,
       now: NOW + 2,
     })
@@ -159,7 +163,10 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
 
     let failed = false
     try {
-      await new DatabaseHumanGateTaskLifecyclePersistence(db).parkPrepared({
+      await new DatabaseHumanGateTaskLifecyclePersistence(
+        db,
+        createTaskRuntimeLifecyclePersistence(db),
+      ).parkPrepared({
         prepared: opening.prepared,
         now: NOW + 3,
       })
@@ -190,6 +197,7 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
 
     const settled = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
+      createTaskRuntimeLifecyclePersistence(db),
     ).settleManualQuestionParks({ taskId, now: NOW + 4 })
 
     expect(settled).toEqual({ parked: false, taskRevision: 1, operationIds: [], eventRefs: [] })
@@ -204,6 +212,7 @@ describeEachProvider('RFC-359 W4-D25 —— human-gate 停靠原子', (harness) 
 
     const outcome = await new DatabaseHumanGateTaskLifecyclePersistence(
       db,
+      createTaskRuntimeLifecyclePersistence(db),
     ).trySetWhenNoManualQuestionParks({
       taskId,
       to: 'done',
@@ -259,10 +268,10 @@ test('源码锁：停靠只剩一份实现，legacy 同步停靠路与 provider 
 
   // 两个 bootstrap 装的是同一份停靠原子。
   expect(read('modules/task-execution/composition/taskExecutionPersistence.ts')).toContain(
-    'new DatabaseHumanGateTaskLifecyclePersistence(db)',
+    'new DatabaseHumanGateTaskLifecyclePersistence(db, runtimeLifecycle)',
   )
   // legacy 服务的停靠入口也落到同一份，不再有第二条同步路。
-  expect(read('modules/task-execution/composition/humanGate.ts')).toContain(
-    'parkTaskAtHumanGate(new DatabaseHumanGateTaskLifecyclePersistence(input.db)',
+  expect(read('modules/task-execution/composition/humanGate.ts')).toMatch(
+    /parkTaskAtHumanGate\(\s*new DatabaseHumanGateTaskLifecyclePersistence\(\s*input\.db,\s*createTaskRuntimeLifecyclePersistence\(input\.db, input\),/,
   )
 })

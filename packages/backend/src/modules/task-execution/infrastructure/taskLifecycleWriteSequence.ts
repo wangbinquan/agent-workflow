@@ -43,6 +43,7 @@ export interface TaskLifecycleWriteInput<Tx extends ProviderNeutralDatabase> {
   readonly workspacePruneDecision: TerminalWorkspacePruneDecision
   readonly previousErrorSummary: string | null
   readonly expectedLifecycleRevision?: number
+  readonly expectedWorktreePath?: string
   readonly nodeChanges?: readonly TaskNodeChangeV1[]
   readonly sourceTerminationEffectRef?: string | null
   readonly committedEventIdentity?: Partial<TaskCommittedEventIdentity>
@@ -93,8 +94,16 @@ export function* taskLifecycleWriteSequence<Tx extends ProviderNeutralDatabase>(
           ...(input.expectedLifecycleRevision === undefined
             ? []
             : [eq(tasks.lifecycleEventRevision, input.expectedLifecycleRevision)]),
+          ...(input.expectedWorktreePath === undefined
+            ? []
+            : [eq(tasks.worktreePath, input.expectedWorktreePath)]),
           ...(input.isRevival
-            ? [isNull(tasks.workspacePruningAt), isNull(tasks.workspacePrunedAt)]
+            ? [
+                isNull(tasks.deletedAt),
+                isNull(tasks.sourceTerminationFence),
+                isNull(tasks.workspacePruningAt),
+                isNull(tasks.workspacePrunedAt),
+              ]
             : []),
           ...(prune.prune
             ? [

@@ -3,6 +3,7 @@
 // （提交 / continuation / 待处理 gate successor）、intent 终态化（按 epoch 过滤 + replay 授权释放）。
 // 此前 SQLite 侧四个薄壳套 `platform/persistence/sqlite/taskLifecycle.ts` 等同步内核，PG 侧各自整份实现。
 
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import { expect, test } from 'bun:test'
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -153,7 +154,10 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', 
   test('guard stays before CAS; successful publication reads committed rows and a failed guard rolls back', async () => {
     const db = harness.db
     const taskId = await seedTask(db, { status: 'pending' })
-    const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(db)
+    const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(
+      db,
+      createFileWorkspacePresenceQueries(),
+    )
     const order: string[] = []
     const published: { status: string | undefined; eventIds: string[] }[] = []
     registerAfterCommitEventPump({
@@ -209,7 +213,10 @@ describeEachProvider('RFC-359 W4-B1 批 2g —— 任务运行时状态迁移', 
   test('CAS 推进 revision；非法来源 / 终态覆盖 ⇒ false；复活门与 owner 围栏', async () => {
     const db = harness.db
     const taskId = await seedTask(db, { status: 'pending' })
-    const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(db)
+    const lifecycle = new DrizzleTaskRuntimeLifecyclePersistence(
+      db,
+      createFileWorkspacePresenceQueries(),
+    )
     const before = (await taskRow(db, taskId))!.revision
     expect(
       await lifecycle.trySet({
