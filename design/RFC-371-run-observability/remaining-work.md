@@ -4,6 +4,12 @@
 
 更新：2026-10-02。状态：In Progress。本文是当前待办入口；[plan.md](./plan.md) 各实施批次保留历史，不把历史的“尚未接入”或原型勾选直接当成当前状态。代码、精确提交 CI、实际部署和真实运行验收分别记录。未取得退出证据的任务保持未完成。
 
+## 2026-10-02 当前 CI 接续
+
+观测文档 `e8c9d73b13bf467c2e56b9abe2d9baf2f4765797` 已上库；CI36977794334 终态 failure（42 success/8 failure）。原会话修复类型和架构登记后的 `55b1104a812c247f692f5450b6738e299d437bc1`，CI36980700296 为 failure（48 success/2 failure），只剩 RFC-370 三条固定源码链接的 GitHub blob 503 及汇总失败。共享文件中的官方 raw 地址改动完整保留；同提交内容 HTTP 200、字节与 Git 对象一致，修正版等待独立 SOURCE 与自身 hosted CI。原失败保留，尚不关闭 AW-R01。
+
+原 b339 默认矩阵的 75 个成功作业、实际三任务四桶 Token 与人民币验收估算证明保持，不替代新提交 CI。CS 原父结束、重建接续及完整 writer/未知尾部链路仍在实施，producer 保持 OFF，不能以存储或类型通过替代产品完工；浏览器新部署验收仍需实际解锁和有效原身份会话。
+
 ## 当前已经具备的能力
 
 正式入口位于“运行与仓库”，已有总览、任务追踪、Agent 汇总、人民币用量分析、基础泳道和采集状态。已有四桶 nullable Token、持久去重账本、执行身份和价格目录冻结、CNY 版本配置、OpenCode 原生根/子树证明及历史修订。CS 来源通过独立 usage/valuation 同步，不使用 AW 本地费率重复计价。
@@ -21,7 +27,7 @@
 
 ## 下一步执行顺序
 
-1. AW-R01 已关闭：主 CI 与九种原默认定时配置全部成功，精确终态记录见下文。
+1. AW-R01 的历史 b339 主 CI 与九种原默认矩阵通过；当前链接修正版仍待精确 hosted CI，收口记录见本页当前 CI 接续。
 2. AW-R02 与 CS RFC-034 的 CS-R01：完成 v2 跨仓同步和托管准入验证；CS-R02～05 优先补项目开发消耗。
 3. AW-R03～08：补齐调用来源、树形归因、时间口径、细粒度泳道与分析。
 4. AW-R09～11：异常、历史维护和规模验证。
@@ -31,7 +37,7 @@
 
 ## 待办清单
 
-### AW-R01 当前候选 CI 收口〔已关闭；原 P0/P1〕
+### AW-R01 CI 收口〔历史矩阵通过；当前链接修正版待精确 hosted CI〕
 
 - 修复提交 `edd56ebe33731cb05aa7491b292be294a3026521` 的[主 CI 36684248034](https://github.com/wangbinquan/agent-workflow/actions/runs/36684248034)50项成功；九种定时配置共25项全部成功，含[WebKit 36684326977](https://github.com/wangbinquan/agent-workflow/actions/runs/36684326977)两平台八分片、[full 36684319531](https://github.com/wangbinquan/agent-workflow/actions/runs/36684319531)四分片/覆盖对账，以及[weekly-all PG 36684345862](https://github.com/wangbinquan/agent-workflow/actions/runs/36684345862)五项。10个运行的headSha均为同一完整提交、均正常终态success；未取消或削弱门禁，本机无AW测试/构建。修复候选限定独立功能门PASS，AW-R01已满足退出条件，[完整矩阵](./ci-recovery.md#修复候选精确终态2026-09-30)。后继文档CI另外验证；AW-R02～12和两个RFC保持未完成。
 

@@ -1,8 +1,16 @@
 # RFC-371 CI 与定时工作流修复记录
 
-更新：2026-09-30。本页属于 AW-R01 的 CI 关闭证据；两 RFC 的产品剩余范围继续按 remaining-work.md 实施。用户本轮明确要求修复 AW CI 和定时 CI，因此本轮读取失败步骤与日志定位根因；此前仅记录扫描元数据的历史保留。
+更新：2026-10-02。本页属于 AW-R01 的 CI 接续与历史关闭证据；两 RFC 的产品剩余范围继续按 remaining-work.md 实施。用户本轮明确要求修复 AW CI 和定时 CI，因此本轮读取失败步骤与日志定位根因；此前仅记录扫描元数据的历史保留。
 
-## 2026-10-02 当前提交与原审批时序验收
+## 2026-10-02 当前后继检查与固定源码链接修复
+
+观测文档提交 `e8c9d73b13bf467c2e56b9abe2d9baf2f4765797` 的[主 CI36977794334](https://github.com/wangbinquan/agent-workflow/actions/runs/36977794334) completed/failure，42 success/8 failure；其中并行已发布源码的类型和架构登记问题由原会话自行提交修复。其后继 `55b1104a812c247f692f5450b6738e299d437bc1` 的[主 CI36980700296](https://github.com/wangbinquan/agent-workflow/actions/runs/36980700296) completed/failure，48 success/2 failure：功能、类型、架构和浏览器作业通过，只有设计链接检查及 CI 汇总失败。两份原日志均保留，不能称这两个 SHA 全绿。
+
+剩余三条错误来自 RFC-370 的 CrewStation 固定提交 `35cf5a475979cbf74fb324230173f55b4e1a0a75` 源码链接，GitHub blob 页面返回 503。该相关共享文件已由并行输出改为同提交、同路径的官方 raw.githubusercontent.com 地址；本会话完整保留这些改动并逐条核对 HTTP 200、返回字节与该 Git 对象一致，再按标准格式整理。未改变检查规则或接受 503，修正版仍须自身 hosted CI 终态。公开源码校验回执在 `/private/tmp/observability-aw-ci-primary-sources-v1.json`。
+
+`b339e7e06e13c7b4456cc1bf928048c7fc0262a3` 的原默认矩阵 10 个有效运行、75 个成功作业仍只属于该 SHA；后继变化不重写这些历史证明，也不免除新提交主 CI。无本机 AW 测试、类型检查、构建或服务；两个 RFC 继续 In Progress，完整剩余范围见 [remaining-work.md](./remaining-work.md)。
+
+## 2026-10-02 原审批时序验收历史
 
 `d185ebfe8332c9951e1ad6416a9a2447417b2931` 的[主 CI 36961953982](https://github.com/wangbinquan/agent-workflow/actions/runs/36961953982) 已 completed/success，50/50 作业成功；同一 SHA 的[默认 WebKit 36962140176](https://github.com/wangbinquan/agent-workflow/actions/runs/36962140176) 已 completed/success，Ubuntu/macOS 八分片均成功。该 SHA 包含 `bbb545851a5dc4c5328ff005a82b196cdedf5d28` 的 mixed workflow 失败 lineage 诊断与 RFC-370 会话修复的精确 composition 17/16 数量基线；正式规则与强度保持。其他八种默认定时配置此前的成功回执分别属于其记录的 SHA，不能写成全部在 d185ebfe 重新运行。
 
@@ -41,7 +49,7 @@
 
 ## 当前状态与关闭边界
 
-观测源码基线 `b339e7e06e13c7b4456cc1bf928048c7fc0262a3` 的主 CI 和九类原默认定时配置已全部 completed/success，共十次有效运行、75 个成功作业；AW-R01 保持关闭。精确矩阵及已恢复的原审批 POST 时序见[最新终态回执](#2026-10-02-原审批时序与默认-ci-矩阵复验)。mixed report 原根因仍未确证，下方原失败、取消与中间候选历史完整保留。分类 Token、人民币估算的新只读核对已记录；最新正式页面、CS 完整父结束链路与开发 producer、真实托管联动仍继续，两个 RFC 保持 In Progress。本次后继纯文档提交的精确主 CI 另验。
+观测源码基线 `b339e7e06e13c7b4456cc1bf928048c7fc0262a3` 的主 CI 和九类原默认定时配置已全部 completed/success，共十次有效运行、75 个成功作业；这是历史矩阵通过，当前链接修正版仍待精确 hosted CI。精确矩阵及已恢复的原审批 POST 时序见[最新终态回执](#2026-10-02-原审批时序与默认-ci-矩阵复验)。mixed report 原根因仍未确证，下方原失败、取消与中间候选历史完整保留。分类 Token、人民币估算的新只读核对已记录；最新正式页面、CS 完整父结束链路与开发 producer、真实托管联动仍继续，两个 RFC 保持 In Progress。本次后继纯文档提交的精确主 CI 另验。
 
 ## 第二轮 CI 候选：传递依赖与启动回读（2026-09-30）
 
