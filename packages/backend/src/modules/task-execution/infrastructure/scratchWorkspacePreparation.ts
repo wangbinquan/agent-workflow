@@ -119,7 +119,7 @@ export async function prepareScratchWorkspace(input: {
     prepared = true
     const space =
       current.state === 'prepared'
-        ? input.binding.restoreScratch(input.taskId, current.artifactJson!)
+        ? await input.binding.restoreScratch(input.taskId, current.artifactJson!)
         : await input.binding.prepareScratch({
             taskId: input.taskId,
             gitCommitIdentity: input.gitCommitIdentity,

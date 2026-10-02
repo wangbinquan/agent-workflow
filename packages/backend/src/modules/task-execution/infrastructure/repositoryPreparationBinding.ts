@@ -59,7 +59,10 @@ export interface TaskRepositoryPreparationBinding {
     signal: AbortSignal
     assertCurrent(): Promise<void>
   }): Promise<MaterializedSpace>
-  restoreScratch(taskId: string, artifactJson: string): MaterializedSpace
+  restoreScratch(
+    taskId: string,
+    artifactJson: string,
+  ): MaterializedSpace | Promise<MaterializedSpace>
   cleanupScratch(input: {
     taskId: string
     assertCurrent(): Promise<void>

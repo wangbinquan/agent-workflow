@@ -2,13 +2,10 @@ import {
   reclaimLegacyWorkspaceArtifacts,
   type LegacyWorkspaceRecoveryLog,
 } from '../infrastructure/legacyWorkspaceRecovery'
-import { join } from 'node:path'
 import {
   materializeSpaceWithProvider,
   commitMaterializedSpace,
   cleanupMaterializedSpace,
-  createMaterializedSpaceCleanup,
-  cleanupMaterializedSpaceLease,
 } from '../infrastructure/workspaceMaterializer'
 import { createPublicRepositorySourceSeal } from '../infrastructure/publicRepositorySourceSeal'
 import { SealedRepositorySourceFactsSchema } from '../domain/repositoryPreparationFacts'
@@ -26,6 +23,9 @@ import { createRepositoryPreparationJournal } from '../infrastructure/repository
 import { composeRepositoryPreparationParticipant } from '../infrastructure/repositoryPreparationParticipant'
 import { createFileRepositoryPreparationEffects } from '../infrastructure/local/fileRepositoryPreparationEffects'
 import type { RepositoryPreparationEffectFactory } from '../application/ports/repositoryPreparationEffects'
+import type { ScratchWorkspaceEffects } from '../application/ports/scratchWorkspaceEffects'
+import { decodeScratchWorkspaceArtifact } from '../application/workspaceMaterialization'
+import { createFileScratchWorkspaceEffects } from '../infrastructure/local/fileScratchWorkspaceEffects'
 import { composeRepositoryWorkspaceStore } from '../infrastructure/repositoryWorkspaceStore'
 import { cleanupRepositoryWorkspace } from '../application/repositoryPreparationCleanup'
 import type {
@@ -47,9 +47,12 @@ export function composeRepositoryPreparation(input: {
   workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
   cloneTimeoutMs?: number | undefined
   preparationEffects?: RepositoryPreparationEffectFactory
+  scratchEffects?: ScratchWorkspaceEffects
 }) {
   const journal = createRepositoryPreparationJournal(input.db)
   const driver = composeRepositoryPreparationParticipant({ journal })
+  const scratch: ScratchWorkspaceEffects =
+    input.scratchEffects ?? createFileScratchWorkspaceEffects(input)
   const preparationEffects: RepositoryPreparationEffectFactory = input.preparationEffects ?? {
     create(request) {
       return createFileRepositoryPreparationEffects({
@@ -132,53 +135,22 @@ export function composeRepositoryPreparation(input: {
       assertCurrent(): Promise<void>
     }): Promise<MaterializedSpace> {
       await request.assertCurrent()
-      const space = await materializeSpaceWithProvider(
-        { scratch: true },
-        {
-          appHome: input.appHome,
-          repositoryWorkspace: composeRepositoryWorkspaceStore(input.db),
-          gitCommitIdentity: request.gitCommitIdentity,
-          sourceTerminationLaunchSignal: request.signal,
-          resumeExistingScratch: true,
-          ...(input.workspaceCleanupHook === undefined
-            ? {}
-            : { workspaceCleanupHook: input.workspaceCleanupHook }),
-          loadFrozenSpaceLayout: async () => {
-            throw new Error('scratch-has-no-frozen-layout')
-          },
-        },
-        request.taskId,
-      )
+      const space = await scratch.prepare(request)
       await request.assertCurrent()
       return space
     },
-    restoreScratch(taskId: string, artifactJson: string): MaterializedSpace {
-      const saved = JSON.parse(artifactJson) as { version: number; space: MaterializedSpace }
-      if (
-        saved.version !== 1 ||
-        saved.space.taskId !== taskId ||
-        saved.space.kind !== 'scratch' ||
-        (saved.space.worktreePath !== '' &&
-          saved.space.worktreePath !== join(input.appHome, 'scratch', taskId))
-      )
-        throw new Error('scratch-preparation-artifact-mismatch')
-      return saved.space
+    restoreScratch(
+      taskId: string,
+      artifactJson: string,
+    ): MaterializedSpace | Promise<MaterializedSpace> {
+      return scratch.restore(taskId, decodeScratchWorkspaceArtifact(taskId, artifactJson))
     },
     async cleanupScratch(request: {
       taskId: string
       assertCurrent(): Promise<void>
     }): Promise<WorkspaceCleanupReport> {
       await request.assertCurrent()
-      const report = await cleanupMaterializedSpaceLease(
-        createMaterializedSpaceCleanup(
-          request.taskId,
-          join(input.appHome, 'scratch', request.taskId),
-        ),
-        async (event) => {
-          await request.assertCurrent()
-          await input.workspaceCleanupHook?.(event)
-        },
-      )
+      const report = await scratch.cleanup(request)
       await request.assertCurrent()
       return report
     },
