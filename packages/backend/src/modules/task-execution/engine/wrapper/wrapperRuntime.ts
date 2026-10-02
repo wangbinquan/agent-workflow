@@ -3,6 +3,7 @@ import type { WrapperNodeExecutionPort } from '../../application/ports/wrapperNo
 import type { WrapperRunLedgerPort } from '../../application/ports/wrapperRunLedger'
 import type { WrapperStatusPublisherPort } from '../../application/ports/wrapperStatusPublisher'
 import type { NodeStepOutcome } from '../../domain/nodeExecution'
+import { TaskScopeHandoffSignal } from '../../domain/taskEngine'
 import {
   WrapperSupersededSignal,
   type WrapperExecutionRequest,
@@ -62,6 +63,7 @@ export class WrapperRuntime implements WrapperNodeExecutionPort {
         kind,
         status: settlement.rowStatus,
       })
+      if (settlement.outcome.kind === 'handoff') throw new TaskScopeHandoffSignal()
       return settlement.outcome
     } catch (error) {
       if (error instanceof WrapperSupersededSignal) return error.outcome

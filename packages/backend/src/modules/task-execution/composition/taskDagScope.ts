@@ -2,7 +2,7 @@ import { decideScopeOutcome } from '@/services/dispatchFrontier'
 import { maybeRunCommitPush } from '@/services/scheduler'
 import { deriveFrontier } from './dagFrontier'
 import { buildScopeUpstreams, findScopeCycle } from './taskDagGraph'
-import type { TaskScopeOutcome } from '../domain/taskEngine'
+import { TaskScopeHandoffSignal, type TaskScopeOutcome } from '../domain/taskEngine'
 import type {
   NodeMechanicsResult,
   TaskMechanicsState,
@@ -71,7 +71,10 @@ export async function runScope(
   // the terminal block can bubble the right message (a node parked in a PRIOR
   // invocation has no entry → falls back to '' / the generic detail, matching
   // the old `?? ''` wrapper bubbling).
-  const inFlight = new Map<string, Promise<{ nodeId: string; result: NodeMechanicsResult }>>()
+  const inFlight = new Map<
+    string,
+    Promise<{ nodeId: string; result: NodeMechanicsResult | Readonly<{ kind: 'handoff' }> }>
+  >()
   const dispatchedThisInvocation = new Set<string>()
   // One top-level node can complete more than once in the same scope iteration:
   // a fresh pending clarify/review rerun is deliberately redispatched below.
@@ -90,6 +93,7 @@ export async function runScope(
   // decision); this set bounds that bypass to one release per row id.
   const dispatchedPendingRowIds = new Set<string>()
   const parkedDetail = new Map<string, { summary: string; message: string }>()
+  let handoffObserved = false
   let firstFailureDetail: { summary: string; message: string; nodeId?: string } | undefined
 
   // RFC-098 B1: in-flight auto commit&push promises are keyed
@@ -125,8 +129,9 @@ export async function runScope(
     }
 
     const handoffRequested =
-      opts.executionContext !== undefined &&
-      (await opts.persistence.intents.hasPendingGateSuccessor(taskId))
+      handoffObserved ||
+      (opts.executionContext !== undefined &&
+        (await opts.persistence.intents.hasPendingGateSuccessor(taskId)))
 
     let f: ReturnType<typeof deriveFrontier> | undefined
     if (!handoffRequested) {
@@ -185,6 +190,12 @@ export async function runScope(
           nodeId,
           executeNode(state, { node, containerRunId, iteration, log }, wrapperRuntimeFactory).then(
             (result) => ({ nodeId, result }),
+            (error: unknown) => {
+              if (error instanceof TaskScopeHandoffSignal) {
+                return { nodeId, result: { kind: 'handoff' as const } }
+              }
+              throw error
+            },
           ),
         )
       }
@@ -205,8 +216,20 @@ export async function runScope(
       return outcome
     }
 
-    const { nodeId, result } = await Promise.race(inFlight.values())
+    const { nodeId, result } = await Promise.race(inFlight.values()).catch(
+      async (error: unknown) => {
+        // Once control has been handed off, every admitted operation must ACK
+        // before this invocation leaves, including when a sibling rejects.
+        if (handoffRequested) await Promise.allSettled(inFlight.values())
+        throw error
+      },
+    )
     inFlight.delete(nodeId)
+
+    if (result.kind === 'handoff') {
+      handoffObserved = true
+      continue
+    }
 
     if (result.processUnreaped === true) {
       // Do not derive another frontier while an old framework child can still
@@ -261,6 +284,7 @@ export async function runScope(
     // nodes while the commit session runs. The synthetic resolves kind 'ok'
     // unconditionally (failures are logged inside).
     if (
+      !handoffRequested &&
       state.task.autoCommitPush &&
       state.topLevelIds.has(nodeId) &&
       !nodeId.startsWith('commitpush:')

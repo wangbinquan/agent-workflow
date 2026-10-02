@@ -30,7 +30,7 @@ export function wrapperOutputBindings(
 }
 
 export function wrapperSettlement(
-  rowStatus: WrapperSettlement['rowStatus'],
+  rowStatus: Exclude<WrapperSettlement['rowStatus'], 'interrupted'>,
   outcome: NodeStepOutcome,
   errorMessage?: string,
 ): WrapperSettlement {

@@ -98,6 +98,9 @@ export class GitStrategy implements WrapperStrategy<'wrapper-git'> {
       iteration,
       workspace: scene,
     })
+    if (result.kind === 'handoff') {
+      return { rowStatus: 'interrupted', outcome: { kind: 'handoff' } }
+    }
     if (result.kind === 'canceled') {
       return wrapperSettlement('canceled', {
         kind: 'canceled',

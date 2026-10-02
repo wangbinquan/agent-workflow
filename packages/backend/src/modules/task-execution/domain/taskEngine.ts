@@ -28,6 +28,14 @@ export interface TaskScopeOutcome {
   readonly processUnreaped?: true
 }
 
+/** A nested drive yields control without completing its wrapper or task. */
+export class TaskScopeHandoffSignal extends Error {
+  constructor() {
+    super('task-scope-handoff')
+    this.name = 'TaskScopeHandoffSignal'
+  }
+}
+
 export function taskEngineOutcomeFromScope(result: TaskScopeOutcome): TaskEngineOutcome {
   if (result.kind === 'failed') {
     const detail = result.detail ?? {

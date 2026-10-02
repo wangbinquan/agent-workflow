@@ -52,7 +52,7 @@ async function clearWrapperReuseDisabled(
 async function settleTerminal(
   state: SchedulerState,
   wrapperRunId: string,
-  settlement: WrapperSettlement,
+  settlement: Exclude<WrapperSettlement, { rowStatus: 'interrupted' }>,
 ): Promise<void> {
   try {
     await state.opts.persistence.nodeRuns.set({
@@ -185,6 +185,16 @@ export function createWrapperRunLedger(state: SchedulerState): WrapperRunLedgerP
       generation: OpenWrapperGeneration<K>,
       settlement: WrapperSettlement,
     ): Promise<void> {
+      if (settlement.rowStatus === 'interrupted') {
+        await state.opts.persistence.nodeRuns.transition({
+          nodeRunId: generation.runId,
+          event: { kind: 'mark-interrupted' },
+          ...(state.opts.executionContext === undefined
+            ? {}
+            : { executionContext: state.opts.executionContext }),
+        })
+        return
+      }
       if (settlement.rowStatus === 'awaiting_human' || settlement.rowStatus === 'awaiting_review') {
         await state.opts.persistence.nodeRuns.transition({
           nodeRunId: generation.runId,

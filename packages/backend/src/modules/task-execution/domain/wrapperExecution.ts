@@ -38,12 +38,18 @@ export type WrapperRowSettlementStatus =
   | 'exhausted'
   | 'awaiting_human'
   | 'awaiting_review'
+  | 'interrupted'
 
-export interface WrapperSettlement {
-  readonly rowStatus: WrapperRowSettlementStatus
-  readonly outcome: NodeStepOutcome
-  readonly errorMessage?: string
-}
+export type WrapperSettlement =
+  | {
+      readonly rowStatus: Exclude<WrapperRowSettlementStatus, 'interrupted'>
+      readonly outcome: NodeStepOutcome
+      readonly errorMessage?: string
+    }
+  | {
+      readonly rowStatus: 'interrupted'
+      readonly outcome: Readonly<{ kind: 'handoff' }>
+    }
 
 export type WrapperPreparation<K extends WrapperNodeKind = WrapperNodeKind> =
   | { readonly kind: 'rejected'; readonly outcome: NodeStepOutcome }

@@ -235,6 +235,9 @@ export class LoopStrategy implements WrapperStrategy<'wrapper-loop'> {
         iteration,
         workspace: scene,
       })
+      if (result.kind === 'handoff') {
+        return { rowStatus: 'interrupted', outcome: { kind: 'handoff' } }
+      }
       if (result.kind === 'canceled') {
         return wrapperSettlement('canceled', {
           kind: 'canceled',
