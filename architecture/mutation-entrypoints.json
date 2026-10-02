@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1788,
+    "entries": 1792,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -7390,6 +7390,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createRepositoryLocationRead",
       "symbol": "createRepositoryLocationRead",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceContentQueries.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceContentQueries.ts#createFileEvidenceContentQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceContentQueries.ts#createFileEvidenceContentQueries",
+      "symbol": "createFileEvidenceContentQueries",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -15721,31 +15746,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts#createLegacyPluginInstaller",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts#createLegacyPluginInstaller",
-      "symbol": "createLegacyPluginInstaller",
-      "targetContext": "resource-catalog",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#updateResourceAcl",
@@ -18257,6 +18257,31 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionPresenceQueries.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionPresenceQueries.ts#createFileSkillVersionPresenceQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionPresenceQueries.ts#createFileSkillVersionPresenceQueries",
+      "symbol": "createFileSkillVersionPresenceQueries",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "system",
         "authorization": true,
         "event": true,
@@ -18273,6 +18298,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillVersionRecoveryContentStore.ts#createFileSkillVersionRecoveryContentStore",
       "symbol": "createFileSkillVersionRecoveryContentStore",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/localPluginInstaller.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/localPluginInstaller.ts#createLocalPluginInstaller",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/localPluginInstaller.ts#createLocalPluginInstaller",
+      "symbol": "createLocalPluginInstaller",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -24120,6 +24170,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileInstallationSeedCompletion.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/fileInstallationSeedCompletion.ts#createFileInstallationSeedCompletion",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileInstallationSeedCompletion.ts#createFileInstallationSeedCompletion",
+      "symbol": "createFileInstallationSeedCompletion",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -27071,6 +27146,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createTaskExecutionPersistence",
       "symbol": "createTaskExecutionPersistence",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createTaskRuntimeLifecyclePersistence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#createTaskRuntimeLifecyclePersistence",
+      "symbol": "createTaskRuntimeLifecyclePersistence",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -42721,7 +42821,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:08703d62600043c1d2f33d719d8f1a21c2ef47ab48f859905282733bca005a01",
+  "sourceDigest": "sha256:e02e1036a16b249c3ed5f11ca06cbb2534a8e3efc5e820c591b2504447117680",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -43215,8 +43315,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#345:tasks",
-        "line": 345,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#355:tasks",
+        "line": 355,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#admitResume",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -43231,8 +43331,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#725:tasks",
-        "line": 725,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#735:tasks",
+        "line": 735,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#cancelTaskProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -43247,8 +43347,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionOwners",
         "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#741:taskExecutionOwners",
-        "line": 741,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#751:taskExecutionOwners",
+        "line": 751,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#cancelTaskProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -43263,8 +43363,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#774:tasks",
-        "line": 774,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#784:tasks",
+        "line": 784,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#cancelTaskProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -43279,8 +43379,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#802:nodeRuns",
-        "line": 802,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#812:nodeRuns",
+        "line": 812,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/childTaskLifecycleParticipant.ts#cancelTaskProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -44511,8 +44611,8 @@
         "controlSubtype": "terminal-control",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#73:tasks",
-        "line": 73,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#74:tasks",
+        "line": 74,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskLifecycleWriteSequence.ts#taskLifecycleWriteSequence",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-status-and-optional-lifecycle-revision-cas",
@@ -44783,8 +44883,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#148:tasks",
-        "line": 148,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#155:tasks",
+        "line": 155,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRuntimeLifecyclePersistence.ts#DrizzleTaskRuntimeLifecyclePersistence",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",

@@ -353,3 +353,33 @@ SC-owned `WorkspacePresenceQueries` 与独立 file adapter 只提供同步或异
 十路径由独立 `/root/task_config_functional_gate` 有限 PASS，指纹 `ada4b1d9492b69d8aae8bd62ba362ca97d64eadd4fa81664e5b2d3f12c049e15`。新真实双 provider 回归检验 pending/false/reject、409 不探测、多仓順序/短路和真正 workgroup composer；local adapter 真实文件存在/缺失/空引用保持。PG 166 statements/order 的全体 AST 除唯一 worktreeExists 绑定外逐字等价，W29 原逆变换摘要精确迁移，SQLite 两摘要不变；INSERT 血缘四站点只跟随实际行号2467，全部列判据保持。
 
 官方 scoped census 仅纳入这十路径，mutation +1、imports +5、exception +4、public +1、owner +4，各按原账本协议登记并后继退役。仅目标格式/lint与静态源码生成，无本机 AW test/typecheck/build/service。维护前批 `65db0c7710ed527663010112385b93c38f3e3323` 的 CI36931610730 尚待终态；本批行为交新的完整 hosted CI，取消/失败记录分别保留。A-G、CS adapter、M0～M4 仍未完成，RFC 持续。
+
+### 普通 resume 候选与存在查询 CI 源码登记修正（2026-10-02）
+
+普通 resume 的 11 路径候选已获独立有限功能 PASS，指纹 `0d867898de6af0ebef9b3b838b0f72d9bc6f1af588fd2582cb9488734cd52217`。真实 SQLite/PG bootstrap、child lifecycle admission 与工作组复用所选 WorkspacePresenceQueries，逐项 await、保留 this、phase 优先拒绝与多仓任一存在短路；host capability 不进入 ChildResumeRuntime。新增真实双 provider 回归只验证 admission/source-closed 边界，不冒称已运行 AgentTaskEngine。尚未发布，不据此关闭完整 H3。
+
+存在查询已发布 tip `e3b656a10e2bae30c2c51994d565bbcc649efed6` 的 [主 CI36932108422](https://github.com/wangbinquan/agent-workflow/actions/runs/36932108422) 已 completed/failure：47 job success，两 backend 分片失败和汇总失败。两个分片均仅是同一 INSERT 来源行号登记 `services/task.ts:2467` 与格式化后真实 `:2466` 不一致。原四个写入站点和三列血缘完整；修正仅更新该行号，保留逐字/列完整性/新增站点等断言。正式恢复仍等修复提交的 hosted CI，失败历史保留。[Windows surface36932108486](https://github.com/wangbinquan/agent-workflow/actions/runs/36932108486) 已 completed/success、headSha一致。维护提交65db的主CI取消，不记该精确SHA成功。
+
+按只读剩余依赖审计收束 [八个阶段 A 实施组](./remaining-a.md)，不新增平台业务耦合、不改 A-G 或 M0～M4 顺序。共享架构清单已与 RFC371 原会话按用户授权协调，双方源代码保持；其 c2c96cef4 发布后，本候选登记已重新生成，imports5615→5620、exception4984→4987、owner25648→25647，仅前两项实际增长按原协议登记/后继退役。其他有限候选源码均排除。
+
+行号修正 b8995791eb0eb177f944b04166c1e4922d7b3690 和三条已消费观测增长许可的退役后继8cb41fdfa9331183e4a27f32cedfd94b967fbb00均已同步远端。退役不改计数、源清单或历史说明；[CI36938903292](https://github.com/wangbinquan/agent-workflow/actions/runs/36938903292) 正式终态仍待验证，不能以静态对拍替代。普通 resume 与其他 feature 候选先等 CI 恢复再发布，持续推进不冲突的 A 实施。
+
+### 阶段 A 八个有限候选的发布准备（2026-10-02）
+
+普通 resume 11、经典目录 availability 10、插件 local 5、selected boot 2、DE 程序读取3、DA evidence读取6、终态复活11、安装示例完成6，共54个不同源码/测试路径；每组独立有限实现门及指纹见 functional-gates。各自保留原业务、standalone local 和真实 provider 回归，不以这些有限门代替完整 A-G。boot roots 的终态 presence 贯穿仍为下一步；其余八实施组按 remaining-a 持续。
+
+官方 scoped census 从共享 main 已发布语料加上述54路径生成，所有其他在制源码排除。真实计数 mutation1788→1792、observed imports5615→5627、required port36→37、exception4984→4991、public1044→1047、owner25648→25670；六项实际增长按原协议记录一次性许可，源发布后后继退役，不改变扫描规则。seed wrapper 的一条 exact default composition 入边登记 why/owner/A-T7，commons inbound260→261；TE default presence 的跨域内部边明确保留实际分类和 A-T7 注入退役依据，不虚报为零耦合。
+
+前继8cb的 CI36938903292、6b42a9de6 的 CI36940613451 已发现 RFC371 测试夹具的类型／前端失败，不记全绿；并行前端修复完整保留。后端三处测试类型遗漏已作单文件功能修正并经有限独立 PASS，精确上库同步 `0120088f8557ef7357b69e0d0294dd5575d3c842`，完整共享 RFC371 文件含其原并行输出。正式恢复等待 [CI36942147693](https://github.com/wangbinquan/agent-workflow/actions/runs/36942147693)，只有恢复后再发布上述功能候选。仅目标格式/lint与官方静态生成，无本机 AW test/typecheck/build/service，RFC/M0～M4 未关闭。
+
+### CI 范围 URL 修复与后续 local 候选（2026-10-02）
+
+0120088f8 的 CI36942147693 已 completed/failure（45 success/5 failure），静态类型修复通过；三平台观测 E2E 与 macOS multipart timeout 仍红。只发布经有限独立复核的观测 search transport 三处修正，main/origin 同步3ac730f84；正式恢复等待 [CI36945626088](https://github.com/wangbinquan/agent-workflow/actions/runs/36945626088)。单文件首次有限FAIL和修正PASS均留 functional-gates；macOS clone未修改预算、未宣称解决。
+
+journaled repository preparation 七路径和员工 local 内容四路径各获有限PASS，仍独立未发布并排除八批54路径canonical。本批冻结源指纹均不变，仅CI基准/证据与文档更新；恢复CI后按原八小批、真实治理增长及后继退役发布，再贯穿终态presence roots并继续八实施组。无本机AW test/typecheck/build/service，A-G、CS adapter和M0～M4持续，不关闭RFC。
+
+### CI 恢复终态与八批发布（2026-10-02）
+
+修复基准 `3ac730f84c9430459efb6d8fe72a6db9f5e8a1ed` 的 [CI36945626088](https://github.com/wangbinquan/agent-workflow/actions/runs/36945626088) 已 completed/success，50/50 作业 success，headSha 严格相同；观测 E2E 三平台及 macOS multipart 分片通过。multipart 单次停滞原因未确证，未修改预算或把重验成功冒称原因修复。原 012 的失败与所有有限门历史保留。
+
+八批54路径源内容不变，现在短发布临界区按八个小 source commit、canonical/docs、六项真实增长许可后继退役发布。官方语料仍只包括这54路径；新 journaled preparation7、员工 local4、物理插件6、generation GC3 的有限 PASS 候选继续独立在制，全部排除。插件首四路径 source oracle FAIL 与纠正后的六路径 PASS 均见 functional-gates；后续必须登记其实际兼容入边。发布后先验证新 exact-SHA CI，同时贯穿终态 presence 的真实启动根和员工附件异步完成事实，再继续 remaining-a 全组，完整 A-G 与 B/M0～M4 不提前关闭。

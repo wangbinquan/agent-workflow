@@ -1,3 +1,27 @@
+## 2026-10-02 RFC-370 CI 恢复终态与八批发布
+
+修复提交 `3ac730f84c9430459efb6d8fe72a6db9f5e8a1ed` 的 [CI36945626088](https://github.com/wangbinquan/agent-workflow/actions/runs/36945626088) 已 completed/success，50/50 作业 success，headSha 严格核对。三平台观测 E2E 与原 macOS multipart 分片均通过；multipart 单次停滞原因仍未确证，未改测试预算，不把重验成功写成已修该原因。原失败记录保留。
+
+八批54路径冻结源码及有限复核指纹不变，现按小批发布源码、官方 scoped canonical 和六项真实增长许可的后继退役。后续插件物理安装六路径、generation GC 三路径均获有限功能 PASS；与 journaled preparation 七路径、员工 local 内容四路径一样独立在制，排除本次 canonical。真实 boot roots 的终态 presence 注入、附件异步完成语义和 remaining-a 八组继续；完整 A-G、独立 CS adapter、M0～M4 尚未完成。无本机 AW test/typecheck/build/service，下方历史与并行输出完整保留。
+
+## 2026-10-02 RFC-370 观测 URL CI 修正续批
+
+0120088f8 的 CI36942147693 已终态45 success/5 failure，类型检查通过；三个平台观测 E2E 和一项macOS multipart clone timeout保留。router JSON-first范围编码三处修正经有限独立PASS、目标格式/lint通过，上库main/origin同步3ac730f84c9430459efb6d8fe72a6db9f5e8a1ed；正式恢复等CI36945626088，macOS停滞未冒称解决/未抬预算。全部共享源码完整保留。
+
+八批54路径冻结指纹不变；journaled preparation七路径、员工local内容四路径各获有限PASS，尚未发布且排除本批canonical。真实root贯穿、其余A实施组、完整A-G、CS独立adapter及M0～M4持续，无本机AW test/typecheck/build/service；不关闭RFC。下方历史与并行输出保留。
+
+## 2026-10-02 RFC-370 CI 三项类型修正与八批候选
+
+共享 main/origin 已同步0120088f8557ef7357b69e0d0294dd5575d3c842，只提交一份完整保留并行输出的 RFC371 测试文件；actual CI36940613451 的两个泛型字段断言及完整 capture receipt 三字段已修，独立有限 PASS、目标格式/lint通过，正式恢复等 CI36942147693，未冒称全绿。其他源码在制完整保留，不夹带发布。
+
+阶段 A 八个有限候选共54路径各获独立功能 PASS；官方 scoped census 严格只纳入这批，真实增长六项各有一次性依据及后继退役，seed exact 兼容入边已登记。终态复活与安装 seed 完成事实支持所选异步效果；前者真正 boot roots 贯穿仍下一步，完整八实施组、A-G、CS 独立 adapter 和 M0～M4 持续推进，RFC 未关闭。无本机 AW test/typecheck/build/service；下方全部历史与并行输出保留。
+
+## 2026-10-02 RFC-370 普通 resume 待发布与 CI 行号修复
+
+普通 resume 十一路径已获有限独立功能 PASS，真实两 provider 根与工作组共享所选 SC presence query，原 admission/phase/短路/错误行为保持。按用户授权完成与「设计运行观测统计全景」的发布协调，观测源码及所有其他候选完整保留；其 c2c96cef4 已同步远端，本批官方 scoped census 在该后继上重生，只纳入普通 resume，imports +5、exception +3、owner -1，实际增长许可随后退役。经典目录内容10路径、插件local5路径、selected boot2路径及程序编辑read3路径各获有限 PASS，仍为独立未发布候选；DA证据读取在制，不夹带。
+
+e3b656a10 的 CI36932108422 已终态47 success/3 failure，两个后端同为服务 INSERT 行号2467与实际2466不符。只修该登记的 b8995791e 及不改任何计数的增长许可退役8cb41fdfa均已同步远端，正式修复等待 [CI36938903292](https://github.com/wangbinquan/agent-workflow/actions/runs/36938903292) 完整终态；不冒称已绿。65db维护旧CI cancelled，Windows e3b已success。后续 feature 发布先等修复终态，无本机 AW test/typecheck/build/service。全部阶段 A 残余、完整 A-G、CS adapter 和 M0～M4 持续，不关闭RFC；下方历史与并行输出保持。
+
 ## 2026-10-02 RFC-370 H3 恢复预检存在查询
 
 十路径 SC 中立 exists/local adapter 候选有限实现门PASS，异步 false/reject、多仓顺序/短路、409 先拒绝及工作组 composer 的 this 接线由真实双 provider 回归覆盖；PG 全体AST仅新查询绑定不同，原W29与INSERT判据保留。维护已上库65db0c771，其CI36931610730仍待终态，本批行为交新的完整hosted CI；无本机AW test/typecheck/build/service。普通API resume经另一条共用lifecycle admission，其direct FS下一批继续，H3/A-G/CS adapter/M0～M4仍未关闭。全部下方并行输出保留。

@@ -2,6 +2,14 @@
 
 2026-10-01。按 `CLAUDE.md` 的双门及 `docs/dev-gotchas.md` 的独立子代理备选执行；openai-codex 插件工具本会话未提供。评审均在既有 primary checkout/main 按精确路径只读完成，未创建隔离 checkout，未运行本机 AW 测试、类型检查、构建或服务。仅审功能；正式行为、完整 A-G 和实际 CS 联合验收单独记录。
 
+## 最新 CI 恢复与后续插件有限候选（2026-10-02）
+
+`3ac730f84c9430459efb6d8fe72a6db9f5e8a1ed` 的 [CI36945626088](https://github.com/wangbinquan/agent-workflow/actions/runs/36945626088) 已 completed/success，50/50 作业成功，headSha 逐字核对。三个平台观测 E2E 和原 macOS multipart 分片均通过。后者没有修改预算，其旧单次停滞原因未确证；原失败历史保留。八批54路径冻结候选的正式功能仍交其发布后 exact-SHA CI，不借修复基准全绿关闭这些候选或 A-G。
+
+插件物理安装首四路径有限 FAIL/P2，指纹 `b2dc5269af7d59809e18eaf3881bdb6ad9f9354c81852abf45cfaf3aa12e7122`：两个既有源码 oracle 仍读旧 service，无法在移动后取得原 prefix/timeout 判据。只更正实际源码路径，原断言不减；补齐两路径后的六路径由 `/root/rfc370_design_gate` 复读有限 PASS，指纹 `2aeb9d575016c57df92a7e2b81713b5e0794e047bb778270a66eb3f543d71e51`（清单顺序）。全部物理安装原体移入 RC 独立 local 包，service 精确兼容出口与 class/cache identity、动态 Paths、原安装规则保持；纯文本原体对拍与目标格式/lint通过。实际兼容入边须随本候选后续 canonical 登记，未冒称零跨域耦合。
+
+generation GC 三路径由 `/root/task_config_functional_gate` 有限 PASS，指纹 `4938db7c871cbcc569ab134d9227186c6cf5713b98c1f3cacc263bf32863e98b`（清单顺序）。preflight、工厂和接口原体逐字保持，动态 Paths、读取时点、引用保护、删除顺序及 fallback 不变；run/start/tick 业务仍原位。composition 四个准确出口与原 service 工厂兼容入口保持，worker/真实 GC 合同和 source guard 已沿读。该候选依赖前述未发布物理安装 local 包，二者均排除八批54路径 canonical；无本机功能测试，正式行为待各自发布后的 hosted CI。本有限门不关闭完整 H6/A-G。
+
 ## 设计门
 
 首轮 `/root/rfc370_design_gate` 只读审查 proposal、design、plan、seam-assessment、rfc035-storage 及所引用的实际 AW/CS 合同。结论 FAIL，一项 P2：同 producer 绑定一个 endpoint 无法保留既有同 provider 多 endpoint 的规则和观测范围。具体输入为 GitLab endpoint A/B 分别处理 repo A/B，迁到共享 producer 后单绑定会漏掉一个 source；AW 原 schema 只对 urlToken 唯一，观测键包含 endpoint。
@@ -72,3 +80,71 @@ RFC108/287 只改变实际 policy 源位置并保持字段/类型原断言；RFC
 ## H3 恢复预检存在查询有限实现门（2026-10-02）
 
 `/root/task_config_functional_gate` 有限 PASS，十路径指纹 `ada4b1d9492b69d8aae8bd62ba362ca97d64eadd4fa81664e5b2d3f12c049e15`。沿读现 recovery/query/workgroup composer、SC public 与 file adapter、双 provider harness；await false/reject、多仓顺序及 this 接线正确，原409/410/错误传播保留。PG 原166语句只追加唯一 preflight presence binding 的全体 AST 对拍通过，W29 无放宽、SQLite 两摘要不变；未运行本机功能测试。该门不涵盖普通任务共用 lifecycle resume admission、完整H3、A-G或CS联合验收，下一批继续。
+
+## H3 普通 resume 有限实现门（2026-10-02）
+
+`/root/task_config_functional_gate` 对十一路径有限 PASS，完整指纹 `0d867898de6af0ebef9b3b838b0f72d9bc6f1af588fd2582cb9488734cd52217`。已完整读取普通 lifecycle admission、实际 provider/runtime/root/路由、schema、rollback 与测试调用链；所选实例沿真实普通 resume 和工作组使用，await/this/短路/phase 优先拒绝及异常正确，能力不进入 ChildResumeRuntime。新双 provider 回归以实际 route/runtime 验证等待期间和拒绝后的 intent/owner/revision 不变，停在既有 source-closed admission，不冒称完整 AgentTaskEngine 执行。完整 bootstrap AST 对拍与167语句守卫对应；尚未发布，完整 H3/A-G 未通过。
+
+## H6 经典目录内容与存在事实有限实现门（2026-10-02）
+
+`/root/intent_functional_gate` 十路径有限 PASS，指纹 `de242672ed852f5b19ea0c1d91a993196945416e8d49d253c8723c6fa7f48bd8`。首读两处确定回归为 D15 旧单行 import oracle 与新历史内容断言错误使用 version；现分别匹配实际四行导入、真实 versionIndex 和 content.bodyMd，其他断言保留。旧 finding 保留，不以首读未结束状态冒称 PASS。
+
+完整候选及 boot、原创建/版本状态机、local 内容实现、workflow/validator/schema/authority/双 provider/三个实际 bootstrap 已读。query 保留 this、等待/错误传播与查询前后 boot gate；classic 转发原六内容端口，workflow 使用同一 availability。真实 selected root 创建/内容/历史/重装及 present/missing/unavailable 屏障和 DB 不变回归符合原 schema。尚未发布，本机没有功能测试；该门不关闭 H6 全量/A-G。
+
+## H6 插件 local adapter 有限实现门（2026-10-02）
+
+`/root/task_config_functional_gate` 四路径有限 PASS 指纹 `23cbffea3669a538e90f1c0c89f8c36911e128c13911e7b1800a72f6a01aac89`；首读的旧 createLegacyPluginInstaller 源码 oracle 已改为实际 local import/default selection，并保留全部其他合同断言。原四路径只覆盖新工厂的 CRUD/spec 重装/并发创建/GC，未把旧 wrapper 下的升级/OCC/补偿计入其证据。
+
+随后补入真实升级/OCC/补偿测试使用的 helper，原四路径内容不动，五路径有限集成 PASS，末次指纹 `a1990aba074e48ba16de846f2cd2c72b7d6ef64c8dd0c432d266921b8240298c`。helper 每次 install/check 以当时三项 options 选择实际 local installer，原 hooks、repository、authority 和断言保持。默认空 options 不预冻 Paths；原错误分类和 generation cleanup 捕获保持，file 来源不清理。复用已有 PluginInstallerPort，没有另一份发布状态机或 CS 实现。尚未发布，无本机 AW test/typecheck/build/service；正式结果交确切 SHA CI，不关闭完整 H6/H4/H5/A-G。
+
+## H1 启动安装能力选择有限实现门（2026-10-02）
+
+`/root/rfc370_design_gate` 两路径有限 PASS，指纹 `1b4c2bdfd1fc574dad5487ba5a1d5f77d87655d702f838861680e32afb3c25a4`。所选 boot 输入只需 config、contract、configuration、installation，直接等待原 prepareDatabaseInstallation；不创建 file adapter、不加载默认 history，失败不回退文件分支。三处 CLI/main 旧消费者与最后公开重载的 PreparedFileDatabase 形状保持。七类原时序、错误和 generation oracle 分别覆盖 application 与真实 boot-composition 入口，全部原断言保留。
+
+两候选完整文件及 installation application、两个 port、file adapter、generation/history/provider runtime 和相关 source oracle 已独立读取，无可构造功能 finding。另以纯 AST/类型擦除对拍确认去除唯一新增 selected 分支后，原 file runtime body 完全一致，摘要 `83baf6f003c27a3967fad510471ae26b1c61bebaadf213a72e560c6b9daa5d72`。首次临时证明脚本字符串换行错误已经修正，其失败未计为通过；未运行本机功能测试/类型检查/构建/服务。尚未发布，正式行为交确切 SHA hosted CI；外层锁、seed、宿主生命周期及完整 H1/A-G 仍未完成。
+
+## H6 程序内容异步读取有限实现门（2026-10-02）
+
+`/root/intent_functional_gate` 三路径有限 PASS，指纹 `c474477105a683cb7fc7ae9920440c8d24dc6109cf33f621799af246b7d04bdb`（allowlist 顺序）。复用已有 ProgramArtifactPort 与 DE module 的所选实例；自动升级及实际工具编辑读取逐项 await，保留 this、缺失／错误传播及原 source/digest/参数业务投影。新真实双 provider 的工具创建和编辑 query 使用 opaque content ref，等待期间及失败后工具数据库不变；仅执行能力使用显式 test effect，未冒称程序执行验收。
+
+完整三文件和原 module/composition、schema、local adapter、两个调用点及双 provider harness 已独立复读，无剩余可构造功能 finding。目标格式/lint通过；尚未发布，没有本机 AW test/typecheck/build/service。正式结果待确切 SHA hosted CI，不关闭完整 H6/A-G。
+
+## H6 流水线证据所选内容有限实现门（2026-10-02）
+
+`/root/task_config_functional_gate` 六路径有限 PASS，指纹 `a7f91a49129236390bf04da24b17da460c0953b7f633f578327087fe6b488061`（allowlist 顺序）。DA application 拥有 EvidenceContentQueries，原 file text/range 效果移入独立 local adapter，module 只选择一次。实际任务 detail 与日志 operation 等待同一实例，原 manifest/schema/member 查验、4MiB clamp、UTF-8／截断／nextOffset 与 404 语义保持。
+
+原 RFC310 range/HTTP 全部断言保留；新真实双 provider 的 mission/composition 回归覆盖 selected text/range 的 this、pending、missing、错误、clamp 与续读，等待和失败不改数据库。评审沿读实际 operations/module/route contract/harness，fixture 的 OCC 返回已修为实际 ok/revision 形状。该门范围只含证据读面，材料化、upload、archive 等余项仍持续；无本机 AW test/typecheck/build/service，尚未发布，正式行为待确切 SHA hosted CI。完整 H6/A-G 未关闭。
+
+## H3 终态复活所选存在事实有限实现门（2026-10-02）
+
+`/root/rfc370_design_gate` 十一路径有限 PASS，指纹 `a5e099827121d97c4ba0b0aa7da7b1ea6c827d69f48deede5ffa89d4f145cf7d`（allowlist 顺序）。runtime lifecycle required WorkspacePresenceQueries，async exists 保留 this、异常不回退；human-gate 和 recovery aggregate 复用同一 lifecycle，默认 file 只在 composition。原 phase／410、owner、guard、companion、事务和提交后事件顺序保持。
+
+await 期间路径、生命周期 revision、清理、删除或来源状态变化时，成功复活和缺失回收均按原快照及当前生命周期判据拒绝，不误写。新真实双 provider 回归覆盖等待／true／false／reject／receiver／上述状态交错；旧五测试原行为判据保持，只补构造依赖和两个实际 composition 源码锚点。全部十一文件及必要 port、schema、交易与 legacy writer 已独立读取。本有限结论依赖调用者实际注入所选 presence；真实 boot roots 贯穿仍为下一步，不冒称完整 H3/A-G。无本机 AW test/typecheck/build/service，尚未发布。
+
+## H1 安装示例完成事实有限实现门（2026-10-02）
+
+`/root/intent_functional_gate` 六路径有限 PASS，指纹 `56602f31f27784262eca3e6b9f356a7048c9b07bfdc80d26565cd81ed543f1f9`（allowlist 顺序）。SO owner port/public、独立 file adapter 和 per-call composition default 将原 marker 效果分离；原两个 seed owner 和全部 sample input 不变。所选完成事实可异步，读取完成后才进入 owner，两个 owner 全成才写并等待 ACK；this 保持，read/write 错误原传播、owner 错误原 nonfatal retry。
+
+新双 provider 真实 owner/schema 测试覆盖等待、写入时机、部分失败、marker 错误及幂等重试；原 RFC307/345/349 删除不重建与默认文件行为保留。两个真实 standalone 启动入口继续兼容 wrapper，该有限门不包括整个 H1/authority。marker 的 exact compatibility 入边单独登记 why/owner/A-T7 退役，原 scanner 不变。无本机 AW test/typecheck/build/service，尚未发布。
+
+## CI 观测夹具类型修复有限实现门（2026-10-02）
+
+CI36940613451 的 functional static job110631445644 仍报三处后端 test 类型错误，原失败保留。`/root/task_config_functional_gate` 对一份完整共享 RFC371 测试文件的九行修正有限 PASS，指纹 `cf45fd86d01f17482585ce32d291dcfcd16c4598c659e39338d529f91e411b18`。两个 unresolved matcher 的值／缺行失败条件等价，完整 capture fixture 补 sourceId/sourceCursor/resolutions 并用 satisfies；实际读取链前两字段不消费，resolutions 空数组等于原缺值回退。生产代码、预算、分页和数值判据不变，并行内容完整保留。
+
+已精确发布并同步 `0120088f8557ef7357b69e0d0294dd5575d3c842`，只含该一文件；本机只作目标格式/lint，正式恢复等待其 hosted exact-SHA CI，未冒称全绿。
+
+## CI 观测范围 URL 修复有限实现门（2026-10-02）
+
+0120088f8 的 CI36942147693 已终态45 success/5 failure；类型检查已通过，三个平台观测 E2E 的主题前置失败与一项 macOS multipart clone timeout 保留。Windows trace 的实际错误是 router 拒绝 object-valued selection；所安装 TanStack 1.169.2 的 JSON-first search 对可解析 JSON string 再序列化，API transport 则仍传单份 JSON。
+
+单文件首次候选 `70b572cb91f3b481a80505f3fd85076b79910a8c3ca72c24617560598a5cf6d7` 有限 FAIL：两处后续 page URL 断言也需按 router 层解码。保留该 finding 后，只修初始编码与两处页面 URL 解码，API 解码和全部范围/交叉模型/清除/主题/语言/键盘/Dialog/尺寸期望值不动；修正指纹 `2f47dfe1c7a4cb579a0e077b49ec69d993ce9e1cc75df9e91b0c30b995db92fb` 经 `/root/task_config_functional_gate` 有限 PASS及目标格式/lint通过。上库同步 `3ac730f84c9430459efb6d8fe72a6db9f5e8a1ed`，完整共享文件含原并行输出；macOS clone 失败未冒称已修、不抬 timeout，正式恢复等 CI36945626088。
+
+## H3 journaled preparation 所选效果工厂有限实现门（2026-10-02）
+
+初始六路径指纹 `fdea36675050fbf5882df1737abe1312acbe2c16207fbf685b61304c773523f6` 有限 FAIL/P2：participant 展开 effects 会丢 receiver 与 prototype 方法。保留 finding，显式转发两个方法到原实例，新增原型实例真实双 provider 回归。修正七路径指纹 `a256a3c48fcd5df6d54ca8383211d61d6642ba0302777a6a748e92458fbb5e58` 经 `/root/rfc370_design_gate` 有限 PASS及目标格式/lint通过。
+
+factory 在 operation read 后等待，prepare 与 compensation 用同一 effects；原 assertCurrent 前后、running/close、journal CAS、checkpoint/replay/补偿失败重试与幂等回执保持。local 原物理 factory/schema 逐体对拍，默认十四字段绑定不变。该批尚未发布，排除54路径 canonical；其他 launch lane/scratch/sourceSeal、真实 roots 和完整 H3/A-G继续。
+
+## H6 员工内容 local 实现落位有限实现门（2026-10-02）
+
+四路径指纹 `fbfeabc42bf912d39e13f556cd7eaf9d12d15981b2d79ecaa4a51eac297b4da7` 经 `/root/intent_functional_gate` 有限 PASS及目标格式/lint通过。两种既有 program/input 物理实现原体移入各自 infrastructure/local；只变 factory 名称及 type-only import深度，旧入口准确具名 alias。实际所选 port、composition/三个根/既有真实回归不变；同步read/null/error、immutable digest、异步put、回读/复制顺序保持。尚未发布、排除54路径 canonical，input 的异步hasBlob/copy与消费者接线属下一步。无本机AW test/typecheck/build/service，不冒称完整H6/A-G。

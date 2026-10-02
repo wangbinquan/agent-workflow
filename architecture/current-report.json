@@ -2,22 +2,32 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 500,
-    "architectureExceptions": 4984,
+    "architectureExceptions": 4991,
     "backgroundJobs": 338,
-    "crossContextImports": 5615,
+    "crossContextImports": 5627,
     "facades": 295,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25648,
-    "mutationEntrypoints": 1788,
+    "moduleSymbolOwners": 25670,
+    "mutationEntrypoints": 1792,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1044,
+    "publicSurfaces": 1047,
     "transactionExternalEffects": 261
   },
   "metrics": {
     "ambientWiringEntries": 500,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1958,
+    "backendProductionFiles": 1966,
     "backendValueSccs": [
+      [
+        "packages/backend/src/modules/source-control/composition.ts",
+        "packages/backend/src/modules/source-control/infrastructure/workspaceMaterializer.ts",
+        "packages/backend/src/modules/task-execution/composition/sqliteTaskExecutionContext.ts",
+        "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+        "packages/backend/src/modules/task-execution/public/participants.ts",
+        "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
+        "packages/backend/src/services/gc.ts",
+        "packages/backend/src/services/taskExecutionParticipants.ts"
+      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -49,7 +59,7 @@
     ],
     "directNativeIntervals": 22,
     "directNativeTimers": 76,
-    "inboundBoundaryEdges": 260,
+    "inboundBoundaryEdges": 261,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -62,7 +72,7 @@
       },
       {
         "context": "development-automation",
-        "files": 142
+        "files": 143
       },
       {
         "context": "digital-employee",
@@ -98,7 +108,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 249
+        "files": 252
       },
       {
         "context": "run-observability",
@@ -114,7 +124,7 @@
       },
       {
         "context": "system-operations",
-        "files": 49
+        "files": 53
       },
       {
         "context": "task-catalog",
@@ -125,7 +135,7 @@
         "files": 340
       }
     ],
-    "moduleFiles": 1404,
+    "moduleFiles": 1412,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -140,6 +150,16 @@
     ],
     "outboundBoundaryEdges": 31,
     "repoValueSccs": [
+      [
+        "packages/backend/src/modules/source-control/composition.ts",
+        "packages/backend/src/modules/source-control/infrastructure/workspaceMaterializer.ts",
+        "packages/backend/src/modules/task-execution/composition/sqliteTaskExecutionContext.ts",
+        "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+        "packages/backend/src/modules/task-execution/public/participants.ts",
+        "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
+        "packages/backend/src/services/gc.ts",
+        "packages/backend/src/services/taskExecutionParticipants.ts"
+      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -161,5 +181,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:08703d62600043c1d2f33d719d8f1a21c2ef47ab48f859905282733bca005a01"
+  "sourceDigest": "sha256:e02e1036a16b249c3ed5f11ca06cbb2534a8e3efc5e820c591b2504447117680"
 }
