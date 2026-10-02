@@ -18,7 +18,7 @@ import { users, workflows } from '@/db/schema'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { skillVersionAbs } from '@/modules/resource-catalog/infrastructure/legacy/skillIdentityPaths'
-import { createSkillContentAvailability } from '@/modules/resource-catalog/infrastructure/skillContentAvailability'
+import { composeSkillContentAvailability } from '@/modules/resource-catalog/composition/workflowOperations'
 import { createWorkflowPersistenceSemantics } from '@/modules/resource-catalog/infrastructure/workflowPersistenceSemantics'
 import { createWorkflowRepository } from '@/modules/resource-catalog/infrastructure/workflowRepository'
 import {
@@ -315,7 +315,7 @@ describeEachProvider('RFC-359 W4-D15 —— Workflow 仓库', (harness) => {
 test('managed skill 可用性判据：权威版本目录缺失即不可用，目录到位即可用', async () => {
   const appHome = mkdtempSync(join(tmpdir(), 'aw-skill-availability-'))
   try {
-    const availability = createSkillContentAvailability({ appHome })
+    const availability = composeSkillContentAvailability({ appHome })
     const skill = { id: `skill-${ulid()}`, contentVersion: 3 } as Parameters<
       typeof availability.isAvailable
     >[0]
@@ -356,7 +356,12 @@ test('源码锁：Workflow 聚合没有 provider 命名的仓库 / 语义 / 校�
   // RFC-359 W12: bootstrap shares the classic bundle, which constructs and returns this workflow catalog.
   const classicComposition = readFileSync(join(root, 'composition/classicCatalogs.ts'), 'utf8')
   expect(classicComposition).toContain(
-    "import { composeDatabaseWorkflowCatalog } from './workflowOperations'",
+    [
+      'import {',
+      '  composeDatabaseWorkflowCatalog,',
+      '  composeSkillContentAvailability,',
+      "} from './workflowOperations'",
+    ].join('\n'),
   )
   expect(classicComposition).toContain('const workflow = composeDatabaseWorkflowCatalog({')
   expect(classicComposition).toContain(

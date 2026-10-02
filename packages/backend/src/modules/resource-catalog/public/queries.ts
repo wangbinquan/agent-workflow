@@ -1,3 +1,8 @@
+export type {
+  SkillContentAvailability,
+  SkillVersionPresenceQueries,
+} from '../application/skills/contentAvailability'
+
 import type {
   McpDiagnosticsResourceRef,
   McpDiagnosticsSessionRef,

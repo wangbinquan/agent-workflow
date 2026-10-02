@@ -16,7 +16,7 @@ import type {
 import { agentFromPersistenceRow } from './agentPersistence'
 import { mcpFromPersistenceRow } from './mcpPersistence'
 import { pluginFromPersistenceRow } from './pluginPersistence'
-import type { SkillContentAvailability } from './skillContentAvailability'
+import type { SkillContentAvailability } from '../application/skills/contentAvailability'
 import { skillFromPersistenceRow } from './skillPersistence'
 import { workflowReferenceFromPersistenceRow } from './workflowPersistence'
 import {

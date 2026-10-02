@@ -9,10 +9,10 @@ import {
   createAgentPersistenceSemantics,
   type AgentRuntimeProfileLookup,
 } from '../infrastructure/agentPersistenceSemantics'
-import {
-  createSkillContentAvailability,
-  type SkillContentAvailability,
-} from '../infrastructure/skillContentAvailability'
+import type {
+  SkillContentAvailability,
+  SkillVersionPresenceQueries,
+} from '../application/skills/contentAvailability'
 import type { SkillRestoreMembershipPort } from '../infrastructure/legacy/skillVersion'
 import { composeAgentImportQueries } from './agentImportQueries'
 import {
@@ -22,8 +22,11 @@ import {
 } from './agentResourceIntegrity'
 import { composeAgentCatalog } from './agentOperations'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
-import { composeSkillCatalog } from './skillOperations'
-import { composeDatabaseWorkflowCatalog } from './workflowOperations'
+import { composeSkillCatalog, type SkillCatalogCompositionDependencies } from './skillOperations'
+import {
+  composeDatabaseWorkflowCatalog,
+  composeSkillContentAvailability,
+} from './workflowOperations'
 
 export interface ClassicCatalogBundle {
   readonly agent: AgentCatalogModule
@@ -33,7 +36,7 @@ export interface ClassicCatalogBundle {
   /**
    * RFC-359 W4-D23c：技能内容可用性。此前这里是 PostgreSQL 私有的 873 行内容生命周期
    * （ZIP 导入 / 工作流校验 / 启动装配共用），随原生技能实现一并退役；剩下真正被外部需要的
-   * 只是「这个技能的内容在不在」，由两个数据库共用的文件系统实现回答（与 SQLite 侧同一份）。
+   * 只是「这个技能的内容在不在」，由 AW 的共同启动判据与所选存储事实回答。
    */
   readonly skillContent: SkillContentAvailability
 }
@@ -44,14 +47,25 @@ export interface ClassicCatalogBundle {
  * `appHome` is the managed Resource Catalog artifact root. Callers never bind
  * filesystem/journal mechanics or persistence semantics themselves.
  */
-export function composeClassicCatalogs(input: {
+export interface ClassicCatalogCompositionDependencies extends Omit<
+  SkillCatalogCompositionDependencies,
+  'db' | 'appHome' | 'restoreMembership'
+> {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
-  readonly runtimeProfiles: AgentRuntimeProfileLookup
   readonly restoreMembership: SkillRestoreMembershipPort
+  readonly runtimeProfiles: AgentRuntimeProfileLookup
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
-}): ClassicCatalogBundle {
-  const skillContent = createSkillContentAvailability({ appHome: input.appHome })
+  readonly versionPresence?: SkillVersionPresenceQueries
+}
+
+export function composeClassicCatalogs(
+  input: ClassicCatalogCompositionDependencies,
+): ClassicCatalogBundle {
+  const skillContent = composeSkillContentAvailability({
+    appHome: input.appHome,
+    versionPresence: input.versionPresence,
+  })
   const agentResourceInventory = composeDatabaseAgentResourceInventorySource({
     db: input.db,
     authorization: input.resourceCatalog.authorization,
@@ -73,6 +87,12 @@ export function composeClassicCatalogs(input: {
     db: input.db,
     appHome: input.appHome,
     restoreMembership: input.restoreMembership,
+    content: input.content,
+    versionReader: input.versionReader,
+    lifecycleContent: input.lifecycleContent,
+    deletionContent: input.deletionContent,
+    versionContent: input.versionContent,
+    creationContent: input.creationContent,
   })
   const workflow = composeDatabaseWorkflowCatalog({
     db: input.db,

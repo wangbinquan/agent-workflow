@@ -24,10 +24,12 @@ import {
   type WorkflowPersistenceSemantics,
 } from '../infrastructure/workflowRepository'
 import { createWorkflowPersistenceSemantics } from '../infrastructure/workflowPersistenceSemantics'
-import {
-  createSkillContentAvailability,
-  type SkillContentAvailability,
-} from '../infrastructure/skillContentAvailability'
+import { createSkillContentAvailability } from '../infrastructure/skillContentAvailability'
+import type {
+  SkillContentAvailability,
+  SkillVersionPresenceQueries,
+} from '../application/skills/contentAvailability'
+import { createFileSkillVersionPresenceQueries } from '../infrastructure/local/fileSkillVersionPresenceQueries'
 import { createWorkflowOperationDescriptors } from './catalogOperationDescriptors'
 import type { WorkflowCatalogModule } from '../public/operations'
 import type { WorkflowOperationContext } from '../public/participants'
@@ -176,8 +178,11 @@ function workflowBroadcastEvents(): NonNullable<
 /** managed skill 可用性判据只有一份；bootstrap 经这里取，不碰 infrastructure。 */
 export function composeSkillContentAvailability(input: {
   readonly appHome: string
+  readonly versionPresence?: SkillVersionPresenceQueries
 }): SkillContentAvailability {
-  return createSkillContentAvailability(input)
+  return createSkillContentAvailability({
+    versionPresence: input.versionPresence ?? createFileSkillVersionPresenceQueries(input.appHome),
+  })
 }
 
 /**

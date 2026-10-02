@@ -60,8 +60,19 @@ describe('RFC-349 classic resource-catalog PostgreSQL adapters', () => {
     }
     expect(bundle).toContain('createAgentPersistenceSemantics({')
     // RFC-359 W4-D23c：技能这一格不再有 provider 私有的内容生命周期——bundle 装配的是中立目录，
-    // 工作流校验要的「技能内容在不在」由两个数据库共用的文件系统实现回答。
-    expect(bundle).toContain('createSkillContentAvailability({ appHome: input.appHome })')
+    // 工作流校验复用 AW 启动判据和所选存储事实；默认仍选择原文件实现。
+    expect(bundle).toContain('const skillContent = composeSkillContentAvailability({')
+    expect(bundle).toContain('versionPresence: input.versionPresence')
+    for (const adapter of [
+      'content',
+      'versionReader',
+      'lifecycleContent',
+      'deletionContent',
+      'versionContent',
+      'creationContent',
+    ]) {
+      expect(bundle).toContain(`${adapter}: input.${adapter}`)
+    }
     expect(bundle).not.toContain('createPostgresqlSkillContentLifecycle')
     // RFC-353 T7：回滚成员关系由 knowledge-evolution 裁定、bootstrap 注入，
     // 这里断言的是「bundle 把它原样传给技能目录」这条装配事实。
