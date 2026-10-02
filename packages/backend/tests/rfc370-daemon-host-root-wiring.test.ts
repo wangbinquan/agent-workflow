@@ -91,8 +91,12 @@ test('both HTTP roots consume the host query rather than reading the info file i
   expect(route.text).not.toContain("from '@/util/daemonInfo'")
 })
 
-test('the single listener invokes every selected lifecycle method on its original receiver', () => {
+test('the single listener composes one host application with the original selected receiver', () => {
   const root = declaration(start, 'serveDaemon')
+  selected(root, start, 'composeDaemonHostApplication', 'host:input.daemonHost,')
+  expect(calls(root, start, 'application.run')).toHaveLength(1)
+  const application = source('modules/system-operations/application/daemonHostApplication.ts')
+  const run = declaration(application, 'runDaemonHostApplication')
   for (const [method, count] of [
     ['subscribeShutdown', 1],
     ['publishReady', 1],
@@ -100,9 +104,17 @@ test('the single listener invokes every selected lifecycle method on its origina
     ['announceReady', 1],
     ['terminate', 1],
   ] as const) {
-    expect(calls(root, start, `input.daemonHost.${method}`)).toHaveLength(count)
+    expect(calls(run, application, `input.host.${method}`)).toHaveLength(count)
+    expect(calls(root, start, `input.daemonHost.${method}`)).toHaveLength(0)
   }
+  expect(calls(run, application, 'input.stopListener')).toHaveLength(1)
+  expect(calls(run, application, 'input.stopApplication')).toHaveLength(1)
+  expect(calls(run, application, 'input.releaseAuthority')).toHaveLength(1)
+  expect(calls(run, application, 'input.releaseAuthorityOnExit')).toHaveLength(1)
   expect(calls(root, start, 'Bun.serve')).toHaveLength(1)
   expect(calls(root, start, 'input.bootstrap.stop')).toHaveLength(1)
   expect(calls(root, start, 'input.lock.release')).toHaveLength(2)
+  expect(application.text).not.toContain('Bun.')
+  expect(application.text).not.toContain('node:fs')
+  expect(application.text).not.toContain('process.')
 })

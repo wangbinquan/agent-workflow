@@ -1,3 +1,18 @@
+import type { DaemonHostLifecyclePort } from './application/ports/daemonHostLifecycle'
+import {
+  runDaemonHostApplication,
+  type DaemonHostApplicationOptions,
+} from './application/daemonHostApplication'
+
+/** Bootstrap joins selected host effects with neutral listener/application lifetimes. */
+export function composeDaemonHostApplication(
+  input: Omit<DaemonHostApplicationOptions, 'host'> & {
+    readonly host: DaemonHostLifecyclePort
+  },
+): Readonly<{ run(): Promise<never> }> {
+  return Object.freeze({ run: () => runDaemonHostApplication(input) })
+}
+
 import type { DatabasePreOpenRecoveryPort } from './application/ports/databasePreOpenRecovery'
 import {
   prepareDatabasePreOpenRecovery as prepareSelectedDatabasePreOpenRecovery,

@@ -41,6 +41,7 @@ import {
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import {
   composeDevelopmentAutomation,
+  type EvidenceDocumentCommands,
   composeDevelopmentAdmissionLookup,
   createDevelopmentDeliveryProvider,
   createDevelopmentMissionExecutionTerminalObserver,
@@ -143,6 +144,7 @@ import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/com
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
 import {
+  composeDaemonHostApplication,
   type DaemonDatabasePreOpenRecoveryPort,
   prepareDatabasePreOpenRecovery,
 } from '@/modules/system-operations/composition'
@@ -396,6 +398,7 @@ export interface StartOptions {
   skillContent?: SkillContentBinding
   employeePrograms?: ProgramArtifactPort
   evidenceRead?: EvidenceReadBinding
+  evidenceDocumentCommands?: EvidenceDocumentCommands
   daemonHost?: DaemonHostLifecyclePort
 }
 
@@ -560,6 +563,7 @@ async function composePostgresqlProviderSession(
     skillContent: input.skillContent,
     employeePrograms: input.employeePrograms,
     evidenceRead: input.evidenceRead,
+    evidenceDocumentCommands: input.evidenceDocumentCommands,
     daemonRuntime: input.daemonRuntime,
     token: input.token,
     appHome: Paths.root,
@@ -1081,6 +1085,7 @@ interface DaemonProviderSessionComposeInput {
   readonly skillContent?: SkillContentBinding
   readonly employeePrograms?: ProgramArtifactPort
   readonly evidenceRead?: EvidenceReadBinding
+  readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly daemonRuntime: DaemonRuntimeQueries
   readonly token: string
   readonly secretBox: ReturnType<typeof createSecretBox>
@@ -1164,103 +1169,31 @@ export async function serveDaemon(input: {
   const baseUrl = `http://${server.hostname}:${server.port}/`
   input.log.info('listening', { url: baseUrl, databaseProvider: input.databaseProvider })
 
-  const waitForHostExit = (): Promise<never> => new Promise(() => {})
-  const readinessInFlight = new Set<Promise<void>>()
-  let shuttingDown = false
-  const shutdown = async (signal: string, terminate = true): Promise<void> => {
-    if (shuttingDown) return
-    shuttingDown = true
-    const admittedReadiness = [...readinessInFlight]
-    input.log.info('shutting down', { signal, databaseProvider: input.databaseProvider })
-    try {
-      await input.daemonHost.withdrawReady()
-    } catch (error) {
-      input.log.warn('daemon readiness withdrawal error', {
-        databaseProvider: input.databaseProvider,
-        error: describeDaemonProviderSessionFailure(error),
-      })
-    }
-    await server.stop(true)
-    try {
-      await input.bootstrap.stop()
-    } catch (error) {
-      // 关机请求已经封住 HTTP/WS 准入、停了监听、排空了任务执行；provider 收尾失败只是
-      // 这个正在退场的进程的诊断，不能把一次成功的 dev 代际交接变成 exit 1、让接班进程
-      // 卡在仍被持有的 PID 锁后面。
-      input.log.warn('daemon shutdown error', {
-        databaseProvider: input.databaseProvider,
-        error: describeDaemonProviderSessionFailure(error),
-      })
-    }
-    try {
-      await (await controlListener).close()
-    } catch (error) {
-      input.log.warn('daemon control close error', {
-        databaseProvider: input.databaseProvider,
-        error: describeDaemonProviderSessionFailure(error),
-      })
-    }
-    if (admittedReadiness.length > 0) {
-      // A ready write admitted before shutdown can commit after the first
-      // withdrawal. Settle it and its final withdrawal before the host exits.
-      await Promise.allSettled(admittedReadiness)
-      try {
-        await input.daemonHost.withdrawReady()
-      } catch (error) {
-        input.log.warn('daemon readiness withdrawal error', {
-          databaseProvider: input.databaseProvider,
-          error: describeDaemonProviderSessionFailure(error),
-        })
-      }
-    }
-    input.lock.release()
-    if (terminate) await input.daemonHost.terminate(0)
-  }
-  const controlListener = Promise.resolve().then(() =>
-    input.daemonHost.subscribeShutdown({
-      onShutdown: shutdown,
-      onExit: () => input.lock.release(),
-      onFailure: (error) => {
-        input.log.warn('daemon shutdown error', {
-          databaseProvider: input.databaseProvider,
-          error: describeDaemonProviderSessionFailure(error),
-        })
-      },
+  const application = composeDaemonHostApplication({
+    host: input.daemonHost,
+    databaseProvider: input.databaseProvider,
+    log: input.log,
+    describeFailure: describeDaemonProviderSessionFailure,
+    readyInfo: () => ({
+      // This constructor always binds TCP; the Bun Server type also covers Unix sockets.
+      host: server.hostname!,
+      port: server.port!,
+      url: baseUrl,
+      startedAt: new Date().toISOString(),
     }),
-  )
-  try {
-    await controlListener
-    if (shuttingDown) return await waitForHostExit()
-    const readinessPublication = Promise.resolve().then(() =>
-      input.daemonHost.publishReady({
-        // This constructor always binds TCP; the Bun Server type also covers Unix sockets.
-        host: server.hostname!,
-        port: server.port!,
-        url: baseUrl,
-        startedAt: new Date().toISOString(),
-      }),
-    )
-    readinessInFlight.add(readinessPublication)
-    try {
-      await readinessPublication
-    } finally {
-      readinessInFlight.delete(readinessPublication)
-    }
-    if (shuttingDown) return await waitForHostExit()
-    const bootstrapRequired = await input.authRuntime.isBootstrapRequired()
-    if (shuttingDown) return await waitForHostExit()
-    const browserUrl = readyBrowserUrl(baseUrl, input.token, bootstrapRequired)
-    await input.daemonHost.announceReady(browserUrl)
-  } catch (error) {
-    // A requested shutdown owns its drain; a late startup error must not exit
-    // the process before that drain finishes. Otherwise unwind before returning
-    // the original startup failure to the CLI's existing error handler.
-    if (shuttingDown) return await waitForHostExit()
-    await shutdown('startup-failed', false)
-    throw error
-  }
-  await waitForHostExit()
-  throw new Error('daemon-listener-returned')
+    readBootstrapRequired: () => input.authRuntime.isBootstrapRequired(),
+    readyBrowserUrl: (bootstrapRequired) =>
+      readyBrowserUrl(baseUrl, input.token, bootstrapRequired),
+    async stopListener() {
+      await server.stop(true)
+    },
+    async stopApplication() {
+      await input.bootstrap.stop()
+    },
+    releaseAuthority: () => input.lock.release(),
+    releaseAuthorityOnExit: () => input.lock.release(),
+  })
+  return await application.run()
 }
 
 const MAX_DEV_LOCK_HANDOFF_MS = 60_000
@@ -1665,6 +1598,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     skillContent: opts.skillContent,
     employeePrograms: opts.employeePrograms,
     evidenceRead: opts.evidenceRead,
+    evidenceDocumentCommands: opts.evidenceDocumentCommands,
     daemonRuntime: daemonHost,
     token,
     secretBox,
@@ -2758,6 +2692,7 @@ async function composeSqliteProviderSession(
     db,
     appHome: Paths.root,
     evidenceRead: input.evidenceRead,
+    evidenceDocumentCommands: input.evidenceDocumentCommands,
     admissionLookup: developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunnerFor(db),
     changeCandidate: bindChangeCandidateParticipant(),
@@ -3138,6 +3073,7 @@ async function composeSqliteProviderSession(
     skillContent: input.skillContent,
     employeePrograms: input.employeePrograms,
     evidenceRead: input.evidenceRead,
+    evidenceDocumentCommands: input.evidenceDocumentCommands,
     memoryOperations,
     databaseMigration: databaseMigration,
     collaborationContext,
