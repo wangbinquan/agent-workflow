@@ -287,6 +287,7 @@ describe('RFC-346 System Operations contracts', () => {
     expect(readdirSync(join(root, 'public')).sort()).toEqual([
       'commands.ts',
       'operations.ts',
+      'participants.ts',
       'queries.ts',
       'types.ts',
     ])

@@ -1,5 +1,5 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition/workspacePresence'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { DatabaseTaskDecisionPersistence } from '../infrastructure/taskDecisionParticipant'

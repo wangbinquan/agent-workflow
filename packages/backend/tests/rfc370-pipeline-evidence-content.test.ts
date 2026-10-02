@@ -6,7 +6,9 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
-import { buildActor } from '@/auth/actor'
+import { users } from '@/db/schema'
+import { createIdentityAccessRuntime } from '@/modules/identity-access/composition'
+import { admitTestDirectAuthority } from './helpers/identityAccessAuthority'
 import { composeDevelopmentAutomation } from '@/modules/development-automation/composition'
 import { composeDevelopmentMissionOperations } from '@/modules/development-automation/composition/missionOperations'
 import {
@@ -21,7 +23,9 @@ import {
 import type { DevelopmentDeliveryProvider } from '@/services/developmentDeliveryDeps'
 
 const roots: string[] = []
-afterEach(() => {
+const identityRuntimes: ReturnType<typeof createIdentityAccessRuntime>[] = []
+afterEach(async () => {
+  for (const runtime of identityRuntimes.splice(0)) await runtime.shutdown()
   for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
 const unused = async (): Promise<never> => {
@@ -33,16 +37,6 @@ const deliveryProvider: DevelopmentDeliveryProvider = {
   readMrFactTarget: unused,
   pipeline: { collect: unused, trigger: unused, rerun: unused },
 }
-const actor = buildActor({
-  source: 'session',
-  user: {
-    id: 'u-1',
-    username: 'evidence-reader',
-    displayName: 'Evidence reader',
-    role: 'admin',
-    status: 'active',
-  },
-})
 
 describe('RFC-370 selected evidence range policy', () => {
   test('invalid ranges do not call content, and a selected failure is propagated', async () => {
@@ -87,6 +81,24 @@ describe('RFC-370 selected evidence range policy', () => {
 describeEachProvider('RFC-370 selected Mission evidence contents', (harness) => {
   test('actual detail and range operations await the same selected contents and preserve continuation', async () => {
     const fx = await buildPr3Fixture({ db: harness.db })
+    await harness.db.insert(users).values({
+      id: 'u-1',
+      username: 'evidence-reader',
+      displayName: 'Evidence reader',
+      role: 'admin',
+      status: 'active',
+      passwordHash: 'fixture',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const identityAccess = createIdentityAccessRuntime({ db: harness.db })
+    identityRuntimes.push(identityAccess)
+    const admitted = await admitTestDirectAuthority(identityAccess.directAuthority, {
+      userId: 'u-1',
+      source: 'session',
+    })
+    if (admitted === null) throw new Error('evidence reader authority unavailable')
+    const actor = admitted.actor
     const missionId = await fx.launchDirect('selected-evidence-mission')
     const mission = await fx.store.getMission(missionId)
     if (mission === null) throw new Error('expected real mission')

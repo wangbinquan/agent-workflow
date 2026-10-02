@@ -1817,10 +1817,11 @@ export class DigitalEmployeeAuthoringService {
     readonly toolId: string
   }): Promise<{ readonly record: ToolDraftRecord; readonly body: CreateToolRegistrationBody }> {
     const record = await this.#exactTool(input)
+    const storedImplementation = record.content.implementation
     const implementation: CreateToolRegistrationBody['implementation'] =
-      record.content.implementation.kind === 'program'
+      storedImplementation.kind === 'program'
         ? await (async () => {
-            const artifact = await this.#programArtifacts.read(record.content.implementation)
+            const artifact = await this.#programArtifacts.read(storedImplementation)
             if (artifact === null) {
               throw new ConflictError(
                 'employee-program-artifact-unavailable',
@@ -1829,13 +1830,13 @@ export class DigitalEmployeeAuthoringService {
             }
             return {
               kind: 'program' as const,
-              runtimeKind: record.content.implementation.runtimeKind,
+              runtimeKind: storedImplementation.runtimeKind,
               source: artifact.source,
               parameterValues: artifact.parameterValues ?? undefined,
-              runtimeProfileRef: record.content.implementation.runtimeProfileRef,
+              runtimeProfileRef: storedImplementation.runtimeProfileRef,
             }
           })()
-        : record.content.implementation
+        : storedImplementation
     return {
       record,
       body: createToolRegistrationBodySchema.parse({
