@@ -49,3 +49,9 @@ SOURCE v2 的唯一 P2 已按实际事件顺序修正，完整 v3 独立功能�
 ### 实现门 v4 文案修正（2026-10-03）
 
 完整限定实现门 v4 的唯一 P2 是许可理由及发布说明把派生字段预算误写为不变；原 FAIL 与逐文件回执保留。当前只修正该许可 why、用原 provenance 函数重算 ledger 摘要，并列出上述两项实际数字。另 12 份生成产物和全部 48 代码路径逐字未变；纯治理投影复用原 census，未重跑 scanner 或本机测试。窄增量复核、新发布及精确 hosted CI 继续，不关闭 RFC 或开启 CS 开发 producer。
+
+### 已发布候选与 Windows 类型修正（2026-10-03）
+
+完整实现门 v5 已通过，65 路径发布于 `7135c4092bea766742a637a2d998312633811cd0`；随后的 `aa6e75a4cfb35ec0a80b9f2466d6f6d9ee0c514b` 只按原机制退役精确八条增长许可，其他计数、理由和产物保持。推送后 main/origin 精确一致、索引为空。主 CI 与九类原默认定时配置均在 aa6 上验收，不能据此提前宣称全部通过。
+
+[Windows 定时 CI 37068423865](https://github.com/wangbinquan/agent-workflow/actions/runs/37068423865) 的 Typecheck 实际失败：片段来源回归把允许历史 `sourceId=null` 的已受理响应类型，当成要求新来源 ID 的受理请求传入 store。修正该夹具为直接由原 `AcceptObservationInvocationSchema` 创建请求，保留相同输入与全部分页、ACK、归属断言；生产合同、旧响应兼容性与 CNY 均未放宽。这是单一回归文件的类型修正，没有运行 AW 本机测试或类型检查；限定检查、独立功能复核、新提交及 hosted CI 仍须完成。原失败回执保留，两个 RFC 继续 In Progress。

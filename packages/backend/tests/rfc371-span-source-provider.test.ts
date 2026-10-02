@@ -1,8 +1,5 @@
 import { expect, test } from 'bun:test'
-import {
-  AcceptedObservationInvocationSchema,
-  type ObservationSpanFact,
-} from '@agent-workflow/shared'
+import { AcceptObservationInvocationSchema, type ObservationSpanFact } from '@agent-workflow/shared'
 import { tasks, nodeRuns, taskExecutionObservationSources, nodeRunEvents } from '../src/db/schema'
 import { DrizzleNodeExecutionPersistence } from '../src/modules/task-execution/infrastructure/nodeExecutionPersistence'
 import { createObservationSpanSources } from '../src/modules/task-execution/infrastructure/observationSpanSources'
@@ -14,7 +11,8 @@ import { createTaskObservationFacts } from '../src/modules/task-execution/compos
 import { buildActor } from '../src/auth/actor'
 import { describeEachProvider } from './helpers/eachProvider'
 
-const accepted = AcceptedObservationInvocationSchema.parse({
+// Fresh acceptance uses the request contract; persisted responses may retain legacy null source IDs.
+const acceptance = AcceptObservationInvocationSchema.parse({
   invocationId: 'call',
   taskId: 'task',
   nodeRunId: 'run',
@@ -22,8 +20,6 @@ const accepted = AcceptedObservationInvocationSchema.parse({
   agentRevision: 1,
   purpose: 'task',
   authority: { kind: 'local', runtime: null },
-  acceptedAt: 1,
-  priceBookRevision: null,
   spanCaptureContract: 'runtime-span-facts-v1',
   spanCaptureSource: 'source',
 })
@@ -75,8 +71,7 @@ describeEachProvider('RFC-371 retained span source cursors', (harness) => {
       .values({ id: 'run', taskId: 'task', nodeId: 'node', status: 'running', startedAt: 1 })
       .run()
     const store = createObservationInvocationStore(harness.db, () => 1)
-    const { acceptedAt: _at, priceBookRevision: _price, ...input } = accepted
-    await store.accept(input)
+    await store.accept(acceptance)
     const writer = new DrizzleNodeExecutionPersistence(harness.db),
       source = composeObservationUsageSource(harness.db)
     return {
