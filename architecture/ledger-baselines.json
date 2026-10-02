@@ -903,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25671,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 CI correction: one narrow Source Control standalone presence composition entry replaces the broad composition barrel as the Task persistence default. It reexports the identical existing file query and removes the real Task execution value SCC without changing lifecycle rules, selected adapters, scanner rules or business state. The single new module file owner is the only owner-count growth in this exact six-path repair."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -923,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "165bb447dc0a8bc4f8e0e8ce9698512791a7477d",
-    "contentDigest": "sha256:f1bc75714836c462cbf4668a05141e8f8c22b9dabfca6db5326a0be267e675f6",
+    "currentSnapshotSha": "264b43bd253bc303982a0ca9f76390fbe46ff883",
+    "contentDigest": "sha256:620d47d1b0b0a86b6bfb1a721953d987f2c648803ede64af9b34354a3016e7e0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
