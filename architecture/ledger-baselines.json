@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1823,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-371: six actual create-prefixed factories introduce span owner lookup, task span query, native capture, OpenCode/stream composition and the retained Task source provider. These metadata-only factories retain the original classifier and add no numeric usage writer."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -836,30 +833,21 @@
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 345,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-371: the original classifier records one exact setTimeout in nativeSpanCapture for the bounded owner/source lookup. Keep this named timer and its measured classification; no scanner or lifetime rule is changed."
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
       "baseline": 501,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
-      "allowGrowth": {
-        "why": "RFC-371: mountObservationRoutes adds the actual authenticated task/:id/spans GET registration. The net registration count increases by one; existing routes retain their original mounting and ownership."
-      }
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5778,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-371: the original scanner records 22 additional value/type edges for shared span contracts, Task retained-source projection, owner lookup, runtime public capture composition and the three exact legacy runtime helpers. Retain both endpoints and original edge classification."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -880,30 +868,21 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5136,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-371: the unchanged original projection records 21 additional exact legacy boundary edges associated with runner, runtime drivers and the three registered span helpers. Keep each concrete edge, original owner and retirement condition; no wildcard, rule or budget exemption is introduced."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
       "file": "architecture/facades.json",
       "symbol": "entries",
       "baseline": 298,
-      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。",
-      "allowGrowth": {
-        "why": "RFC-371: register the three actual legacy runtime helpers claudeCode/spanFacts.ts, opencode/spanFacts.ts and runtime/spanCapture.ts under runtime-management. Retain exact file ownership and their original W9-D retirement conditions."
-      }
+      "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1053,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-371: runtime-management participants adds the two capture composition exports and four original NativeSpan capture types. The original public-surface classifier records six new entries; the original budget calculation rules remain unchanged. The generated ObservationTaskQueries leaf/union budgets update from 169/58 to 205/76, and TaskObservationFactsQuery from 60/32 to 75/38, matching the added fields; do not describe these derived numeric values as unchanged."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -924,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25901,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371: the exact backend/frontend/shared corpus adds 82 file-root and top-level-symbol owner entries for native span capture, retained source/query/projection, shared schema and formal trace UI. Preserve complete ownership and the original production corpus rules."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -944,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "d2c29c15c2e65dfc447ea5f7ae99bac8c6bc77bd",
-    "contentDigest": "sha256:3c479e835de0cba2d2c5a31cc0342d5b9d177966690466d9b9dc1047eb19ff24",
+    "currentSnapshotSha": "7135c4092bea766742a637a2d998312633811cd0",
+    "contentDigest": "sha256:e1e3c3bbfcfa47a883637400c8630679d49a88b4412c3aa91c87a55eef54e9bb",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
