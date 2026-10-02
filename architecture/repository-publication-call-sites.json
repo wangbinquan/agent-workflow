@@ -54,6 +54,7 @@
     "fetch": [
       "packages/backend/src/modules/source-control/application/deliverCandidate.ts",
       "packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts",
+      "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects.ts",
       "packages/backend/src/services/commitPushRunner.ts",
       "packages/backend/src/services/gitRepoCache.ts",
       "packages/backend/src/services/gitSubmodule.ts",

@@ -6,7 +6,7 @@
     "moduleFiles": 1430,
     "productionFiles": 2786,
     "sharedFiles": 160,
-    "symbolsIncludingFileRoots": 25720
+    "symbolsIncludingFileRoots": 25719
   },
   "entries": [
     {
@@ -160919,18 +160919,6 @@
     {
       "currentContext": "legacy",
       "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/providerTraits.ts",
-      "id": "owner:packages/backend/src/platform/persistence/providerTraits.ts#DatabaseStorageShape",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "DatabaseStorageShape",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
       "exported": false,
       "file": "packages/backend/src/platform/persistence/resourcePackageApplyLock.ts",
       "id": "owner:packages/backend/src/platform/persistence/resourcePackageApplyLock.ts#$file",
@@ -309372,5 +309360,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:468ebe45a63654b0bb262bde6c4c598900cea11da7745d271a00007cd527a205"
+  "sourceDigest": "sha256:25226bfe9d34142ef008867288f00bd92daee04be9ff42810803bdac65563205"
 }

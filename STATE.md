@@ -1,3 +1,7 @@
+## 2026-10-02 RFC-370：24路径批次的 CI 补正
+
+24路径已按13/11源码、canonical、六消费回执退役发布64bf703622b6a7899df8a82a9e4b1dec13185d33并同步；Windows36976027391 failure，主CI36976027404 cancelled、38成功/7失败/5取消，均非全绿。新六路径补正：真实DatabaseProvider类型来源与receiver断言泛型；删除无实际消费者的storage trait；取消fixture等待持久执行身份之后的真实launch屏障并finally收完，原判据/预算保持。两组三路径独立有限PASS；provider债数量24→23、实际Git fetch位置补一条、两项真实类型边增长按原协议登记/后继退役。仅目标格式/lint、纯源码/JSON与官方scoped生成；并行e8c9d73b1仅两个RFC371文档已保留同步。后继精确CI尚待发布，完整A1～A8/A-G、CS adapter及M0～M4继续，无AW-in-CS部署，不关闭RFC；下方历史与并行输出保留。
+
 ## 候选工作区与启动前恢复24路径有限交付（2026-10-02）
 
 修复b339e7e0主CI36969850886已completed/success 50/50，同SHA Windows36970559143 success 1/1；d5及默认Windows取消/失败历史完整保留，mixed report丢失原因未确证。新A4候选工作区13与A1启动前恢复11两组均独立有限PASS，真实异步效果/释放与原规则保留；24路径无交集，按两个source小commit、官方scoped canonical/docs、六项真实增长消费后继退役发布，正式行为仍等本批exact-SHA CI。public1045、implementation SCC空；唯一两项实际pendingRestore value/type R1有SO owner/A-T7退役，原298条款保持。无本机AW test/typecheck/build/service；完整A1～A8/A-G、CS adapter、M0～M4继续，尚无AW-in-CS部署。下方并行输出和全部历史逐字保留。
