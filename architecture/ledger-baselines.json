@@ -294,10 +294,7 @@
       "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
       "symbol": "CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT",
       "baseline": 17,
-      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。",
-      "allowGrowth": {
-        "why": "Record the single exact standalone workspace-presence composition dependency already published in e4d7dba7d8902b7374048492d643c09791ae9b20. Exact CI36955843850 reports 17 existing entries against the prior baseline 16. All scanner code, assertions, and other quantities remain unchanged. This receipt covers only that published structural quantity and is retired after the matching baseline commit. Unpublished RFC-370 source candidates and their generated evidence are excluded and preserved."
-      }
+      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。"
     },
     {
       "id": "rfc329-mcp-surface-exemptions",
@@ -923,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "bbb545851a5dc4c5328ff005a82b196cdedf5d28",
-    "contentDigest": "sha256:83acf92ecf3978df9246e5389417a371d76cf097513e133fe73f45022ceee57e",
+    "currentSnapshotSha": "bb4101a45bb3fb7278201b408f4735c1132c8438",
+    "contentDigest": "sha256:2daacdc98f9ebf243a791bc255196845f5f5cb305af8cf7112b3c537eb85d731",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
