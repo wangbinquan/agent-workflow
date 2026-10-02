@@ -257,3 +257,11 @@ mixed report 原丢失根因仍未确证。复验已恢复最初的 reject POST 
 `c843938ae1e1103d6d78ec2f4f9f2e1ec31c0560` 的 [CI36985769914](https://github.com/wangbinquan/agent-workflow/actions/runs/36985769914) 终态 failure，48 success / 2 failure。三条 CS 固定源码 raw 链接已通过；Markdown 作业 110770777970 的唯一报错为 RFC-371 分类文档中 OpenCode 固定提交的 GitHub blob 503，第二个失败为汇总作业。
 
 共享分类文档中并行会话保留的文件路径、行区间及固定 SHA 完整保留。官方同 SHA 的 raw 源码只读核验返回 HTTP 200，实际 getUsage 已核对；`81d6d54f` 曾追加可读链接，其限定文档复核没有覆盖仓库 `CLAUDE.md` 的强制引用规则。现仅将本会话追加段落改为纯文本 `packages/opencode/src/session/session.ts:321-379` 与同一固定 SHA；Token 口径和原断言不变。没有增加豁免、放宽 HTTP 接受状态或修改工作流配置。自身 hosted CI 仍需回执，AW-R01 当前接续未关闭。
+
+## 2026-10-02 当前 Promise lint 修订
+
+固定源码引用提交 `6f506e0d3e61d9dd958c0eabbf9913bd665a5c1e` 的精确 CI `36992655535` 已终态 cancelled：文档检查成功，功能失败是 `submoduleRefresh.ts:244` 的 `no-floating-promises`，不能当作整体通过。原终态及日志保留在 `/private/tmp/observability-aw-source-citation-convention-exact-ci-watch-v1.json` 和 `/private/tmp/observability-aw-source-citation-convention-lint-failure-v1.log`。
+
+本修订只显式消费初始化重配返回值：旧入口的配置读取仍同步，新异步入口仍先 await 初始快照后才启动；不改变重配、停止和排空语义，不移除并行 RFC-370 实现，也不放宽规则。静态格式核对及独立 SOURCE 复核后精确发布，最终判断仍等待修订自身的完整托管 CI。
+
+`81d6d54f567dd3d871062cd15e6587b5291dceac` 默认定时矩阵已全部终态：完整 E2E `36990114153`、PostgreSQL `36990174841` 各 5 项成功，WebKit `36990131501` 的8项成功，OpenCode／Git压测／证据保留／视觉检查也成功，共7次成功运行、23项成功job。维护、Windows、主CI的3次取消历史完整保留；整套矩阵仍未关闭，后续补核本修订固定SHA的默认矩阵，不把部分成功当全绿。原终态汇总在 `/private/tmp/observability-aw-81d6-default-nightly-matrix-v1.json`。

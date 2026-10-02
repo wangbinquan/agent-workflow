@@ -241,7 +241,8 @@ function createSubmoduleRefreshLoop(
     return change
   }
   if (intervalMs === HOUR_MS) {
-    if (initial === undefined) reconfigure()
+    // The legacy entry point reads synchronously; the async entry point already awaited its initial snapshot.
+    if (initial === undefined) void reconfigure()
     else apply(initial, ++revision)
   } else job.reconfigure(intervalMs)
   return {
