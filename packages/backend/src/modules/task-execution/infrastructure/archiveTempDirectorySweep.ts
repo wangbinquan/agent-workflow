@@ -1,4 +1,4 @@
-// RFC-359 W3-T15-B —— 归档 `.tmp-*` 残留目录的收尾：纯文件系统，一份实现，两个 provider 的归档
+// RFC-359 W3-T15-B / RFC-370 —— 归档 `.tmp-*` 残留目录的收尾：一份规则、所选内容效果，两个 provider 的归档
 // 恢复都调它（RFC-359 W8-A 合一后的唯一调用点是
 // `taskArchiveMaintenanceCommand.ts` 的 `createDrizzleTaskArchiveMaintenanceCommand().recover`）。
 //
@@ -7,28 +7,12 @@
 //   · 正式目录已存在 ⇒ 丢弃 tmp；
 //   · 否则（行已删、崩在 rename 与删库之间）⇒ 提升为正式目录，否则数据就真的没了。
 
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import type { TaskArchiveContentPort } from '../application/ports/taskArchiveContent'
 
-/** 把 tmp 里挪走的 runs / logs 子目录放回原根；有任何一个目标已存在则停下并报告未完成。 */
-export function restoreLegacyMovedDirectories(
-  tmpDir: string,
-  kind: 'runs' | 'logs',
-  root: string,
-): boolean {
-  const movedRoot = join(tmpDir, kind)
-  if (!existsSync(movedRoot)) return true
-  mkdirSync(root, { recursive: true })
-  for (const entry of readdirSync(movedRoot)) {
-    const from = join(movedRoot, entry)
-    const to = join(root, entry)
-    if (existsSync(to)) return false
-    renameSync(from, to)
-  }
-  return true
-}
+export { restoreFileArchiveMovedDirectories as restoreLegacyMovedDirectories } from './local/fileTaskArchiveContent'
 
 export interface ArchiveTempDirectorySweepInput {
+  readonly content: TaskArchiveContentPort
   readonly archiveRoot: string
   readonly runsDir: string
   readonly logsDir: string
@@ -45,30 +29,31 @@ export interface ArchiveTempDirectorySweepReceipt {
 export async function sweepArchiveTempDirectories(
   input: ArchiveTempDirectorySweepInput,
 ): Promise<ArchiveTempDirectorySweepReceipt> {
+  const content = input.content
   const promoted: string[] = []
   const discarded: string[] = []
-  if (!existsSync(input.archiveRoot)) return { promoted, discarded }
-  for (const entry of readdirSync(input.archiveRoot)) {
+  if (!(await content.exists(input.archiveRoot))) return { promoted, discarded }
+  for (const entry of await content.list(input.archiveRoot)) {
     if (!entry.startsWith('.tmp-')) continue
     const rootTaskId = entry.slice('.tmp-'.length)
     if (input.claimedRoots.has(rootTaskId)) continue
-    const tmpDir = join(input.archiveRoot, entry)
+    const tmpDir = content.resolve(input.archiveRoot, entry)
     if (await input.taskExists(rootTaskId)) {
-      const runsRestored = restoreLegacyMovedDirectories(tmpDir, 'runs', input.runsDir)
-      const logsRestored = restoreLegacyMovedDirectories(tmpDir, 'logs', input.logsDir)
+      const runsRestored = await content.restoreMovedDirectories(tmpDir, 'runs', input.runsDir)
+      const logsRestored = await content.restoreMovedDirectories(tmpDir, 'logs', input.logsDir)
       if (runsRestored && logsRestored) {
-        rmSync(tmpDir, { recursive: true, force: true })
+        await content.remove(tmpDir, true)
         discarded.push(rootTaskId)
       }
       continue
     }
-    const finalDir = join(input.archiveRoot, rootTaskId)
-    if (existsSync(finalDir)) {
-      rmSync(tmpDir, { recursive: true, force: true })
+    const finalDir = content.resolve(input.archiveRoot, rootTaskId)
+    if (await content.exists(finalDir)) {
+      await content.remove(tmpDir, true)
       discarded.push(rootTaskId)
       continue
     }
-    renameSync(tmpDir, finalDir)
+    await content.move(tmpDir, finalDir)
     promoted.push(rootTaskId)
   }
   return { promoted, discarded }

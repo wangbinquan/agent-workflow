@@ -64,7 +64,7 @@ const PROVABLY_NULL_FREE: Record<string, Record<string, string>> = {
     employeeId: '同一个 WHERE 里有 isNotNull(employeeId)',
   },
   // RFC-359 W8-A：归档维护命令合一，两侧的同一条「保留期到期的根任务」查询归到这一份实现。
-  'modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts': {
+  'modules/task-execution/infrastructure/taskArchiveContentCoordinator.ts': {
     finishedAt: 'WHERE 是 lte(finishedAt, cutoff)；NULL 被比较排除',
   },
   // RFC-359 W7：归档服务迁到中立事务原语后按类型可达性进了 PG 执行面，这条 ORDER BY 第一次被扫到。

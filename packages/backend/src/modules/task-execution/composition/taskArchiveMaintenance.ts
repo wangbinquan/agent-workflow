@@ -1,9 +1,14 @@
-// RFC-359 W8-A：归档维护命令合一后只剩一份中立实现，两个 provider 共用。
+// RFC-370: select archive content at composition; both providers share the original coordinator.
+import type { ProviderNeutralDatabase } from '@/db/query'
+import type { TaskArchiveContentPort } from '../application/ports/taskArchiveContent'
+import type { TaskArchiveMaintenanceCommand } from '../application/ports/taskArchiveMaintenanceCommand'
+import { createTaskArchiveContentCoordinator } from '../infrastructure/taskArchiveContentCoordinator'
+import { createFileTaskArchiveContent } from '../infrastructure/local/fileTaskArchiveContent'
+
 export {
   ARCHIVED_TABLES,
   ARCHIVE_EXEMPT_TABLES,
-  createDrizzleTaskArchiveMaintenanceCommand,
-} from '../infrastructure/taskArchiveMaintenanceCommand'
+} from '../infrastructure/taskArchiveContentCoordinator'
 export type {
   ArchivedTaskTreeReceipt,
   TaskArchiveConfig,
@@ -13,3 +18,10 @@ export type {
   TaskArchivePreviewTree,
   TaskArchiveSweepReceipt,
 } from '../application/ports/taskArchiveMaintenanceCommand'
+
+export function createDrizzleTaskArchiveMaintenanceCommand(
+  db: ProviderNeutralDatabase,
+  input: { readonly content?: TaskArchiveContentPort } = {},
+): TaskArchiveMaintenanceCommand {
+  return createTaskArchiveContentCoordinator(db, input.content ?? createFileTaskArchiveContent())
+}
