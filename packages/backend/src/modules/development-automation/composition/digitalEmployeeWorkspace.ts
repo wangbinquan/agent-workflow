@@ -549,7 +549,7 @@ export interface DevelopmentEmployeeWorkspaceCompositionInput {
    */
   readonly reactionRounds: EmployeeReactionRoundQueryPort
   readonly inputArtifacts: {
-    copyBlobTo(blobRef: string, absoluteTargetPath: string): void
+    copyBlobTo(blobRef: string, absoluteTargetPath: string): void | Promise<void>
   }
   readonly repositoryPreparation: RepositoryPreparationPort
   readonly sourceControl: {
@@ -739,7 +739,7 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
           const blobRef = upload.artifactRef.slice('employee-input:'.length)
           const target = join(workspacePath(plan.caseRef.id), upload.targetPath)
           mkdirSync(dirname(target), { recursive: true })
-          input.inputArtifacts.copyBlobTo(blobRef, target)
+          await input.inputArtifacts.copyBlobTo(blobRef, target)
         }
         const requirementsRoot = join(
           workspacePath(plan.caseRef.id),

@@ -93,8 +93,8 @@ export interface EmployeeInputArtifactPort {
     readonly sha256: string
     readonly bytes: number
   }>
-  hasBlob(blobRef: string): boolean
-  copyBlobTo(blobRef: string, absoluteTargetPath: string): void
+  hasBlob(blobRef: string): boolean | Promise<boolean>
+  copyBlobTo(blobRef: string, absoluteTargetPath: string): void | Promise<void>
 }
 
 export interface ReactionExecutionMetering {

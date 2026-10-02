@@ -854,15 +854,16 @@ export class DigitalEmployeeRuntimeService {
       now,
     })
     const platformCaseKey = stableIdentityComponent(caseId)
-    const resolvedUploads = intake.uploads.map((upload, index) => {
+    const resolvedUploads = []
+    for (const [index, upload] of intake.uploads.entries()) {
       const row = uploads[index]!
-      if (!this.#inputArtifacts.hasBlob(row.blobRef)) {
+      if (!(await this.#inputArtifacts.hasBlob(row.blobRef))) {
         throw new ValidationError(
           'employee-upload-artifact-missing',
           `input upload artifact is missing: ${row.id}`,
         )
       }
-      return {
+      resolvedUploads.push({
         uploadRef: row.id,
         blobRef: row.blobRef,
         sha256: row.sha256,
@@ -873,8 +874,8 @@ export class DigitalEmployeeRuntimeService {
           upload.placement === 'repository'
             ? upload.targetPath!
             : `${PLATFORM_WORKSPACE_DIR}/inputs/requirements/${platformCaseKey}/uploads/${String(index + 1).padStart(3, '0')}-${stableIdentityComponent(row.id)}`,
-      }
-    })
+      })
+    }
     const launch = employeeCaseLaunchSchema.parse(
       JSON.parse(
         this.#codec(revision.content.typeRef.typeId).buildInitialCaseJson(

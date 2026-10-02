@@ -343,20 +343,71 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       })
       .run()
 
+    // RFC-370: selected object materialization must complete before the Case
+    // workspace is committed; retain the real Git/file delivery assertions below.
+    const copyEntered = Promise.withResolvers<void>()
+    const copyRelease = Promise.withResolvers<void>()
+    const copiedBlobs: string[] = []
+    const selectedInputArtifacts = {
+      async copyBlobTo(blobRef: string, target: string) {
+        expect(this).toBe(selectedInputArtifacts)
+        copiedBlobs.push(blobRef)
+        if (copiedBlobs.length === 1) {
+          copyEntered.resolve()
+          await copyRelease.promise
+        }
+        artifactStore.copyBlobTo(blobRef, target)
+      },
+    }
     const workspace = composeDevelopmentEmployeeWorkspace({
       db,
       appHome,
       reactionRounds: createEmployeeReactionRoundQueries(db),
-      inputArtifacts: artifactStore,
+      inputArtifacts: selectedInputArtifacts,
       repositoryPreparation: staticCachedRepositoryPreparation(db),
       sourceControl: bindEmployeeCaseWorkspaceParticipant(),
       conflictMerge: bindConflictMergeParticipant(),
       now: () => 10,
     })
-    const first = await workspace.prepare({
-      planJson: JSON.stringify(analyzePlan),
-      attemptJson: JSON.stringify({ ordinal: 0, mode: 'initial', previousError: null }),
-    })
+    let firstSettled = false
+    const firstPending = workspace
+      .prepare({
+        planJson: JSON.stringify(analyzePlan),
+        attemptJson: JSON.stringify({ ordinal: 0, mode: 'initial', previousError: null }),
+      })
+      .then(
+        (value) => {
+          firstSettled = true
+          return { kind: 'ok' as const, value }
+        },
+        (error: unknown) => {
+          firstSettled = true
+          return { kind: 'error' as const, error }
+        },
+      )
+    try {
+      await Promise.race([
+        copyEntered.promise,
+        firstPending.then(() => {
+          throw new Error('workspace preparation settled before selected input copy')
+        }),
+      ])
+      expect(firstSettled).toBe(false)
+      expect(copiedBlobs).toEqual([artifact.blobRef])
+      expect(await db.select().from(employeeCaseWorkspaces).all()).toEqual([])
+    } finally {
+      copyRelease.resolve()
+      await firstPending
+    }
+    const firstOutcome = await firstPending
+    if (firstOutcome.kind === 'error') throw firstOutcome.error
+    const first = firstOutcome.value
+    expect(copiedBlobs).toEqual([
+      artifact.blobRef,
+      replacementArtifact.blobRef,
+      alreadyArtifact.blobRef,
+      editableSameArtifact.blobRef,
+    ])
     expect(first.kind).toBe('repository')
     if (first.kind !== 'repository') return
     expect(readFileSync(join(first.workspacePath, 'docs/requirements/REQ-42.md'), 'utf8')).toBe(
