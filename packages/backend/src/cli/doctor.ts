@@ -8,7 +8,9 @@ import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { createSecretBox } from '@/auth/secretBox'
 import { statMetadataIsAuthoritative } from '@/util/fileTrust'
-import { loadConfig } from '@/config'
+import type { Config } from '@agent-workflow/shared'
+import { composeFileDoctorConfigurationQueries } from '@/modules/system-operations/composition/doctorConfiguration'
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { quickCheckDbFile } from '@/db/integrity'
 import { countEmbeddedSqlMigrations, IS_EMBEDDED } from '@/embed'
 import {
@@ -152,10 +154,12 @@ const ENGINE_HEALTH_CHECKS = {
   (resolved: ResolvedDatabaseProviderRuntime) => Promise<readonly CheckResult[]>
 >
 
-export async function checkConfiguredDatabase(): Promise<CheckResult[]> {
-  let config: ReturnType<typeof loadConfig>
+export async function checkConfiguredDatabase(
+  configuration?: ApplicationConfigurationQueries,
+): Promise<CheckResult[]> {
+  let config: Config
   try {
-    config = loadConfig(Paths.config)
+    config = await (configuration ?? composeFileDoctorConfigurationQueries(Paths.config)).read()
   } catch (error) {
     return [
       {
@@ -222,13 +226,18 @@ export async function checkConfiguredDatabase(): Promise<CheckResult[]> {
   }
 }
 
-export async function doctorCommand(): Promise<DoctorResult> {
+export async function doctorCommand(
+  selected?: ApplicationConfigurationQueries,
+): Promise<DoctorResult> {
   const checks: CheckResult[] = []
+  const configuration = selected ?? composeFileDoctorConfigurationQueries(Paths.config)
 
   // 1. opencode binary
   let opencodePath: string | undefined
   try {
-    if (existsSync(Paths.config)) opencodePath = loadConfig(Paths.config).opencodePath
+    if (selected !== undefined || existsSync(Paths.config)) {
+      opencodePath = (await configuration.read()).opencodePath
+    }
   } catch {
     // ignore — separate check below catches config issues
   }
@@ -261,7 +270,7 @@ export async function doctorCommand(): Promise<DoctorResult> {
   checks.push(checkAppHome())
 
   // 4. config loads
-  checks.push(checkConfig())
+  checks.push(await checkConfig(configuration, selected === undefined))
 
   // 5. at-rest secrets carry the protection this platform actually offers
   checks.push(checkSecretFileProtection())
@@ -271,7 +280,7 @@ export async function doctorCommand(): Promise<DoctorResult> {
 
   // 7. RFC-108/RFC-213/RFC-349: provider-aware integrity, lifecycle and
   // sealed-credential decryptability. PostgreSQL never probes retained SQLite.
-  checks.push(...(await checkConfiguredDatabase()))
+  checks.push(...(await checkConfiguredDatabase(configuration)))
 
   // 8. Backup inventory is filesystem-owned and provider-neutral.
   checks.push(checkBackups())
@@ -558,15 +567,22 @@ function checkAppHome(): CheckResult {
   }
 }
 
-function checkConfig(): CheckResult {
-  if (!existsSync(Paths.config)) {
+export async function checkConfig(
+  configuration?: ApplicationConfigurationQueries,
+  checkLocalPresence = configuration === undefined,
+): Promise<CheckResult> {
+  if (checkLocalPresence && !existsSync(Paths.config)) {
     return { name: 'config', ok: true, message: '(not yet created; defaults will apply)' }
   }
   try {
-    const cfg = loadConfig(Paths.config)
+    const cfg = await (configuration ?? composeFileDoctorConfigurationQueries(Paths.config)).read()
     return { name: 'config', ok: true, message: `loaded ($schema_version=${cfg.$schema_version})` }
   } catch (err) {
-    return { name: 'config', ok: false, message: (err as Error).message }
+    return {
+      name: 'config',
+      ok: false,
+      message: err instanceof Error ? err.message : String(err),
+    }
   }
 }
 
