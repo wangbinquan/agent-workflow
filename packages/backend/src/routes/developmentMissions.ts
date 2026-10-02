@@ -106,11 +106,11 @@ export function mountDevelopmentMissionRoutes(
       sha256: c.req.param('sha256'),
     }),
     context,
-    encode: (c, file) => {
+    encode: async (c, file) => {
       const baseHeaders = { 'content-type': file.mediaType, 'accept-ranges': 'bytes' }
       const rangeHeader = c.req.header('range')
       if (rangeHeader === undefined) {
-        return c.body(file.openAll(), 200, {
+        return c.body(await file.openAll(), 200, {
           ...baseHeaders,
           'content-length': String(file.bytes),
         })
@@ -136,7 +136,7 @@ export function mountDevelopmentMissionRoutes(
         })
       }
       end = Math.min(end, file.bytes - 1)
-      return c.body(file.open(start, end), 206, {
+      return c.body(await file.open(start, end), 206, {
         ...baseHeaders,
         'content-length': String(end - start + 1),
         'content-range': `bytes ${start}-${end}/${file.bytes}`,

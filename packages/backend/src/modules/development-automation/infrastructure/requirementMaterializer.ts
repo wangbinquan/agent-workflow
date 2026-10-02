@@ -14,7 +14,9 @@
 // 调用；stash 的 canonical digest 必须与 mission.sourceContentDigest 对上，
 // 对不上 = contract-violation，杜绝「stash 什么就物化什么」的偷换）。
 
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import type { EvidenceDocumentQueries } from '../application/evidenceDocuments'
+import { createFileEvidenceDocumentQueries } from './local/fileEvidenceDocumentQueries'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
@@ -133,6 +135,7 @@ export interface RequirementMaterializerDeps {
   readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
   readonly evidence: EvidenceStore
+  readonly documents?: EvidenceDocumentQueries
   /** one-shot sink 的宿主根（每次操作一个 ulid 子目录，用完即删）。 */
   readonly stagingRoot: string
   readonly source?: RequirementSourceRunnerDep
@@ -197,6 +200,12 @@ export function createRequirementMaterializer(
 ): RequirementMaterializer {
   const { bundleRefs, store, snapshots, evidence, stagingRoot } = deps
   mkdirSync(stagingRoot, { recursive: true })
+  const documents =
+    deps.documents ??
+    createFileEvidenceDocumentQueries({
+      getBundle: (ref) => evidence.getBundle(ref),
+      blobPath: (ref) => evidence.blobPath(ref),
+    })
 
   const insertBundleRef = async (input: {
     missionId: string
@@ -242,11 +251,9 @@ export function createRequirementMaterializer(
     }
   }
 
-  const readJsonDoc = (bundleId: string, fileName: string): unknown | null => {
-    const bundle = evidence.getBundle(bundleId)
-    const entry = bundle?.entries.find((e) => e.relativePath === fileName)
-    if (bundle === null || bundle === undefined || entry === undefined) return null
-    return JSON.parse(readFileSync(evidence.blobPath(entry.sha256), 'utf8')) as unknown
+  const readJsonDoc = async (bundleId: string, fileName: string): Promise<unknown | null> => {
+    const text = await documents.readText({ bundleRef: bundleId, relativePath: fileName })
+    return text === null ? null : (JSON.parse(text) as unknown)
   }
 
   /** requirement cells 落新快照 + requirementBundleRef 指过去（OCC 冲突重试 3 次）。 */
@@ -410,7 +417,7 @@ export function createRequirementMaterializer(
   const loadQuestionSet = async (questionSetRef: string): Promise<QuestionSetV1 | null> => {
     const row = await bundleRefById(questionSetRef)
     if (row === null || row.purpose !== 'question-set') return null
-    const doc = readJsonDoc(row.evidenceRef, 'question-set.json')
+    const doc = await readJsonDoc(row.evidenceRef, 'question-set.json')
     if (doc === null) return null
     const parsed = questionSetV1Schema.safeParse(doc)
     return parsed.success ? parsed.data : null
@@ -483,7 +490,7 @@ export function createRequirementMaterializer(
       }
       const existing = await latestBundleRef(input.missionId, 'direct-submission')
       if (existing?.manifestDigest === digest) {
-        const raw = readJsonDoc(existing.evidenceRef, 'submission.json')
+        const raw = await readJsonDoc(existing.evidenceRef, 'submission.json')
         if (raw !== null && directSubmissionDigest(raw as DirectSubmissionDoc) === digest) {
           return { ok: true, submissionRef: digest }
         }
@@ -518,7 +525,7 @@ export function createRequirementMaterializer(
           'stashed submission digest does not match the mission submissionRef',
         )
       }
-      const raw = readJsonDoc(stash.evidenceRef, 'submission.json')
+      const raw = await readJsonDoc(stash.evidenceRef, 'submission.json')
       if (raw === null) {
         return fail('configuration', 'direct-submission-unreadable', 'never', 'stash blob missing')
       }
@@ -788,7 +795,7 @@ export function createRequirementMaterializer(
     async getRequirementManifest(missionId) {
       const row = await latestBundleRef(missionId, 'requirement-manifest')
       if (row === null) return null
-      const doc = readJsonDoc(row.evidenceRef, 'requirement-manifest.json')
+      const doc = await readJsonDoc(row.evidenceRef, 'requirement-manifest.json')
       if (doc === null) return null
       const parsed = requirementBundleManifestV1Schema.safeParse(doc)
       return parsed.success ? parsed.data : null
@@ -797,7 +804,7 @@ export function createRequirementMaterializer(
     async getRequirementManifestMount(missionId, manifestDigest) {
       const row = await bundleRefs.findManifest(missionId, manifestDigest)
       if (row === null) return null
-      const doc = readJsonDoc(row.evidenceRef, 'requirement-manifest.json')
+      const doc = await readJsonDoc(row.evidenceRef, 'requirement-manifest.json')
       if (doc === null) return null
       const parsed = requirementBundleManifestV1Schema.safeParse(doc)
       if (!parsed.success || parsed.data.manifestDigest !== manifestDigest) return null

@@ -1,6 +1,7 @@
 // RFC-344 — transport-neutral current-user operations for legacy DevelopmentMission inbound.
 
 import { z } from 'zod'
+import type { EvidenceDownloadStream } from './evidenceDownloads'
 import type { DirectAuthenticatedAuthority } from '@/modules/identity-access/public/participants'
 import { defineCommandOperation, defineQueryOperation } from '@/platform/operations/definitions'
 
@@ -20,8 +21,8 @@ export interface DevelopmentMissionListInput {
 export interface DevelopmentMissionFileView {
   readonly mediaType: string
   readonly bytes: number
-  readonly openAll: () => ReadableStream<Uint8Array>
-  readonly open: (start: number, endInclusive: number) => ReadableStream<Uint8Array>
+  readonly openAll: () => EvidenceDownloadStream
+  readonly open: (start: number, endInclusive: number) => EvidenceDownloadStream
 }
 
 export interface DevelopmentPipelineEvidenceReadView {

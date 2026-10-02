@@ -466,15 +466,15 @@ function composeDevelopmentMissionOperationsFromPersistence(
           'the hash is not part of this mission requirement bundle',
         )
       }
-      const blob = Bun.file(automation.evidence.blobPath(sha256))
-      if (!(await blob.exists())) {
+      const download = await automation.evidenceDownloads.open(sha256)
+      if (download === null) {
         throw new NotFoundError('evidence-blob-missing', 'evidence blob is missing on disk')
       }
       return {
         mediaType: entry.mediaType,
         bytes: entry.bytes,
-        openAll: () => blob.stream(),
-        open: (start, endInclusive) => blob.slice(start, endInclusive + 1).stream(),
+        openAll: () => download.openAll(),
+        open: (start, endInclusive) => download.open(start, endInclusive),
       }
     },
     async selectRequirementSource(missionId, sourceKey) {

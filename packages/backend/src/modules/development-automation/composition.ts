@@ -73,6 +73,9 @@ import {
 } from './infrastructure/actionWorkspace'
 import { EvidenceStore } from './infrastructure/evidenceStore'
 import type { EvidenceContentQueries } from './application/pipelineEvidenceRead'
+import type { EvidenceDownloadQueries } from './application/evidenceDownloads'
+import type { EvidenceReadBinding } from './composition/evidenceReadBinding'
+import { createFileEvidenceDownloadQueries } from './infrastructure/local/fileEvidenceDownloadQueries'
 import { createFileEvidenceContentQueries } from './infrastructure/local/fileEvidenceContentQueries'
 import {
   createActionBaselineResolver,
@@ -162,6 +165,7 @@ export interface DevelopmentAutomationModule {
   readonly materializer: RequirementMaterializer
   readonly evidence: EvidenceStore
   readonly evidenceContents: EvidenceContentQueries
+  readonly evidenceDownloads: EvidenceDownloadQueries
   /** Business-safe child/approval receipts for Mission detail and journey projection. */
   collaboration(missionId: string): Promise<{
     readonly children: readonly {
@@ -209,6 +213,7 @@ export interface DevelopmentAutomationModule {
 export interface DevelopmentAutomationCompositionOptions {
   readonly appHome: string
   readonly evidenceContents?: EvidenceContentQueries
+  readonly evidenceRead?: EvidenceReadBinding
   /** Bootstrap-selected admission configuration provider; direct tests default to SQLite. */
   readonly admissionLookup?: AdmissionLookup
   /** integration 模块组装的外部需求源 runner；不注入 = 外部取件诚实 blocked。 */
@@ -264,11 +269,16 @@ function composeDevelopmentAutomationFromPersistence(
   const snapshots = persistence.snapshots
   const evidence = new EvidenceStore(join(deps.appHome, 'evidence'))
   const evidenceContents =
+    deps.evidenceRead?.contents ??
     deps.evidenceContents ??
     createFileEvidenceContentQueries({
       blobPath: (ref) => evidence.blobPath(ref),
     })
+  const evidenceDownloads =
+    deps.evidenceRead?.downloads ??
+    createFileEvidenceDownloadQueries({ blobPath: (ref) => evidence.blobPath(ref) })
   const materializer = createRequirementMaterializer({
+    documents: deps.evidenceRead?.documents,
     bundleRefs: persistence.bundleRefs,
     store,
     snapshots,
@@ -371,6 +381,7 @@ function composeDevelopmentAutomationFromPersistence(
     materializer,
     evidence,
     evidenceContents,
+    evidenceDownloads,
     async collaboration(missionId) {
       const links = await playbookSaga.listMissionLinks(missionId)
       const children = await Promise.all(
