@@ -504,10 +504,7 @@
       "file": "packages/backend/tests/architecture/rfc359-w5-t19c-startup-sequence.test.ts",
       "symbol": "STARTUP_SEQUENCE_CALL_SITES",
       "baseline": 5,
-      "why": "RFC-359 W5-T19c：boot 链上每个函数的调用点数。再复制一条启动路径必然要多调一次，多一个就红。",
-      "allowGrowth": {
-        "why": "RFC-370 CI correction: the exact STARTUP_SEQUENCE_CALL_SITES table contains five rows. The fifth was already introduced by the published daemon-host listener regression fixture invoking the same sole exported serveDaemon path; fd02 exact-SHA CI exposed the missing baseline update. Retain the real fixture row and all original startup scanner and negative fixtures."
-      }
+      "why": "RFC-359 W5-T19c：boot 链上每个函数的调用点数。再复制一条启动路径必然要多调一次，多一个就红。"
     },
     {
       "id": "rfc359-w5-unattended-void-promise",
@@ -815,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1817,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 A1: exactly three original-rule entries are introduced: runDaemonStartupWithLease, createNativeDaemonStartupLease and createDaemonRecoveryAuthorityProof. These are the real startup failure lifetime, native provider factory and opaque-receipt converter; the composition factory is not the mutation entry. Preserve the original classifier."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -839,10 +833,7 @@
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
       "baseline": 344,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
-      "allowGrowth": {
-        "why": "RFC-370 A1: the unchanged classifier records readDaemonStartupRecoveryAuthority and createDaemonRecoveryAuthorityProof as two long-running entries. Both belong to the startup-receipt chain; their concrete names, classification and ACK lifetime are preserved in the scoped proof."
-      }
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -856,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5756,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 A1: exactly 18 observed symbol edges are added and the old start createDaemonLockProof edge is replaced, for net 17. They comprise root selection and proof type/value wiring, native lock/control/hash effects and two real required-implementation edges. Preserve all original boundary clauses and the committed classifier; peer span owner WIP is excluded in memory."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -873,20 +861,14 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
       "baseline": 40,
-      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。",
-      "allowGrowth": {
-        "why": "RFC-370 A1: DaemonStartupLeasePort is consumed by the actual SO application, implemented by the independent native provider and bound by exactly one SO root composition. The unchanged rule marks this sole new SPI active; every prior 39 port entry remains intact. Startup authority is separate from full A7 execution ownership and remote orphan recovery."
-      }
+      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
     },
     {
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5115,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 A1: exactly 16 original-rule exception entries are added and the old start createDaemonLockProof edge is replaced, for net 15. The two required-implementation edges are represented by the original liveness rule. Preserve the whole 304-clause debt ledger, 273 inbound/31 outbound baseline, reasons and retirement conditions."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -921,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25819,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 A1: exactly 14 owners are added and the former start acquireStartLock owner is retired, for net 13. The owners are the application file and three helpers, neutral port file and three types, root factory, native provider file/options/acquire helper/factory, and TE receipt converter. Original native algorithm and oracle controls remain unchanged."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -941,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "fd02ad70d48d10446e00fa378be6a80da80edf52",
-    "contentDigest": "sha256:f8030e10803c543fc7e93665adf5e2c2a1602df761591717440a82847c8dc3bb",
+    "currentSnapshotSha": "19c3316c8a0ee64470469935ea2ab04056d0046b",
+    "contentDigest": "sha256:679e6d17a0eec7bcad7ed8aa7134fa1e823b23e2f25cc3e9e5d90512ef57ba32",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
