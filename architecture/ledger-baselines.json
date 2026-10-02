@@ -847,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5687,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 CI correction: DatabaseProvider now resolves through its real pure-type schemaContract export instead of a nonexistent shared export. The original import census records exactly one additional actual resolved platform type edge. Runtime calls and all original assertions are unchanged; no import or boundary rule is widened."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -871,10 +868,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5049,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 CI correction: the original architecture projection counts the one actual platform pure-type edge used by exhaustive pre-open provider preparation. No new boundary exemption is registered and no scanner or rule is changed; the original provider decisions and staged restore behavior remain."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -926,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e8c9d73b13bf467c2e56b9abe2d9baf2f4765797",
-    "contentDigest": "sha256:12e2b258f2c18bd9b4b8a29bd0288e692c6a281fbeebd41d3bd234e3cb76cb1d",
+    "currentSnapshotSha": "3bd953275e62f5498156abeb6e56f040a3af71a3",
+    "contentDigest": "sha256:0a86086ec689b6a5735648f980d44a29d9d5e91a58481787f4f145bf147ddd5a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
