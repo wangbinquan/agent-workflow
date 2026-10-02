@@ -14,3 +14,10 @@ export function composePluginGenerationGcCommand(
     filesystem,
   })
 }
+
+export {
+  createPluginGenerationFilesystemGcPort,
+  hasPluginGenerationGcCandidates,
+  type PluginGenerationFilesystemGcInput,
+  type PluginGenerationFilesystemGcAdapter,
+} from '../infrastructure/local/filePluginGenerationGc'
