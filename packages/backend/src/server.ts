@@ -16,9 +16,9 @@ import {
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import {
-  composeFileApplicationConfiguration,
-  composeFileApplicationConfigurationQueries,
-} from '@/modules/system-operations/composition'
+  composeApplicationConfigurationBinding,
+  type ApplicationConfigurationBinding,
+} from '@/modules/system-operations/composition/applicationConfiguration'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
@@ -803,6 +803,8 @@ export interface AppDeps {
   configPath: string
   /** Selected live query shared by configuration consumers in this application. */
   configuration?: ApplicationConfigurationQueries
+  /** One selected storage instance owns Settings writes and live reads. */
+  applicationConfiguration?: ApplicationConfigurationBinding
   /**
    * Root used for immutable digital-employee program artifacts and isolated
    * contract fixtures. Production uses Paths.root; tests may pin a dedicated
@@ -1997,8 +1999,14 @@ export function composeSqliteApplicationDeps(
   unstarted?: UnstartedApplicationScope,
 ): SqliteAppComposition {
   const appHome = deps.appHome ?? Paths.root
-  const configuration =
-    deps.configuration ?? composeFileApplicationConfigurationQueries(deps.configPath)
+  const applicationConfiguration =
+    deps.applicationConfiguration ??
+    composeApplicationConfigurationBinding({
+      kind: 'file',
+      configPath: deps.configPath,
+      ...(deps.configuration === undefined ? {} : { queries: deps.configuration }),
+    })
+  const configuration = applicationConfiguration.queries
   const workspacePresence = deps.workspacePresence ?? createFileWorkspacePresenceQueries()
   const repositoryBootstrap = composeRepositoryBootstrap(deps, appHome)
   const identityAccess = withIntegrationTriggerResources(
@@ -2438,6 +2446,7 @@ export function composeSqliteApplicationDeps(
     intentApply,
     taskExecutionPersistence,
     eventAutomation,
+    applicationConfiguration,
     configuration,
     unstarted,
   )
@@ -2680,6 +2689,7 @@ function composeSqliteApiRouteMounts(
   intentApply: IntentApplyOperations,
   taskExecutionPersistence: ReturnType<typeof createTaskExecutionPersistence>,
   eventAutomation: EventCenterAutomationCapability,
+  applicationConfiguration: ApplicationConfigurationBinding,
   configuration: ApplicationConfigurationQueries,
   unstarted?: UnstartedApplicationScope,
 ): SqliteApiRouteComposition {
@@ -3442,8 +3452,7 @@ function composeSqliteApiRouteMounts(
   const apiRoutes = Object.freeze({
     config: (app) =>
       mountConfigRoutes(app, {
-        configuration: composeFileApplicationConfiguration({
-          configPath: deps.configPath,
+        configuration: applicationConfiguration.composeCommands({
           runtimeRegistry:
             runtimeManagement.configuration satisfies RuntimeProfileConfigurationCommands,
           withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(deps.configPath),

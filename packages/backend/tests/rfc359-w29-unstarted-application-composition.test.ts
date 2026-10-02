@@ -373,17 +373,17 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   // RFC-370: the four body digests below follow only selected query binding,
   // receiver-preserving async reads and moving the lazy query factory earlier.
   // Their original statement counts and every lifetime rule remain unchanged.
-  test('RFC-370 selects one live query in both roots and passes the daemon selection', () => {
+  test('RFC-370 selects one read/write binding in both roots and passes the daemon selection', () => {
     for (const [source, owner, expected] of [
       [
         pg,
         'composePostgresqlApplication',
-        'input.configuration??composeFileApplicationConfigurationQueries(input.configPath)',
+        "input.applicationConfiguration??composeApplicationConfigurationBinding({kind:'file',configPath:input.configPath,...(input.configuration===undefined?{}:{queries:input.configuration}),})",
       ],
       [
         server,
         'composeSqliteApplicationDeps',
-        'deps.configuration??composeFileApplicationConfigurationQueries(deps.configPath)',
+        "deps.applicationConfiguration??composeApplicationConfigurationBinding({kind:'file',configPath:deps.configPath,...(deps.configuration===undefined?{}:{queries:deps.configuration}),})",
       ],
     ] as const) {
       const body = functionBody(source, owner)
@@ -392,8 +392,18 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
         (node) => ts.isVariableDeclaration(node) && node.name.getText(source) === 'configuration',
       ) as ts.VariableDeclaration[]
       expect(queries).toHaveLength(1)
-      expect(compact(queries[0]!.initializer!, source)).toBe(expected)
-      expect(namedCalls(body, source, 'composeFileApplicationConfigurationQueries')).toHaveLength(1)
+      expect(compact(queries[0]!.initializer!, source)).toBe('applicationConfiguration.queries')
+      const bindings = descendants(
+        body,
+        (node) =>
+          ts.isVariableDeclaration(node) &&
+          node.name.getText(source) === 'applicationConfiguration',
+      ) as ts.VariableDeclaration[]
+      expect(bindings).toHaveLength(1)
+      expect(compact(bindings[0]!.initializer!, source)).toBe(expected)
+      expect(namedCalls(body, source, 'composeApplicationConfigurationBinding')).toHaveLength(1)
+      expect(namedCalls(body, source, 'composeFileApplicationConfigurationQueries')).toHaveLength(0)
+      expect(namedCalls(body, source, 'composeFileApplicationConfiguration')).toHaveLength(0)
       const diagnostics = namedCalls(body, source, 'composeMcpDiagnostics')
       expect(diagnostics).toHaveLength(1)
       const argument = diagnostics[0]!.arguments[0]!
@@ -415,16 +425,29 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       (node) => ts.isVariableDeclaration(node) && node.name.getText(start) === 'configuration',
     ) as ts.VariableDeclaration[]
     expect(queries).toHaveLength(1)
-    expect(compact(queries[0]!.initializer!, start)).toBe(
-      'opts.configuration??composeFileApplicationConfigurationQueries(Paths.config)',
+    expect(compact(queries[0]!.initializer!, start)).toBe('applicationConfiguration.queries')
+    const bindings = descendants(
+      body,
+      (node) =>
+        ts.isVariableDeclaration(node) && node.name.getText(start) === 'applicationConfiguration',
+    ) as ts.VariableDeclaration[]
+    expect(bindings).toHaveLength(1)
+    expect(compact(bindings[0]!.initializer!, start)).toBe(
+      "opts.applicationConfiguration??composeApplicationConfigurationBinding({kind:'file',configPath:Paths.config,...(opts.configuration===undefined?{}:{queries:opts.configuration}),})",
     )
-    for (const [owner, composer, expected] of [
+    for (const [owner, composer, expected, expectedBinding] of [
       [
         'composePostgresqlProviderSession',
         'composePostgresqlDaemonApplication',
         'configuration:input.configuration',
+        'applicationConfiguration:input.applicationConfiguration',
       ],
-      ['composeSqliteProviderSession', 'composeSqliteAppDeps', 'configuration'],
+      [
+        'composeSqliteProviderSession',
+        'composeSqliteAppDeps',
+        'configuration',
+        'applicationConfiguration',
+      ],
     ] as const) {
       const calls = namedCalls(functionBody(start, owner), start, composer)
       expect(calls).toHaveLength(1)
@@ -440,8 +463,43 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
           )
           .map((property) => compact(property, start)),
       ).toEqual([expected])
+      expect(
+        argument.properties
+          .filter(
+            (property) =>
+              (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
+              property.name.getText(start) === 'applicationConfiguration',
+          )
+          .map((property) => compact(property, start)),
+      ).toEqual([expectedBinding])
     }
+    expect(
+      namedCalls(
+        functionBody(pg, 'composePostgresqlApplication'),
+        pg,
+        'applicationConfiguration.composeCommands',
+      ),
+    ).toHaveLength(1)
+    const sqliteCommands = namedCalls(
+      functionBody(server, 'composeSqliteApiRouteMounts'),
+      server,
+      'applicationConfiguration.composeCommands',
+    )
+    expect(sqliteCommands).toHaveLength(1)
+    const sqliteApi = namedCalls(
+      functionBody(server, 'composeSqliteApplicationDeps'),
+      server,
+      'composeSqliteApiRouteMounts',
+    )
+    expect(sqliteApi).toHaveLength(1)
+    expect(sqliteApi[0]!.arguments.slice(-3).map((argument) => compact(argument, server))).toEqual([
+      'applicationConfiguration',
+      'configuration',
+      'unstarted',
+    ])
   })
+  // RFC-370 Settings now shares the selected persistence with live reads; its
+  // existing validation, probe fence and hot-apply dependencies are unchanged.
   // RFC-371 adds one price application per selected provider, sharing its existing
   // runtime directory and DB. Only that property and its single HTTP mount change
   // the whole-body digests below (reviewed against a9fa45ed's parent).
@@ -650,7 +708,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // factory and the durable work-intent store to the daemon phase: 161 -> 165.
     // RFC-370: one shared on-demand configuration reader is composed for HTTP consumers.
     // RFC-370: one daemon-scoped selected presence query, shared by task and workgroup resume.
-    expect(restored.statements).toHaveLength(167)
+    // RFC-370 adds one selected read/write binding declaration; all original phase statements remain.
+    expect(restored.statements).toHaveLength(168)
     expect(namedCalls(body, pg, 'composeRuntimeManagement')).toHaveLength(1)
     // RFC-359 AC-10：摘要随 `runFrameBackfillOnBoot({ provider: 'postgresql', db })` →
     // `({ db })` 更新。`FrameBackfillDatabase` 的 provider 标签是摆设（联合两个成员结构逐字
@@ -766,7 +825,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // adapter (local by default). This next batch selects it once for the task
       // runtime and workgroup; the original full body survives the exact binding inverse.
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
-      'dbd32773f0deb69f230e6ce19b4de81245dc7a666c5e5fa5ef51f3a0ac03bf15',
+      '3fd5d327f2deb153277d2f6a64479dbef89d92ccdec471e2c276ee6e7607042f',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -834,7 +893,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-371: standalone task execution receives mandatory durable invocation accounting.
       // RFC-371: the same database now supplies the committed numeric source participant.
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
-      'b7cf64e0d7da59d207122ec2cf1792a0f1240484d5399c2497043e3e743d831c',
+      '810e1933ca3e5c8ccd16ae7742fb3fb7573f519d3433d04823971429fe504fd2',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -978,7 +1037,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: Intent and webhook configuration bindings change; route order and lifetime stay fixed.
       // RFC-371: task observation queries bind the selected DB and TE facts inside one read snapshot.
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
-      '57a6fb0ebeb185ebd9e700036f4ddeb283830e989a8ba722843180a3ecbc86cb',
+      '94e1a0044982397655f28828fa1be31dafc1efe7b965ebc192c258a3ead43bc7',
     )
     expect(
       namedCalls(

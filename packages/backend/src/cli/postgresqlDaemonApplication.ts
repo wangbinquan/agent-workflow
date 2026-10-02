@@ -9,9 +9,9 @@ import { createTaskObservationFacts } from '@/modules/task-execution/composition
 import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
 import {
-  composeFileApplicationConfiguration,
-  composeFileApplicationConfigurationQueries,
-} from '@/modules/system-operations/composition'
+  composeApplicationConfigurationBinding,
+  type ApplicationConfigurationBinding,
+} from '@/modules/system-operations/composition/applicationConfiguration'
 import type { ConfigConcurrencyHotApplyInput } from '@/modules/system-operations/public/commands'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
@@ -60,7 +60,6 @@ import {
   supportsEventCenterCodeHostDelivery,
   type WebhookDispatcher,
 } from '@/services/webhook/dispatcherTypes'
-import { loadConfig } from '@/config'
 import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import { composeOidcIdentityOperations } from '@/modules/identity-access/composition/providerOperations'
 import { DrizzleOidcProviderRepository } from '@/modules/identity-access/public/operations'
@@ -377,6 +376,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly appHome: string
   readonly configPath: string
   readonly configuration?: ApplicationConfigurationQueries
+  readonly applicationConfiguration?: ApplicationConfigurationBinding
   readonly daemonInfoPath: string
   readonly lockPath: string
   readonly secretBox: SecretBox
@@ -516,8 +516,14 @@ export async function composePostgresqlApplication(
   phase: PostgresqlApplicationPhase,
 ): Promise<PostgresqlDaemonApplication> {
   const workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
-  const configuration =
-    input.configuration ?? composeFileApplicationConfigurationQueries(input.configPath)
+  const applicationConfiguration =
+    input.applicationConfiguration ??
+    composeApplicationConfigurationBinding({
+      kind: 'file',
+      configPath: input.configPath,
+      ...(input.configuration === undefined ? {} : { queries: input.configuration }),
+    })
+  const configuration = applicationConfiguration.queries
   const realtimePolicy = composeDaemonRealtimePolicy({
     resourceVisibility: {
       canViewResource: (actor, type, row) =>
@@ -1956,8 +1962,7 @@ export async function composePostgresqlApplication(
       }) satisfies ObservationTaskQueries,
     },
     config: Object.freeze({
-      configuration: composeFileApplicationConfiguration({
-        configPath: input.configPath,
+      configuration: applicationConfiguration.composeCommands({
         runtimeRegistry:
           runtimeManagement.configuration satisfies RuntimeProfileConfigurationCommands,
         withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(input.configPath),
@@ -2382,7 +2387,7 @@ export async function composePostgresqlApplication(
     async resumeIntentSessions(sessionIds: readonly string[]) {
       if (sessionIds.length === 0) return
       await resumeQueuedIntentWorkingSets(
-        { ...intentDispatchDeps, configSnapshot: loadConfig(input.configPath) },
+        { ...intentDispatchDeps, configSnapshot: await configuration.read() },
         sessionIds,
       )
     },

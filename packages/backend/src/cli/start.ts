@@ -1,6 +1,9 @@
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
-import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
+import {
+  composeApplicationConfigurationBinding,
+  type ApplicationConfigurationBinding,
+} from '@/modules/system-operations/composition/applicationConfiguration'
 import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
@@ -130,7 +133,7 @@ import {
   runTaskIdleTimeoutSweep,
 } from '@/modules/task-execution/composition/taskIdleTimeout'
 import { recoverInterruptedTaskDeletes } from '@/services/taskDelete'
-import { startSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
+import { startConfiguredSubmoduleRefreshLoop } from '@/services/submoduleRefresh'
 import { finishClaimedWebhookWorkspacePrune } from '@/services/gc'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
@@ -364,6 +367,7 @@ export interface StartOptions {
   port?: number
   host?: string
   configuration?: ApplicationConfigurationQueries
+  applicationConfiguration?: ApplicationConfigurationBinding
   databasePreOpenRecovery?: DaemonDatabasePreOpenRecoveryPort
 }
 
@@ -523,6 +527,7 @@ async function composePostgresqlProviderSession(
     db,
     config: input.config,
     configuration: input.configuration,
+    applicationConfiguration: input.applicationConfiguration,
     token: input.token,
     appHome: Paths.root,
     configPath: Paths.config,
@@ -546,6 +551,7 @@ async function composePostgresqlProviderSession(
   })
   const runtime = application.runtime
 
+  const maintenanceConfiguration = await input.configuration.read()
   const maintenanceService: ReturnType<typeof startMaintenanceService> = startMaintenanceService({
     provider: 'postgresql',
     // 外部服务器的存储在服务端，没有「本地文件快照」这回事——恒为 false 与原行为逐字一致
@@ -565,8 +571,8 @@ async function composePostgresqlProviderSession(
         ...handlers,
       }),
     appHome: Paths.root,
-    configPath: Paths.config,
-    loadConfig: () => loadConfig(Paths.config),
+    configPath: input.applicationConfiguration.notificationKey,
+    loadConfig: () => maintenanceConfiguration,
     payloadSources: Object.freeze({
       activeTaskIds: activeTaskIdsSnapshot,
       activeIntentApplyJournalIds: runtime.intentMaintenance.activeApplyJournalIds,
@@ -612,11 +618,10 @@ async function composePostgresqlProviderSession(
   const taskExecutionBindings = await _bindTaskExecutionProviderBackground(
     runtime.taskExecution.background,
     {
-      configPath: Paths.config,
+      configuration: input.configuration,
       scheduled: {
         operations: runtime.scheduledTasks.operations,
         identityAccess: runtime.scheduledTaskIdentityAccess,
-        loadConfig: () => loadConfig(Paths.config),
       },
     },
   )
@@ -844,11 +849,12 @@ async function composePostgresqlProviderSession(
   const idleTimeoutRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'task-idle-timeout',
     intervalMs: DAEMON_CADENCE.taskIdleTimeout,
-    run: () =>
-      runTaskIdleTimeoutSweep(
+    async run() {
+      await runTaskIdleTimeoutSweep(
         runtime.taskIdleTimeout,
-        loadConfig(Paths.config).taskIdleTimeout,
-      ).then(() => undefined),
+        (await input.configuration.read()).taskIdleTimeout,
+      )
+    },
     onError(error) {
       input.log.error('PostgreSQL task idle-timeout sweep failed', {
         error: error instanceof Error ? error.message : String(error),
@@ -858,8 +864,8 @@ async function composePostgresqlProviderSession(
 
   const backupRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'scheduled-backup',
-    start() {
-      const current = loadConfig(Paths.config)
+    async start() {
+      const current = await input.configuration.read()
       const ticker = startBackupScheduler({
         createScheduledBackup: () =>
           application.core.systemOperations.application.commands.requestBackup.execute(
@@ -871,15 +877,6 @@ async function composePostgresqlProviderSession(
         retentionDays: current.backupRetentionDays,
         maxTotalBytes: current.backupMaxTotalBytes,
         protectedKeepCount: current.backupProtectedKeepCount,
-        loadRetention: () => {
-          const next = loadConfig(Paths.config)
-          return {
-            retentionCount: next.backupRetentionCount,
-            retentionDays: next.backupRetentionDays,
-            maxTotalBytes: next.backupMaxTotalBytes,
-            protectedKeepCount: next.backupProtectedKeepCount,
-          }
-        },
         appHome: Paths.root,
         pruneMode: 'external',
         onBackupSettled: () => maintenanceService.runSoon('backupPrune'),
@@ -891,23 +888,27 @@ async function composePostgresqlProviderSession(
           stopped = true
           ticker.stop()
         },
-        drain() {
+        async drain() {
           if (!stopped) throw new Error('scheduled-backup-drain-before-stop')
+          await ticker.awaitIdle()
         },
       })
     },
   })
   const submoduleRefreshRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'submodule-refresh',
-    start() {
-      const ticker = startSubmoduleRefreshLoop(
+    async start() {
+      const ticker = await startConfiguredSubmoduleRefreshLoop(
         application.core.repositoryWorkspaceStore,
-        () => loadConfig(Paths.config),
+        input.configuration,
         undefined,
         Paths.root,
         input.secretBox,
       )
-      const unregister = registerConfigAppliedListener(Paths.config, () => ticker.reconfigure())
+      const unregister = registerConfigAppliedListener(
+        input.applicationConfiguration.notificationKey,
+        () => ticker.reconfigure().then(() => undefined),
+      )
       let stopped = false
       return Object.freeze({
         stop() {
@@ -916,18 +917,19 @@ async function composePostgresqlProviderSession(
           unregister()
           ticker.stop()
         },
-        drain() {
+        async drain() {
           if (!stopped) throw new Error('submodule-refresh-drain-before-stop')
+          await ticker.awaitIdle()
         },
       })
     },
   })
   const batchImportRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'batch-import-gc',
-    start() {
+    async start() {
       const ticker = startBatchImportGc(
         undefined,
-        loadConfig(Paths.config).repoBatchImportRetentionMs,
+        (await input.configuration.read()).repoBatchImportRetentionMs,
       )
       let stopped = false
       return Object.freeze({
@@ -1034,6 +1036,7 @@ interface DaemonProviderSessionComposeInput {
   readonly lifecycle: DaemonProviderSessionLifecycleInput
   readonly config: ReturnType<typeof loadConfig>
   readonly configuration: ApplicationConfigurationQueries
+  readonly applicationConfiguration: ApplicationConfigurationBinding
   readonly token: string
   readonly secretBox: ReturnType<typeof createSecretBox>
   readonly dbVersion: number
@@ -1440,8 +1443,14 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   }
 
   // 3. Load config; honor logLevel if user set non-default in config.
-  const configuration =
-    opts.configuration ?? composeFileApplicationConfigurationQueries(Paths.config)
+  const applicationConfiguration =
+    opts.applicationConfiguration ??
+    composeApplicationConfigurationBinding({
+      kind: 'file',
+      configPath: Paths.config,
+      ...(opts.configuration === undefined ? {} : { queries: opts.configuration }),
+    })
+  const configuration = applicationConfiguration.queries
   let config = await configuration.read()
   if (config.logLevel !== 'info') {
     configureLogger({ level: config.logLevel })
@@ -1570,6 +1579,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   const sessionInput = Object.freeze({
     config,
     configuration,
+    applicationConfiguration,
     token,
     secretBox,
     dbVersion,
@@ -1653,6 +1663,7 @@ async function composeSqliteProviderSession(
   const {
     config,
     configuration,
+    applicationConfiguration,
     token,
     secretBox,
     dbVersion,
@@ -2924,6 +2935,7 @@ async function composeSqliteProviderSession(
   // 不再是 legacy `services/bundle/apply` 的模块级集合。引擎在下面的 `composeSqliteAppDeps`
   // 里装出来，而维护服务先起——这里晚绑定：payload 每个 tick 才求值，那时装配早已完成。
   let resourcePackageApplyActivity: (() => readonly string[]) | null = null
+  const maintenanceConfiguration = await configuration.read()
   const maintenanceService = startMaintenanceService({
     // RFC-359 AC-10：装配方本来就知道自己在装哪个 provider，写出来。
     // 此前这里不写、由 `options.provider ?? 'sqlite'` 静默兜底——那是「落进 else」的另一种写法。
@@ -2957,8 +2969,8 @@ async function composeSqliteProviderSession(
         ...handlers,
       }),
     appHome: Paths.root,
-    configPath: Paths.config,
-    loadConfig: () => loadConfig(Paths.config),
+    configPath: applicationConfiguration.notificationKey,
+    loadConfig: () => maintenanceConfiguration,
     payloadSources: Object.freeze({
       activeTaskIds: activeTaskIdsSnapshot,
       activeIntentApplyJournalIds: intentMaintenanceSnapshots.activeApplyJournalIds,
@@ -3027,6 +3039,7 @@ async function composeSqliteProviderSession(
     digitalEmployeePlatformTools,
     configPath: Paths.config,
     configuration,
+    applicationConfiguration,
     daemonInfoPath: Paths.daemonInfo,
     // RFC-226: runtime readiness is not daemon health. Startup never executes
     // OpenCode; explicit runtime status/Test/use paths perform the version and
@@ -3127,10 +3140,12 @@ async function composeSqliteProviderSession(
     id: 'task-idle-timeout',
     intervalMs: DAEMON_CADENCE.taskIdleTimeout,
     // 每拍热读配置：开关与阈值改动免重启（AC-16）。
-    run: () =>
-      runTaskIdleTimeoutSweep(idleTimeoutOperations, loadConfig(Paths.config).taskIdleTimeout).then(
-        () => undefined,
-      ),
+    async run() {
+      await runTaskIdleTimeoutSweep(
+        idleTimeoutOperations,
+        (await configuration.read()).taskIdleTimeout,
+      )
+    },
     onError(error) {
       log.error('task idle-timeout sweep failed', {
         error: error instanceof Error ? error.message : String(error),
@@ -3142,8 +3157,8 @@ async function composeSqliteProviderSession(
   // backup settles.
   const backupRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'scheduled-backup',
-    start() {
-      const current = loadConfig(Paths.config)
+    async start() {
+      const current = await configuration.read()
       const ticker = startBackupScheduler({
         db,
         intervalMs: current.backupIntervalMs,
@@ -3151,16 +3166,6 @@ async function composeSqliteProviderSession(
         retentionDays: current.backupRetentionDays,
         maxTotalBytes: current.backupMaxTotalBytes,
         protectedKeepCount: current.backupProtectedKeepCount,
-        // 每拍热读:改了设置不必重启(实现门 P1-5)。
-        loadRetention: () => {
-          const cfg = loadConfig(Paths.config)
-          return {
-            retentionCount: cfg.backupRetentionCount,
-            retentionDays: cfg.backupRetentionDays,
-            maxTotalBytes: cfg.backupMaxTotalBytes,
-            protectedKeepCount: cfg.backupProtectedKeepCount,
-          }
-        },
         appHome: Paths.root,
         pruneMode: 'external',
         onBackupSettled: () => maintenanceService.runSoon('backupPrune'),
@@ -3172,8 +3177,9 @@ async function composeSqliteProviderSession(
           stopped = true
           ticker.stop()
         },
-        drain() {
+        async drain() {
           if (!stopped) throw new Error('scheduled-backup-drain-before-stop')
+          await ticker.awaitIdle()
         },
       })
     },
@@ -3182,15 +3188,18 @@ async function composeSqliteProviderSession(
   // nobody launches a task against them. Reads its own enable flag each tick.
   const submoduleRefreshRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'submodule-refresh',
-    start() {
-      const ticker = startSubmoduleRefreshLoop(
+    async start() {
+      const ticker = await startConfiguredSubmoduleRefreshLoop(
         repositoryWorkspaceStore,
-        () => loadConfig(Paths.config),
+        configuration,
         undefined,
         Paths.root,
         secretBox,
       )
-      const unregister = registerConfigAppliedListener(Paths.config, () => ticker.reconfigure())
+      const unregister = registerConfigAppliedListener(
+        applicationConfiguration.notificationKey,
+        () => ticker.reconfigure().then(() => undefined),
+      )
       let stopped = false
       return Object.freeze({
         stop() {
@@ -3199,18 +3208,19 @@ async function composeSqliteProviderSession(
           unregister()
           ticker.stop()
         },
-        drain() {
+        async drain() {
           if (!stopped) throw new Error('submodule-refresh-drain-before-stop')
+          await ticker.awaitIdle()
         },
       })
     },
   })
   const batchImportRuntimeFactory: DaemonProviderRuntimeHandleFactory = Object.freeze({
     id: 'batch-import-gc',
-    start() {
+    async start() {
       const ticker = startBatchImportGc(
         undefined,
-        loadConfig(Paths.config).repoBatchImportRetentionMs,
+        (await configuration.read()).repoBatchImportRetentionMs,
       )
       let stopped = false
       return Object.freeze({
@@ -3560,11 +3570,10 @@ async function composeSqliteProviderSession(
   const taskExecutionBackgroundBindings = await _bindTaskExecutionProviderBackground(
     taskExecutionProvider.background,
     {
-      configPath: Paths.config,
+      configuration,
       scheduled: {
         operations: scheduledTaskRuntime.operations,
         identityAccess: integrationIdentityAccess,
-        loadConfig: () => loadConfig(Paths.config),
       },
     },
   )
