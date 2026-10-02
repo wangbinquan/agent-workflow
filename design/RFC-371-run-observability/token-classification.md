@@ -6,7 +6,9 @@
 
 四类互斥消耗为非缓存输入、缓存读取、缓存写入、输出。总量为四类相加；输出包含 reasoning，不再把推理作为第五桶重复相加。OpenCode 原生输出与 reasoning 分开保存，原生入口合入输出一次；通用 completion/output_tokens、Claude 和平台已规范化用量保留原语义。
 
-原生口径依据：实际调用使用 OpenCode 1.18.31；官方 `Session.getUsage` 从原生 output 中减 reasoning，processor 将此对象存入 message 和 step-finish：[源码](https://github.com/anomalyco/opencode/blob/014614d35b397775e5d397a490fc72368c894ec2/packages/opencode/src/session/session.ts#L321-L379)。新的 stream/native-child adapter 版本注明 1.15.5–1.18.31 和 @2。不能假定任意未来版本仍相同；旧受理记录只可在原 owner、原 record 的修订链内校正，不伪造补差记录或直接改账本。
+原生口径依据：实际调用使用 OpenCode 1.18.31；官方 `Session.getUsage` 从原生 output 中减 reasoning，processor 将此对象存入 message 和 step-finish：`packages/opencode/src/session/session.ts:321-379`（固定提交 `014614d35b397775e5d397a490fc72368c894ec2`）。新的 stream/native-child adapter 版本注明 1.15.5–1.18.31 和 @2。不能假定任意未来版本仍相同；旧受理记录只可在原 owner、原 record 的修订链内校正，不伪造补差记录或直接改账本。
+
+固定来源的可读副本：[OpenCode 官方仓库同提交 raw 源码](https://raw.githubusercontent.com/anomalyco/opencode/014614d35b397775e5d397a490fc72368c894ec2/packages/opencode/src/session/session.ts)（getUsage 第 321–379 行）。GitHub blob 返回 503 的 CI 记录保留；文件路径、提交与口径说明不变。
 
 ## 页面
 
