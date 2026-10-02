@@ -25,7 +25,7 @@ import { createEmployeeReactionRoundQueries } from '@/modules/digital-employee/c
 import { createSecretBox } from '@/auth/secretBox'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 import { ensureTokenFile } from '@/auth/token'
-import { loadConfig } from '@/config'
+import type { loadConfig } from '@/config'
 // RFC-366: the stored budget may carry only the RFC-044 pair; the resolver is the
 // single place the newer per-source caps get their defaults.
 import {
@@ -83,6 +83,7 @@ import {
   composeSqliteMemoryInjectionQueries,
 } from '@/modules/memory/composition'
 import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
+import { composeIntentQueuedResumption } from '@/modules/intent/composition/queuedResumption'
 import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
@@ -552,6 +553,15 @@ async function composePostgresqlProviderSession(
     },
   })
   const runtime = application.runtime
+  const intentQueuedResumption = composeIntentQueuedResumption({
+    configuration: input.configuration,
+    resume: (sessionIds, config) => runtime.resumeIntentSessions(sessionIds, config),
+    onError(error) {
+      input.log.warn('queued PostgreSQL intent working-set admission failed', {
+        error: error instanceof Error ? error.message : String(error),
+      })
+    },
+  })
 
   const maintenanceConfiguration = await input.configuration.read()
   const maintenanceService: ReturnType<typeof startMaintenanceService> = startMaintenanceService({
@@ -599,11 +609,7 @@ async function composePostgresqlProviderSession(
       }
     },
     onIntentQueued(sessionIds) {
-      void runtime.resumeIntentSessions(sessionIds).catch((error) => {
-        input.log.warn('queued PostgreSQL intent working-set admission failed', {
-          error: error instanceof Error ? error.message : String(error),
-        })
-      })
+      intentQueuedResumption.enqueue(sessionIds)
     },
   })
 
@@ -998,6 +1004,7 @@ async function composePostgresqlProviderSession(
     app: application.app,
     webSocket: application.webSocket,
     runtimeFactories: [
+      intentQueuedResumption.runtimeFactory,
       taskExecutionBindings.runtimeFactory,
       maintenanceBindings.runtimeFactory,
       mcpRuntimeBindings.runtimeFactory,
@@ -2910,22 +2917,21 @@ async function composeSqliteProviderSession(
     },
   })
   let intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> | null = null
-  const pendingIntentSessionIds = new Set<string>()
-  const resumeIntentSessions = (sessionIds: readonly string[]): void => {
-    if (sessionIds.length === 0) return
-    if (intentDispatchDeps === null) {
-      for (const sessionId of sessionIds) pendingIntentSessionIds.add(sessionId)
-      return
-    }
-    void resumeQueuedIntentWorkingSets(
-      { ...intentDispatchDeps, configSnapshot: loadConfig(Paths.config) },
-      sessionIds,
-    ).catch((err) =>
+  const intentQueuedResumption = composeIntentQueuedResumption({
+    configuration,
+    async resume(sessionIds, config) {
+      if (intentDispatchDeps === null) throw new Error('intent-queued-resumption-not-composed')
+      await resumeQueuedIntentWorkingSets(
+        { ...intentDispatchDeps, configSnapshot: config },
+        sessionIds,
+      )
+    },
+    onError(err) {
       log.warn('queued intent working-set admission failed', {
         err: err instanceof Error ? err.message : String(err),
-      }),
-    )
-  }
+      })
+    },
+  })
 
   // RFC-338 — every periodic DB/FS-heavy maintenance body runs on a dedicated
   // Worker connection. Main only admits durable slots and consumes typed
@@ -2992,7 +2998,7 @@ async function composeSqliteProviderSession(
         broadcastResolved(taskId)
       }
     },
-    onIntentQueued: resumeIntentSessions,
+    onIntentQueued: intentQueuedResumption.enqueue,
   })
   const maintenanceRuntimeBindings = await createPausableDaemonRuntimeServiceBindings({
     runtimeId: 'maintenance',
@@ -3520,9 +3526,6 @@ async function composeSqliteProviderSession(
     }),
     resourceCatalogFor: intentResourceCatalogFor,
   })
-  const queuedBeforeIntentComposition = [...pendingIntentSessionIds]
-  pendingIntentSessionIds.clear()
-  resumeIntentSessions(queuedBeforeIntentComposition)
   const employeeOsRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'digital-employee-os',
     intervalMs: DAEMON_CADENCE.digitalEmployeeOs,
@@ -3585,6 +3588,7 @@ async function composeSqliteProviderSession(
     },
   )
   const providerRuntimeFactories = Object.freeze([
+    intentQueuedResumption.runtimeFactory,
     taskExecutionBackgroundBindings.runtimeFactory,
     maintenanceRuntimeBindings.runtimeFactory,
     mcpRuntimeTestBindings.runtimeFactory,

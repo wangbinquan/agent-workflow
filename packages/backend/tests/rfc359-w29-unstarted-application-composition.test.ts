@@ -831,7 +831,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // adapter (local by default). This next batch selects it once for the task
       // runtime and workgroup; the original full body survives the exact binding inverse.
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
-      'ac88a77b30ad4f6f4259301edb7af568661583514efc37073f2a11a18eb6a112',
+      // RFC-370: queued admission supplies its already-selected snapshot;
+      // only the runtime method parameter and configSnapshot reference changed.
+      'd636c6a8a0459df274ddce6850cc6ac15313e45a2103f0da911e4f61df690d07',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

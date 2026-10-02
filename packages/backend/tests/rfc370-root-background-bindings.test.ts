@@ -130,12 +130,13 @@ for (const [name, query, notificationKey] of [
   })
 }
 
-test('PostgreSQL queued Intent resume reads the current selected source', () => {
+test('PostgreSQL queued Intent resume consumes the admission-time selected snapshot', () => {
   const found = descendants(
     declaration(pg, 'composePostgresqlApplication'),
     (item) => ts.isMethodDeclaration(item) && item.name.getText(pg) === 'resumeIntentSessions',
   ).filter(ts.isMethodDeclaration)
   expect(found).toHaveLength(1)
-  expect(compact(found[0]!, pg)).toContain('configSnapshot:awaitconfiguration.read()')
+  expect(compact(found[0]!, pg)).toContain('configSnapshot:config')
+  expect(compact(found[0]!, pg)).not.toContain('configuration.read(')
   expect(compact(found[0]!, pg)).not.toContain('loadConfig(')
 })

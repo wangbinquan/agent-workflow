@@ -493,7 +493,7 @@ export interface PostgresqlDaemonApplicationRuntime {
     ReturnType<typeof createPostgresqlResourcePackageAtomicApplyOperations>,
     'activeApplyIds'
   >
-  readonly resumeIntentSessions: (sessionIds: readonly string[]) => Promise<void>
+  readonly resumeIntentSessions: (sessionIds: readonly string[], config: Config) => Promise<void>
   readonly driveHumanGateContinuation: (input: {
     readonly taskId: string
     readonly continuationRef: string
@@ -2391,10 +2391,10 @@ export async function composePostgresqlApplication(
     workspaceMaintenance,
     intentMaintenance,
     resourcePackageActivity: resourcePackageAtomicApply,
-    async resumeIntentSessions(sessionIds: readonly string[]) {
+    async resumeIntentSessions(sessionIds: readonly string[], config: Config) {
       if (sessionIds.length === 0) return
       await resumeQueuedIntentWorkingSets(
-        { ...intentDispatchDeps, configSnapshot: await configuration.read() },
+        { ...intentDispatchDeps, configSnapshot: config },
         sessionIds,
       )
     },
