@@ -6,7 +6,10 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 import { createIntentPersistence } from '@/modules/intent/composition/persistence'
-import { composeIntentQueuedResumption } from '@/modules/intent/composition/queuedResumption'
+import {
+  composeIntentQueuedNotifications,
+  composeIntentQueuedResumption,
+} from '@/modules/intent/composition/queuedResumption'
 import { describeEachProvider } from './helpers/eachProvider'
 
 function deferred<T>() {
@@ -25,6 +28,56 @@ const config = (rounds: number): Config => ({
 })
 
 describe('RFC-370 queued Intent admission lifetime', () => {
+  test('boot notifications transfer to the complete frozen binding before selected admission', async () => {
+    const notifications = composeIntentQueuedNotifications()
+    const ids = ['early', 'early']
+    notifications.enqueue(ids)
+    ids.push('mutated')
+    notifications.enqueue(['early', 'second'])
+    const entered = deferred<void>()
+    const read = deferred<Config>()
+    const admitted = deferred<void>()
+    const seen: (readonly string[])[] = []
+    const bindings = composeIntentQueuedResumption({
+      notifications,
+      configuration: {
+        read() {
+          entered.accept()
+          return read.promise
+        },
+      },
+      async resume(sessionIds, snapshot) {
+        expect(snapshot.intentBuilderMaxGenerateRounds).toBe(17)
+        seen.push(sessionIds)
+        admitted.accept()
+      },
+      onError(error) {
+        throw error
+      },
+    })
+    notifications.enqueue(['after-connect', 'second'])
+    expect(seen).toEqual([])
+    expect(() => notifications.connect(() => {})).toThrow(
+      'intent-queued-notifications-already-connected',
+    )
+    const handle = bindings.runtimeFactory.start()
+    try {
+      await entered.promise
+      expect(seen).toEqual([])
+      read.accept(config(17))
+      await admitted.promise
+      expect(seen).toEqual([['early', 'second', 'after-connect']])
+      expect(Object.isFrozen(seen[0])).toBe(true)
+      notifications.enqueue(['active'])
+      handle.stop()
+      await handle.drain()
+    } finally {
+      read.accept(config(17))
+      handle.stop()
+      await handle.drain()
+    }
+  })
+
   test('frozen notifications dedupe without effects and start waits for the selected ACK', async () => {
     const entered = deferred<void>()
     const read = deferred<Config>()
@@ -401,7 +454,7 @@ describeEachProvider('RFC-370 queued admission selected database', (harness) => 
   })
 })
 
-test('both actual provider roots compose one selected queued lifetime before maintenance', () => {
+test('both actual provider roots wire frozen notifications and one complete selected lifetime', () => {
   const file = ts.createSourceFile(
     'start.ts',
     readFileSync(resolve(import.meta.dir, '../src/cli/start.ts'), 'utf8'),
@@ -436,8 +489,29 @@ test('both actual provider roots compose one selected queued lifetime before mai
         ts.isCallExpression(node) && compact(node.expression) === 'startMaintenanceService',
     )
     expect(maintenance).toHaveLength(1)
-    expect(selected[0]!.pos).toBeLessThan(maintenance[0]!.pos)
-    expect(compact(maintenance[0]!)).toContain('intentQueuedResumption.enqueue')
+    if (name === 'composeSqliteProviderSession') {
+      const notifications = nodes.filter(
+        (node): node is ts.CallExpression =>
+          ts.isCallExpression(node) &&
+          compact(node.expression) === 'composeIntentQueuedNotifications',
+      )
+      expect(notifications).toHaveLength(1)
+      expect(notifications[0]!.pos).toBeLessThan(maintenance[0]!.pos)
+      expect(compact(maintenance[0]!)).toContain('intentQueuedNotifications.enqueue')
+      expect(compact(selected[0]!)).toContain('notifications:intentQueuedNotifications')
+      const dependencies = nodes.filter(
+        (node): node is ts.VariableDeclaration =>
+          ts.isVariableDeclaration(node) && node.name.getText(file) === 'intentDispatchDeps',
+      )
+      expect(dependencies).toHaveLength(1)
+      expect(dependencies[0]!.parent.getText(file)).toStartWith('const intentDispatchDeps')
+      expect(dependencies[0]!.pos).toBeLessThan(selected[0]!.pos)
+      expect(compact(dependencies[0]!.initializer!)).toStartWith('Object.freeze(')
+      expect(compact(root.body)).not.toContain('intent-queued-resumption-not-composed')
+    } else {
+      expect(selected[0]!.pos).toBeLessThan(maintenance[0]!.pos)
+      expect(compact(maintenance[0]!)).toContain('intentQueuedResumption.enqueue')
+    }
     const factories = nodes.filter(
       (node) =>
         (ts.isPropertyAssignment(node) || ts.isVariableDeclaration(node)) &&

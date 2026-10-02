@@ -5,6 +5,7 @@ import type {
   ApplicationConfigurationDependencies,
   ApplicationConfigurationPersistencePort,
 } from '../application/ports/applicationConfiguration'
+import type { DatabaseConfigurationPort } from '../application/ports/databaseConfiguration'
 import { createFileApplicationConfiguration } from '../infrastructure/local/fileApplicationConfiguration'
 import type { ApplicationConfigurationCommands } from '../public/commands'
 import type { ApplicationConfigurationQueries } from '../public/queries'
@@ -13,6 +14,7 @@ import { configureLogger } from '@/util/log'
 
 export interface ApplicationConfigurationBinding {
   readonly queries: ApplicationConfigurationQueries
+  readonly databaseConfiguration: DatabaseConfigurationPort
   readonly notificationKey: string
   composeCommands(
     dependencies: Omit<ApplicationConfigurationDependencies, 'persistence' | 'applied'>,
@@ -44,6 +46,14 @@ export function composeApplicationConfigurationBinding(
       : Object.freeze({ read: () => persistence.load() })
   return Object.freeze({
     queries,
+    databaseConfiguration: Object.freeze({
+      async read() {
+        return (await persistence.load()).database
+      },
+      async write(database) {
+        await persistence.applyPatch({ database })
+      },
+    } satisfies DatabaseConfigurationPort),
     notificationKey,
     composeCommands(
       dependencies: Omit<ApplicationConfigurationDependencies, 'persistence' | 'applied'>,

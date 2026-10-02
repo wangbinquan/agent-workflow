@@ -83,7 +83,10 @@ import {
   composeSqliteMemoryInjectionQueries,
 } from '@/modules/memory/composition'
 import { composeIntentMaintenanceSnapshotQueriesFor } from '@/modules/intent/composition/maintenance'
-import { composeIntentQueuedResumption } from '@/modules/intent/composition/queuedResumption'
+import {
+  composeIntentQueuedNotifications,
+  composeIntentQueuedResumption,
+} from '@/modules/intent/composition/queuedResumption'
 import { composeApprovalGatewayRunnerFor } from '@/modules/integration/composition/approvalGateway'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
@@ -142,8 +145,11 @@ import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backup
 import {
   type DaemonDatabasePreOpenRecoveryPort,
   prepareDatabasePreOpenRecovery,
-  prepareDatabaseProviderForBoot,
 } from '@/modules/system-operations/composition'
+import {
+  prepareDaemonDatabaseProviderForBoot,
+  type DaemonDatabaseInstallationPort,
+} from '@/modules/system-operations/composition/daemonDatabase'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { startBatchImportGc } from '@/services/repoBatchImport'
@@ -372,6 +378,7 @@ export interface StartOptions {
   applicationConfiguration?: ApplicationConfigurationBinding
   runtimeLegacyConfiguration?: RuntimeLegacyConfigurationPort
   databasePreOpenRecovery?: DaemonDatabasePreOpenRecoveryPort
+  databaseInstallation?: DaemonDatabaseInstallationPort
 }
 
 interface DaemonProviderHttpAdmission {
@@ -1527,31 +1534,34 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   // 5. DB — resolve the verified live generation before opening any provider
   // client. The pointer is authoritative; config may supply mechanism settings
   // but cannot silently select a different database.
-  const preparedDatabase = await prepareDatabaseProviderForBoot({
-    config: config.database,
-    configPath: Paths.config,
-    sqlitePath: Paths.db,
-    generationPointerPath: Paths.databaseGenerationPointer,
-    operationsRoot: Paths.databaseMigrationsDir,
-    contract: logicalSchemaContract,
-    history: schemaHistory,
-    lockPath: Paths.lock,
-    lock,
-    sqliteOptions: {
-      migrationsFolder,
-      synchronous: config.sqliteSynchronous,
-      pageCacheMib: config.sqlitePageCacheMib,
-      mmapMib: config.sqliteMmapMib,
-      slowQueryMs: config.sqliteSlowQueryMs,
-      skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
-    },
-    beforeSqliteOpen: () =>
-      maybePreMigrationBackup({
-        appHome: Paths.root,
-        dbPath: Paths.db,
+  const preparedDatabase = await prepareDaemonDatabaseProviderForBoot({
+    configuration: applicationConfiguration.databaseConfiguration,
+    installation: opts.databaseInstallation,
+    file: {
+      config: config.database,
+      sqlitePath: Paths.db,
+      generationPointerPath: Paths.databaseGenerationPointer,
+      operationsRoot: Paths.databaseMigrationsDir,
+      contract: logicalSchemaContract,
+      history: schemaHistory,
+      lockPath: Paths.lock,
+      lock,
+      sqliteOptions: {
         migrationsFolder,
-        enabled: config.backupOnMigration,
-      }).then(() => undefined),
+        synchronous: config.sqliteSynchronous,
+        pageCacheMib: config.sqlitePageCacheMib,
+        mmapMib: config.sqliteMmapMib,
+        slowQueryMs: config.sqliteSlowQueryMs,
+        skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
+      },
+      beforeSqliteOpen: () =>
+        maybePreMigrationBackup({
+          appHome: Paths.root,
+          dbPath: Paths.db,
+          migrationsFolder,
+          enabled: config.backupOnMigration,
+        }).then(() => undefined),
+    },
   }).catch((err: unknown) => {
     if (isDbCorruptionFailure(err)) {
       // RFC-213 fail-closed: never serve a corrupt DB. Print the available
@@ -2916,22 +2926,7 @@ async function composeSqliteProviderSession(
       return worker
     },
   })
-  let intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> | null = null
-  const intentQueuedResumption = composeIntentQueuedResumption({
-    configuration,
-    async resume(sessionIds, config) {
-      if (intentDispatchDeps === null) throw new Error('intent-queued-resumption-not-composed')
-      await resumeQueuedIntentWorkingSets(
-        { ...intentDispatchDeps, configSnapshot: config },
-        sessionIds,
-      )
-    },
-    onError(err) {
-      log.warn('queued intent working-set admission failed', {
-        err: err instanceof Error ? err.message : String(err),
-      })
-    },
-  })
+  const intentQueuedNotifications = composeIntentQueuedNotifications()
 
   // RFC-338 — every periodic DB/FS-heavy maintenance body runs on a dedicated
   // Worker connection. Main only admits durable slots and consumes typed
@@ -2998,7 +2993,7 @@ async function composeSqliteProviderSession(
         broadcastResolved(taskId)
       }
     },
-    onIntentQueued: intentQueuedResumption.enqueue,
+    onIntentQueued: intentQueuedNotifications.enqueue,
   })
   const maintenanceRuntimeBindings = await createPausableDaemonRuntimeServiceBindings({
     runtimeId: 'maintenance',
@@ -3511,7 +3506,7 @@ async function composeSqliteProviderSession(
       },
     }),
   })
-  intentDispatchDeps = Object.freeze({
+  const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
     persistence: intentPersistence,
     events: createIntentSessionWsPublisher(),
     identityAccess: Object.freeze({ directAuthority: identityAccess.directAuthority }),
@@ -3525,6 +3520,21 @@ async function composeSqliteProviderSession(
       authorityFor: intentAuthorityFor,
     }),
     resourceCatalogFor: intentResourceCatalogFor,
+  })
+  const intentQueuedResumption = composeIntentQueuedResumption({
+    configuration,
+    notifications: intentQueuedNotifications,
+    async resume(sessionIds, config) {
+      await resumeQueuedIntentWorkingSets(
+        { ...intentDispatchDeps, configSnapshot: config },
+        sessionIds,
+      )
+    },
+    onError(err) {
+      log.warn('queued intent working-set admission failed', {
+        err: err instanceof Error ? err.message : String(err),
+      })
+    },
   })
   const employeeOsRuntimeFactory = createPollingDaemonRuntimeHandleFactory({
     id: 'digital-employee-os',
