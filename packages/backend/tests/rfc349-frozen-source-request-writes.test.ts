@@ -18,6 +18,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
+import ts from 'typescript'
 import { createAuthRuntimeFor } from '../src/auth/composition'
 import { createPat } from './helpers/auth/patStore'
 import { createSession } from './helpers/auth/sessionStore'
@@ -136,10 +137,23 @@ describe('RFC-349 T10 — a frozen source sees no request-path writes', () => {
     // RFC-359 W12：bootstrap 先构造真实 admission，再把同一组 bindings 交给初始/切换会话。
     const sessionInput = start.indexOf('const sessionInput = Object.freeze({')
     expect(sessionInput).toBeGreaterThan(-1)
-    expect(
-      start.slice(sessionInput, sessionInput + 700),
-      '初始会话必须接收 bootstrap 提供的真实迁移窗口',
-    ).toMatch(
+    // RFC-370: root dependency additions must not truncate the actual bootstrap call.
+    const source = ts.createSourceFile('cli/start.ts', start, ts.ScriptTarget.Latest, true)
+    const calls: ts.CallExpression[] = []
+    const visit = (node: ts.Node) => {
+      if (
+        ts.isCallExpression(node) &&
+        node.expression.getText(source) === 'composeDaemonProviderBootstrap'
+      ) {
+        calls.push(node)
+      }
+      ts.forEachChild(node, visit)
+    }
+    visit(source)
+    expect(calls).toHaveLength(1)
+    const call = calls[0]!
+    expect(ts.isAwaitExpression(call.parent)).toBe(true)
+    expect(call.parent.getText(source), '初始会话必须接收 bootstrap 提供的真实迁移窗口').toMatch(
       /await composeDaemonProviderBootstrap\([\s\S]*composeInitial: \(bindings\)[\s\S]*\.\.\.bindings/u,
     )
     const nextSession = start.indexOf('async create(lifecycleInput, bindings)')

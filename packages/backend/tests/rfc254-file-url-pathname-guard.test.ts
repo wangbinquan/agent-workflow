@@ -25,7 +25,8 @@
 // allowed, which is why the pattern below is anchored on `import.meta.url`.
 
 import { describe, expect, test } from 'bun:test'
-import { readdirSync, readFileSync, statSync } from 'node:fs'
+import { readdirSync, statSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -53,6 +54,17 @@ function walk(dir: string, out: string[]): void {
 const OFFENDER = /new URL\([^)]*import\.meta\.url[^)]*\)\s*\.pathname/
 const SELF = fileURLToPath(import.meta.url)
 
+function sourceOffenders(file: string, source: string): string[] {
+  if (!OFFENDER.test(source)) return []
+  const offenders: string[] = []
+  for (const [i, line] of source.split(/\r?\n/).entries()) {
+    if (OFFENDER.test(line)) {
+      offenders.push(`${file.slice(REPO_ROOT.length + 1)}:${i + 1}: ${line.trim()}`)
+    }
+  }
+  return offenders
+}
+
 describe('RFC-254 T32 — no file-URL .pathname', () => {
   const files: string[] = []
   for (const d of SCAN_DIRS) walk(join(REPO_ROOT, d), files)
@@ -66,21 +78,21 @@ describe('RFC-254 T32 — no file-URL .pathname', () => {
     )
   })
 
-  test('no source file derives a filesystem path from URL.pathname', () => {
+  test('no source file derives a filesystem path from URL.pathname', async () => {
     const offenders: string[] = []
-    for (const f of files) {
-      // This file necessarily SPELLS the banned pattern — in its own header and
-      // in the self-check below. A table-level guard matches literals in
-      // comments too (the RFC-072 lesson), so it has to skip itself; the
-      // self-check test is what keeps the regex honest instead.
-      if (f === SELF) continue
-      const src = readFileSync(f, 'utf-8')
-      if (!OFFENDER.test(src)) continue
-      for (const [i, line] of src.split(/\r?\n/).entries()) {
-        if (OFFENDER.test(line)) {
-          offenders.push(`${f.slice(REPO_ROOT.length + 1)}:${i + 1}: ${line.trim()}`)
-        }
-      }
+    // RFC-370 CI: bounded asynchronous reads keep the original full scan and 5s budget.
+    for (let offset = 0; offset < files.length; offset += 64) {
+      const batch = await Promise.all(
+        files.slice(offset, offset + 64).map(async (f) => {
+          // This file necessarily SPELLS the banned pattern — in its own header and
+          // in the self-check below. A table-level guard matches literals in
+          // comments too (the RFC-072 lesson), so it has to skip itself; the
+          // self-check test is what keeps the regex honest instead.
+          if (f === SELF) return []
+          return sourceOffenders(f, await readFile(f, 'utf-8'))
+        }),
+      )
+      offenders.push(...batch.flat())
     }
     // Use fileURLToPath(import.meta.url) instead — see this file's header.
     expect(offenders).toEqual([])
@@ -92,6 +104,25 @@ describe('RFC-254 T32 — no file-URL .pathname', () => {
     // HTTP request URLs keep their pathname — the ban is file-URL only.
     expect(OFFENDER.test('const p = new URL(request.url).pathname')).toBe(false)
     expect(OFFENDER.test('fileURLToPath(import.meta.url)')).toBe(false)
+  })
+
+  test('source diagnostics preserve all offending line numbers and HTTP URL compatibility', () => {
+    const file = join(REPO_ROOT, 'packages', 'example.ts')
+    const label = join('packages', 'example.ts')
+    expect(
+      sourceOffenders(
+        file,
+        [
+          'const a = new URL(import.meta.url).pathname',
+          'const b = new URL(request.url).pathname',
+          "const c = new URL('../x.ts', import.meta.url).pathname",
+        ].join('\n'),
+      ),
+    ).toEqual([
+      `${label}:1: const a = new URL(import.meta.url).pathname`,
+      `${label}:3: const c = new URL('../x.ts', import.meta.url).pathname`,
+    ])
+    expect(sourceOffenders(file, 'const p = fileURLToPath(import.meta.url)')).toEqual([])
   })
 
   test('at least one real file was scanned for content, not just listed', () => {
