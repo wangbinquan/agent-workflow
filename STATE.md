@@ -1,3 +1,7 @@
+## RFC-370 已发布插件 facade 的 CI 清单补正（2026-10-02）
+
+主 CI36966192393 的终态是 cancelled（42 success/3 failure/5 cancelled），Windows36966192408 failure；有限门不能替正式通过。实际后端8/16只漏已成为薄 facade 的 pluginInstaller.ts 精确清单，归档枚举和格式由并行69afa48c已发布修复。本批只补这一条预期，所有原断言/分类/源码规则/canonical不变；唯一源码已获独立有限功能 PASS，原断言保持；修复 exact-SHA CI待记录。maintenance/git-protocols已终态 success，仍需完整 CI。13路径候选工作区完整保留、排除本修复；无本机 AW test/typecheck/build/service，完整 A1～A8/A-G、CS adapter及M0～M4继续。下方并行内容和全部历史逐字保留。
+
 ## 2026-10-02 RFC-371 CI 接续：已发布归档夹具的枚举收窄
 
 最新并行 d5b266c8 Windows36966192408 failure 定位为 rfc370-task-archive-content.test.ts 2,001 条事件夹具 kind 被推断为 string。只加 text 的 as const，保持真实枚举、原批次/顺序/归档/恢复全部断言与实现；该测试已由原会话发布，不收编其未提交源码。原审批 POST 时序恢复已精确推送064abf30，CI36967523680另记；新修复候选仅目标格式/lint与独立 SOURCE，正式 hosted CI/默认 Windows待核验。无本机 AW test/typecheck/build/service；下方共享并行及历史逐字保留，两 RFC不关闭。
