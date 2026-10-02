@@ -373,7 +373,11 @@ import {
 import { createTaskExecutionResourceBinding } from '@/modules/task-execution/infrastructure/taskExecutionResourceSnapshots'
 import { createTaskExecutionRuntimeParticipants } from '@/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
-import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import {
+  createDrizzleTaskArchiveMaintenanceCommand,
+  type TaskArchiveContentBinding,
+  type TaskArchiveMaintenanceCommand,
+} from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import { composeAgentLaunchResourceOperations } from '@/modules/task-execution/composition/agentLaunchResources'
 import { composeWorkgroupLaunchResourceOperations } from '@/modules/task-execution/composition/workgroupLaunchResources'
 import {
@@ -756,6 +760,10 @@ export function composePostgresqlDaemonProviderCore(
 }
 
 export interface AppDeps {
+  /** Selected archive store for standalone HTTP composition. */
+  taskArchive?: TaskArchiveContentBinding
+  /** Daemon HTTP reuses the exact archive command used by boot recovery. */
+  taskArchiveMaintenance?: TaskArchiveMaintenanceCommand
   /** SC presence facts selected once for root/child/continuation resume. */
   workspacePresence?: WorkspacePresenceQueries
   /**
@@ -3581,7 +3589,9 @@ function composeSqliteApiRouteMounts(
     taskArchive: (app) =>
       mountTaskArchiveRoutes(app, {
         configuration,
-        taskArchiveMaintenance: createDrizzleTaskArchiveMaintenanceCommand(deps.db),
+        taskArchiveMaintenance:
+          deps.taskArchiveMaintenance ??
+          createDrizzleTaskArchiveMaintenanceCommand(deps.db, deps.taskArchive),
       }),
     maintenanceDisk: (app) => mountMaintenanceDiskRoutes(app, deps.maintenanceDisk),
     scheduledTasks: (app) =>

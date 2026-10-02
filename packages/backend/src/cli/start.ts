@@ -371,6 +371,8 @@ import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/com
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
+import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+
 export interface StartOptions {
   port?: number
   host?: string
@@ -379,6 +381,7 @@ export interface StartOptions {
   runtimeLegacyConfiguration?: RuntimeLegacyConfigurationPort
   databasePreOpenRecovery?: DaemonDatabasePreOpenRecoveryPort
   databaseInstallation?: DaemonDatabaseInstallationPort
+  taskArchive?: TaskArchiveContentBinding
 }
 
 interface DaemonProviderHttpAdmission {
@@ -538,6 +541,7 @@ async function composePostgresqlProviderSession(
     config: input.config,
     configuration: input.configuration,
     applicationConfiguration: input.applicationConfiguration,
+    taskArchive: input.taskArchive,
     token: input.token,
     appHome: Paths.root,
     configPath: Paths.config,
@@ -1054,6 +1058,7 @@ interface DaemonProviderSessionComposeInput {
   readonly configuration: ApplicationConfigurationQueries
   readonly applicationConfiguration: ApplicationConfigurationBinding
   readonly runtimeLegacyConfiguration: RuntimeLegacyConfigurationPort
+  readonly taskArchive?: TaskArchiveContentBinding
   readonly token: string
   readonly secretBox: ReturnType<typeof createSecretBox>
   readonly dbVersion: number
@@ -1603,6 +1608,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     configuration,
     applicationConfiguration,
     runtimeLegacyConfiguration,
+    taskArchive: opts.taskArchive,
     token,
     secretBox,
     dbVersion,
@@ -1914,6 +1920,7 @@ async function composeSqliteProviderSession(
   const workspacePresence = createFileWorkspacePresenceQueries()
   const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
     composeSqliteTaskExecutionProviderRuntime(db, {
+      archive: input.taskArchive,
       runtime: {
         workspacePresence,
         observationInvocations: composeLocalInvocationObservations(
@@ -3067,6 +3074,7 @@ async function composeSqliteProviderSession(
     schedulerDriver: taskExecutionRuntime.schedulerDriver,
     taskExecutionReadModels: taskExecutionRuntime.readModels,
     taskRouteLaunch: taskExecutionProvider.routeLaunch,
+    taskArchiveMaintenance: taskExecutionProvider.archive,
     memoryOperations,
     databaseMigration: databaseMigration,
     collaborationContext,

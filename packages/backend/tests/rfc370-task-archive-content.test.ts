@@ -13,6 +13,8 @@ import {
 } from '@/db/schema'
 import type { TaskArchiveContentPort } from '@/modules/task-execution/application/ports/taskArchiveContent'
 import { createDrizzleTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import { createTaskArchiveMaintenanceCommand } from '@/modules/task-execution/composition/providerRuntime'
+import { describeEachProviderHttpApplication } from './helpers/providerHttpApplicationScope'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const NOW = 1_788_278_400_000
@@ -401,3 +403,208 @@ describeEachProvider('RFC-370 selected archive content', (harness) => {
     }, 20_000)
   }
 })
+
+// RFC-370 A2: selected roots belong to the same content binding, including
+// true HTTP composition. Legacy physical options must not redirect that store.
+describeEachProvider('RFC-370 bound archive command roots', (harness) => {
+  test('helper freezes selected roots and retains caller timestamp and policy', async () => {
+    await seedTask(harness.db)
+    const store = memoryContent()
+    const locations = { ...OPTIONS }
+    const command = createTaskArchiveMaintenanceCommand(harness.db, {
+      content: store.content,
+      locations,
+    })
+    locations.archiveDir = 'caller:changed-after-composition'
+    store.putFile(`${OPTIONS.runsDir}/${ROOT}/prompt.md`, 'bound prompt')
+    const caller = {
+      archiveDir: 'caller:archive',
+      runsDir: 'caller:runs',
+      logsDir: 'caller:logs',
+      now: NOW,
+    }
+    expect(await command.preview({ retentionDays: 1, maxTrees: 1, now: NOW })).toEqual([
+      { rootTaskId: ROOT, taskCount: 1, lastFinishedAt: NOW - 10 * DAY },
+    ])
+    expect(store.calls).toEqual([])
+    const receipt = await command.runSweep(
+      { enabled: true, retentionDays: 1, maxTreesPerSweep: 1 },
+      caller,
+    )
+    expect(receipt.archived.map((tree) => tree.dir)).toEqual([FINAL])
+    expect(store.files.get(`${FINAL}/runs/${ROOT}/prompt.md`)).toBe('bound prompt')
+    expect(store.calls.every((call) => !call.reference.startsWith('caller:'))).toBe(true)
+    expect((await claims(harness.db))[0]!.cleanupPlanJson).toBe(
+      JSON.stringify({
+        v: 2,
+        rootTaskId: ROOT,
+        archiveRoot: OPTIONS.archiveDir,
+        runsRoot: OPTIONS.runsDir,
+        logsRoot: OPTIONS.logsDir,
+      }),
+    )
+    expect((await harness.db.select().from(taskArchiveAudit))[0]).toMatchObject({
+      source: 'sweep',
+      createdAt: NOW,
+    })
+  }, 20_000)
+
+  test('bound manual command keeps actor, explicit retention and audit timestamp', async () => {
+    await seedTask(harness.db)
+    const store = memoryContent()
+    const command = createTaskArchiveMaintenanceCommand(harness.db, {
+      content: store.content,
+      locations: OPTIONS,
+    })
+    const result = await command.runManual(
+      { retentionDays: 1, maxTrees: 1, actorUserId: 'archive-user', now: NOW },
+      { archiveDir: 'other:archive', runsDir: 'other:runs', logsDir: 'other:logs', now: 0 },
+    )
+    expect(result.archived.map((tree) => tree.dir)).toEqual([FINAL])
+    expect((await harness.db.select().from(taskArchiveAudit))[0]).toMatchObject({
+      source: 'manual',
+      actorUserId: 'archive-user',
+      retentionDays: 1,
+      createdAt: NOW,
+    })
+  }, 20_000)
+
+  test('bound boot recovery waits on the same content receiver before deleting temporary content', async () => {
+    await seedTask(harness.db)
+    const entered = barrier()
+    const release = barrier()
+    const store = memoryContent({
+      before: async (operation, reference) => {
+        if (operation === 'restore' && reference === `${TEMPORARY}/runs`) {
+          entered.release()
+          await release.promise
+        }
+      },
+    })
+    store.makeDirectory(`${TEMPORARY}/db`)
+    const command = createTaskArchiveMaintenanceCommand(harness.db, {
+      content: store.content,
+      locations: OPTIONS,
+    })
+    const pending = command.recover({
+      archiveDir: 'other:archive',
+      runsDir: 'other:runs',
+      logsDir: 'other:logs',
+    })
+    try {
+      await Promise.race([
+        entered.promise,
+        pending.then(() => {
+          throw new Error('bound recovery skipped its selected ACK')
+        }),
+      ])
+      expect(store.directories.has(TEMPORARY)).toBe(true)
+      expect(store.calls.some((call) => call.operation === 'remove')).toBe(false)
+      release.release()
+      expect((await pending).discarded).toEqual([ROOT])
+      expect(store.calls.every((call) => !call.reference.startsWith('other:'))).toBe(true)
+    } finally {
+      release.release()
+      await pending
+    }
+  }, 20_000)
+
+  test('selected recovery failure is propagated without consulting a local archive root', async () => {
+    const failure = new Error('selected archive unavailable')
+    const store = memoryContent({
+      before(operation) {
+        if (operation === 'exists') throw failure
+      },
+    })
+    const command = createTaskArchiveMaintenanceCommand(harness.db, {
+      content: store.content,
+      locations: OPTIONS,
+    })
+    await expect(
+      command.recover({
+        archiveDir: 'other:archive',
+        runsDir: 'other:runs',
+        logsDir: 'other:logs',
+      }),
+    ).rejects.toBe(failure)
+    expect(store.calls).toEqual([{ operation: 'exists', reference: OPTIONS.archiveDir }])
+  }, 20_000)
+})
+
+describeEachProviderHttpApplication(
+  'RFC-370 real HTTP archive content binding',
+  {
+    token: 'a'.repeat(64),
+    opencodeVersion: null,
+    dbVersion: 17,
+    tempPrefix: 'aw-rfc370-archive-root-',
+  },
+  (scope) => {
+    test('manual HTTP waits for selected manifest ACK, preserves the claim and uses selected roots', async () => {
+      const db = scope.harness.db
+      await seedTask(db)
+      await db
+        .update(tasks)
+        .set({ finishedAt: Date.now() - 10 * DAY })
+        .where(eq(tasks.id, ROOT))
+      const entered = barrier()
+      const release = barrier()
+      const store = memoryContent({
+        before: async (operation, reference) => {
+          if (operation === 'write' && reference === `${TEMPORARY}/manifest.json`) {
+            entered.release()
+            await release.promise
+          }
+        },
+      })
+      const { app } = await scope.open({
+        taskArchive: { content: store.content, locations: OPTIONS },
+      })
+      store.putFile(`${OPTIONS.runsDir}/${ROOT}/prompt.md`, 'HTTP prompt')
+      const request = (dryRun: boolean) =>
+        app.request('/api/tasks/archive', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${'a'.repeat(64)}`,
+            'content-type': 'application/json',
+          },
+          body: JSON.stringify({ retentionDays: 1, maxTrees: 1, dryRun }),
+        })
+      const preview = await request(true)
+      expect(preview.status).toBe(200)
+      expect(await preview.json()).toMatchObject({ dryRun: true, treeCount: 1, taskCount: 1 })
+      expect(store.calls).toEqual([])
+      const pending = request(false)
+      try {
+        await Promise.race([
+          entered.promise,
+          pending.then(async (response) => {
+            throw new Error(
+              `HTTP archive missed selected ACK: ${response.status} ${await response.text()}`,
+            )
+          }),
+        ])
+        expect(await taskExists(db)).toBe(true)
+        const initial = await claims(db)
+        expect(initial).toHaveLength(1)
+        expect(initial[0]!.state).toBe('claimed')
+        release.release()
+        const response = await pending
+        expect(response.status).toBe(200)
+        expect(await response.json()).toMatchObject({
+          dryRun: false,
+          treeCount: 1,
+          taskCount: 1,
+          skipped: 0,
+        })
+        expect(await taskExists(db)).toBe(false)
+        expect((await claims(db))[0]).toMatchObject({ id: initial[0]!.id, state: 'completed' })
+        expect(store.files.get(`${FINAL}/runs/${ROOT}/prompt.md`)).toBe('HTTP prompt')
+        expect(store.calls.every((call) => call.reference.startsWith('artifact:'))).toBe(true)
+      } finally {
+        release.release()
+        await pending
+      }
+    }, 20_000)
+  },
+)

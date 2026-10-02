@@ -51,7 +51,10 @@ import {
   createTaskRouteOperations,
   type TaskRouteOperationsDependencies,
 } from '../infrastructure/taskRouteOperations'
-import { createDrizzleTaskArchiveMaintenanceCommand } from '../infrastructure/taskArchiveMaintenanceCommand'
+import {
+  createDrizzleTaskArchiveMaintenanceCommand,
+  type TaskArchiveContentBinding,
+} from './taskArchiveMaintenance'
 import type { AutomaticTaskRepairOptions } from '../infrastructure/taskRouteRepairOperations'
 import { createTaskLifecycleAutoRepairCommand } from './taskLifecycleRepair'
 import { createDatabaseTaskLifecycleWsProjector } from '../infrastructure/taskLifecycleWsProjection'
@@ -227,6 +230,7 @@ type SqliteRuntimeParticipantsAssembled =
 export interface SqliteTaskExecutionProviderRuntimeDependencies<
   C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
 > {
+  readonly archive?: TaskArchiveContentBinding
   readonly runtime: Omit<
     TaskExecutionRuntimeParticipantsInput,
     // RFC-359 AC-1（plan §5hn 批次二 ⑤）：`childLaunchWorkgroup` 与 PostgreSQL 那一支同形——
@@ -364,7 +368,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
     readModels: persistence.reads,
     recovery: persistence.recoveryAdministration,
     shutdown: persistence.shutdown,
-    archive: createDrizzleTaskArchiveMaintenanceCommand(db),
+    archive: createDrizzleTaskArchiveMaintenanceCommand(db, dependencies.archive),
     autoResume,
     repositoryPreparationRetry: dependencies.repositoryPreparationRetry,
     lifecycleRepair,
@@ -416,6 +420,7 @@ export interface PostgresqlTaskExecutionRuntimeDependencies extends Omit<
 }
 
 export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
+  readonly archive?: TaskArchiveContentBinding
   readonly runtime: Omit<PostgresqlTaskExecutionRuntimeDependencies, 'childLaunchWorkgroup'>
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime
   readonly routeLaunch: Omit<TaskRouteLaunchDependencies, 'db' | 'workspace'>
@@ -569,7 +574,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
     readModels: persistence.reads,
     recovery: persistence.recoveryAdministration,
     shutdown: persistence.shutdown,
-    archive: createDrizzleTaskArchiveMaintenanceCommand(db),
+    archive: createDrizzleTaskArchiveMaintenanceCommand(db, dependencies.archive),
     autoResume,
     repositoryPreparationRetry,
     lifecycleRepair,
@@ -613,6 +618,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
  */
 export function createTaskArchiveMaintenanceCommand(
   db: ProviderNeutralDatabase,
+  archive?: TaskArchiveContentBinding,
 ): TaskArchiveMaintenanceCommand {
-  return createDrizzleTaskArchiveMaintenanceCommand(db)
+  return createDrizzleTaskArchiveMaintenanceCommand(db, archive)
 }

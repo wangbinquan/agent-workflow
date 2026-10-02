@@ -833,7 +833,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
       // RFC-370: queued admission supplies its already-selected snapshot;
       // only the runtime method parameter and configSnapshot reference changed.
-      'd636c6a8a0459df274ddce6850cc6ac15313e45a2103f0da911e4f61df690d07',
+      // RFC-370: the same selected archive command/content binding now reaches HTTP;
+      // original statement counts, phase blocks and all lifetime predicates remain.
+      '98308e5bf243956d1036dbf0271c2c149eb0936123586ede16a84533c848f033',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -1045,7 +1047,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: Intent and webhook configuration bindings change; route order and lifetime stay fixed.
       // RFC-371: task observation queries bind the selected DB and TE facts inside one read snapshot.
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
-      '5b39b5836e5beec6312130079887bc8739c6aa351332ece8abd817972bf88de7',
+      // RFC-370: the same selected archive command/content binding now reaches HTTP;
+      // original statement counts, phase blocks and all lifetime predicates remain.
+      '9aa32ce74155c0df4b5932669ca02d085e61400e87232eb584973b796b3f5213',
     )
     expect(
       namedCalls(

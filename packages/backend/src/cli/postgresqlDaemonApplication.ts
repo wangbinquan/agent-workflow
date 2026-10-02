@@ -366,6 +366,8 @@ type PostgresqlProviderRuntime = Extract<
   { readonly provider: 'postgresql' }
 >
 
+import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+
 export interface PostgresqlDaemonApplicationInput {
   readonly provider: PostgresqlProviderRuntime
   readonly db: PostgresqlDatabaseClient
@@ -377,6 +379,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly configPath: string
   readonly configuration?: ApplicationConfigurationQueries
   readonly applicationConfiguration?: ApplicationConfigurationBinding
+  readonly taskArchive?: TaskArchiveContentBinding
   readonly daemonInfoPath: string
   readonly lockPath: string
   readonly secretBox: SecretBox
@@ -983,6 +986,7 @@ export async function composePostgresqlApplication(
       ...runtimeConfigOpts(resolveLaunchRuntimeConfig(input.configPath)),
     })
   const taskExecutionProvider = composePostgresqlTaskExecutionProviderRuntime(input.db, {
+    archive: input.taskArchive,
     runtime: {
       workspacePresence,
       observationInvocations: composeLocalInvocationObservations(
