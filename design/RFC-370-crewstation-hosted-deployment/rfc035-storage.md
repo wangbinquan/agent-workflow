@@ -4,7 +4,7 @@
 
 ## 1. 已有平台合同与分工
 
-2026-10-01 只读核对 CS `35cf5a475979cbf74fb324230173f55b4e1a0a75` 的 [integration-contract](https://github.com/wangbinquan/CrewStation/blob/35cf5a475979cbf74fb324230173f55b4e1a0a75/proposal/rfc/RFC-035-service-persistent-volumes/integration-contract.md)、[acceptance](https://github.com/wangbinquan/CrewStation/blob/35cf5a475979cbf74fb324230173f55b4e1a0a75/proposal/rfc/RFC-035-service-persistent-volumes/acceptance.md) 和 [serviceStorageClient](https://github.com/wangbinquan/CrewStation/blob/35cf5a475979cbf74fb324230173f55b4e1a0a75/packages/api-client/serviceStorageClient.ts)。这三个路径没有工作树修改。平台已记录对象上传、任务输入、暂停留卷、finalize 归档后回收及卷后下载的真实验收；这些记录不替代 AW 自身的联合部署证明。
+2026-10-01 只读核对 CS `35cf5a475979cbf74fb324230173f55b4e1a0a75` 的 [integration-contract](https://raw.githubusercontent.com/wangbinquan/CrewStation/35cf5a475979cbf74fb324230173f55b4e1a0a75/proposal/rfc/RFC-035-service-persistent-volumes/integration-contract.md)、[acceptance](https://raw.githubusercontent.com/wangbinquan/CrewStation/35cf5a475979cbf74fb324230173f55b4e1a0a75/proposal/rfc/RFC-035-service-persistent-volumes/acceptance.md) 和 [serviceStorageClient](https://raw.githubusercontent.com/wangbinquan/CrewStation/35cf5a475979cbf74fb324230173f55b4e1a0a75/packages/api-client/serviceStorageClient.ts)。这三个路径没有工作树修改。平台已记录对象上传、任务输入、暂停留卷、finalize 归档后回收及卷后下载的真实验收；这些记录不替代 AW 自身的联合部署证明。
 
 | 内容 | AW／CS 责任 |
 | --- | --- |

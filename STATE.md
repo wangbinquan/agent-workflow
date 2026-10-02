@@ -1,3 +1,11 @@
+## 2026-10-02 RFC-370 CI 修正发布与 RFC035 来源链接
+
+6路径源码修正与17份配套已按四个小提交发布并精确同步 `55b1104a812c247f692f5450b6738e299d437bc1`；双发布锁、空共享索引、候选字节、提交路径/归属及其他在制内容均核对，foreignDrift为空。Windows [36980819374](https://github.com/wangbinquan/agent-workflow/actions/runs/36980819374) 已 completed/success、1/1，headSha严格一致。主 [36980700296](https://github.com/wangbinquan/agent-workflow/actions/runs/36980700296) 已 completed/failure、48 success／2 failure／0 cancelled；失败只有 Markdown link check 与 CI required 聚合，其余作业全部成功，不能记正式全绿。
+
+三项均在 rfc035-storage.md：CS 的固定SHA blob页面返回503。仓库实时核对为PUBLIC，GitHub API确认原精确提交存在；同SHA/同路径的三个raw内容URL实时HEAD均200。限定改为raw内容链接，逆变换后本文件全文逐字相同；不改事实、平台合同、来源版本、链接checker、接受状态、重试或预算。正式恢复交新确切SHA CI，原失败事实保留。
+
+配置叶层14路径有限独立PASS，指纹dbfb8db829287e32bf7e6f6089d9e820dad9078fa08f2744cc81efe984dd943e；所选配置根及双provider回归仍独立在制，完全排除本次文档修复。仅HTTP头、API提交元数据、源码/AST/字节证明和目标格式/lint，无本机AW test/typecheck/build/service。完整A1～A8/A-G、CS独立adapter及M0～M4持续，尚无AW-in-CS部署，不关闭RFC；下方全部历史和并行输出保持。
+
 ## 2026-10-02 RFC-370：24路径批次的 CI 补正
 
 24路径已按13/11源码、canonical、六消费回执退役发布64bf703622b6a7899df8a82a9e4b1dec13185d33并同步；Windows36976027391 failure，主CI36976027404 cancelled、38成功/7失败/5取消，均非全绿。新六路径补正：真实DatabaseProvider类型来源与receiver断言泛型；删除无实际消费者的storage trait；取消fixture等待持久执行身份之后的真实launch屏障并finally收完，原判据/预算保持。两组三路径独立有限PASS；provider债数量24→23、实际Git fetch位置补一条、两项真实类型边增长按原协议登记/后继退役。仅目标格式/lint、纯源码/JSON与官方scoped生成；并行e8c9d73b1仅两个RFC371文档已保留同步。后继精确CI尚待发布，完整A1～A8/A-G、CS adapter及M0～M4继续，无AW-in-CS部署，不关闭RFC；下方历史与并行输出保留。
