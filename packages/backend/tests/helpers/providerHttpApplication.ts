@@ -36,6 +36,7 @@ export type ProviderHttpApplicationInput = Pick<
   | 'taskArchive'
   | 'skillContent'
   | 'employeePrograms'
+  | 'employeeInputArtifacts'
   | 'evidenceRead'
   | 'evidenceDocumentCommands'
   | 'daemonRuntime'

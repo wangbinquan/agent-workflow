@@ -23,6 +23,7 @@ import {
   type PipelineEvidenceManifestV1,
 } from '../domain/pipelineManifest'
 import { claimDeliveryEffect, type DeliveryChainDeps } from './missionDeliveryChain'
+import type { AttemptContextStorePort } from './ports/attemptContextStore'
 import type { MissionRow } from './ports/missionStore'
 
 /** trigger/rerun 的 effect kinds：与发布链同享「链自身是结算者」的 guard 豁免。 */
@@ -78,13 +79,13 @@ function countsOf(cells: Cells, id: string): Record<string, number> {
 }
 
 /** cells 里的 pinned manifest（repair 闭集 / rerun 判定共用）。 */
-export function loadPipelineManifest(
-  deps: Pick<DeliveryChainDeps, 'ports'>,
+export async function loadPipelineManifest(
+  deps: { readonly ports: { readonly attemptContext?: AttemptContextStorePort } },
   cells: Cells,
-): PipelineEvidenceManifestV1 | null {
+): Promise<PipelineEvidenceManifestV1 | null> {
   const manifestRef = knownString(cells, '__pipeline.manifestRef')
   if (manifestRef === null || deps.ports.attemptContext === undefined) return null
-  const raw = deps.ports.attemptContext.load(manifestRef)
+  const raw = await deps.ports.attemptContext.load(manifestRef)
   if (raw === null) return null
   try {
     const parsed = pipelineEvidenceManifestV1Schema.safeParse(JSON.parse(raw))

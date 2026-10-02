@@ -203,7 +203,7 @@ async function loadCandidateContext(
   if (validated === undefined || validated.preSnapshotRef === null) {
     return { failCode: 'candidate-context-missing:attempt' }
   }
-  const raw = deps.ports.attemptContext.load(validated.preSnapshotRef)
+  const raw = await deps.ports.attemptContext.load(validated.preSnapshotRef)
   if (raw === null) return { failCode: 'candidate-context-missing:pre-state' }
   let pre: { baselineRepoPath?: unknown; baselineSha?: unknown; workspacePath?: unknown }
   try {

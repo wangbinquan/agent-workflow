@@ -17,6 +17,7 @@ import type {
   ChildMissionIntent,
   ChildMissionReceipt,
 } from '../../domain/stepSaga'
+import type { AttemptContextStorePort } from './attemptContextStore'
 import type { PlaybookSagaPersistence } from './playbookSagaStore'
 import type { RepositoryPublicationReceipt } from '@agent-workflow/shared'
 
@@ -341,10 +342,7 @@ export interface ChangeCandidatePort {
  * PR-4 —— attempt pre-state 上下文的持久面（内容寻址 JSON，evidence 池实现；
  * Agent workspace 之外，Agent 不可达——伪造 pre 快照即伪造回退基准）。
  */
-export interface AttemptContextStorePort {
-  save(json: string): Promise<string>
-  load(ref: string): string | null
-}
+export type { AttemptContextStorePort } from './attemptContextStore'
 
 /**
  * PR-4 T47 —— workspace 对拍面（infrastructure/workspaceValidator 的结构同形；

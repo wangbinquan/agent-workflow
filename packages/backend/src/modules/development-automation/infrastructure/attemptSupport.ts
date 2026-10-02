@@ -7,44 +7,15 @@
 //    `<ws>/.git`、evidence = `<ws>/.agent-workflow`）也钉在这里，launch 轮拍
 //    与 collect 轮重拍必须同一约定。
 
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
-import type {
-  AttemptContextStorePort,
-  WorkspaceValidationPort,
-} from '../application/ports/reconcilerPorts'
-import type { EvidenceStore } from './evidenceStore'
+import type { WorkspaceValidationPort } from '../application/ports/reconcilerPorts'
 import { snapshotProtectedRoots, type ProtectedRootSnapshot } from './protectedSnapshot'
 import { businessTreeSnapshot, validateWorkspaceOutcome } from './workspaceValidator'
 import type { CapabilityWorkspaceMode } from '../domain/capabilityDefinition'
 
-export function createAttemptContextStore(evidence: EvidenceStore): AttemptContextStorePort {
-  return {
-    async save(json) {
-      const staging = mkdtempSync(join(tmpdir(), 'aw-attempt-ctx-'))
-      try {
-        const file = join(staging, 'context.json')
-        writeFileSync(file, json)
-        const blob = await evidence.putBlobFromFile(file)
-        return blob.sha256
-      } finally {
-        rmSync(staging, { recursive: true, force: true })
-      }
-    },
-    load(ref) {
-      if (!/^[0-9a-f]{64}$/.test(ref)) return null
-      const path = evidence.blobPath(ref)
-      try {
-        return readFileSync(path, 'utf8')
-      } catch {
-        return null
-      }
-    },
-  }
-}
+export { createAttemptContextStore } from './local/fileAttemptContextStore'
 
 /** launch/collect 两轮共用的 protected roots 约定。 */
 function protectedRootsOf(workspacePath: string): Record<string, string> {

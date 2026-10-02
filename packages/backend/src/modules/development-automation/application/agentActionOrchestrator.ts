@@ -845,7 +845,9 @@ export async function collectAgentAttempt(
   if (attempt.status !== 'claimed' && attempt.status !== 'running') return { kind: 'no-op' }
   if (attempt.executionRef === null) return { kind: 'no-op' }
 
-  const preState = parsePreState(ports.attemptContext?.load(attempt.preSnapshotRef ?? '') ?? null)
+  const preState = parsePreState(
+    (await ports.attemptContext?.load(attempt.preSnapshotRef ?? '')) ?? null,
+  )
   const launcher = preState?.scriptRef === null ? ports.agentLauncher : ports.scriptLauncher
   if (launcher === undefined) return { kind: 'no-op' }
   const snapshot = await launcher.fetchOutcome(attempt.executionRef)

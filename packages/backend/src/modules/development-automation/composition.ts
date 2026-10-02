@@ -62,10 +62,8 @@ import type { UploadMaintenancePersistence } from './application/ports/uploadMai
 import type { UploadPlacementPersistence } from './application/ports/uploadPlacementStore'
 import type { RecoveryReaders } from './application/missionRecovery'
 import type { WakeSweepReaders } from './application/missionWakeSweep'
-import {
-  createAttemptContextStore,
-  createWorkspaceValidationAdapter,
-} from './infrastructure/attemptSupport'
+import { createWorkspaceValidationAdapter } from './infrastructure/attemptSupport'
+import { createAttemptContextStore } from './infrastructure/local/fileAttemptContextStore'
 import {
   adoptActionWorkspace,
   discardWorkspace,
@@ -77,6 +75,8 @@ import type { EvidenceDownloadQueries } from './application/evidenceDownloads'
 import type { EvidenceReadBinding } from './composition/evidenceReadBinding'
 import type { EvidenceDocumentCommands } from './application/evidenceDocumentCommands'
 export type { EvidenceDocumentCommands }
+import type { AttemptContextStorePort } from './application/ports/attemptContextStore'
+export type { AttemptContextStorePort }
 import { createFileEvidenceDownloadQueries } from './infrastructure/local/fileEvidenceDownloadQueries'
 import { createFileEvidenceContentQueries } from './infrastructure/local/fileEvidenceContentQueries'
 import {
@@ -217,6 +217,7 @@ export interface DevelopmentAutomationCompositionOptions {
   readonly evidenceContents?: EvidenceContentQueries
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
+  readonly attemptContext?: AttemptContextStorePort
   /** Bootstrap-selected admission configuration provider; direct tests default to SQLite. */
   readonly admissionLookup?: AdmissionLookup
   /** integration 模块组装的外部需求源 runner；不注入 = 外部取件诚实 blocked。 */
@@ -330,7 +331,7 @@ function composeDevelopmentAutomationFromPersistence(
       discard: discardWorkspace,
     },
     uploadPlanReader: persistence.uploadPlanReader,
-    attemptContext: createAttemptContextStore(evidence),
+    attemptContext: deps.attemptContext ?? createAttemptContextStore(evidence),
     actionTemplates: {
       content: async (id, revision) => {
         const row = await templates.getRevision(id, revision)

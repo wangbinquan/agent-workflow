@@ -115,7 +115,10 @@ import {
   selectSkillContentDependencies,
   type SkillContentBinding,
 } from '@/modules/resource-catalog/composition/skillContentBinding'
-import type { ProgramArtifactPort } from '@/modules/digital-employee/composition'
+import type {
+  ProgramArtifactPort,
+  EmployeeInputArtifactPort,
+} from '@/modules/digital-employee/composition'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 import type { AgentResourceIntegrityComposition } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
@@ -461,6 +464,7 @@ import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/develo
 import {
   composeDevelopmentAutomation,
   type EvidenceDocumentCommands,
+  type AttemptContextStorePort,
   composeDevelopmentAdmissionLookup,
   createDevelopmentMissionExecutionTerminalObserver,
   createDevelopmentDeliveryProvider,
@@ -774,8 +778,10 @@ export interface AppDeps {
   /** The same complete store selection serves skill editing and boot recovery. */
   skillContent?: SkillContentBinding
   employeePrograms?: ProgramArtifactPort
+  employeeInputArtifacts?: EmployeeInputArtifactPort
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
+  attemptContext?: AttemptContextStorePort
   /** Selected archive store for standalone HTTP composition. */
   taskArchive?: TaskArchiveContentBinding
   /** Daemon HTTP reuses the exact archive command used by boot recovery. */
@@ -1983,6 +1989,7 @@ function composeFallbackDevelopmentAutomation(
     appHome,
     evidenceRead: deps.evidenceRead,
     evidenceDocumentCommands: deps.evidenceDocumentCommands,
+    attemptContext: deps.attemptContext,
     admissionLookup: deps.developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunnerFor(deps.db),
     changeCandidate: bindChangeCandidateParticipant(),
@@ -2722,9 +2729,9 @@ function composeSqliteApiRouteMounts(
   unstarted?: UnstartedApplicationScope,
 ): SqliteApiRouteComposition {
   const appHome = deps.appHome ?? Paths.root
-  const inputArtifacts = createEmployeeInputArtifactStore(
-    join(appHome, 'artifacts', 'employee-inputs'),
-  )
+  const inputArtifacts =
+    deps.employeeInputArtifacts ??
+    createEmployeeInputArtifactStore(join(appHome, 'artifacts', 'employee-inputs'))
   const developmentDelivery = buildDevelopmentDeliveryDeps(deps.developmentDeliveryProvider)
   const repositoryTransportModule = deps.repositoryTransport
   const repositoryWorkspaceStore = deps.repositoryWorkspaceStore

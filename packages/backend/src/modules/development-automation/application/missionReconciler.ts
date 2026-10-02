@@ -828,7 +828,7 @@ export async function runMissionReconcile(
   // rerun（effect 台账）→ 全过放行 readiness；「在跑」诚实 wait。
   selected = redispatchPipeline(mission, cells, policy, selected, {
     now,
-    manifest: loadPipelineManifest(deps, cells),
+    manifest: await loadPipelineManifest(deps, cells),
   })
 
   // Published business steps are a deterministic overlay after the platform
@@ -1157,10 +1157,10 @@ async function persistRequirementCells(
 }
 
 /** pipeline.repair 的 launch 附件：pinned bundle 描述 + failing gate 的 issue 闭集。 */
-function pipelineRepairInputs(
+async function pipelineRepairInputs(
   deps: ReconcileDeps,
   cells: Readonly<Record<string, FactCell<FactCellValue>>>,
-): {
+): Promise<{
   pipelineBundle?: {
     readonly bundleId: string
     readonly manifestDigest: string
@@ -1168,10 +1168,10 @@ function pipelineRepairInputs(
     readonly totalBytes: number
   }
   pipelineIssueRefs?: readonly string[]
-} {
+}> {
   const manifestRef = knownString(cells, '__pipeline.manifestRef')
   if (manifestRef === null || deps.ports.attemptContext === undefined) return {}
-  const raw = deps.ports.attemptContext.load(manifestRef)
+  const raw = await deps.ports.attemptContext.load(manifestRef)
   if (raw === null) return {}
   let parsedJson: unknown
   try {
@@ -1509,7 +1509,7 @@ async function handleDecision(
         // PR-6 T69：repair 动作挂 pinned pipeline bundle + issue 闭集（新
         // commit 产生新 head 后 collect 会覆盖 cells，旧 evidence 自然失效）。
         ...(selected.capabilityId === 'pipeline.repair'
-          ? pipelineRepairInputs(deps, snapshot.cells)
+          ? await pipelineRepairInputs(deps, snapshot.cells)
           : {}),
         // PR-7b T78：conflict repair 的 exact 合并两端。缺任一端不猜——
         // launch 会以 conflict-heads-unavailable 诚实停住，由 MR facts 重采补齐。

@@ -188,6 +188,7 @@ import {
   composeDevelopmentAdmissionLookup,
   composeDevelopmentAutomation,
   type EvidenceDocumentCommands,
+  type AttemptContextStorePort,
 } from '@/modules/development-automation/composition'
 import {
   developmentEmployeeRuntimeCodec,
@@ -381,7 +382,10 @@ import {
   selectSkillContentDependencies,
   type SkillContentBinding,
 } from '@/modules/resource-catalog/composition/skillContentBinding'
-import type { ProgramArtifactPort } from '@/modules/digital-employee/composition'
+import type {
+  ProgramArtifactPort,
+  EmployeeInputArtifactPort,
+} from '@/modules/digital-employee/composition'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 
 export interface PostgresqlDaemonApplicationInput {
@@ -398,8 +402,10 @@ export interface PostgresqlDaemonApplicationInput {
   readonly taskArchive?: TaskArchiveContentBinding
   readonly skillContent?: SkillContentBinding
   readonly employeePrograms?: ProgramArtifactPort
+  readonly employeeInputArtifacts?: EmployeeInputArtifactPort
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
+  readonly attemptContext?: AttemptContextStorePort
   readonly daemonInfoPath: string
   readonly daemonRuntime?: DaemonRuntimeQueries
   readonly daemonStartupLease?: DaemonStartupLease
@@ -1471,9 +1477,9 @@ export async function composePostgresqlApplication(
     }),
   })
 
-  const employeeInputArtifacts = createEmployeeInputArtifactStore(
-    join(input.appHome, 'artifacts', 'employee-inputs'),
-  )
+  const employeeInputArtifacts =
+    input.employeeInputArtifacts ??
+    createEmployeeInputArtifactStore(join(input.appHome, 'artifacts', 'employee-inputs'))
   const employeeReactionRounds = createEmployeeReactionRoundQueries(input.db)
   const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
     db: input.db,
@@ -1694,6 +1700,7 @@ export async function composePostgresqlApplication(
     appHome: input.appHome,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
+    attemptContext: input.attemptContext,
     admissionLookup: developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunnerFor(input.db),
     changeCandidate: bindChangeCandidateParticipant(),

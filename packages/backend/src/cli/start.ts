@@ -42,6 +42,7 @@ import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import {
   composeDevelopmentAutomation,
   type EvidenceDocumentCommands,
+  type AttemptContextStorePort,
   composeDevelopmentAdmissionLookup,
   createDevelopmentDeliveryProvider,
   createDevelopmentMissionExecutionTerminalObserver,
@@ -381,7 +382,10 @@ import {
   selectSkillContentDependencies,
   type SkillContentBinding,
 } from '@/modules/resource-catalog/composition/skillContentBinding'
-import type { ProgramArtifactPort } from '@/modules/digital-employee/composition'
+import type {
+  ProgramArtifactPort,
+  EmployeeInputArtifactPort,
+} from '@/modules/digital-employee/composition'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 import {
   selectDaemonHostLifecycle,
@@ -400,8 +404,10 @@ export interface StartOptions {
   taskArchive?: TaskArchiveContentBinding
   skillContent?: SkillContentBinding
   employeePrograms?: ProgramArtifactPort
+  employeeInputArtifacts?: EmployeeInputArtifactPort
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
+  attemptContext?: AttemptContextStorePort
   daemonHost?: DaemonHostLifecyclePort
   startupLease?: DaemonStartupLeasePort
 }
@@ -566,8 +572,10 @@ async function composePostgresqlProviderSession(
     taskArchive: input.taskArchive,
     skillContent: input.skillContent,
     employeePrograms: input.employeePrograms,
+    employeeInputArtifacts: input.employeeInputArtifacts,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
+    attemptContext: input.attemptContext,
     daemonRuntime: input.daemonRuntime,
     daemonStartupLease: input.lock,
     token: input.token,
@@ -1089,8 +1097,10 @@ interface DaemonProviderSessionComposeInput {
   readonly taskArchive?: TaskArchiveContentBinding
   readonly skillContent?: SkillContentBinding
   readonly employeePrograms?: ProgramArtifactPort
+  readonly employeeInputArtifacts?: EmployeeInputArtifactPort
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
+  readonly attemptContext?: AttemptContextStorePort
   readonly daemonRuntime: DaemonRuntimeQueries
   readonly token: string
   readonly secretBox: ReturnType<typeof createSecretBox>
@@ -1536,8 +1546,10 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       taskArchive: opts.taskArchive,
       skillContent: opts.skillContent,
       employeePrograms: opts.employeePrograms,
+      employeeInputArtifacts: opts.employeeInputArtifacts,
       evidenceRead: opts.evidenceRead,
       evidenceDocumentCommands: opts.evidenceDocumentCommands,
+      attemptContext: opts.attemptContext,
       daemonRuntime: daemonHost,
       token,
       secretBox,
@@ -2631,6 +2643,7 @@ async function composeSqliteProviderSession(
     appHome: Paths.root,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
+    attemptContext: input.attemptContext,
     admissionLookup: developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunnerFor(db),
     changeCandidate: bindChangeCandidateParticipant(),
@@ -3010,8 +3023,10 @@ async function composeSqliteProviderSession(
     taskArchiveMaintenance: taskExecutionProvider.archive,
     skillContent: input.skillContent,
     employeePrograms: input.employeePrograms,
+    employeeInputArtifacts: input.employeeInputArtifacts,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
+    attemptContext: input.attemptContext,
     memoryOperations,
     databaseMigration: databaseMigration,
     collaborationContext,
@@ -3290,9 +3305,9 @@ async function composeSqliteProviderSession(
   // may be recreated by tests; the daemon owns the one durable driver that
   // gives Event Center, Case outbox/queue, Reaction planning and TaskEngine
   // settlement bounded turns. All business state and leases remain in SQLite.
-  const employeeInputArtifacts = createEmployeeInputArtifactStore(
-    join(Paths.root, 'artifacts', 'employee-inputs'),
-  )
+  const employeeInputArtifacts =
+    input.employeeInputArtifacts ??
+    createEmployeeInputArtifactStore(join(Paths.root, 'artifacts', 'employee-inputs'))
   const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
     db,
     appHome: Paths.root,
