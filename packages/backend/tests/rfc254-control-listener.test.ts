@@ -253,18 +253,54 @@ describe('RFC-254 T7 — `stop` picks its transport by platform', () => {
 
 describe('RFC-254 T7 — the daemon publishes and retracts the endpoint', () => {
   const start = readFileSync(join(import.meta.dir, '..', 'src', 'cli', 'start.ts'), 'utf8')
+  const host = readFileSync(
+    join(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'system-operations',
+      'infrastructure',
+      'local',
+      'nativeDaemonHostLifecycle.ts',
+    ),
+    'utf8',
+  )
+  const application = readFileSync(
+    join(
+      import.meta.dir,
+      '..',
+      'src',
+      'modules',
+      'system-operations',
+      'application',
+      'daemonHostApplication.ts',
+    ),
+    'utf8',
+  )
 
   test('the listener is started and closed on exit', () => {
-    expect(start).toContain('startControlListener(')
-    expect(start).toContain('controlListener.close()')
+    expect(start).toContain('composeDaemonHostApplication({')
+    expect(start).toContain('return await application.run()')
+    expect(host).toContain('const control = startControlListener({')
+    expect(host).toContain('return { close: () => control.close() }')
+    expect(application).toContain('await (await controlListener).close()')
   })
 
   test('it drives the SAME shutdown sequence the signal handler does', () => {
     // A second, parallel drain path would be a second place for the 30 s
     // budget, the lock release and the task bookkeeping to drift.
-    const onShutdown = start.split('onShutdown: () => {')[1]?.split('},')[0] ?? ''
-    expect(onShutdown).toContain('removeDaemonInfo()')
-    expect(onShutdown).toContain('shutdown(')
+    const request =
+      host.split('const request = (reason: string): void => {')[1]?.split('\n      }')[0] ?? ''
+    expect(request).toContain('withdrawReady()')
+    expect(request).toContain('callbacks.onShutdown(reason)')
+    expect(host).toContain("onShutdown: () => request('control-shutdown')")
+    expect(host).toContain("process.on('SIGTERM', () => request('SIGTERM'))")
+    expect(host).toContain("process.on('SIGINT', () => request('SIGINT'))")
+    expect(application).toContain('onShutdown: shutdown')
+    expect(application).toContain('await input.host.withdrawReady()')
+    expect(application).toContain('await input.stopApplication()')
+    expect(start).toContain('await input.bootstrap.stop()')
   })
 
   test('the control path is registered as an at-rest secret location', () => {

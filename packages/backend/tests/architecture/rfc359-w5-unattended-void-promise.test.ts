@@ -144,7 +144,8 @@ function scan(): string[] {
  */
 export const UNATTENDED_VOID_PROMISE_DEBT: readonly string[] = [
   'cli/postgresqlDaemonApplication.ts: 3',
-  'cli/start.ts: 6',
+  // RFC-370: all three host shutdown callbacks now report rejection through the selected adapter.
+  'cli/start.ts: 3',
   'mcp/server.ts: 1',
   'modules/digital-employee/application/osWorker.ts: 1',
   'modules/event-center/application/eventCenterWorker.ts: 1',

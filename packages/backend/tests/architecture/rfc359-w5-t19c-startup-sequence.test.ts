@@ -104,6 +104,8 @@ const STARTUP_SEQUENCE_CALL_SITES: readonly string[] = [
   'composeDaemonProviderSession @ packages/backend/src/cli/start.ts: 2',
   'composePostgresqlDaemonApplication @ packages/backend/src/cli/start.ts: 1',
   'serveDaemon @ packages/backend/src/cli/start.ts: 1',
+  // One real listener fixture exercises the same exported serve path; no second boot sequence.
+  'serveDaemon @ packages/backend/tests/rfc370-daemon-host-lifecycle.test.ts: 1',
   'startCommand @ packages/backend/src/main.ts: 1',
 ]
 
