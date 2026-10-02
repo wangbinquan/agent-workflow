@@ -1,3 +1,13 @@
+## 2026-10-03 RFC-370 异步运行上下文与员工输入根接线
+
+两组独立有限功能门组成 SOURCE18 PASS `e0d025860e64c0606f6f2860a6a31df0880af9900ef0cd76fd0e9dcf1daff68e`。AttemptContextStorePort 独立落位，四个真实读取消费者等待异步 ACK；原 native factory 全文提取到独立 local adapter，同步默认读取和兼容出口保持。同一所选 receiver 贯穿 start/session、PG、SQLite 和 standalone HTTP。员工输入复用现有 EmployeeInputArtifactPort，三个启动根各自只选一次，同一实例交给上传与工作区物化；新增双 provider 真实 HTTP 保存 ACK 和失败回归，未在本机运行。
+
+上一批 `d2c29c15c2e65dfc447ea5f7ae99bac8c6bc77bd` 的 [主 CI37062367239](https://github.com/wangbinquan/agent-workflow/actions/runs/37062367239) completed/success，50/50；[Windows37062367334](https://github.com/wangbinquan/agent-workflow/actions/runs/37062367334) completed/success，1/1。该证据确认上一批 CI 修复；本批正式行为等待新的 exact-SHA hosted CI。已承接并行观测提交 aa6e75a4，18 个候选与15个控制字节保持，复用原源码门。
+
+官方 scoped census/boundary 各一次；实际三增长为 imports5778→5784、exceptions5136→5142、owner25901→25903，匹配 canonical 后一次退役。原40个 required SPI 全文和20 active/20 declared-debt、304条 debt、273/31、target69、公共面1053、后台345、ambient501与原四规则保持。全部旧正文、CI/功能门历史和已发布观测输出保持。详见 [功能门](design/RFC-370-crewstation-hosted-deployment/functional-gates.md)。
+
+仅目标格式/lint、纯源码/AST/JSON/字节证明和原生成，无本机 AW test/typecheck/build/service。此批只覆盖所选运行上下文与员工输入根；其余 A1～A8、全根/AC00 和独立完整 A-G 继续。随后各层独立 CS adapters、B/M0 先实际部署，再 M1～M4；尚无 AW-in-CS 部署，不关闭 RFC。
+
 ## RFC-371 原生调用片段、归属事件保留与正式清单（2026-10-03）
 
 原生 span 来源与 formal trace UI 的限定 SOURCE v3 独立功能门 PASS，51 候选/61 引用稳定；原 v2 的唯一 P2 修复为最多200个不同原始观察和重复去重，矛盾结束时间保持 unknown。原 FAIL 与实际正常起止、205重复及双顺序真实 SQLite 回归保留，未用本机测试代签。完整实现门 v4 唯一P2为预算数字不变的错误文案，原FAIL保留，当前修正许可why/原provenance及四文档后作窄增量复核。48代码文件保持 v3 审核内容；新 metadata/document 增量另行完整实现审查，远端行为按新发布 SHA 的 hosted CI 收据记录。

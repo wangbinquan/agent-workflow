@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2024,
+    "backendFiles": 2026,
     "frontendFiles": 643,
     "legacyFiles": 557,
-    "moduleFiles": 1467,
-    "productionFiles": 2828,
+    "moduleFiles": 1469,
+    "productionFiles": 2830,
     "sharedFiles": 161,
-    "symbolsIncludingFileRoots": 25901
+    "symbolsIncludingFileRoots": 25903
   },
   "entries": [
     {
@@ -30536,6 +30536,30 @@
       "currentContext": "development-automation",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/development-automation/application/ports/attemptContextStore.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/attemptContextStore.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/ports/attemptContextStore.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/attemptContextStore.ts#AttemptContextStorePort",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AttemptContextStorePort",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/development-automation/application/ports/configResourceStore.ts",
       "id": "owner:packages/backend/src/modules/development-automation/application/ports/configResourceStore.ts#$file",
       "removeAfterWave": null,
@@ -31345,18 +31369,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ApprovalGatewayPort",
-      "targetContext": "development-automation",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/application/ports/reconcilerPorts.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/application/ports/reconcilerPorts.ts#AttemptContextStorePort",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "AttemptContextStorePort",
       "targetContext": "development-automation",
       "targetLayer": "application"
     },
@@ -41061,18 +41073,6 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/infrastructure/attemptSupport.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/attemptSupport.ts#createAttemptContextStore",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "createAttemptContextStore",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/infrastructure/attemptSupport.ts",
       "id": "owner:packages/backend/src/modules/development-automation/infrastructure/attemptSupport.ts#createWorkspaceValidationAdapter",
       "removeAfterWave": null,
       "status": "current-module",
@@ -41737,6 +41737,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "sha256OfFile",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileAttemptContextStore.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileAttemptContextStore.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileAttemptContextStore.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileAttemptContextStore.ts#createAttemptContextStore",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createAttemptContextStore",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -311545,5 +311569,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0c055d81bc6a485593c8bc3d13c8451f22b6ed211b692efaaf980f7cabf81bd6"
+  "sourceDigest": "sha256:1f74f2fed6ed4b527f53de0264804b780142f0afd4d0d0b3f14e2a1b93cf77f8"
 }

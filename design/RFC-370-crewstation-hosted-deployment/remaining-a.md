@@ -205,3 +205,13 @@ A1本批收口外层startup claim及neutral recovery receipt：同一selected le
 fd02主CI37056660544失败46/4、Windows37056797584成功1/1保留；两个CI测试修正有限PASS并纳入16路径，七实际账本增长按原协议登记/匹配提交后退役。只做静态检查、纯证明和原scoped生成，正式行为待新exact-SHA CI。原304条debt、四规则及peer span/UI输出保持。
 
 A2其余evidence intake/blob/capture/import/materialize/上传/验证及TE/RC恢复，A3/A4两LaunchLane和所有workspace/Git，A5完整执行链，A6所有purpose，A7执行权恢复，A8全roots/AC00与独立完整A-G继续。随后CS独立adapter、B/M0实际部署再M1～M4；无AW-in-CS部署，不关闭RFC。
+
+## 2026-10-03 上下文与员工输入真根后的余项
+
+本批有限收口 AttemptContextStorePort 的异步读取全链和独立 native adapter、员工输入完整对象在 start/session、PG、SQLite 与 standalone HTTP 根的选择。三根各复用同一个员工输入 receiver 到 intake/materialization；其他 EvidenceStore 能力和物理 workspace 实现仍在原链，不能将本批等同整个对象存储或完整 A2/A8 完成。原40个 required SPI 全文保持，DA 专属 port 不改变原登记分类。
+
+上一批 d2c29c15 的主 CI37062367239 success50/50、Windows37062367334 success1/1确认原修复；本批SOURCE18有限PASS，正式行为待新 exact-SHA hosted CI。新增长只为六 bootstrap type edges/对应exceptions和净增两 owner；原304条 debt、273/31、target69、四规则及已发布观测全文保持。无本机 AW test/typecheck/build/service；旧 CI 和所有门历史保留。
+
+剩余 A2：RC 插件完整 CRUD/materialization/GC，TE 内容/prompt/scratch/archive/recovery 全消费，DA evidence intake/blob/capture/import/materialize/上传/验证/输出，DE 逻辑内容与工作区物化效果；A1 配置/安装/恢复其他读点也须按原矩阵核完。A3/A4 两 LaunchLane 与所有 workspace/Git；A5 submit/durable receipt/cursor/message/cancel/materials/terminal cleanup；A6 所有 purpose 命令；A7 worker/authority/直接HTTP/remote orphan 重启对账；A8 全 roots/AC00；随后独立完整 A-G 继续。CS重启应保留远程 task/receipt，不能批量按 native orphan 规则中断或取消。
+
+CS独立adapter及B/M0、M1～M4和实际 AW-in-CS 部署尚未开始。保持中立 A1～A8/完整 A-G 后写各层独立 CS adapters，在 CS先部署M0，再逐项收编能力；RFC持续，不关闭。

@@ -624,3 +624,11 @@ A2 归档真实根九路径有限独立 PASS，指纹 `f9a5659c85fb50b3a0158e9d1
 fd02主CI37056660544终态46/4 failure、Windows37056797584 success1/1完整留档。本批修复真实调用账本缺数、bootstrap窗口截断和macOS全文件读取超时，保持原规则/判据/预算；正式结论等待新exact-SHA CI。scoped原生成各一次，七实际增长按原provenance协议登记并在匹配canonical后退役，peer owner/span/UI与全部旧记录保持。
 
 下一步继续A2完整内容效果、A3/A4工作区/Git、A5材料/执行/清理、A6purpose命令、A7完整执行权/恢复和A8所有roots/AC00；完整A-G通过后才编写各层独立CS adapters，B/M0先实际部署再M1～M4。启动lease不关闭整个A1/A7；尚无AW-in-CS部署，RFC继续。无本机AW test/typecheck/build/service。
+
+## 2026-10-03 运行上下文与员工输入根接线增量
+
+独立 SOURCE15 运行上下文与 SOURCE7 员工输入根各获有限 PASS，合并18个不同路径，15控制保持；共享 root/W29 增量逆变换恢复先前已通过候选，复用原门。运行上下文专属 port/native adapter 和四个异步读取消费者到达真实启动/HTTP根；员工输入复用既有完整合同，同一 receiver 同时用于上传和工作区物化。原同步默认与业务 ACK/失败语义保持，新增双 provider 回归交远端。详见 [功能门](./functional-gates.md) 新节。
+
+上一批 d2c29c15 主 CI37062367239 completed/success 50/50、Windows37062367334 completed/success 1/1，确认前次修复。承接已发布 aa6e75a4 的观测源码/登记后，本批候选和控制逐字未变，不重跑 SOURCE 全量门。原 scoped census/boundary 各一次，三个实际 growth 一次登记/匹配 canonical 后一次退役，原 required SPI 40全文、304条 debt、四规则和所有已发布并行内容保持。当前批正式行为等待新 exact-SHA CI，无本机 AW runtime 检查。
+
+继续剩余内容 intake/blob/capture/import/materialize/上传/验证和 TE/RC 恢复、完整 workspace/Git 两 LaunchLane、A5 提交/receipt/cursor/message/cancel/终态清理、A6 所有 purpose、A7 执行权/worker/直接HTTP恢复、A8 全 roots/AC00。完成中立 A1～A8 后独立完整 A-G，再写各层独立 CS adapters，B/M0先部署再 M1～M4；尚无 AW-in-CS 部署，不关闭 RFC。旧正文与所有 CI/门历史保持。

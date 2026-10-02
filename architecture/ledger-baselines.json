@@ -846,8 +846,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5778,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5784,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: exactly six bootstrap type edges are added, one per actual start/PostgreSQL/standalone HTTP root for AttemptContextStorePort and EmployeeInputArtifactPort. Each complete selected receiver is forwarded through the existing root; preserve the published observation input and the original classifier."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +870,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5136,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5142,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: the unchanged original rule records the same six bootstrap type edges as exact exceptions. No boundary debt is added; preserve every original 304 debt clause, 273 inbound/31 outbound, target 69 and all retirement conditions."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +908,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25901,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25903,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: four owners are introduced for the dedicated AttemptContextStorePort file/type and independent fileAttemptContextStore file/factory; two former declaration owners in reconcilerPorts and attemptSupport are retired, net two. The complete native factory body and compatibility type/value exports are preserved; the mutation entry moves without increasing its count."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:0c055d81bc6a485593c8bc3d13c8451f22b6ed211b692efaaf980f7cabf81bd6",
+    "sourceDigest": "sha256:1f74f2fed6ed4b527f53de0264804b780142f0afd4d0d0b3f14e2a1b93cf77f8",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +929,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "7135c4092bea766742a637a2d998312633811cd0",
-    "contentDigest": "sha256:e1e3c3bbfcfa47a883637400c8630679d49a88b4412c3aa91c87a55eef54e9bb",
+    "currentSnapshotSha": "aa6e75a4cfb35ec0a80b9f2466d6f6d9ee0c514b",
+    "contentDigest": "sha256:71d823fca3bb64aefc835661a2a7a29de9d841c1607f759f997f6d43990f2afd",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
