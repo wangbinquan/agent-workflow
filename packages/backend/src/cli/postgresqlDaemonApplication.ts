@@ -105,7 +105,10 @@ import {
   composeMcpCatalog,
   mcpAclRuntimeTestLifecycle,
 } from '@/modules/resource-catalog/composition/mcpOperations'
-import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
+import {
+  composePluginCatalog,
+  type PluginInstallerPort,
+} from '@/modules/resource-catalog/composition/pluginOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import {
   composeWorkgroupTaskRoom,
@@ -210,7 +213,10 @@ import {
   composeDevelopmentMissionOperations,
   createLegacyMissionAdmissionsEnabledQuery,
 } from '@/modules/development-automation/composition/missionOperations'
-import { composeMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
+import {
+  composeMissionInputUploadOperations,
+  type MissionInputBlobPersistence,
+} from '@/modules/development-automation/composition/missionInputUploads'
 import { composeRequirementSourceRunnerFor } from '@/modules/integration/composition/requirementSource'
 import { composeDevelopmentToolConnectionCatalog } from '@/modules/integration/composition/digitalEmployeeToolConnections'
 import { composeDevelopmentAdapterConfigOperationsFor } from '@/modules/integration/composition/developmentAdapterConfigOperations'
@@ -403,6 +409,8 @@ export interface PostgresqlDaemonApplicationInput {
   readonly skillContent?: SkillContentBinding
   readonly employeePrograms?: ProgramArtifactPort
   readonly employeeInputArtifacts?: EmployeeInputArtifactPort
+  readonly missionInputBlobs?: MissionInputBlobPersistence
+  readonly pluginInstaller?: PluginInstallerPort
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -734,6 +742,7 @@ export async function composePostgresqlApplication(
     db: input.db,
     resourceCatalog,
     coordinator: pluginOperationCoordinator,
+    installer: input.pluginInstaller,
   })
   const workgroupCatalog = composeWorkgroupCatalog({
     db: input.db,
@@ -1830,6 +1839,7 @@ export async function composePostgresqlApplication(
       missionInputUploads: composeMissionInputUploadOperations({
         db: input.db,
         appHome: input.appHome,
+        blobs: input.missionInputBlobs,
       }),
     })
 

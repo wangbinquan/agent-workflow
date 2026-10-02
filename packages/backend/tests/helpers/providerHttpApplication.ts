@@ -37,6 +37,8 @@ export type ProviderHttpApplicationInput = Pick<
   | 'skillContent'
   | 'employeePrograms'
   | 'employeeInputArtifacts'
+  | 'missionInputBlobs'
+  | 'pluginInstaller'
   | 'evidenceRead'
   | 'evidenceDocumentCommands'
   | 'daemonRuntime'

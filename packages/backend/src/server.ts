@@ -129,7 +129,10 @@ import {
   createMcpTransactionLifecycle,
 } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { mcpAclRuntimeTestLifecycle } from '@/modules/resource-catalog/composition/mcpOperations'
-import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
+import {
+  composePluginCatalog,
+  type PluginInstallerPort,
+} from '@/modules/resource-catalog/composition/pluginOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import {
   composeWorkgroupTaskRoom,
@@ -354,7 +357,10 @@ import {
   composeDevelopmentMissionOperations,
   createLegacyMissionAdmissionsEnabledQuery,
 } from '@/modules/development-automation/composition/missionOperations'
-import { composeMissionInputUploadOperations } from '@/modules/development-automation/composition/missionInputUploads'
+import {
+  composeMissionInputUploadOperations,
+  type MissionInputBlobPersistence,
+} from '@/modules/development-automation/composition/missionInputUploads'
 import { composeCodeHistoryQueries } from '@/modules/code-capability/composition/historyQueries'
 import {
   composeCapabilityTemplateOperations,
@@ -779,6 +785,8 @@ export interface AppDeps {
   skillContent?: SkillContentBinding
   employeePrograms?: ProgramArtifactPort
   employeeInputArtifacts?: EmployeeInputArtifactPort
+  missionInputBlobs?: MissionInputBlobPersistence
+  pluginInstaller?: PluginInstallerPort
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -2387,6 +2395,7 @@ export function composeSqliteApplicationDeps(
     db: effectiveDeps.db,
     resourceCatalog: providerResourceCatalog,
     coordinator: pluginOperationCoordinator,
+    installer: effectiveDeps.pluginInstaller,
   })
   const skillCatalog = classicCatalogs.skill
   const workflowCatalog = classicCatalogs.workflow
@@ -3441,7 +3450,11 @@ function composeSqliteApiRouteMounts(
         }),
     }),
   })
-  const missionInputUploads = composeMissionInputUploadOperations({ db: deps.db, appHome })
+  const missionInputUploads = composeMissionInputUploadOperations({
+    db: deps.db,
+    appHome,
+    blobs: deps.missionInputBlobs,
+  })
   const collaborationRouteOperations = composeCollaborationRouteOperations({
     db: deps.db,
     context: deps.collaborationContext,

@@ -169,7 +169,10 @@ import {
 } from '@/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
-import { composePluginCatalog } from '@/modules/resource-catalog/composition/pluginOperations'
+import {
+  composePluginCatalog,
+  type PluginInstallerPort,
+} from '@/modules/resource-catalog/composition/pluginOperations'
 import { composeWorkgroupCatalog } from '@/modules/resource-catalog/composition/workgroupOperations'
 import { composeMcpProbeStore } from '@/modules/resource-catalog/composition/mcpProbeStore'
 import { mcpAclRuntimeTestLifecycle } from '@/modules/resource-catalog/composition/mcpOperations'
@@ -377,6 +380,7 @@ import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/com
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
+import type { MissionInputBlobPersistence } from '@/modules/development-automation/composition/missionInputUploads'
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
 import {
   selectSkillContentDependencies,
@@ -405,6 +409,8 @@ export interface StartOptions {
   skillContent?: SkillContentBinding
   employeePrograms?: ProgramArtifactPort
   employeeInputArtifacts?: EmployeeInputArtifactPort
+  missionInputBlobs?: MissionInputBlobPersistence
+  pluginInstaller?: PluginInstallerPort
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -573,6 +579,8 @@ async function composePostgresqlProviderSession(
     skillContent: input.skillContent,
     employeePrograms: input.employeePrograms,
     employeeInputArtifacts: input.employeeInputArtifacts,
+    missionInputBlobs: input.missionInputBlobs,
+    pluginInstaller: input.pluginInstaller,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -1098,6 +1106,8 @@ interface DaemonProviderSessionComposeInput {
   readonly skillContent?: SkillContentBinding
   readonly employeePrograms?: ProgramArtifactPort
   readonly employeeInputArtifacts?: EmployeeInputArtifactPort
+  readonly missionInputBlobs?: MissionInputBlobPersistence
+  readonly pluginInstaller?: PluginInstallerPort
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -1547,6 +1557,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       skillContent: opts.skillContent,
       employeePrograms: opts.employeePrograms,
       employeeInputArtifacts: opts.employeeInputArtifacts,
+      missionInputBlobs: opts.missionInputBlobs,
+      pluginInstaller: opts.pluginInstaller,
       evidenceRead: opts.evidenceRead,
       evidenceDocumentCommands: opts.evidenceDocumentCommands,
       attemptContext: opts.attemptContext,
@@ -2409,6 +2421,7 @@ async function composeSqliteProviderSession(
     db,
     resourceCatalog,
     coordinator: pluginOperationCoordinator,
+    installer: input.pluginInstaller,
   })
   const workflowCatalog = classicCatalogs.workflow
   const workgroupCatalog = composeWorkgroupCatalog({ db, resourceCatalog })
@@ -3024,6 +3037,8 @@ async function composeSqliteProviderSession(
     skillContent: input.skillContent,
     employeePrograms: input.employeePrograms,
     employeeInputArtifacts: input.employeeInputArtifacts,
+    missionInputBlobs: input.missionInputBlobs,
+    pluginInstaller: input.pluginInstaller,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,

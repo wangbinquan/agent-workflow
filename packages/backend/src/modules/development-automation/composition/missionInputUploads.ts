@@ -9,6 +9,8 @@ import {
 import { EvidenceStore } from '../infrastructure/evidenceStore'
 import { createMissionInputUploadPersistence } from '../infrastructure/missionInputUploadPersistence'
 
+export type { MissionInputBlobPersistence }
+
 function lazyEvidenceBlobs(appHome: string): MissionInputBlobPersistence {
   let evidence: EvidenceStore | undefined
   return {
@@ -23,9 +25,10 @@ function lazyEvidenceBlobs(appHome: string): MissionInputBlobPersistence {
 export function composeMissionInputUploadOperations(input: {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
+  readonly blobs?: MissionInputBlobPersistence
 }): MissionInputUploadOperations {
   return createMissionInputUploadOperations({
     persistence: createMissionInputUploadPersistence(input.db),
-    blobs: lazyEvidenceBlobs(input.appHome),
+    blobs: input.blobs ?? lazyEvidenceBlobs(input.appHome),
   })
 }

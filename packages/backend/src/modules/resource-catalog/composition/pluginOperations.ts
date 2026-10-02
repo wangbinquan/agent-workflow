@@ -19,6 +19,8 @@ import type { ProviderResourceCatalogComposition } from './providerResourceCatal
 import { createPluginOperationDescriptors } from './catalogOperationDescriptors'
 import type { PluginCatalogModule } from '../public/operations'
 
+export type { PluginInstallerPort }
+
 type PluginAclOperationApplication = Parameters<typeof createPluginOperationDescriptors>[3]
 
 export interface PluginCatalogAdapterCompositionDependencies {
