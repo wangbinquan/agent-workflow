@@ -574,13 +574,13 @@ describeEachProviderHttpApplication(
       expect(preview.status).toBe(200)
       expect(await preview.json()).toMatchObject({ dryRun: true, treeCount: 1, taskCount: 1 })
       expect(store.calls).toEqual([])
-      const pending = request(false)
+      const pending = Promise.resolve(request(false))
       try {
         await Promise.race([
           entered.promise,
           pending.then(async (response) => {
             throw new Error(
-              `HTTP archive missed selected ACK: ${response.status} ${await response.text()}`,
+              `HTTP archive missed selected ACK: ${response.status} ${await response.clone().text()}`,
             )
           }),
         ])
