@@ -107,7 +107,7 @@ class CandidateFixture {
 class SelectedFactory implements RepositoryCandidateEffectsFactory {
   constructor(readonly fixture: CandidateFixture) {}
   async acquire(input: { readonly baselineReference: string; readonly overlayReference: string }) {
-    expect(this).toBe(this.fixture.factory)
+    expect<SelectedFactory>(this).toBe(this.fixture.factory)
     expect(input).toEqual({
       baselineReference: BASE.baselineRepoPath,
       overlayReference: BASE.overlayRoot,
@@ -120,7 +120,7 @@ class SelectedFactory implements RepositoryCandidateEffectsFactory {
 class SelectedSession implements RepositoryCandidateSession {
   constructor(readonly fixture: CandidateFixture) {}
   async runBaseline(args: readonly string[]) {
-    expect(this).toBe(this.fixture.session)
+    expect<SelectedSession>(this).toBe(this.fixture.session)
     this.fixture.baselineCommands.push([...args])
     await this.fixture.enter('baseline:' + args.join(' '))
     if (this.fixture.reusedCommit === null) return { ...OK, exitCode: 1 }
@@ -129,12 +129,12 @@ class SelectedSession implements RepositoryCandidateSession {
     return { ...OK, stdout: BASE.baselineSha + '\n' }
   }
   async createWorkspace() {
-    expect(this).toBe(this.fixture.session)
+    expect<SelectedSession>(this).toBe(this.fixture.session)
     await this.fixture.enter('workspace:create')
     return this.fixture.workspace
   }
   async close() {
-    expect(this).toBe(this.fixture.session)
+    expect<SelectedSession>(this).toBe(this.fixture.session)
     await this.fixture.enter('session:close')
   }
 }
@@ -143,7 +143,7 @@ class SelectedWorkspace implements RepositoryCandidateWorkspace {
   readonly reference = 'artifact:temporary-candidate'
   constructor(readonly fixture: CandidateFixture) {}
   private check() {
-    expect(this).toBe(this.fixture.workspace)
+    expect<SelectedWorkspace>(this).toBe(this.fixture.workspace)
   }
   async cloneBaseline() {
     this.check()

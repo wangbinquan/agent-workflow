@@ -1,6 +1,6 @@
 // Pre-open generation reads and restore completion stay in their original phases.
 import { describe, expect, test } from 'bun:test'
-import type { DatabaseProvider } from '@agent-workflow/shared'
+import type { DatabaseProvider } from '@/platform/persistence/databaseProviders'
 import type { DatabasePreOpenRecoveryPort } from '@/modules/system-operations/application/ports/databasePreOpenRecovery'
 import { prepareDatabasePreOpenRecovery } from '@/modules/system-operations/composition'
 import type {

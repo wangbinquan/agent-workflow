@@ -1,5 +1,4 @@
-import type { DatabaseProvider } from '@agent-workflow/shared'
-import type { LogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import type { DatabaseProvider, LogicalSchemaContract } from '@/platform/persistence/schemaContract'
 import type { DatabasePreOpenRecoveryPort } from './ports/databasePreOpenRecovery'
 
 // RFC-359's exhaustive pre-open table retains the original provider decisions.
