@@ -75,6 +75,8 @@ import { EvidenceStore } from './infrastructure/evidenceStore'
 import type { EvidenceContentQueries } from './application/pipelineEvidenceRead'
 import type { EvidenceDownloadQueries } from './application/evidenceDownloads'
 import type { EvidenceReadBinding } from './composition/evidenceReadBinding'
+import type { EvidenceDocumentCommands } from './application/evidenceDocumentCommands'
+export type { EvidenceDocumentCommands }
 import { createFileEvidenceDownloadQueries } from './infrastructure/local/fileEvidenceDownloadQueries'
 import { createFileEvidenceContentQueries } from './infrastructure/local/fileEvidenceContentQueries'
 import {
@@ -214,6 +216,7 @@ export interface DevelopmentAutomationCompositionOptions {
   readonly appHome: string
   readonly evidenceContents?: EvidenceContentQueries
   readonly evidenceRead?: EvidenceReadBinding
+  readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   /** Bootstrap-selected admission configuration provider; direct tests default to SQLite. */
   readonly admissionLookup?: AdmissionLookup
   /** integration 模块组装的外部需求源 runner；不注入 = 外部取件诚实 blocked。 */
@@ -279,6 +282,7 @@ function composeDevelopmentAutomationFromPersistence(
     createFileEvidenceDownloadQueries({ blobPath: (ref) => evidence.blobPath(ref) })
   const materializer = createRequirementMaterializer({
     documents: deps.evidenceRead?.documents,
+    documentCommands: deps.evidenceDocumentCommands,
     bundleRefs: persistence.bundleRefs,
     store,
     snapshots,

@@ -182,6 +182,7 @@ import { readTaskResourceUsage } from '@/services/limits'
 import {
   composeDevelopmentAdmissionLookup,
   composeDevelopmentAutomation,
+  type EvidenceDocumentCommands,
 } from '@/modules/development-automation/composition'
 import {
   developmentEmployeeRuntimeCodec,
@@ -393,6 +394,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly skillContent?: SkillContentBinding
   readonly employeePrograms?: ProgramArtifactPort
   readonly evidenceRead?: EvidenceReadBinding
+  readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly daemonInfoPath: string
   readonly daemonRuntime?: DaemonRuntimeQueries
   readonly lockPath: string
@@ -1685,6 +1687,7 @@ export async function composePostgresqlApplication(
     db: input.db,
     appHome: input.appHome,
     evidenceRead: input.evidenceRead,
+    evidenceDocumentCommands: input.evidenceDocumentCommands,
     admissionLookup: developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunnerFor(input.db),
     changeCandidate: bindChangeCandidateParticipant(),

@@ -835,7 +835,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // only the runtime method parameter and configSnapshot reference changed.
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
-      '33a8816962bba878d2c1ed552273b5bac43b9f330f0f65fafcd2c3b5b6d24b11',
+      '7ad9d218a924daf8a641a70c88b17866fe86a36e7257261a68d244bf1cd07c95',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

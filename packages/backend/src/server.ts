@@ -460,6 +460,7 @@ import { composeDevelopmentEmployeePlatformWorkItems } from '@/modules/developme
 import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/development-automation/composition/employeeCaseDetailProjection'
 import {
   composeDevelopmentAutomation,
+  type EvidenceDocumentCommands,
   composeDevelopmentAdmissionLookup,
   createDevelopmentMissionExecutionTerminalObserver,
   createDevelopmentDeliveryProvider,
@@ -774,6 +775,7 @@ export interface AppDeps {
   skillContent?: SkillContentBinding
   employeePrograms?: ProgramArtifactPort
   evidenceRead?: EvidenceReadBinding
+  evidenceDocumentCommands?: EvidenceDocumentCommands
   /** Selected archive store for standalone HTTP composition. */
   taskArchive?: TaskArchiveContentBinding
   /** Daemon HTTP reuses the exact archive command used by boot recovery. */
@@ -1980,6 +1982,7 @@ function composeFallbackDevelopmentAutomation(
     db: deps.db,
     appHome,
     evidenceRead: deps.evidenceRead,
+    evidenceDocumentCommands: deps.evidenceDocumentCommands,
     admissionLookup: deps.developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunnerFor(deps.db),
     changeCandidate: bindChangeCandidateParticipant(),

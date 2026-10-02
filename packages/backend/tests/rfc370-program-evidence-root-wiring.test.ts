@@ -56,7 +56,7 @@ test('provider session and recompose retain both bootstrap selections', () => {
     (item) => ts.isVariableDeclaration(item) && item.name.getText(start) === 'sessionInput',
   ).filter(ts.isVariableDeclaration)
   expect(inputs).toHaveLength(1)
-  for (const key of ['employeePrograms', 'evidenceRead']) {
+  for (const key of ['employeePrograms', 'evidenceRead', 'evidenceDocumentCommands']) {
     expect(compact(inputs[0]!, start)).toContain(`${key}:opts.${key},`)
     selected(
       declaration(start, 'composePostgresqlProviderSession'),
@@ -81,6 +81,12 @@ test('both daemon owners consume the same program and evidence read selection', 
     const root = declaration(file, rootName)
     selected(root, file, 'composeDigitalEmployee', `programArtifacts:${receiver}.employeePrograms,`)
     selected(root, file, 'composeDevelopmentAutomation', `evidenceRead:${receiver}.evidenceRead,`)
+    selected(
+      root,
+      file,
+      'composeDevelopmentAutomation',
+      `evidenceDocumentCommands:${receiver}.evidenceDocumentCommands,`,
+    )
   }
 })
 
@@ -96,5 +102,11 @@ test('standalone HTTP consumers preserve the selected receiver through fallback 
     server,
     'composeDevelopmentAutomation',
     'evidenceRead:deps.evidenceRead,',
+  )
+  selected(
+    declaration(server, 'composeFallbackDevelopmentAutomation'),
+    server,
+    'composeDevelopmentAutomation',
+    'evidenceDocumentCommands:deps.evidenceDocumentCommands,',
   )
 })

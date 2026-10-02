@@ -37,6 +37,7 @@ export type ProviderHttpApplicationInput = Pick<
   | 'skillContent'
   | 'employeePrograms'
   | 'evidenceRead'
+  | 'evidenceDocumentCommands'
   | 'daemonRuntime'
   | 'dbVersion'
   | 'opencodeVersion'
