@@ -4,6 +4,7 @@
 import { describe, expect, test } from 'bun:test'
 import { prepareDatabaseInstallation } from '@/modules/system-operations/application/prepareDatabaseInstallation'
 import type { DatabaseInstallationPort } from '@/modules/system-operations/application/ports/databaseInstallation'
+import { prepareDatabaseProviderForBoot } from '@/modules/system-operations/composition'
 import {
   digestGenerationPayload,
   type DatabaseGenerationBootstrapCandidate,
@@ -21,7 +22,7 @@ function deferred() {
   return { promise, resolve }
 }
 
-function fixture(current = false) {
+function fixture(current = false, entry: 'application' | 'boot-composition' = 'application') {
   const calls: string[] = []
   const payload: DatabaseGenerationPayload = {
     version: 1,
@@ -69,8 +70,8 @@ function fixture(current = false) {
       return 'prepared'
     },
   }
-  const run = () =>
-    prepareDatabaseInstallation({
+  const run = () => {
+    const input = {
       config: { provider: 'sqlite' },
       contract: history.head.contract,
       configuration: {
@@ -81,8 +82,11 @@ function fixture(current = false) {
           throw new Error('no copy recovery: retain initial config')
         },
       },
-      effects,
-    })
+    } as const
+    return entry === 'boot-composition'
+      ? prepareDatabaseProviderForBoot({ ...input, installation: effects })
+      : prepareDatabaseInstallation({ ...input, effects })
+  }
   return {
     calls,
     effects,
@@ -94,106 +98,109 @@ function fixture(current = false) {
   }
 }
 
-describe('RFC-370 installation host effects', () => {
-  test('a current generation does not rewrite metadata or take an upgrade lock', async () => {
-    const f = fixture(true)
-    expect(await f.run()).toBe('prepared')
-    expect(f.calls).toEqual(['read', 'prepare', 'admit', 'release'])
-  })
+describe.each(['application', 'boot-composition'] as const)(
+  'RFC-370 installation host effects through %s',
+  (entry) => {
+    test('a current generation does not rewrite metadata or take an upgrade lock', async () => {
+      const f = fixture(true, entry)
+      expect(await f.run()).toBe('prepared')
+      expect(f.calls).toEqual(['read', 'prepare', 'admit', 'release'])
+    })
 
-  test('awaits the lock before preparing and metadata commit before admission and release', async () => {
-    const f = fixture()
-    const locked = deferred()
-    const lockEntered = deferred()
-    const written = deferred()
-    const writeEntered = deferred()
-    f.effects.requireUpgradeLock = async () => {
-      f.calls.push('lock-start')
-      lockEntered.resolve()
-      await locked.promise
-      f.calls.push('locked')
-    }
-    const write = f.effects.writeGeneration
-    f.effects.writeGeneration = async (payload) => {
-      writeEntered.resolve()
-      await written.promise
-      await write(payload)
-    }
-    const result = f.run()
-    await lockEntered.promise
-    expect(f.calls).not.toContain('prepare')
-    locked.resolve()
-    await writeEntered.promise
-    expect(f.calls).not.toContain('admit')
-    expect(f.calls).not.toContain('release')
-    written.resolve()
-    expect(await result).toBe('prepared')
-    expect(f.calls).toEqual([
-      'read',
-      'lock-start',
-      'locked',
-      'prepare',
-      'read',
-      'write',
-      'admit',
-      'release',
-    ])
-  })
-
-  test.each(['lock', 'prepare', 'write'] as const)(
-    '%s failure releases the owned preparation boundary without admission',
-    async (stage) => {
-      const f = fixture()
-      const failure = new Error(`${stage} failed`)
-      if (stage === 'lock')
-        f.effects.requireUpgradeLock = async () => {
-          throw failure
-        }
-      if (stage === 'prepare')
-        f.effects.prepareProvider = async () => {
-          throw failure
-        }
-      if (stage === 'write')
-        f.effects.writeGeneration = async () => {
-          throw failure
-        }
-      await expect(f.run()).rejects.toBe(failure)
-      expect(f.calls.at(-1)).toBe('release')
+    test('awaits the lock before preparing and metadata commit before admission and release', async () => {
+      const f = fixture(false, entry)
+      const locked = deferred()
+      const lockEntered = deferred()
+      const written = deferred()
+      const writeEntered = deferred()
+      f.effects.requireUpgradeLock = async () => {
+        f.calls.push('lock-start')
+        lockEntered.resolve()
+        await locked.promise
+        f.calls.push('locked')
+      }
+      const write = f.effects.writeGeneration
+      f.effects.writeGeneration = async (payload) => {
+        writeEntered.resolve()
+        await written.promise
+        await write(payload)
+      }
+      const result = f.run()
+      await lockEntered.promise
+      expect(f.calls).not.toContain('prepare')
+      locked.resolve()
+      await writeEntered.promise
       expect(f.calls).not.toContain('admit')
-    },
-  )
+      expect(f.calls).not.toContain('release')
+      written.resolve()
+      expect(await result).toBe('prepared')
+      expect(f.calls).toEqual([
+        'read',
+        'lock-start',
+        'locked',
+        'prepare',
+        'read',
+        'write',
+        'admit',
+        'release',
+      ])
+    })
 
-  test('a changed generation still rejects the pending write', async () => {
-    const f = fixture()
-    f.effects.prepareProvider = async (input) => {
-      const changed = { ...f.payload, generationId: 'dbg_replaced_installation' }
-      f.setCandidate({
-        kind: 'schema-upgrade',
-        payload: changed,
-        pointerDigest: digestGenerationPayload(changed),
-      })
-      await input.advancePointer()
-      return 'unexpected admission'
-    }
-    await expect(f.run()).rejects.toThrow('database generation changed during schema preparation')
-    expect(f.calls).not.toContain('write')
-    expect(f.calls.at(-1)).toBe('release')
-  })
+    test.each(['lock', 'prepare', 'write'] as const)(
+      '%s failure releases the owned preparation boundary without admission',
+      async (stage) => {
+        const f = fixture(false, entry)
+        const failure = new Error(`${stage} failed`)
+        if (stage === 'lock')
+          f.effects.requireUpgradeLock = async () => {
+            throw failure
+          }
+        if (stage === 'prepare')
+          f.effects.prepareProvider = async () => {
+            throw failure
+          }
+        if (stage === 'write')
+          f.effects.writeGeneration = async () => {
+            throw failure
+          }
+        await expect(f.run()).rejects.toBe(failure)
+        expect(f.calls.at(-1)).toBe('release')
+        expect(f.calls).not.toContain('admit')
+      },
+    )
 
-  test('an already advanced pointer is retained without a second write', async () => {
-    const f = fixture()
-    f.effects.prepareProvider = async (input) => {
-      f.setCandidate({
-        kind: 'current',
-        generation: {
-          source: 'verified-pointer',
-          payload: { ...f.payload, schemaDigest: history.head.contract.digest },
-        },
-      })
-      await input.advancePointer()
-      return 'prepared'
-    }
-    expect(await f.run()).toBe('prepared')
-    expect(f.calls).not.toContain('write')
-  })
-})
+    test('a changed generation still rejects the pending write', async () => {
+      const f = fixture(false, entry)
+      f.effects.prepareProvider = async (input) => {
+        const changed = { ...f.payload, generationId: 'dbg_replaced_installation' }
+        f.setCandidate({
+          kind: 'schema-upgrade',
+          payload: changed,
+          pointerDigest: digestGenerationPayload(changed),
+        })
+        await input.advancePointer()
+        return 'unexpected admission'
+      }
+      await expect(f.run()).rejects.toThrow('database generation changed during schema preparation')
+      expect(f.calls).not.toContain('write')
+      expect(f.calls.at(-1)).toBe('release')
+    })
+
+    test('an already advanced pointer is retained without a second write', async () => {
+      const f = fixture(false, entry)
+      f.effects.prepareProvider = async (input) => {
+        f.setCandidate({
+          kind: 'current',
+          generation: {
+            source: 'verified-pointer',
+            payload: { ...f.payload, schemaDigest: history.head.contract.digest },
+          },
+        })
+        await input.advancePointer()
+        return 'prepared'
+      }
+      expect(await f.run()).toBe('prepared')
+      expect(f.calls).not.toContain('write')
+    })
+  },
+)

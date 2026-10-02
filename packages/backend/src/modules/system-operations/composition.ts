@@ -96,19 +96,45 @@ import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/com
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
 
 /** Boot/manual-command preparation; the returned provider owns the prepared mechanism. */
-export async function prepareDatabaseProviderForBoot(
-  input: Omit<DatabaseSchemaUpgradeOptions, 'readConfig' | 'writeConfig'> &
-    (
-      | { readonly configuration: DatabaseConfigurationPort; readonly configPath?: never }
-      | { readonly configuration?: never; readonly configPath?: string }
-    ),
-) {
+export interface SelectedDatabaseBootPreparation<TPrepared> {
+  readonly config: DatabaseConfig
+  readonly contract: LogicalSchemaContract
+  readonly configuration: DatabaseConfigurationPort
+  readonly installation: DatabaseInstallationPort<TPrepared>
+}
+
+type FileDatabaseBootPreparation = Omit<
+  DatabaseSchemaUpgradeOptions,
+  'readConfig' | 'writeConfig'
+> &
+  (
+    | { readonly configuration: DatabaseConfigurationPort; readonly configPath?: never }
+    | { readonly configuration?: never; readonly configPath?: string }
+  )
+
+type PreparedFileDatabase = Awaited<ReturnType<typeof prepareDatabaseSchemaUpgrade>>
+
+export function prepareDatabaseProviderForBoot<TPrepared>(
+  input: SelectedDatabaseBootPreparation<TPrepared>,
+): Promise<TPrepared>
+export function prepareDatabaseProviderForBoot(
+  input: FileDatabaseBootPreparation,
+): Promise<PreparedFileDatabase>
+export async function prepareDatabaseProviderForBoot<TPrepared>(
+  input: SelectedDatabaseBootPreparation<TPrepared> | FileDatabaseBootPreparation,
+): Promise<TPrepared | PreparedFileDatabase> {
+  if ('installation' in input) {
+    return await prepareDatabaseInstallation({
+      config: input.config,
+      contract: input.contract,
+      configuration: input.configuration,
+      effects: input.installation,
+    })
+  }
   const { configuration, configPath, ...options } = input
   const configurationPort =
     configuration ?? createFileDatabaseConfiguration(configPath ?? Paths.config)
-  const effects: DatabaseInstallationPort<
-    Awaited<ReturnType<typeof prepareDatabaseSchemaUpgrade>>
-  > = createFileDatabaseInstallation({
+  const effects: DatabaseInstallationPort<PreparedFileDatabase> = createFileDatabaseInstallation({
     ...options,
     history: options.history ?? (await loadPostgresqlMigrationHistory()),
     readConfig: () => configurationPort.read(),
