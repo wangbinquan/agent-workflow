@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2009,
+    "backendFiles": 2010,
     "frontendFiles": 642,
     "legacyFiles": 554,
-    "moduleFiles": 1455,
-    "productionFiles": 2811,
+    "moduleFiles": 1456,
+    "productionFiles": 2812,
     "sharedFiles": 160,
-    "symbolsIncludingFileRoots": 25802
+    "symbolsIncludingFileRoots": 25806
   },
   "entries": [
     {
@@ -117752,6 +117752,42 @@
       "currentContext": "system-operations",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/system-operations/application/daemonHostApplication.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/daemonHostApplication.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/daemonHostApplication.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/daemonHostApplication.ts#DaemonHostApplicationOptions",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DaemonHostApplicationOptions",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/daemonHostApplication.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/daemonHostApplication.ts#runDaemonHostApplication",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "runDaemonHostApplication",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/system-operations/application/databaseMigrationApplication.ts",
       "id": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationApplication.ts#$file",
       "removeAfterWave": null,
@@ -118669,6 +118705,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "composeApplicationConfiguration",
+      "targetContext": "system-operations",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition.ts#composeDaemonHostApplication",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeDaemonHostApplication",
       "targetContext": "system-operations",
       "targetLayer": "composition"
     },
@@ -310357,5 +310405,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8c56bbb82686cd2fbc2be56d46cf794bc5f8a5ec664a2645ccaae5b1d7d9d884"
+  "sourceDigest": "sha256:23a114c3710b4a2d04f4a6de85bc18de8b9a7ae8b39c5f0f39db8efa8549c98f"
 }

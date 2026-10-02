@@ -185,3 +185,15 @@ CS 独立 adapters、B/M0 与 AW-in-CS 真实部署均未开始。保持先完�
 实际源码变化后只执行一次新 R2 scoped census/boundary，保留首版生成记录；观察边和 exceptions 逐项与首版相同，六实际增量仍为 1810→1813、5723→5735、38→39、5085→5096、1045→1047、25780→25802。ProgramArtifactPort 恢复 active 且只有一个 composition binding；required 汇总现为 18 active/21 declared-debt（原 HEAD 18/20），宿主新增 SPI 仍 declared-debt/W4-E7。新 sourceDigest `sha256:8c56bbb82686cd2fbc2be56d46cf794bc5f8a5ec664a2645ccaae5b1d7d9d884`；四原规则、304 条 debt、273/31、target 69、implementation SCC 空保持，boundary added 空。六回执只更新本会话精确未发布记录，在匹配 canonical commit 后一次退役；没有替他人移除回执。
 
 首版新节与全部旧正文/并行内容/门和 CI 历史完整保留。R2 METADATA 只检视实际变更的投影和新增记录；只做目标 format/lint、纯源码/AST/JSON/字节证明与原 scoped 生成，无 AW 本机 tests/typecheck/build/service。正式行为仍待新 exact-SHA hosted CI。完整 A1/A2/A3～A8/AC00/A-G 与后续独立 CS adapters、B/M0～M4 持续；尚无 AW-in-CS 实际部署，不关闭 RFC。
+
+## 2026-10-03 宿主 application 与 writer 全根后的余项
+
+本批 SOURCE12 有限 PASS `f493a18e5ff395a70d576e97fe15da31624de2e096e4609e2084398d8250dc7b` 收口 host application/唯一 composition 和 document writer 的根选择。旧九全文与七控制 SHA保持；宿主 required SPI由原规则成为 active，汇总19 active/20 declared-debt。该 liveness 只证明真实消费/提供/装配，不代表锁/执行权、所有内容或完整 A-G 完成。
+
+- A1/A7：raw PID lock、启动唯一权、boot proof/恢复、托管租约及直接 HTTP authority 尚未中立化；保持 ACK 后退出，PID仅诊断，服务重启不得批量中断远程任务。
+- A2/A8：JSON document writer 已贯穿所有 roots 和 provider 重装配；其余 EvidenceStore intake/import、materialize、上传、验证、工作区证据及 blob 输出仍需逻辑引用和独立效果链；不能以本批答案存储宣称整个对象存储接入。
+- A3～A8：两 LaunchLane 和全部 workspace/Git 消费者；A5 submit/durable receipt/cursor/message/cancel/terminal cleanup 全链；A6所有purpose命令，A7全部worker/authority，A8 AC00/所有roots，继续完成后独立完整 A-G。
+
+e0c42a53 main37050645456 completed/failure（44/6），Windows37050766328 success1/1，原失败完整保留。三测试 CI 守卫补正有限 PASS `430fd59c328c035fa1268b82e7526eda61090259062728795fd885370e73bb53`：实际 void count6→3、新真实 serve fixture调用1、RFC254两功能断言迁实际owner；规则/其他段落不变。复用12门组成SOURCE15 `d00525b2a6b937195b3acbf572a0643996dcc9d440cb9908442b359fa5ef9fcf`，尚待新 exact-SHA hosted CI，不冒称正式通过。原scoped生成只一次，四真实增长及原条款/数量保护见 [功能门](./functional-gates.md)，无本机AW runtime检查。
+
+CS独立adapters、B/M0和实际AW-in-CS部署仍未开始。先中立A1～A8及独立完整A-G，再CS M0实际部署、逐项M1～M4；旧正文、所有门/CI历史和并行输出保持，不关闭RFC。

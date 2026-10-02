@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1813,
+    "entries": 1814,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -24089,6 +24089,28 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/application/daemonHostApplication.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/application/daemonHostApplication.ts#runDaemonHostApplication",
+      "missingControls": [
+        "audit",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/daemonHostApplication.ts#runDaemonHostApplication",
+      "symbol": "runDaemonHostApplication",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": true,
         "event": false,
@@ -43336,7 +43358,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8c56bbb82686cd2fbc2be56d46cf794bc5f8a5ec664a2645ccaae5b1d7d9d884",
+  "sourceDigest": "sha256:23a114c3710b4a2d04f4a6de85bc18de8b9a7ae8b39c5f0f39db8efa8549c98f",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

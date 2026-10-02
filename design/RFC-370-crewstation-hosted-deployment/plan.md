@@ -606,3 +606,13 @@ A2 归档真实根九路径有限独立 PASS，指纹 `f9a5659c85fb50b3a0158e9d1
 实际源码变化后只执行一次新 R2 scoped census/boundary，保留首版生成记录；观察边和 exceptions 逐项与首版相同，六实际增量仍为 1810→1813、5723→5735、38→39、5085→5096、1045→1047、25780→25802。ProgramArtifactPort 恢复 active 且只有一个 composition binding；required 汇总现为 18 active/21 declared-debt（原 HEAD 18/20），宿主新增 SPI 仍 declared-debt/W4-E7。新 sourceDigest `sha256:8c56bbb82686cd2fbc2be56d46cf794bc5f8a5ec664a2645ccaae5b1d7d9d884`；四原规则、304 条 debt、273/31、target 69、implementation SCC 空保持，boundary added 空。六回执只更新本会话精确未发布记录，在匹配 canonical commit 后一次退役；没有替他人移除回执。
 
 首版新节与全部旧正文/并行内容/门和 CI 历史完整保留。R2 METADATA 只检视实际变更的投影和新增记录；只做目标 format/lint、纯源码/AST/JSON/字节证明与原 scoped 生成，无 AW 本机 tests/typecheck/build/service。正式行为仍待新 exact-SHA hosted CI。完整 A1/A2/A3～A8/AC00/A-G 与后续独立 CS adapters、B/M0～M4 持续；尚无 AW-in-CS 实际部署，不关闭 RFC。
+
+## 2026-10-03 宿主 application 与证据 writer 根接线进度
+
+12 路径 SOURCE 有限 PASS `f493a18e5ff395a70d576e97fe15da31624de2e096e4609e2084398d8250dc7b`：真正的 SO application consumer 与唯一 root composition 承接 host ACK 协调；原规则下 DaemonHostLifecyclePort 成为 active，39项现19 active/20 declared-debt。StartOptions/session/recompose/SQLite/PG/standalone 同一 document writer 已到 materializer，双 provider 真 HTTP answers 的 own/prototype/held ACK/replay/逻辑引用回归已编写。九份旧文件逆变换及七控制 SHA 保持；W29 仅 PG实际接线摘要变化，数量/规则/预算保持。
+
+前批 e0c42a53 [主 CI37050645456](https://github.com/wangbinquan/agent-workflow/actions/runs/37050645456) completed/failure（44/6），[Windows37050766328](https://github.com/wangbinquan/agent-workflow/actions/runs/37050766328) success1/1。五个功能分片的三类旧守卫 mismatch 已按实际数量/owner 路径补正；三测试有限增量 PASS `430fd59c328c035fa1268b82e7526eda61090259062728795fd885370e73bb53`，原规则和其他段落保持。12路径未变，组合15 SOURCE `d00525b2a6b937195b3acbf572a0643996dcc9d440cb9908442b359fa5ef9fcf` 复用两门；本批正式修复等待新 exact-SHA hosted CI。
+
+原 scoped census/boundary 各一次，entry+1/import+4/exception+4/owner+4为真实投影；四原规则、304 debt、273/31、target69及implementation SCC空保持。四增长匹配 canonical 后独立退役。三个补正测试不影响 production corpus/digest额外输入，复用原生成；无本机 AW test/typecheck/build/service，旧全文/并行内容/门及 CI 历史保持。
+
+后续仍按既定矩阵完成 raw lock/authority、全部证据物理效果、A3～A8/AC00，再独立完整 A-G；不得凭此批 active SPI 关闭整个 A1 或 A 阶段。然后各层独立 CS adapters，B/M0先实际部署，增量 M1～M4。尚无 AW-in-CS 实际部署，不关闭 RFC。

@@ -9498,3 +9498,13 @@ M1 验收：跑通 `创 agent → 创 skill → 通过 API/curl 创线性 workfl
 5. 完成一批 issue 后：commit + push + 更新本文件
 
 17路径metadata首门另有文档事实P2：c843 CI在复核期间刚进入终态，新增节的“待终态”已按精确回执修正；该finding和原候选指纹f162d6ecbbbbdd592d10d583f7083e8b060176f8991e6268a1366a697aeadbdc保留。独立单文档CI引用修正有限PASS，指纹32ba3a45fec8988daf421e3bb9a64bb4d45d00ab91f9d92158bae8c0e6a32fdf；按CLAUDE原规则把同固定提交/路径/行号的OpenCode blob超链接改成文本引用，逆变换旧全文逐字一致，原RFC371输出全部保持，不改任何事实、checker或预算。该文档以另一个小commit同批发布，正式恢复仍待本批exact-SHA CI。
+
+## 2026-10-03 RFC-370 宿主 application、证据写入根及 CI 守卫补正
+
+宿主 application 与 document writer 根接线 12 路径有限独立 PASS `f493a18e5ff395a70d576e97fe15da31624de2e096e4609e2084398d8250dc7b`：SO application 接管唯一监听器后的 ready/control/drain 顺序，等待 late readiness 最终 withdrawal 和 releaseAuthority ACK；start 保留唯一 Bun listener 和原同步退出回调。EvidenceDocumentCommands 贯穿 StartOptions/session/recompose/SQLite/PG/standalone HTTP，同一 receiver 到达 materializer；新双 provider 真实 HTTP 答案回归覆盖 own/prototype writer、held ACK 后 refs/mission 才前进、逻辑引用、replay 及无 staging 回退。30 项定位逆变换恢复九份旧全文，七份原控制 SHA 保持；W29 仅真实 PG digest 更新，168/49/65 statements、8 phases 和所有原规则/预算保持。
+
+已发布 `e0c42a53e5786faaef27170ad592d57d2ef08565` 的 [主 CI37050645456](https://github.com/wangbinquan/agent-workflow/actions/runs/37050645456) completed/failure：44 success、6 failure；五个功能分片复现三处旧守卫位置/数量不符，另一失败为 required 汇总。[Windows37050766328](https://github.com/wangbinquan/agent-workflow/actions/runs/37050766328) completed/success 1/1。三测试增量有限 PASS `430fd59c328c035fa1268b82e7526eda61090259062728795fd885370e73bb53`：W5 原计数规则不变，仅实际无人接管 Promise 从6降到3；startup 原规则登记一处真实监听器 fixture；RFC254 两功能接线断言移至实际 native/application/root 共同关闭链，其余段落保持。五项逆变换恢复三份 before 全文；12 路径未变，组合 SOURCE15 `d00525b2a6b937195b3acbf572a0643996dcc9d440cb9908442b359fa5ef9fcf` 复用两门，正式修复等待新 exact-SHA hosted CI。
+
+原 scoped census/boundary 各一次，四规则及原304条 debt、273/31、target69、implementation SCC空保持；actual entry1813→1814、imports5735→5739、exceptions5096→5100、owner25802→25806，四真实增长匹配 canonical 后一次退役。宿主 required SPI 由原规则观察到 application consumer、native provider、唯一 root composition 而成为 active；39项现19 active/20 declared-debt。新 digest `sha256:23a114c3710b4a2d04f4a6de85bc18de8b9a7ae8b39c5f0f39db8efa8549c98f`。三个 CI 测试不在生产语料/两个 digest 额外输入内，不再运行 generator。旧门/CI/并行正文保持，无 AW 本机 test/typecheck/build/service。
+
+A1 raw lock/执行 authority、A2 其他物理证据效果及 A3～A8/AC00/独立完整 A-G 继续；本门不关闭完整 A 阶段。完成后编写各层独立 CS adapters，B/M0 先实际部署，再逐项 M1～M4；尚无 AW-in-CS 实际部署，不关闭 RFC。
