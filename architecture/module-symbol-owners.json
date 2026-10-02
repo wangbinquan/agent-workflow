@@ -6,7 +6,7 @@
     "moduleFiles": 1441,
     "productionFiles": 2797,
     "sharedFiles": 160,
-    "symbolsIncludingFileRoots": 25762
+    "symbolsIncludingFileRoots": 25763
   },
   "entries": [
     {
@@ -132064,6 +132064,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "createDrizzleTaskArchiveMaintenanceCommand",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/taskArchiveMaintenance.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskArchiveMaintenance.ts#TaskArchiveContentBinding",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "TaskArchiveContentBinding",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -309876,5 +309888,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d37cb5442dd22693190d66992a93c96e9417133908338709b8e501eba587b75a"
+  "sourceDigest": "sha256:aae858707649d363df929b4327f896923f79153baacd49bbec09d9933efd7973"
 }

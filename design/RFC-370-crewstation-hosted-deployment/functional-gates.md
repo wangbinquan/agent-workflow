@@ -345,3 +345,16 @@ nested Git/loop wrapper 将原 TaskScopeOutcome.handoff 逐层传回：真实 in
 官方 scoped census 只纳入已提交 9e8db61f 加本批16个不同源码/回归路径，四条原生成规则保持。实际 entry1807→1808（一个已用纯 inbox factory）；imports5706→5707、原 exceptions5068→5069（三条真实 root symbol edge 新增、旧 preparation value 和 Intent-to-SO type 两条删除）；owner25752→25762（十项真实 owner 新增）。background342、public1045、required-port liveness38 及 implementation SCC 集合保持。原 boundary scanner 无新增 R1/R2，273 inbound/31 outbound、全部原 reason/退役条款和 bootstrap 列表保持；四项真实增长按原协议一次登记，匹配 canonical 提交后另行退役。
 
 按两个 source 小提交（wrapper 九路径、启动及完整装配七路径）、17路径 canonical/docs 和四项消费回执后继退役发布；全部旧正文与并行输出保持。只做目标 format/lint、纯源码/字节证明和官方 scoped 生成；无本机 AW test/typecheck/build/service。正式修复交新 exact-SHA hosted CI。有限门只覆盖本批，外层宿主锁/生命周期及其他 A1～A8/完整 AC00/A-G 持续推进；完整 A-G 后才实施独立 CS adapters，B/M0 先实际部署，再逐项 M1～M4。尚无 AW-in-CS 部署，不关闭 RFC。
+
+
+## 2026-10-02 归档真实根接线与 nested handoff 回归夹具补正
+
+A2 归档真实根九路径有限独立 PASS，指纹 `f9a5659c85fb50b3a0158e9d1d56157959c7eca2159335106bbe7effc7750136`。TaskArchiveContentBinding 将所选 content 与三个逻辑根一起传入 StartOptions、provider session、SQLite/PG runtime 和 standalone HTTP。composition 冻结所选根，调用者的 now、retention、maxTrees、actor 和 preview 仍由原协调器裁定。SQLite daemon HTTP 优先复用 boot 同一 command；PG 原共享实例接线保持。原协调器、local content、temp sweep 和 route 完整字节不变；27 项有限逆变换恢复八个旧文件全文。五组新增行为回归覆盖双 provider helper、manual、held recovery ACK、失败无本地回退及真 HTTP manifest ACK/claim 保留。W29 只按真实接线修改两项摘要，原 168/49/65 statements、8 phase blocks 及所有原判据/预算保持。
+
+前批已发布至 `1ed4061c3e10bbabd4e690126e7a3eaebd8217d6`，精确 main/origin 同步；其 [Windows37021105289](https://github.com/wangbinquan/agent-workflow/actions/runs/37021105289) completed/failure 0/1。该 SHA [主 CI37020545454](https://github.com/wangbinquan/agent-workflow/actions/runs/37020545454) 的本批冻结功能快照为 42 success、3 failure、4 非终态，并非全套终态结论。类型检查两个 OS 都指出 rfc370-wrapper-gate-handoff.test.ts:521 的 tasks fixture 缺 workflowId/inputs/startedAt；Ubuntu3 与 macOS5 的同一真实双库回归失败于 workflow_id NOT NULL。四份功能作业日志已单独保存；既有 runner 本次已通过对应原断言，没有改写前次一次失败的原因。其余任务和主 CI 的最终结论另行记录，旧失败/取消及 gate findings 全部保持。
+
+单路径 CI 夹具补正有限独立 PASS，指纹 `445fe558e475c284dca90a0b44add96dee5f8eb376d5b34e5705c36549b30e67`；只插入真实 workflow row、workflowId/inputs/startedAt 三项必填字段及 workflow import；原 handoff/interrupted/progress/frame/resume 断言、预算和全部生产代码保持。三项有限逆变换恢复原测试全文，不用类型压制或放宽原 schema。正式修复仍以新 exact-SHA hosted CI 为准，不将有限源码门或部分作业通过记为主 CI 全绿。
+
+官方 scoped census 只纳入已提交 1ed4061c 加归档九路径，四条原生成规则保持。实际 imports5711（原5707）、原 exceptions5073（原5069）仅来自四条真实 bootstrap type edge；owner25763（原25762）只新增一个已消费的 archive binding owner。entry1808、background342、public1045、required-port liveness38 及 implementation SCC 集合保持。原 boundary scanner 无新增 R1/R2，273 inbound/31 outbound、全部原 reason/退役条款和 bootstrap 列表保持；三项真实增长按原协议一次登记，匹配 canonical 提交后另行退役。
+
+按 CI 夹具单路径、归档九路径、17路径 canonical/docs 和三项消费回执后继退役及时发布；旧正文和并行输出保持。仅运行目标 format/lint、纯源码/AST/字节证明及官方 scoped 生成，无本机 AW test/typecheck/build/service。后台 Worker 的 archive content 接线仍在 A2/A7，其他内容及 A1～A8/完整 AC00/A-G 持续；完整 A-G 后才实施独立 CS adapters，B/M0 先实际部署再逐项 M1～M4。尚无 AW-in-CS 部署，不关闭 RFC。

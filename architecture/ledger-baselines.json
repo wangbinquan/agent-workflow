@@ -846,8 +846,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5707,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5711,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: exactly four actual bootstrap type edges select the archive content/root binding in both daemon roots and select the shared archive command plus binding in SQLite HTTP. Original import rules and offered DAG remain unchanged."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +870,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5069,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5073,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: the original exception projection records the same four actual bootstrap type edges. Original 273 inbound/31 outbound R1/R2 clauses and retirement conditions remain unchanged; no new boundary exception is added."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +908,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25762,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25763,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: exactly one real composition owner is added for TaskArchiveContentBinding, consumed by both provider roots and SQLite HTTP. All original owner rules remain unchanged; no new unused factory or public surface is introduced."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:d37cb5442dd22693190d66992a93c96e9417133908338709b8e501eba587b75a",
+    "sourceDigest": "sha256:aae858707649d363df929b4327f896923f79153baacd49bbec09d9933efd7973",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +929,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "553486073aa2885b6f03299d5f69d5b467c57408",
-    "contentDigest": "sha256:924d684af325eca2f6235eec180e39a6eb57e8222576e946e97ab7c341949cc3",
+    "currentSnapshotSha": "1ed4061c3e10bbabd4e690126e7a3eaebd8217d6",
+    "contentDigest": "sha256:0f4b6d321d64ac12d990bbf85ae8971d4a975983ff773181948f7f70d8a7052b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
