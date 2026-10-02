@@ -182,7 +182,6 @@ describe('RFC-349 provider completeness', () => {
 
     for (const provider of DATABASE_PROVIDERS) {
       const traits = DATABASE_PROVIDER_TRAITS[provider]
-      expect(traits.storage, `${provider} must declare its storage shape`).toBeDefined()
       // The two decisions a third provider was measured to inherit wrongly.
       expect(traits.booleanLiteral(true), `${provider} boolean true literal`).toBeTruthy()
       expect(traits.booleanLiteral(false), `${provider} boolean false literal`).toBeTruthy()
@@ -269,7 +268,6 @@ describe('RFC-349 provider completeness', () => {
       'migrationRole',
       'offlineCompaction',
       'serverVersionFallback',
-      'storage',
     ])
     const consumers = backendSources().filter(
       (source) =>

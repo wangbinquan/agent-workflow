@@ -84,16 +84,39 @@ describe('RFC-368 实现门 findings', () => {
       reset()
       await seedReaction(harness.db)
       const port = scriptedPort()
-      port.launchBehavior = () => new Promise<void>(() => {}) // launch 进行中
-      const service = reactionService(harness.db, { port, now, mint })
-      void service.dispatchOneReaction()
-      await Bun.sleep(50)
-      expect((await reactionRows(harness.db)).round).toMatchObject({
-        state: 'planned',
-        executionRef: 'execution-1',
+      let enterLaunch!: () => void
+      let releaseLaunch!: () => void
+      const enteredLaunch = new Promise<void>((resolve) => {
+        enterLaunch = resolve
       })
-      await service.terminate(REACTION_CASE, 'user-terminated')
-      expect(port.canceled).toEqual([`reaction:${REACTION_ROUND}:0|execution-1`])
+      const heldLaunch = new Promise<void>((resolve) => {
+        releaseLaunch = resolve
+      })
+      // Wait for the real launch boundary, after execution identity persistence.
+      // A fixed 50ms can observe planned with executionRef still null on CI.
+      port.launchBehavior = async () => {
+        enterLaunch()
+        await heldLaunch
+      }
+      const service = reactionService(harness.db, { port, now, mint })
+      const dispatch = service.dispatchOneReaction()
+      try {
+        await Promise.race([
+          enteredLaunch,
+          dispatch.then(() => {
+            throw new Error('reaction dispatch completed before launch was entered')
+          }),
+        ])
+        expect((await reactionRows(harness.db)).round).toMatchObject({
+          state: 'planned',
+          executionRef: 'execution-1',
+        })
+        await service.terminate(REACTION_CASE, 'user-terminated')
+        expect(port.canceled).toEqual([`reaction:${REACTION_ROUND}:0|execution-1`])
+      } finally {
+        releaseLaunch()
+        await dispatch
+      }
     })
 
     test('P2-2：launch 返回时案例已终止 ⇒ 立刻取消刚建出的执行', async () => {

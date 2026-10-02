@@ -19,19 +19,7 @@ import { retryableSqliteWriteErrorCode } from '@/platform/persistence/sqliteWrit
 
 import { type DatabaseProvider } from './databaseProviders'
 
-/**
- * How the daemon relates to the store. `embedded-file` means the daemon owns a
- * file it can stat, vacuum and back up in-process; `external-server` means a
- * separate server process the daemon only connects to.
- *
- * Ask this instead of `provider === 'sqlite'` whenever the question is really
- * "is there a local file?" — a new provider then answers correctly by
- * declaration rather than by falling through a branch.
- */
-export type DatabaseStorageShape = 'embedded-file' | 'external-server'
-
 export interface DatabaseProviderTraits {
-  readonly storage: DatabaseStorageShape
   /**
    * Renders a boolean literal for DDL defaults. SQLite has no boolean type and
    * takes 1/0; PostgreSQL rejects those for a `boolean` column.
@@ -101,7 +89,6 @@ export interface DatabaseProviderTraits {
 
 export const DATABASE_PROVIDER_TRAITS = {
   sqlite: {
-    storage: 'embedded-file',
     booleanLiteral: (value) => (value ? '1' : '0'),
     classifyRetryable: retryableSqliteWriteErrorCode,
     migrationRole: 'source',
@@ -111,7 +98,6 @@ export const DATABASE_PROVIDER_TRAITS = {
     absentLocalStoreMessage: 'SQLite (no database yet)',
   },
   postgresql: {
-    storage: 'external-server',
     booleanLiteral: (value) => (value ? 'TRUE' : 'FALSE'),
     classifyRetryable: postgresqlSerializationFailureCode,
     migrationRole: 'target',
