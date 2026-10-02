@@ -41,7 +41,7 @@
 
 ## 当前状态与关闭边界
 
-当前源码修复 `a241fcf48420c363cf5c1255b4100a5dd113dd93` 的主 CI 和九种原默认定时配置已全部终态 success，共 75 个作业成功；本次回归已恢复，AW-R01 保持关闭。精确矩阵见[最新终态回执](#2026-10-01-最终修复的主-ci-与九种定时配置终态)。下方原失败与中间候选记录完整保留。并行 resource-catalog 四路径保留；AW-R08 维度筛选/模型用途下钻及其余 AW/CS 工作继续，两个 RFC 仍 In Progress。后继五份纯文档提交的精确主 CI 另验。
+观测源码基线 `b339e7e06e13c7b4456cc1bf928048c7fc0262a3` 的主 CI 和九类原默认定时配置已全部 completed/success，共十次有效运行、75 个成功作业；AW-R01 保持关闭。精确矩阵及已恢复的原审批 POST 时序见[最新终态回执](#2026-10-02-原审批时序与默认-ci-矩阵复验)。mixed report 原根因仍未确证，下方原失败、取消与中间候选历史完整保留。分类 Token、人民币估算的新只读核对已记录；最新正式页面、CS 完整父结束链路与开发 producer、真实托管联动仍继续，两个 RFC 保持 In Progress。本次后继纯文档提交的精确主 CI 另验。
 
 ## 第二轮 CI 候选：传递依赖与启动回读（2026-09-30）
 
@@ -218,3 +218,28 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 `c2c96cef469ce550529a52fbeefaa89a952f0417` 的明细下钻源码已精确提交上库，原源级 v3 和完整集成 v4 静态功能回执保留。[主 CI 36938431472](https://github.com/wangbinquan/agent-workflow/actions/runs/36938431472) 整体终态 cancelled，`CI required` 为 failure，不能算通过。前端 Ubuntu 3/3 实际为 2504 pass、2 fail，均在观测回归内；后继的并行架构修复与账本许可退役仍由其 owner 负责，未收编其在制源码。
 
 两处修正保留原验证：读取失败后返回完整空页的夹具明确 `nextCursor: null`，与真实 EOF 合同一致；有续页的空批次仍必须显示“本批尚未确认匹配任务”，已有单独断言不变。模型贡献 Dialog 进入整任务明细时，等待真实任务标题加载后再判断返回行为；顶部返回按钮在加载期间已存在，不能充当数据就绪信号。没有固定延时、删测试、跳过或更改生产逻辑。精确格式与 lint 已通过；本机未运行 AW 测试、构建或服务。新的精确提交主 CI 与适用定时矩阵、真实页面 Dialog 验收仍待，两个 RFC 保持 In Progress。
+
+## 2026-10-02 原审批时序与默认 CI 矩阵复验
+
+当前代码基线 `b339e7e06e13c7b4456cc1bf928048c7fc0262a3` 包含观测明细、原审批 POST 时序恢复 `064abf30`、归档夹具枚举与格式修正 `69afa48c`，以及原 owner 的薄 facade 精确清单修正。主 CI 和九类现有默认定时工作流已全部 completed/success，共十次有效运行、75 个成功作业；未降低预算、删除断言或修改调度。
+
+| 工作流                        | Run                                                                                   | 成功作业 |
+| ----------------------------- | ------------------------------------------------------------------------------------- | -------- |
+| CI                            | [36969850886](https://github.com/wangbinquan/agent-workflow/actions/runs/36969850886) | 50/50    |
+| maintenance-soak-nightly.yml  | [36970414480](https://github.com/wangbinquan/agent-workflow/actions/runs/36970414480) | 1/1      |
+| e2e-full-nightly.yml          | [36970420107](https://github.com/wangbinquan/agent-workflow/actions/runs/36970420107) | 5/5      |
+| windows-platform.yml          | [36970559143](https://github.com/wangbinquan/agent-workflow/actions/runs/36970559143) | 1/1      |
+| e2e-webkit-nightly.yml        | [36970432899](https://github.com/wangbinquan/agent-workflow/actions/runs/36970432899) | 8/8      |
+| integration-opencode.yml      | [36970439090](https://github.com/wangbinquan/agent-workflow/actions/runs/36970439090) | 2/2      |
+| git-protocols-e2e.yml         | [36970445195](https://github.com/wangbinquan/agent-workflow/actions/runs/36970445195) | 1/1      |
+| evidence-soak-nightly.yml     | [36970451369](https://github.com/wangbinquan/agent-workflow/actions/runs/36970451369) | 1/1      |
+| visual-regression-nightly.yml | [36970456678](https://github.com/wangbinquan/agent-workflow/actions/runs/36970456678) | 1/1      |
+| postgresql-evidence.yml       | [36970464478](https://github.com/wangbinquan/agent-workflow/actions/runs/36970464478) | 5/5      |
+
+Windows 首次同 SHA 默认运行 `36970426040` 为 cancelled，保留原回执；采用同 SHA、没有参数输入的替代 `36970559143` 成功终态。原 `064abf30` 主 CI 因已发布归档夹具的格式与 facade 清单而 failure，`69afa48c` 主 CI 被后继 push 取消且仍有 facade 清单失败；这些记录均保留，不写成绿色。
+
+mixed report 原丢失根因仍未确证。复验已恢复最初的 reject POST 顺序，原 run 身份断言移到既有 afterReject 查询后，不新增 GET、等待、重试或预算。原失败诊断、修订 frame、writer3 输入、fanout 汇总及最终审批断言保持；本矩阵证明该实际原时序通过 Chromium 与 WebKit，不冒充缺失根因的功能修复。
+
+新只读读取再次核对三个已执行的原生验收任务：输入 36,260、缓存读 8,832、缓存写 0、输出 2,432，总计 47,524 Token，人民币估算 ¥0.096392；仅使用已授权的验收专用费率，不代表供应商账单。正式新页面的剩余实机几何/焦点验收因 Mac 锁屏继续等待，CS 当前 API 会话亦已过期，未切换身份或开启项目费用可见性。CS 原父结束/物理证明/恢复/开发采集以及 AW/CS 托管联动仍继续，两个 RFC 保持 In Progress。
+
+本次后继只更新回执文档，源码候选不重复跑已通过的默认矩阵；文档提交的精确主 CI 单独跟踪。
