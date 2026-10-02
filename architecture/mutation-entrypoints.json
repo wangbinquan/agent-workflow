@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1805,
+    "entries": 1807,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -11940,6 +11940,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/application/queuedResumption.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/application/queuedResumption.ts#createQueuedIntentResumption",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/application/queuedResumption.ts#createQueuedIntentResumption",
+      "symbol": "createQueuedIntentResumption",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
@@ -23526,6 +23551,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryPreviewIndex.ts#createFileRepositoryPreviewIndexPort",
       "symbol": "createFileRepositoryPreviewIndexPort",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileScratchWorkspaceEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/fileScratchWorkspaceEffects.ts#createFileScratchWorkspaceEffects",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileScratchWorkspaceEffects.ts#createFileScratchWorkspaceEffects",
+      "symbol": "createFileScratchWorkspaceEffects",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -43138,7 +43187,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:370ccf1ae8683da55f3037f049ffdf7499037bf2a06f7cf3eaec12e7eec7d92c",
+  "sourceDigest": "sha256:5c2084587ac8cd07c4b2745d0fc626ade15adfb721effa79d86200596b608314",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

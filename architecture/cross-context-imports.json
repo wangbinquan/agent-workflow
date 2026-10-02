@@ -9402,6 +9402,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileScratchWorkspaceEffects.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/infrastructure/local/fileScratchWorkspaceEffects.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1a3e6f154cdc8b4ac673",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/workspaceMaterializer.ts#$file",
@@ -24325,6 +24342,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor",
       "toPath": "packages/backend/src/auth/actor.ts",
       "toSymbol": "Actor",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/workspaceMaterialization.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/application/workspaceMaterialization.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:465fa4f09f0a1e1b252d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W5",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#WorktreeCleanupProvenance",
+      "toPath": "packages/backend/src/util/git.ts",
+      "toSymbol": "WorktreeCleanupProvenance",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -47317,6 +47351,23 @@
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "fromPath": "packages/backend/src/cli/start.ts",
       "fromSymbol": "$file",
+      "id": "exception:import:8e6f24081e4d8f738cd5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/queuedResumption.ts#composeIntentQueuedResumption",
+      "toPath": "packages/backend/src/modules/intent/composition/queuedResumption.ts",
+      "toSymbol": "composeIntentQueuedResumption",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
       "id": "exception:import:8e7a731b2457fcd9aff2",
       "introducedByRFC": "pre-RFC-294-current-debt",
       "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
@@ -62780,6 +62831,23 @@
       "toPath": "packages/backend/src/auth/secretBox.ts",
       "toSymbol": "SecretBox",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/queuedResumption.ts#$file",
+      "fromPath": "packages/backend/src/modules/intent/composition/queuedResumption.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bd8f67057f893f82fe62",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W9-D",
+      "rule": "off-dag-offered",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#ApplicationConfigurationQueries",
+      "toPath": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toSymbol": "ApplicationConfigurationQueries",
+      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
     },
     {
       "edgeKind": "value",
@@ -86090,9 +86158,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5064,
+    "architectureExceptions": 5068,
     "implementationSccs": 0,
-    "observedEdges": 5702,
+    "observedEdges": 5706,
     "requiredPorts": 38,
     "targetEdges": 69
   },
@@ -95731,6 +95799,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskRecoveryOperations.ts#TaskRecoveryOperations"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/infrastructure/local/fileScratchWorkspaceEffects.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileScratchWorkspaceEffects.ts#$file",
+      "id": "import:1a3e6f154cdc8b4ac673",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
       "edgeKind": "value",
@@ -111587,6 +111671,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/actor.ts",
       "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/application/workspaceMaterialization.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/application/workspaceMaterialization.ts#$file",
+      "id": "import:465fa4f09f0a1e1b252d",
+      "owner": "source-control",
+      "removeAfterWave": "W5",
+      "role": "legacy-outbound",
+      "specifier": "@/util/git",
+      "syntax": "static-import",
+      "targetSymbol": "WorktreeCleanupProvenance",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/git.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#WorktreeCleanupProvenance"
     },
     {
       "edgeKind": "value",
@@ -136233,6 +136333,22 @@
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:8e6f24081e4d8f738cd5",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/intent/composition/queuedResumption",
+      "syntax": "static-import",
+      "targetSymbol": "composeIntentQueuedResumption",
+      "toContext": "intent",
+      "toFile": "packages/backend/src/modules/intent/composition/queuedResumption.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/queuedResumption.ts#composeIntentQueuedResumption"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "id": "import:8e7a731b2457fcd9aff2",
       "owner": "bootstrap",
       "removeAfterWave": "W9-D",
@@ -152787,6 +152903,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/secretBox.ts",
       "toOwnerEntryId": "owner:packages/backend/src/auth/secretBox.ts#SecretBox"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/composition/queuedResumption.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/composition/queuedResumption.ts#$file",
+      "id": "import:bd8f67057f893f82fe62",
+      "owner": "intent",
+      "removeAfterWave": "W9-D",
+      "role": "off-dag-offered",
+      "specifier": "@/modules/system-operations/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "ApplicationConfigurationQueries",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#ApplicationConfigurationQueries"
     },
     {
       "edgeKind": "value",
@@ -178173,7 +178305,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:370ccf1ae8683da55f3037f049ffdf7499037bf2a06f7cf3eaec12e7eec7d92c",
+  "sourceDigest": "sha256:5c2084587ac8cd07c4b2745d0fc626ade15adfb721effa79d86200596b608314",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
