@@ -358,3 +358,17 @@ A2 归档真实根九路径有限独立 PASS，指纹 `f9a5659c85fb50b3a0158e9d1
 官方 scoped census 只纳入已提交 1ed4061c 加归档九路径，四条原生成规则保持。实际 imports5711（原5707）、原 exceptions5073（原5069）仅来自四条真实 bootstrap type edge；owner25763（原25762）只新增一个已消费的 archive binding owner。entry1808、background342、public1045、required-port liveness38 及 implementation SCC 集合保持。原 boundary scanner 无新增 R1/R2，273 inbound/31 outbound、全部原 reason/退役条款和 bootstrap 列表保持；三项真实增长按原协议一次登记，匹配 canonical 提交后另行退役。
 
 按 CI 夹具单路径、归档九路径、17路径 canonical/docs 和三项消费回执后继退役及时发布；旧正文和并行输出保持。仅运行目标 format/lint、纯源码/AST/字节证明及官方 scoped 生成，无本机 AW test/typecheck/build/service。后台 Worker 的 archive content 接线仍在 A2/A7，其他内容及 A1～A8/完整 AC00/A-G 持续；完整 A-G 后才实施独立 CS adapters，B/M0 先实际部署再逐项 M1～M4。尚无 AW-in-CS 部署，不关闭 RFC。
+
+## 2026-10-02 技能完整存储真实根与 HTTP 回归夹具补正
+
+技能完整选择八路径首门 `58773cdefc01365ca8afd7e2f64a33838e429952ce15556dc491e9568b1a6428` FAIL/P2 保留：直接展开合法原型 getter bundle 会丢失 capability 并启用 file 默认。owner 的 selectSkillContentDependencies 现显式读取全部11项能力及一次 rootReference，五个真实 classic/boot 调用展开该冻结投影；同一 binding 贯穿 StartOptions、provider session/recompose、SQLite/PG 和 standalone HTTP。undefined 保持原 file 默认，原叶层状态机完整字节不变。
+
+修正八路径有限独立 PASS `80c9b1f5c8529376cbca39db7930a0faf418121114a5830b54bc301cdc979cad`；28项有界逆变换恢复五个旧文件全文，七个叶层 SHA 保持。原 own-field 双provider HTTP、publish ACK、操作锁/row/phase、boot snapshot ACK、读取失败判据及每例20秒预算保留，新增无own字段的12原型getter夹具。W29只变真实PG/SQLite两个摘要，168/49/65 statements、8 phase及全部原规则/预算不变。首版一次scoped投影随其FAIL保存为无效未发布记录，真实源码补正后只执行一次新R2投影。
+
+前批 `1ed4061c3e10bbabd4e690126e7a3eaebd8217d6` 主 [CI37020545454](https://github.com/wangbinquan/agent-workflow/actions/runs/37020545454) 已 completed/cancelled：44成功、4失败、2取消，旧非终态快照保留。当前已发布 `2b91d76c4ab10f2efe1b11bff506ad17da4ced29` 精确同步；[Windows37025412186](https://github.com/wangbinquan/agent-workflow/actions/runs/37025412186) completed/failure 0/1；主 [CI37024745598](https://github.com/wangbinquan/agent-workflow/actions/runs/37024745598) 本批冻结快照为in_progress、43成功、3失败、1取消、2非终态，非全套终态结论；完成等待曾被GitHub504中断，已重新接入同一run。四份功能作业日志明确归档新回归的Response或Promise类型错误及等待诊断消费原body；生产归档接线及原wrapper断言保持。
+
+两测试路径夹具补正有限独立 PASS `49910a7755dd1d46fec20a847bb5db9837b63e27f2f91eef5c9cb5ba3b69926b`：Promise.resolve保留同一次HTTP请求，诊断读取clone而保留原body给JSON断言；技能同类写法同步补正，getter fixture的receiver按eslint改延后const，原assertions/预算保持。五项有界逆变换恢复两份before全文；其他七个技能路径逐字保持。八路径原PASS与此次一项重叠fixture增量形成技能最终组合指纹 `952de1db48e1240cad8e06f76b17839f8ae56b7b4b26b05b63067b875072b808`，不冒称另一次全量门。
+
+原四条生成规则及production语料规则保持；两fixture均不在sourceDigest的src语料或两个额外输入内，因此不重复R2 census。实际六条bootstrap value/type边使imports5711→5717、exceptions5073→5079，五个真实composition owner使25763→25768。entry1808、background342、public1045、required-port liveness38、target69及implementation SCC保持；原boundary scanner无新增R1/R2，273 inbound/31 outbound及原全部条款/reason/退役条件保持。三项真实增长一次登记，匹配canonical提交后另行退役。
+
+按归档CI单路径、技能八路径、17路径canonical/docs及三回执后继退役及时发布；旧正文及并行输出完整保持。只做目标format/lint、纯源码/AST/字节证明及原官方scoped生成，无本机AW test/typecheck/build/service；正式行为交新exact-SHA hosted CI。其他内容与A1～A8/完整AC00/A-G继续；完整A-G后编写独立CS adapters，B/M0先实际部署，再逐项M1～M4。尚无AW-in-CS部署，不关闭RFC。

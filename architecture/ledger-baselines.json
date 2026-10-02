@@ -846,8 +846,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5711,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5717,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: exactly six real bootstrap edges consume SkillContentBinding and selectSkillContentDependencies in SQLite/PG daemon and standalone HTTP roots. The explicit owner projection preserves all eleven selected capabilities including prototype getters. Original import rules and offered DAG remain unchanged."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +870,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5073,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5079,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: the original exception projection records the same six real bootstrap value/type edges. All original 273 inbound/31 outbound R1/R2 clauses, reasons and retirement conditions remain unchanged; no boundary exception is added."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +908,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25763,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25768,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: five real composition owners are added for the skill binding file, two private capability type aliases, complete SkillContentBinding and the explicit selected dependency projection consumed by five root calls. All original owner rules remain unchanged; no unused public factory is introduced."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:aae858707649d363df929b4327f896923f79153baacd49bbec09d9933efd7973",
+    "sourceDigest": "sha256:6faf5b04245227bb5c23b4df374ec3ab8bf53f1b1adfd559d9d93328e3f15864",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +929,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "3f887998c81c7f2fef51044b773e3c00d415efbe",
-    "contentDigest": "sha256:3acd53018c836afe9f1a25aafb067ca4d54d7ae1e423ed233147e502ea396d77",
+    "currentSnapshotSha": "2b91d76c4ab10f2efe1b11bff506ad17da4ced29",
+    "contentDigest": "sha256:d1c6caec1ed2898cfe06e7e2d1d72bed26ff2ce0e261767db47663fc06b387ac",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

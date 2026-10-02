@@ -3044,6 +3044,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:07ae018d5f42f876bdd9",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#selectSkillContentDependencies",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "toSymbol": "selectSkillContentDependencies",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationCoordinator.ts#$file",
@@ -12122,6 +12139,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:227c767dfa5cf28e0b75",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#SkillContentBinding",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "toSymbol": "SkillContentBinding",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -16914,6 +16948,23 @@
       "toPath": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
       "toSymbol": "requireDatabaseConfig",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:30af2fdbc1e1cc9b9c00",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#SkillContentBinding",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "toSymbol": "SkillContentBinding",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -51785,6 +51836,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:9bad7768963d547a4914",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#selectSkillContentDependencies",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "toSymbol": "selectSkillContentDependencies",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts",
       "fromSymbol": "$file",
@@ -69531,6 +69599,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d0f53dc3dedec766f20a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#SkillContentBinding",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "toSymbol": "SkillContentBinding",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -76311,6 +76396,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#composeLocalSystemOperations",
       "toPath": "packages/backend/src/modules/system-operations/composition.ts",
       "toSymbol": "composeLocalSystemOperations",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e3891cdb2a3e8ea83b8d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#selectSkillContentDependencies",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "toSymbol": "selectSkillContentDependencies",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -86243,9 +86345,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5073,
+    "architectureExceptions": 5079,
     "implementationSccs": 0,
-    "observedEdges": 5711,
+    "observedEdges": 5717,
     "requiredPorts": 38,
     "targetEdges": 69
   },
@@ -89180,6 +89282,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskRepos"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:07ae018d5f42f876bdd9",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/skillContentBinding",
+      "syntax": "static-import",
+      "targetSymbol": "selectSkillContentDependencies",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#selectSkillContentDependencies"
     },
     {
       "edgeKind": "type",
@@ -98846,6 +98964,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#requireResourceEdit"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:227c767dfa5cf28e0b75",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/skillContentBinding",
+      "syntax": "static-import",
+      "targetSymbol": "SkillContentBinding",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#SkillContentBinding"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
@@ -103868,6 +104002,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseProviderRuntime.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseProviderRuntime.ts#requireDatabaseConfig"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:30af2fdbc1e1cc9b9c00",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/skillContentBinding",
+      "syntax": "static-import",
+      "targetSymbol": "SkillContentBinding",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#SkillContentBinding"
     },
     {
       "edgeKind": "value",
@@ -141135,6 +141285,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:9bad7768963d547a4914",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/skillContentBinding",
+      "syntax": "static-import",
+      "targetSymbol": "selectSkillContentDependencies",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#selectSkillContentDependencies"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skillIdentityMigration.ts#$file",
@@ -160030,6 +160196,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition.ts#$file"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:d0f53dc3dedec766f20a",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/skillContentBinding",
+      "syntax": "static-import",
+      "targetSymbol": "SkillContentBinding",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#SkillContentBinding"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
@@ -167180,6 +167362,22 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#composeLocalSystemOperations"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:e3891cdb2a3e8ea83b8d",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/skillContentBinding",
+      "syntax": "static-import",
+      "targetSymbol": "selectSkillContentDependencies",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#selectSkillContentDependencies"
     },
     {
       "edgeKind": "type",
@@ -178470,7 +178668,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aae858707649d363df929b4327f896923f79153baacd49bbec09d9933efd7973",
+  "sourceDigest": "sha256:6faf5b04245227bb5c23b4df374ec3ab8bf53f1b1adfd559d9d93328e3f15864",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

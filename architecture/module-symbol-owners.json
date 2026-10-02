@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1995,
+    "backendFiles": 1996,
     "frontendFiles": 642,
     "legacyFiles": 554,
-    "moduleFiles": 1441,
-    "productionFiles": 2797,
+    "moduleFiles": 1442,
+    "productionFiles": 2798,
     "sharedFiles": 160,
-    "symbolsIncludingFileRoots": 25763
+    "symbolsIncludingFileRoots": 25768
   },
   "entries": [
     {
@@ -86568,6 +86568,66 @@
       "removeAfterWave": "W9-D",
       "status": "current-module",
       "symbol": "composeSkillCatalogBoot",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#BootContent",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "BootContent",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#CatalogContent",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "CatalogContent",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#selectSkillContentDependencies",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "selectSkillContentDependencies",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/composition/skillContentBinding.ts#SkillContentBinding",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "SkillContentBinding",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -309888,5 +309948,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:aae858707649d363df929b4327f896923f79153baacd49bbec09d9933efd7973"
+  "sourceDigest": "sha256:6faf5b04245227bb5c23b4df374ec3ab8bf53f1b1adfd559d9d93328e3f15864"
 }
