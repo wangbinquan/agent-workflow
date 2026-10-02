@@ -26,6 +26,7 @@ import { composePluginGenerationGcCommand } from '../src/modules/resource-catalo
 import { composePluginCatalog } from '../src/modules/resource-catalog/composition/pluginOperations'
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { createPluginRepository } from '../src/modules/resource-catalog/infrastructure/pluginRepository'
+import { createLocalPluginInstaller } from '../src/modules/resource-catalog/infrastructure/local/localPluginInstaller'
 import type { PluginCatalogModule } from '../src/modules/resource-catalog/public/operations'
 import type { PluginOperationContext } from '../src/modules/resource-catalog/public/participants'
 import {
@@ -38,12 +39,7 @@ import {
   updatePlugin,
 } from './helpers/pluginServiceBinding'
 import { createPluginGenerationFilesystemGcPort } from '../src/services/pluginGenerationGc'
-import {
-  checkForUpdate,
-  cleanupInstallGeneration,
-  installPlugin,
-  resetNpmProbeCacheForTests,
-} from '../src/services/pluginInstaller'
+import { resetNpmProbeCacheForTests } from '../src/services/pluginInstaller'
 import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
 import { ConflictError, NotFoundError } from '../src/util/errors'
 
@@ -114,19 +110,7 @@ describeEachProvider('Plugin catalog behavior', (harness) => {
   }
 
   function testPluginInstaller(): PluginInstallerPort {
-    return Object.freeze({
-      async install(pluginId: string, spec: string) {
-        const installed = await installPlugin(pluginId, spec, opts())
-        return Object.freeze({
-          sourceKind: installed.sourceKind,
-          cachedPath: installed.cachedPath,
-          resolvedVersion: installed.resolvedVersion,
-          cleanup: () => cleanupInstallGeneration(installed),
-        })
-      },
-      checkForUpdate: (pluginId: string, spec: string, currentCachedPath: string) =>
-        checkForUpdate(pluginId, spec, currentCachedPath, opts()),
-    })
+    return createLocalPluginInstaller(opts())
   }
 
   function composeTestPluginCatalog(db: ProviderNeutralDatabase): PluginCatalogModule {

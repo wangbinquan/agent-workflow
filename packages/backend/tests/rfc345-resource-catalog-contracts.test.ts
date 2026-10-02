@@ -1160,7 +1160,11 @@ describe('RFC-345 T1 resource-catalog contracts', () => {
     expect(composition).toContain('createPluginRepository')
     expect(composition).toContain('createPluginApplication')
     expect(composition).toContain('composeProviderResourceAclOperationApplication')
-    expect(composition).toContain('createLegacyPluginInstaller')
+    expect(composition).toContain(
+      "import { createLocalPluginInstaller } from '../infrastructure/local/localPluginInstaller'",
+    )
+    expect(composition).toContain('installer: input.installer ?? createLocalPluginInstaller()')
+    expect(composition).not.toContain("from '@/services/pluginInstaller'")
     expect(composition).toContain('application.commands')
     expect(composition).toContain('application.updateCommands')
     expect(operations).toContain('updateCommands.checkUpdate')

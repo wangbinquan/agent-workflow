@@ -1,7 +1,6 @@
 import type { Plugin } from '@agent-workflow/shared'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { checkForUpdate, cleanupInstallGeneration, installPlugin } from '@/services/pluginInstaller'
 import { monotonicNow } from '@/util/time'
 import { createPluginApplication } from '../application/plugins/pluginApplication'
 import type {
@@ -14,6 +13,7 @@ import type {
 } from '../application/plugins/ports'
 import type { PluginOperationContext } from '../public/participants'
 import { createPluginRepository } from '../infrastructure/pluginRepository'
+import { createLocalPluginInstaller } from '../infrastructure/local/localPluginInstaller'
 import { composeProviderResourceAclOperationApplication } from './resourceAcl'
 import type { ProviderResourceCatalogComposition } from './providerResourceCatalog'
 import { createPluginOperationDescriptors } from './catalogOperationDescriptors'
@@ -44,22 +44,6 @@ export interface PluginCatalogCompositionDependencies extends Omit<
   readonly resourceCatalog: Pick<ProviderResourceCatalogComposition, 'authorization' | 'acl'>
 }
 
-function createLegacyPluginInstaller(): PluginInstallerPort {
-  return Object.freeze({
-    async install(pluginId: string, spec: string) {
-      const installed = await installPlugin(pluginId, spec)
-      return Object.freeze({
-        sourceKind: installed.sourceKind,
-        cachedPath: installed.cachedPath,
-        resolvedVersion: installed.resolvedVersion,
-        cleanup: () => cleanupInstallGeneration(installed),
-      })
-    },
-    checkForUpdate: (pluginId: string, spec: string, currentCachedPath: string) =>
-      checkForUpdate(pluginId, spec, currentCachedPath),
-  })
-}
-
 export function composePluginCatalogFromAdapters(
   input: PluginCatalogAdapterCompositionDependencies,
 ): PluginCatalogModule {
@@ -72,7 +56,7 @@ export function composePluginCatalogFromAdapters(
     projection: input.projection,
     access: input.access,
     coordinator: input.coordinator,
-    installer: input.installer ?? createLegacyPluginInstaller(),
+    installer: input.installer ?? createLocalPluginInstaller(),
     clock,
     id: input.id ?? ulid,
     now: input.now ?? Date.now,

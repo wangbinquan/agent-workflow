@@ -30,13 +30,9 @@ import {
   requireResourceGovern,
 } from '../../src/modules/resource-catalog/composition/resourceAcl'
 import { createPluginRepository } from '../../src/modules/resource-catalog/infrastructure/pluginRepository'
+import { createLocalPluginInstaller } from '../../src/modules/resource-catalog/infrastructure/local/localPluginInstaller'
 import type { PluginCatalogModule } from '../../src/modules/resource-catalog/public/operations'
 import type { PluginOperationContext } from '../../src/modules/resource-catalog/public/participants'
-import {
-  checkForUpdate,
-  cleanupInstallGeneration,
-  installPlugin,
-} from '../../src/services/pluginInstaller'
 import { ResourceOperationCoordinator } from '../../src/services/resourceOperationCoordinator'
 import { NotFoundError } from '../../src/util/errors'
 import { monotonicNow } from '../../src/util/time'
@@ -119,26 +115,16 @@ export function composePluginServiceBindingForTest(
       references: readonly PluginAgentReference[],
     ) => discloseRefs(db, candidate, 'agent', references),
   })
+  const localInstaller = () =>
+    createLocalPluginInstaller({
+      pluginsDir: options.pluginsDir,
+      npmBin: options.npmBin,
+      timeoutMs: options.installTimeoutMs,
+    })
   const installer: PluginInstallerPort = Object.freeze({
-    async install(pluginId: string, spec: string) {
-      const installed = await installPlugin(pluginId, spec, {
-        pluginsDir: options.pluginsDir,
-        npmBin: options.npmBin,
-        timeoutMs: options.installTimeoutMs,
-      })
-      return Object.freeze({
-        sourceKind: installed.sourceKind,
-        cachedPath: installed.cachedPath,
-        resolvedVersion: installed.resolvedVersion,
-        cleanup: () => cleanupInstallGeneration(installed),
-      })
-    },
+    install: (pluginId: string, spec: string) => localInstaller().install(pluginId, spec),
     checkForUpdate: (pluginId: string, spec: string, currentCachedPath: string) =>
-      checkForUpdate(pluginId, spec, currentCachedPath, {
-        pluginsDir: options.pluginsDir,
-        npmBin: options.npmBin,
-        timeoutMs: options.installTimeoutMs,
-      }),
+      localInstaller().checkForUpdate(pluginId, spec, currentCachedPath),
   })
   const acl = composeResourceAclOperationApplication<PluginOperationContext, Plugin>({
     db,
