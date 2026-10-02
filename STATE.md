@@ -1,3 +1,7 @@
+## 2026-10-02 运行观测 CI 精确 composition 登记补正
+
+02940128f 的 CI36951130717 已终态 failure：macOS shard 4/6 与 Ubuntu shard 16/16 同为 RFC-328 exact bridge census 漏登记已发布的 SC workspacePresence → TE taskExecutionPersistence composition 边。该实际 standalone 默认只绑定中立 presence query，用于避开旧 composition 循环；本批仅补这一条完整路径登记及其 boot-root 注入后的退役说明，扫描规则、负向夹具和全部业务/事务判据保持。无本机 AW test/typecheck/build/service，正式结果等待补正后的 exact-SHA CI。六类修正版 hosted CI 已成功，full/WebKit/PostgreSQL 仍等终态；历史 failure/cancelled 保留，不关闭 RFC-371 或并行 RFC-370，下方共享历史完整保留。
+
 ## 2026-10-02 RFC-370 八批发布后的 CI 配套修复
 
 八批54源码/测试及 scoped canonical 已按十个小提交发布并精确同步 `165bb447dc0a8bc4f8e0e8ce9698512791a7477d`，其他在制文件逐字保持。其主 [CI36948285794](https://github.com/wangbinquan/agent-workflow/actions/runs/36948285794) 已 completed/failure、43 success/7 failure；同 SHA 的 [maintenance36948285743](https://github.com/wangbinquan/agent-workflow/actions/runs/36948285743) completed/success。正式失败不被有限 PASS 覆盖。

@@ -250,6 +250,9 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   'resource-catalog/infrastructure/legacy/workgroups: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
   // RFC-357：两个 provider 的目录源适配收成一份，这条债随之只剩一条（两个装配文件不再
   // 各自 import task-catalog 的 required-ports）。
+  // RFC-370 H3: standalone binds the neutral SC presence query at this composition.
+  // The narrow default avoids a composition cycle; retire with fully injected boot roots.
+  'source-control/composition/workspacePresence: packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts',
   'task-catalog/composition/required-ports: packages/backend/src/modules/task-execution/infrastructure/taskCatalogSources.ts',
   'task-catalog/composition/required-ports: packages/backend/src/modules/task-execution/infrastructure/taskExecutionCatalogSources.ts',
 ])
