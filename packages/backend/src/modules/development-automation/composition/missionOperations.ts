@@ -1,6 +1,5 @@
 // RFC-344 — bootstrap composition for DevelopmentMission inbound operations.
 
-import { readFileSync } from 'node:fs'
 import { ulid } from 'ulid'
 import { z } from 'zod'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -17,7 +16,7 @@ import {
 import type { DevelopmentAutomationModule } from '../composition'
 import type { AdmissionLookup } from '../application/ports/admissionLookup'
 import { runCutoverCommand, adoptActiveMr } from '../application/cutover'
-import { readEvidenceFileRange, EVIDENCE_READ_MAX_BYTES } from '../application/pipelineEvidenceRead'
+import { readEvidenceRange, EVIDENCE_READ_MAX_BYTES } from '../application/pipelineEvidenceRead'
 import { projectMissionJourney } from '../domain/journeyProjection'
 import type { OperationFailureReceipt } from '../domain/operationFailure'
 import { pipelineEvidenceManifestV1Schema } from '../domain/pipelineManifest'
@@ -369,12 +368,12 @@ function composeDevelopmentMissionOperationsFromPersistence(
                 resumeAt: null,
                 deadlineAt: activeChild.deadlineAt,
               }
-      const pipeline = (() => {
+      const pipeline = await (async () => {
         const manifestRef = knownString('__pipeline.manifestRef')
         if (manifestRef === null) return null
         try {
           const parsed = pipelineEvidenceManifestV1Schema.safeParse(
-            JSON.parse(readFileSync(automation.evidence.blobPath(manifestRef), 'utf8')),
+            JSON.parse((await automation.evidenceContents.readText(manifestRef)) ?? ''),
           )
           if (!parsed.success) return null
           return {
@@ -552,13 +551,18 @@ function composeDevelopmentMissionOperationsFromPersistence(
           'no pipeline evidence has been collected for this mission yet',
         )
       }
-      const manifestBlob = Bun.file(automation.evidence.blobPath(manifestRef))
-      if (!(await manifestBlob.exists())) {
+      let manifestText: string | null
+      try {
+        manifestText = await automation.evidenceContents.readText(manifestRef)
+      } catch {
+        throw new NotFoundError('pipeline-manifest-invalid', 'stored pipeline manifest is invalid')
+      }
+      if (manifestText === null) {
         throw new NotFoundError('evidence-blob-missing', 'pipeline manifest blob is missing')
       }
       let manifestJson: unknown
       try {
-        manifestJson = JSON.parse(await manifestBlob.text())
+        manifestJson = JSON.parse(manifestText)
       } catch {
         throw new NotFoundError('pipeline-manifest-invalid', 'stored pipeline manifest is invalid')
       }
@@ -573,10 +577,11 @@ function composeDevelopmentMissionOperationsFromPersistence(
           'the hash is not part of this mission pipeline evidence bundle',
         )
       }
-      const read = readEvidenceFileRange(
-        { blobPath: (ref) => automation.evidence.blobPath(ref) },
-        { sha256, offsetBytes: offset, limitBytes: limit },
-      )
+      const read = await readEvidenceRange(automation.evidenceContents, {
+        sha256,
+        offsetBytes: offset,
+        limitBytes: limit,
+      })
       if (!read.ok) {
         if (read.code === 'range-invalid') {
           throw new ValidationError('range-invalid', 'offset/limit must be valid integers')

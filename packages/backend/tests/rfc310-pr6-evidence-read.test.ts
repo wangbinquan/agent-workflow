@@ -24,7 +24,7 @@ import { createSession } from './helpers/auth/sessionStore'
 import { createUser } from '../src/services/users'
 import {
   EVIDENCE_READ_MAX_BYTES,
-  readEvidenceFileRange,
+  readEvidenceRange,
 } from '../src/modules/development-automation/application/pipelineEvidenceRead'
 import {
   canonicalDigest,
@@ -33,6 +33,7 @@ import {
 import type { FactCell } from '../src/modules/development-automation/domain/factCell'
 import type { FactCellValue } from '../src/modules/development-automation/domain/facts'
 import { EvidenceStore } from '../src/modules/development-automation/infrastructure/evidenceStore'
+import { createFileEvidenceContentQueries } from '../src/modules/development-automation/infrastructure/local/fileEvidenceContentQueries'
 import { createMissionPersistence } from '../src/modules/development-automation/infrastructure/missionStore'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 
@@ -66,27 +67,27 @@ async function reqAs(path: string): Promise<Response> {
 }
 
 // RFC-359 AC-6：两个引擎各跑一遍。
-describe('rfc310 pr6 T67 — readEvidenceFileRange', () => {
+describe('rfc310 pr6 T67 — readEvidenceRange', () => {
   test('exact ranges, tail, past-end, clamp, and honest truncation receipts', async () => {
     const tmp = join(mkdtempSync(join(tmpdir(), 'rfc310-pr6-range-')), 'f')
     writeFileSync(tmp, 'ABCDEFGHIJ') // 10 bytes
-    const deps = { blobPath: () => tmp }
+    const deps = createFileEvidenceContentQueries({ blobPath: () => tmp })
 
-    const head = readEvidenceFileRange(deps, { sha256: 'x', offsetBytes: 0, limitBytes: 4 })
+    const head = await readEvidenceRange(deps, { sha256: 'x', offsetBytes: 0, limitBytes: 4 })
     expect(head).toMatchObject({ ok: true, totalBytes: 10, truncated: true, nextOffset: 4 })
     expect(new TextDecoder().decode((head as { bytes: Uint8Array }).bytes)).toBe('ABCD')
 
-    const middle = readEvidenceFileRange(deps, { sha256: 'x', offsetBytes: 4, limitBytes: 4 })
+    const middle = await readEvidenceRange(deps, { sha256: 'x', offsetBytes: 4, limitBytes: 4 })
     expect(new TextDecoder().decode((middle as { bytes: Uint8Array }).bytes)).toBe('EFGH')
     expect(middle).toMatchObject({ truncated: true, nextOffset: 8 })
 
     // 尾部：读到文件尾 → 不截断、无 nextOffset。
-    const tail = readEvidenceFileRange(deps, { sha256: 'x', offsetBytes: 8, limitBytes: 100 })
+    const tail = await readEvidenceRange(deps, { sha256: 'x', offsetBytes: 8, limitBytes: 100 })
     expect(new TextDecoder().decode((tail as { bytes: Uint8Array }).bytes)).toBe('IJ')
     expect(tail).toMatchObject({ truncated: false, nextOffset: null })
 
     // 超尾：空读 + 明确终点，不是错误。
-    const past = readEvidenceFileRange(deps, { sha256: 'x', offsetBytes: 10, limitBytes: 4 })
+    const past = await readEvidenceRange(deps, { sha256: 'x', offsetBytes: 10, limitBytes: 4 })
     expect(past).toMatchObject({
       ok: true,
       totalBytes: 10,
@@ -97,7 +98,7 @@ describe('rfc310 pr6 T67 — readEvidenceFileRange', () => {
 
     // clamp：limit 超硬上限按 EVIDENCE_READ_MAX_BYTES 收（文件小照常全读）。
     expect(EVIDENCE_READ_MAX_BYTES).toBe(4 * 1024 * 1024)
-    const clamped = readEvidenceFileRange(deps, {
+    const clamped = await readEvidenceRange(deps, {
       sha256: 'x',
       offsetBytes: 0,
       limitBytes: Number.MAX_SAFE_INTEGER,
@@ -105,17 +106,17 @@ describe('rfc310 pr6 T67 — readEvidenceFileRange', () => {
     expect((clamped as { bytes: Uint8Array }).bytes.byteLength).toBe(10)
 
     // 非法区间与缺失文件是 typed code。
-    expect(readEvidenceFileRange(deps, { sha256: 'x', offsetBytes: -1, limitBytes: 4 })).toEqual({
+    expect(await readEvidenceRange(deps, { sha256: 'x', offsetBytes: -1, limitBytes: 4 })).toEqual({
       ok: false,
       code: 'range-invalid',
     })
-    expect(readEvidenceFileRange(deps, { sha256: 'x', offsetBytes: 0, limitBytes: 0 })).toEqual({
+    expect(await readEvidenceRange(deps, { sha256: 'x', offsetBytes: 0, limitBytes: 0 })).toEqual({
       ok: false,
       code: 'range-invalid',
     })
     expect(
-      readEvidenceFileRange(
-        { blobPath: () => '/nonexistent/blob' },
+      await readEvidenceRange(
+        createFileEvidenceContentQueries({ blobPath: () => '/nonexistent/blob' }),
         { sha256: 'x', offsetBytes: 0, limitBytes: 4 },
       ),
     ).toEqual({ ok: false, code: 'evidence-file-missing' })

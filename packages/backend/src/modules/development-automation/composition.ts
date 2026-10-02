@@ -72,6 +72,8 @@ import {
   materializeActionWorkspace,
 } from './infrastructure/actionWorkspace'
 import { EvidenceStore } from './infrastructure/evidenceStore'
+import type { EvidenceContentQueries } from './application/pipelineEvidenceRead'
+import { createFileEvidenceContentQueries } from './infrastructure/local/fileEvidenceContentQueries'
 import {
   createActionBaselineResolver,
   createRepositoryLocationRead,
@@ -159,6 +161,7 @@ export function composeDevelopmentAutomationMaintenanceCommands(
 export interface DevelopmentAutomationModule {
   readonly materializer: RequirementMaterializer
   readonly evidence: EvidenceStore
+  readonly evidenceContents: EvidenceContentQueries
   /** Business-safe child/approval receipts for Mission detail and journey projection. */
   collaboration(missionId: string): Promise<{
     readonly children: readonly {
@@ -205,6 +208,7 @@ export interface DevelopmentAutomationModule {
 
 export interface DevelopmentAutomationCompositionOptions {
   readonly appHome: string
+  readonly evidenceContents?: EvidenceContentQueries
   /** Bootstrap-selected admission configuration provider; direct tests default to SQLite. */
   readonly admissionLookup?: AdmissionLookup
   /** integration 模块组装的外部需求源 runner；不注入 = 外部取件诚实 blocked。 */
@@ -259,6 +263,11 @@ function composeDevelopmentAutomationFromPersistence(
   const lookup = deps.admissionLookup ?? persistence.admissionLookup
   const snapshots = persistence.snapshots
   const evidence = new EvidenceStore(join(deps.appHome, 'evidence'))
+  const evidenceContents =
+    deps.evidenceContents ??
+    createFileEvidenceContentQueries({
+      blobPath: (ref) => evidence.blobPath(ref),
+    })
   const materializer = createRequirementMaterializer({
     bundleRefs: persistence.bundleRefs,
     store,
@@ -361,6 +370,7 @@ function composeDevelopmentAutomationFromPersistence(
   return {
     materializer,
     evidence,
+    evidenceContents,
     async collaboration(missionId) {
       const links = await playbookSaga.listMissionLinks(missionId)
       const children = await Promise.all(
