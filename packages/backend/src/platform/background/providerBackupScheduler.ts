@@ -219,7 +219,9 @@ async function requestScheduledBackup(
  *  only — RFC-311 (audit L3-2): retention used to be chained to it, so the
  *  default-off scheduler meant pruneBackups NEVER executed and backups/ grew
  *  without bound. Retention now runs at boot + hourly regardless. */
-export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedulerHandle {
+export function startBackupScheduler(
+  opts: BackupSchedulerOptions,
+): BackupSchedulerHandle & { awaitIdle: () => Promise<void> } {
   const appHome = opts.appHome ?? Paths.root
   const externalPrune = opts.pruneMode === 'external'
   const safePrune = (label: string): void => {
@@ -247,15 +249,16 @@ export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedu
       })
 
   if (!opts.intervalMs || opts.intervalMs <= 0) {
-    return { stop: () => pruneTicker.stop() }
+    return { stop: () => pruneTicker.stop(), awaitIdle: () => Promise.resolve() }
   }
   let running = false // reentrancy guard: a slow createBackup must not overlap
+  let stopped = false
+  let active: Promise<void> | null = null
   const handle = setInterval(() => {
-    if (running) return
+    if (stopped || running) return
     running = true
-    ;(async () => {
-      await requestScheduledBackup(opts, appHome)
-    })()
+    const run = Promise.resolve()
+      .then(() => requestScheduledBackup(opts, appHome))
       .catch((err) => log.warn('backup tick threw', { error: (err as Error).message }))
       .finally(() => {
         // A fresh backup is exactly when the family caps want re-applying, and
@@ -272,13 +275,19 @@ export function startBackupScheduler(opts: BackupSchedulerOptions): BackupSchedu
           safePrune('post-backup prune')
         }
         running = false
+        if (active === run) active = null
       })
+    active = run
   }, opts.intervalMs)
   ;(handle as { unref?: () => void }).unref?.()
   return {
     stop: () => {
+      stopped = true
       clearInterval(handle)
       pruneTicker.stop()
+    },
+    async awaitIdle() {
+      while (active !== null) await active
     },
   }
 }
