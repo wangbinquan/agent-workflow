@@ -1851,7 +1851,8 @@ function composeRepositoryBootstrap(deps: SqliteAppDeps, appHome: string): Repos
 }
 
 function composeFallbackDevelopmentAutomation(
-  deps: RuntimeComposedAppDeps & RepositoryBootstrap,
+  deps: RuntimeComposedAppDeps &
+    RepositoryBootstrap & { readonly workspacePresence: WorkspacePresenceQueries },
   appHome: string,
   // RFC-345：Agent 查询由 bootstrap 从模块的目录查询面提供，本文件不再经 services/agent 门面。
   agents: Parameters<typeof composeAgentActionExecution>[0]['agents'],
@@ -1864,7 +1865,9 @@ function composeFallbackDevelopmentAutomation(
   // 失败上报逐条对齐 PostgreSQL daemon 那份（`postgresqlDaemonApplication.ts` 的
   // `boundTaskDriveCoordinator.failureReporter`）：驱动崩了要把任务落成 failed 并终结意图，
   // 否则失败会表现成「动作卡住不失败」。
-  const persistence = createTaskExecutionPersistence(deps.db)
+  const persistence = createTaskExecutionPersistence(deps.db, {
+    workspacePresence: deps.workspacePresence,
+  })
   const hostLaunchStartDeps = buildStartTaskDeps(
     deps.db,
     deps.schedulerDriver,
@@ -1886,6 +1889,7 @@ function composeFallbackDevelopmentAutomation(
     gitCommitIdentity: deps.identityAccess.getUserGitCommitIdentity,
     coordinator: createTaskDriveCoordinator({
       deps: hostLaunchStartDeps,
+      persistence,
       // 2026-09-19：组合根装配一次、之后长驻——17 个运行期旋钮必须每次 drive 现读，
       // 否则设置页改完配置对新任务不生效（e2e CFG-45 实撞，判据在
       // `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`）。
@@ -2017,7 +2021,7 @@ export function composeSqliteApplicationDeps(
     deps.configConcurrencyHotApply ?? composeLegacyConfigConcurrencyHotApply(deps.db)
   const memoryInjectionQueries =
     deps.memoryOperations?.injectionQueries ?? composeSqliteMemoryInjectionQueries(deps.db)
-  const taskExecutionPersistence = createTaskExecutionPersistence(deps.db)
+  const taskExecutionPersistence = createTaskExecutionPersistence(deps.db, { workspacePresence })
   // RFC-359 W11：读模型先定下来，再决定要不要装配 runtime。此前是反过来的——先装 runtime、
   // 再从 `deps.taskExecutionReadModels ?? taskExecutionRuntime?.readModels` 取，于是类型上多出
   // 一个 `undefined` 分支要兜一句 throw，而那个分支**根本不可达**（runtime 只在
@@ -2083,6 +2087,7 @@ export function composeSqliteApplicationDeps(
             log: createLogger('task'),
             lifecycle: createDatabaseTaskDriverLifecyclePort({
               db: deps.db,
+              persistence: taskExecutionPersistence,
               log: createLogger('task'),
               finalizeWorkspace: async (taskId: string) => {
                 await finishClaimedWebhookWorkspacePrune(deps.db, taskId)
@@ -2231,15 +2236,19 @@ export function composeSqliteApplicationDeps(
   )
   const developmentAutomation =
     runtimeDeps.developmentAutomation ??
-    composeFallbackDevelopmentAutomation({ ...runtimeDeps, ...repositoryBootstrap }, appHome, {
-      // RFC-359 W11：动作执行只在运行期查代理，目录是同一作用域里的 `const agentCatalog`
-      // （下面几十行）。词法闭包代替了「先留空、装配完再回填」的槽。
-      get: async (id) => {
-        const identity = await admitDaemonIdentity(identityAccess)
-        if (identity === null) throw new Error('agent-action-authority-not-admitted')
-        return agentCatalog.queries.get(identity.actor, { id })
+    composeFallbackDevelopmentAutomation(
+      { ...runtimeDeps, ...repositoryBootstrap, workspacePresence },
+      appHome,
+      {
+        // RFC-359 W11：动作执行只在运行期查代理，目录是同一作用域里的 `const agentCatalog`
+        // （下面几十行）。词法闭包代替了「先留空、装配完再回填」的槽。
+        get: async (id) => {
+          const identity = await admitDaemonIdentity(identityAccess)
+          if (identity === null) throw new Error('agent-action-authority-not-admitted')
+          return agentCatalog.queries.get(identity.actor, { id })
+        },
       },
-    })
+    )
   const developmentMissionOperations = composeDevelopmentMissionOperations({
     db: runtimeDeps.db,
     deliveryProvider: repositoryBootstrap.developmentDeliveryProvider,
@@ -2703,6 +2712,7 @@ function composeSqliteApiRouteMounts(
       log: createLogger('task'),
       lifecycle: createDatabaseTaskDriverLifecyclePort({
         db: deps.db,
+        persistence: taskExecutionPersistence,
         log: createLogger('task'),
         finalizeWorkspace: async (id: string) => {
           await finishClaimedWebhookWorkspacePrune(deps.db, id)
@@ -2901,6 +2911,7 @@ function composeSqliteApiRouteMounts(
           secretBox: deps.secretBox,
           gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
           coordinator: createTaskDriveCoordinator({
+            persistence: taskExecutionPersistence,
             // 同下面那台路由协调器：`runtimeConfigOpts(deps)` 读的十七个旋钮必须从配置漏斗取，
             // 否则数字员工执行这条路也在用编译期缺省跑（RFC-359 AC-1，plan §5hn 批次二 ①②）。
             deps: {
@@ -3063,6 +3074,7 @@ function composeSqliteApiRouteMounts(
       integrity: agentResourceIntegrity.launch,
     }),
     coordinator: createTaskDriveCoordinator({
+      persistence: taskExecutionPersistence,
       // RFC-359 AC-1（plan §5hn 批次二 ①②，**修 20d4a6ce5 推的 e2e 红**）：运行期配置必须与
       // `buildStartTaskDeps` 取自同一处——`createTaskDriveCoordinator` 里的
       // `runtimeConfigOpts(input.deps)` 从 `deps` 上读十七个旋钮（`defaultNodeRetries` /

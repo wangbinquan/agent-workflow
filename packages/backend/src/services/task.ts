@@ -1208,6 +1208,7 @@ export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOp
     | 'configPath'
     | 'subagentLiveCapture'
     | 'memoryDistillEnqueuer'
+    | 'workspacePresence'
   > & {
     /**
      * RFC-359 AC-1（plan §5hm）：收成中立句柄。此前这一格是从 `StartTaskDeps` Pick 来的
@@ -1221,6 +1222,9 @@ export type TaskDriveCoordinatorDependencies = Parameters<typeof runtimeConfigOp
 
 export function createTaskDriveCoordinator(input: {
   readonly deps: TaskDriveCoordinatorDependencies
+  readonly persistence?: Parameters<
+    typeof taskDriveComposition.createDatabaseTaskDriverLifecyclePort
+  >[0]['persistence']
   readonly appHome: string
   readonly ensureWorkspaceProfiles?: boolean
   readonly admittedContinuation?: RepositoryPreparationStep
@@ -1293,6 +1297,8 @@ export function createTaskDriveCoordinator(input: {
     },
     lifecycle: createDatabaseTaskDriverLifecyclePort({
       db: input.deps.db,
+      persistence: input.persistence,
+      workspacePresence: input.deps.workspacePresence,
       log,
       finalizeWorkspace: async (taskId) => {
         await finishClaimedWebhookWorkspacePrune(input.deps.db, taskId)

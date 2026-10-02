@@ -693,7 +693,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: the existing workgroup preflight binds the selected presence
       // adapter (local by default). This next batch selects it once for the task
       // runtime and workgroup; the original full body survives the exact binding inverse.
-      '84a6e33f6d150433931586060fe3eafe03af5210a25719ebbcc37d2644dc8fef',
+      // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
+      '5150f54d476eb69e4cd47c00be5c28a4c3c250f12d4726fde0191a8a8f2abf27',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -760,7 +761,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // delegated-context factory and the durable work-intent store.
       // RFC-371: standalone task execution receives mandatory durable invocation accounting.
       // RFC-371: the same database now supplies the committed numeric source participant.
-      'fa0426de1cb8b134ef7f27812fbdb399da8e1c91d33905259aa9a10a00bb62a5',
+      // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
+      '649dc5f2d1e9e450eeb0e8a0e496f34266b51fc6e13512943f441eef21da9553',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -903,7 +905,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 判据在 `tests/rfc368-*.test.ts`。
       // RFC-370: Intent and webhook configuration bindings change; route order and lifetime stay fixed.
       // RFC-371: task observation queries bind the selected DB and TE facts inside one read snapshot.
-      '20512443695f4bfc6bfe4bf43d6294a0524d240cfe5a5477535cb8d1d4847b02',
+      // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
+      'a1422d112d646560d03055a74c99f5e0ad33e049f3ce98855ebb1f03e240a908',
     )
     expect(
       namedCalls(

@@ -2059,6 +2059,7 @@ async function composeSqliteProviderSession(
   // 而不是留下一个编译通过、运行期才炸的空槽（同 PostgreSQL daemon 的 `boundTaskDriveCoordinator`）。
   const launchRuntimeConfig = resolveLaunchRuntimeConfig(Paths.config)
   const routeLaunchDriveCoordinator = createTaskDriveCoordinator({
+    persistence: taskExecutionPersistence,
     deps: {
       db,
       schedulerDriver: taskExecutionRuntime.schedulerDriver,
@@ -2638,6 +2639,7 @@ async function composeSqliteProviderSession(
       gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
       coordinator: createTaskDriveCoordinator({
         deps: hostLaunchStartDeps,
+        persistence: taskExecutionPersistence,
         // 2026-09-19：组合根装配一次、之后长驻——17 个运行期旋钮必须每次 drive 现读，
         // 否则设置页改完配置对新任务不生效（e2e CFG-45 实撞，判据在
         // `tests/rfc319-cfg45-default-runtime-hot-read.test.ts`）。

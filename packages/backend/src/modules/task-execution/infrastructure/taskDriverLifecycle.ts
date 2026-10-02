@@ -18,6 +18,7 @@ import {
   type TaskExecutionModule,
 } from '../composition'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { ownershipTokenKey, type OwnershipToken } from '../domain/ownership'
 import { TaskExecutionError } from '../application/taskExecutionError'
 import {
@@ -223,6 +224,8 @@ export function createTaskDriverLifecyclePort(
  */
 export function createDatabaseTaskDriverLifecyclePort(options: {
   readonly db: ProviderNeutralDatabase
+  readonly persistence?: TaskExecutionPersistence
+  readonly workspacePresence?: WorkspacePresenceQueries
   readonly log: TaskExecutionTopologyLogger
   readonly finalizeWorkspace: (taskId: string) => Promise<void>
 }): TaskDriverLifecyclePort {
@@ -230,7 +233,9 @@ export function createDatabaseTaskDriverLifecyclePort(options: {
     db: options.db,
     module: taskExecutionModule,
     claim: (intentId) => taskExecutionModule.claim({ db: options.db, intentId }),
-    persistence: createTaskExecutionPersistence(options.db),
+    persistence:
+      options.persistence ??
+      createTaskExecutionPersistence(options.db, { workspacePresence: options.workspacePresence }),
     log: options.log,
     finalizeWorkspace: options.finalizeWorkspace,
     legacyConnection: options.db,

@@ -259,7 +259,9 @@ export function composeSqliteTaskExecutionProviderRuntime<
   db: DbClient,
   dependencies: SqliteTaskExecutionProviderRuntimeDependencies<C>,
 ): SelectedSqliteTaskExecutionProviderRuntime<C> {
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    workspacePresence: dependencies.runtime.workspacePresence,
+  })
   const log = createLogger('task')
   const participants = createTaskExecutionRuntimeParticipants({
     db,
@@ -273,6 +275,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
     //（执行上下文带 `legacyConnection`）+ 进程内注册表的活跃度 / 停机票据。
     lifecycle: createDatabaseTaskDriverLifecyclePort({
       db,
+      persistence,
       log,
       finalizeWorkspace: async (taskId: string) => {
         await finishClaimedWebhookWorkspacePrune(db, taskId)
@@ -436,7 +439,11 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   db: PostgresqlDatabaseClient,
   dependencies: PostgresqlTaskExecutionProviderRuntimeDependencies,
 ): SelectedPostgresqlTaskExecutionProviderRuntime {
-  const persistence = dependencies.runtime.persistence ?? createTaskExecutionPersistence(db)
+  const persistence =
+    dependencies.runtime.persistence ??
+    createTaskExecutionPersistence(db, {
+      workspacePresence: dependencies.runtime.workspacePresence,
+    })
   const executionModule =
     dependencies.runtime.executionModule ??
     createProviderTaskExecutionModule({

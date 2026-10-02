@@ -879,7 +879,7 @@ export async function composePostgresqlApplication(
     input.db,
     taskExecutionResourceSnapshots,
   )
-  const taskExecutionPersistence = createTaskExecutionPersistence(input.db)
+  const taskExecutionPersistence = createTaskExecutionPersistence(input.db, { workspacePresence })
   // RFC-359 W7：运行期机制与 SQLite 是同一份实现（评审门开启 / 澄清轮开启 / 自治遣散全部跑在
   // 两引擎共用的写事务上），停靠原子与 node-run CAS 由那份实现自己经中立参与者取。
   const collaborationRuntime = createCollaborationRuntimeMechanics(input.db)

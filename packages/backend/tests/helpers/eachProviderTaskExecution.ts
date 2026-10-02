@@ -142,7 +142,7 @@ export async function createEachProviderTaskExecution(
     authority: identityAccess.directAuthority.authorityForLegacyProjection(actor),
     resources,
   })
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, { workspacePresence })
   const dynamicWorkflow = createTestDynamicWorkflowOperations(db)
   const appHome = runConfig.appHome
   const configPath = join(appHome, 'config.json')
