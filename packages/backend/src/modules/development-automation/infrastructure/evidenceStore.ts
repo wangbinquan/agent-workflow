@@ -24,24 +24,8 @@ import {
 } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { ulid } from 'ulid'
-
-export interface EvidenceBudget {
-  readonly maxFiles: number
-  readonly maxFileBytes: number
-  readonly maxTotalBytes: number
-}
-
-export interface EvidenceEntry {
-  readonly relativePath: string
-  readonly bytes: number
-  readonly sha256: string
-}
-
-export interface EvidenceBundleRecord {
-  readonly bundleId: string
-  readonly entries: readonly EvidenceEntry[]
-  readonly totalBytes: number
-}
+import type { EvidenceBudget, EvidenceBundleRecord, EvidenceEntry } from '../domain/evidence'
+export type { EvidenceBudget, EvidenceBundleRecord, EvidenceEntry } from '../domain/evidence'
 
 function assertSafeRelPath(relPath: string): void {
   if (relPath.length === 0 || relPath.length > 4096) throw new Error(`unsafe path: ${relPath}`)

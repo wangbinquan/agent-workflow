@@ -16,7 +16,9 @@
 
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import type { EvidenceDocumentQueries } from '../application/evidenceDocuments'
+import type { EvidenceDocumentCommands } from '../application/evidenceDocumentCommands'
 import { createFileEvidenceDocumentQueries } from './local/fileEvidenceDocumentQueries'
+import { createFileEvidenceDocumentCommands } from './local/fileEvidenceDocumentCommands'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
 
@@ -136,6 +138,7 @@ export interface RequirementMaterializerDeps {
   readonly snapshots: FactSnapshotReader
   readonly evidence: EvidenceStore
   readonly documents?: EvidenceDocumentQueries
+  readonly documentCommands?: EvidenceDocumentCommands
   /** one-shot sink 的宿主根（每次操作一个 ulid 子目录，用完即删）。 */
   readonly stagingRoot: string
   readonly source?: RequirementSourceRunnerDep
@@ -199,7 +202,8 @@ export function createRequirementMaterializer(
   deps: RequirementMaterializerDeps,
 ): RequirementMaterializer {
   const { bundleRefs, store, snapshots, evidence, stagingRoot } = deps
-  mkdirSync(stagingRoot, { recursive: true })
+  const documentCommands =
+    deps.documentCommands ?? createFileEvidenceDocumentCommands({ evidence, stagingRoot })
   const documents =
     deps.documents ??
     createFileEvidenceDocumentQueries({
@@ -235,20 +239,17 @@ export function createRequirementMaterializer(
 
   const bundleRefById = (id: string) => bundleRefs.get(id)
 
-  /** 单 JSON 文档 → evidence bundle（staged 一次性目录，导入即删）。 */
+  /** Canonical JSON is frozen by AW; the selected writer owns byte persistence. */
   const importJsonDoc = async (
     fileName: string,
     value: unknown,
   ): Promise<{ bundleId: string; totalBytes: number }> => {
-    const dir = join(stagingRoot, ulid())
-    mkdirSync(dir, { recursive: true })
-    try {
-      writeFileSync(join(dir, fileName), canonicalStringify(value))
-      const bundle = await evidence.importStagedTree(dir, DIRECT_SUBMISSION_BUDGET)
-      return { bundleId: bundle.bundleId, totalBytes: bundle.totalBytes }
-    } finally {
-      rmSync(dir, { recursive: true, force: true })
-    }
+    const bundle = await documentCommands.writeDocument({
+      relativePath: fileName,
+      content: canonicalStringify(value),
+      budget: DIRECT_SUBMISSION_BUDGET,
+    })
+    return { bundleId: bundle.bundleId, totalBytes: bundle.totalBytes }
   }
 
   const readJsonDoc = async (bundleId: string, fileName: string): Promise<unknown | null> => {
