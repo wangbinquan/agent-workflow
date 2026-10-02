@@ -421,6 +421,7 @@ describeEachProvider('rfc310 pr5 — verification arm', (harness) => {
       readonly verifyOk: boolean
       readonly stagedTree?: string
       readonly profileRef?: string
+      readonly beforeCleanup?: () => Promise<void>
     },
   ): Promise<{
     blocks: { code: string; detail: string | null }[]
@@ -439,7 +440,16 @@ describeEachProvider('rfc310 pr5 — verification arm', (harness) => {
             ok: true,
             ws,
             treeOid: opts.stagedTree ?? TREE,
-            cleanup: () => rmSync(parent, { recursive: true, force: true }),
+            cleanup:
+              opts.beforeCleanup === undefined
+                ? () => rmSync(parent, { recursive: true, force: true })
+                : async () => {
+                    try {
+                      await opts.beforeCleanup!()
+                    } finally {
+                      rmSync(parent, { recursive: true, force: true })
+                    }
+                  },
           }
         },
       }),
@@ -488,6 +498,61 @@ describeEachProvider('rfc310 pr5 — verification arm', (harness) => {
       [opts.profileRef ?? 'unit@1'],
     )
     return { blocks, outcome }
+  }
+
+  // RFC-370: the actual verification handler must await selected stage cleanup
+  // before publishing the success/failure facts in either real DB provider.
+  for (const verifyOk of [true, false]) {
+    test(`verification ${verifyOk ? 'success' : 'failure'} waits for stage cleanup before persisting progress`, async () => {
+      const fx = await buildPr3Fixture({ db: harness.db, rules: NEVER_MATCH_RULES })
+      const mission = await seedDeliveredMission(fx)
+      const before = await currentCells(fx, mission.missionId)
+      let enter!: () => void
+      let release!: () => void
+      const entered = new Promise<void>((resolve) => {
+        enter = resolve
+      })
+      const acknowledged = new Promise<void>((resolve) => {
+        release = resolve
+      })
+      let settled = false
+      const pending = runArm(fx, mission.missionId, {
+        verifyOk,
+        beforeCleanup: async () => {
+          enter()
+          await acknowledged
+        },
+      })
+      void pending.then(
+        () => {
+          settled = true
+        },
+        () => {
+          settled = true
+        },
+      )
+      try {
+        await Promise.race([
+          entered,
+          pending.then(() => {
+            throw new Error('verification completed before stage cleanup')
+          }),
+        ])
+        expect(settled).toBe(false)
+        expect(await currentCells(fx, mission.missionId)).toEqual(before)
+        release()
+        const result = await pending
+        expect(result.outcome).toBe(verifyOk ? 'collected' : 'blocked')
+        const after = await currentCells(fx, mission.missionId)
+        expect(after['verification.lastOutcome']).toMatchObject({
+          value: verifyOk ? 'passed' : 'failed',
+        })
+        expect(after['__delivery.verifiedTreeOid']).toMatchObject({ value: TREE })
+      } finally {
+        release()
+        await pending.catch(() => undefined)
+      }
+    })
   }
 
   test('pass records treeOid-bound progress; fail blocks typed; tree drift blocks', async () => {

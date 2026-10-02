@@ -407,7 +407,12 @@ export interface CandidateDeliveryPort {
       }[]
     } | null
   }): Promise<
-    | { readonly ok: true; readonly ws: string; readonly treeOid: string; cleanup(): void }
+    | {
+        readonly ok: true
+        readonly ws: string
+        readonly treeOid: string
+        cleanup(): void | Promise<void>
+      }
     | { readonly ok: false; readonly code: string; readonly detail: string }
   >
   commit(input: {

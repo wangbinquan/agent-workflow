@@ -14,13 +14,18 @@ import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
-import { deriveChangeCandidate } from '../src/modules/source-control/application/changeCandidate'
 import {
-  commitCandidate,
+  bindChangeCandidateParticipant,
+  bindCandidateDeliveryParticipant,
+} from '../src/modules/source-control/composition/repositoryCandidate'
+import {
   missionCandidateRef,
   pushCandidate,
 } from '../src/modules/source-control/application/deliverCandidate'
 import { missionSourceBranch } from '../src/modules/source-control/domain/deliveryPolicy'
+
+const { derive: deriveChangeCandidate } = bindChangeCandidateParticipant()
+const { commit: commitCandidate } = bindCandidateDeliveryParticipant()
 
 setDefaultTimeout(120_000)
 

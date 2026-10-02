@@ -13,15 +13,18 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
-  deriveChangeCandidate,
-  stageCandidateTree,
-} from '../src/modules/source-control/application/changeCandidate'
+  bindChangeCandidateParticipant,
+  bindCandidateDeliveryParticipant,
+} from '../src/modules/source-control/composition/repositoryCandidate'
 import {
   candidateReceiptRef,
   checkForbiddenCandidatePaths,
   verifyUploadLineage,
 } from '../src/modules/source-control/domain/changeCandidate'
 import { sha256Hex } from '../src/util/hash'
+
+const { derive: deriveChangeCandidate } = bindChangeCandidateParticipant()
+const { stage: stageCandidateTree } = bindCandidateDeliveryParticipant()
 
 setDefaultTimeout(120_000)
 
@@ -397,7 +400,7 @@ describe('rfc310 pr4 T48 — change candidate derivation', () => {
       }
       expect(git(staged.ws, 'ls-files', '--stage', '--', 'verify.sh')).toStartWith('100755 ')
     } finally {
-      staged.cleanup()
+      await staged.cleanup()
     }
   })
 })

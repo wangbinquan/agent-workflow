@@ -383,7 +383,7 @@ export async function handleRunVerification(
       profile: parsed.data,
     })
   } finally {
-    staged.cleanup()
+    await staged.cleanup()
   }
 
   const verified = verifiedProfilesOf(cells, ctx.treeOid)

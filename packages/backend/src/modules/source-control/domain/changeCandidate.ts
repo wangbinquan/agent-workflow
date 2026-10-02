@@ -80,12 +80,10 @@ export type UploadLineageVerdict =
  *   already-present ⇒ 不得伪装为 changed path。
  * 任一不满足都作废整个 candidate（不允许漏掉上传文件继续发布）。
  */
-export function verifyUploadLineage(
+export function* planUploadLineageVerification(
   entries: readonly UploadLineageEntry[],
   facts: {
     readonly changed: ReadonlySet<string>
-    /** candidate 树内目标文件的内容 digest；不存在 ⇒ null。 */
-    readonly blobSha256Of: (targetPath: string) => string | null
     /**
      * The baseline is a platform-published mission commit that already
      * fulfilled this upload plan. Repair rounds still verify existence and
@@ -94,7 +92,7 @@ export function verifyUploadLineage(
      */
     readonly alreadyPublished?: boolean
   },
-): UploadLineageVerdict {
+): Generator<string, UploadLineageVerdict, string | null> {
   const finalDigests: { targetPath: string; sha256: string }[] = []
   for (const entry of [...entries].sort((a, b) => a.targetPath.localeCompare(b.targetPath))) {
     if (entry.disposition === 'already-present') {
@@ -106,7 +104,7 @@ export function verifyUploadLineage(
     if (!facts.changed.has(entry.targetPath) && facts.alreadyPublished !== true) {
       return { ok: false, code: 'upload-entry-missing-from-diff', targetPath: entry.targetPath }
     }
-    const actual = facts.blobSha256Of(entry.targetPath)
+    const actual = yield entry.targetPath
     if (actual === null) {
       return { ok: false, code: 'upload-editable-target-missing', targetPath: entry.targetPath }
     }
@@ -116,6 +114,21 @@ export function verifyUploadLineage(
     finalDigests.push({ targetPath: entry.targetPath, sha256: actual })
   }
   return { ok: true, finalDigests }
+}
+
+/** Synchronous compatibility over the same pure, lazy verification plan. */
+export function verifyUploadLineage(
+  entries: readonly UploadLineageEntry[],
+  facts: {
+    readonly changed: ReadonlySet<string>
+    readonly blobSha256Of: (targetPath: string) => string | null
+    readonly alreadyPublished?: boolean
+  },
+): UploadLineageVerdict {
+  const verification = planUploadLineageVerification(entries, facts)
+  let step = verification.next()
+  while (!step.done) step = verification.next(facts.blobSha256Of(step.value))
+  return step.value
 }
 
 export interface ChangeCandidateReceipt {

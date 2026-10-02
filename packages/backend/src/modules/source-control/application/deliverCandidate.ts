@@ -21,7 +21,11 @@ import {
   missionGitRefComponent,
   type DeliveryContextEnvelope,
 } from '../domain/deliveryPolicy'
-import { stageCandidateTree } from './changeCandidate'
+import { stageCandidateTreeInSession } from './changeCandidate'
+import type {
+  RepositoryCandidateEffectsFactory,
+  RepositoryCandidateSession,
+} from './ports/repositoryCandidateEffects'
 import type { RepositoryGit } from './repositoryCommit'
 import { classifyRepositoryPushFailure } from '../domain/repositoryPushFailure'
 import { redactSensitiveString } from '@/util/redact'
@@ -36,18 +40,25 @@ export function missionCandidateRef(missionId: string): string {
   return `refs/aw/mission/${missionGitRefComponent(missionId)}/candidate`
 }
 
+async function readCommitTreeIdentity(
+  read: RepositoryCandidateSession['runBaseline'],
+  sha: string,
+): Promise<{ tree: string; parent: string | null } | null> {
+  const tree = await read(['rev-parse', '--verify', `${sha}^{tree}`])
+  if (tree.exitCode !== 0) return null
+  const parent = await read(['rev-parse', '--verify', `${sha}^1`])
+  return {
+    tree: tree.stdout.trim(),
+    parent: parent.exitCode === 0 ? parent.stdout.trim() : null,
+  }
+}
+
 async function commitTreeIdentityOf(
   runGit: RepositoryGit,
   repoPath: string,
   sha: string,
 ): Promise<{ tree: string; parent: string | null } | null> {
-  const tree = await runGit(repoPath, ['rev-parse', '--verify', `${sha}^{tree}`])
-  if (tree.exitCode !== 0) return null
-  const parent = await runGit(repoPath, ['rev-parse', '--verify', `${sha}^1`])
-  return {
-    tree: tree.stdout.trim(),
-    parent: parent.exitCode === 0 ? parent.stdout.trim() : null,
-  }
+  return readCommitTreeIdentity((args) => runGit(repoPath, [...args]), sha)
 }
 
 export interface CommitCandidateInput {
@@ -88,72 +99,73 @@ export type CommitCandidateResult =
       readonly detail: string
     }
 
-export async function commitCandidate(input: CommitCandidateInput): Promise<CommitCandidateResult> {
-  const runGit = input.runGit ?? defaultRunGit
+export async function commitCandidate(
+  input: CommitCandidateInput,
+  factory: RepositoryCandidateEffectsFactory,
+): Promise<CommitCandidateResult> {
   const localRef = missionCandidateRef(input.missionId)
-
-  // 幂等短路：内部 ref 已有同身份 commit ⇒ 复用（不重复 commit）。
-  const existing = await runGit(input.baselineRepoPath, [
-    'rev-parse',
-    '--verify',
-    `${localRef}^{commit}`,
-  ])
-  if (existing.exitCode === 0) {
-    const sha = existing.stdout.trim()
-    const identity = await commitTreeIdentityOf(runGit, input.baselineRepoPath, sha)
-    if (
-      identity !== null &&
-      identity.tree === input.expectedTreeOid &&
-      identity.parent === input.baselineSha
-    ) {
-      return { ok: true, commitSha: sha, localRef, reused: true }
-    }
-  }
-
-  const staged = await stageCandidateTree({
-    baselineRepoPath: input.baselineRepoPath,
-    baselineSha: input.baselineSha,
-    overlayRoot: input.overlayRoot,
-    uploadPlan: input.uploadPlan ?? null,
-    runGit,
+  const session = await factory.acquire({
+    baselineReference: input.baselineRepoPath,
+    overlayReference: input.overlayRoot,
   })
-  if (!staged.ok) return staged
   try {
-    if (staged.treeOid !== input.expectedTreeOid) {
-      // §9.2：prepare 之后现场改变 = digest mismatch，整个 candidate 作废。
-      return {
-        ok: false,
-        code: 'candidate-drifted',
-        detail: `staged tree ${staged.treeOid} != pinned ${input.expectedTreeOid}`,
+    // 幂等短路：内部 ref 已有同身份 commit ⇒ 复用（不重复 commit）。
+    const existing = await session.runBaseline(['rev-parse', '--verify', `${localRef}^{commit}`])
+    if (existing.exitCode === 0) {
+      const sha = existing.stdout.trim()
+      const identity = await readCommitTreeIdentity((args) => session.runBaseline(args), sha)
+      if (
+        identity !== null &&
+        identity.tree === input.expectedTreeOid &&
+        identity.parent === input.baselineSha
+      ) {
+        return { ok: true, commitSha: sha, localRef, reused: true }
       }
     }
-    const message = candidateCommitMessage({
-      missionId: input.missionId,
-      summarySource: input.summarySource,
-      ...(input.contextEnvelope === undefined ? {} : { contextEnvelope: input.contextEnvelope }),
-    })
-    const committed = await runGit(
-      staged.ws,
-      ['commit-tree', staged.treeOid, '-p', input.baselineSha, '-m', message],
-      { env: { ...AW_INTERNAL_GIT_IDENTITY } },
+
+    const staged = await stageCandidateTreeInSession(
+      {
+        baselineRepoPath: input.baselineRepoPath,
+        baselineSha: input.baselineSha,
+        overlayRoot: input.overlayRoot,
+        uploadPlan: input.uploadPlan ?? null,
+      },
+      session,
     )
-    if (committed.exitCode !== 0) {
-      return { ok: false, code: 'commit-failed', detail: committed.stderr.slice(0, 300) }
+    if (!staged.ok) return staged
+    try {
+      if (staged.treeOid !== input.expectedTreeOid) {
+        // §9.2：prepare 之后现场改变 = digest mismatch，整个 candidate 作废。
+        return {
+          ok: false,
+          code: 'candidate-drifted',
+          detail: `staged tree ${staged.treeOid} != pinned ${input.expectedTreeOid}`,
+        }
+      }
+      const message = candidateCommitMessage({
+        missionId: input.missionId,
+        summarySource: input.summarySource,
+        ...(input.contextEnvelope === undefined ? {} : { contextEnvelope: input.contextEnvelope }),
+      })
+      const committed = await staged.workspace.run(
+        ['commit-tree', staged.treeOid, '-p', input.baselineSha, '-m', message],
+        { env: { ...AW_INTERNAL_GIT_IDENTITY } },
+      )
+      if (committed.exitCode !== 0) {
+        return { ok: false, code: 'commit-failed', detail: committed.stderr.slice(0, 300) }
+      }
+      const commitSha = committed.stdout.trim()
+      // durable：对象 + 内部 ref 落 baseline 镜像（临时 stage 树随后销毁）。
+      const fetched = await staged.workspace.importCommitToBaseline({ commitSha, localRef })
+      if (fetched.exitCode !== 0) {
+        return { ok: false, code: 'commit-failed', detail: fetched.stderr.slice(0, 300) }
+      }
+      return { ok: true, commitSha, localRef, reused: false }
+    } finally {
+      await staged.cleanup()
     }
-    const commitSha = committed.stdout.trim()
-    // durable：对象 + 内部 ref 落 baseline 镜像（临时 stage 树随后销毁）。
-    const fetched = await runGit(input.baselineRepoPath, [
-      'fetch',
-      '--quiet',
-      staged.ws,
-      `+${commitSha}:${localRef}`,
-    ])
-    if (fetched.exitCode !== 0) {
-      return { ok: false, code: 'commit-failed', detail: fetched.stderr.slice(0, 300) }
-    }
-    return { ok: true, commitSha, localRef, reused: false }
   } finally {
-    staged.cleanup()
+    await session.close()
   }
 }
 
