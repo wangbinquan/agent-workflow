@@ -193,6 +193,9 @@ describe('RFC-370 doctor configuration selection', () => {
       originalMessage = (error as Error).message
     }
     expect(originalMessage).toBeDefined()
+    if (originalMessage === undefined) {
+      throw new Error('invalid standalone configuration must produce its original load error')
+    }
     expect(await checkConfig()).toEqual({ name: 'config', ok: false, message: originalMessage })
   })
 
