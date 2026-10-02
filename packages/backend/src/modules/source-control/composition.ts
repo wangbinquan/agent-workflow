@@ -16,6 +16,8 @@ import {
   type RepositoryGit,
 } from './application/repositoryCommit'
 import { ensurePlatformWorkspaceDirectory } from './infrastructure/platformWorkspaceDirectory'
+import { createFileRepositoryPreviewIndexPort } from './infrastructure/local/fileRepositoryPreviewIndex'
+import type { RepositoryPreviewIndexPort } from './application/ports/repositoryPreviewIndex'
 import { deriveChangeCandidate, stageCandidateTree } from './application/changeCandidate'
 import { commitCandidate, pushCandidate } from './application/deliverCandidate'
 import {
@@ -186,6 +188,7 @@ export function bindRepositoryCommitParticipant(input: {
   configuredPatterns?: readonly string[]
   runGit?: RepositoryGit
   gitOptions?: Parameters<RepositoryGit>[2]
+  previewIndex?: RepositoryPreviewIndexPort
 }): RepositoryCommitCandidateParticipant & RepositoryCommitPublicationParticipant {
   const common = {
     repoPath: input.repoPath,
@@ -193,6 +196,7 @@ export function bindRepositoryCommitParticipant(input: {
     ...(input.runGit !== undefined ? { runGit: input.runGit } : {}),
     ...(input.gitOptions !== undefined ? { gitOptions: input.gitOptions } : {}),
   }
+  const previewIndex = input.previewIndex ?? createFileRepositoryPreviewIndexPort(common)
   return {
     prepare: () => prepareRepositoryCommit(common),
     commitPrepared: (request: {
@@ -201,7 +205,7 @@ export function bindRepositoryCommitParticipant(input: {
       authorName?: string | null
       authorEmail?: string | null
     }) => commitPreparedRepository({ ...common, ...request }),
-    preview: () => readRepositoryCommitPreview(common),
+    preview: () => readRepositoryCommitPreview({ ...common, previewIndex }),
     publish: (request: { baseSha: string; tipSha: string; mode: RepositoryPublishMode }) =>
       publishRepositoryCommit({ ...common, ...request }),
     resolvePushBase: (request: { remote: string; branch: string; fallbackRef: string }) =>

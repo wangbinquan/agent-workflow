@@ -4,10 +4,8 @@
 // their own orchestration and push modes. They both delegate the Git mechanism
 // here so stage/preview/freeze/history can no longer drift.
 
-import { mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { AW_INTERNAL_GIT_IDENTITY, runGit as defaultRunGit } from '@/util/git'
+import type { RepositoryPreviewIndexPort } from './ports/repositoryPreviewIndex'
 import { createTaskCommitPolicy, type TaskCommitPolicy } from '../domain/taskCommitPolicy'
 import type {
   CommitPreparedResult,
@@ -294,20 +292,22 @@ export async function updateRepositoryRef(input: {
 }
 
 /** Preview the exact candidate tree with a disposable index; the live index is untouched. */
+type CommitPreviewResult =
+  | { ok: true; diff: string; receipt: CommitExclusionReceipt }
+  | { ok: false; error: string }
+
 export async function readRepositoryCommitPreview(input: {
   repoPath: string
   configuredPatterns?: readonly string[]
-  runGit?: RepositoryGit
-  gitOptions?: Parameters<RepositoryGit>[2]
-}): Promise<
-  { ok: true; diff: string; receipt: CommitExclusionReceipt } | { ok: false; error: string }
-> {
-  const runGit = input.runGit ?? defaultRunGit
-  const tempDir = mkdtempSync(join(tmpdir(), 'aw-commit-index-'))
-  const tempIndex = join(tempDir, 'index')
-  try {
-    const gitOptions = mergeGitOptions(input.gitOptions, { GIT_INDEX_FILE: tempIndex })
-    const readTree = await runGit(input.repoPath, ['read-tree', 'HEAD'], gitOptions)
+  previewIndex: RepositoryPreviewIndexPort
+}): Promise<CommitPreviewResult> {
+  return input.previewIndex.withIndex<CommitPreviewResult>(async (index) => {
+    const runGit: RepositoryGit = (_repoPath, args, options) =>
+      index.run(
+        args,
+        options?.env?.GIT_LITERAL_PATHSPECS === '1' ? { literalPathspecs: true } : undefined,
+      )
+    const readTree = await runGit(input.repoPath, ['read-tree', 'HEAD'])
     if (readTree.exitCode !== 0) {
       return {
         ok: false,
@@ -323,14 +323,9 @@ export async function readRepositoryCommitPreview(input: {
       repoPath: input.repoPath,
       configuredPatterns: input.configuredPatterns ?? [],
       runGit,
-      gitOptions,
     })
     if (!prepared.ok) return prepared
-    const diff = await runGit(
-      input.repoPath,
-      ['diff', '--cached', '--no-color', '--unified=3'],
-      gitOptions,
-    )
+    const diff = await runGit(input.repoPath, ['diff', '--cached', '--no-color', '--unified=3'])
     return diff.exitCode === 0
       ? { ok: true, diff: diff.stdout, receipt: prepared.receipt }
       : {
@@ -342,9 +337,7 @@ export async function readRepositoryCommitPreview(input: {
             diff.exitCode,
           ),
         }
-  } finally {
-    rmSync(tempDir, { recursive: true, force: true })
-  }
+  })
 }
 
 async function changedGroups(input: {
