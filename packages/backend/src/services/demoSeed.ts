@@ -2,15 +2,13 @@
 // Each bounded context owns its rows. This file owns only the durable marker
 // and the sample description; it never receives a database client.
 
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
-import { dirname } from 'node:path'
-
 import { DEMO_RESOURCE_ID_PREFIX } from '@agent-workflow/shared'
 
 import { SYSTEM_USER_ID } from '@/auth/systemIdentity'
 import type { CodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import type { DemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/public/participants'
-import { Paths } from '@/util/paths'
+import { composeInstallationSeedCompletion } from '@/modules/system-operations/composition/installationSeedCompletion'
+import type { InstallationSeedCompletionPort } from '@/modules/system-operations/public/participants'
 import { createLogger } from '@/util/log'
 
 const log = createLogger('demo-seed')
@@ -34,6 +32,7 @@ export interface DemoSeedResult {
 export interface DemoSeedParticipants {
   readonly resourceCatalog: DemoResourceCatalogSeedParticipant
   readonly codeCapability: CodeCapabilityDemoSeedParticipant
+  readonly completion?: InstallationSeedCompletionPort
 }
 
 function resourceCatalogSeedInput() {
@@ -147,7 +146,17 @@ function resourceCatalogSeedInput() {
 /** Seed once per install. Failure is non-fatal and leaves the marker absent so
  * the next start retries the complete owner-native sequence. */
 export async function seedDemoContent(participants: DemoSeedParticipants): Promise<DemoSeedResult> {
-  if (existsSync(Paths.demoSeedMarker)) return { seeded: false, reason: 'already-offered' }
+  return await offerDemoContent(
+    participants,
+    composeInstallationSeedCompletion(participants.completion),
+  )
+}
+
+async function offerDemoContent(
+  participants: DemoSeedParticipants,
+  completion: InstallationSeedCompletionPort,
+): Promise<DemoSeedResult> {
+  if (await completion.hasCompleted()) return { seeded: false, reason: 'already-offered' }
 
   try {
     const resourceReceipt = await participants.resourceCatalog.seed(resourceCatalogSeedInput())
@@ -162,7 +171,6 @@ export async function seedDemoContent(participants: DemoSeedParticipants): Promi
     return { seeded: false, reason: 'error' }
   }
 
-  mkdirSync(dirname(Paths.demoSeedMarker), { recursive: true })
-  writeFileSync(Paths.demoSeedMarker, `${String(Date.now())}\n`, { mode: 0o600 })
+  await completion.recordCompleted(Date.now())
   return { seeded: true }
 }
