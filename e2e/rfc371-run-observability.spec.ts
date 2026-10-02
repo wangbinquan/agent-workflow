@@ -636,7 +636,9 @@ test('model contributions restore the exact Dialog and scope before selecting an
     workflow: workflow.id,
     q: 'Observed',
     status: 'done',
-    selection: JSON.stringify(initialSelection),
+    // TanStack search is JSON-first: encode this JSON-valued string as a string,
+    // matching router navigation rather than parsing it into an object on load.
+    selection: JSON.stringify(JSON.stringify(initialSelection)),
   })
   const nextControl = process.platform === 'darwin' && browserName === 'webkit' ? 'Alt+Tab' : 'Tab'
   for (language of ['zh-CN', 'en-US'] as const)
@@ -757,7 +759,9 @@ test('model contributions restore the exact Dialog and scope before selecting an
         expect(response.ok()).toBe(true)
         const selectedUrl = new URL(page.url()),
           requestUrl = new URL(response.url())
-        expect(JSON.parse(selectedUrl.searchParams.get('selection')!)).toEqual(expectedSelection)
+        expect(JSON.parse(JSON.parse(selectedUrl.searchParams.get('selection')!))).toEqual(
+          expectedSelection,
+        )
         expect(JSON.parse(requestUrl.searchParams.get('selection')!)).toEqual(expectedSelection)
         for (const key of ['from', 'to', 'q', 'status', 'workflow']) {
           expect(selectedUrl.searchParams.get(key)).toBe(scope.get(key))
@@ -784,7 +788,7 @@ test('model contributions restore the exact Dialog and scope before selecting an
           })
           .click()
         await expect
-          .poll(() => JSON.parse(new URL(page.url()).searchParams.get('selection')!))
+          .poll(() => JSON.parse(JSON.parse(new URL(page.url()).searchParams.get('selection')!)))
           .toEqual(initialSelection)
         await expect(
           page.getByRole('button', { name: /CSV|Export|More filters|导出|更多筛选/ }),
