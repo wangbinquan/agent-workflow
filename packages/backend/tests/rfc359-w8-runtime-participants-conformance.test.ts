@@ -75,6 +75,7 @@ import {
 } from './helpers/taskExecutionTestTopology'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import type { ChildTaskLifecycleRuntimePorts } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/infrastructure/runtimeSessionLeaseOperations'
@@ -144,6 +145,7 @@ function sharedInput(
 > {
   return {
     db,
+    workspacePresence: createFileWorkspacePresenceQueries(),
     persistence: createTaskExecutionPersistence(db),
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
     memoryInjectionQueries: sqliteMemoryInjectionQueries(db as unknown as DbClient),

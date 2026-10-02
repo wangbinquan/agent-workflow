@@ -52,6 +52,7 @@ import {
   cleanupOrphanedGitCredentialLeases,
   composeRepositoryTransportCredentials,
   createRepositoryPublicationTransport,
+  createFileWorkspacePresenceQueries,
   reconcileRepositoryTransportConnectionProjections,
 } from '@/modules/source-control/composition'
 import { composeAgentActionExecution } from '@/modules/task-execution/composition/agentActionExecution'
@@ -1911,9 +1912,11 @@ async function composeSqliteProviderSession(
       : { subagentLiveCapture: config.subagentLiveCapture }),
     ...resolveLaunchRuntimeConfig(Paths.config),
   })
+  const workspacePresence = createFileWorkspacePresenceQueries()
   const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
     composeSqliteTaskExecutionProviderRuntime(db, {
       runtime: {
+        workspacePresence,
         observationInvocations: composeLocalInvocationObservations(
           db,
           composeObservationUsageSource(db),
@@ -3072,6 +3075,7 @@ async function composeSqliteProviderSession(
     secretBox,
     repositoryPublicationTransport,
     developmentAutomation,
+    workspacePresence,
     schedulerDriver: taskExecutionRuntime.schedulerDriver,
     taskExecutionReadModels: taskExecutionRuntime.readModels,
     taskRouteLaunch: taskExecutionProvider.routeLaunch,

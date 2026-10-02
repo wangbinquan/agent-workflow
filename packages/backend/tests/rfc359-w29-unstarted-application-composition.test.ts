@@ -577,7 +577,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-365 adds the Event target provider wiring, the IA event-only delegated-context
     // factory and the durable work-intent store to the daemon phase: 161 -> 165.
     // RFC-370: one shared on-demand configuration reader is composed for HTTP consumers.
-    expect(restored.statements).toHaveLength(166)
+    // RFC-370: one daemon-scoped selected presence query, shared by task and workgroup resume.
+    expect(restored.statements).toHaveLength(167)
     expect(namedCalls(body, pg, 'composeRuntimeManagement')).toHaveLength(1)
     // RFC-359 AC-10：摘要随 `runFrameBackfillOnBoot({ provider: 'postgresql', db })` →
     // `({ db })` 更新。`FrameBackfillDatabase` 的 provider 标签是摆设（联合两个成员结构逐字
@@ -690,8 +691,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: selected package owners make the local installer optional; its two
       // method parameter types use NonNullable. Runtime statements/order are unchanged.
       // RFC-370: the existing workgroup preflight binds the selected presence
-      // adapter (local by default). All 166 statements/order remain unchanged.
-      'faf37d206be4636a78a0a75e0a30e8b51e605c08addd974a32be515b75233da2',
+      // adapter (local by default). This next batch selects it once for the task
+      // runtime and workgroup; the original full body survives the exact binding inverse.
+      '84a6e33f6d150433931586060fe3eafe03af5210a25719ebbcc37d2644dc8fef',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -758,7 +760,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // delegated-context factory and the durable work-intent store.
       // RFC-371: standalone task execution receives mandatory durable invocation accounting.
       // RFC-371: the same database now supplies the committed numeric source participant.
-      '7801fe442d8c7136fa07e7ef0e6e3e167a33b77f079491dc5c02956f1e8d8f5d',
+      'fa0426de1cb8b134ef7f27812fbdb399da8e1c91d33905259aa9a10a00bb62a5',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -901,7 +903,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // 判据在 `tests/rfc368-*.test.ts`。
       // RFC-370: Intent and webhook configuration bindings change; route order and lifetime stay fixed.
       // RFC-371: task observation queries bind the selected DB and TE facts inside one read snapshot.
-      'e2a362af65a4136c2568f37e1e1bab5c40eaf7e099cd5b71ff3840703f9e58bc',
+      '20512443695f4bfc6bfe4bf43d6294a0524d240cfe5a5477535cb8d1d4847b02',
     )
     expect(
       namedCalls(

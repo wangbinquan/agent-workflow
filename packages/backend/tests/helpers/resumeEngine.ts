@@ -9,6 +9,8 @@
 // 「退役那份用 `StartTaskDeps` 表达、共用那份不认识」的东西显式化：
 //   · **收尾模式**：`awaitScheduler: true` → `completionMode: 'await-settle'`；
 //   · **活跃度**：缺省就是生产那一份（进程级注册表），要造「已经有人在跑」的判据自己传。
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -28,6 +30,7 @@ import { NotFoundError } from '@/util/errors'
 import type { Task } from '@agent-workflow/shared'
 
 export interface ResumeEngineOptions {
+  readonly workspacePresence?: WorkspacePresenceQueries
   readonly appHome?: string
   /** 引擎驱动面。既有套件普遍交 `createTaskExecutionTestTopology(...).schedulerDriver`。 */
   readonly schedulerDriver: Parameters<typeof resumeTaskProjection>[2]['schedulerDriver']
@@ -61,6 +64,7 @@ export function createResumeEngine(
       await resumeTaskProjection(
         {
           db,
+          workspacePresence: options.workspacePresence ?? createFileWorkspacePresenceQueries(),
           persistence: createTaskExecutionPersistence(db),
           runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
           log,

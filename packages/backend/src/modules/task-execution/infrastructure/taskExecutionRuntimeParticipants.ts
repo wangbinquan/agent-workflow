@@ -7,6 +7,7 @@ import type {
 } from '@/modules/collaboration/public/participants'
 import type { DelegatedRequestAuthorityFactory } from '@/modules/identity-access/public/participants'
 import type { MemoryInjectionQueries } from '@/modules/memory/public/queries'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import type { RepositoryPublicationTransport } from '@/modules/source-control/public/types'
 import type { CodeHostConnectionsService } from '@/services/codeHost/connections'
 import type { DynamicWorkflowValidationContextSource } from '@/services/dynamicWorkflowRunner'
@@ -61,6 +62,7 @@ import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
  * 那从来不是引擎差异，合并后一律由装配方交。
  */
 export interface TaskExecutionRuntimeParticipantsInput {
+  readonly workspacePresence: WorkspacePresenceQueries
   readonly observationInvocations: ObservationInvocationParticipant
   readonly db: ProviderNeutralDatabase
   readonly persistence: TaskExecutionPersistence
@@ -154,6 +156,7 @@ export function createTaskExecutionRuntimeParticipants(
       db: input.db,
       persistence: input.persistence,
       runtimeSessionLeases: input.runtimeSessionLeases,
+      workspacePresence: input.workspacePresence,
       log: input.log,
       lifecycle: input.lifecycle,
       activity: input.activity,

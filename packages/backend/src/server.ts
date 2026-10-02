@@ -200,6 +200,7 @@ import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution
 import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import { createWorkspaceContentScope } from '@/modules/source-control/composition'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { createChildTaskLifecycleParticipant } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
@@ -504,6 +505,7 @@ import {
   bindEmployeeCaseWorkspaceParticipant,
   composePostgresqlRepositoryWorkspaceStore,
   composeRepositoryWorkspaceOperations,
+  createFileWorkspacePresenceQueries,
   composeRepositoryTransportCredentials,
   composeSqliteRepositoryWorkspaceStore,
   createRepositoryPublicationTransport,
@@ -755,6 +757,8 @@ export function composePostgresqlDaemonProviderCore(
 }
 
 export interface AppDeps {
+  /** SC presence facts selected once for root/child/continuation resume. */
+  workspacePresence?: WorkspacePresenceQueries
   /**
    * RFC-349 bootstrap-selected provider core shared by HTTP, MCP, WebSocket
    * and background services. Individual fields below remain test seams; the
@@ -1027,6 +1031,7 @@ interface RepositoryBootstrap {
 
 type SqliteComposedAppDeps = RuntimeComposedAppDeps &
   RepositoryBootstrap & {
+    readonly workspacePresence: WorkspacePresenceQueries
     readonly developmentAutomation: DevelopmentAutomationModule
     readonly developmentAdapterAclIdentity: ReturnType<
       typeof composeDevelopmentAdapterConfigOperationsFor
@@ -1986,6 +1991,7 @@ export function composeSqliteApplicationDeps(
   unstarted?: UnstartedApplicationScope,
 ): SqliteAppComposition {
   const appHome = deps.appHome ?? Paths.root
+  const workspacePresence = deps.workspacePresence ?? createFileWorkspacePresenceQueries()
   const repositoryBootstrap = composeRepositoryBootstrap(deps, appHome)
   const identityAccess = withIntegrationTriggerResources(
     deps.db,
@@ -2025,6 +2031,7 @@ export function composeSqliteApplicationDeps(
       : composeTaskExecutionRuntime({
           participants: createTaskExecutionRuntimeParticipants({
             db: deps.db,
+            workspacePresence,
             observationInvocations: composeLocalInvocationObservations(
               deps.db,
               composeObservationUsageSource(deps.db),
@@ -2244,6 +2251,7 @@ export function composeSqliteApplicationDeps(
   })
   const effectiveDeps: SqliteComposedAppDeps = {
     ...runtimeDeps,
+    workspacePresence,
     ...repositoryBootstrap,
     // RFC-317 T54：装配落在 bootstrap。HTTP 与 MCP operation adapter
     // 拿到的是**同一个**实例；MCP 不再另建 route table。
@@ -2689,6 +2697,7 @@ function composeSqliteApiRouteMounts(
     // 从此走同一个参与者，不再各拼各的。
     children: createChildTaskLifecycleParticipant({
       db: deps.db,
+      workspacePresence: deps.workspacePresence,
       persistence: taskExecutionPersistence,
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(deps.db),
       log: createLogger('task'),
@@ -3151,6 +3160,7 @@ function composeSqliteApiRouteMounts(
     // 单进程部署：受理请求的进程既看得到工作树、也持有调度器，预检与驱动都在本进程内做。
     continuation: composeWorkgroupTaskRoomContinuationDriver({
       db: deps.db,
+      workspacePresence: deps.workspacePresence,
       configPath: deps.configPath,
       schedulerDriver,
       taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,

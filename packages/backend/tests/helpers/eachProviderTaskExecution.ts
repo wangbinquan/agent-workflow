@@ -1,3 +1,5 @@
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
@@ -112,6 +114,7 @@ export async function createEachProviderTaskExecution(
   userId: string,
   options: {
     readonly completionMode?: TaskDriveCompletionMode
+    readonly workspacePresence?: WorkspacePresenceQueries
     /**
      * RFC-359 AC-1（第 9 刀第 1 步）：SQLite 的路由壳在调用 `retryNode` / `resumeTask`
      * **之前**就展开这个对象，所以缺省那个「一调用就炸」的桩会让 retry / resume 两个动词
@@ -121,6 +124,7 @@ export async function createEachProviderTaskExecution(
   } = {},
 ) {
   const completionMode = options.completionMode ?? 'await-settle'
+  const workspacePresence = options.workspacePresence ?? createFileWorkspacePresenceQueries()
   const { db } = harness
   const identityAccess = createIdentityAccessRuntime({ db })
   const admitted = await admitTestDirectAuthority(identityAccess.directAuthority, {
@@ -214,6 +218,7 @@ export async function createEachProviderTaskExecution(
     const provider: SelectedSqliteTaskExecutionProviderRuntime =
       composeSqliteTaskExecutionProviderRuntime(sqlite, {
         runtime: {
+          workspacePresence,
           identityAccess: runtimeIdentity,
           memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
           collaborationRuntime,
@@ -351,6 +356,7 @@ export async function createEachProviderTaskExecution(
   const provider: SelectedPostgresqlTaskExecutionProviderRuntime =
     composePostgresqlTaskExecutionProviderRuntime(postgresql, {
       runtime: {
+        workspacePresence,
         observationInvocations: composeLocalInvocationObservations(
           db,
           composeObservationUsageSource(db),

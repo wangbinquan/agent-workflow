@@ -1,3 +1,4 @@
+import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeNodeRunRuntimePersistence } from './nodeRunRuntime'
@@ -101,6 +102,7 @@ export function composeTestChildLaunchWorkgroup(db: ProviderNeutralDatabase) {
 export function singleProcessDeploymentPorts(db: DbClient) {
   const log = createLogger('task')
   return {
+    workspacePresence: createFileWorkspacePresenceQueries(),
     taskDagCollaboration: createTaskDagCollaborationOperations(db),
     processConcurrencyScope: db,
     log,

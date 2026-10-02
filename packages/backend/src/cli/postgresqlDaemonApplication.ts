@@ -513,6 +513,7 @@ export async function composePostgresqlApplication(
   input: PostgresqlApplicationInput,
   phase: PostgresqlApplicationPhase,
 ): Promise<PostgresqlDaemonApplication> {
+  const workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
   const realtimePolicy = composeDaemonRealtimePolicy({
     resourceVisibility: {
       canViewResource: (actor, type, row) =>
@@ -973,6 +974,7 @@ export async function composePostgresqlApplication(
     })
   const taskExecutionProvider = composePostgresqlTaskExecutionProviderRuntime(input.db, {
     runtime: {
+      workspacePresence,
       observationInvocations: composeLocalInvocationObservations(
         input.db,
         composeObservationUsageSource(input.db),
@@ -1231,8 +1233,7 @@ export async function composePostgresqlApplication(
       assertResumable: composeWorktreeResumePreflight({
         getTask: (taskId) => taskExecutionProvider.routes.tasks.get(taskId),
         taskRecoveryOperations: taskExecutionProvider.recovery,
-        worktreeExists: (reference) =>
-          (input.workspacePresence ?? createFileWorkspacePresenceQueries()).exists(reference),
+        worktreeExists: (reference) => workspacePresence.exists(reference),
       }),
       // 驱动仍交给 daemon 的 `human-gate-continuation` worker 轮询认领（start.ts 注册）：
       // 「谁驱动这个任务」才是真按部署形态分的那一半，预检不是。

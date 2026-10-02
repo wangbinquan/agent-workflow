@@ -15,8 +15,8 @@ import {
   type TaskStatus,
 } from '@agent-workflow/shared'
 import { and, eq, inArray, isNotNull, isNull, sql } from 'drizzle-orm'
-import { existsSync } from 'node:fs'
 import { ulid } from 'ulid'
+import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 
 import {
   nodeRuns,
@@ -65,10 +65,6 @@ import type { TaskDriverLifecyclePort } from '../application/drive/taskDriveCoor
 const NODE_CANCELABLE_STATUSES = allowedFromStatusesForEvent({ kind: 'mark-canceled' })
 
 const log = createLogger('task-execution.postgresql-child-lifecycle')
-
-function lacksMaterializedWorkspace(path: string): boolean {
-  return path.length === 0 || !existsSync(path)
-}
 
 type ResumeRun = Readonly<{
   id: string
@@ -126,6 +122,7 @@ export interface ChildTaskLifecycleRuntimePorts {
 }
 
 export interface ChildTaskLifecycleDependencies extends ChildTaskLifecycleRuntimePorts {
+  readonly workspacePresence: WorkspacePresenceQueries
   readonly db: ProviderNeutralDatabase
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
@@ -191,6 +188,7 @@ export interface TaskCancelOptions {
 }
 
 export interface TaskResumeDependencies {
+  readonly workspacePresence: WorkspacePresenceQueries
   readonly db: ProviderNeutralDatabase
   readonly persistence: TaskExecutionPersistence
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
@@ -300,7 +298,11 @@ async function assertResumeAdmission(
       `task '${task.id}' workspace is being reclaimed by GC`,
     )
   }
-  if (phase === 'pruned' || lacksMaterializedWorkspace(task.worktreePath)) {
+  if (
+    phase === 'pruned' ||
+    task.worktreePath.length === 0 ||
+    !(await dependencies.workspacePresence.exists(task.worktreePath))
+  ) {
     throw new DomainError(
       'task-worktree-missing',
       `task '${task.id}' worktree is unavailable; cannot resume`,
@@ -311,14 +313,22 @@ async function assertResumeAdmission(
   if (
     rollbackTarget !== null &&
     rollbackTarget.repoCount > 1 &&
-    rollbackTarget.repositories.length > 0 &&
-    !rollbackTarget.repositories.some((repository) => existsSync(repository.worktreePath))
+    rollbackTarget.repositories.length > 0
   ) {
-    throw new DomainError(
-      'task-worktree-missing',
-      `task '${task.id}' has no remaining repository worktree; cannot resume`,
-      410,
-    )
+    let remainingWorkspace = false
+    for (const repository of rollbackTarget.repositories) {
+      if (await dependencies.workspacePresence.exists(repository.worktreePath)) {
+        remainingWorkspace = true
+        break
+      }
+    }
+    if (!remainingWorkspace) {
+      throw new DomainError(
+        'task-worktree-missing',
+        `task '${task.id}' has no remaining repository worktree; cannot resume`,
+        410,
+      )
+    }
   }
   if (task.sourceTerminationFence !== null) {
     throw new ConflictError(
@@ -925,6 +935,7 @@ export function createChildTaskLifecycleParticipant(
           db: dependencies.db,
           persistence: dependencies.persistence,
           runtimeSessionLeases: dependencies.runtimeSessionLeases,
+          workspacePresence: dependencies.workspacePresence,
           log: dependencies.log,
           // 「进程内是不是已经有人在跑」：PostgreSQL 读注入的 `executionModule.runtimeRegistry`，
           // 单进程形态读 `composeLegacyTaskActivityParticipant()`。
