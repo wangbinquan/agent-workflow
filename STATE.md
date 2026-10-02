@@ -1,3 +1,21 @@
+## 2026-10-02 人工迁移、运行时所选配置与 CI 断言接续
+
+前批 96eb71db5dcaadbc2c0c0aa6bfe59cedb5e234ed 的 [主 CI36993377294](https://github.com/wangbinquan/agent-workflow/actions/runs/36993377294) 已 completed/cancelled：42 success、7 failure、1 cancelled；同 SHA [Windows36993443952](https://github.com/wangbinquan/agent-workflow/actions/runs/36993443952) completed/success 1/1。四个后端失败分别指向两处已滞后的源断言：memory-distill 仍查本地 loadConfig，W29 将所选诊断工厂误查成 direct call。现对应真实每 tick 所选 read 和两根的 phase/unstarted 工厂调用，原工厂数、timeout/四旋钮及同 configuration 参数断言保留。Lint 的 submoduleRefresh.ts:244 已由并行 3bf8cc6c6364773f251b4fae9ea0399b2be349c8 显式 void 修复；其三个完整文件已同步承接，不归入本批源码提交。原失败/取消及 717 的主取消 19/1/30 全部作为历史保留；不能将 Windows 或有限源码门记成主 CI 全绿。
+
+人工迁移四路径有限 PASS 02890cdb5dce0365f295189d8df6dd91e25b8054385710f5e498ca40a475b8a3 及首门两个 P2 完整保留。运行时真实根四路径另由 /root/task_config_functional_gate 有限 PASS，指纹 400cb6451c7747f95c587b96adbf12d90cf23385af848dd8249d5d5aafdd35f1：PG/SQLite runtime-management 的 current 每次调用同一所选 configuration.read，probe fence 与 Settings 共用 applicationConfiguration.notificationKey；默认文件 binding 的 key 保持原 configPath，沿现 KeyedSerialQueue。双 provider 真实 HTTP 夹具覆盖 held read ACK、热切默认 runtime、unsaved probe 使用所选路径及读取失败无回退。两生产文件完整逆变换和 W29 原数量 168/49/65/4 保持；W29 此前只两 digest 变化，新 CI 工厂查找修正单独记账，不改原生命周期规则。
+
+旧人工迁移 17 路径 metadata 在 96eb 冻结候选获得有限 PASS 78b9b1cf03e87ae6f3df9dc041d60d8265938ef011141b13e5fea240d5417c98。HEAD 前进未取消该门；后继 canonical 基于 3bf8cc6 的完整已提交源码加本批九个不同源码/回归路径重生，四原生成规则逐字保持。运行时 binding 与两个 oracle 未新增受控数量，仍只有人工迁移三项实际各 +5：imports 5692→5697、原 exception 投影 5054→5059、owner 25726→25731；entry1805、background342、public1045、required-port liveness38 及原 value SCC 集合保持。两项 CLI 实际 R1 替换一旧边、inbound270/outbound31 及 SO/A-T7 退役条件不变。三条既有 growth receipt 不重复登记，须在匹配 canonical 提交后仅退役这三条。后继 17 路径属于有限 delta 门，正式验证交发布后的 exact-SHA CI。
+
+仅运行目标格式/lint、纯源码/AST/JSON证明和官方 scoped census，没有本机 AW test/typecheck/build/service。SQLite queued Intent、runtime legacy boot、配置 CLI/doctor、外层锁/宿主生命周期及其余 A1～A8 继续；完整 A-G 尚未关闭。独立 CS adapters 和 B/M0～M4 保持批准的顺序，尚无 AW-in-CS 部署，不关闭 RFC。所有旧正文、并行输出及 gate/CI 历史完整保留。
+
+## 2026-10-02 RFC-370 手动迁移所选准备入口
+
+手动迁移四路径获有限独立功能PASS，指纹02890cdb5dce0365f295189d8df6dd91e25b8054385710f5e498ca40a475b8a3。首三路径5ea5候选的FAIL/两个P2保留：旧CLI准备入口锚点已唯一更新；PG夹具改用原状态机的finalized manifest与合法generation，并经过真实manifest/source读取。原CLI输出、穷举围栏及finally await close正文逐字保持；所选configuration和installation的读取/准备/释放/关闭ACK由八个双provider功能例覆盖，默认本机行为保持。
+
+官方scoped生产语料与四份原规则不变；imports5692→5697、原exception投影5054→5059、owner25726→25731，实际六条symbol边替换一条。真实CLI type/value两项R1替换退役的旧入边，269→270，owner SO、A-T7退役；其他条款/原因不变，三增长回执匹配canonical后后继退役。前批96eb71db的Windows36993443952已completed/success 1/1、headSha严格一致；其主CI36993377294尚未取得终态回执。更早71703608主CI36990280728已completed/cancelled、19成功/1聚合失败/30取消，原非终态历史快照保留。
+
+仅目标format/lint、纯源码/字节/JSON及官方生成，无本机AW test/typecheck/build/service。正式运行等本批exact-SHA hosted CI；SQLite queued Intent、runtime真实根及其他A1～A8/A-G、独立CS adapter和M0～M4继续，无AW-in-CS部署，不关闭RFC。下方全部原历史与并行输出保留。
+
 ## 2026-10-02 RFC-370 所选配置读写真根与后台排空11路径
 
 配置binding真根9与通知ACK2路径获分组有限独立PASS；首门旧void隐含返回值P2及FAIL保留，现仅等待真实thenable并补兼容回归。三个真实根选择同一persistence供Settings读写/live query，原保存政策与热应用顺序保留；后台备份/仓库刷新同实例stop/drain已接通。双provider真实HTTP回归和完整body逆变换证明已写，运行仍交新批exact-SHA hosted CI，无本机AW test/typecheck/build/service。

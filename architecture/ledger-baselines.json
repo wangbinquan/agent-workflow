@@ -846,8 +846,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5692,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5697,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 manual migration: the CLI now consumes the narrow SO preparation factory and its selected options type; the new composition binds the existing provider type, logical schema, migration folder and local path defaults. Six actual symbol edges replace the former direct composition edge, a net increase of five. Only the three reviewed paths are included; all source and import rules remain unchanged."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +870,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5054,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5059,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 manual migration: the original import projection records the same six added and one retired symbol edges. Only the two actual CLI type/value R1 entries replace its retired direct composition entry; no boundary clause, scanner rule or directory exemption is added. Selected configuration and installation use existing neutral contracts."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +908,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25726,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25731,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 manual migration: exactly five owner entries arise from the new SO composition file, its private mapped runtime union, used prepared lifetime and selected options types, and used preparation factory. All existing owner resolution rules and owners are retained."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:bc18656fdf3a864b196205004ab29051b9ec443ec93fd406a36a9267b8237822",
+    "sourceDigest": "sha256:33988b69dc58a8539704f77fe1225d04b42217b1f30ca869e5766b40c7663742",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +929,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9c708807d74dbf3a466a527c81c1c9dc58649224",
-    "contentDigest": "sha256:12dff33478ae2518dc0e6c1d361c5d3816fa0ac1a4004e72b557502d7f3c45d4",
+    "currentSnapshotSha": "3bf8cc6c6364773f251b4fae9ea0399b2be349c8",
+    "contentDigest": "sha256:c10d558e636a0fad3353c1336976f6d89f1044acd38f3f164a07c3729aa1dc15",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

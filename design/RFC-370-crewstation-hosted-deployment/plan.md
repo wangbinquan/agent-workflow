@@ -473,3 +473,16 @@ scoped canonical只纳入26路径、原规则保持；四项实际增长依原�
 真实双provider HTTP与binding ACK/失败回归已写；W29三body严格逆变换恢复旧全体，PG168/SQLite49仅各多一binding声明，API65/EC4和原生命周期规则保持。官方scoped生成仅HEAD加11路径，三项实际各+3增长原协议登记/后继退役；原规则、其他计数、public1045及SCC空保持。
 
 前批26源码加17配套按七commit发布71703608，OpenCode文本引用由并行81d6三个共享文档承载且完整保留。717的Windows36990563985已success，主CI非终态快照与最终证据分开。新批按两个小source提交及配套发布，正式验证交确切SHA CI；无本机AW test/typecheck/build/service，完整A-G后才进入独立CS adapter与M0～M4，不改变退出门。
+
+
+- 2026-10-02 A1手动迁移增量：四路径有限独立PASS（02890cdb5dce0365f295189d8df6dd91e25b8054385710f5e498ca40a475b8a3），首三路径FAIL/两个P2及修正完整保留，详情见functional-gates。实际migrate入口复用SO configuration/installation，原输出与finally close尾部逐字保持；八个双provider例覆盖所选读取/准备/释放/close ACK和错误优先级。默认文件选择行为保留。官方原口径三项各+5，实际两条CLI R1替换旧direct入边，其他规则/数量/条款不变；按source、canonical/docs、三回执后继退役的小提交发布。96eb前批Windows exact-SHA已success 1/1，主CI终态尚未取得；717旧主CI cancelled19/1/30单独留档，不替本批验证。只有目标format/lint与纯source/JSON/官方生成，没有本机AW运行；SQLite queued Intent/runtime真实根、其余A1～A8、完整A-G、独立CS adapters和M0～M4继续，无AW-in-CS部署，RFC仍In Progress。
+
+## 2026-10-02 人工迁移、运行时所选配置与 CI 断言接续
+
+前批 96eb71db5dcaadbc2c0c0aa6bfe59cedb5e234ed 的 [主 CI36993377294](https://github.com/wangbinquan/agent-workflow/actions/runs/36993377294) 已 completed/cancelled：42 success、7 failure、1 cancelled；同 SHA [Windows36993443952](https://github.com/wangbinquan/agent-workflow/actions/runs/36993443952) completed/success 1/1。四个后端失败分别指向两处已滞后的源断言：memory-distill 仍查本地 loadConfig，W29 将所选诊断工厂误查成 direct call。现对应真实每 tick 所选 read 和两根的 phase/unstarted 工厂调用，原工厂数、timeout/四旋钮及同 configuration 参数断言保留。Lint 的 submoduleRefresh.ts:244 已由并行 3bf8cc6c6364773f251b4fae9ea0399b2be349c8 显式 void 修复；其三个完整文件已同步承接，不归入本批源码提交。原失败/取消及 717 的主取消 19/1/30 全部作为历史保留；不能将 Windows 或有限源码门记成主 CI 全绿。
+
+人工迁移四路径有限 PASS 02890cdb5dce0365f295189d8df6dd91e25b8054385710f5e498ca40a475b8a3 及首门两个 P2 完整保留。运行时真实根四路径另由 /root/task_config_functional_gate 有限 PASS，指纹 400cb6451c7747f95c587b96adbf12d90cf23385af848dd8249d5d5aafdd35f1：PG/SQLite runtime-management 的 current 每次调用同一所选 configuration.read，probe fence 与 Settings 共用 applicationConfiguration.notificationKey；默认文件 binding 的 key 保持原 configPath，沿现 KeyedSerialQueue。双 provider 真实 HTTP 夹具覆盖 held read ACK、热切默认 runtime、unsaved probe 使用所选路径及读取失败无回退。两生产文件完整逆变换和 W29 原数量 168/49/65/4 保持；W29 此前只两 digest 变化，新 CI 工厂查找修正单独记账，不改原生命周期规则。
+
+旧人工迁移 17 路径 metadata 在 96eb 冻结候选获得有限 PASS 78b9b1cf03e87ae6f3df9dc041d60d8265938ef011141b13e5fea240d5417c98。HEAD 前进未取消该门；后继 canonical 基于 3bf8cc6 的完整已提交源码加本批九个不同源码/回归路径重生，四原生成规则逐字保持。运行时 binding 与两个 oracle 未新增受控数量，仍只有人工迁移三项实际各 +5：imports 5692→5697、原 exception 投影 5054→5059、owner 25726→25731；entry1805、background342、public1045、required-port liveness38 及原 value SCC 集合保持。两项 CLI 实际 R1 替换一旧边、inbound270/outbound31 及 SO/A-T7 退役条件不变。三条既有 growth receipt 不重复登记，须在匹配 canonical 提交后仅退役这三条。后继 17 路径属于有限 delta 门，正式验证交发布后的 exact-SHA CI。
+
+仅运行目标格式/lint、纯源码/AST/JSON证明和官方 scoped census，没有本机 AW test/typecheck/build/service。SQLite queued Intent、runtime legacy boot、配置 CLI/doctor、外层锁/宿主生命周期及其余 A1～A8 继续；完整 A-G 尚未关闭。独立 CS adapters 和 B/M0～M4 保持批准的顺序，尚无 AW-in-CS 部署，不关闭 RFC。所有旧正文、并行输出及 gate/CI 历史完整保留。
