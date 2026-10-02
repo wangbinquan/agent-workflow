@@ -242,8 +242,16 @@ function createSubmoduleRefreshLoop(
   }
   if (intervalMs === HOUR_MS) {
     // The legacy entry point reads synchronously; the async entry point already awaited its initial snapshot.
-    if (initial === undefined) void reconfigure()
-    else apply(initial, ++revision)
+    if (initial === undefined) {
+      const configured = reconfigure()
+      if (configured instanceof Promise) {
+        void configured.catch((err: unknown) => {
+          log.error('submodule refresh initial configuration failed', {
+            error: err instanceof Error ? err.message : String(err),
+          })
+        })
+      }
+    } else apply(initial, ++revision)
   } else job.reconfigure(intervalMs)
   return {
     stop() {
