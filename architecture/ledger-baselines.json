@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1792,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1797,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 A2/A3/A4: the original employee, plugin, repository-preparation and archive physical bodies move into independent local adapters, while precise compatibility factories remain. The selected preview-index and archive content contracts add their bound factories to the unchanged entrypoint heuristic. Exactly 48 reviewed source/test paths; AW selection, lifecycle, transaction and retry rules are unchanged."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -832,8 +835,11 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 338,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 339,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: the original generation-GC filesystem factory moves into Resource Catalog local infrastructure while the compatibility factory remains. The unchanged name-based census observes one extra factory, with no new timer or background business worker. Existing timer locations follow the selected terminal-root bindings."
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -846,8 +852,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5627,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5661,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A2/A3/A4: independent local program/input, plugin installation/GC, repository preparation, preview-index and task archive packages replace the old physical-body locations. Selected terminal roots forward one shared presence query. Exact service reexports and type/value edges remain; the six real R1 compatibility entries for two target paths carry A-T7 retirement. No scanner, public entry, directory or corpus exemption is added."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +876,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 4991,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5024,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 A2/A3/A4: the unchanged canonical rules observe the precise compatibility exports and owner-local physical-body relocations. The original owners and exact-target retirement remain. No public factory without a production consumer is exported, and no exception rule or scope is widened. Only the 48 frozen reviewed paths are included."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +914,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25671,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25691,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 A2/A3/A4: existing physical bodies move into independent local files; application preparation, preview-index and task archive contracts, their local factories and precise legacy wrappers remain in their original contexts. All production files and top-level symbols retain module ownership. Exactly 48 reviewed paths, with no CS adapter or other candidate source included."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f17caace561f83431fe26b33bd92c5a67538aa7433122ecf72907c6f8bdd1478",
+    "sourceDigest": "sha256:be997784a30fa16d6a83f36d1fee8706c08a35ddb02ead3365450ce36779dd30",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +935,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "bb4101a45bb3fb7278201b408f4735c1132c8438",
-    "contentDigest": "sha256:2daacdc98f9ebf243a791bc255196845f5f5cb305af8cf7112b3c537eb85d731",
+    "currentSnapshotSha": "d185ebfe8332c9951e1ad6416a9a2447417b2931",
+    "contentDigest": "sha256:f8c3ed286a73820b751cd831894542dc411d9cd5696d4fa5077fd425e82778b2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

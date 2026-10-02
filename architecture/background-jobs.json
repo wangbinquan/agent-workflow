@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2882",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2884",
       "kind": "register-call",
-      "line": 2882,
+      "line": 2884,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -25,9 +25,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2888",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2890",
       "kind": "register-call",
-      "line": 2888,
+      "line": 2890,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -58,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3226",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3228",
       "kind": "register-call",
-      "line": 3226,
+      "line": 3228,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3274",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3276",
       "kind": "global-setter",
-      "line": 3274,
+      "line": 3276,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -5437,9 +5437,9 @@
     {
       "callee": "registerOperationAlias",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3750",
+      "id": "ambient:packages/backend/src/server.ts#registerOperationAlias:3762",
       "kind": "register-call",
-      "line": 3750,
+      "line": 3762,
       "ownerEntryId": "owner:packages/backend/src/server.ts#mountApiRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountApiRoutes",
@@ -5459,9 +5459,9 @@
     {
       "callee": "registerResourcePackageRoutes",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:3531",
+      "id": "ambient:packages/backend/src/server.ts#registerResourcePackageRoutes:3543",
       "kind": "register-call",
-      "line": 3531,
+      "line": 3543,
       "ownerEntryId": "owner:packages/backend/src/server.ts#composeSqliteApiRouteMounts",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteApiRouteMounts",
@@ -5470,9 +5470,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/server.ts",
-      "id": "ambient:packages/backend/src/server.ts#registerRoute:3810",
+      "id": "ambient:packages/backend/src/server.ts#registerRoute:3822",
       "kind": "register-call",
-      "line": 3810,
+      "line": 3822,
       "ownerEntryId": "owner:packages/backend/src/server.ts#createHttpRequestApp",
       "removeAfterWave": "W6/W9",
       "symbol": "createHttpRequestApp",
@@ -5520,11 +5520,11 @@
   "denominator": {
     "ambientWiring": 500,
     "disabled": 9,
-    "entries": 338,
+    "entries": 339,
     "executionLocal": 41,
     "longRunning": 80,
     "managed": 11,
-    "periodic": 208
+    "periodic": 209
   },
   "entries": [
     {
@@ -7656,6 +7656,48 @@
     },
     {
       "dependencies": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginGenerationGc.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginGenerationGc.ts#createPluginGenerationFilesystemGcPort",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginGenerationGc.ts#createPluginGenerationFilesystemGcPort",
+      "phase": "unknown",
+      "symbol": "createPluginGenerationFilesystemGcPort",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginGenerationGc.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginGenerationGc.ts#hasPluginGenerationGcCandidates",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginGenerationGc.ts#hasPluginGenerationGcCandidates",
+      "phase": "unknown",
+      "symbol": "hasPluginGenerationGcCandidates",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityInspector.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityInspector.ts#prepareHuskSweep",
@@ -8999,9 +9041,9 @@
       "dependencies": [
         "db"
       ],
-      "file": "packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts",
+      "file": "packages/backend/src/modules/task-execution/infrastructure/taskArchiveContentCoordinator.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts#recoverClaimedArchives",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskArchiveContentCoordinator.ts#recoverClaimedArchives",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -9013,7 +9055,7 @@
       },
       "lifetime": "daemon",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskArchiveMaintenanceCommand.ts#recoverClaimedArchives",
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskArchiveContentCoordinator.ts#recoverClaimedArchives",
       "phase": "after-ready",
       "symbol": "recoverClaimedArchives",
       "targetContext": "task-execution"
@@ -9047,7 +9089,7 @@
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$setInterval:136",
+      "id": "background:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$setInterval:137",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -9061,7 +9103,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:136",
+      "symbol": "$setInterval:137",
       "targetContext": "task-execution"
     },
     {
@@ -11972,27 +12014,6 @@
       "dependencies": [],
       "file": "packages/backend/src/services/pluginGenerationGc.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/pluginGenerationGc.ts#hasPluginGenerationGcCandidates",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": false,
-        "readiness": false,
-        "run": false,
-        "start": false,
-        "state": false,
-        "stop": false
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/services/pluginGenerationGc.ts#hasPluginGenerationGcCandidates",
-      "phase": "unknown",
-      "symbol": "hasPluginGenerationGcCandidates",
-      "targetContext": "resource-catalog"
-    },
-    {
-      "dependencies": [],
-      "file": "packages/backend/src/services/pluginGenerationGc.ts",
-      "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/services/pluginGenerationGc.ts#runPluginGenerationGc",
       "kind": "periodic",
       "lifecycle": {
@@ -12427,7 +12448,7 @@
       ],
       "file": "packages/backend/src/services/task.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/services/task.ts#$setTimeout:4268",
+      "id": "background:packages/backend/src/services/task.ts#$setTimeout:4274",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -12441,7 +12462,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:4268",
+      "symbol": "$setTimeout:4274",
       "targetContext": "task-execution"
     },
     {
@@ -12971,5 +12992,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f17caace561f83431fe26b33bd92c5a67538aa7433122ecf72907c6f8bdd1478"
+  "sourceDigest": "sha256:be997784a30fa16d6a83f36d1fee8706c08a35ddb02ead3365450ce36779dd30"
 }

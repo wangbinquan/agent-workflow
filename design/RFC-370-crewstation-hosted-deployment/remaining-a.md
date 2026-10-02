@@ -18,9 +18,9 @@
 ## 当前候选边界
 
 - 普通 resume11、RC经典内容10、插件 CRUD local5、selected boot2、程序编辑读取3、DA evidence读取6、终态 revival11及 seed完成6 共54路径已发布165bb447d；修复02940128f 的主 CI47/3 failure、Windows success，完整恢复继续，不能据此关闭 A2/A-G。
-- 下一批七组40路径均获有限独立功能 PASS：journaled preparation6、员工local4、插件物理安装6/GC3、附件 async完成5、终态 presence 真根10、提交预览 index6。准备工厂 public 零消费者和随后测试导入 P2 已修，历史完整保留；正式行为待该批发布后的 hosted CI。
+- 八组48路径收口为同一发布候选：原七组40加归档内容8，所有原有限功能 PASS/指纹不变。准备工厂 public 零消费者和随后测试导入 P2 已修，历史完整保留；按八个小 source commit、官方 scoped canonical/docs、五项实际增长回执后继退役发布，正式行为待本批 hosted CI。
 - 插件 CRUD/物理安装/GC 各自独立 local 包，service 准确兼容边按实际六项登记 owner RC/A-T7 退役；runtime 物化和完整调用者仍在 A2/A6。提交预览只抽 isolated index 效果；其他候选/交付/Git node/wrapper/工作区检查仍为 A4 残余。
-- 任务归档内容原七路径 PASS 保留，补正既有 RFC349 的真实查询源码键后八路径独立有限 PASS；原认领/导出/恢复/删库规则、默认 local 和全部 SQL 排序断言保持，异步内容 ACK、同 claim 重试与提交后丢 ACK 回归已写。仍未发布且排除上述40路径 canonical，真 boot roots 注入与其他 TE/RC 内容继续。system-operations 外层 boot/seed完成事实已发布；外层锁、宿主生命周期、预打开 restore 仍属 A1，A3 各 launch lane 继续。
+- 任务归档内容原七路径 PASS 保留，补正既有 RFC349 的真实查询源码键后八路径独立有限 PASS；原认领/导出/恢复/删库规则、默认 local 和全部 SQL 排序断言保持，异步内容 ACK、同 claim 重试与提交后丢 ACK 回归已写。现纳入48路径 scoped canonical；真 boot roots 注入与其他 TE/RC 内容继续。system-operations 外层 boot/seed完成事实已发布；外层锁、宿主生命周期、预打开 restore 仍属 A1，A3 各 launch lane 继续。
 - A5 必须覆盖材料、执行与清理全链。可选 runFn、宿主路径/命令/PID 的换名或一层 wrapper 不能代替中立执行合同。
 
 M0 只要求 H1/H2 和已开放编辑所需 H6、明确的未就绪能力状态；未就绪执行/效果 worker 不启动。此策略缩小的是 B/M0 适配范围，完整阶段 A 的退出门仍保留。M1 的首个任务闭环同时交付执行权、取消和重启对账。

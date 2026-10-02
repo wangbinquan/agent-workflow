@@ -1,3 +1,11 @@
+## 2026-10-02 RFC-370 八组48路径发布候选
+
+journaled preparation6、员工local4、插件安装6、generation GC3、附件异步完成5、终态 presence 真根10、提交预览 index6、归档内容8，共48个不同源码/回归路径；八组原有限功能 PASS 和完整指纹均保持，首门 findings 与所有历史 CI failure/cancelled 保留。按八个源码小提交、官方 scoped canonical/docs及五项已消费增长回执的后继退役发布，正式行为交本批 exact-SHA hosted CI。
+
+官方规则及语料算法逐字保持，只纳入已提交 HEAD 加48候选：entry1792→1797、background338→339、imports5627→5661、exception4991→5024、owner25671→25691；公共出口1045、TE零 value SCC保持。六项真实插件 R1 兼容记录完整沿用此前证据，owner resource-catalog、A-T7 selected roots/legacy callers退役；现有292项记录完整保持，不扩大目录或规则。五项增长按原协议一次登记，在匹配 canonical commit 后退役。
+
+归档 coordinator/legacy sweep 的原业务及SQL顺序、异步导出/manifest/move ACK、同 claim恢复和重试保持，RFC349仅定位真实查询源码；默认local位于独立包，真实root选择贯穿仍属A8。其他A1～A8、完整A-G、CS独立adapter及M0～M4继续，尚无AW-in-CS部署证据。仅目标格式/lint、源码/AST/JSON证明与官方scoped生成，无本机AW test/typecheck/build/service。下方所有并行输出与历史完整保留。
+
 ## 2026-10-02 RFC-370 CI 既有数量补正候选
 
 共享 main/origin 同步到 bbb545851a5dc4c5328ff005a82b196cdedf5d28，已承接并行的 E2E 失败 lineage 诊断。官方 census 只纳入已提交 HEAD，未发布40路径与归档8路径全部排除，八组源码指纹逐一保持；原40路径生成证据和实际六条 R1/五项待发布增长依据保留，随该批源发布前重生，未被冒称消费退役。四份治理候选只同步现有 provenance，唯一正文变化为 CI36955843850 实际数量17/旧基线16所对应的单项16→17及原协议一次性回执；其余数值、正文、源码、扫描规则和所有断言保持。独立有限功能检视后单独发布并后继退役此回执，正式结果仍等修复 exact-SHA CI，mixed_summary 的既有真实功能失败继续处理。无本机 AW test/typecheck/build/service，不关闭 RFC-370/A-G；下方全部并行/历史内容保留。

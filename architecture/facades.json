@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 295,
-    "thinFacades": 49
+    "thinFacades": 50
   },
   "entries": [
     {
@@ -1297,7 +1297,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:1db8cdd216f61ab44733"
+        "import:1db8cdd216f61ab44733",
+        "import:223e0cd8394e53cbe18c"
       ],
       "exportedSymbols": [
         "FINAL_REAP_MARGIN_MS",
@@ -1705,8 +1706,8 @@
     {
       "boundaryEdgeIds": [
         "import:0e8a7c31c118c21a05c6",
-        "import:1bb364ffb920be8cd432",
         "import:22c3108507c832bb72ba",
+        "import:31413a870797ceaa091b",
         "import:3936b70e0b63bfe7368e",
         "import:4a9b387f1fbe819827a6",
         "import:5eec16ee0b8a0b6f1ceb",
@@ -2650,13 +2651,15 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:1a28f4c0cf72f62786c1"
+        "import:1a28f4c0cf72f62786c1",
+        "import:88fabd16ee334805427b",
+        "import:8e8c9a988d5f0d3d4d08",
+        "import:b76ca1090b3e5e9e26c3",
+        "import:d2327486e327e612e4e0",
+        "import:eaa7f371301328297ccf"
       ],
       "exportedSymbols": [
-        "PluginGenerationFilesystemGcAdapter",
-        "PluginGenerationFilesystemGcInput",
         "createPluginGenerationFilesystemGcPort",
-        "hasPluginGenerationGcCandidates",
         "runPluginGenerationGc",
         "startPluginGenerationGc"
       ],
@@ -2670,38 +2673,37 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:0c5d5d0f22a0c6c2166c",
+        "import:1b6dd4362ccc74e3ccb8",
+        "import:27c53d76444b835237da",
+        "import:38400851762fb755ef93",
+        "import:402f826eab1cfaeb25d2",
         "import:4305cdacf2d64c8aaa06",
+        "import:4f9d37c953ae473feb7d",
+        "import:5170043b84c360bdde93",
         "import:56ee7c039565590c3b2d",
+        "import:5bc6da2901aecf8b0481",
+        "import:6e1acb7ece42ef5857db",
+        "import:7101761cdfaadf56c46c",
         "import:86737c62083e69418e3b",
+        "import:89ab4e784f2fa6beecf6",
+        "import:917a9ae360ed9b3f4e0b",
+        "import:987289edacedc1bc30c4",
         "import:a08c9b464859a69c04f4",
-        "import:c0285390d79476e2e155"
+        "import:a414f72ee95104f044b5",
+        "import:ad01bcba1e141f6eb492",
+        "import:c0285390d79476e2e155",
+        "import:c3fe91e71f890d09e715",
+        "import:e2bab2788cb13cdcdc09",
+        "import:e5b83c2f6c9aaceccbad",
+        "import:fc6bc8dd62abc9273190"
       ],
-      "exportedSymbols": [
-        "InstallResult",
-        "NpmUnavailableError",
-        "PLUGIN_GENERATION_MANIFEST",
-        "PluginFileNotFoundError",
-        "PluginGenerationManifest",
-        "PluginInstallFailedError",
-        "PluginInstallTimeoutError",
-        "checkForUpdate",
-        "cleanupInstallGeneration",
-        "fileSpecToHostPath",
-        "garbageCollectPluginGenerations",
-        "inferSourceKind",
-        "installPlugin",
-        "plannedGenerationDir",
-        "probeNpmBinary",
-        "readGenerationManifestForCachedPath",
-        "resetNpmProbeCacheForTests",
-        "resolveNpmCommand",
-        "resolveNpmCommandForHost"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/pluginInstaller.ts",
       "id": "facade:packages/backend/src/services/pluginInstaller.ts",
       "ownerEntryId": "owner:packages/backend/src/services/pluginInstaller.ts#$file",
       "removeAfterWave": "W9-D",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "resource-catalog",
       "targetLayer": "application"
     },
@@ -6312,5 +6314,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f17caace561f83431fe26b33bd92c5a67538aa7433122ecf72907c6f8bdd1478"
+  "sourceDigest": "sha256:be997784a30fa16d6a83f36d1fee8706c08a35ddb02ead3365450ce36779dd30"
 }

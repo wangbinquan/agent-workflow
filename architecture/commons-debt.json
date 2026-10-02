@@ -3,10 +3,10 @@
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
   "baseline": {
     "recordedAt": "2026-09-04",
-    "inboundEdges": 261,
+    "inboundEdges": 267,
     "outboundEdges": 31,
     "registeredFindings": 79,
-    "recordedAtShaNote": "RFC-366（2026-09-21）：inbound 边 252→253。执行结束记忆提炼把 agent 运行结束观察者装进 task-execution 自己的 composition，由 legacy `services/task.ts` 的 runtimeConfigOpts 消费；条目文本由 RFC-366 作者提供。\n\nRFC-367（2026-09-21）：outbound 边 27→31。记忆蒸馏器改用共享的 `runSystemAgent` 运行原语，让候选解析与会话页记录同源于一条规范化事件流（此前两条 reader 各解析一次同一段输出，漂移过两次、静默丢光候选）。四条新边分别是 memory→`@/services/systemAgentRun`（type+value）、memory 的 distill 端口→`@/services/sessionEventSink`（type）、以及候选解析改用公共 envelope 解析件带来的 memory→`@/services/envelope`（value）。三个目标都仍在 legacy `services/` 下，本 RFC 只做最小扩展不顺手迁位；随 RFC-294 W4-C / W4-E1 归位时一并销账。\n\nRFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged.\n\nRFC-360 T3: register eight exact temporary forwarding imports/exports for the relocated single registry. Remove these with the named compatibility consumers in T6; no directory or scanner exemption is added.\n\nRFC-370 H2：auth/session 兼容门面指向 identity-access composition 的 type/value import/export 四条边精确登记；WS 传输和两个 HTTP bootstrap 已注入 participant，剩余兼容调用者在 A-T7 逐项收口。\n\nRFC-370 H1：五条配置 local composition 的 exact compatibility 入边补记，255→260；selected query 与 policy 从 public 出口消费，默认兼容边于 A-T7 逐入口收口，原 scanner/fixtures 不变。\n\nRFC-370 H1（2026-10-02）：installation seed completion 兼容默认仅由 SO composition 选择，services/demoSeed 新增一条 exact value/static-import 入边，260→261；原 owner native seed 顺序不变，所选完成事实无本机 fallback，A-T7 root injection 收口后退役。TE composition→SC composition 的所选 presence 默认属于实际 temporary-internal-debt，owner task-execution，随 A-T7 完整依赖注入后删除该默认内部边；不是 R1 legacy 口径，未虚增本账本。"
+    "recordedAtShaNote": "RFC-366（2026-09-21）：inbound 边 252→253。执行结束记忆提炼把 agent 运行结束观察者装进 task-execution 自己的 composition，由 legacy `services/task.ts` 的 runtimeConfigOpts 消费；条目文本由 RFC-366 作者提供。\n\nRFC-367（2026-09-21）：outbound 边 27→31。记忆蒸馏器改用共享的 `runSystemAgent` 运行原语，让候选解析与会话页记录同源于一条规范化事件流（此前两条 reader 各解析一次同一段输出，漂移过两次、静默丢光候选）。四条新边分别是 memory→`@/services/systemAgentRun`（type+value）、memory 的 distill 端口→`@/services/sessionEventSink`（type）、以及候选解析改用公共 envelope 解析件带来的 memory→`@/services/envelope`（value）。三个目标都仍在 legacy `services/` 下，本 RFC 只做最小扩展不顺手迁位；随 RFC-294 W4-C / W4-E1 归位时一并销账。\n\nRFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged.\n\nRFC-360 T3: register eight exact temporary forwarding imports/exports for the relocated single registry. Remove these with the named compatibility consumers in T6; no directory or scanner exemption is added.\n\nRFC-370 H2：auth/session 兼容门面指向 identity-access composition 的 type/value import/export 四条边精确登记；WS 传输和两个 HTTP bootstrap 已注入 participant，剩余兼容调用者在 A-T7 逐项收口。\n\nRFC-370 H1：五条配置 local composition 的 exact compatibility 入边补记，255→260；selected query 与 policy 从 public 出口消费，默认兼容边于 A-T7 逐入口收口，原 scanner/fixtures 不变。\n\nRFC-370 H1（2026-10-02）：installation seed completion 兼容默认仅由 SO composition 选择，services/demoSeed 新增一条 exact value/static-import 入边，260→261；原 owner native seed 顺序不变，所选完成事实无本机 fallback，A-T7 root injection 收口后退役。TE composition→SC composition 的所选 presence 默认属于实际 temporary-internal-debt，owner task-execution，随 A-T7 完整依赖注入后删除该默认内部边；不是 R1 legacy 口径，未虚增本账本。\n\nRFC-370 A2（2026-10-02）：插件安装和 generation GC 原物理主体下沉 RC independent local adapter，service 只保留原准确兼容出口及 worker 业务。两条实际目标路径按原 R1 的 type/value 与 import/export 口径登记六项（261→267），owner resource-catalog，随 A-T7 bootstrap selected effect 贯穿及旧调用者收口退役。原边界算法、public 规则与 scanner 未改。"
   },
   "entries": [
     {
@@ -2145,6 +2145,29 @@
     },
     {
       "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/demoSeed.ts",
+      "specifier": "@/modules/system-operations/composition/installationSeedCompletion",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "system-operations",
+      "why": "RFC-370 H1：legacy seed wrapper 保持现有两种 provider 的启动入口，只有 SO composition 选择 standalone 文件完成标记；orchestrator 与所选安装经 public port 读取和记录完成事实。该 exact 兼容边随 A-T7 的 bootstrap 注入收口，不增加目录豁免。",
+      "introducedByRFC": "RFC-370 A-T2（installation completion seam）",
+      "removeAfterWave": "RFC-370 A-T7（root selection and legacy compatibility closeout）",
+      "findingId": "G-01",
+      "to": "packages/backend/src/modules/system-operations/composition/installationSeedCompletion",
+      "canonicalImportEdgeIds": [
+        "import:cc67a4e3852cc57ec1f7"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/demoSeed.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/system-operations/composition/installationSeedCompletion.ts#composeInstallationSeedCompletion"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/demoSeed.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/developmentDeliveryDeps.ts",
       "to": "packages/backend/src/modules/development-automation/application/ports/reconcilerPorts",
       "specifier": "@/modules/development-automation/application/ports/reconcilerPorts",
@@ -3702,6 +3725,179 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/ownerScopedName.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/pluginGenerationGc.ts",
+      "to": "packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc",
+      "specifier": "@/modules/resource-catalog/composition/pluginGenerationGc",
+      "edgeKind": "type",
+      "syntax": "export",
+      "owner": "resource-catalog",
+      "why": "RFC-370 A2: the unchanged physical generation preflight and filesystem GC factory now belong to the Resource Catalog local adapter and are selected by its composition. The existing worker business rule and precise compatibility import/export remain until their callers receive the selected effect from bootstrap; no scanner or directory exception is added.",
+      "introducedByRFC": "RFC-370 A-T4/A-T6 local plugin effects",
+      "removeAfterWave": "RFC-370 A-T7 selected plugin roots and legacy callers",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:b76ca1090b3e5e9e26c3",
+        "import:eaa7f371301328297ccf"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/pluginGenerationGc.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/pluginGenerationGc.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/pluginGenerationGc.ts",
+      "to": "packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc",
+      "specifier": "@/modules/resource-catalog/composition/pluginGenerationGc",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "resource-catalog",
+      "why": "RFC-370 A2: the unchanged physical generation preflight and filesystem GC factory now belong to the Resource Catalog local adapter and are selected by its composition. The existing worker business rule and precise compatibility import/export remain until their callers receive the selected effect from bootstrap; no scanner or directory exception is added.",
+      "introducedByRFC": "RFC-370 A-T4/A-T6 local plugin effects",
+      "removeAfterWave": "RFC-370 A-T7 selected plugin roots and legacy callers",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:8e8c9a988d5f0d3d4d08"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/pluginGenerationGc.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/pluginGenerationGc.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/pluginGenerationGc.ts",
+      "to": "packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc",
+      "specifier": "@/modules/resource-catalog/composition/pluginGenerationGc",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "resource-catalog",
+      "why": "RFC-370 A2: the unchanged physical generation preflight and filesystem GC factory now belong to the Resource Catalog local adapter and are selected by its composition. The existing worker business rule and precise compatibility import/export remain until their callers receive the selected effect from bootstrap; no scanner or directory exception is added.",
+      "introducedByRFC": "RFC-370 A-T4/A-T6 local plugin effects",
+      "removeAfterWave": "RFC-370 A-T7 selected plugin roots and legacy callers",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:88fabd16ee334805427b"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/pluginGenerationGc.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/pluginGenerationGc.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/pluginGenerationGc.ts",
+      "to": "packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc",
+      "specifier": "@/modules/resource-catalog/composition/pluginGenerationGc",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "resource-catalog",
+      "why": "RFC-370 A2: the unchanged physical generation preflight and filesystem GC factory now belong to the Resource Catalog local adapter and are selected by its composition. The existing worker business rule and precise compatibility import/export remain until their callers receive the selected effect from bootstrap; no scanner or directory exception is added.",
+      "introducedByRFC": "RFC-370 A-T4/A-T6 local plugin effects",
+      "removeAfterWave": "RFC-370 A-T7 selected plugin roots and legacy callers",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:d2327486e327e612e4e0"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/pluginGenerationGc.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/composition/pluginGenerationGc.ts#$file"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/pluginGenerationGc.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/pluginInstaller.ts",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation",
+      "specifier": "@/modules/resource-catalog/infrastructure/local/filePluginInstallation",
+      "edgeKind": "type",
+      "syntax": "export",
+      "owner": "resource-catalog",
+      "why": "RFC-370 A2/A6: the unchanged installation and generation filesystem bodies now belong to the Resource Catalog local adapter. This exact service reexport preserves all existing installer classes, cache identity and callers until bootstrap-selected installation effects replace the legacy entry; no scanner or directory exception is added.",
+      "introducedByRFC": "RFC-370 A-T4/A-T6 local plugin effects",
+      "removeAfterWave": "RFC-370 A-T7 selected plugin roots and legacy callers",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:c3fe91e71f890d09e715",
+        "import:fc6bc8dd62abc9273190"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/pluginInstaller.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#InstallResult",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#PluginGenerationManifest"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/pluginInstaller.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/pluginInstaller.ts",
+      "to": "packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation",
+      "specifier": "@/modules/resource-catalog/infrastructure/local/filePluginInstallation",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "resource-catalog",
+      "why": "RFC-370 A2/A6: the unchanged installation and generation filesystem bodies now belong to the Resource Catalog local adapter. This exact service reexport preserves all existing installer classes, cache identity and callers until bootstrap-selected installation effects replace the legacy entry; no scanner or directory exception is added.",
+      "introducedByRFC": "RFC-370 A-T4/A-T6 local plugin effects",
+      "removeAfterWave": "RFC-370 A-T7 selected plugin roots and legacy callers",
+      "findingId": "G-01",
+      "canonicalImportEdgeIds": [
+        "import:0c5d5d0f22a0c6c2166c",
+        "import:1b6dd4362ccc74e3ccb8",
+        "import:27c53d76444b835237da",
+        "import:38400851762fb755ef93",
+        "import:402f826eab1cfaeb25d2",
+        "import:4f9d37c953ae473feb7d",
+        "import:5170043b84c360bdde93",
+        "import:5bc6da2901aecf8b0481",
+        "import:6e1acb7ece42ef5857db",
+        "import:7101761cdfaadf56c46c",
+        "import:89ab4e784f2fa6beecf6",
+        "import:917a9ae360ed9b3f4e0b",
+        "import:987289edacedc1bc30c4",
+        "import:a414f72ee95104f044b5",
+        "import:ad01bcba1e141f6eb492",
+        "import:e2bab2788cb13cdcdc09",
+        "import:e5b83c2f6c9aaceccbad"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/pluginInstaller.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#NpmUnavailableError",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#PLUGIN_GENERATION_MANIFEST",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#PluginFileNotFoundError",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#PluginInstallFailedError",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#PluginInstallTimeoutError",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#checkForUpdate",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#cleanupInstallGeneration",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#fileSpecToHostPath",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#garbageCollectPluginGenerations",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#inferSourceKind",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#installPlugin",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#plannedGenerationDir",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#probeNpmBinary",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#readGenerationManifestForCachedPath",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#resetNpmProbeCacheForTests",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#resolveNpmCommand",
+        "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/filePluginInstallation.ts#resolveNpmCommandForHost"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/pluginInstaller.ts"
       ]
     },
     {
@@ -6858,29 +7054,6 @@
         "owner:packages/backend/src/services/freshness.ts#pickFrameSourceRun"
       ],
       "canonicalFacadeIds": []
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/demoSeed.ts",
-      "specifier": "@/modules/system-operations/composition/installationSeedCompletion",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "system-operations",
-      "why": "RFC-370 H1：legacy seed wrapper 保持现有两种 provider 的启动入口，只有 SO composition 选择 standalone 文件完成标记；orchestrator 与所选安装经 public port 读取和记录完成事实。该 exact 兼容边随 A-T7 的 bootstrap 注入收口，不增加目录豁免。",
-      "introducedByRFC": "RFC-370 A-T2（installation completion seam）",
-      "removeAfterWave": "RFC-370 A-T7（root selection and legacy compatibility closeout）",
-      "findingId": "G-01",
-      "to": "packages/backend/src/modules/system-operations/composition/installationSeedCompletion",
-      "canonicalImportEdgeIds": [
-        "import:cc67a4e3852cc57ec1f7"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/demoSeed.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/system-operations/composition/installationSeedCompletion.ts#composeInstallationSeedCompletion"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/demoSeed.ts"
-      ]
     }
   ],
   "registeredFindings": [
@@ -8061,15 +8234,15 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:f17caace561f83431fe26b33bd92c5a67538aa7433122ecf72907c6f8bdd1478",
+    "sourceDigest": "sha256:be997784a30fa16d6a83f36d1fee8706c08a35ddb02ead3365450ce36779dd30",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "bbb545851a5dc4c5328ff005a82b196cdedf5d28",
-    "contentDigest": "sha256:0014f6aeb5bff0841a175413e0d467535f5ad4453a68b8b5d1a1b1e481a3fb58",
+    "currentSnapshotSha": "d185ebfe8332c9951e1ad6416a9a2447417b2931",
+    "contentDigest": "sha256:ffc67e46eb1217acfc6cf6aab161472aca1619060409c28db985e1dc8a0e3437",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

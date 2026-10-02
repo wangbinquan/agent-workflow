@@ -408,3 +408,11 @@ journaled repository preparation 七路径和员工 local 内容四路径各获�
 ### 2026-10-02 归档八路径与 CI 既有数量补正
 
 原归档7路径保持，RFC349源码键定位真实查询后扩为8路径有限 PASS（31c06684b6c2028f4604e6906c9bee7f4bed2663ffd505427412d7f0f2b7e116），原 SQL 排序判据/why/断言不变。共享 main 已承接 bbb545851 的 E2E lineage 诊断；CI 补正只纳入已提交 HEAD 的源码/治理 seed，48源码候选指纹保持并排除，原候选生成证据留待源发布前重生。仅按确切 CI 的既有数量17/基线16同步一项计数和一次性回执，其他正文/数值/规则/断言不动；有限功能门后单独发布并退役，正式 exact-SHA CI 与原 E2E 功能修复持续，无本机 AW test/typecheck/build/service，不关闭完整 A2/A-G/RFC。
+
+## 2026-10-02 RFC-370 八组48路径发布候选
+
+journaled preparation6、员工local4、插件安装6、generation GC3、附件异步完成5、终态 presence 真根10、提交预览 index6、归档内容8，共48个不同源码/回归路径；八组原有限功能 PASS 和完整指纹均保持，首门 findings 与所有历史 CI failure/cancelled 保留。按八个源码小提交、官方 scoped canonical/docs及五项已消费增长回执的后继退役发布，正式行为交本批 exact-SHA hosted CI。
+
+官方规则及语料算法逐字保持，只纳入已提交 HEAD 加48候选：entry1792→1797、background338→339、imports5627→5661、exception4991→5024、owner25671→25691；公共出口1045、TE零 value SCC保持。六项真实插件 R1 兼容记录完整沿用此前证据，owner resource-catalog、A-T7 selected roots/legacy callers退役；现有292项记录完整保持，不扩大目录或规则。五项增长按原协议一次登记，在匹配 canonical commit 后退役。
+
+归档 coordinator/legacy sweep 的原业务及SQL顺序、异步导出/manifest/move ACK、同 claim恢复和重试保持，RFC349仅定位真实查询源码；默认local位于独立包，真实root选择贯穿仍属A8。其他A1～A8、完整A-G、CS独立adapter及M0～M4继续，尚无AW-in-CS部署证据。仅目标格式/lint、源码/AST/JSON证明与官方scoped生成，无本机AW test/typecheck/build/service。下方所有并行输出与历史完整保留。

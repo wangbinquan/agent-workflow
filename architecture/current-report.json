@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 500,
-    "architectureExceptions": 4991,
-    "backgroundJobs": 338,
-    "crossContextImports": 5627,
+    "architectureExceptions": 5024,
+    "backgroundJobs": 339,
+    "crossContextImports": 5661,
     "facades": 295,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25671,
-    "mutationEntrypoints": 1792,
+    "moduleSymbolOwners": 25691,
+    "mutationEntrypoints": 1797,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 1045,
     "transactionExternalEffects": 261
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 500,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1967,
+    "backendProductionFiles": 1977,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 338,
+    "backgroundEntries": 339,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -49,7 +49,7 @@
     ],
     "directNativeIntervals": 22,
     "directNativeTimers": 76,
-    "inboundBoundaryEdges": 261,
+    "inboundBoundaryEdges": 267,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -66,7 +66,7 @@
       },
       {
         "context": "digital-employee",
-        "files": 40
+        "files": 42
       },
       {
         "context": "event-center",
@@ -98,7 +98,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 252
+        "files": 254
       },
       {
         "context": "run-observability",
@@ -110,7 +110,7 @@
       },
       {
         "context": "source-control",
-        "files": 59
+        "files": 62
       },
       {
         "context": "system-operations",
@@ -122,10 +122,10 @@
       },
       {
         "context": "task-execution",
-        "files": 340
+        "files": 343
       }
     ],
-    "moduleFiles": 1413,
+    "moduleFiles": 1423,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f17caace561f83431fe26b33bd92c5a67538aa7433122ecf72907c6f8bdd1478"
+  "sourceDigest": "sha256:be997784a30fa16d6a83f36d1fee8706c08a35ddb02ead3365450ce36779dd30"
 }

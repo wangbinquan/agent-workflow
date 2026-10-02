@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 951,
+    "consumers": 952,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
     "methods": 1132,
@@ -131189,7 +131189,8 @@
         "import:ae357e3d341462be2569",
         "import:d512037dba4c853fd0f8",
         "import:dd2849eb6c2fa387b771",
-        "import:e03451da52da660032b2"
+        "import:e03451da52da660032b2",
+        "import:e47796fe44953449bd40"
       ],
       "context": "source-control",
       "dataClass": "confidential",
@@ -131277,6 +131278,12 @@
           "edgeId": "import:e03451da52da660032b2",
           "file": "packages/backend/src/services/task.ts",
           "ownerEntryId": "owner:packages/backend/src/services/task.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:e47796fe44953449bd40",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -170501,7 +170508,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f17caace561f83431fe26b33bd92c5a67538aa7433122ecf72907c6f8bdd1478",
+  "sourceDigest": "sha256:be997784a30fa16d6a83f36d1fee8706c08a35ddb02ead3365450ce36779dd30",
   "targetContexts": [
     "collaboration",
     "development-automation",
