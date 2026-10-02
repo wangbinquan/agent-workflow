@@ -144,7 +144,7 @@ const DAEMON_ENTRY_FILES: readonly string[] = [
  * 记账连同 `if` 一起删掉，账本改成空表。
  *
  * **2026-09-15（RFC-359 AC-10 §5fd）：就按这条正解做完了，账本已空。**
- * `cli/start.ts` 的 `PRE_OPEN_STAGED_RESTORE` 是那张按 `DatabaseProvider` 穷举的表
+ * SO application/prepareDatabasePreOpenRecovery.ts 的 `PRE_OPEN_STAGED_RESTORE` 是那张按 `DatabaseProvider` 穷举的表
  * （`satisfies Record<DatabaseProvider, …>`），SQLite 适配器跑 `applyPendingRestoreIfAny`，
  * 外部服务器适配器恒为「什么都没应用」；中立序列在打开库之前调用它一次。
  * `if` 连同这条记账一起删除。

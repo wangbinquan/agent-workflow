@@ -1,3 +1,13 @@
+import type { DatabasePreOpenRecoveryPort } from './application/ports/databasePreOpenRecovery'
+import {
+  prepareDatabasePreOpenRecovery as prepareSelectedDatabasePreOpenRecovery,
+  type PreparedDatabasePreOpenRecovery,
+} from './application/prepareDatabasePreOpenRecovery'
+import { createFileDatabasePreOpenRecovery } from './infrastructure/local/fileDatabasePreOpenRecovery'
+import type { PostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationSequence'
+
+export type DaemonDatabasePreOpenRecoveryPort =
+  DatabasePreOpenRecoveryPort<PostgresqlMigrationHistory>
 import type { ApplicationConfigurationQueries } from './public/queries'
 // RFC-370: bootstrap-only settings composition; the application has no paths.
 import { createApplicationConfiguration } from './application/applicationConfiguration'
@@ -94,6 +104,41 @@ export {
 } from './infrastructure/databaseMigrationDaemonAdmission'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
 import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-catalog/composition/skillVersionCommit'
+
+/** Pre-open effects are selected before either history or generation is read. */
+export function prepareDatabasePreOpenRecovery<THistory>(input: {
+  readonly contract: LogicalSchemaContract
+  readonly migrationsFolder: string
+  readonly recovery: DatabasePreOpenRecoveryPort<THistory>
+}): Promise<PreparedDatabasePreOpenRecovery<THistory>>
+export function prepareDatabasePreOpenRecovery(input: {
+  readonly contract: LogicalSchemaContract
+  readonly migrationsFolder: string
+  readonly recovery?: DaemonDatabasePreOpenRecoveryPort
+}): Promise<PreparedDatabasePreOpenRecovery<PostgresqlMigrationHistory>>
+export async function prepareDatabasePreOpenRecovery<THistory>(input: {
+  readonly contract: LogicalSchemaContract
+  readonly migrationsFolder: string
+  readonly recovery?: DatabasePreOpenRecoveryPort<THistory>
+}): Promise<
+  | PreparedDatabasePreOpenRecovery<THistory>
+  | PreparedDatabasePreOpenRecovery<PostgresqlMigrationHistory>
+> {
+  const recovery = input.recovery
+  if (recovery !== undefined) {
+    return await prepareSelectedDatabasePreOpenRecovery({
+      contract: input.contract,
+      effects: recovery,
+    })
+  }
+  return await prepareSelectedDatabasePreOpenRecovery({
+    contract: input.contract,
+    effects: createFileDatabasePreOpenRecovery({
+      migrationsFolder: input.migrationsFolder,
+      postOpenRecovery: composeSqlitePostRestoreRecovery,
+    }),
+  })
+}
 
 /** Boot/manual-command preparation; the returned provider owns the prepared mechanism. */
 export interface SelectedDatabaseBootPreparation<TPrepared> {

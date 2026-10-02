@@ -134,11 +134,10 @@ import { finishClaimedWebhookWorkspacePrune } from '@/services/gc'
 import { composeWorkspaceMaintenanceCommand } from '@/modules/source-control/composition/workspaceMaintenance'
 import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/expandService'
 import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
-import { applyPendingRestoreIfAny } from '@/services/pendingRestore'
 import {
-  composeSqlitePostRestoreRecovery,
+  type DaemonDatabasePreOpenRecoveryPort,
+  prepareDatabasePreOpenRecovery,
   prepareDatabaseProviderForBoot,
-  readDatabaseSchemaUpgradeGeneration,
 } from '@/modules/system-operations/composition'
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
@@ -276,7 +275,6 @@ import {
   type ResolvedDatabaseProviderRuntime,
 } from '@/platform/persistence/databaseProviderRuntime'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
-import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { composeDaemonRealtimePolicy } from './daemonRealtimePolicy'
 import { composeResourceCatalogFor } from '@/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/skillCatalogBoot'
@@ -364,6 +362,7 @@ import { composeIntentWorkflowGraphValidation } from '@/modules/intent/compositi
 export interface StartOptions {
   port?: number
   host?: string
+  databasePreOpenRecovery?: DaemonDatabasePreOpenRecoveryPort
 }
 
 interface DaemonProviderHttpAdmission {
@@ -1058,42 +1057,6 @@ type DaemonProviderSessionComposer = (
   input: DaemonProviderSessionComposeInput,
 ) => Promise<ComposedDaemonProviderSession>
 
-/**
- * 开机时的**预打开恢复**：把暂存的 restore 目录落到位。这一步必须跑在库被打开之前，
- * 所以它不能等到会话装配（`composeDaemonProviderSession`）之后再做。
- *
- * RFC-359 AC-10：原来写成
- * `databaseProviderTraits(bootGenerationPayload.provider).storage === 'embedded-file'`。
- * `storage` 比品牌名好一档，但它仍是**两值枚举**——同一张真值表的另一种拼法，第三个 provider
- * 照样只能落进其中一边。而这一段又不能像 `offlineCompaction` 那样「把答案声明进 traits」：
- * 答案不是一句话，是一段 SQLite 恢复机械，traits 表里放的是答案不是机械。
- * 所以走另一条既有处方——**按 provider 查表**，与下面的会话装配表同一个形状：
- * 表按 `DatabaseProvider` 穷举，少一个 provider 就编译不过。
- */
-const PRE_OPEN_STAGED_RESTORE = {
-  sqlite: async (input: {
-    readonly appHome: string
-    readonly dbPath: string
-    readonly migrationsFolder: string
-  }): Promise<boolean> =>
-    await applyPendingRestoreIfAny({
-      appHome: input.appHome,
-      dbPath: input.dbPath,
-      migrationsFolder: input.migrationsFolder,
-      postOpenRecovery: composeSqlitePostRestoreRecovery(),
-    }),
-  // 外部服务器的存储在服务端：恢复走它自己的目标路径，没有「在库文件旁边暂存一个目录」
-  // 这回事，所以这一步恒为「什么都没应用」——与原来「不进这个分支」逐字同义。
-  postgresql: async (): Promise<boolean> => false,
-} satisfies Record<
-  DatabaseProvider,
-  (input: {
-    readonly appHome: string
-    readonly dbPath: string
-    readonly migrationsFolder: string
-  }) => Promise<boolean>
->
-
 /** 按 provider 查表；表按 `DatabaseProvider` 穷举，少一个 provider 就编译不过。 */
 function composeDaemonProviderSession(
   input: DaemonProviderSessionComposeInput,
@@ -1447,25 +1410,18 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     },
   })
   const logicalSchemaContract = buildLogicalSchemaContract()
-  const schemaHistory = await loadPostgresqlMigrationHistory()
-  const bootGeneration = readDatabaseSchemaUpgradeGeneration({
-    generationPointerPath: Paths.databaseGenerationPointer,
-    operationsRoot: Paths.databaseMigrationsDir,
+  const preOpenRecovery = await prepareDatabasePreOpenRecovery({
     contract: logicalSchemaContract,
-    history: schemaHistory,
+    migrationsFolder,
+    recovery: opts.databasePreOpenRecovery,
   })
-  const bootGenerationPayload =
-    bootGeneration.kind === 'current' ? bootGeneration.generation.payload : bootGeneration.payload
+  const schemaHistory = preOpenRecovery.history
   // A failure inside applyPendingRestoreIfAny self-heals (impl-gate P1-1): the
   // staged dir is quarantined and the boot continues on the untouched DB. The
   // catch below only guards truly unexpected filesystem-level throws.
   {
     try {
-      const applied = await PRE_OPEN_STAGED_RESTORE[bootGenerationPayload.provider]({
-        appHome: Paths.root,
-        dbPath: Paths.db,
-        migrationsFolder,
-      })
+      const applied = await preOpenRecovery.applyStagedRestore()
       if (applied) log.warn('staged restore applied on boot', { db: Paths.db })
     } catch (err) {
       lock.release()
