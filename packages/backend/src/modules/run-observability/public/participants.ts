@@ -2,6 +2,9 @@ import type {
   AcceptObservationInvocation,
   AcceptedObservationInvocation,
   ObservationCapturedUsage,
+  ObservationSpanOwnerProof,
+  ObservationSpanSourceInput,
+  ObservationSpanSourcePage,
 } from '@agent-workflow/shared'
 
 /** Execution supplies frozen facts; bootstrap selects the accounting authority. */
@@ -14,10 +17,22 @@ export interface ObservationInvocationParticipant {
   accept(input: ObservationInvocationStart): Promise<AcceptedObservationInvocation>
   /** Bounded projection of committed evidence; failures leave the durable source pending. */
   reconcile?(nodeRunId?: string): Promise<number>
+  /** Frozen creation proofs only; missing capability is explicit partial coverage. */
+  spanOwners?(input: {
+    readonly invocationId: string
+    readonly sourceNamespace: string
+    readonly rootSessionId: string
+    readonly limit: number
+  }): Promise<{
+    readonly owners: readonly ObservationSpanOwnerProof[]
+    readonly complete: boolean
+    readonly issues: readonly string[]
+  }>
 }
 
 /** The execution owner supplies numeric-only committed facts and delivery acknowledgements. */
 export interface ObservationUsageSource {
+  spanSources?(input: ObservationSpanSourceInput): Promise<ObservationSpanSourcePage>
   pending(input: {
     readonly limit: number
     readonly nodeRunId?: string

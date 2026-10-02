@@ -86,6 +86,10 @@ import type {
   RuntimeObservationIdentity,
 } from '@/modules/runtime-management/public/types'
 import type { RuntimeExecutionQueries } from '@/modules/runtime-management/public/queries'
+import type {
+  NativeSpanCapture,
+  NativeSpanRootBinding,
+} from '@/modules/runtime-management/public/participants'
 import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
 import type {
@@ -1358,6 +1362,40 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       resumeSessionId: effectiveResumeSessionId,
       nextRevision: captureUsage.nextRevision,
     })
+    const preparedSpans = driver.prepareSpanCapture?.({ env: plan.env, invocationId })
+    let nativeSpanCapture: NativeSpanCapture | undefined
+    let observationSpawnedAt: number | null = null
+    const observationRoots: NativeSpanRootBinding[] = []
+    const bindObservationRoot = (rootSessionId: string) => {
+      if (!nativeSpanCapture) return
+      const epoch = nativeSessionEpochIds.length - 1
+      const binding: NativeSpanRootBinding = {
+        rootSessionId,
+        epoch,
+        mode:
+          epoch === 0 ? (effectiveResumeSessionId === rootSessionId ? 'resume' : 'fresh') : 'reset',
+        sourceNamespace: nativeSpanCapture.sourceNamespace,
+        originalRootAccepted: true,
+        spawnedAt: observationSpawnedAt,
+      }
+      observationRoots.push(binding)
+      nativeSpanCapture.bindRoot(binding)
+    }
+    const flushSpanFacts = async () => {
+      const observations = nativeSpanCapture?.flush(Date.now()) ?? []
+      if (!observations.length) return
+      try {
+        await persistRunnerWrite('node-run-observation/spans', () =>
+          opts.persistence.nodeExecution.appendEvents({
+            nodeRunId: opts.nodeRunId,
+            events: [],
+            observations,
+          }),
+        )
+      } catch {
+        log.warn('node-run-observation-span-write-failed', { nodeRunId: opts.nodeRunId })
+      }
+    }
     /** 抛错前把已缓冲的取证事件写下去——它们恰恰在失败时最重要。冲刷本身再失败也不能
      *  盖住原始错误（那才是这次运行失败的原因）。 */
     const flushEventsBeforeThrow = async (): Promise<void> => {
@@ -1512,6 +1550,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
                 throw new Error('runtime returned a different native session id')
               }
               nativeSessionEpochIds.push(nativeSessionId)
+              bindObservationRoot(nativeSessionId)
             } else if (sessionId !== ev.sessionId) {
               if (pendingConversationReset === undefined) {
                 throw new Error('runtime changed native session id without a conversation reset')
@@ -1536,6 +1575,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
               runtimeLeaseInvalidatedByReset = false
               sessionId = nextSessionId
               nativeSessionEpochIds.push(nextSessionId)
+              bindObservationRoot(nextSessionId)
               pendingConversationReset = undefined
             }
           }
@@ -1621,6 +1661,15 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // stdout 行都解析不出它，而 `node_run_events.kind` 的 enum 里也没有它。
         // 读进局部常量是必要的：`kind` 是可变属性，窄化跨不进下面的延迟回调。
         const persistedKind: PersistedEventKind = ev.kind === 'startup_inventory' ? 'text' : ev.kind
+        if (nativeSpanCapture && preparedSpans && sessionId) {
+          try {
+            const raw: unknown = JSON.parse(ev.rawLine)
+            for (const span of preparedSpans.normalize(raw, sessionId))
+              nativeSpanCapture.observe(span, sessionId, nativeSessionEpochIds.length - 1)
+          } catch {
+            log.warn('node-run-observation-span-normalize-failed', { nodeRunId: opts.nodeRunId })
+          }
+        }
         const observation = localObservationAccepted
           ? captureUsage(ev.rawLine, evtSessionId, Date.now())
           : undefined
@@ -1765,6 +1814,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           agentId: opts.agent.id,
           agentRevision: opts.agent.updatedAt,
           purpose: opts.observationPurpose ?? 'task',
+          ...(preparedSpans && opts.observationInvocations.spanOwners
+            ? {
+                spanCaptureContract: preparedSpans.contract,
+                spanCaptureSource: preparedSpans.sourceNamespace,
+              }
+            : {}),
           ...(nativeUsageCapture
             ? {
                 nativeCaptureContract: nativeUsageCapture.contract,
@@ -1782,6 +1837,28 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           } catch {
             log.warn('node-run-observation-baseline-failed', { nodeRunId: opts.nodeRunId })
           }
+          if (
+            preparedSpans &&
+            accepted.spanCaptureContract === preparedSpans.contract &&
+            accepted.spanCaptureSource === preparedSpans.sourceNamespace
+          ) {
+            try {
+              nativeSpanCapture = preparedSpans.create({
+                accepted,
+                ...(effectiveResumeSessionId ? { resumeSessionId: effectiveResumeSessionId } : {}),
+                lookupOwners: (query) =>
+                  opts.observationInvocations.spanOwners?.({ invocationId, ...query }) ??
+                  Promise.resolve({
+                    owners: [],
+                    complete: false,
+                    issues: ['native-span-owner-source-unavailable'],
+                  }),
+              })
+              await nativeSpanCapture.begin()
+            } catch {
+              log.warn('node-run-observation-span-baseline-failed', { nodeRunId: opts.nodeRunId })
+            }
+          }
         }
       },
       requireSpawnReceipt: true,
@@ -1791,6 +1868,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         spawnBinaryPath: string
         launchNonce?: string
       }) => {
+        observationSpawnedAt = receipt.spawnedAt
         // RFC-108 T9 (AR-14): persist the spawned binary path (cmd[0]) alongside
         // pid so the stale-process reaper can match a live pid against THIS
         // specific binary, not a fuzzy regex.
@@ -1813,7 +1891,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           await onStdoutLine(line)
         },
         // RFC-314 D3：一个 chunk 的行投递完 ⇒ 合并成一条多行 INSERT 落库。
-        onStdoutChunkEnd: () => stdoutEvents.flush(),
+        onStdoutChunkEnd: async () => {
+          await stdoutEvents.flush()
+          await flushSpanFacts()
+        },
         onStderrChunkEnd: () => stderrEvents.flush(),
         // impl-gate P2-B: the OLD runner applied settlePump to BOTH streams —
         // a stderr-persist failure was also a stream failure. persistStderrLine
@@ -1829,6 +1910,27 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // 之前。
     await stdoutEvents.flush()
     await stderrEvents.flush()
+    if (localObservationAccepted && nativeSpanCapture && runResult.outcome !== 'unreaped') {
+      try {
+        const observations = await nativeSpanCapture.finish(
+          observationRoots,
+          Date.now(),
+          runResult.drainTimedOut || runResult.pumpError || nativeSessionIdentityInvalidObserved
+            ? ['native-span-output-incomplete']
+            : [],
+        )
+        if (observations.length)
+          await persistRunnerWrite('node-run-observation/spans-final', () =>
+            opts.persistence.nodeExecution.appendEvents({
+              nodeRunId: opts.nodeRunId,
+              events: [],
+              observations,
+            }),
+          )
+      } catch {
+        log.warn('node-run-observation-span-final-failed', { nodeRunId: opts.nodeRunId })
+      }
+    }
     if (localObservationAccepted && runResult.outcome !== 'unreaped') {
       try {
         const observedAt = Date.now()

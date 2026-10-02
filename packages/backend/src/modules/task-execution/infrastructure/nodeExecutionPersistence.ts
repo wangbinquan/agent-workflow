@@ -15,7 +15,7 @@ import { engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   MERGE_STATES,
   RerunCauseSchema,
-  ObservationCapturedUsageSchema,
+  parseObservationCapturedUsage,
   type MergeStateOrNull,
 } from '@agent-workflow/shared'
 import type {
@@ -285,7 +285,7 @@ export class DrizzleNodeExecutionPersistence implements NodeExecutionPersistence
       const sources = observations.map((observation) => ({
         taskId,
         nodeRunId: input.nodeRunId,
-        evidenceJson: JSON.stringify(ObservationCapturedUsageSchema.parse(observation)),
+        evidenceJson: JSON.stringify(parseObservationCapturedUsage(observation)),
       }))
       await insertInBatches(tx, taskExecutionObservationSources, sources, (batch) =>
         tx

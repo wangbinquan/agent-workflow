@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1817,
+    "entries": 1823,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -21099,6 +21099,30 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/application/spanBaselines.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/spanBaselines.ts#createSpanOwnerLookup",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/spanBaselines.ts#createSpanOwnerLookup",
+      "symbol": "createSpanOwnerLookup",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
@@ -21115,6 +21139,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/taskObservations.ts#createTaskObservationQueries",
       "symbol": "createTaskObservationQueries",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/application/taskSpans.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/application/taskSpans.ts#createTaskSpanQuery",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/taskSpans.ts#createTaskSpanQuery",
+      "symbol": "createTaskSpanQuery",
       "targetContext": "run-observability",
       "targetLayer": "application"
     },
@@ -21320,6 +21369,29 @@
       "symbol": "createUsageLedgerStore",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts#createNativeSpanCapture",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts#createNativeSpanCapture",
+      "symbol": "createNativeSpanCapture",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
     },
     {
       "controls": {
@@ -22017,6 +22089,55 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeSelection.ts#createRuntimeSelectionParticipantInTx",
       "symbol": "createRuntimeSelectionParticipantInTx",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/composition/nativeSpanCapture.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/composition/nativeSpanCapture.ts#createOpencodeNativeSpanCapture",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/nativeSpanCapture.ts#createOpencodeNativeSpanCapture",
+      "symbol": "createOpencodeNativeSpanCapture",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/composition/nativeSpanCapture.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/composition/nativeSpanCapture.ts#createRuntimeStreamSpanCapture",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/nativeSpanCapture.ts#createRuntimeStreamSpanCapture",
+      "symbol": "createRuntimeStreamSpanCapture",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -29599,6 +29720,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts#createNodeRunMintParticipantInTx",
       "symbol": "createNodeRunMintParticipantInTx",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/observationSpanSources.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/observationSpanSources.ts#createObservationSpanSources",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/observationSpanSources.ts#createObservationSpanSources",
+      "symbol": "createObservationSpanSources",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -43431,7 +43575,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:98461efc25aafde03970cd25c3067dc9a41bb27a946a67b253ea7ffc83560356",
+  "sourceDigest": "sha256:0c055d81bc6a485593c8bc3d13c8451f22b6ed211b692efaaf980f7cabf81bd6",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

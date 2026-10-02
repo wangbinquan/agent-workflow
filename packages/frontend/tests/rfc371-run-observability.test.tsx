@@ -212,6 +212,19 @@ function fixture(
     if (state.error)
       return Response.json({ error: { code: 'unavailable', message: 'offline' } }, { status: 503 })
     if (url.pathname === '/api/observability/tasks/task-1') return Response.json(state.detail)
+    if (url.pathname === '/api/observability/tasks/task-1/spans')
+      return Response.json({
+        taskId: 'task-1',
+        nodeRunId: url.searchParams.get('nodeRunId'),
+        invocationId: null,
+        spans: [],
+        captures: [],
+        priorRepairCount: 0,
+        partial: true,
+        reasons: ['span-capture-unsupported'],
+        watermark: 0,
+        nextCursor: null,
+      })
     if (url.pathname === '/api/observability/overview') return Response.json(state.overview)
     if (url.pathname !== '/api/observability/tasks')
       throw new Error('Unexpected API: ' + url.pathname)

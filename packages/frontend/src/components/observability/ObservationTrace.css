@@ -1,0 +1,25 @@
+.observation-trace__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.observation-trace__header h3 {
+  margin: 0;
+}
+.observation-trace__details {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+  gap: var(--space-3);
+}
+.observation-trace__details div {
+  min-width: 0;
+}
+.observation-trace__details dt {
+  color: var(--muted);
+}
+.observation-trace__details dd {
+  margin: var(--space-1) 0 0;
+  overflow-wrap: anywhere;
+}

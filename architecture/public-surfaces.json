@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 960,
+    "consumers": 969,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1133,
+    "methods": 1144,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21533,
-    "symbols": 1047
+    "recursiveFields": 21702,
+    "symbols": 1053
   },
   "entries": [
     {
@@ -118484,13 +118484,63 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:reconcile.$return",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7270198332e68bb8ccf"
+          ],
+          "fieldPath": "$method:spanOwners.$parameter:input.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7270198332e68bb8ccf"
+          ],
+          "fieldPath": "$method:spanOwners.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7270198332e68bb8ccf"
+          ],
+          "fieldPath": "$method:spanOwners.$parameter:input.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7270198332e68bb8ccf"
+          ],
+          "fieldPath": "$method:spanOwners.$parameter:input.sourceNamespace",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7270198332e68bb8ccf"
+          ],
+          "fieldPath": "$method:spanOwners.$return.complete",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7270198332e68bb8ccf"
+          ],
+          "fieldPath": "$method:spanOwners.$return.issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7270198332e68bb8ccf"
+          ],
+          "fieldPath": "$method:spanOwners.$return.owners",
+          "type": "readonly ObservationSpanOwnerProof[]"
         }
       ],
       "file": "packages/backend/src/modules/run-observability/public/participants.ts",
       "id": "public:run-observability:participants:ObservationInvocationParticipant",
       "members": [
         "accept",
-        "reconcile"
+        "reconcile",
+        "spanOwners"
       ],
       "methods": [
         {
@@ -118504,6 +118554,13 @@
           "consumerEdgeIds": [],
           "name": "reconcile",
           "signatureDigest": "sha256:57b2bffa5fdbe8e6f5e37849477ced82da80914122b563577ac59ef42d0b7b14"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a7270198332e68bb8ccf"
+          ],
+          "name": "spanOwners",
+          "signatureDigest": "sha256:50c14ffa4d04f4695693f284b22e305202ef40c8878c32c289e80723fd7f2130"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationInvocationParticipant",
@@ -118530,7 +118587,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:310205ee8e3f0a97e526d7c4f6c4955017741fc24bf42384ebaba453a717d185",
+      "signatureDigest": "sha256:bc0458b1f42949f77bf21ab1173516085a124b72bdcbcd1aa70d40c5cd6b108e",
       "status": "target-context-current-surface",
       "symbol": "ObservationInvocationParticipant",
       "transaction": "caller-tx",
@@ -118636,13 +118693,93 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:pending.$return",
           "type": "readonly {\n      readonly id: number\n      readonly taskId: string\n      readonly nodeRunId: string\n      readonly evidence: ObservationCapturedUsage\n    }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.after.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.after.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.carrierInvocationIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "fieldPath": "$method:spanSources.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.scopeHash",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.sourceNamespace.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.sourceNamespace.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "fieldPath": "$method:spanSources.$parameter:input.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.nextCursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.records",
+          "type": "readonly ObservationSpanSourceRecord[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.scannedSources",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.truncated",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.watermark",
+          "type": "number"
         }
       ],
       "file": "packages/backend/src/modules/run-observability/public/participants.ts",
       "id": "public:run-observability:participants:ObservationUsageSource",
       "members": [
         "acknowledge",
-        "pending"
+        "pending",
+        "spanSources"
       ],
       "methods": [
         {
@@ -118658,6 +118795,13 @@
           ],
           "name": "pending",
           "signatureDigest": "sha256:c9bc98e5fb3c53203dc9a5e4cc7fff10315936c0f7f8ea73c3ae50cfd06017a1"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "name": "spanSources",
+          "signatureDigest": "sha256:ece4c4b618103219009bfafbe7e528d4ee174af2f758d3682e704b87b478b2e5"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationUsageSource",
@@ -118672,7 +118816,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:4d7271cab5c5ddcd8d5a40026090db8b208e29c8a252c0b9eea15b2dc6bd9980",
+      "signatureDigest": "sha256:e2802a1b8d857f20f12a8d4ade6af3354a35868f3ccb2d0fede135ce7eae58bd",
       "status": "target-context-current-surface",
       "symbol": "ObservationUsageSource",
       "transaction": "caller-tx",
@@ -118684,8 +118828,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 169,
-        "maxUnionVariants": 58
+        "maxTransitiveLeafFields": 205,
+        "maxUnionVariants": 76
       },
       "consumerEdgeIds": [
         "import:44a2cc15a17a1d4359b4",
@@ -119614,6 +119758,196 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:overview.$return.unresolvedTasks",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.authorityRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.patId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.permissions[]",
+          "type": "(typeof PERMISSIONS)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.purpose",
+          "type": "z.infer<typeof PatPurposeSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.source.$variant:0",
+          "type": "'session'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.source.$variant:1",
+          "type": "'pat'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.source.$variant:2",
+          "type": "'daemon'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:spans.$parameter:actor.user.displayName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:spans.$parameter:actor.user.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.user.role.$variant:0",
+          "type": "'admin'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.user.role.$variant:1",
+          "type": "'user'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.user.role.$variant:2",
+          "type": "'manager'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.user.role.$variant:3",
+          "type": "'guest'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.user.status.$variant:0",
+          "type": "'active'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.user.status.$variant:1",
+          "type": "'disabled'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:actor.user.status.$variant:2",
+          "type": "'invited'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:spans.$parameter:actor.user.username",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:query.after.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:query.after.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:query.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:query.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:query.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$parameter:taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$return.$variant:0.captures",
+          "type": "readonly {\n    readonly invocationId: string\n    readonly capture: ObservationSpanCapture\n  }[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$return.$variant:0.invocationId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$return.$variant:0.invocationId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$return.$variant:0.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$return.$variant:0.nextCursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$return.$variant:0.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$return.$variant:0.partial",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$return.$variant:0.priorRepairCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$return.$variant:0.reasons",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$return.$variant:0.spans",
+          "type": "readonly ObservationSpanDetail[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:44a2cc15a17a1d4359b4",
+            "import:fb61bc2532c019579cbd"
+          ],
+          "fieldPath": "$method:spans.$return.$variant:0.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$return.$variant:0.watermark",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spans.$return.$variant:1",
+          "type": "null"
         }
       ],
       "file": "packages/backend/src/modules/run-observability/public/queries.ts",
@@ -119621,7 +119955,8 @@
       "members": [
         "detail",
         "list",
-        "overview"
+        "overview",
+        "spans"
       ],
       "methods": [
         {
@@ -119645,6 +119980,11 @@
           ],
           "name": "overview",
           "signatureDigest": "sha256:91f81feeb8b244adf8fe8b2419fb682da8d08338c272a0eacf698ff4ef5994e7"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "spans",
+          "signatureDigest": "sha256:d5c7258fd50d43c73e10d03ebe46e02547fab0e9fa08c901e1e227a631803aaa"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/queries.ts#ObservationTaskQueries",
@@ -119665,7 +120005,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:c58b9b6f16a39af2c0741da532e44077496abaad0c4b02ead1220d9c8a35efcb",
+      "signatureDigest": "sha256:04101611d574016db96d2101bbdb56e29ca4afdee8324c1ed974c449ada6c2e1",
       "status": "target-context-current-surface",
       "symbol": "ObservationTaskQueries",
       "transaction": "none",
@@ -121039,6 +121379,110 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:645c10c4b96781acd29e"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.accepted",
+          "type": "z.infer<typeof AcceptedObservationInvocationSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:645c10c4b96781acd29e"
+          ],
+          "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:645c10c4b96781acd29e"
+          ],
+          "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.sourceNamespace",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.lookupOwners.$return.complete",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.lookupOwners.$return.issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.lookupOwners.$return.owners",
+          "type": "readonly ObservationSpanOwnerProof[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.path.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.path.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:645c10c4b96781acd29e"
+          ],
+          "fieldPath": "$call.$parameter:input.resumeSessionId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:createOpencodeNativeSpanCapture",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:83dd0a604bef1853002b41be2f6b18aab5787bff541808f0b1ce7409c4165080"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:645c10c4b96781acd29e",
+          "file": "packages/backend/src/services/runtime/opencode/driver.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/driver.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:e51322cfd46eb3309c57dedde83f7e1557609ec6063a2009c4e3499f6f71c17e",
+      "status": "target-context-current-surface",
+      "symbol": "createOpencodeNativeSpanCapture",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:e9392ed19fff78dda4f7"
       ],
       "context": "runtime-management",
@@ -121136,6 +121580,109 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:c1a7ee36995d7a0a0261"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.accepted",
+          "type": "z.infer<typeof AcceptedObservationInvocationSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c1a7ee36995d7a0a0261"
+          ],
+          "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c1a7ee36995d7a0a0261"
+          ],
+          "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c1a7ee36995d7a0a0261"
+          ],
+          "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.sourceNamespace",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.lookupOwners.$return.complete",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.lookupOwners.$return.issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:input.lookupOwners.$return.owners",
+          "type": "readonly ObservationSpanOwnerProof[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c1a7ee36995d7a0a0261"
+          ],
+          "fieldPath": "$call.$parameter:input.resumeSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c1a7ee36995d7a0a0261"
+          ],
+          "fieldPath": "$call.$parameter:input.sourceNamespace",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:createRuntimeStreamSpanCapture",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:737a6118873769e6795421e95f9db07787e4570c290fbb2f7070561dfa7b8720"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:c1a7ee36995d7a0a0261",
+          "file": "packages/backend/src/services/runtime/claudeCode/driver.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/driver.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:40ea5a815c2751069d132459dc0e19151e109a3a1bd2fd00b94fc4da3f7e5f28",
+      "status": "target-context-current-surface",
+      "symbol": "createRuntimeStreamSpanCapture",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:ac46b2eb947020756815"
       ],
       "context": "runtime-management",
@@ -121170,6 +121717,684 @@
       "signatureDigest": "sha256:5cb89c49b734dde7356ec002fc513c2cca2e5a751eb60ba2f69567edc8b429f8",
       "status": "target-context-current-surface",
       "symbol": "FrozenRuntimeRef",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:3c42cbe78d4b7c2b99a8",
+        "import:3fbaf72709184ea25ffa",
+        "import:fcfddd6e072c42be4bba"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:3c42cbe78d4b7c2b99a8",
+            "import:fcfddd6e072c42be4bba"
+          ],
+          "fieldPath": "ancestors",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3c42cbe78d4b7c2b99a8",
+            "import:fcfddd6e072c42be4bba"
+          ],
+          "fieldPath": "callId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:fcfddd6e072c42be4bba"
+          ],
+          "fieldPath": "issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3c42cbe78d4b7c2b99a8",
+            "import:fcfddd6e072c42be4bba"
+          ],
+          "fieldPath": "kind",
+          "type": "ObservationSpanScope['kind']"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3c42cbe78d4b7c2b99a8",
+            "import:fcfddd6e072c42be4bba"
+          ],
+          "fieldPath": "label",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "measurementRecordId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "measurementRecordId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3c42cbe78d4b7c2b99a8",
+            "import:fcfddd6e072c42be4bba"
+          ],
+          "fieldPath": "model.$variant:0.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:0.provider.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:0.provider.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "origin.$variant:0",
+          "type": "'creation'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "origin.$variant:1",
+          "type": "'completion'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "parentCallId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "parentCallId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "parentSessionId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "parentSessionId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3c42cbe78d4b7c2b99a8",
+            "import:fcfddd6e072c42be4bba"
+          ],
+          "fieldPath": "sessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3c42cbe78d4b7c2b99a8",
+            "import:fcfddd6e072c42be4bba"
+          ],
+          "fieldPath": "state",
+          "type": "z.infer<typeof ObservationSpanStateSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:NativeSpan",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:3c42cbe78d4b7c2b99a8",
+          "file": "packages/backend/src/services/runtime/claudeCode/spanFacts.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/spanFacts.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:3fbaf72709184ea25ffa",
+          "file": "packages/backend/src/services/runtime/spanCapture.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/spanCapture.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:fcfddd6e072c42be4bba",
+          "file": "packages/backend/src/services/runtime/opencode/spanFacts.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/spanFacts.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:participants:NativeSpanCapture"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:3b16af7089b2b87ab454c33974a8f9b9d4a0f2d0a0636e30acfb32fc12495eeb",
+      "status": "target-context-current-surface",
+      "symbol": "NativeSpan",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 41,
+        "maxUnionVariants": 17
+      },
+      "consumerEdgeIds": [
+        "import:67576bc58043c5f2d0af",
+        "import:c8c3946c2415ba7280d7"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:begin.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "fieldPath": "$method:bindRoot.$parameter:binding.epoch",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bindRoot.$parameter:binding.mode.$variant:0",
+          "type": "'fresh'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bindRoot.$parameter:binding.mode.$variant:1",
+          "type": "'resume'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bindRoot.$parameter:binding.mode.$variant:2",
+          "type": "'reset'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "fieldPath": "$method:bindRoot.$parameter:binding.originalRootAccepted",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af",
+            "import:c8c3946c2415ba7280d7"
+          ],
+          "fieldPath": "$method:bindRoot.$parameter:binding.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af",
+            "import:c8c3946c2415ba7280d7"
+          ],
+          "fieldPath": "$method:bindRoot.$parameter:binding.sourceNamespace",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bindRoot.$parameter:binding.spawnedAt.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bindRoot.$parameter:binding.spawnedAt.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bindRoot.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:finish.$parameter:capturedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:finish.$parameter:issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:finish.$parameter:roots",
+          "type": "readonly NativeSpanRootBinding[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:finish.$return[]",
+          "type": "z.infer<typeof ObservationCapturedUsageSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:flush.$parameter:capturedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:flush.$return[]",
+          "type": "z.infer<typeof ObservationCapturedUsageSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:epoch",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.ancestors",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.callId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "fieldPath": "$method:observe.$parameter:span.issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "fieldPath": "$method:observe.$parameter:span.kind",
+          "type": "ObservationSpanScope['kind']"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "fieldPath": "$method:observe.$parameter:span.label",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.measurementRecordId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.measurementRecordId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "fieldPath": "$method:observe.$parameter:span.model.$variant:0.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.model.$variant:0.provider.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.model.$variant:0.provider.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.origin.$variant:0",
+          "type": "'creation'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.origin.$variant:1",
+          "type": "'completion'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.parentCallId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.parentCallId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.parentSessionId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$parameter:span.parentSessionId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "fieldPath": "$method:observe.$parameter:span.sessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "fieldPath": "$method:observe.$parameter:span.state",
+          "type": "z.infer<typeof ObservationSpanStateSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:observe.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af",
+            "import:c8c3946c2415ba7280d7"
+          ],
+          "fieldPath": "contract",
+          "type": "'runtime-span-facts-v1'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af",
+            "import:c8c3946c2415ba7280d7"
+          ],
+          "fieldPath": "sourceNamespace",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:NativeSpanCapture",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "name": "begin",
+          "signatureDigest": "sha256:1bb2f630373b98064235fa7c4129e6d40d0f271a5d035a9a883d0b36e134af7d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "name": "bindRoot",
+          "signatureDigest": "sha256:fd3ecb6c18fca5701fd72e8b3102d82f8f1e7c5c6be494548e587f153c941930"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "name": "finish",
+          "signatureDigest": "sha256:cf2f4978969a218e830f892100d50b10106f6829efa54023fe44ae4c0cc2e000"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "name": "flush",
+          "signatureDigest": "sha256:58b7e79b34c16eb8a7e96f329a0140c55afa7dc222a802ca1421f067039a0958"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:67576bc58043c5f2d0af"
+          ],
+          "name": "observe",
+          "signatureDigest": "sha256:b2f22bfb91199d393698a12e0a1ad9ff2d47b024af5d0198fb4f923775b28e30"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:67576bc58043c5f2d0af",
+          "file": "packages/backend/src/services/runner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:c8c3946c2415ba7280d7",
+          "file": "packages/backend/src/services/runtime/spanCapture.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/spanCapture.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b3167c304dd9e50acc18f528465e23a3a62e6fba4657365325af5cacf1db0bd5",
+      "status": "target-context-current-surface",
+      "symbol": "NativeSpanCapture",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:15723441b28ca0566236"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "accepted",
+          "type": "z.infer<typeof AcceptedObservationInvocationSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "lookupOwners.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:15723441b28ca0566236"
+          ],
+          "fieldPath": "lookupOwners.$parameter:input.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:15723441b28ca0566236"
+          ],
+          "fieldPath": "lookupOwners.$parameter:input.sourceNamespace",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "lookupOwners.$return.complete",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "lookupOwners.$return.issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "lookupOwners.$return.owners",
+          "type": "readonly ObservationSpanOwnerProof[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "resumeSessionId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:NativeSpanCaptureIdentity",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:15723441b28ca0566236",
+          "file": "packages/backend/src/services/runtime/spanCapture.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/spanCapture.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:participants:createOpencodeNativeSpanCapture",
+        "public:runtime-management:participants:createRuntimeStreamSpanCapture"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:01cb1087e658215469df70629e2eb3048515da675b9333fe97045b8de8e82503",
+      "status": "target-context-current-surface",
+      "symbol": "NativeSpanCaptureIdentity",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:d3b53e3b0101dae3dc04"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:d3b53e3b0101dae3dc04"
+          ],
+          "fieldPath": "epoch",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "mode.$variant:0",
+          "type": "'fresh'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "mode.$variant:1",
+          "type": "'resume'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "mode.$variant:2",
+          "type": "'reset'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d3b53e3b0101dae3dc04"
+          ],
+          "fieldPath": "originalRootAccepted",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d3b53e3b0101dae3dc04"
+          ],
+          "fieldPath": "rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d3b53e3b0101dae3dc04"
+          ],
+          "fieldPath": "sourceNamespace",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "spawnedAt.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "spawnedAt.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:NativeSpanRootBinding",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:d3b53e3b0101dae3dc04",
+          "file": "packages/backend/src/services/runner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:participants:NativeSpanCapture"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:eb3cf790ca1688a2a8a8f707b7c525b9ea34d2eadd3c3bbd4bb283696397ee21",
+      "status": "target-context-current-surface",
+      "symbol": "NativeSpanRootBinding",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -121311,7 +122536,9 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
           "fieldPath": "invocationId",
           "type": "string"
         },
@@ -164802,8 +166029,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 60,
-        "maxUnionVariants": 32
+        "maxTransitiveLeafFields": 75,
+        "maxUnionVariants": 38
       },
       "consumerEdgeIds": [
         "import:0f0f0c7c9b99f8905c51",
@@ -165141,6 +166368,86 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:sourceBacklog.$return",
           "type": "readonly ObservationSourceBacklog[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.after.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.after.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.carrierInvocationIds",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.scopeHash",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.sourceNamespace.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$parameter:input.sourceNamespace.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
+          "fieldPath": "$method:spanSources.$parameter:input.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c82e310dedf362bdf079"
+          ],
+          "fieldPath": "$method:spanSources.$return.issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.nextCursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.records",
+          "type": "readonly ObservationSpanSourceRecord[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.scannedSources",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.truncated",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:spanSources.$return.watermark",
+          "type": "number"
         }
       ],
       "file": "packages/backend/src/modules/task-execution/public/queries.ts",
@@ -165149,7 +166456,8 @@
         "attempts",
         "get",
         "list",
-        "sourceBacklog"
+        "sourceBacklog",
+        "spanSources"
       ],
       "methods": [
         {
@@ -165176,6 +166484,11 @@
           "consumerEdgeIds": [],
           "name": "sourceBacklog",
           "signatureDigest": "sha256:9394233bd4069959ed8580f694e2dbf2b3aeeaf7ed3f8581b00e8a1b4b1fe739"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "spanSources",
+          "signatureDigest": "sha256:ece4c4b618103219009bfafbe7e528d4ee174af2f758d3682e704b87b478b2e5"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#TaskObservationFactsQuery",
@@ -165196,7 +166509,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:f8ceb0f2b2464e1e80780f43487c653fe3d34eb0a8611a034540c8c33a22e08c",
+      "signatureDigest": "sha256:57e68e0b3aacf82a5c11085eeafe935d9c99b13f249051e4ad7f3dedb3922b47",
       "status": "target-context-current-surface",
       "symbol": "TaskObservationFactsQuery",
       "transaction": "none",
@@ -170807,7 +172120,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:98461efc25aafde03970cd25c3067dc9a41bb27a946a67b253ea7ffc83560356",
+  "sourceDigest": "sha256:0c055d81bc6a485593c8bc3d13c8451f22b6ed211b692efaaf980f7cabf81bd6",
   "targetContexts": [
     "collaboration",
     "development-automation",

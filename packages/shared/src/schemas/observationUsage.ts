@@ -1,4 +1,10 @@
 import { z } from 'zod'
+import {
+  ObservationCapturedSpansSchema,
+  ObservationPriorSpanRevisionSchema,
+  ObservationSpanCaptureSchema,
+  ObservationSpanFactSchema,
+} from './observationSpans'
 
 const identity = z.string().min(1).max(512)
 const count = z
@@ -165,7 +171,7 @@ export type ObservationMeasurement = z.infer<typeof ObservationMeasurementSchema
 export type ObservationIngest = z.infer<typeof ObservationIngestSchema>
 
 /** Numeric evidence attached to the owner's durable runtime event, before projection. */
-export const ObservationCapturedUsageSchema = z
+const capturedNumericUsage = z
   .object({
     invocationId: identity,
     measurements: z.array(ObservationMeasurementSchema).max(500),
@@ -173,4 +179,54 @@ export const ObservationCapturedUsageSchema = z
     capture: ObservationNativeCaptureSchema.optional(),
   })
   .strict()
+export const ObservationCapturedUsageSchema = capturedNumericUsage
+  .extend({
+    spanFacts: z.array(ObservationSpanFactSchema).max(200).optional(),
+    priorSpanRevisions: z.array(ObservationPriorSpanRevisionSchema).max(200).optional(),
+    spanCapture: ObservationSpanCaptureSchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if ((value.spanFacts?.length ?? 0) + (value.priorSpanRevisions?.length ?? 0) > 200)
+      ctx.addIssue({ code: 'custom', message: 'A frame contains at most 200 span records' })
+    if (
+      value.spanFacts?.some((fact) => fact.invocationId !== value.invocationId) ||
+      value.priorSpanRevisions?.some(
+        (revision) => revision.carrierInvocationId !== value.invocationId,
+      )
+    )
+      ctx.addIssue({ code: 'custom', message: 'Span records must retain their actual carrier' })
+  })
 export type ObservationCapturedUsage = z.infer<typeof ObservationCapturedUsageSchema>
+
+/** Preserve the original strict numeric write/rollback contract; isolate optional trace damage. */
+export function parseObservationCapturedUsage(value: unknown): ObservationCapturedUsage {
+  if (value === null || typeof value !== 'object' || Array.isArray(value))
+    return capturedNumericUsage.parse(value)
+  const document = value as Record<string, unknown>
+  const { spanFacts, priorSpanRevisions, spanCapture, ...numeric } = document
+  const parsed = capturedNumericUsage.parse(numeric)
+  if (
+    !['spanFacts', 'priorSpanRevisions', 'spanCapture'].some((key) => Object.hasOwn(document, key))
+  )
+    return parsed
+  const metadata = ObservationCapturedSpansSchema.safeParse({
+    ...(spanFacts === undefined ? {} : { spanFacts }),
+    ...(priorSpanRevisions === undefined ? {} : { priorSpanRevisions }),
+    ...(spanCapture === undefined ? {} : { spanCapture }),
+  })
+  if (
+    !metadata.success ||
+    metadata.data.spanFacts?.some((fact) => fact.invocationId !== parsed.invocationId) ||
+    metadata.data.priorSpanRevisions?.some(
+      (revision) => revision.carrierInvocationId !== parsed.invocationId,
+    )
+  )
+    return {
+      ...parsed,
+      diagnostics: [
+        ...parsed.diagnostics.filter((code) => code !== 'span-metadata-invalid').slice(0, 99),
+        'span-metadata-invalid',
+      ],
+    }
+  return { ...parsed, ...metadata.data }
+}

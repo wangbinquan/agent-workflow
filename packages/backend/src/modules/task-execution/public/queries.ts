@@ -12,10 +12,14 @@ import type {
   ObservationTaskFacts,
   ObservationTaskPageQuery,
   ObservationSourceBacklog,
+  ObservationSpanSourceInput,
+  ObservationSpanSourcePage,
 } from '@agent-workflow/shared'
 
 /** RFC-371: actor-filtered execution facts, without runtime payloads or private rows. */
 export interface TaskObservationFactsQuery {
+  /** Retained span metadata, after the original actor-visible task lookup. */
+  spanSources?(input: ObservationSpanSourceInput): Promise<ObservationSpanSourcePage>
   list(input: { readonly actor: Actor; readonly query: ObservationTaskPageQuery }): Promise<{
     readonly items: readonly ObservationTaskFacts[]
     /** Opaque owner continuations for each authorized item, from this same query. */

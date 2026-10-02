@@ -1,8 +1,14 @@
 # RFC-371 剩余工作与关闭条件
 
-2026-10-02：观测源码基线 `b339e7e06e13c7b4456cc1bf928048c7fc0262a3` 的主 CI 50/50 与九类默认定时工作流均已 completed/success，共十次有效运行、75 个成功作业。首次拒绝 POST 的原触发时序已恢复并通过 Chromium 与 WebKit；偶发 mixed report 缺失根因仍未确证，原失败和取消记录保持。详见[当前 CI 回执与边界](./ci-recovery.md#2026-10-02-原审批时序与默认-ci-矩阵复验)。CS 开发 producer、完整退出链路、最新正式页面验收及真实托管联动未完成，两 RFC 不关闭。
+2026-10-02 历史证据：观测源码基线 `b339e7e06e13c7b4456cc1bf928048c7fc0262a3` 的主 CI 50/50 与九类默认定时工作流均已 completed/success，共十次有效运行、75 个成功作业。首次拒绝 POST 的原触发时序已恢复并通过 Chromium 与 WebKit；偶发 mixed report 缺失根因仍未确证，原失败和取消记录保持。详见[当前 CI 回执与边界](./ci-recovery.md#2026-10-02-原审批时序与默认-ci-矩阵复验)。CS 开发 producer、完整退出链路、最新正式页面验收及真实托管联动未完成，两 RFC 不关闭。
 
-更新：2026-10-02。状态：In Progress。本文是当前待办入口；[plan.md](./plan.md) 各实施批次保留历史，不把历史的“尚未接入”或原型勾选直接当成当前状态。代码、精确提交 CI、实际部署和真实运行验收分别记录。未取得退出证据的任务保持未完成。
+更新：2026-10-03。状态：In Progress。本文是当前待办入口；[plan.md](./plan.md) 各实施批次保留历史，不把历史的“尚未接入”或原型勾选直接当成当前状态。代码、精确提交 CI、实际部署和真实运行验收分别记录。未取得退出证据的任务保持未完成。
+
+## 当前 CI 与原生片段接续（2026-10-03）
+
+已发布 main 基线为 `d2c29c15c2e65dfc447ea5f7ae99bac8c6bc77bd`。本会话原生片段与 formal trace UI 的 51 路径 SOURCE v3 已通过独立功能审查；48 代码路径保持，13 原官方生成产物与发布文档正在形成完整提交候选。源码有限 PASS 和本机静态生成均不代替新发布 SHA 的主 CI、九种默认定时矩阵或实际页面验收；e0c 主 CI 44 success/6 failure、fd02 主 CI 46 success/4 failure 与全部更早失败/取消保持，不能用历史 b339 的全绿替代本片结论。
+
+CS 的联合修复已部署到 `463f24d85b0e6edfc8fbf984758be3f2c585d400`，六项精确 CI 和八组件实际 OCI 来源已核；生产开发 producer 仍 OFF，全 writer/inflight、unbound/unknown-tail 和真实联合验收继续。AW 系统/CLI/自测入口、完整归属、时间/分析/规模及正式页面剩余项不关闭。下节保留 2026-10-02 当时的链接修正状态，仅为历史记录。
 
 ## 2026-10-02 当前 CI 接续
 
@@ -27,7 +33,7 @@
 
 ## 下一步执行顺序
 
-1. AW-R01 的历史 b339 主 CI 与九种原默认矩阵通过；当前链接修正版仍待精确 hosted CI，收口记录见本页当前 CI 接续。
+1. AW-R01 的历史 b339 主 CI 与九种原默认矩阵通过；本片原生 span 新候选仍需自身精确 hosted CI 与默认矩阵，按上方当前接续核对，保留旧链接与 e0c/fd02 失败。
 2. AW-R02 与 CS RFC-034 的 CS-R01：完成 v2 跨仓同步和托管准入验证；CS-R02～05 优先补项目开发消耗。
 3. AW-R03～08：补齐调用来源、树形归因、时间口径、细粒度泳道与分析。
 4. AW-R09～11：异常、历史维护和规模验证。
@@ -37,7 +43,7 @@
 
 ## 待办清单
 
-### AW-R01 CI 收口〔历史矩阵通过；当前链接修正版待精确 hosted CI〕
+### AW-R01 CI 收口〔历史矩阵通过；本片新候选待精确 hosted CI〕
 
 - 修复提交 `edd56ebe33731cb05aa7491b292be294a3026521` 的[主 CI 36684248034](https://github.com/wangbinquan/agent-workflow/actions/runs/36684248034)50项成功；九种定时配置共25项全部成功，含[WebKit 36684326977](https://github.com/wangbinquan/agent-workflow/actions/runs/36684326977)两平台八分片、[full 36684319531](https://github.com/wangbinquan/agent-workflow/actions/runs/36684319531)四分片/覆盖对账，以及[weekly-all PG 36684345862](https://github.com/wangbinquan/agent-workflow/actions/runs/36684345862)五项。10个运行的headSha均为同一完整提交、均正常终态success；未取消或削弱门禁，本机无AW测试/构建。修复候选限定独立功能门PASS，AW-R01已满足退出条件，[完整矩阵](./ci-recovery.md#修复候选精确终态2026-09-30)。后继文档CI另外验证；AW-R02～12和两个RFC保持未完成。
 
@@ -263,3 +269,33 @@ RFC-370 owner 已明确暂停共享清单/Git 发布，让 RFC-371 先完成短�
 独立 DESIGN v1 的 P2／FAIL 保留：短窗口加原 650ms 等待会早于 1600ms marker 到期，只断言“文件没有出现”会使负例失去判别力。修订 v2 已独立 PASS；原用例增加实际 detached leader 的 PGID 日志、严格唯一解析与 safeInteger>0 断言，原 650ms 等待后以 `process.kill(-groupPid, 0)` 探测原整组。存活即失败，只有实际 Error.code===ESRCH 可判原组不存在，EPERM／其他异常继续抛出；原 marker 不存在和两项 <2s 断言全部保留，1600ms／650ms／10s timeout／50ms grace 不变。该观测不向后代发送额外终止信号，也不添加重试或 skip。
 
 四路径代码／测试／文档已落地，限定格式／lint、逐字逆变换证明、独立 SOURCE 与本提交精确 CI／原默认定时配置继续验证。本机没有执行 AW test／typecheck／build／E2E／服务。两个 RFC 仍 In Progress，其他产品和跨仓验收继续。
+
+### 2026-10-03 原生调用片段与泳道实现接续
+
+[原生片段设计](durable-span-facts.md) 独立 DESIGN v3 PASS（原 v1/v2 FAIL 保留），本地业务 runNode 的元数据留存、原生来源扫描、旧受理能力保持、A/B 续跑原属、ACK 后 Task 来源分页、任务片段 API 与正式泳道组件已落地。模型详情复用原贡献与人民币费率，分别展示非缓存输入、缓存读、缓存写、输出；工具/原生 Agent 不重复添加 Token 或费用。未知原生时间不借任务全长，冲突证据让原片段保持 unknown；异步查找不直接写持久状态。
+
+精确 47 路径格式/lint 通过，45 个 TS/TSX 的 AST 语法无诊断；没有本机 AW 测试、语义 typecheck、build、E2E 或服务。真实 SQLite/PG provider、原生时间/归属、帧内 cursor、水位、Actor/attempt、旧 replay、Runner 接线与组件 URL/焦点回归已经写入但尚未执行。独立 SOURCE、官方架构登记、精确远端 CI 与新正式页面验收待完成。
+
+227c 主 CI 的 44 success / 6 fail 保留，其三个实际缺陷由原负责会话按职责提交修正；新 SHA 的验证须独立等终态，不能用原定时矩阵或旧数字对账代签。系统 Agent/smoke/CLI/自测的原受理与采集尚未闭合，CS 托管 spans 与生产开发采集的全 writer/inflight、unbound/unknown-tail 仍继续。AW-R03/R04/R09 和两个 RFC 保持 In Progress。
+
+### 2026-10-03 原生片段 SOURCE v2 失败与有界事件修正
+
+独立 SOURCE v2 完整核对 51 候选与 52 引用，首尾均稳定，结论 FAIL；唯一 P2 为归属查询尚未返回时，pending 按调用身份覆盖之前的实际 completion，可能把相互矛盾的结束时间错误显示为已知完成。原失败回执与旧候选保留，没有运行 AW 本机测试来代签。
+
+修正为每 root 最多 200 条不同原生观察的有界缓冲，完全相同的事件去重，归属受理后经同一原证据投影顺序处理；已完成归属的事件直接走原冲突判据。两条不同 completion 均保留，后续最终 SQLite 只留后一值也不能抹去冲突；旧数字账本、数值捕获 500 限额及 CNY 计价没有改动。新增真实临时 SQLite 的两种冲突事件顺序，以及正常 start→completion 和 205 次重复交付的正例；均为写入待 hosted CI 的回归，不宣称已运行。两个实际变化源码/回归文件限定格式、lint、纯 AST 语法解析通过；未运行语义 typecheck、build、E2E 或服务。
+
+官方完整 13 产物已在固定 e0c42a53 + 精确 51 路径的私有只读 provider 生成，未写仓库；生成期间共享主干合法推进到 fd02ad70，故旧私有产物仅证明原基线，当前 SHA 的产物、真实增长解释、完整实现门、远端 CI 与页面验收继续。源码修正须经 SOURCE v3；CS 开发 producer 保持 OFF，两个 RFC 保持 In Progress。
+
+### 2026-10-03 原生片段 SOURCE v3 与正式生成清单
+
+SOURCE v2 的唯一 P2 已按实际事件顺序修正，完整 v3 独立功能审查为 PASS：51 候选、61 引用首尾稳定，46 路径继承、5 路径重审，无新增 P1/P2。查询归属回包之前保留最多 200 个不同原始观察，同一事件去重；矛盾 completion 的两个顺序、最终 SQLite 只剩最后一条、正常 start→completion 与 205 次重复均有新回归。只做目标 format/lint 与纯 AST，没有运行 AW 本机测试、类型检查、构建或服务；新回归行为仍交远端 CI 验证，原 FAIL 保留。
+
+固定已发布 `d2c29c15c2e65dfc447ea5f7ae99bac8c6bc77bd` 加精确 51 路径，只读 provider 的原官方 census 一次生成 13 产物，候选和引用保持，未纳入其他未提交源码。SOURCE digest 为 `sha256:0c055d81bc6a485593c8bc3d13c8451f22b6ed211b692efaaf980f7cabf81bd6`；production 2,828（backend 2,024／frontend 643／shared 161），legacy 557／module 1,467，symbol/root 25,901。原四项生成规则和字段预算计算方式不变；两项既有合同随新增字段更新派生数值：ObservationTaskQueries leaf/union 为 169/58→205/76，TaskObservationFactsQuery 为 60/32→75/38。完整 owner/edge、debt 与波次判据保持，新增三个已批准的精确 runtime helper 登记。
+
+实际八项增长依原 RFC-317 机制各登记一次：mutation 1,817→1,823、background 344→345、ambient 500→501、observed imports 5,756→5,778、exceptions 5,115→5,136、facades 295→298、public 1,047→1,053、symbols 25,819→25,901。增长来自实际采集/查询工厂、限时读取 timer、正式 spans GET、原边分类、两个公共工厂与四种 capture 类型、三个 helper 及新符号；没有增加数值 usage writer 或放宽规则。原 pure governance projection 复用这一次 census，只给这八项实增条目投影具名 why 和原 provenance；其他十二产物逐字相同，没有重跑 census。回执必须在匹配 canonical 提交之后由原机制立即退役。
+
+旧 e0c 的私有产物、report-only 修正及原 SOURCE v1/v2 历史保留；只读生成和源码有限 PASS 不替代完整实现门、新发布 SHA 的 hosted CI 或正式页面验收。本片只补本地业务 runNode 的原生片段；system/smoke/CLI 全入口、CS hosted 联合链路、原生层级完整性和全部剩余工作继续，两个 RFC 仍 In Progress，CS 开发 producer 保持 OFF。
+
+### 实现门 v4 文案修正（2026-10-03）
+
+完整限定实现门 v4 的唯一 P2 是许可理由及发布说明把派生字段预算误写为不变；原 FAIL 与逐文件回执保留。当前只修正该许可 why、用原 provenance 函数重算 ledger 摘要，并列出上述两项实际数字。另 12 份生成产物和全部 48 代码路径逐字未变；纯治理投影复用原 census，未重跑 scanner 或本机测试。窄增量复核、新发布及精确 hosted CI 继续，不关闭 RFC 或开启 CS 开发 producer。

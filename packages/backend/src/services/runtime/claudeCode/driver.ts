@@ -1,4 +1,8 @@
 import { normalizeUsage } from './usage'
+import { isAbsolute, resolve } from 'node:path'
+import { sha256Hex } from '@/util/hash'
+import { createRuntimeStreamSpanCapture } from '@/modules/runtime-management/public/participants'
+import { normalizeClaudeSpans } from './spanFacts'
 // RFC-111 PR-B — the Claude Code RuntimeDriver.
 //
 // The shared seam exposes `parseEvent` (the generic stdout pump consumes it for
@@ -506,6 +510,23 @@ export const claudeCodeDriver: RuntimeDriver = {
     return parseEvent(line)
   },
   normalizeUsage,
+  prepareSpanCapture: ({ env, invocationId }) => {
+    const root =
+      env.CLAUDE_CONFIG_DIR && isAbsolute(env.CLAUDE_CONFIG_DIR)
+        ? resolve(env.CLAUDE_CONFIG_DIR)
+        : env.HOME && isAbsolute(env.HOME)
+          ? resolve(env.HOME, '.claude')
+          : null
+    const sourceNamespace = sha256Hex(
+      JSON.stringify(root ? ['claude-native-root', root] : ['claude-invocation', invocationId]),
+    )
+    return {
+      contract: 'runtime-span-facts-v1',
+      sourceNamespace,
+      create: (identity) => createRuntimeStreamSpanCapture({ ...identity, sourceNamespace }),
+      normalize: normalizeClaudeSpans,
+    }
+  },
   observeSystemEvent,
   // RFC-237 (design-gate P2-4) — surface a clean-exit terminal `is_error`
   // result (auth/API failure) so systemAgentRun can fail the run instead of

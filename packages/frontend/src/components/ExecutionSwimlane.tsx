@@ -9,6 +9,8 @@ export interface ExecutionSwimlaneRow {
   readonly end: number | null
   readonly description: string
   readonly detail: ReactNode
+  readonly point?: boolean
+  readonly open?: boolean
 }
 /** One shared, keyboard-selectable time axis. Text details remain available without the bars. */
 export function ExecutionSwimlane(props: {
@@ -43,6 +45,7 @@ export function ExecutionSwimlane(props: {
                   <button
                     type="button"
                     className="btn btn--sm execution-swimlane__select"
+                    data-execution-id={row.id}
                     onClick={(event) => props.onSelect(row.id, event.currentTarget)}
                     aria-label={row.description}
                   >
@@ -54,6 +57,20 @@ export function ExecutionSwimlane(props: {
                             left: `${((start - props.from) / width) * 100}%`,
                             width: `${((end - start) / width) * 100}%`,
                           }}
+                        />
+                      )}
+                      {!valid && row.point && row.end !== null && (
+                        <span
+                          className="execution-swimlane__point"
+                          style={{
+                            left: `${((Math.max(props.from, Math.min(props.to, row.end)) - props.from) / width) * 100}%`,
+                          }}
+                        />
+                      )}
+                      {!valid && row.open && row.start !== null && (
+                        <span
+                          className="execution-swimlane__open"
+                          style={{ left: `${((start - props.from) / width) * 100}%` }}
                         />
                       )}
                     </span>

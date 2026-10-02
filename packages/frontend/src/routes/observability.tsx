@@ -54,6 +54,12 @@ export function validateObservationSearch(raw: Record<string, unknown>): Observa
         : 'overview',
     ...(typeof raw.after === 'string' && raw.after ? { after: raw.after } : {}),
     ...(typeof raw.task === 'string' && raw.task ? { task: raw.task } : {}),
+    ...(typeof raw.attempt === 'string' && raw.attempt && raw.attempt.length <= 512
+      ? { attempt: raw.attempt }
+      : {}),
+    ...(typeof raw.span === 'string' && raw.span && raw.span.length <= 512
+      ? { span: raw.span }
+      : {}),
     ...(typeof raw.agent === 'string' && raw.agent ? { agent: raw.agent } : {}),
     ...(typeof raw.quality === 'string' && raw.quality ? { quality: raw.quality } : {}),
   }

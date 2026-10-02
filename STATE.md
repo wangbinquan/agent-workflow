@@ -1,3 +1,11 @@
+## RFC-371 原生调用片段、归属事件保留与正式清单（2026-10-03）
+
+原生 span 来源与 formal trace UI 的限定 SOURCE v3 独立功能门 PASS，51 候选/61 引用稳定；原 v2 的唯一 P2 修复为最多200个不同原始观察和重复去重，矛盾结束时间保持 unknown。原 FAIL 与实际正常起止、205重复及双顺序真实 SQLite 回归保留，未用本机测试代签。完整实现门 v4 唯一P2为预算数字不变的错误文案，原FAIL保留，当前修正许可why/原provenance及四文档后作窄增量复核。48代码文件保持 v3 审核内容；新 metadata/document 增量另行完整实现审查，远端行为按新发布 SHA 的 hosted CI 收据记录。
+
+官方 scoped census 固定已发布 d2c29c15 加本片51路径，13产物一次生成；sourceDigest 0c055d81bc6a485593c8bc3d13c8451f22b6ed211b692efaaf980f7cabf81bd6。production2828=backend2024+frontend643+shared161，legacy557/module1467、symbols25901；原四规则、完整owner/edge、预算计算方式与各波次保持；两项既有合同的派生 leaf/union budget 实际更新为 ObservationTaskQueries 169/58→205/76、TaskObservationFactsQuery 60/32→75/38。八项实增为1817→1823、344→345、500→501、5756→5778、5115→5136、295→298、1047→1053、25819→25901，各只登记一次具名 RFC-317 回执；pure governance projection复用原 census，只有 ledger 许可/provenance 改变，匹配canonical提交后立即按原机制退役。
+
+只执行目标format/lint、纯源码/AST/JSON/字节证明及官方静态生成，没有 AW 本机 test/typecheck/build/service。保留所有并行输出、旧回执与失败历史。此片只覆盖本地业务 runNode spans，数值四桶/CNY 沿原 contribution source，旧接受记录不能被能力回填升级；system/smoke/CLI全入口、CS hosted联合实采、规模/全景/正式页面与全部剩余工作继续。CS 开发 producer OFF，两个 RFC 仍 In Progress。
+
 ## 2026-10-03 RFC-370 启动租约与精确 CI 补正
 
 启动租约14路径组合有限功能 PASS `8ccd6aa4ca93efd3090e8ff0b7df6704704c00a62c87966b203effc35eee15db`：原 PID 锁算法进入独立 SO native adapter，真实 start、PG/SQLite boot、provider 重装配共享同一 acquired lease；启动失败等待 release ACK，旧锁文件/错误/开发接管与 proof digest 语义保持。首门 FAIL/两个 P2 及三路径 R2 PASS 完整保留。该租约只覆盖启动 claim；全 A7 执行权和远程 orphan 恢复继续。

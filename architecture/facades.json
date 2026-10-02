@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "serviceFiles": 295,
+    "serviceFiles": 298,
     "thinFacades": 51
   },
   "entries": [
@@ -3509,6 +3509,7 @@
     {
       "boundaryEdgeIds": [
         "import:647d2f3472f9ceefca7f",
+        "import:67576bc58043c5f2d0af",
         "import:6c106e47305a3b3ebdc5",
         "import:a0be50c8c5f99fc17814",
         "import:a3cc771dbfd60e02c49d",
@@ -3518,6 +3519,7 @@
         "import:c6d83040f9bf48f345f9",
         "import:c74b0ad40adb1d4f2de1",
         "import:cb91aa44b71df5165d3c",
+        "import:d3b53e3b0101dae3dc04",
         "import:dba082fcaa3501c2d332",
         "import:ddb1a9cb8d5a6063f9cf",
         "import:ef6d239c3d1ca57471ef",
@@ -3583,7 +3585,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:c1a7ee36995d7a0a0261"
+      ],
       "exportedSymbols": [
         "assembleClaudeBusinessSpawn",
         "assembleClaudePersonaSpawn",
@@ -3687,6 +3691,21 @@
       "file": "packages/backend/src/services/runtime/claudeCode/sessionCapture.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/sessionCapture.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/sessionCapture.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-implementation",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [
+        "import:3c42cbe78d4b7c2b99a8"
+      ],
+      "exportedSymbols": [
+        "normalizeClaudeSpans"
+      ],
+      "file": "packages/backend/src/services/runtime/claudeCode/spanFacts.ts",
+      "id": "facade:packages/backend/src/services/runtime/claudeCode/spanFacts.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/spanFacts.ts#$file",
       "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
@@ -3808,6 +3827,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:645c10c4b96781acd29e",
         "import:e9392ed19fff78dda4f7"
       ],
       "exportedSymbols": [
@@ -3993,6 +4013,21 @@
       "targetLayer": "application"
     },
     {
+      "boundaryEdgeIds": [
+        "import:fcfddd6e072c42be4bba"
+      ],
+      "exportedSymbols": [
+        "normalizeOpencodeSpans"
+      ],
+      "file": "packages/backend/src/services/runtime/opencode/spanFacts.ts",
+      "id": "facade:packages/backend/src/services/runtime/opencode/spanFacts.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/spanFacts.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-implementation",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
       "boundaryEdgeIds": [],
       "exportedSymbols": [
         "MAX_OPENCODE_PROMPT_BYTES",
@@ -4086,6 +4121,27 @@
       "file": "packages/backend/src/services/runtime/selfCheck.ts",
       "id": "facade:packages/backend/src/services/runtime/selfCheck.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runtime/selfCheck.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-implementation",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "boundaryEdgeIds": [
+        "import:15723441b28ca0566236",
+        "import:3fbaf72709184ea25ffa",
+        "import:c8c3946c2415ba7280d7"
+      ],
+      "exportedSymbols": [
+        "PreparedRuntimeSpanCapture",
+        "isoSpanTime",
+        "spanId",
+        "spanObject",
+        "spanTime"
+      ],
+      "file": "packages/backend/src/services/runtime/spanCapture.ts",
+      "id": "facade:packages/backend/src/services/runtime/spanCapture.ts",
+      "ownerEntryId": "owner:packages/backend/src/services/runtime/spanCapture.ts#$file",
       "removeAfterWave": "W9-D",
       "status": "legacy-implementation",
       "targetContext": "runtime-management",
@@ -6322,5 +6378,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:98461efc25aafde03970cd25c3067dc9a41bb27a946a67b253ea7ffc83560356"
+  "sourceDigest": "sha256:0c055d81bc6a485593c8bc3d13c8451f22b6ed211b692efaaf980f7cabf81bd6"
 }

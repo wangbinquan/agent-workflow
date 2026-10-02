@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm'
+import { asc, eq } from 'drizzle-orm'
 import {
   AcceptObservationInvocationSchema,
   AcceptedObservationInvocationSchema,
@@ -22,6 +22,32 @@ function canonicalExecution(input: AcceptObservationInvocation): string {
   )
 }
 const decode = (document: string) => AcceptedObservationInvocationSchema.parse(JSON.parse(document))
+const sameAcceptance = (
+  row: { fingerprint: string; document: string },
+  input: AcceptObservationInvocation,
+) => {
+  if (row.fingerprint === JSON.stringify(input)) return true
+  const accepted = decode(row.document)
+  if (accepted.spanCaptureContract !== undefined || accepted.spanCaptureSource !== undefined)
+    return false
+  const { spanCaptureContract: _contract, spanCaptureSource: _source, ...legacy } = input
+  return row.fingerprint === JSON.stringify(legacy)
+}
+
+/** Bounded original acceptances used by retained span reads; no new accounting authority. */
+export async function readTaskSpanInvocations(db: ProviderNeutralDatabase, taskId: string) {
+  const rows = await db
+    .select({ document: observationInvocations.document })
+    .from(observationInvocations)
+    .where(eq(observationInvocations.taskId, taskId))
+    .orderBy(asc(observationInvocations.id))
+    .limit(1001)
+    .all()
+  return {
+    items: rows.slice(0, 1000).map((row) => decode(row.document)),
+    truncated: rows.length > 1000,
+  }
+}
 
 export function createObservationInvocationStore(
   db: ProviderNeutralDatabase,
@@ -43,7 +69,7 @@ export function createObservationInvocationStore(
       return databaseSessionFor(db).transaction(async (tx) => {
         const existing = await read(tx, input.invocationId)
         if (existing) {
-          if (existing.fingerprint !== fingerprint)
+          if (!sameAcceptance(existing, input))
             throw new ObservationInvocationError(
               'invocation-conflict',
               'Invocation acceptance changed',
@@ -83,7 +109,7 @@ export function createObservationInvocationStore(
             'execution-already-mapped',
             'Execution already belongs to another invocation',
           )
-        if (persisted.fingerprint !== fingerprint)
+        if (!sameAcceptance(persisted, input))
           throw new ObservationInvocationError(
             'invocation-conflict',
             'Invocation acceptance changed',

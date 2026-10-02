@@ -4,6 +4,8 @@ import type {
   ObservationTaskFacts,
   ObservationTaskPageQuery,
   ObservationTokenUsage,
+  ObservationSpanSourceInput,
+  ObservationSpanSourcePage,
   ObservationSourceBacklog,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
@@ -12,6 +14,7 @@ import type { UsageLedgerStore } from './usageLedger'
 
 /** Structurally supplied by the TaskExecution owner, only at bootstrap. */
 export interface ObservationTaskSource {
+  spanSources?(input: ObservationSpanSourceInput): Promise<ObservationSpanSourcePage>
   list(input: { readonly actor: Actor; readonly query: ObservationTaskPageQuery }): Promise<{
     readonly items: readonly ObservationTaskFacts[]
     readonly positions: readonly { readonly taskId: string; readonly cursor: string }[]

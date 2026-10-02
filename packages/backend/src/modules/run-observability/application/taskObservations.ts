@@ -25,6 +25,7 @@ import { selectUsageContributions, type UsageContributionEvidence } from '../dom
 import type { ObservationSnapshot, ObservationSnapshotSources } from '../ports/taskObservations'
 import { readObservationOverview, type ObservationAnalysisTask } from './observationOverview'
 import { readDimensionTasks } from './dimensionTasks'
+import { createTaskSpanQuery } from './taskSpans'
 import {
   parseObservationSelection,
   invocationRuntimeIdentity,
@@ -351,6 +352,26 @@ async function loadTask(sources: ObservationSnapshotSources, taskId: string) {
       hasGaps: false,
     })
   return { invocations, truncated, sources: sourceStates, nativeCaptures, platformCaptures }
+}
+
+/** Reuse the original contribution selection and CNY valuation; never price a span twice. */
+export async function loadTaskSpanContributions(
+  sources: ObservationSnapshotSources,
+  taskId: string,
+) {
+  const loaded = await loadTask(sources, taskId)
+  return {
+    truncated: loaded.truncated,
+    records: loaded.invocations.flatMap((row) =>
+      row.records.map((record) => ({
+        invocationId: row.invocation.invocationId,
+        recordId: record.record.measurement.recordId,
+        usage: record.record.contribution,
+        amountDecimal: record.amount,
+        costComplete: record.complete,
+      })),
+    ),
+  }
 }
 
 /** Token coverage is independent of a proven-empty tree's CNY visibility/readiness. */
@@ -698,6 +719,7 @@ export function createTaskObservationQueries(input: {
   readonly now: () => number
 }) {
   return {
+    spans: createTaskSpanQuery(input.snapshot, loadTaskSpanContributions),
     overview: (actor: Actor, query: ObservationOverviewQuery): Promise<ObservationOverview> =>
       input.snapshot.read(async (sources) => {
         const asOf = input.now()

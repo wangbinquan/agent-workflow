@@ -1,12 +1,14 @@
 import { and, asc, eq, inArray, gt } from 'drizzle-orm'
-import { ObservationCapturedUsageSchema } from '@agent-workflow/shared'
+import { parseObservationCapturedUsage } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskExecutionObservationSources } from '@/db/schema'
 import type { ObservationUsageSource } from '@/modules/run-observability/public/participants'
+import { createObservationSpanSources } from './observationSpanSources'
 
 /** Acks change delivery metadata only; runtime evidence and execution ownership stay intact. */
 export function createObservationUsageSource(db: ProviderNeutralDatabase): ObservationUsageSource {
   return {
+    spanSources: createObservationSpanSources(db),
     async pending(input) {
       if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 500)
         throw new RangeError('Observation source page must contain 1 through 500 rows')
@@ -51,7 +53,7 @@ export function createObservationUsageSource(db: ProviderNeutralDatabase): Obser
         .all()
       return rows.map(({ document, ...row }) => ({
         ...row,
-        evidence: ObservationCapturedUsageSchema.parse(JSON.parse(document!)),
+        evidence: parseObservationCapturedUsage(JSON.parse(document!)),
       }))
     },
     async acknowledge(ids) {

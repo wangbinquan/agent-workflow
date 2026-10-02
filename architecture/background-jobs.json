@@ -531,9 +531,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:104",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:107",
       "kind": "register-call",
-      "line": 104,
+      "line": 107,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
@@ -542,9 +542,31 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:121",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:122",
       "kind": "register-call",
-      "line": 121,
+      "line": 122,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountObservationRoutes",
+      "targetContext": "run-observability"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:132",
+      "kind": "register-call",
+      "line": 132,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
+      "removeAfterWave": "W6/W9",
+      "symbol": "mountObservationRoutes",
+      "targetContext": "run-observability"
+    },
+    {
+      "callee": "registerRoute",
+      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:149",
+      "kind": "register-call",
+      "line": 149,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
@@ -564,9 +586,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:58",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:70",
       "kind": "register-call",
-      "line": 58,
+      "line": 70,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
@@ -575,20 +597,9 @@
     {
       "callee": "registerRoute",
       "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:79",
+      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:86",
       "kind": "register-call",
-      "line": 79,
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
-      "removeAfterWave": "W6/W9",
-      "symbol": "mountObservationRoutes",
-      "targetContext": "run-observability"
-    },
-    {
-      "callee": "registerRoute",
-      "file": "packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts",
-      "id": "ambient:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#registerRoute:94",
-      "kind": "register-call",
-      "line": 94,
+      "line": 86,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/http/observationRoutes.ts#mountObservationRoutes",
       "removeAfterWave": "W6/W9",
       "symbol": "mountObservationRoutes",
@@ -5518,13 +5529,13 @@
     ]
   },
   "denominator": {
-    "ambientWiring": 500,
+    "ambientWiring": 501,
     "disabled": 9,
-    "entries": 344,
+    "entries": 345,
     "executionLocal": 41,
     "longRunning": 85,
     "managed": 11,
-    "periodic": 209
+    "periodic": 210
   },
   "entries": [
     {
@@ -7959,6 +7970,29 @@
       "phase": "unknown",
       "symbol": "readPendingCaptureRepairs",
       "targetContext": "run-observability"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts#$setTimeout:258",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setTimeout:258",
+      "targetContext": "runtime-management"
     },
     {
       "dependencies": [
@@ -13099,5 +13133,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:98461efc25aafde03970cd25c3067dc9a41bb27a946a67b253ea7ffc83560356"
+  "sourceDigest": "sha256:0c055d81bc6a485593c8bc3d13c8451f22b6ed211b692efaaf980f7cabf81bd6"
 }

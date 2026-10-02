@@ -2656,8 +2656,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts#transaction:43",
-      "line": 43,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts#transaction:69",
+      "line": 69,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts#createObservationInvocationStore",
       "status": "clear",
       "symbol": "createObservationInvocationStore",
@@ -3196,7 +3196,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:98461efc25aafde03970cd25c3067dc9a41bb27a946a67b253ea7ffc83560356",
+  "sourceDigest": "sha256:0c055d81bc6a485593c8bc3d13c8451f22b6ed211b692efaaf980f7cabf81bd6",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -4291,9 +4291,9 @@
         "effectKind": "process",
         "file": "packages/backend/src/services/runner.ts",
         "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/services/runner.ts#1738:process",
+        "id": "task-effect:packages/backend/src/services/runner.ts#1787:process",
         "journaledBy": "createProcessEffectAttemptObserver",
-        "line": 1738,
+        "line": 1787,
         "operationFamily": "lineage-slot-stable-action",
         "ownerEntryId": "owner:packages/backend/src/services/runner.ts#runNode",
         "recoveryClass": "managed-process-preactivation",

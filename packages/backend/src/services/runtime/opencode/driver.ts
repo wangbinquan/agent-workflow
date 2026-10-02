@@ -1,6 +1,11 @@
 import { normalizeUsage } from './usage'
 import { createOpencodeUsageNormalizer, opencodeUsageDatabasePath } from './nativeUsage'
-import { createOpencodeNativeUsageCapture } from '@/modules/runtime-management/public/participants'
+import {
+  createOpencodeNativeUsageCapture,
+  createOpencodeNativeSpanCapture,
+} from '@/modules/runtime-management/public/participants'
+import { sha256Hex } from '@/util/hash'
+import { normalizeOpencodeSpans } from './spanFacts'
 // RFC-111 PR-A — the opencode RuntimeDriver.
 //
 // PR-A slice A1 implements `parseEvent` (delegating to ./events). Later slices
@@ -357,6 +362,15 @@ export const opencodeDriver: RuntimeDriver = {
     },
   },
   minVersion: null,
+  prepareSpanCapture: ({ env }) => {
+    const path = opencodeUsageDatabasePath(env)
+    return {
+      contract: 'runtime-span-facts-v1',
+      sourceNamespace: sha256Hex(JSON.stringify(['opencode-native-db', path])),
+      create: (identity) => createOpencodeNativeSpanCapture({ ...identity, path }),
+      normalize: normalizeOpencodeSpans,
+    }
+  },
   // RFC-280 T6 — playground session strategy (opencode: no pre-allocated id;
   // resume rides the captured session id).
   createMcpTestNativeSessionId: () => null,

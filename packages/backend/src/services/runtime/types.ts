@@ -1,4 +1,5 @@
 import type { RuntimeUsageContext, RuntimeUsageFrame } from './usage'
+import type { PreparedRuntimeSpanCapture } from './spanCapture'
 import type {
   NativeUsageCapture,
   NativeUsageCaptureIdentity,
@@ -764,6 +765,10 @@ export interface RuntimeDriver {
       readonly env: Readonly<Record<string, string | undefined>>
     },
   ): NativeUsageCapture
+  prepareSpanCapture?(input: {
+    readonly env: Readonly<Record<string, string | undefined>>
+    readonly invocationId: string
+  }): PreparedRuntimeSpanCapture
   /**
    * RFC-297 T5 — synthetic events to append to the stream once the child has
    * exited. This is how an observation that does NOT arrive on stdout still

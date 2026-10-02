@@ -50,6 +50,27 @@ const platform = {
 }
 
 describeEachProvider('RFC-371 accepted invocation authority and price catalogue', (harness) => {
+  test('new span capability cannot upgrade a legacy replay or downgrade a new acceptance', async () => {
+    const store = createObservationInvocationStore(harness.db, () => NOW)
+    const old = acceptance('legacy-spans'),
+      original = await store.accept(old)
+    const upgraded = {
+      ...old,
+      spanCaptureContract: 'runtime-span-facts-v1' as const,
+      spanCaptureSource: 'native-source',
+    }
+    expect(await store.accept(upgraded)).toEqual(original)
+    expect(await Promise.all([store.accept(upgraded), store.accept(upgraded)])).toEqual([
+      original,
+      original,
+    ])
+    expect((await store.get(old.invocationId))!.spanCaptureContract).toBeUndefined()
+    await expect(store.accept({ ...upgraded, agentRevision: 99 })).rejects.toThrow('changed')
+    const current = { ...upgraded, invocationId: 'new-spans' },
+      accepted = await store.accept(current)
+    expect(accepted.spanCaptureContract).toBe('runtime-span-facts-v1')
+    await expect(store.accept({ ...old, invocationId: 'new-spans' })).rejects.toThrow('changed')
+  })
   function fixture() {
     let serial = 0,
       clock = NOW

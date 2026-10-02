@@ -34,7 +34,7 @@ export const ObservationExecutionAuthoritySchema = z.discriminatedUnion('kind', 
   localAuthority,
   platformAuthority,
 ])
-export const AcceptObservationInvocationSchema = z
+const acceptObservationInvocation = z
   .object({
     invocationId: key,
     taskId: key,
@@ -46,21 +46,44 @@ export const AcceptObservationInvocationSchema = z
     /** Absent on older invocations; never infer child completeness from root counters. */
     nativeCaptureContract: z.literal('opencode-child-steps-v1').optional(),
     nativeCaptureSource: key.optional(),
+    /** Metadata capability is accepted separately from numeric capture. Older documents omit it. */
+    spanCaptureContract: z.literal('runtime-span-facts-v1').optional(),
+    spanCaptureSource: key.optional(),
   })
   .strict()
-export const AcceptedObservationInvocationSchema = AcceptObservationInvocationSchema.extend({
-  authority: z.discriminatedUnion('kind', [
-    localAuthority,
-    // Older accepted documents lack installation identity. They remain readable,
-    // but cannot be rebound to the currently configured platform implicitly.
-    platformAuthority.extend({ sourceId: key.nullable().default(null) }),
-  ]),
-  acceptedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
-  /** Zero is an explicitly empty local catalogue; null means local pricing is inapplicable. */
-  priceBookRevision: revision.nullable(),
-})
+function validateSpanCapability(
+  value: {
+    readonly spanCaptureContract?: 'runtime-span-facts-v1'
+    readonly spanCaptureSource?: string
+    readonly authority: { readonly kind: 'local' | 'crewstation' }
+  },
+  ctx: z.RefinementCtx,
+): void {
+  if ((value.spanCaptureContract === undefined) !== (value.spanCaptureSource === undefined))
+    ctx.addIssue({ code: 'custom', message: 'Span contract and source must be accepted together' })
+  if (value.spanCaptureContract !== undefined && value.authority.kind !== 'local')
+    ctx.addIssue({
+      code: 'custom',
+      message: 'Local span capture cannot replace platform authority',
+    })
+}
+export const AcceptObservationInvocationSchema =
+  acceptObservationInvocation.superRefine(validateSpanCapability)
+export const AcceptedObservationInvocationSchema = acceptObservationInvocation
+  .extend({
+    authority: z.discriminatedUnion('kind', [
+      localAuthority,
+      // Older accepted documents lack installation identity. They remain readable,
+      // but cannot be rebound to the currently configured platform implicitly.
+      platformAuthority.extend({ sourceId: key.nullable().default(null) }),
+    ]),
+    acceptedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+    /** Zero is an explicitly empty local catalogue; null means local pricing is inapplicable. */
+    priceBookRevision: revision.nullable(),
+  })
   .strict()
   .superRefine((value, ctx) => {
+    validateSpanCapability(value, ctx)
     const localCatalogue = value.authority.kind === 'local' && value.authority.runtime !== null
     if (localCatalogue !== (value.priceBookRevision !== null)) {
       ctx.addIssue({

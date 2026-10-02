@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { lazy, Suspense, useRef } from 'react'
 import { useTranslation } from 'react-i18next'
 import type {
   ObservationOverviewQuery,
@@ -30,6 +30,7 @@ import { ObservationFilters } from './ObservationFilters'
 import { ObservationNativeCapture } from './ObservationNativeCapture'
 import { ObservationPlatformCapture } from './ObservationPlatformCapture'
 import './RunObservability.css'
+const ObservationTrace = lazy(() => import('./ObservationTrace'))
 
 export interface ObservationSearch {
   readonly from: number
@@ -47,10 +48,20 @@ export interface ObservationSearch {
   readonly workflow?: string
   readonly selection?: string
   readonly model?: string
+  readonly attempt?: string
+  readonly span?: string
 }
-function TaskDetail({ data }: { data: ObservationTaskDetail }) {
+function TaskDetail({
+  data,
+  search,
+  onChange,
+}: {
+  data: ObservationTaskDetail
+  search: ObservationSearch
+  onChange: (value: ObservationSearch) => void
+}) {
   const { t, i18n } = useTranslation(),
-    [selected, setSelected] = useState<string | null>(null)
+    selected = search.attempt ?? null
   const attemptTrigger = useRef<HTMLElement | null>(null)
   const duration = (ms: number) => {
     const token = formatDurationMs(ms)
@@ -189,7 +200,7 @@ function TaskDetail({ data }: { data: ObservationTaskDetail }) {
             to={Math.min(data.asOf, data.task.finishedAt ?? data.asOf)}
             onSelect={(id, trigger) => {
               attemptTrigger.current = trigger
-              setSelected(id)
+              onChange({ ...search, attempt: id, span: undefined })
             }}
             rows={data.attempts.map((a) => ({
               id: a.attempt.id,
@@ -215,7 +226,7 @@ function TaskDetail({ data }: { data: ObservationTaskDetail }) {
       {chosen && (
         <Dialog
           open
-          onClose={() => setSelected(null)}
+          onClose={() => onChange({ ...search, attempt: undefined, span: undefined })}
           title={t('runObservability.selected', { id: chosen.attempt.id })}
           triggerRef={attemptTrigger}
           bodyTabIndex={0}
@@ -227,7 +238,17 @@ function TaskDetail({ data }: { data: ObservationTaskDetail }) {
             {chosen.attempt.wgRound !== null &&
               ` · ${t('runObservability.round', { index: chosen.attempt.wgRound })}`}
           </p>
-          <Metrics value={chosen.metrics} />
+          <div className="stack--md">
+            <Metrics value={chosen.metrics} />
+            <Suspense fallback={<LoadingState />}>
+              <ObservationTrace
+                taskId={data.task.id}
+                nodeRunId={chosen.attempt.id}
+                selectedSpan={search.span}
+                onSelectSpan={(span) => onChange({ ...search, span })}
+              />
+            </Suspense>
+          </div>
         </Dialog>
       )}
       <NoticeBanner tone="info" size="compact">
@@ -464,7 +485,14 @@ export function RunObservability({
           : {})}
       >
         {search.task
-          ? detail.data && <TaskDetail key={search.task} data={detail.data} />
+          ? detail.data && (
+              <TaskDetail
+                key={search.task}
+                data={detail.data}
+                search={search}
+                onChange={onChange}
+              />
+            )
           : tab !== 'tasks'
             ? overview.data && (
                 <ObservationAnalysis

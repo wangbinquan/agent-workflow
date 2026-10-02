@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:98461efc25aafde03970cd25c3067dc9a41bb27a946a67b253ea7ffc83560356`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:0c055d81bc6a485593c8bc3d13c8451f22b6ed211b692efaaf980f7cabf81bd6`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,17 +10,17 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2013 |
-| `services/` 文件 | 295 |
-| `modules/**` 文件 / 非空 context | 1459 / 18 |
+| backend production TS 文件 | 2024 |
+| `services/` 文件 | 298 |
+| `modules/**` 文件 / 非空 context | 1467 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
-| production ambient wiring seam | 500 |
-| background work entries | 344 |
+| production ambient wiring seam | 501 |
+| background work entries | 345 |
 | direct native `setInterval`（call / files） | 22 / 19 |
-| direct native timers（全部） | 76 |
+| direct native timers（全部） | 77 |
 | RFC-317 boundary census（inbound / outbound） | 273 / 31 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
@@ -29,16 +29,16 @@
 
 | 账本 | 条目数 |
 | --- | --- |
-| `ambientWiring` | 500 |
-| `architectureExceptions` | 5115 |
-| `backgroundJobs` | 344 |
-| `crossContextImports` | 5756 |
-| `facades` | 295 |
+| `ambientWiring` | 501 |
+| `architectureExceptions` | 5136 |
+| `backgroundJobs` | 345 |
+| `crossContextImports` | 5778 |
+| `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25819 |
-| `mutationEntrypoints` | 1817 |
+| `moduleSymbolOwners` | 25901 |
+| `mutationEntrypoints` | 1823 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1047 |
+| `publicSurfaces` | 1053 |
 | `transactionExternalEffects` | 261 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -48,7 +48,7 @@
 | context / layer | 数量 |
 | --- | --- |
 | resource-catalog / infrastructure | 126 |
-| task-execution / infrastructure | 114 |
+| task-execution / infrastructure | 115 |
 | task-execution / application | 107 |
 | resource-catalog / application | 76 |
 | task-execution / composition | 62 |
@@ -71,21 +71,21 @@
 | task-execution / engine | 20 |
 | integration / composition | 18 |
 | intent / domain | 18 |
+| runtime-management / application | 17 |
 | code-capability / infrastructure | 15 |
 | development-automation / composition | 15 |
-| runtime-management / application | 15 |
 | collaboration / domain | 14 |
 | digital-employee / application | 14 |
-| run-observability / domain | 13 |
+| run-observability / domain | 14 |
+| runtime-management / infrastructure | 13 |
 | identity-access / infrastructure | 12 |
-| runtime-management / infrastructure | 12 |
+| run-observability / application | 12 |
 | system-operations / composition | 12 |
 | code-capability / domain | 11 |
 | digital-employee / infrastructure | 11 |
 | memory / application | 11 |
 | resource-catalog / domain | 11 |
 | intent / infrastructure | 10 |
-| run-observability / application | 10 |
 | memory / domain | 9 |
 | run-observability / ports | 9 |
 | source-control / domain | 9 |
@@ -96,13 +96,13 @@
 | run-observability / infrastructure | 8 |
 | development-automation / engine | 7 |
 | memory / infrastructure | 7 |
+| runtime-management / composition | 7 |
 | task-execution / public | 7 |
 | digital-employee / composition | 6 |
 | digital-employee / domain | 6 |
 | identity-access / composition | 6 |
 | identity-access / public | 6 |
 | memory / public | 6 |
-| runtime-management / composition | 6 |
 | source-control / composition | 6 |
 | collaboration / public | 5 |
 | digital-employee / public | 5 |
@@ -151,7 +151,7 @@
 | platform | 183 |
 | task-execution | 74 |
 | resource-catalog | 51 |
-| runtime-management | 45 |
+| runtime-management | 48 |
 | identity-access | 38 |
 | collaboration | 31 |
 | workspace-insight | 31 |
@@ -173,7 +173,7 @@
 | targetContext | 数量 |
 | --- | --- |
 | task-execution | 69 |
-| runtime-management | 42 |
+| runtime-management | 45 |
 | resource-catalog | 41 |
 | workspace-insight | 31 |
 | collaboration | 27 |
@@ -190,7 +190,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9-D | 95 |
+| W9-D | 98 |
 | W4-E1 | 68 |
 | W4-E5 | 31 |
 | W4 | 27 |
@@ -208,9 +208,9 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3329 |
-| legacy-inbound | 1602 |
-| infrastructure-external | 290 |
+| legacy-outbound | 3341 |
+| legacy-inbound | 1611 |
+| infrastructure-external | 291 |
 | offered-consumption | 207 |
 | temporary-internal-debt | 89 |
 | off-dag-offered | 83 |
@@ -223,8 +223,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3329 |
-| legacy-inbound | 1602 |
+| legacy-outbound | 3341 |
+| legacy-inbound | 1611 |
 | temporary-internal-debt | 89 |
 | off-dag-offered | 83 |
 | no-circular | 6 |
@@ -235,8 +235,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2765 |
-| W9-D | 862 |
+| W9 | 2778 |
+| W9-D | 870 |
 | W4-E1 | 679 |
 | W4 | 201 |
 | W4-B | 187 |
@@ -262,8 +262,8 @@
 | source-control | 67 |
 | identity-access | 65 |
 | digital-employee | 51 |
+| runtime-management | 43 |
 | development-automation | 39 |
-| runtime-management | 37 |
 | knowledge-evolution | 25 |
 | execution-contract | 22 |
 | memory | 22 |
@@ -274,7 +274,7 @@
 | run-observability | 4 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1047）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1053）
 
 | context | 数量 |
 | --- | --- |

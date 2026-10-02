@@ -28,3 +28,17 @@
   background: var(--accent);
   border-radius: var(--radius-sm);
 }
+.execution-swimlane__point,
+.execution-swimlane__open {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--accent);
+  transform: translateX(-50%);
+}
+.execution-swimlane__open {
+  width: var(--space-3);
+  border: 1px dashed var(--accent);
+  background: transparent;
+}

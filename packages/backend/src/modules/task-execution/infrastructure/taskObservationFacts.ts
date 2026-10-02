@@ -6,6 +6,7 @@ import { nodeRuns, taskExecutionObservationSources, taskRepos, tasks } from '@/d
 import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import type { TaskObservationFactsQuery } from '../public/queries'
+import { createObservationSpanSources } from './observationSpanSources'
 
 const canRead = (actor: Actor) =>
   actor.permissions.has('tasks:read:all') || actor.permissions.has('tasks:read:own')
@@ -58,6 +59,7 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
       canReadAllTasks: actor.permissions.has('tasks:read:all'),
     })
   return {
+    spanSources: createObservationSpanSources(db),
     async sourceBacklog(taskIds) {
       if (taskIds.length > 200)
         throw new RangeError('Observation source cohort exceeds read budget')

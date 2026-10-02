@@ -44,6 +44,34 @@ export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependen
     {
       ...readGate,
       method: 'GET',
+      path: '/api/observability/tasks/:id/spans',
+      summary: 'Read original tool, model and native-agent spans with CNY contribution links',
+    },
+    async (c) => {
+      const raw = c.req.query(),
+        limit = raw.limit === undefined ? 200 : Number(raw.limit)
+      if (!raw.nodeRunId || !Number.isInteger(limit) || limit < 1 || limit > 200)
+        throw new ValidationError('invalid-query', 'Invalid span query')
+      try {
+        const result = await deps.tasks.spans?.(actorOf(c), c.req.param('id'), {
+          nodeRunId: raw.nodeRunId,
+          ...(raw.invocationId ? { invocationId: raw.invocationId } : {}),
+          ...(raw.after ? { after: raw.after } : {}),
+          limit,
+        })
+        if (!result) throw new NotFoundError('task-not-found', 'Task or attempt not found')
+        return c.json(result)
+      } catch (error) {
+        if (error instanceof RangeError) throw new ValidationError('invalid-query', error.message)
+        throw error
+      }
+    },
+  )
+  registerRoute(
+    app,
+    {
+      ...readGate,
+      method: 'GET',
       path: '/api/observability/overview',
       summary: 'Read visible task cohort totals, trends and agent/model/runtime distributions',
     },

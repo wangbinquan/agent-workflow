@@ -485,3 +485,33 @@ RFC-370 owner 已明确暂停共享清单/Git 发布，让 RFC-371 先完成短�
 静态生成 v5 使用同一官方 AST/投影入口与固定 `--snapshot-sha e3b656a10e2bae30c2c51994d565bbcc649efed6`，保留各自原 `originSha`，正式输出日志明确 provenance pinned。2760 及 `sourceDigest=sha256:08703d62600043c1d2f33d719d8f1a21c2ef47ab48f859905282733bca005a01` 保持；四项 payload 摘要另用独立 JSON 计算对拍全部一致。此 SHA 是当前已提交的生成基线，尚未把工作树称为已发布提交。
 
 修正后的完整候选 v3 将独立复核后精确提交、推送并等待本 SHA hosted CI。正式浏览器几何/焦点和整体 RFC 的其他条目仍继续；不把原静态失败、部分覆盖或未定价当零，生产开发采集不因此开启。
+
+### 2026-10-03 原生调用片段与泳道实现接续
+
+[原生片段设计](durable-span-facts.md) 独立 DESIGN v3 PASS（原 v1/v2 FAIL 保留），本地业务 runNode 的元数据留存、原生来源扫描、旧受理能力保持、A/B 续跑原属、ACK 后 Task 来源分页、任务片段 API 与正式泳道组件已落地。模型详情复用原贡献与人民币费率，分别展示非缓存输入、缓存读、缓存写、输出；工具/原生 Agent 不重复添加 Token 或费用。未知原生时间不借任务全长，冲突证据让原片段保持 unknown；异步查找不直接写持久状态。
+
+精确 47 路径格式/lint 通过，45 个 TS/TSX 的 AST 语法无诊断；没有本机 AW 测试、语义 typecheck、build、E2E 或服务。真实 SQLite/PG provider、原生时间/归属、帧内 cursor、水位、Actor/attempt、旧 replay、Runner 接线与组件 URL/焦点回归已经写入但尚未执行。独立 SOURCE、官方架构登记、精确远端 CI 与新正式页面验收待完成。
+
+227c 主 CI 的 44 success / 6 fail 保留，其三个实际缺陷由原负责会话按职责提交修正；新 SHA 的验证须独立等终态，不能用原定时矩阵或旧数字对账代签。系统 Agent/smoke/CLI/自测的原受理与采集尚未闭合，CS 托管 spans 与生产开发采集的全 writer/inflight、unbound/unknown-tail 仍继续。AW-R03/R04/R09 和两个 RFC 保持 In Progress。
+
+### 2026-10-03 原生片段 SOURCE v2 失败与有界事件修正
+
+独立 SOURCE v2 完整核对 51 候选与 52 引用，首尾均稳定，结论 FAIL；唯一 P2 为归属查询尚未返回时，pending 按调用身份覆盖之前的实际 completion，可能把相互矛盾的结束时间错误显示为已知完成。原失败回执与旧候选保留，没有运行 AW 本机测试来代签。
+
+修正为每 root 最多 200 条不同原生观察的有界缓冲，完全相同的事件去重，归属受理后经同一原证据投影顺序处理；已完成归属的事件直接走原冲突判据。两条不同 completion 均保留，后续最终 SQLite 只留后一值也不能抹去冲突；旧数字账本、数值捕获 500 限额及 CNY 计价没有改动。新增真实临时 SQLite 的两种冲突事件顺序，以及正常 start→completion 和 205 次重复交付的正例；均为写入待 hosted CI 的回归，不宣称已运行。两个实际变化源码/回归文件限定格式、lint、纯 AST 语法解析通过；未运行语义 typecheck、build、E2E 或服务。
+
+官方完整 13 产物已在固定 e0c42a53 + 精确 51 路径的私有只读 provider 生成，未写仓库；生成期间共享主干合法推进到 fd02ad70，故旧私有产物仅证明原基线，当前 SHA 的产物、真实增长解释、完整实现门、远端 CI 与页面验收继续。源码修正须经 SOURCE v3；CS 开发 producer 保持 OFF，两个 RFC 保持 In Progress。
+
+### 2026-10-03 原生片段 SOURCE v3 与正式生成清单
+
+SOURCE v2 的唯一 P2 已按实际事件顺序修正，完整 v3 独立功能审查为 PASS：51 候选、61 引用首尾稳定，46 路径继承、5 路径重审，无新增 P1/P2。查询归属回包之前保留最多 200 个不同原始观察，同一事件去重；矛盾 completion 的两个顺序、最终 SQLite 只剩最后一条、正常 start→completion 与 205 次重复均有新回归。只做目标 format/lint 与纯 AST，没有运行 AW 本机测试、类型检查、构建或服务；新回归行为仍交远端 CI 验证，原 FAIL 保留。
+
+固定已发布 `d2c29c15c2e65dfc447ea5f7ae99bac8c6bc77bd` 加精确 51 路径，只读 provider 的原官方 census 一次生成 13 产物，候选和引用保持，未纳入其他未提交源码。SOURCE digest 为 `sha256:0c055d81bc6a485593c8bc3d13c8451f22b6ed211b692efaaf980f7cabf81bd6`；production 2,828（backend 2,024／frontend 643／shared 161），legacy 557／module 1,467，symbol/root 25,901。原四项生成规则和字段预算计算方式不变；两项既有合同随新增字段更新派生数值：ObservationTaskQueries leaf/union 为 169/58→205/76，TaskObservationFactsQuery 为 60/32→75/38。完整 owner/edge、debt 与波次判据保持，新增三个已批准的精确 runtime helper 登记。
+
+实际八项增长依原 RFC-317 机制各登记一次：mutation 1,817→1,823、background 344→345、ambient 500→501、observed imports 5,756→5,778、exceptions 5,115→5,136、facades 295→298、public 1,047→1,053、symbols 25,819→25,901。增长来自实际采集/查询工厂、限时读取 timer、正式 spans GET、原边分类、两个公共工厂与四种 capture 类型、三个 helper 及新符号；没有增加数值 usage writer 或放宽规则。原 pure governance projection 复用这一次 census，只给这八项实增条目投影具名 why 和原 provenance；其他十二产物逐字相同，没有重跑 census。回执必须在匹配 canonical 提交之后由原机制立即退役。
+
+旧 e0c 的私有产物、report-only 修正及原 SOURCE v1/v2 历史保留；只读生成和源码有限 PASS 不替代完整实现门、新发布 SHA 的 hosted CI 或正式页面验收。本片只补本地业务 runNode 的原生片段；system/smoke/CLI 全入口、CS hosted 联合链路、原生层级完整性和全部剩余工作继续，两个 RFC 仍 In Progress，CS 开发 producer 保持 OFF。
+
+### 实现门 v4 文案修正（2026-10-03）
+
+完整限定实现门 v4 的唯一 P2 是许可理由及发布说明把派生字段预算误写为不变；原 FAIL 与逐文件回执保留。当前只修正该许可 why、用原 provenance 函数重算 ledger 摘要，并列出上述两项实际数字。另 12 份生成产物和全部 48 代码路径逐字未变；纯治理投影复用原 census，未重跑 scanner 或本机测试。窄增量复核、新发布及精确 hosted CI 继续，不关闭 RFC 或开启 CS 开发 producer。

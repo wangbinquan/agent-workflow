@@ -1,22 +1,22 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 500,
-    "architectureExceptions": 5115,
-    "backgroundJobs": 344,
-    "crossContextImports": 5756,
-    "facades": 295,
+    "ambientWiring": 501,
+    "architectureExceptions": 5136,
+    "backgroundJobs": 345,
+    "crossContextImports": 5778,
+    "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25819,
-    "mutationEntrypoints": 1817,
+    "moduleSymbolOwners": 25901,
+    "mutationEntrypoints": 1823,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1047,
+    "publicSurfaces": 1053,
     "transactionExternalEffects": 261
   },
   "metrics": {
-    "ambientWiringEntries": 500,
+    "ambientWiringEntries": 501,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2013,
+    "backendProductionFiles": 2024,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 344,
+    "backgroundEntries": 345,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -48,7 +48,7 @@
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
     "directNativeIntervals": 22,
-    "directNativeTimers": 76,
+    "directNativeTimers": 77,
     "inboundBoundaryEdges": 273,
     "knownViolations": 8,
     "moduleContexts": [
@@ -102,11 +102,11 @@
       },
       {
         "context": "run-observability",
-        "files": 46
+        "files": 49
       },
       {
         "context": "runtime-management",
-        "files": 38
+        "files": 42
       },
       {
         "context": "source-control",
@@ -122,10 +122,10 @@
       },
       {
         "context": "task-execution",
-        "files": 343
+        "files": 344
       }
     ],
-    "moduleFiles": 1459,
+    "moduleFiles": 1467,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -156,10 +156,10 @@
       ]
     ],
     "routeToDbEdges": 0,
-    "serviceFiles": 295,
+    "serviceFiles": 298,
     "transportToDbEdges": 0,
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:98461efc25aafde03970cd25c3067dc9a41bb27a946a67b253ea7ffc83560356"
+  "sourceDigest": "sha256:0c055d81bc6a485593c8bc3d13c8451f22b6ed211b692efaaf980f7cabf81bd6"
 }
