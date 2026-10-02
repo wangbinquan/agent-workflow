@@ -376,6 +376,8 @@ import {
   selectSkillContentDependencies,
   type SkillContentBinding,
 } from '@/modules/resource-catalog/composition/skillContentBinding'
+import type { ProgramArtifactPort } from '@/modules/digital-employee/composition/required-ports'
+import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 
 export interface StartOptions {
   port?: number
@@ -387,6 +389,8 @@ export interface StartOptions {
   databaseInstallation?: DaemonDatabaseInstallationPort
   taskArchive?: TaskArchiveContentBinding
   skillContent?: SkillContentBinding
+  employeePrograms?: ProgramArtifactPort
+  evidenceRead?: EvidenceReadBinding
 }
 
 interface DaemonProviderHttpAdmission {
@@ -548,6 +552,8 @@ async function composePostgresqlProviderSession(
     applicationConfiguration: input.applicationConfiguration,
     taskArchive: input.taskArchive,
     skillContent: input.skillContent,
+    employeePrograms: input.employeePrograms,
+    evidenceRead: input.evidenceRead,
     token: input.token,
     appHome: Paths.root,
     configPath: Paths.config,
@@ -1066,6 +1072,8 @@ interface DaemonProviderSessionComposeInput {
   readonly runtimeLegacyConfiguration: RuntimeLegacyConfigurationPort
   readonly taskArchive?: TaskArchiveContentBinding
   readonly skillContent?: SkillContentBinding
+  readonly employeePrograms?: ProgramArtifactPort
+  readonly evidenceRead?: EvidenceReadBinding
   readonly token: string
   readonly secretBox: ReturnType<typeof createSecretBox>
   readonly dbVersion: number
@@ -1617,6 +1625,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     runtimeLegacyConfiguration,
     taskArchive: opts.taskArchive,
     skillContent: opts.skillContent,
+    employeePrograms: opts.employeePrograms,
+    evidenceRead: opts.evidenceRead,
     token,
     secretBox,
     dbVersion,
@@ -2707,6 +2717,7 @@ async function composeSqliteProviderSession(
   const developmentAutomation = composeDevelopmentAutomation({
     db,
     appHome: Paths.root,
+    evidenceRead: input.evidenceRead,
     admissionLookup: developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunnerFor(db),
     changeCandidate: bindChangeCandidateParticipant(),
@@ -3084,6 +3095,8 @@ async function composeSqliteProviderSession(
     taskRouteLaunch: taskExecutionProvider.routeLaunch,
     taskArchiveMaintenance: taskExecutionProvider.archive,
     skillContent: input.skillContent,
+    employeePrograms: input.employeePrograms,
+    evidenceRead: input.evidenceRead,
     memoryOperations,
     databaseMigration: databaseMigration,
     collaborationContext,
@@ -3383,6 +3396,7 @@ async function composeSqliteProviderSession(
   const employeeOs = composeDigitalEmployee({
     db,
     appHome: Paths.root,
+    programArtifacts: input.employeePrograms,
     typePackages: [developmentEmployeeTypePackage],
     typePackageDriftPolicy: digitalEmployeeTypePackageDriftPolicy,
     platformTools: digitalEmployeePlatformTools,

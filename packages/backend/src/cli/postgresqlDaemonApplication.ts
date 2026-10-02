@@ -371,6 +371,8 @@ import {
   selectSkillContentDependencies,
   type SkillContentBinding,
 } from '@/modules/resource-catalog/composition/skillContentBinding'
+import type { ProgramArtifactPort } from '@/modules/digital-employee/composition/required-ports'
+import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 
 export interface PostgresqlDaemonApplicationInput {
   readonly provider: PostgresqlProviderRuntime
@@ -385,6 +387,8 @@ export interface PostgresqlDaemonApplicationInput {
   readonly applicationConfiguration?: ApplicationConfigurationBinding
   readonly taskArchive?: TaskArchiveContentBinding
   readonly skillContent?: SkillContentBinding
+  readonly employeePrograms?: ProgramArtifactPort
+  readonly evidenceRead?: EvidenceReadBinding
   readonly daemonInfoPath: string
   readonly lockPath: string
   readonly secretBox: SecretBox
@@ -1553,6 +1557,7 @@ export async function composePostgresqlApplication(
   const digitalEmployee = composeDigitalEmployee({
     db: input.db,
     appHome: input.appHome,
+    programArtifacts: input.employeePrograms,
     typePackages: [developmentEmployeeTypePackage],
     platformTools: await composeDigitalEmployeeBuiltinToolCatalog({
       agentTemplates: digitalEmployeeAgentTemplates,
@@ -1674,6 +1679,7 @@ export async function composePostgresqlApplication(
   const developmentAutomation = composeDevelopmentAutomation({
     db: input.db,
     appHome: input.appHome,
+    evidenceRead: input.evidenceRead,
     admissionLookup: developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunnerFor(input.db),
     changeCandidate: bindChangeCandidateParticipant(),

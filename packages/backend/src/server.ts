@@ -111,6 +111,8 @@ import {
   selectSkillContentDependencies,
   type SkillContentBinding,
 } from '@/modules/resource-catalog/composition/skillContentBinding'
+import type { ProgramArtifactPort } from '@/modules/digital-employee/composition/required-ports'
+import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 import type { AgentResourceIntegrityComposition } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
@@ -766,6 +768,8 @@ export function composePostgresqlDaemonProviderCore(
 export interface AppDeps {
   /** The same complete store selection serves skill editing and boot recovery. */
   skillContent?: SkillContentBinding
+  employeePrograms?: ProgramArtifactPort
+  evidenceRead?: EvidenceReadBinding
   /** Selected archive store for standalone HTTP composition. */
   taskArchive?: TaskArchiveContentBinding
   /** Daemon HTTP reuses the exact archive command used by boot recovery. */
@@ -1969,6 +1973,7 @@ function composeFallbackDevelopmentAutomation(
   const automation = composeDevelopmentAutomation({
     db: deps.db,
     appHome,
+    evidenceRead: deps.evidenceRead,
     admissionLookup: deps.developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunnerFor(deps.db),
     changeCandidate: bindChangeCandidateParticipant(),
@@ -2887,6 +2892,7 @@ function composeSqliteApiRouteMounts(
   const digitalEmployee = composeDigitalEmployee({
     db: deps.db,
     appHome,
+    programArtifacts: deps.employeePrograms,
     typePackages: [developmentEmployeeTypePackage],
     typePackageDriftPolicy: deps.digitalEmployeeTypePackageDriftPolicy,
     ...(deps.digitalEmployeePlatformTools === undefined
