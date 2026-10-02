@@ -249,3 +249,13 @@ A1 启动前恢复11路径由 /root/intent_functional_gate 有限 PASS，有序�
 e4d6f5b2 [CI36984501133](https://github.com/wangbinquan/agent-workflow/actions/runs/36984501133) cancelled、27 success/2 failure/21 cancelled，三个CS raw来源通过，失败是RFC371既有OpenCode来源503及aggregate；不记全绿。并行三个文档c843938a完整承接，其[CI36985769914](https://github.com/wangbinquan/agent-workflow/actions/runs/36985769914)已completed/failure、48成功/2失败，失败仅OpenCode来源503及聚合。原55b1104a主48/2失败、同SHA Windows1/1成功全部保留。本批实际执行以发布后精确SHA主CI及Windows为准。
 
 17路径metadata首门另有文档事实P2：c843 CI在复核期间刚进入终态，新增节的“待终态”已按精确回执修正；该finding和原候选指纹f162d6ecbbbbdd592d10d583f7083e8b060176f8991e6268a1366a697aeadbdc保留。独立单文档CI引用修正有限PASS，指纹32ba3a45fec8988daf421e3bb9a64bb4d45d00ab91f9d92158bae8c0e6a32fdf；按CLAUDE原规则把同固定提交/路径/行号的OpenCode blob超链接改成文本引用，逆变换旧全文逐字一致，原RFC371输出全部保持，不改任何事实、checker或预算。该文档以另一个小commit同批发布，正式恢复仍待本批exact-SHA CI。
+
+## 所选配置读写真根与后台排空有限实现门（2026-10-02）
+
+所选配置读写绑定9路径与通知ACK2路径分组独立有限PASS，完整11路径互不重叠。ACK首门指纹4964cf6701d9373c6bc7fc2d416ecbe549473e4bc30dc9663b782147d5017a55的FAIL/P2保留：合法旧void回调隐含返回number也曾被当作异步；现只收真实thenable，原三组回归完整保留并补typed void的number/null兼容例。修正两路径指纹4d5ce8e541ad00b7b47bd9e85e7711081dd9352a27116179accbfff6b93797ae；九路径指纹213ea64f2d241e6f4e9898bdccb3bcf83b46790bdb04f610a828fcdb5ab708f8。
+
+三个真实start/PG/SQLite根选择一次binding；selected同一persistence receiver供live query与Settings commands，逻辑通知key无需本机路径，旧query-only显式注入保持兼容。Settings原校验/probe fence/失效/保存/通知/日志/对账/池容量顺序保留；真实双provider HTTP用例覆盖held write及held hot-apply ACK、GET/discovery一致、读写失败500及本地config全文不变。CLI维护在原时点读所选query，TE background/idle/batch贯穿，backup/refresh启动await、同实例stop/drain。PG queued Intent读所选源，SQLite剩余resume及runtime/迁移/宿主切面仍继续，不把本批记成完整A1/A7/A8。
+
+三完整composition body的严格局部逆变换恢复原W29摘要；只增加一个binding声明，PG167→168、SQLite48→49，API65/EC4保持，原phase/lifetime判据保留。官方scoped census只取HEAD加11路径，四原规则逐字保持：imports5689→5692、原exception投影5051→5054、owner25723→25726；实际八条边替换五条，三个owner为新文件/type/factory。entry1805、background342、public1045、required-port liveness38及implementation SCC空保持。三项增长按既有协议登记，canonical发布后后继退役，不新增边界条款或豁免。
+
+前批26源码及17配套已按七个小提交发布并精确同步7170360814136a31c494fe380092d5d7655dde8d；原OpenCode文本引用以并行81d6d54f的三个完整共享文档承载，不另外提交旧单文档快照。其Windows [36990563985](https://github.com/wangbinquan/agent-workflow/actions/runs/36990563985)已completed/success 1/1、headSha严格一致；主CI36990280728的2026-10-02T09:44:39+00:00读取快照为queued、非终态，不能用该快照断言最终通过或失败；终态另记，全部旧failure/cancelled保留。只有限定format/lint、源码/AST/JSON证明和官方生成，无本机AW test/typecheck/build/service。完整A1～A8/A-G、独立CS adapters、M0～M4持续；尚无AW-in-CS部署，不关闭RFC。

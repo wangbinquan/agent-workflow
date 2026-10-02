@@ -1,3 +1,9 @@
+## 2026-10-02 RFC-370 所选配置读写真根与后台排空11路径
+
+配置binding真根9与通知ACK2路径获分组有限独立PASS；首门旧void隐含返回值P2及FAIL保留，现仅等待真实thenable并补兼容回归。三个真实根选择同一persistence供Settings读写/live query，原保存政策与热应用顺序保留；后台备份/仓库刷新同实例stop/drain已接通。双provider真实HTTP回归和完整body逆变换证明已写，运行仍交新批exact-SHA hosted CI，无本机AW test/typecheck/build/service。
+
+原规则/scoped语料保持；实际三项各增长3（imports5692、exception5054、owner25726），其他计数/public1045/SCC空不变，canonical后继按原协议退役回执。前批已精确发布71703608；其Windows36990563985 success 1/1，主CI快照非终态且不能代替通过。原CI和并行全文保留；SQLite queued Intent、runtime/迁移/宿主及其余A1～A8/A-G继续，独立CS adapters/M0～M4尚待实施，无AW-in-CS部署，不关闭RFC。
+
 ## 2026-10-02 RFC-370 所选配置读取与后台排空26路径候选
 
 配置叶层14、所选真实根6、周期原语2、仓库刷新2、备份排空2，共26个不同源码/回归路径，五组均获有限独立功能PASS。两项首门P2及FAIL保留：热读取拒绝不再跳过tick排空；备份所选回调进入前先登记active，同步关闭仍等待ACK与原收尾。新旧业务政策、错误分类、读取时点、同步兼容及已有断言保持，正式运行仍等本批exact-SHA hosted CI。

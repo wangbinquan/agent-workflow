@@ -44,3 +44,9 @@ A1 启动前恢复11路径由 /root/intent_functional_gate 有限 PASS，有序�
 scoped canonical只纳入26路径、原规则保持；四项实际增长依原协议登记并在matching canonical后继退役。按五个小source提交及配套及时发布，正式功能验证交本批exact-SHA hosted CI和Windows，不运行本机AW test/typecheck/build/service。e4d6f5b2主CI已cancelled 27/2/21，CS三来源已通过，另一RFC来源503及聚合失败保留；并行c843938a三文档完整保留，其CI已completed/failure、48成功/2失败（OpenCode来源503及聚合），原失败保留。完整B/M0～M4顺序和RFC退出条件保持。
 
 17路径metadata首门另有文档事实P2：c843 CI在复核期间刚进入终态，新增节的“待终态”已按精确回执修正；该finding和原候选指纹f162d6ecbbbbdd592d10d583f7083e8b060176f8991e6268a1366a697aeadbdc保留。独立单文档CI引用修正有限PASS，指纹32ba3a45fec8988daf421e3bb9a64bb4d45d00ab91f9d92158bae8c0e6a32fdf；按CLAUDE原规则把同固定提交/路径/行号的OpenCode blob超链接改成文本引用，逆变换旧全文逐字一致，原RFC371输出全部保持，不改任何事实、checker或预算。该文档以另一个小commit同批发布，正式恢复仍待本批exact-SHA CI。
+
+## 2026-10-02 所选配置耐久写与后台真根增量
+
+A1本批完成三个真实根的同一配置binding透传，Settings及live query使用同一selected persistence receiver和逻辑通知key；旧query-only覆写保持。A7增量接通backup/refresh真实stop/drain、维护初始读取、TE background/idle/batch所选query。通知2与根9分组有限PASS、原同步兼容P2保留并修复，真实双provider HTTP及held write/hot ACK/失败不改文件回归已写；源证明不替正式运行。
+
+SQLite queued Intent、runtime注册表/迁移、boot/manual外层选择、锁及宿主生命周期仍属A1/A7；其余A2～A8及完整AC00/A-G持续，不以本批关闭全部配置或执行权。scoped canonical与三项真实增长按原规则发布/后继退役，正式行为等新exact-SHA CI；717的Windows已success，主CI非终态快照另记，原失败/取消保持。独立CS adapters及M0～M4仍按完整A-G后的顺序实施，无AW-in-CS部署；不运行本机AW test/typecheck/build/service，不关闭RFC。

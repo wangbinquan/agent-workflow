@@ -465,3 +465,11 @@ A1 启动前恢复11路径由 /root/intent_functional_gate 有限 PASS，有序�
 scoped canonical只纳入26路径、原规则保持；四项实际增长依原协议登记并在matching canonical后继退役。按五个小source提交及配套及时发布，正式功能验证交本批exact-SHA hosted CI和Windows，不运行本机AW test/typecheck/build/service。e4d6f5b2主CI已cancelled 27/2/21，CS三来源已通过，另一RFC来源503及聚合失败保留；并行c843938a三文档完整保留，其CI已completed/failure、48成功/2失败（OpenCode来源503及聚合），原失败保留。完整B/M0～M4顺序和RFC退出条件保持。
 
 17路径metadata首门另有文档事实P2：c843 CI在复核期间刚进入终态，新增节的“待终态”已按精确回执修正；该finding和原候选指纹f162d6ecbbbbdd592d10d583f7083e8b060176f8991e6268a1366a697aeadbdc保留。独立单文档CI引用修正有限PASS，指纹32ba3a45fec8988daf421e3bb9a64bb4d45d00ab91f9d92158bae8c0e6a32fdf；按CLAUDE原规则把同固定提交/路径/行号的OpenCode blob超链接改成文本引用，逆变换旧全文逐字一致，原RFC371输出全部保持，不改任何事实、checker或预算。该文档以另一个小commit同批发布，正式恢复仍待本批exact-SHA CI。
+
+### 所选配置读写真根与后台排空11路径（2026-10-02）
+
+通知ACK2与真实binding9分组有限PASS，原同步隐含返回值FAIL/P2及修复记录见functional-gates。SO composition选择一次存储，StartOptions、PG应用及SQLite应用透传同一binding；selected逻辑通知key不需本机路径，旧query-only覆写兼容。Settings读写共享receiver，业务校验/probe fence及原热应用顺序保持；维护、TE后台、idle、batch、backup/refresh接所选query，最后两者关闭等待在途ACK。SQLite queued Intent及runtime/迁移/宿主继续。
+
+真实双provider HTTP与binding ACK/失败回归已写；W29三body严格逆变换恢复旧全体，PG168/SQLite49仅各多一binding声明，API65/EC4和原生命周期规则保持。官方scoped生成仅HEAD加11路径，三项实际各+3增长原协议登记/后继退役；原规则、其他计数、public1045及SCC空保持。
+
+前批26源码加17配套按七commit发布71703608，OpenCode文本引用由并行81d6三个共享文档承载且完整保留。717的Windows36990563985已success，主CI非终态快照与最终证据分开。新批按两个小source提交及配套发布，正式验证交确切SHA CI；无本机AW test/typecheck/build/service，完整A-G后才进入独立CS adapter与M0～M4，不改变退出门。

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1984,
+    "backendFiles": 1985,
     "frontendFiles": 642,
     "legacyFiles": 554,
-    "moduleFiles": 1430,
-    "productionFiles": 2786,
+    "moduleFiles": 1431,
+    "productionFiles": 2787,
     "sharedFiles": 160,
-    "symbolsIncludingFileRoots": 25723
+    "symbolsIncludingFileRoots": 25726
   },
   "entries": [
     {
@@ -118359,6 +118359,42 @@
       "symbol": "SystemOperationsRecoveryAdapter",
       "targetContext": "system-operations",
       "targetLayer": "composition"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/applicationConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/applicationConfiguration.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/applicationConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/applicationConfiguration.ts#ApplicationConfigurationBinding",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "ApplicationConfigurationBinding",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/applicationConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/applicationConfiguration.ts#composeApplicationConfigurationBinding",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "composeApplicationConfigurationBinding",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
     },
     {
       "currentContext": "system-operations",
@@ -309408,5 +309444,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:9424c946e01dedf96fbaaed3a551a591b95c38e5410dfa35a44e52ff9f91624a"
+  "sourceDigest": "sha256:bc18656fdf3a864b196205004ab29051b9ec443ec93fd406a36a9267b8237822"
 }
