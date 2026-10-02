@@ -44,51 +44,51 @@ function binding(rootReference: string): SkillContentBinding {
 function inheritedBinding(store: SkillContentBinding): SkillContentBinding {
   class InheritedBinding implements SkillContentBinding {
     get rootReference() {
-      expect(this).toBe(receiver)
+      expect<SkillContentBinding>(this).toBe(receiver)
       return store.rootReference
     }
     get content() {
-      expect(this).toBe(receiver)
+      expect<SkillContentBinding>(this).toBe(receiver)
       return store.content
     }
     get versionReader() {
-      expect(this).toBe(receiver)
+      expect<SkillContentBinding>(this).toBe(receiver)
       return store.versionReader
     }
     get creationContent() {
-      expect(this).toBe(receiver)
+      expect<SkillContentBinding>(this).toBe(receiver)
       return store.creationContent
     }
     get deletionContent() {
-      expect(this).toBe(receiver)
+      expect<SkillContentBinding>(this).toBe(receiver)
       return store.deletionContent
     }
     get lifecycleContent() {
-      expect(this).toBe(receiver)
+      expect<SkillContentBinding>(this).toBe(receiver)
       return store.lifecycleContent
     }
     get versionContent() {
-      expect(this).toBe(receiver)
+      expect<SkillContentBinding>(this).toBe(receiver)
       return store.versionContent
     }
     get versionPresence() {
-      expect(this).toBe(receiver)
+      expect<SkillContentBinding>(this).toBe(receiver)
       return store.versionPresence
     }
     get snapshotInspector() {
-      expect(this).toBe(receiver)
+      expect<SkillContentBinding>(this).toBe(receiver)
       return store.snapshotInspector
     }
     get versionRecovery() {
-      expect(this).toBe(receiver)
+      expect<SkillContentBinding>(this).toBe(receiver)
       return store.versionRecovery
     }
     get identityContent() {
-      expect(this).toBe(receiver)
+      expect<SkillContentBinding>(this).toBe(receiver)
       return store.identityContent
     }
     get identityInspector() {
-      expect(this).toBe(receiver)
+      expect<SkillContentBinding>(this).toBe(receiver)
       return store.identityInspector
     }
   }
