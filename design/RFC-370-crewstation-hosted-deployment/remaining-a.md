@@ -36,3 +36,11 @@ A1 启动前恢复11路径由 /root/intent_functional_gate 有限 PASS，有序�
 官方 census 只纳入已提交HEAD加上述24路径，原工具/扫描/语料规则保持。entry1803（原1797）、background342（339）、imports5686（5661）、required-port liveness38（37）、exception5048（5024）、owner25720（25691）；public1045、implementation SCC空保持。新增 required SPI 有真实共享consumer、file provider及composition三方owner绑定。原298条边界条款的owner/why/退役规定保留；仅按原口径增加pendingRestore→SO local的实际value/type两项R1，inbound267→269、outbound31不变，A-T7退役。六项真实增长按原协议一次登记，匹配canonical发布后后继退役，不扩大目录/规则。
 
 按两个source小提交、scoped canonical/docs及六项消费回执后继退役发布，正式行为仍以本批exact-SHA hosted CI为准。只有目标格式/lint、纯源码/AST/JSON证明及官方生成，没有本机AW test/typecheck/build/service。有限源码门、已有修复CI与新批正式CI各自记账；A1～A8/完整A-G、CS独立adapter、M0～M4继续，尚无AW-in-CS部署，不关闭RFC。
+
+## 2026-10-02 所选配置与排空实施增量
+
+已形成五组26路径有限独立PASS候选：叶层14、真实根6、周期2、仓库刷新2、备份2。两项首门FAIL/P2、修正和回归详见functional-gates，全部旧政策/counts/断言保持。A1的同一所选query贯穿双provider/daemon/HTTP和本批purpose读；awaitIdle及仓库刷新异步配置支撑后续CLI stop/drain。settings耐久写、剩余热读/后台真接线、宿主生命周期、完整A1/A7/A8/A-G继续，尚无CS生产adapter或AW-in-CS部署。
+
+scoped canonical只纳入26路径、原规则保持；四项实际增长依原协议登记并在matching canonical后继退役。按五个小source提交及配套及时发布，正式功能验证交本批exact-SHA hosted CI和Windows，不运行本机AW test/typecheck/build/service。e4d6f5b2主CI已cancelled 27/2/21，CS三来源已通过，另一RFC来源503及聚合失败保留；并行c843938a三文档完整保留，其CI已completed/failure、48成功/2失败（OpenCode来源503及聚合），原失败保留。完整B/M0～M4顺序和RFC退出条件保持。
+
+17路径metadata首门另有文档事实P2：c843 CI在复核期间刚进入终态，新增节的“待终态”已按精确回执修正；该finding和原候选指纹f162d6ecbbbbdd592d10d583f7083e8b060176f8991e6268a1366a697aeadbdc保留。独立单文档CI引用修正有限PASS，指纹32ba3a45fec8988daf421e3bb9a64bb4d45d00ab91f9d92158bae8c0e6a32fdf；按CLAUDE原规则把同固定提交/路径/行号的OpenCode blob超链接改成文本引用，逆变换旧全文逐字一致，原RFC371输出全部保持，不改任何事实、checker或预算。该文档以另一个小commit同批发布，正式恢复仍待本批exact-SHA CI。

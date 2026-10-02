@@ -1,3 +1,13 @@
+## 2026-10-02 RFC-370 所选配置读取与后台排空26路径候选
+
+配置叶层14、所选真实根6、周期原语2、仓库刷新2、备份排空2，共26个不同源码/回归路径，五组均获有限独立功能PASS。两项首门P2及FAIL保留：热读取拒绝不再跳过tick排空；备份所选回调进入前先登记active，同步关闭仍等待ACK与原收尾。新旧业务政策、错误分类、读取时点、同步兼容及已有断言保持，正式运行仍等本批exact-SHA hosted CI。
+
+同一live query经StartOptions贯穿PG/SQLite真实daemon与HTTP roots，MCP/EC/DE/Intent/schedule及memory/committed/webhook所选消费方等待当前读取；W29只更新四个body摘要，原counts/生命周期判据完整保留。周期和备份awaitIdle、所选仓库刷新异步启动/热重配及stop/drain已有回归；CLI剩余后台接线、耐久settings写、完整A1/A7/A8继续，不把本批记成完整接入。
+
+官方scoped语料仅HEAD加26路径，四份原规则逐字保持；entry1803→1805、imports5687→5689、exception5049→5051、owner25719→25723；background342、public1045、required-port liveness38及implementation SCC空保持。四项实际增长按原协议登记，canonical发布后后继退役，不新增边界条款。e4d6f5b2主CI36984501133已cancelled、27成功/2失败/21取消；三个CS raw来源已通过，失败为RFC371一处OpenCode来源503及聚合。并行c843938a仅三个文档、全部保留；其CI36985769914已completed/failure、48成功/2失败（OpenCode来源503及聚合），原失败保留。55b1104a的48/2失败及Windows1/1成功历史保持。
+
+本批按五个小source提交及配套发布；只有目标format/lint、源码/AST/JSON证明和官方生成，无本机AW test/typecheck/build/service。共享STATE及并行历史完整保留；完整A1～A8/A-G、CS独立adapter、M0～M4持续，尚无AW-in-CS部署，不关闭RFC。
+
 ## 2026-10-02 RFC-370 CI 修正发布与 RFC035 来源链接
 
 6路径源码修正与17份配套已按四个小提交发布并精确同步 `55b1104a812c247f692f5450b6738e299d437bc1`；双发布锁、空共享索引、候选字节、提交路径/归属及其他在制内容均核对，foreignDrift为空。Windows [36980819374](https://github.com/wangbinquan/agent-workflow/actions/runs/36980819374) 已 completed/success、1/1，headSha严格一致。主 [36980700296](https://github.com/wangbinquan/agent-workflow/actions/runs/36980700296) 已 completed/failure、48 success／2 failure／0 cancelled；失败只有 Markdown link check 与 CI required 聚合，其余作业全部成功，不能记正式全绿。
@@ -9338,3 +9348,5 @@ M1 验收：跑通 `创 agent → 创 skill → 通过 API/curl 创线性 workfl
 3. 看 `TaskList`（如果当前 session 有持久任务，否则按本文件"下一步"接力）
 4. 选 issue → 创 TaskCreate → 进 in_progress
 5. 完成一批 issue 后：commit + push + 更新本文件
+
+17路径metadata首门另有文档事实P2：c843 CI在复核期间刚进入终态，新增节的“待终态”已按精确回执修正；该finding和原候选指纹f162d6ecbbbbdd592d10d583f7083e8b060176f8991e6268a1366a697aeadbdc保留。独立单文档CI引用修正有限PASS，指纹32ba3a45fec8988daf421e3bb9a64bb4d45d00ab91f9d92158bae8c0e6a32fdf；按CLAUDE原规则把同固定提交/路径/行号的OpenCode blob超链接改成文本引用，逆变换旧全文逐字一致，原RFC371输出全部保持，不改任何事实、checker或预算。该文档以另一个小commit同批发布，正式恢复仍待本批exact-SHA CI。

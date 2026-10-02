@@ -24755,6 +24755,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:47d8a9ba989d33f2bd31",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#ApplicationConfigurationQueries",
+      "toPath": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toSymbol": "ApplicationConfigurationQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/agents.ts#$file",
       "fromPath": "packages/backend/src/routes/agents.ts",
       "fromSymbol": "$file",
@@ -83473,6 +83490,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f8ece5e8919cd5b83027",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#ApplicationConfigurationQueries",
+      "toPath": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toSymbol": "ApplicationConfigurationQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResources.ts#$file",
       "fromPath": "packages/backend/src/services/execution/taskExecutionResources.ts",
       "fromSymbol": "$file",
@@ -85835,9 +85869,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5049,
+    "architectureExceptions": 5051,
     "implementationSccs": 0,
-    "observedEdges": 5687,
+    "observedEdges": 5689,
     "requiredPorts": 38,
     "targetEdges": 69
   },
@@ -111796,6 +111830,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:47d8a9ba989d33f2bd31",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "ApplicationConfigurationQueries",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#ApplicationConfigurationQueries"
     },
     {
       "edgeKind": "value",
@@ -174344,6 +174394,22 @@
     {
       "edgeKind": "type",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:f8ece5e8919cd5b83027",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "ApplicationConfigurationQueries",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#ApplicationConfigurationQueries"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/execution/taskExecutionResources.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResources.ts#$file",
       "id": "import:f8f549a6355d854ddc9f",
@@ -177678,7 +177744,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:25226bfe9d34142ef008867288f00bd92daee04be9ff42810803bdac65563205",
+  "sourceDigest": "sha256:9424c946e01dedf96fbaaed3a551a591b95c38e5410dfa35a44e52ff9f91624a",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

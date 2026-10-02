@@ -5113,6 +5113,7 @@
         "DEFAULT_REFRESH_INTERVAL_MS",
         "refreshDueRepos",
         "selectDueRepos",
+        "startConfiguredSubmoduleRefreshLoop",
         "startSubmoduleRefreshLoop"
       ],
       "file": "packages/backend/src/services/submoduleRefresh.ts",
@@ -6316,5 +6317,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:25226bfe9d34142ef008867288f00bd92daee04be9ff42810803bdac65563205"
+  "sourceDigest": "sha256:9424c946e01dedf96fbaaed3a551a591b95c38e5410dfa35a44e52ff9f91624a"
 }

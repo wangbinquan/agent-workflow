@@ -233,3 +233,19 @@ A1 启动前恢复11路径由 /root/intent_functional_gate 有限 PASS，有序�
 修正tip `55b1104a812c247f692f5450b6738e299d437bc1` 已上库并精确同步；Windows36980819374 completed/success、1/1，headSha一致。主CI36980700296已completed/failure、48success／2failure／0cancelled；仅Markdown link check及CI required聚合失败，其余作业全部成功，不能记全绿。失败日志只列 rfc035-storage.md 的三个CS固定版本blob URL，均为503；PUBLIC仓库/精确提交已由GitHub API核对，三个相同SHA/路径的raw内容URL实时HEAD200。
 
 本次只替换这三个来源链接，完整正文经反向替换逐字等价；保留全部合同/事实/固定SHA与路径。没有改checker、接受状态、重试、预算或CI其他步骤；新确切SHA正式CI另验，原失败和取消记录保留。配置叶层14路径有限PASS与selected根/真实双provider新用例独立在制，均不纳入本次文档提交或canonical；所有数值/规则/源码不动。无本机AW test/typecheck/build/service；完整A-G、CS adapter和M0～M4尚未完成，RFC保持进行中。
+
+## 2026-10-02 所选live配置与排空有限门
+
+五组源门均仅源码/必要功能下游复核，不替正式hosted CI，也不关闭完整A1/A7/A8/A-G：
+
+- 叶层14：dbfb8db829287e32bf7e6f6089d9e820dad9078fa08f2744cc81efe984dd943e，有限PASS。9生产文件与4旧测试精确逆变换全文保持；六类purpose读取支持Promise并在原点等待。新增memory准入ACK和terminal三例，原双provider回归保留。
+- 所选根6：9ecee8b6918f0099f0ac12584a22daef9f8984b9880c00190bf2986e604d5611，有限PASS。同一实例传入实际PG/SQLite daemon app及两个HTTP根，重装读取nextConfig；新真实双provider发现热读、schedule三段ACK前无写/launch及失败无file fallback。W29四摘要按原纯AST生成，原167/48/65/4 counts及全部规则保持。
+- 周期原语2：e5773754335375ab1f872f2d0cf4daf7973e0f4409a0fbecd95ca4071f87f5de，有限PASS。active覆盖原完整then/catch/finally，stop保留准入tick并禁止rearm，awaitIdle等其结算。两新fake-timer用例、旧测试全文保持；onError回归回调同步，异步错误链的其余等待只有源码证据。
+- 仓库刷新2：首门e32c42c13b850b84e72c9a6b899a193709cab6ea71efe3e50531fb7bf6dbd2d0为FAIL/P2：拒绝的hot read使drain跳过已准入tick。修正56bc21f94d69c8f961ef5cfef05bfadcf92b73a9be90146d056887cb4a46e594有限PASS；先allSettled所有读取，再job.awaitIdle，reconfigure仍原样传播错误。四个真实双provider例覆盖初始ACK、receiver、hot读取、latest重配、stop后late ACK、拒绝与tick共同排空；原刷新政策、SQL及同步bool兼容保持。
+- 备份排空2：首门1e3e05651cbb719cc79488baf09882a4906e1df0e4dcf674ab2e756e4270cad8为FAIL/P2：同步provider回调可在active登记前开始drain。修正8f3c75fdf9630c374ff60c627bd8b5b6c2bddb32fcd94ed007adad3ab5aa7c64有限PASS；微任务进入callback前先登记active。三个ACK例覆盖成功/失败、重入stop/drain、原wake；精确逆变换保持旧production全文，retention/Wal政策不改。
+
+26路径有序联合指纹e5fa1807c6fc5e3fe4ed6e5a9e8ad4fc857b464aa4f48a31923856cd8fbadb94。scoped canonical只有四项实际增长：entry1803→1805、imports5687→5689、exception5049→5051、owner25719→25723；public1045、background342、liveness38及implementation SCC空保持。增长按原协议一次登记/匹配canonical后继退役；全部扫描规则和边界条款保持。
+
+e4d6f5b2 [CI36984501133](https://github.com/wangbinquan/agent-workflow/actions/runs/36984501133) cancelled、27 success/2 failure/21 cancelled，三个CS raw来源通过，失败是RFC371既有OpenCode来源503及aggregate；不记全绿。并行三个文档c843938a完整承接，其[CI36985769914](https://github.com/wangbinquan/agent-workflow/actions/runs/36985769914)已completed/failure、48成功/2失败，失败仅OpenCode来源503及聚合。原55b1104a主48/2失败、同SHA Windows1/1成功全部保留。本批实际执行以发布后精确SHA主CI及Windows为准。
+
+17路径metadata首门另有文档事实P2：c843 CI在复核期间刚进入终态，新增节的“待终态”已按精确回执修正；该finding和原候选指纹f162d6ecbbbbdd592d10d583f7083e8b060176f8991e6268a1366a697aeadbdc保留。独立单文档CI引用修正有限PASS，指纹32ba3a45fec8988daf421e3bb9a64bb4d45d00ab91f9d92158bae8c0e6a32fdf；按CLAUDE原规则把同固定提交/路径/行号的OpenCode blob超链接改成文本引用，逆变换旧全文逐字一致，原RFC371输出全部保持，不改任何事实、checker或预算。该文档以另一个小commit同批发布，正式恢复仍待本批exact-SHA CI。

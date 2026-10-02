@@ -6,7 +6,7 @@
     "moduleFiles": 1430,
     "productionFiles": 2786,
     "sharedFiles": 160,
-    "symbolsIncludingFileRoots": 25719
+    "symbolsIncludingFileRoots": 25723
   },
   "entries": [
     {
@@ -45891,6 +45891,18 @@
     {
       "currentContext": "digital-employee",
       "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "id": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#EmployeeRetryLimits",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "EmployeeRetryLimits",
+      "targetContext": "digital-employee",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "digital-employee",
+      "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
       "id": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#EmployeeRetryLimitsPort",
@@ -50322,6 +50334,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "EventDeliveryConsumerPort",
+      "targetContext": "event-center",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "event-center",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/event-center/composition/required-ports.ts",
+      "id": "owner:packages/backend/src/modules/event-center/composition/required-ports.ts#EventDeliveryRetryLimits",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "EventDeliveryRetryLimits",
       "targetContext": "event-center",
       "targetLayer": "composition"
     },
@@ -196043,6 +196067,18 @@
     {
       "currentContext": "legacy",
       "currentLayer": "services",
+      "exported": false,
+      "file": "packages/backend/src/services/submoduleRefresh.ts",
+      "id": "owner:packages/backend/src/services/submoduleRefresh.ts#createSubmoduleRefreshLoop",
+      "removeAfterWave": "W5",
+      "status": "legacy-target",
+      "symbol": "createSubmoduleRefreshLoop",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/submoduleRefresh.ts",
       "id": "owner:packages/backend/src/services/submoduleRefresh.ts#DEFAULT_ONLY_RECENT_DAYS",
@@ -196121,6 +196157,18 @@
       "removeAfterWave": "W5",
       "status": "legacy-target",
       "symbol": "selectDueRepos",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/submoduleRefresh.ts",
+      "id": "owner:packages/backend/src/services/submoduleRefresh.ts#startConfiguredSubmoduleRefreshLoop",
+      "removeAfterWave": "W5",
+      "status": "legacy-target",
+      "symbol": "startConfiguredSubmoduleRefreshLoop",
       "targetContext": "source-control",
       "targetLayer": "application"
     },
@@ -309360,5 +309408,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:25226bfe9d34142ef008867288f00bd92daee04be9ff42810803bdac65563205"
+  "sourceDigest": "sha256:9424c946e01dedf96fbaaed3a551a591b95c38e5410dfa35a44e52ff9f91624a"
 }

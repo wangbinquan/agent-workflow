@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 952,
+    "consumers": 954,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
     "methods": 1132,
@@ -139078,6 +139078,7 @@
         "import:091b082ddd09f7089081",
         "import:1994e0db7f238976000a",
         "import:28fdc25abb181339bb7f",
+        "import:47d8a9ba989d33f2bd31",
         "import:885617536657ec3e3029",
         "import:895a17e9e2d5e8cbe05a",
         "import:8af559537e34d29da303",
@@ -139086,7 +139087,8 @@
         "import:c678160f4a66661ac419",
         "import:c8df23c62f146ffc951b",
         "import:cb1a68456feac0d06b64",
-        "import:e50d1b1b10cfd8bc7215"
+        "import:e50d1b1b10cfd8bc7215",
+        "import:f8ece5e8919cd5b83027"
       ],
       "context": "system-operations",
       "dataClass": "metadata",
@@ -139115,6 +139117,7 @@
             "import:091b082ddd09f7089081",
             "import:1994e0db7f238976000a",
             "import:28fdc25abb181339bb7f",
+            "import:47d8a9ba989d33f2bd31",
             "import:895a17e9e2d5e8cbe05a",
             "import:8af559537e34d29da303",
             "import:a4f4590d8176bddfb8de",
@@ -139122,7 +139125,8 @@
             "import:c678160f4a66661ac419",
             "import:c8df23c62f146ffc951b",
             "import:cb1a68456feac0d06b64",
-            "import:e50d1b1b10cfd8bc7215"
+            "import:e50d1b1b10cfd8bc7215",
+            "import:f8ece5e8919cd5b83027"
           ],
           "name": "read",
           "signatureDigest": "sha256:f3f1912f56e30f22123a2fabef0b3fc07db9e1602c1dea034d2df48139bde84e"
@@ -139147,6 +139151,12 @@
           "edgeId": "import:28fdc25abb181339bb7f",
           "file": "packages/backend/src/routes/cached-repos.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/cached-repos.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:47d8a9ba989d33f2bd31",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
         },
         {
           "context": "legacy",
@@ -139201,6 +139211,12 @@
           "edgeId": "import:e50d1b1b10cfd8bc7215",
           "file": "packages/backend/src/routes/maintenance.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/maintenance.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:f8ece5e8919cd5b83027",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -170508,7 +170524,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:25226bfe9d34142ef008867288f00bd92daee04be9ff42810803bdac65563205",
+  "sourceDigest": "sha256:9424c946e01dedf96fbaaed3a551a591b95c38e5410dfa35a44e52ff9f91624a",
   "targetContexts": [
     "collaboration",
     "development-automation",

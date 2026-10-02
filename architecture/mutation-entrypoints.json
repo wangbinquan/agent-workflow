@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1803,
+    "entries": 1805,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -40308,6 +40308,55 @@
         "authority": "none-observed",
         "authorization": false,
         "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/submoduleRefresh.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/submoduleRefresh.ts#createSubmoduleRefreshLoop",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/submoduleRefresh.ts#createSubmoduleRefreshLoop",
+      "symbol": "createSubmoduleRefreshLoop",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/submoduleRefresh.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/submoduleRefresh.ts#startConfiguredSubmoduleRefreshLoop",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/submoduleRefresh.ts#startConfiguredSubmoduleRefreshLoop",
+      "symbol": "startConfiguredSubmoduleRefreshLoop",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -43089,7 +43138,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:25226bfe9d34142ef008867288f00bd92daee04be9ff42810803bdac65563205",
+  "sourceDigest": "sha256:9424c946e01dedf96fbaaed3a551a591b95c38e5410dfa35a44e52ff9f91624a",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

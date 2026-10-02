@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1803,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1805,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 selected configuration: the unchanged name-based projection observes exactly two new Source Control declarations, startConfiguredSubmoduleRefreshLoop and its shared createSubmoduleRefreshLoop. Existing refresh selection, recency, serial failure handling and cadence policies remain intact. Only 26 reviewed source/test paths are included; no CS production adapter or unrelated WIP."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5687,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5689,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 selected configuration: exactly two real pure-type ApplicationConfigurationQueries imports bind the CLI start and PostgreSQL roots to the existing neutral public query. The chosen live instance reaches both provider application compositions. The import and boundary rules are unchanged."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +873,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5049,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5051,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 selected configuration: the original projection records those two actual boot-root public query type edges. No new boundary clauses, scanner rules or directory exemptions are registered. Only the actual imports are reflected."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +911,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25719,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25723,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 selected configuration: four actual declarations have the original owner projection: the two private used retry-limit return aliases in Event Center and Digital Employee, plus the selected/shared Source Control refresh functions. All old owners and ownership rules remain unchanged."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:25226bfe9d34142ef008867288f00bd92daee04be9ff42810803bdac65563205",
+    "sourceDigest": "sha256:9424c946e01dedf96fbaaed3a551a591b95c38e5410dfa35a44e52ff9f91624a",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +932,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "3bd953275e62f5498156abeb6e56f040a3af71a3",
-    "contentDigest": "sha256:0a86086ec689b6a5735648f980d44a29d9d5e91a58481787f4f145bf147ddd5a",
+    "currentSnapshotSha": "c843938ae1e1103d6d78ec2f4f9f2e1ec31c0560",
+    "contentDigest": "sha256:ebfe9ce14f33975fa0b88b9241ee91d6d1e21b338c83809638168ff3d2099d4a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
