@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:be997784a30fa16d6a83f36d1fee8706c08a35ddb02ead3365450ce36779dd30`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:468ebe45a63654b0bb262bde6c4c598900cea11da7745d271a00007cd527a205`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,18 +10,18 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1977 |
+| backend production TS 文件 | 1984 |
 | `services/` 文件 | 295 |
-| `modules/**` 文件 / 非空 context | 1423 / 18 |
+| `modules/**` 文件 / 非空 context | 1430 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
 | route/MCP `AppDeps` consumer 文件 | 0 |
 | production ambient wiring seam | 500 |
-| background work entries | 339 |
+| background work entries | 342 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 76 |
-| RFC-317 boundary census（inbound / outbound） | 267 / 31 |
+| RFC-317 boundary census（inbound / outbound） | 269 / 31 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 500 |
-| `architectureExceptions` | 5024 |
-| `backgroundJobs` | 339 |
-| `crossContextImports` | 5661 |
+| `architectureExceptions` | 5048 |
+| `backgroundJobs` | 342 |
+| `crossContextImports` | 5686 |
 | `facades` | 295 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25691 |
-| `mutationEntrypoints` | 1797 |
+| `moduleSymbolOwners` | 25720 |
+| `mutationEntrypoints` | 1803 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1045 |
 | `transactionExternalEffects` | 261 |
@@ -61,16 +61,16 @@
 | task-execution / domain | 32 |
 | intent / application | 27 |
 | identity-access / application | 25 |
+| source-control / infrastructure | 24 |
+| system-operations / infrastructure | 24 |
 | integration / application | 23 |
-| source-control / infrastructure | 23 |
 | integration / infrastructure | 22 |
-| system-operations / infrastructure | 22 |
 | code-capability / application | 20 |
 | task-execution / engine | 20 |
+| source-control / application | 19 |
+| system-operations / application | 19 |
 | integration / composition | 18 |
 | intent / domain | 18 |
-| source-control / application | 18 |
-| system-operations / application | 17 |
 | code-capability / infrastructure | 15 |
 | runtime-management / application | 15 |
 | collaboration / domain | 14 |
@@ -102,6 +102,7 @@
 | identity-access / public | 6 |
 | memory / public | 6 |
 | runtime-management / composition | 6 |
+| source-control / composition | 6 |
 | system-operations / composition | 6 |
 | collaboration / public | 5 |
 | digital-employee / public | 5 |
@@ -109,7 +110,6 @@
 | event-center / public | 5 |
 | integration / public | 5 |
 | resource-catalog / public | 5 |
-| source-control / composition | 5 |
 | source-control / public | 5 |
 | system-operations / public | 5 |
 | code-capability / composition | 4 |
@@ -208,14 +208,14 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3297 |
-| legacy-inbound | 1543 |
+| legacy-outbound | 3311 |
+| legacy-inbound | 1553 |
 | infrastructure-external | 290 |
 | offered-consumption | 207 |
 | temporary-internal-debt | 89 |
 | off-dag-offered | 83 |
 | authority-type-only | 78 |
-| required-implementation | 68 |
+| required-implementation | 69 |
 | external-layer-debt | 4 |
 | provider-mirror | 2 |
 
@@ -223,8 +223,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3297 |
-| legacy-inbound | 1543 |
+| legacy-outbound | 3311 |
+| legacy-inbound | 1553 |
 | temporary-internal-debt | 89 |
 | off-dag-offered | 83 |
 | no-circular | 6 |
@@ -235,8 +235,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2728 |
-| W9-D | 825 |
+| W9 | 2740 |
+| W9-D | 835 |
 | W4-E1 | 674 |
 | W4 | 201 |
 | W4-B | 187 |
@@ -245,7 +245,7 @@
 | W4-E9 | 71 |
 | W2-D/W3/W5 | 9 |
 | RFC-371 | 8 |
-| W9-E | 6 |
+| W9-E | 8 |
 | W4-E10 | 3 |
 | W4-E5 | 2 |
 
@@ -298,7 +298,7 @@
 | status | 数量 |
 | --- | --- |
 | declared-debt | 20 |
-| active | 17 |
+| active | 18 |
 
 ### 7.2 provider=0 且 consumer=0 的 required port（合计 8）
 

@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1797,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1803,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 A1/A4: exactly 24 reviewed source/test paths select candidate-workspace effects and pre-open history/generation/restore effects. The unchanged staged-restore physical body moves into independent local infrastructure, while precise compatibility exports and the selected factories remain. The original name-based entrypoint rule is unchanged."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -832,8 +835,11 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 339,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 342,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-370 A1/A4: the unchanged name-based background census observes three additional selected/local factory declarations. No new business worker or timer is introduced; the original startup and background lifecycle bodies are preserved. Exactly 24 reviewed source/test paths, with no other WIP or CS implementation included."
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -846,8 +852,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5661,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5686,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A1/A4: candidate staging/delivery now uses independent local workspace effects and narrow composition; the pre-open boot sequence receives a generic-history owner port and a file default. Exact legacy staged-restore value/type exports account for the two new R1 rows. The original import, public and boundary rules remain unchanged."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -860,15 +869,21 @@
       "id": "rfc294-required-port-liveness",
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
-      "baseline": 37,
-      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
+      "baseline": 38,
+      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。",
+      "allowGrowth": {
+        "why": "RFC-370 A1: DatabasePreOpenRecoveryPort is an active required SPI with its actual shared application consumer, independent file provider and System Operations composition. The official projection resolves all three owner bindings; this is one live port, with no liveness rule or debt exemption added."
+      }
     },
     {
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5024,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5048,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 A1/A4: the existing architecture projection reflects precise compatibility exports, owner-local physical relocation and the new active pre-open SPI. Only the real staged-restore type/value reexport boundary is registered with System Operations ownership and A-T7 retirement. No scanner, directory or rule exception is widened."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +917,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25691,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25720,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 A1/A4: the original native staged-restore body and candidate workspace mechanisms belong to independent local adapters; neutral preparation, candidate verification and precise compatibility declarations retain explicit ownership. All existing owners remain projected by the original source rule. Exactly 24 reviewed paths."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:be997784a30fa16d6a83f36d1fee8706c08a35ddb02ead3365450ce36779dd30",
+    "sourceDigest": "sha256:468ebe45a63654b0bb262bde6c4c598900cea11da7745d271a00007cd527a205",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +938,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "8d3f9cf1989f18958880a57e43eaf8d0c80356f4",
-    "contentDigest": "sha256:63afba741dbde45930129f5e43747f5872772abb827478cf37d300255fc4f257",
+    "currentSnapshotSha": "b339e7e06e13c7b4456cc1bf928048c7fc0262a3",
+    "contentDigest": "sha256:953e8c741506f42e652f02529498af44bb244deb01cacaabcaeb675c082229ed",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

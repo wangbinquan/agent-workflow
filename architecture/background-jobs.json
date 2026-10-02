@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2884",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2840",
       "kind": "register-call",
-      "line": 2884,
+      "line": 2840,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -25,9 +25,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2890",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:2846",
       "kind": "register-call",
-      "line": 2890,
+      "line": 2846,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -36,9 +36,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:724",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:723",
       "kind": "register-call",
-      "line": 724,
+      "line": 723,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -47,9 +47,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:730",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:729",
       "kind": "register-call",
-      "line": 730,
+      "line": 729,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -58,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3228",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3184",
       "kind": "register-call",
-      "line": 3228,
+      "line": 3184,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -69,9 +69,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:908",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:907",
       "kind": "register-call",
-      "line": 908,
+      "line": 907,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -80,9 +80,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1709",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1665",
       "kind": "register-call",
-      "line": 1709,
+      "line": 1665,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3276",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3232",
       "kind": "global-setter",
-      "line": 3276,
+      "line": 3232,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -102,9 +102,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:752",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:751",
       "kind": "global-setter",
-      "line": 752,
+      "line": 751,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -5520,9 +5520,9 @@
   "denominator": {
     "ambientWiring": 500,
     "disabled": 9,
-    "entries": 339,
+    "entries": 342,
     "executionLocal": 41,
-    "longRunning": 80,
+    "longRunning": 83,
     "managed": 11,
     "periodic": 209
   },
@@ -8210,6 +8210,27 @@
       "targetContext": "source-control"
     },
     {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/system-operations/application/prepareDatabasePreOpenRecovery.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/system-operations/application/prepareDatabasePreOpenRecovery.ts#prepareDatabasePreOpenRecovery",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/prepareDatabasePreOpenRecovery.ts#prepareDatabasePreOpenRecovery",
+      "phase": "unknown",
+      "symbol": "prepareDatabasePreOpenRecovery",
+      "targetContext": "system-operations"
+    },
+    {
       "dependencies": [
         "db"
       ],
@@ -8251,6 +8272,27 @@
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#composeSystemOperationsWithRecoveryAdapter",
       "phase": "unknown",
       "symbol": "composeSystemOperationsWithRecoveryAdapter",
+      "targetContext": "system-operations"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/system-operations/composition.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/system-operations/composition.ts#prepareDatabasePreOpenRecovery",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/composition.ts#prepareDatabasePreOpenRecovery",
+      "phase": "unknown",
+      "symbol": "prepareDatabasePreOpenRecovery",
       "targetContext": "system-operations"
     },
     {
@@ -8318,6 +8360,29 @@
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/legacyPlatformRecoveryAdapter.ts#createLegacyPlatformRecoveryAdapter",
       "phase": "before-ready",
       "symbol": "createLegacyPlatformRecoveryAdapter",
+      "targetContext": "system-operations"
+    },
+    {
+      "dependencies": [
+        "db"
+      ],
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabasePreOpenRecovery.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabasePreOpenRecovery.ts#createFileDatabasePreOpenRecovery",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabasePreOpenRecovery.ts#createFileDatabasePreOpenRecovery",
+      "phase": "unknown",
+      "symbol": "createFileDatabasePreOpenRecovery",
       "targetContext": "system-operations"
     },
     {
@@ -12992,5 +13057,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:be997784a30fa16d6a83f36d1fee8706c08a35ddb02ead3365450ce36779dd30"
+  "sourceDigest": "sha256:468ebe45a63654b0bb262bde6c4c598900cea11da7745d271a00007cd527a205"
 }

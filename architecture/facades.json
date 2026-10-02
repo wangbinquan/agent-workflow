@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 295,
-    "thinFacades": 50
+    "thinFacades": 51
   },
   "entries": [
     {
@@ -2586,28 +2586,27 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:216f08734a507d0a67e0",
+        "import:25480926a815d9d0e1c6",
+        "import:2c469d42a2f6149ad45f",
+        "import:6f065842474ca9956535",
+        "import:7700d2cee6378d92dbd7",
         "import:800b92632c19772d7b8c",
         "import:8547f9405f21f9464ce7",
         "import:87fb29133a2fed533a66",
-        "import:e054ffaf2e60de1e5755"
+        "import:d760be17dd3b328596d7",
+        "import:e054ffaf2e60de1e5755",
+        "import:e0d4bbfa7aa7933f6890",
+        "import:e26dad1c93f45ef40d1c",
+        "import:fc12440e3682a29a6ac4",
+        "import:fd78e5173afbd65d383b"
       ],
-      "exportedSymbols": [
-        "ApplyPendingRestoreOptions",
-        "FailedRestoreInfo",
-        "PendingRestoreInfo",
-        "StagePendingRestoreOptions",
-        "applyPendingRestoreIfAny",
-        "clearPendingRestore",
-        "hasPendingRestore",
-        "listFailedRestores",
-        "readPendingRestore",
-        "stagePendingRestore"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/pendingRestore.ts",
       "id": "facade:packages/backend/src/services/pendingRestore.ts",
       "ownerEntryId": "owner:packages/backend/src/services/pendingRestore.ts#$file",
       "removeAfterWave": "W9-E",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "platform",
       "targetLayer": "infrastructure"
     },
@@ -3375,7 +3374,10 @@
       "targetLayer": "infrastructure"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:07d5bf3abf81749d2582",
+        "import:3a6d58f1c89ee81588ce"
+      ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/restore.ts",
       "id": "facade:packages/backend/src/services/restore.ts",
@@ -6314,5 +6316,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:be997784a30fa16d6a83f36d1fee8706c08a35ddb02ead3365450ce36779dd30"
+  "sourceDigest": "sha256:468ebe45a63654b0bb262bde6c4c598900cea11da7745d271a00007cd527a205"
 }

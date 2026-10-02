@@ -1,3 +1,7 @@
+## 候选工作区与启动前恢复24路径有限交付（2026-10-02）
+
+修复b339e7e0主CI36969850886已completed/success 50/50，同SHA Windows36970559143 success 1/1；d5及默认Windows取消/失败历史完整保留，mixed report丢失原因未确证。新A4候选工作区13与A1启动前恢复11两组均独立有限PASS，真实异步效果/释放与原规则保留；24路径无交集，按两个source小commit、官方scoped canonical/docs、六项真实增长消费后继退役发布，正式行为仍等本批exact-SHA CI。public1045、implementation SCC空；唯一两项实际pendingRestore value/type R1有SO owner/A-T7退役，原298条款保持。无本机AW test/typecheck/build/service；完整A1～A8/A-G、CS adapter、M0～M4继续，尚无AW-in-CS部署。下方并行输出和全部历史逐字保留。
+
 ## RFC-370 已发布插件 facade 的 CI 清单补正（2026-10-02）
 
 主 CI36966192393 的终态是 cancelled（42 success/3 failure/5 cancelled），Windows36966192408 failure；有限门不能替正式通过。实际后端8/16只漏已成为薄 facade 的 pluginInstaller.ts 精确清单，归档枚举和格式由并行69afa48c已发布修复。本批只补这一条预期，所有原断言/分类/源码规则/canonical不变；唯一源码已获独立有限功能 PASS，原断言保持；修复 exact-SHA CI待记录。maintenance/git-protocols已终态 success，仍需完整 CI。13路径候选工作区完整保留、排除本修复；无本机 AW test/typecheck/build/service，完整 A1～A8/A-G、CS adapter及M0～M4继续。下方并行内容和全部历史逐字保留。

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1797,
+    "entries": 1803,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -892,7 +892,7 @@
     {
       "controls": {
         "audit": false,
-        "authority": "none-observed",
+        "authority": "system",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -903,7 +903,6 @@
       "id": "mutation:packages/backend/src/cli/start.ts#StartOptions",
       "missingControls": [
         "audit",
-        "authority",
         "authorization",
         "event",
         "fenceOrOcc",
@@ -22967,6 +22966,102 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/source-control/application/changeCandidate.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/application/changeCandidate.ts#StageCandidateTreeInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/application/changeCandidate.ts#StageCandidateTreeInput",
+      "symbol": "StageCandidateTreeInput",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/application/changeCandidate.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/application/changeCandidate.ts#stageCandidateTreeInSession",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/application/changeCandidate.ts#stageCandidateTreeInSession",
+      "symbol": "stageCandidateTreeInSession",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/application/changeCandidate.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/application/changeCandidate.ts#StageCandidateTreeResult",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/application/changeCandidate.ts#StageCandidateTreeResult",
+      "symbol": "StageCandidateTreeResult",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/application/changeCandidate.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/application/changeCandidate.ts#StagedCandidateInSession",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/application/changeCandidate.ts#StagedCandidateInSession",
+      "symbol": "StagedCandidateInSession",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/source-control/application/deliverCandidate.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/source-control/application/deliverCandidate.ts#commitCandidate",
@@ -23360,6 +23455,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/journaledWorktreeMaterializer.ts#createJournaledWorktreeMaterializer",
       "symbol": "createJournaledWorktreeMaterializer",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects.ts#createFileRepositoryCandidateEffectsFactory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryCandidateEffects.ts#createFileRepositoryCandidateEffectsFactory",
+      "symbol": "createFileRepositoryCandidateEffectsFactory",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -24268,6 +24387,30 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabasePreOpenRecovery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabasePreOpenRecovery.ts#createFileDatabasePreOpenRecovery",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabasePreOpenRecovery.ts#createFileDatabasePreOpenRecovery",
+      "symbol": "createFileDatabasePreOpenRecovery",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
@@ -24287,6 +24430,126 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileInstallationSeedCompletion.ts#createFileInstallationSeedCompletion",
       "symbol": "createFileInstallationSeedCompletion",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts#applyPendingRestoreIfAny",
+      "missingControls": [
+        "audit",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts#applyPendingRestoreIfAny",
+      "symbol": "applyPendingRestoreIfAny",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts#ApplyPendingRestoreOptions",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts#ApplyPendingRestoreOptions",
+      "symbol": "ApplyPendingRestoreOptions",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts#stagedPath",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts#stagedPath",
+      "symbol": "stagedPath",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts#stagePendingRestore",
+      "missingControls": [
+        "audit",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts#stagePendingRestore",
+      "symbol": "stagePendingRestore",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts#StagePendingRestoreOptions",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts#StagePendingRestoreOptions",
+      "symbol": "StagePendingRestoreOptions",
       "targetContext": "system-operations",
       "targetLayer": "infrastructure"
     },
@@ -37811,126 +38074,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "system",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/pendingRestore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/pendingRestore.ts#applyPendingRestoreIfAny",
-      "missingControls": [
-        "audit",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/pendingRestore.ts#applyPendingRestoreIfAny",
-      "symbol": "applyPendingRestoreIfAny",
-      "targetContext": "platform",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/pendingRestore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/pendingRestore.ts#ApplyPendingRestoreOptions",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/pendingRestore.ts#ApplyPendingRestoreOptions",
-      "symbol": "ApplyPendingRestoreOptions",
-      "targetContext": "platform",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/pendingRestore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/pendingRestore.ts#stagedPath",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/pendingRestore.ts#stagedPath",
-      "symbol": "stagedPath",
-      "targetContext": "platform",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/pendingRestore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/pendingRestore.ts#stagePendingRestore",
-      "missingControls": [
-        "audit",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/pendingRestore.ts#stagePendingRestore",
-      "symbol": "stagePendingRestore",
-      "targetContext": "platform",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/pendingRestore.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/pendingRestore.ts#StagePendingRestoreOptions",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/pendingRestore.ts#StagePendingRestoreOptions",
-      "symbol": "StagePendingRestoreOptions",
-      "targetContext": "platform",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
@@ -42946,7 +43089,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:be997784a30fa16d6a83f36d1fee8706c08a35ddb02ead3365450ce36779dd30",
+  "sourceDigest": "sha256:468ebe45a63654b0bb262bde6c4c598900cea11da7745d271a00007cd527a205",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
