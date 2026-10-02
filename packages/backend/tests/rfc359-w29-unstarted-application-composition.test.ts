@@ -374,16 +374,18 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   // receiver-preserving async reads and moving the lazy query factory earlier.
   // Their original statement counts and every lifetime rule remain unchanged.
   test('RFC-370 selects one read/write binding in both roots and passes the daemon selection', () => {
-    for (const [source, owner, expected] of [
+    for (const [source, owner, expected, diagnosticsFactory] of [
       [
         pg,
         'composePostgresqlApplication',
         "input.applicationConfiguration??composeApplicationConfigurationBinding({kind:'file',configPath:input.configPath,...(input.configuration===undefined?{}:{queries:input.configuration}),})",
+        "(phase.kind==='daemon'?composeMcpDiagnostics:phase.scope.createMcpRuntimeTests)",
       ],
       [
         server,
         'composeSqliteApplicationDeps',
         "deps.applicationConfiguration??composeApplicationConfigurationBinding({kind:'file',configPath:deps.configPath,...(deps.configuration===undefined?{}:{queries:deps.configuration}),})",
+        '(unstarted?.createMcpRuntimeTests??composeMcpDiagnostics)',
       ],
     ] as const) {
       const body = functionBody(source, owner)
@@ -404,7 +406,11 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       expect(namedCalls(body, source, 'composeApplicationConfigurationBinding')).toHaveLength(1)
       expect(namedCalls(body, source, 'composeFileApplicationConfigurationQueries')).toHaveLength(0)
       expect(namedCalls(body, source, 'composeFileApplicationConfiguration')).toHaveLength(0)
-      const diagnostics = namedCalls(body, source, 'composeMcpDiagnostics')
+      const diagnostics = descendants(
+        body,
+        (node) =>
+          ts.isCallExpression(node) && compact(node.expression, source) === diagnosticsFactory,
+      ).filter(ts.isCallExpression)
       expect(diagnostics).toHaveLength(1)
       const argument = diagnostics[0]!.arguments[0]!
       if (!ts.isObjectLiteralExpression(argument)) throw new Error('Missing diagnostics bindings')
@@ -825,7 +831,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // adapter (local by default). This next batch selects it once for the task
       // runtime and workgroup; the original full body survives the exact binding inverse.
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
-      '3fd5d327f2deb153277d2f6a64479dbef89d92ccdec471e2c276ee6e7607042f',
+      'ac88a77b30ad4f6f4259301edb7af568661583514efc37073f2a11a18eb6a112',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -1037,7 +1043,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: Intent and webhook configuration bindings change; route order and lifetime stay fixed.
       // RFC-371: task observation queries bind the selected DB and TE facts inside one read snapshot.
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
-      '94e1a0044982397655f28828fa1be31dafc1efe7b965ebc192c258a3ead43bc7',
+      '5b39b5836e5beec6312130079887bc8739c6aa351332ece8abd817972bf88de7',
     )
     expect(
       namedCalls(

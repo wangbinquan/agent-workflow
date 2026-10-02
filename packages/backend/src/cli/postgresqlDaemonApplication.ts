@@ -1944,7 +1944,12 @@ export async function composePostgresqlApplication(
       tasks: taskExecutionProvider.overview,
     })
   const runtimeManagement = composeRuntimeManagement({
-    configPath: input.configPath,
+    configuration: {
+      current: () => configuration.read(),
+      withProbeReceiptFence: composeRuntimeProbeConfigFence(
+        applicationConfiguration.notificationKey,
+      ),
+    },
     runtimeRegistry: core.runtimeRegistry,
     runtimeTests: mcpRuntimeTests.reconciliation,
     ...(input.runtimeDiagnosticTestDependencies === undefined
@@ -1965,7 +1970,9 @@ export async function composePostgresqlApplication(
       configuration: applicationConfiguration.composeCommands({
         runtimeRegistry:
           runtimeManagement.configuration satisfies RuntimeProfileConfigurationCommands,
-        withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(input.configPath),
+        withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(
+          applicationConfiguration.notificationKey,
+        ),
         runtimeTests: mcpRuntimeTests.reconciliation,
         concurrencyHotApply: Object.freeze({
           apply(next: ConfigConcurrencyHotApplyInput) {

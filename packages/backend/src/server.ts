@@ -3442,7 +3442,12 @@ function composeSqliteApiRouteMounts(
     }),
   })
   const runtimeManagement = composeRuntimeManagement({
-    configPath: deps.configPath,
+    configuration: {
+      current: () => configuration.read(),
+      withProbeReceiptFence: composeRuntimeProbeConfigFence(
+        applicationConfiguration.notificationKey,
+      ),
+    },
     runtimeRegistry: deps.runtimeRegistry,
     runtimeTests: mcpRuntimeTests.reconciliation,
     ...(deps.runtimeDiagnosticTestDependencies === undefined
@@ -3455,7 +3460,9 @@ function composeSqliteApiRouteMounts(
         configuration: applicationConfiguration.composeCommands({
           runtimeRegistry:
             runtimeManagement.configuration satisfies RuntimeProfileConfigurationCommands,
-          withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(deps.configPath),
+          withRuntimeProbeConfigFence: composeRuntimeProbeConfigFence(
+            applicationConfiguration.notificationKey,
+          ),
           runtimeTests: mcpRuntimeTests.reconciliation,
           concurrencyHotApply: deps.configConcurrencyHotApply,
         }),

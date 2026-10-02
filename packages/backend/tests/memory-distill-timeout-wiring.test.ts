@@ -32,9 +32,9 @@ function count(needle: string): number {
 /**
  * The body of each `id: 'memory-distill'` polling factory.
  *
- * Scoped rather than file-wide on purpose: `const current = loadConfig(…)` is a
- * common idiom in start.ts (7 occurrences), so a global count would answer a
- * different question than "does THIS factory re-read per tick".
+ * Scoped rather than file-wide on purpose: other configuration reads in
+ * start.ts do not establish that THIS factory re-reads the selected binding
+ * inside its run callback on every tick.
  */
 function distillFactoryBodies(): string[] {
   const bodies: string[] = []
@@ -61,9 +61,13 @@ describe('memory distill worker wiring (start.ts)', () => {
   test('both paths re-read config and forward the timeout knob every tick', () => {
     const bodies = distillFactoryBodies()
     expect(bodies).toHaveLength(2)
+    const selectedReads = [
+      'const current = await input.configuration.read()',
+      'const current = await configuration.read()',
+    ]
     for (const [index, body] of bodies.entries()) {
       expect(body, `distill factory #${index} must re-read config inside run()`).toContain(
-        'const current = loadConfig(Paths.config)',
+        `async run() {\n      ${selectedReads[index]}`,
       )
       expect(body, `distill factory #${index} must forward the timeout knob`).toContain(
         'timeoutMs: current.memoryDistillTimeoutMs',
