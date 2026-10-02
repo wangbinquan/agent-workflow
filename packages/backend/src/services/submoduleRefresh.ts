@@ -160,10 +160,56 @@ export function startSubmoduleRefreshLoop(
   intervalMs: number = HOUR_MS,
   appHome?: string,
   secretBox?: SecretBox,
-): { stop: () => void; reconfigure: () => boolean } {
+): { stop: () => void; reconfigure: () => boolean; awaitIdle: () => Promise<void> } {
+  const loop = createSubmoduleRefreshLoop(store, loadConfig, intervalMs, appHome, secretBox)
+  // The legacy callback is synchronous; its reconfiguration remains synchronous.
+  return { ...loop, reconfigure: () => loop.reconfigure() as boolean }
+}
+
+/** Select a live asynchronous source before arming the default cadence. */
+export async function startConfiguredSubmoduleRefreshLoop(
+  store: RepositoryWorkspaceStore,
+  configuration: { readonly read: () => RefreshConfig | Promise<RefreshConfig> },
+  intervalMs: number = HOUR_MS,
+  appHome?: string,
+  secretBox?: SecretBox,
+): Promise<{
+  stop: () => void
+  reconfigure: () => Promise<boolean>
+  awaitIdle: () => Promise<void>
+}> {
+  const initial = intervalMs === HOUR_MS ? await configuration.read() : undefined
+  const loop = createSubmoduleRefreshLoop(
+    store,
+    () => configuration.read(),
+    intervalMs,
+    appHome,
+    secretBox,
+    initial,
+  )
+  return { ...loop, reconfigure: async () => await loop.reconfigure() }
+}
+
+function createSubmoduleRefreshLoop(
+  store: RepositoryWorkspaceStore,
+  loadConfig: () => RefreshConfig | Promise<RefreshConfig>,
+  intervalMs: number,
+  appHome?: string,
+  secretBox?: SecretBox,
+  initial?: RefreshConfig,
+): {
+  stop: () => void
+  reconfigure: () => boolean | Promise<boolean>
+  awaitIdle: () => Promise<void>
+} {
+  let stopped = false
+  let revision = 0
+  const pending = new Set<Promise<boolean>>()
   const job = createManagedPeriodicJob({
     run: async () => {
-      await refreshDueRepos(store, loadConfig(), {
+      const current = await loadConfig()
+      if (stopped) return
+      await refreshDueRepos(store, current, {
         ...(appHome !== undefined ? { appHome } : {}),
         ...(secretBox !== undefined ? { secretBox } : {}),
       })
@@ -176,13 +222,40 @@ export function startSubmoduleRefreshLoop(
       })
     },
   })
-  const reconfigure = (): boolean => {
-    const refresh = loadConfig().submoduleAutoRefresh
+  const apply = (current: RefreshConfig, ownerRevision: number): boolean => {
+    if (stopped || ownerRevision !== revision) return false
+    const refresh = current.submoduleAutoRefresh
     if (refresh?.enabled === false) return job.reconfigure(0)
     const configured = refresh?.intervalMs ?? DEFAULT_REFRESH_INTERVAL_MS
     return job.reconfigure(Math.min(configured, HOUR_MS))
   }
-  if (intervalMs === HOUR_MS) reconfigure()
-  else job.reconfigure(intervalMs)
-  return { stop: job.stop, reconfigure }
+  const reconfigure = (): boolean | Promise<boolean> => {
+    if (stopped) return false
+    const ownerRevision = ++revision
+    const current = loadConfig()
+    if (!(current instanceof Promise)) return apply(current, ownerRevision)
+    const change = current
+      .then((config) => apply(config, ownerRevision))
+      .finally(() => pending.delete(change))
+    pending.add(change)
+    return change
+  }
+  if (intervalMs === HOUR_MS) {
+    if (initial === undefined) reconfigure()
+    else apply(initial, ++revision)
+  } else job.reconfigure(intervalMs)
+  return {
+    stop() {
+      stopped = true
+      revision += 1
+      job.stop()
+    },
+    reconfigure,
+    async awaitIdle() {
+      // Each reconfigure caller owns its read error. Drain every read before
+      // awaiting the tick, including when one of those reads has rejected.
+      while (pending.size > 0) await Promise.allSettled(pending)
+      await job.awaitIdle()
+    },
+  }
 }
