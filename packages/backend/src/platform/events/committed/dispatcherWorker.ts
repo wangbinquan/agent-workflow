@@ -112,7 +112,7 @@ export function createCommittedEventDispatcher(input: {
   readonly workerId: string
   readonly codecs: CommittedEventCodecRegistry
   readonly consumers: readonly CommittedEventConsumerDefinition[]
-  readonly maxAttempts?: () => number
+  readonly maxAttempts?: () => number | Promise<number>
   readonly now?: () => number
   readonly leaseMs?: number
   readonly projectionLedger?: CommittedEventProjectionLedger
@@ -195,7 +195,7 @@ export function createCommittedEventDispatcher(input: {
           claim,
           errorCode: errorCode(error),
           errorSummary: error instanceof Error ? error.message : String(error),
-          maxAttempts: Math.max(1, Math.trunc(input.maxAttempts?.() ?? 5)),
+          maxAttempts: Math.max(1, Math.trunc((await input.maxAttempts?.()) ?? 5)),
           now: now(),
         })
       }

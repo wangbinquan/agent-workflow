@@ -11,7 +11,7 @@ import { createWebhookTerminalWorkspaceAttributionQueries } from '../infrastruct
  */
 export function composeWebhookTerminalWorkspacePrunePolicy(input: {
   readonly db: ProviderNeutralDatabase
-  readonly enabled: () => boolean
+  readonly enabled: () => boolean | Promise<boolean>
 }): TerminalWorkspacePrunePolicy {
   return createWebhookTerminalWorkspacePrunePolicy({
     attribution: createWebhookTerminalWorkspaceAttributionQueries(input.db),

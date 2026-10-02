@@ -725,7 +725,7 @@ export class EventCenterService {
       })
       return 'completed'
     } catch (error) {
-      const limits = this.#deliveryRetryLimits.current()
+      const limits = await this.#deliveryRetryLimits.current()
       const maxAttempts =
         1 +
         Math.max(0, Math.trunc(limits.defaultNodeRetries)) +

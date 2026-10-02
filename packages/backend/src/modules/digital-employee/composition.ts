@@ -859,7 +859,7 @@ function composeDigitalEmployeeFromPersistence(
     const policy =
       options.retryLimits === undefined
         ? await service.getExecutionPolicy()
-        : await service.ensureExecutionPolicyFromLimits(options.retryLimits.current())
+        : await service.ensureExecutionPolicyFromLimits(await options.retryLimits.current())
     return {
       revision: policy.revision,
       content: policy.content,
@@ -900,10 +900,10 @@ function composeDigitalEmployeeFromPersistence(
           currentTypeRefs: runtimePackages.map((runtime) => runtime.descriptor.typeRef),
           executionContracts: options.executionContracts,
           platformTools,
-          resolveExecutionPolicy: () =>
+          resolveExecutionPolicy: async () =>
             options.retryLimits === undefined
               ? service.getExecutionPolicy()
-              : service.ensureExecutionPolicyFromLimits(options.retryLimits.current()),
+              : service.ensureExecutionPolicyFromLimits(await options.retryLimits.current()),
           inputUploads: inputUploadStore,
           inputArtifacts,
           ...(options.now === undefined ? {} : { now: options.now }),

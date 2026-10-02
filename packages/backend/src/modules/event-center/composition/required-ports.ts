@@ -65,8 +65,13 @@ export interface EventDeliverySettlement {
   readonly error: string | null
 }
 
+type EventDeliveryRetryLimits = {
+  readonly defaultNodeRetries: number
+  readonly sessionRestartBudget: number
+}
+
 export interface EventDeliveryRetryLimitsPort {
-  current(): { readonly defaultNodeRetries: number; readonly sessionRestartBudget: number }
+  current(): EventDeliveryRetryLimits | Promise<EventDeliveryRetryLimits>
 }
 
 declare const eventAutomationOriginBrand: unique symbol

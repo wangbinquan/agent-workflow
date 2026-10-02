@@ -74,9 +74,12 @@ export const DISTILL_DEBOUNCE_MS = 5_000
  * defaults a fresh install sees, or the gate's behaviour would differ between
  * the first event after boot and every later one.
  */
-let memoryDistillPolicyProvider: () => DistillPolicy = () => DEFAULT_DISTILL_POLICY
+let memoryDistillPolicyProvider: () => DistillPolicy | Promise<DistillPolicy> = () =>
+  DEFAULT_DISTILL_POLICY
 
-export function setMemoryDistillPolicyProvider(fn: () => DistillPolicy): void {
+export function setMemoryDistillPolicyProvider(
+  fn: () => DistillPolicy | Promise<DistillPolicy>,
+): void {
   memoryDistillPolicyProvider = fn
 }
 
@@ -140,7 +143,7 @@ export async function enqueueDistillJob(
   store: MemoryDistillWorkStore,
   input: EnqueueDistillJobInput,
 ): Promise<EnqueueResult | null> {
-  const policy = memoryDistillPolicyProvider()
+  const policy = await memoryDistillPolicyProvider()
   const taskRow = input.taskId === null ? null : await store.findTaskScope(input.taskId)
   const admission = distillAdmission({
     sourceKind: input.sourceKind,

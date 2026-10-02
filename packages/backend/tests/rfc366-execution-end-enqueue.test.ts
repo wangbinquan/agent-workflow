@@ -63,7 +63,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
   })
 
   function policy(overrides: Partial<DistillPolicy> = {}): void {
-    setMemoryDistillPolicyProvider(() => ({ ...DEFAULT_DISTILL_POLICY, ...overrides }))
+    setMemoryDistillPolicyProvider(async () => ({ ...DEFAULT_DISTILL_POLICY, ...overrides }))
   }
 
   async function seedTask(
@@ -426,6 +426,69 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     }
   })
 
+  test('RFC-370: asynchronous current policy is acknowledged before enqueue and reread', async () => {
+    const fx = await seedTask({ launchOrigin: 'manual' })
+    let enter!: () => void
+    let release!: () => void
+    const entered = new Promise<void>((resolve) => {
+      enter = resolve
+    })
+    const held = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    let current: DistillPolicy = { ...DEFAULT_DISTILL_POLICY, outputLang: 'zh-CN' }
+    let reads = 0
+    setMemoryDistillPolicyProvider(async () => {
+      reads += 1
+      enter()
+      if (reads === 1) await held
+      return current
+    })
+    let settled = false
+    const pending = enqueueDistillJob(memory.store, {
+      sourceKind: 'feedback',
+      sourceEventId: `async-first-${fx.taskId}`,
+      taskId: fx.taskId,
+    }).finally(() => {
+      settled = true
+    })
+    try {
+      await entered
+      expect(settled).toBe(false)
+      expect(await rowsOf(fx.taskId)).toEqual([])
+      release()
+      expect(await pending).not.toBeNull()
+      expect(await rowsOf(fx.taskId)).toMatchObject([{ outputLang: 'zh-CN' }])
+
+      current = { ...current, sources: { ...current.sources, feedback: false } }
+      expect(
+        await enqueueDistillJob(memory.store, {
+          sourceKind: 'feedback',
+          sourceEventId: `async-disabled-${fx.taskId}`,
+          taskId: fx.taskId,
+        }),
+      ).toBeNull()
+      expect(reads).toBe(2)
+      expect(await rowsOf(fx.taskId)).toHaveLength(1)
+
+      const failure = new Error('selected distill policy unavailable')
+      setMemoryDistillPolicyProvider(async () => {
+        throw failure
+      })
+      await expect(
+        enqueueDistillJob(memory.store, {
+          sourceKind: 'feedback',
+          sourceEventId: `async-failed-${fx.taskId}`,
+          taskId: fx.taskId,
+        }),
+      ).rejects.toBe(failure)
+      expect(await rowsOf(fx.taskId)).toHaveLength(1)
+    } finally {
+      release()
+      await pending
+    }
+  })
+
   // RFC-366 AC-20：`memoryDistillerEnabled=false` 关的是**蒸馏器**，不是**入队**。
   // 两者是两个阶段：那个开关只让 worker tick 变成空壳（`cli/start.ts` 的
   // `if (current.memoryDistillerEnabled === false) return`），队列照常积累、审计行照常写，
@@ -442,7 +505,7 @@ describeEachProvider('RFC-366 execution-end distill enqueue', (harness) => {
     // 多余属性检查拦在编译期——那正是本用例要锁的事实（这个键根本不在准入门的可视面里），
     // 但编译不过就没有运行期断言了，所以先落成一个真正的 Config 再交。
     const config: Config = { ...DEFAULT_CONFIG, memoryDistillerEnabled: false }
-    setMemoryDistillPolicyProvider(() => resolveDistillPolicy(config))
+    setMemoryDistillPolicyProvider(async () => resolveDistillPolicy(config))
     const kinds: readonly DistillSourceKind[] = [
       'clarify',
       'review',

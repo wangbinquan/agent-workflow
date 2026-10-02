@@ -761,7 +761,7 @@ describe('RFC-310 stateful employee Case runtime', () => {
         appHome,
         typePackages: [developmentEmployeeTypePackage],
         executionContracts,
-        retryLimits: { current: () => retryLimits },
+        retryLimits: { current: async () => retryLimits },
         now: () => now,
         id: nextId,
         connectionCatalog: {

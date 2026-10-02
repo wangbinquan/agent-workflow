@@ -168,7 +168,7 @@ async function createRuleAndDelivery(input: {
     workerId: input.workerId,
     deliveryLeaseMs: input.deliveryLeaseMs,
     deliveryRetryLimits: {
-      current: () => ({ defaultNodeRetries: 1, sessionRestartBudget: 0 }),
+      current: async () => ({ defaultNodeRetries: 1, sessionRestartBudget: 0 }),
     },
   })
   await eventCenter.responseRules.commands.create(
@@ -263,7 +263,7 @@ describeEachProvider('RFC-365 Event automation target providers', (harness) => {
       id: () => 'rfc365-restart-unused',
       workerId: 'rfc365-worker-after-crash',
       deliveryRetryLimits: {
-        current: () => ({ defaultNodeRetries: 1, sessionRestartBudget: 0 }),
+        current: async () => ({ defaultNodeRetries: 1, sessionRestartBudget: 0 }),
       },
     })
     expect(await restarted.worker.runOneNotification(first.deliveryId)).toBe('completed')

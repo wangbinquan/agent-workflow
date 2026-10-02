@@ -57,12 +57,12 @@ export function shouldRequestWebhookWorkspacePrune(
 export function createWebhookTerminalWorkspacePrunePolicy(deps: {
   readonly attribution: WebhookTerminalWorkspaceAttributionQueries
   /** 每次转移都重读，配置保持热更新（沿用 RFC-300 既有语义）。 */
-  readonly enabled: () => boolean
+  readonly enabled: () => boolean | Promise<boolean>
 }): TerminalWorkspacePrunePolicy {
   return async (row, to) => {
     const attribution = await deps.attribution.load(row.taskId)
     if (attribution === null) return { prune: false }
-    const prune = shouldRequestWebhookWorkspacePrune(deps.enabled(), {
+    const prune = shouldRequestWebhookWorkspacePrune(await deps.enabled(), {
       to,
       webhookTriggerId: attribution.webhookTriggerId,
       eventSubscriptionId: attribution.eventSubscriptionId,

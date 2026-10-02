@@ -24,11 +24,13 @@ export interface ToolConnectionVisibilitySubject {
  * intentionally read-only: authoring an employee must never create a second
  * retry-policy namespace beside Settings -> Limits.
  */
+type EmployeeRetryLimits = {
+  readonly defaultNodeRetries: number
+  readonly sessionRestartBudget: number
+}
+
 export interface EmployeeRetryLimitsPort {
-  current(): {
-    readonly defaultNodeRetries: number
-    readonly sessionRestartBudget: number
-  }
+  current(): EmployeeRetryLimits | Promise<EmployeeRetryLimits>
 }
 
 /**

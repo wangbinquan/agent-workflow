@@ -276,7 +276,7 @@ describeEachProvider('RFC-341 committed-event store', (harness) => {
           },
         },
       ],
-      maxAttempts: () => 1,
+      maxAttempts: async () => 1,
       now: () => NOW + 100,
     })
     expect(await dispatcher.runOne()).toBe('dead-letter')

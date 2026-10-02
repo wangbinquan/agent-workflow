@@ -119,7 +119,7 @@ export function mountScheduledTaskRoutes(
     }
     readonly scheduledTaskRuntime: ScheduledTaskRuntime
     readonly buildScheduleLaunch: BuildScheduleLaunch
-    readonly getDefaultRuntime: () => string | null
+    readonly getDefaultRuntime: () => string | null | Promise<string | null>
   },
 ): void {
   const resourceAuthority = (c: Parameters<typeof actorOf>[0]) => {
@@ -201,7 +201,7 @@ export function mountScheduledTaskRoutes(
       const created = await createScheduledTask(deps.scheduledTaskRuntime.operations, parsed.data, {
         actor: actorOf(c),
         resourceAuthority: resourceAuthority(c),
-        defaultRuntime: deps.getDefaultRuntime(),
+        defaultRuntime: await deps.getDefaultRuntime(),
       })
       return c.json(created, 201)
     },
@@ -269,7 +269,7 @@ export function mountScheduledTaskRoutes(
         {
           actor,
           resourceAuthority: resourceAuthority(c),
-          defaultRuntime: deps.getDefaultRuntime(),
+          defaultRuntime: await deps.getDefaultRuntime(),
         },
       )
       return c.json(updated)
@@ -336,7 +336,7 @@ export function mountScheduledTaskRoutes(
         existing.id,
         deps.buildScheduleLaunch,
         deps.identityAccess,
-        deps.getDefaultRuntime(),
+        await deps.getDefaultRuntime(),
       )
       return c.json(result, 201)
     },
