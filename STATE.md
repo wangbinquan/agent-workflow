@@ -1,3 +1,17 @@
+## 2026-10-03 程序与证据读取的真实根接线
+
+20 路径组合候选有限功能 PASS `ae7d8ffabdb9d18d9e58c03c90a9f9572ff99411ea45305ac772e187b511d97e`。既有 DE ProgramArtifactPort 和 DA EvidenceReadBinding 经 start/session/recompose、PG 与 SQLite daemon、standalone HTTP 传入同一 selected receiver。DA 文档读取和下载流各有独立 local adapter；五处文档消费者等待读取 ACK，下载保留原 manifest membership、媒体类型、字节数、200/206/416 与 range 判据。prototype getter 和 handle 方法保留 this。证据写入/import/materialize 的物理效果仍待迁移，不把读取交付写成完整 A2。
+
+首轮20路径 FAIL 的两个 P2 完整保留：getter matcher 的多态 this 类型冲突，以及程序读取严格预期漏掉 kind/runtimeProfileRef。只修两份夹具，有限增量 PASS `84c3f38be879b911baa8cd66e0438aee710ddacdd9898712083fce3f6eaccf06`；另18文件全文 SHA 保持，合成上述20路径结论，不冒称重跑全量门。39项有界逆变换、41次实际替换恢复10份旧文件全文，8份叶层控制保持。W29只更新真实 PG/HTTP 两个摘要，168/49/65语句数、8 phase及原规则不变。
+
+原 scoped census 一次生成，输入为已提交 `76c564b376bc568096a76c7a1c809eb519cda5ec` 加本批20路径，四项原生成规则保持。实际入口1808→1810（原 create 前缀计入两个已用只读工厂）、imports5717→5723、exceptions5079→5085、owner25768→25780；background342、public1045、required-port38、target69与implementation SCC保持。原 boundary scanner 无新增条款，273 inbound/31 outbound、全部 reason/退役条件/bootstrap列表保持。四项真实增长只登记一次，匹配 canonical 提交后另行退役。
+
+前批技能候选已按四提交发布至 `54f108dff1b77f65cc71fd7e4bc41b9336b1d594`；原发布脚本因远端前进在暂存前停止，未重跑，后继保留并行 a414fcb3 四路径 runner 修复。旧归档 [CI37024745598](https://github.com/wangbinquan/agent-workflow/actions/runs/37024745598) 已 completed/failure：45成功、4失败、1取消，原非终态快照保持。54f主 [CI37031695406](https://github.com/wangbinquan/agent-workflow/actions/runs/37031695406) completed/cancelled：41成功、2失败、7取消；[Windows37031886943](https://github.com/wangbinquan/agent-workflow/actions/runs/37031886943) failure 0/1，实际12处 matcher TS2769。
+
+单测试路径补正已发布 `76c564b376bc568096a76c7a1c809eb519cda5ec`，有限 PASS `563278a008749ed450177b6de784d2c98357cb439bd76b9b9778bc327f268e0e`：12处 expect<SkillContentBinding> 显式选择接口，原 receiver 身份比较、运行时参数和20秒预算保持。该 SHA [Windows37034643759](https://github.com/wangbinquan/agent-workflow/actions/runs/37034643759) completed/success 1/1；主 [CI37034403145](https://github.com/wangbinquan/agent-workflow/actions/runs/37034403145) 尚未取得终态，不能据此声称主 CI 全绿。
+
+仅目标 format/lint、纯源码/AST/JSON/字节证明与官方 scoped 生成；无本机 AW test/typecheck/build/service。所有旧正文、并行输出及失败/取消记录保持。A1宿主/执行权、内容写入、工作区/Git、A5～A8和完整 A-G继续；随后独立 CS adapters，B/M0先实际部署再逐项 M1～M4。尚无 AW-in-CS 部署，不关闭 RFC。
+
 ## 2026-10-02 技能完整存储真实根与 HTTP 回归夹具补正
 
 技能完整选择八路径首门 `58773cdefc01365ca8afd7e2f64a33838e429952ce15556dc491e9568b1a6428` FAIL/P2 保留：直接展开合法原型 getter bundle 会丢失 capability 并启用 file 默认。owner 的 selectSkillContentDependencies 现显式读取全部11项能力及一次 rootReference，五个真实 classic/boot 调用展开该冻结投影；同一 binding 贯穿 StartOptions、provider session/recompose、SQLite/PG 和 standalone HTTP。undefined 保持原 file 默认，原叶层状态机完整字节不变。

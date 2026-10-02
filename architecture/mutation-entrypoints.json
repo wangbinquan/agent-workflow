@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1808,
+    "entries": 1810,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -7414,6 +7414,56 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceContentQueries.ts#createFileEvidenceContentQueries",
       "symbol": "createFileEvidenceContentQueries",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDocumentQueries.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDocumentQueries.ts#createFileEvidenceDocumentQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDocumentQueries.ts#createFileEvidenceDocumentQueries",
+      "symbol": "createFileEvidenceDocumentQueries",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDownloadQueries.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDownloadQueries.ts#createFileEvidenceDownloadQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDownloadQueries.ts#createFileEvidenceDownloadQueries",
+      "symbol": "createFileEvidenceDownloadQueries",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -43212,7 +43262,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6faf5b04245227bb5c23b4df374ec3ab8bf53f1b1adfd559d9d93328e3f15864",
+  "sourceDigest": "sha256:503074766d22ee23a9f8c7ec82568499e3e5b5d2d169945474ee08686f77aa58",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

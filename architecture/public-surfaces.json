@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1132,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21510,
+    "recursiveFields": 21516,
     "symbols": 1045
   },
   "entries": [
@@ -19360,8 +19360,8 @@
       "budget": {
         "maxMethods": 25,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 250,
-        "maxUnionVariants": 82
+        "maxTransitiveLeafFields": 252,
+        "maxUnionVariants": 86
       },
       "consumerEdgeIds": [
         "import:32b4b72eb45660d3ca24"
@@ -19927,12 +19927,22 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:operations.$method:getRequirementFile.$return.open.$return",
+          "fieldPath": "$call.$parameter:operations.$method:getRequirementFile.$return.open.$return.$variant:0",
           "type": "ReadableStream<Uint8Array>"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:operations.$method:getRequirementFile.$return.openAll.$return",
+          "fieldPath": "$call.$parameter:operations.$method:getRequirementFile.$return.open.$return.$variant:1",
+          "type": "ReadableStream<Uint8Array>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:operations.$method:getRequirementFile.$return.openAll.$return.$variant:0",
+          "type": "ReadableStream<Uint8Array>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:operations.$method:getRequirementFile.$return.openAll.$return.$variant:1",
           "type": "ReadableStream<Uint8Array>"
         },
         {
@@ -23391,12 +23401,22 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "open.$return",
+          "fieldPath": "open.$return.$variant:0",
           "type": "ReadableStream<Uint8Array>"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "openAll.$return",
+          "fieldPath": "open.$return.$variant:1",
+          "type": "ReadableStream<Uint8Array>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "openAll.$return.$variant:0",
+          "type": "ReadableStream<Uint8Array>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "openAll.$return.$variant:1",
           "type": "ReadableStream<Uint8Array>"
         }
       ],
@@ -23495,8 +23515,8 @@
       "budget": {
         "maxMethods": 24,
         "maxTopLevelFields": 25,
-        "maxTransitiveLeafFields": 250,
-        "maxUnionVariants": 82
+        "maxTransitiveLeafFields": 252,
+        "maxUnionVariants": 86
       },
       "consumerEdgeIds": [
         "import:17d7bb9e4a877407bcf2",
@@ -24103,12 +24123,22 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:getRequirementFile.$return.open.$return",
+          "fieldPath": "$method:getRequirementFile.$return.open.$return.$variant:0",
           "type": "ReadableStream<Uint8Array>"
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:getRequirementFile.$return.openAll.$return",
+          "fieldPath": "$method:getRequirementFile.$return.open.$return.$variant:1",
+          "type": "ReadableStream<Uint8Array>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRequirementFile.$return.openAll.$return.$variant:0",
+          "type": "ReadableStream<Uint8Array>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:getRequirementFile.$return.openAll.$return.$variant:1",
           "type": "ReadableStream<Uint8Array>"
         },
         {
@@ -170532,7 +170562,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6faf5b04245227bb5c23b4df374ec3ab8bf53f1b1adfd559d9d93328e3f15864",
+  "sourceDigest": "sha256:503074766d22ee23a9f8c7ec82568499e3e5b5d2d169945474ee08686f77aa58",
   "targetContexts": [
     "collaboration",
     "development-automation",

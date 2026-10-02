@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1996,
+    "backendFiles": 2001,
     "frontendFiles": 642,
     "legacyFiles": 554,
-    "moduleFiles": 1442,
-    "productionFiles": 2798,
+    "moduleFiles": 1447,
+    "productionFiles": 2803,
     "sharedFiles": 160,
-    "symbolsIncludingFileRoots": 25768
+    "symbolsIncludingFileRoots": 25780
   },
   "entries": [
     {
@@ -27860,6 +27860,78 @@
       "currentContext": "development-automation",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/development-automation/application/evidenceDocuments.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/evidenceDocuments.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/evidenceDocuments.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/evidenceDocuments.ts#EvidenceDocumentQueries",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "EvidenceDocumentQueries",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/application/evidenceDownloads.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/evidenceDownloads.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/evidenceDownloads.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/evidenceDownloads.ts#EvidenceDownloadHandle",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "EvidenceDownloadHandle",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/evidenceDownloads.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/evidenceDownloads.ts#EvidenceDownloadQueries",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "EvidenceDownloadQueries",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/evidenceDownloads.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/evidenceDownloads.ts#EvidenceDownloadStream",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "EvidenceDownloadStream",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/development-automation/application/migrationAnalyzer.ts",
       "id": "owner:packages/backend/src/modules/development-automation/application/migrationAnalyzer.ts#$file",
       "removeAfterWave": null,
@@ -34477,6 +34549,30 @@
       "removeAfterWave": "W4-E8",
       "status": "current-module",
       "symbol": "WRITE_REQUIRED",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts#$file",
+      "removeAfterWave": "W4-E8",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts#EvidenceReadBinding",
+      "removeAfterWave": "W4-E8",
+      "status": "current-module",
+      "symbol": "EvidenceReadBinding",
       "targetContext": "development-automation",
       "targetLayer": "application"
     },
@@ -41653,6 +41749,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "readFileRange",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDocumentQueries.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDocumentQueries.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDocumentQueries.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDocumentQueries.ts#createFileEvidenceDocumentQueries",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileEvidenceDocumentQueries",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDownloadQueries.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDownloadQueries.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDownloadQueries.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDownloadQueries.ts#createFileEvidenceDownloadQueries",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileEvidenceDownloadQueries",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -309948,5 +310092,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6faf5b04245227bb5c23b4df374ec3ab8bf53f1b1adfd559d9d93328e3f15864"
+  "sourceDigest": "sha256:503074766d22ee23a9f8c7ec82568499e3e5b5d2d169945474ee08686f77aa58"
 }

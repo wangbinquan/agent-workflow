@@ -157,3 +157,9 @@ A2 归档真实根九路径有限独立 PASS，指纹 `f9a5659c85fb50b3a0158e9d1
 原四条生成规则及production语料规则保持；两fixture均不在sourceDigest的src语料或两个额外输入内，因此不重复R2 census。实际六条bootstrap value/type边使imports5711→5717、exceptions5073→5079，五个真实composition owner使25763→25768。entry1808、background342、public1045、required-port liveness38、target69及implementation SCC保持；原boundary scanner无新增R1/R2，273 inbound/31 outbound及原全部条款/reason/退役条件保持。三项真实增长一次登记，匹配canonical提交后另行退役。
 
 按归档CI单路径、技能八路径、17路径canonical/docs及三回执后继退役及时发布；旧正文及并行输出完整保持。只做目标format/lint、纯源码/AST/字节证明及原官方scoped生成，无本机AW test/typecheck/build/service；正式行为交新exact-SHA hosted CI。其他内容与A1～A8/完整AC00/A-G继续；完整A-G后编写独立CS adapters，B/M0先实际部署，再逐项M1～M4。尚无AW-in-CS部署，不关闭RFC。
+
+## 程序与证据读取真实根的接续（2026-10-03）
+
+20路径组合有限PASS `ae7d8ffabdb9d18d9e58c03c90a9f9572ff99411ea45305ac772e187b511d97e`，实际三根统一传入既有ProgramArtifactPort和complete evidence read binding。文档五消费者/下载流已等待所选ACK，原prototype receiver、JSON/schema、membership及200/206/416/range语义保持；首轮两P2、两fixture后继PASS与原全文/W29证明见 [功能门](./functional-gates.md) 新节。官方scoped投影实际entry+2/imports+6/exceptions+6/owner+12，其余数量/原条款/SCC/liveness保持，四growth匹配canonical后退役。
+
+本批仍不关闭A2：EvidenceStore写入/import、requirement materialize、DE输入文件的逻辑捕获/物化、全部TE/RC恢复仍须完整接入。A1外层宿主/锁/执行权，A3/A4全工作区/Git消费者及A5～A8继续；完整A-G后实施独立CS adapters，B/M0先部署再逐项M1～M4。前批2b/54f真实失败取消和76matcher修复的Windows成功/主CI未终态见 [STATE](../../STATE.md)。尚无AW-in-CS部署，不关闭RFC；原正文/并行输出与全部门/CI历史保持，仅目标静态检查和原scoped生成，无本机AW test/typecheck/build/service。

@@ -576,3 +576,11 @@ A2 归档真实根九路径有限独立 PASS，指纹 `f9a5659c85fb50b3a0158e9d1
 原四条生成规则及production语料规则保持；两fixture均不在sourceDigest的src语料或两个额外输入内，因此不重复R2 census。实际六条bootstrap value/type边使imports5711→5717、exceptions5073→5079，五个真实composition owner使25763→25768。entry1808、background342、public1045、required-port liveness38、target69及implementation SCC保持；原boundary scanner无新增R1/R2，273 inbound/31 outbound及原全部条款/reason/退役条件保持。三项真实增长一次登记，匹配canonical提交后另行退役。
 
 按归档CI单路径、技能八路径、17路径canonical/docs及三回执后继退役及时发布；旧正文及并行输出完整保持。只做目标format/lint、纯源码/AST/字节证明及原官方scoped生成，无本机AW test/typecheck/build/service；正式行为交新exact-SHA hosted CI。其他内容与A1～A8/完整AC00/A-G继续；完整A-G后编写独立CS adapters，B/M0先实际部署，再逐项M1～M4。尚无AW-in-CS部署，不关闭RFC。
+
+## 程序与证据读取真实根的有限交付（2026-10-03）
+
+20路径组合有限 PASS `ae7d8ffabdb9d18d9e58c03c90a9f9572ff99411ea45305ac772e187b511d97e`。既有 DE ProgramArtifactPort 与 DA complete evidence read binding贯穿真实 start/session/recompose、PG/SQLite daemon和standalone HTTP；五处文档读取及range stream均等待selected ACK，local默认独立包保持原字节/错误/范围语义。首轮两个夹具P2和两路径后继PASS、全文逆变换、原W29数量与摘要记录见 [功能门](./functional-gates.md) 新节，不冒称全量复跑。
+
+官方 scoped canonical以76c564b加本批20路径只生成一次，原四规则保持。实际entry+2、imports+6、exceptions+6、owner+12；其他受控数量和SCC/liveness保持，原273 inbound/31 outbound无新增条款。按20 source、17 canonical/docs、匹配四growth回执后继退役发布。前批2b/54f失败取消、76单测试matcher修复及Windows成功/主CI未终态见 [STATE](../../STATE.md) 新节；正式本批行为交新exact-SHA hosted CI。
+
+后续必须完成A1外层宿主/执行权、A2内容写入/import/materialize和完整恢复、A3/A4工作区与Git全消费者、A5材料/执行/清理、A6命令、A7执行权恢复与A8完整装配/独立A-G；本批只是读取切面。随后编写独立CS adapters，B/M0先实际部署，再逐项M1～M4。尚无AW-in-CS部署，不关闭RFC；原正文和并行内容保持，无本机AW test/typecheck/build/service。

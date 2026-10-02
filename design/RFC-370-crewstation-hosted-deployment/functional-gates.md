@@ -372,3 +372,15 @@ A2 归档真实根九路径有限独立 PASS，指纹 `f9a5659c85fb50b3a0158e9d1
 原四条生成规则及production语料规则保持；两fixture均不在sourceDigest的src语料或两个额外输入内，因此不重复R2 census。实际六条bootstrap value/type边使imports5711→5717、exceptions5073→5079，五个真实composition owner使25763→25768。entry1808、background342、public1045、required-port liveness38、target69及implementation SCC保持；原boundary scanner无新增R1/R2，273 inbound/31 outbound及原全部条款/reason/退役条件保持。三项真实增长一次登记，匹配canonical提交后另行退役。
 
 按归档CI单路径、技能八路径、17路径canonical/docs及三回执后继退役及时发布；旧正文及并行输出完整保持。只做目标format/lint、纯源码/AST/字节证明及原官方scoped生成，无本机AW test/typecheck/build/service；正式行为交新exact-SHA hosted CI。其他内容与A1～A8/完整AC00/A-G继续；完整A-G后编写独立CS adapters，B/M0先实际部署，再逐项M1～M4。尚无AW-in-CS部署，不关闭RFC。
+
+## 程序与证据读取真实根20路径组合门（2026-10-03）
+
+首轮20路径 `3cbb94c59f652d15f9f6ea5cd5529b52187fdf54aebe6e1e82fce3e1b13f648a` 有限 FAIL/P2 两项保留：证据 prototype getter 的 expect(this).toBe(receiver) 有多态 this 类型冲突；程序读取预期漏掉实际 kind/program 和 builtin runtimeProfileRef，严格比较在 readEntered 前失败。生产代码不因此改写。两夹具增量 `84c3f38be879b911baa8cd66e0438aee710ddacdd9898712083fce3f6eaccf06` 由 /root/intent_functional_gate 有限 PASS：三处 expect<EvidenceReadBinding> 保持原 receiver 身份断言；独立 expectedRead 值保留六字段严格 toEqual。2项有界逆变换、4次替换恢复首轮两文件全文，其他18文件逐字保持。
+
+20路径最终组合指纹 `ae7d8ffabdb9d18d9e58c03c90a9f9572ff99411ea45305ac772e187b511d97e`，由原20路径其余18项审查与两夹具增量组成 PASS，不声称另跑全量门。实际 start options/session/recompose、PG/SQLite daemon和standalone HTTP传入同一 employeePrograms/evidenceRead receiver。ProgramArtifactPort为既有 DE 合同；DA complete read binding只包含内容/文档/下载三面，不包含写入。五处文档读取等待同一 readText ACK，JSON parse/schema判断留原业务 owner；下载等待 open/openAll/open(range)，inclusive byte range及原 HTTP 输出保持，合法 prototype getter/方法不丢 this。原 partial evidenceContents override保持。
+
+双 provider 真实 HTTP 回归覆盖 program put/read ACK、精确refs、missing409/failure500和DB row；证据 own/prototype binding、文档/打开/流三段held ACK、manifest与bytes/headers、固定/开放/后缀/钳制range、416无stream、missing/invalid/schema/rejection、missing membership无open及DB row。另有 materializer消费者与真实 file adapter回归，所有每例20秒预算保留；ACK诊断只读同一次响应的clone，不消费原JSON body。39项有界逆变换、41次实际替换恢复10份旧文件全文，8份叶层控制 SHA 保持。原 W29 只有 PG `547a7cc5…→5fb5aa8e…`、HTTP mounts `9aa32ce7…→a64272f5…` 两摘要变化，168/49/65数量、8phase、SQLite/event摘要及原规则保持。
+
+官方 scoped census只执行一次：已提交76c564b加20路径，四原生成规则 SHA不变。实际入口1808→1810、imports5717→5723、exceptions5079→5085、owner25768→25780；仅两已用local工厂被原create前缀算法计入入口，六真实bootstrap type边，以及五文件/七符号owner。background342、public1045、required-port liveness38、target69、implementation SCC保持；无新增R1/R2，273 inbound/31 outbound、原每条reason/退役条件/bootstrap列表完整保持。四项真实growth一次登记，匹配canonical提交后退役。
+
+前批54f技能交付、2b旧归档终态、54f主取消41/2/7与Windows failure0/1、76单路径 matcher有限PASS和Windows success1/1详见 [STATE](../../STATE.md) 新节。76主CI37034403145尚未取得终态；所有旧FAIL/取消和冻结快照保持，有限源码门与Windows不替代主CI结论。仅目标format/lint、纯源码/AST/JSON/字节证明及原scoped生成，无本机AW test/typecheck/build/service。DA写入/import/materialize、其他A1～A8/完整A-G、独立CS adapters与B/M0～M4持续，尚无AW-in-CS部署。

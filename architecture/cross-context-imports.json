@@ -8365,6 +8365,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1799a8af02208def804b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts#EvidenceReadBinding",
+      "toPath": "packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts",
+      "toSymbol": "EvidenceReadBinding",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -11459,6 +11476,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:20ebe31ae5d72fb6e866",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort",
+      "toPath": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toSymbol": "ProgramArtifactPort",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/package/packageApplication.ts#$file",
@@ -11490,6 +11524,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels",
       "toPath": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts",
       "toSymbol": "createTaskExecutionReadModels",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:20fae361c573dd0a24f5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort",
+      "toPath": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toSymbol": "ProgramArtifactPort",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -17372,6 +17423,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/digitalEmployeeEventObserver.ts#composeDevelopmentCodeHostEventObserver",
       "toPath": "packages/backend/src/modules/integration/composition/digitalEmployeeEventObserver.ts",
       "toSymbol": "composeDevelopmentCodeHostEventObserver",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:31d1709935f1cf311ec1",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts#EvidenceReadBinding",
+      "toPath": "packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts",
+      "toSymbol": "EvidenceReadBinding",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -53689,6 +53757,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a0bd8ab451685af0d34d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort",
+      "toPath": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toSymbol": "ProgramArtifactPort",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
       "fromPath": "packages/backend/src/services/runner.ts",
       "fromSymbol": "$file",
@@ -62048,6 +62133,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/operations.ts#$file",
       "toPath": "packages/backend/src/modules/task-execution/public/operations.ts",
       "toSymbol": "transitionNodeRunStatusInTx",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bb022374a1346e0bbad6",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts#EvidenceReadBinding",
+      "toPath": "packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts",
+      "toSymbol": "EvidenceReadBinding",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -86345,9 +86447,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5079,
+    "architectureExceptions": 5085,
     "implementationSccs": 0,
-    "observedEdges": 5717,
+    "observedEdges": 5723,
     "requiredPorts": 38,
     "targetEdges": 69
   },
@@ -94932,6 +95034,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#AgentOperationDescriptors"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:1799a8af02208def804b",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/evidenceReadBinding",
+      "syntax": "static-import",
+      "targetSymbol": "EvidenceReadBinding",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts#EvidenceReadBinding"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
@@ -98244,6 +98362,22 @@
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:20ebe31ae5d72fb6e866",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ProgramArtifactPort",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/application/package/packageApplication.ts",
@@ -98274,6 +98408,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:20fae361c573dd0a24f5",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ProgramArtifactPort",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort"
     },
     {
       "edgeKind": "value",
@@ -104450,6 +104600,22 @@
       "toContext": "integration",
       "toFile": "packages/backend/src/modules/integration/composition/digitalEmployeeEventObserver.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/integration/composition/digitalEmployeeEventObserver.ts#composeDevelopmentCodeHostEventObserver"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:31d1709935f1cf311ec1",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/evidenceReadBinding",
+      "syntax": "static-import",
+      "targetSymbol": "EvidenceReadBinding",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts#EvidenceReadBinding"
     },
     {
       "edgeKind": "value",
@@ -143238,6 +143404,22 @@
     {
       "edgeKind": "type",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:a0bd8ab451685af0d34d",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/digital-employee/composition/required-ports",
+      "syntax": "static-import",
+      "targetSymbol": "ProgramArtifactPort",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/runner.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
       "id": "import:a0be50c8c5f99fc17814",
@@ -152338,6 +152520,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/operations.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:bb022374a1346e0bbad6",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/evidenceReadBinding",
+      "syntax": "static-import",
+      "targetSymbol": "EvidenceReadBinding",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/evidenceReadBinding.ts#EvidenceReadBinding"
     },
     {
       "edgeKind": "value",
@@ -178668,7 +178866,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6faf5b04245227bb5c23b4df374ec3ab8bf53f1b1adfd559d9d93328e3f15864",
+  "sourceDigest": "sha256:503074766d22ee23a9f8c7ec82568499e3e5b5d2d169945474ee08686f77aa58",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

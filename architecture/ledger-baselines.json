@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1808,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1810,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: the unchanged create-prefix scanner counts exactly the two used local factories createFileEvidenceDocumentQueries and createFileEvidenceDownloadQueries as entries. Their behavior remains read-only; no scanner or bootstrap exemption is changed."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5717,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5723,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: six actual bootstrap type imports consume the existing DE ProgramArtifactPort and the DA complete EvidenceReadBinding at SQLite/PG daemon and standalone HTTP roots. All three roots pass the same selected receivers; no offered-DAG or original import rule is changed."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +873,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5079,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5085,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: the original exception projection records the same six actual bootstrap type edges for program and evidence reads. The original 273 inbound and 31 outbound R1/R2 clauses, reasons, retirement conditions and bootstrap lists remain unchanged; no boundary clause is added."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +911,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25768,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25780,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: twelve real DA owners comprise five files, document query, download stream/handle/query, complete read binding, and two used local factories. These are consumed by existing materializer/download operations and all real roots. Original owner and public-surface rules remain unchanged."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:6faf5b04245227bb5c23b4df374ec3ab8bf53f1b1adfd559d9d93328e3f15864",
+    "sourceDigest": "sha256:503074766d22ee23a9f8c7ec82568499e3e5b5d2d169945474ee08686f77aa58",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +932,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "019e6d01805d41e6202d1dceebdcbf88859c3741",
-    "contentDigest": "sha256:a80be3140febe06f75209dc47917aa46ac3b3cbf5ceff5e161cb0e40ad176120",
+    "currentSnapshotSha": "76c564b376bc568096a76c7a1c809eb519cda5ec",
+    "contentDigest": "sha256:dfd45ebdecc3222faed464940033bd6c18b29bc307fe35f04b11b6e74185d856",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

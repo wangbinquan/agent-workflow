@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:6faf5b04245227bb5c23b4df374ec3ab8bf53f1b1adfd559d9d93328e3f15864`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:503074766d22ee23a9f8c7ec82568499e3e5b5d2d169945474ee08686f77aa58`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 1996 |
+| backend production TS 文件 | 2001 |
 | `services/` 文件 | 295 |
-| `modules/**` 文件 / 非空 context | 1442 / 18 |
+| `modules/**` 文件 / 非空 context | 1447 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 500 |
-| `architectureExceptions` | 5079 |
+| `architectureExceptions` | 5085 |
 | `backgroundJobs` | 342 |
-| `crossContextImports` | 5717 |
+| `crossContextImports` | 5723 |
 | `facades` | 295 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25768 |
-| `mutationEntrypoints` | 1808 |
+| `moduleSymbolOwners` | 25780 |
+| `mutationEntrypoints` | 1810 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1045 |
 | `transactionExternalEffects` | 261 |
@@ -52,11 +52,11 @@
 | task-execution / application | 107 |
 | resource-catalog / application | 76 |
 | task-execution / composition | 62 |
-| development-automation / application | 51 |
+| development-automation / application | 53 |
 | collaboration / infrastructure | 47 |
 | resource-catalog / composition | 37 |
 | collaboration / application | 36 |
-| development-automation / infrastructure | 34 |
+| development-automation / infrastructure | 36 |
 | development-automation / domain | 33 |
 | task-execution / domain | 32 |
 | intent / application | 29 |
@@ -72,9 +72,9 @@
 | integration / composition | 18 |
 | intent / domain | 18 |
 | code-capability / infrastructure | 15 |
+| development-automation / composition | 15 |
 | runtime-management / application | 15 |
 | collaboration / domain | 14 |
-| development-automation / composition | 14 |
 | digital-employee / application | 14 |
 | run-observability / domain | 13 |
 | identity-access / infrastructure | 12 |
@@ -209,7 +209,7 @@
 | role | 数量 |
 | --- | --- |
 | legacy-outbound | 3320 |
-| legacy-inbound | 1575 |
+| legacy-inbound | 1581 |
 | infrastructure-external | 290 |
 | offered-consumption | 207 |
 | temporary-internal-debt | 89 |
@@ -224,7 +224,7 @@
 | rule | 数量 |
 | --- | --- |
 | legacy-outbound | 3320 |
-| legacy-inbound | 1575 |
+| legacy-inbound | 1581 |
 | temporary-internal-debt | 89 |
 | off-dag-offered | 83 |
 | no-circular | 6 |
@@ -241,8 +241,8 @@
 | W4 | 201 |
 | W4-B | 187 |
 | W5 | 181 |
-| W4-E8 | 130 |
-| W4-E9 | 71 |
+| W4-E8 | 133 |
+| W4-E9 | 74 |
 | W2-D/W3/W5 | 9 |
 | RFC-371 | 8 |
 | W9-E | 8 |
