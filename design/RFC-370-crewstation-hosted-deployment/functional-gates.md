@@ -384,3 +384,26 @@ A2 归档真实根九路径有限独立 PASS，指纹 `f9a5659c85fb50b3a0158e9d1
 官方 scoped census只执行一次：已提交76c564b加20路径，四原生成规则 SHA不变。实际入口1808→1810、imports5717→5723、exceptions5079→5085、owner25768→25780；仅两已用local工厂被原create前缀算法计入入口，六真实bootstrap type边，以及五文件/七符号owner。background342、public1045、required-port liveness38、target69、implementation SCC保持；无新增R1/R2，273 inbound/31 outbound、原每条reason/退役条件/bootstrap列表完整保持。四项真实growth一次登记，匹配canonical提交后退役。
 
 前批54f技能交付、2b旧归档终态、54f主取消41/2/7与Windows failure0/1、76单路径 matcher有限PASS和Windows success1/1详见 [STATE](../../STATE.md) 新节。76主CI37034403145尚未取得终态；所有旧FAIL/取消和冻结快照保持，有限源码门与Windows不替代主CI结论。仅目标format/lint、纯源码/AST/JSON/字节证明及原scoped生成，无本机AW test/typecheck/build/service。DA写入/import/materialize、其他A1～A8/完整A-G、独立CS adapters与B/M0～M4持续，尚无AW-in-CS部署。
+
+## A1 宿主/CI 与 A2 文档写入组合候选的有限功能门（2026-10-03）
+
+28 路径 source fingerprint `193a0c97303944b793cf098ff2faa89946dd8592cca6f5ca50a54033d94d5fc0`，由两个有限门组合为 PASS：
+
+- 宿主/CI 首 21 路径 `21118e772d16645dd3cd23119869570a87f7e7fa979158163347855c129bcb1a` 首门 FAIL/P2：fast control.close ACK 可使 shutdown 在已受理 publishReady 完成前 terminate。保留原 finding；仅 start 与真实监听回归两路径 R2 `d9dfef3cc9ae3a0930a878519545870379c530d943de6f8d7884c0d6c54a5ee1` PASS。其他 19 路径 SHA 逐一不变，组合 21 路径 `e8f9d78d39b1456922dd73585ac105a5a9c3c433529b5f8690b599cf39b4b05f` PASS，没有重跑完整 21 路径门。
+- A2 七路径文档写入 `ad092e01f31dfabf524f8fef605604bc7c8941fd33ca4b2f300111b7c899cf38` 独立有限 PASS。原 EvidenceStore 物理正文、形状、五处 canonical JSON/budget 和业务引用语义保持；等待 writer ACK、prototype receiver/this、同步/异步/failure/默认字节/预算及 staging finally cleanup 回归已写，未本机运行。实际启动注入与其余内容能力不在此 PASS 范围。
+
+原 49 个定位段逆变换恢复 13 个 HEAD 旧整文件；R2 14 个定位段恢复两路径首候选整文件，再组合前述证明恢复原 HEAD；文档写入七个定位段恢复两个旧整文件。原控制路径、W3 shutdown/listener 判据、严格 range 字节和 RFC-310 deep import 原规则保持。W29 原 pure projection 一次生成后保留 PG 168/8 phase、SQLite 49、HTTP mount 65 等既有数量，仅反映两处真实 receiver wiring 字符串；不重跑、不改测试预算。
+
+精确 `227cfacc488b2150c62e0dc0bc28e032dfcd24f8` 主 [CI37038117741](https://github.com/wangbinquan/agent-workflow/actions/runs/37038117741) completed/failure（44 success、6 failure），[Windows37038361399](https://github.com/wangbinquan/agent-workflow/actions/runs/37038361399) completed/failure 0/1。六份功能日志确定 QuestionSetV1 类型、range 返回全 21 字节和三个 forbidden deep type imports；本批修复真实实现/夹具/根类型导出，未放宽 manifest、原字节匹配或边界规则。76c564b 的主 CI37034403145 已 cancelled（41 success、8 cancelled、1 aggregate failure）；其 Windows37034643759 success，不等于该 SHA 整套绿色。旧非终态与失败正文不改写。
+
+原 scoped census/原 boundary 各一次、原规则哈希不变、commons-debt 304 条及 273/31 完整保持，boundary added 空，target 69 和 implementation SCC 空不变。实际六项 ledger 增量为 1810→1813、5723→5735、38→39、5085→5096、1045→1047、25780→25802；matching canonical commit 消费后按原 helper 退役六回执。新增 DaemonHostLifecyclePort 有真实 native provider/启动消费者，但原 SO application/root composition 规则仅得到 `declared-debt`（W4-E7），不能写 active binding；该真实 A1/A8 余项继续。
+
+独立 METADATA 门只审新 17 路径候选及六回执退役脚本；不再重审已 PASS SOURCE。未执行 AW 本机 test/typecheck/build/service，正式行为与全仓结论待本批 exact-SHA hosted CI。所有旧 gate/CI 历史、并行输出保持；完整 AC00/A1～A8/A-G 未完成，CS adapters 与 AW-in-CS 实际部署未开始。
+
+## RFC-370 类型出口增量与原 active SPI 恢复（2026-10-03）
+
+首版 SOURCE28 `193a0c97303944b793cf098ff2faa89946dd8592cca6f5ca50a54033d94d5fc0` 与 METADATA17 `d1b498319866d70f916ac8bf32fd071eba0a447e2d741046ce59818dc8589377` 有限 PASS 保留，但未发布。原清单将 DE ProgramArtifactPort 的 from-type 再导出算作同路径第二次 composition binding，造成 active→declared-debt。仅 DE composition 一路径把出口改为 `export type { ProgramArtifactPort }`，复用原有 type import，整文件逆变换一致；单路径增量有限 PASS `38ca0e5cd13d8c8bc8af390afa963c82fe58600af080993f94966d7581c95443`。其余 27 路径逐字未变，复用原 PASS 组成 SOURCE28 `8ded9a42418055aa1674d4fb31360855f4a6ae66cdbe2781b20eddda68924dc1`，不重开 SOURCE 全量门。
+
+实际源码变化后只执行一次新 R2 scoped census/boundary，保留首版生成记录；观察边和 exceptions 逐项与首版相同，六实际增量仍为 1810→1813、5723→5735、38→39、5085→5096、1045→1047、25780→25802。ProgramArtifactPort 恢复 active 且只有一个 composition binding；required 汇总现为 18 active/21 declared-debt（原 HEAD 18/20），宿主新增 SPI 仍 declared-debt/W4-E7。新 sourceDigest `sha256:8c56bbb82686cd2fbc2be56d46cf794bc5f8a5ec664a2645ccaae5b1d7d9d884`；四原规则、304 条 debt、273/31、target 69、implementation SCC 空保持，boundary added 空。六回执只更新本会话精确未发布记录，在匹配 canonical commit 后一次退役；没有替他人移除回执。
+
+首版新节与全部旧正文/并行内容/门和 CI 历史完整保留。R2 METADATA 只检视实际变更的投影和新增记录；只做目标 format/lint、纯源码/AST/JSON/字节证明与原 scoped 生成，无 AW 本机 tests/typecheck/build/service。正式行为仍待新 exact-SHA hosted CI。完整 A1/A2/A3～A8/AC00/A-G 与后续独立 CS adapters、B/M0～M4 持续；尚无 AW-in-CS 实际部署，不关闭 RFC。

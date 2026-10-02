@@ -1,3 +1,25 @@
+## RFC-370 类型出口增量与原 active SPI 恢复（2026-10-03）
+
+首版 SOURCE28 `193a0c97303944b793cf098ff2faa89946dd8592cca6f5ca50a54033d94d5fc0` 与 METADATA17 `d1b498319866d70f916ac8bf32fd071eba0a447e2d741046ce59818dc8589377` 有限 PASS 保留，但未发布。原清单将 DE ProgramArtifactPort 的 from-type 再导出算作同路径第二次 composition binding，造成 active→declared-debt。仅 DE composition 一路径把出口改为 `export type { ProgramArtifactPort }`，复用原有 type import，整文件逆变换一致；单路径增量有限 PASS `38ca0e5cd13d8c8bc8af390afa963c82fe58600af080993f94966d7581c95443`。其余 27 路径逐字未变，复用原 PASS 组成 SOURCE28 `8ded9a42418055aa1674d4fb31360855f4a6ae66cdbe2781b20eddda68924dc1`，不重开 SOURCE 全量门。
+
+实际源码变化后只执行一次新 R2 scoped census/boundary，保留首版生成记录；观察边和 exceptions 逐项与首版相同，六实际增量仍为 1810→1813、5723→5735、38→39、5085→5096、1045→1047、25780→25802。ProgramArtifactPort 恢复 active 且只有一个 composition binding；required 汇总现为 18 active/21 declared-debt（原 HEAD 18/20），宿主新增 SPI 仍 declared-debt/W4-E7。新 sourceDigest `sha256:8c56bbb82686cd2fbc2be56d46cf794bc5f8a5ec664a2645ccaae5b1d7d9d884`；四原规则、304 条 debt、273/31、target 69、implementation SCC 空保持，boundary added 空。六回执只更新本会话精确未发布记录，在匹配 canonical commit 后一次退役；没有替他人移除回执。
+
+首版新节与全部旧正文/并行内容/门和 CI 历史完整保留。R2 METADATA 只检视实际变更的投影和新增记录；只做目标 format/lint、纯源码/AST/JSON/字节证明与原 scoped 生成，无 AW 本机 tests/typecheck/build/service。正式行为仍待新 exact-SHA hosted CI。完整 A1/A2/A3～A8/AC00/A-G 与后续独立 CS adapters、B/M0～M4 持续；尚无 AW-in-CS 实际部署，不关闭 RFC。
+
+## RFC-370 A1 宿主切面、A2 文档写入与精确 CI 修复（2026-10-03）
+
+28 路径组合候选有限功能 PASS `193a0c97303944b793cf098ff2faa89946dd8592cca6f5ca50a54033d94d5fc0`。原 21 路径宿主/CI 候选首门 FAIL/P2 保留；只修 shutdown 未等待已受理 publishReady ACK 的两个路径，R2 有限 PASS，另 19 路径逐字未变，组成 21 路径 PASS。七路径 DA 文档写入候选独立有限 PASS；没有重跑未变的完整门，也不是完整 A1/A2/A-G。
+
+宿主运行信息、就绪发布/撤回、控制监听及退出进入独立 native adapter，同一 selected receiver 经 start/session/recompose、PG/SQLite daemon 和 standalone HTTP 到真实路由。正常 shutdown 顺序保持；已受理的异步就绪发布必须结束并取得最终撤回 ACK 后，才能释放锁和 terminate。PID 锁/执行权仍待迁移；原口径将新增宿主 SPI 标为 `declared-debt`（W4-E7），SO application 协调及根 composition 接线仍待收口，不冒领 active liveness。
+
+DA 原 EvidenceBudget/Entry/BundleRecord 形状移入 domain，原 EvidenceStore 物理实现正文逐字保留。五处 JSON 文档消费者等待所选 writeDocument ACK 后才写业务引用；默认独立 local adapter 保留 mkdir/UTF-8/import/finally cleanup 行为。真实默认写入、ACK、失败/预算与双 provider 回归已编写；实际启动入口注入、其他 intake/import/materialize 与内容写入仍属 A2/A8 未决。
+
+前批 `227cfacc488b2150c62e0dc0bc28e032dfcd24f8` 的 [主 CI37038117741](https://github.com/wangbinquan/agent-workflow/actions/runs/37038117741) 已 completed/failure，44 success、6 failure；[Windows37038361399](https://github.com/wangbinquan/agent-workflow/actions/runs/37038361399) completed/failure 0/1。六份功能作业日志确定三项实际问题：QuestionSetV1 夹具类型、local range 返回整文件、三个 bootstrap 深层 type import。分别用真实类型、inclusive-end createReadStream/Readable.toWeb 与 DE composition-root 类型导出修复，原精确字节断言、边界规则及 manifest 不放宽。更早 `76c564b376bc568096a76c7a1c809eb519cda5ec` 主 [CI37034403145](https://github.com/wangbinquan/agent-workflow/actions/runs/37034403145) 终态为 cancelled（41 success、8 cancelled、1 aggregate failure），Windows37034643759 success；旧待终态正文完整保留。
+
+28 路径原 scoped census 和原 boundary report 各只执行一次：entry 1810→1813、imports 5723→5735、required SPI 38→39、exceptions 5085→5096、public surfaces 1045→1047、owners 25780→25802。六项实际增长回执在匹配 canonical commit 后按原 provenance helper 退役。四条原生成规则不变；commons-debt 304 条完整内容、273 inbound/31 outbound、target 69、implementation SCC 空及未解析 first-party 空均保持，boundary 新增为零。新 sourceDigest `sha256:730ed9945a9c1c2a0c62d20938eaf83aaccdf9d7d97581c7dd570b2c8c838c0d`；并行 span 工作不纳入本批投影或提交。
+
+本批仅目标 format/lint、纯源码/AST/JSON/字节证明和原 scoped 生成，无本机 AW test/typecheck/build/service；正式行为交新 exact-SHA hosted CI。全部旧正文、并行内容和首门/CI 失败记录保持。A1 执行权、A2 全面内容能力、A3/A4/A5～A8、AC00 和完整 A-G 继续；之后编写独立 CS adapters，B/M0 先实际部署，再逐项 M1～M4。尚未完成 AW-in-CS 部署，不关闭 RFC。
+
 ## 2026-10-03 程序与证据读取的真实根接线
 
 20 路径组合候选有限功能 PASS `ae7d8ffabdb9d18d9e58c03c90a9f9572ff99411ea45305ac772e187b511d97e`。既有 DE ProgramArtifactPort 和 DA EvidenceReadBinding 经 start/session/recompose、PG 与 SQLite daemon、standalone HTTP 传入同一 selected receiver。DA 文档读取和下载流各有独立 local adapter；五处文档消费者等待读取 ACK，下载保留原 manifest membership、媒体类型、字节数、200/206/416 与 range 判据。prototype getter 和 handle 方法保留 this。证据写入/import/materialize 的物理效果仍待迁移，不把读取交付写成完整 A2。

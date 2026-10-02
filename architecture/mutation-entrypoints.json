@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1810,
+    "entries": 1813,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -7414,6 +7414,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceContentQueries.ts#createFileEvidenceContentQueries",
       "symbol": "createFileEvidenceContentQueries",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDocumentCommands.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDocumentCommands.ts#createFileEvidenceDocumentCommands",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDocumentCommands.ts#createFileEvidenceDocumentCommands",
+      "symbol": "createFileEvidenceDocumentCommands",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -24469,6 +24494,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries.ts#createFileDaemonRuntimeQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries.ts#createFileDaemonRuntimeQueries",
+      "symbol": "createFileDaemonRuntimeQueries",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/fileDatabaseConfiguration.ts#createFileDatabaseConfiguration",
@@ -24674,6 +24724,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/filePendingRestore.ts#StagePendingRestoreOptions",
       "symbol": "StagePendingRestoreOptions",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonHostLifecycle.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonHostLifecycle.ts#createNativeDaemonHostLifecycle",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonHostLifecycle.ts#createNativeDaemonHostLifecycle",
+      "symbol": "createNativeDaemonHostLifecycle",
       "targetContext": "system-operations",
       "targetLayer": "infrastructure"
     },
@@ -43262,7 +43336,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:503074766d22ee23a9f8c7ec82568499e3e5b5d2d169945474ee08686f77aa58",
+  "sourceDigest": "sha256:8c56bbb82686cd2fbc2be56d46cf794bc5f8a5ec664a2645ccaae5b1d7d9d884",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

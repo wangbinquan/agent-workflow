@@ -163,3 +163,25 @@ A2 归档真实根九路径有限独立 PASS，指纹 `f9a5659c85fb50b3a0158e9d1
 20路径组合有限PASS `ae7d8ffabdb9d18d9e58c03c90a9f9572ff99411ea45305ac772e187b511d97e`，实际三根统一传入既有ProgramArtifactPort和complete evidence read binding。文档五消费者/下载流已等待所选ACK，原prototype receiver、JSON/schema、membership及200/206/416/range语义保持；首轮两P2、两fixture后继PASS与原全文/W29证明见 [功能门](./functional-gates.md) 新节。官方scoped投影实际entry+2/imports+6/exceptions+6/owner+12，其余数量/原条款/SCC/liveness保持，四growth匹配canonical后退役。
 
 本批仍不关闭A2：EvidenceStore写入/import、requirement materialize、DE输入文件的逻辑捕获/物化、全部TE/RC恢复仍须完整接入。A1外层宿主/锁/执行权，A3/A4全工作区/Git消费者及A5～A8继续；完整A-G后实施独立CS adapters，B/M0先部署再逐项M1～M4。前批2b/54f真实失败取消和76matcher修复的Windows成功/主CI未终态见 [STATE](../../STATE.md)。尚无AW-in-CS部署，不关闭RFC；原正文/并行输出与全部门/CI历史保持，仅目标静态检查和原scoped生成，无本机AW test/typecheck/build/service。
+
+## 2026-10-03 本批宿主/JSON 写入后的实际余项
+
+28 路径组合 SOURCE 有限 PASS `193a0c97303944b793cf098ff2faa89946dd8592cca6f5ca50a54033d94d5fc0`；host 首门 shutdown P2、两路径 R2 PASS 与其他 19 路径不变证据完整保留，doc-write 七路径独立 PASS。此次仅收口下列有限切面，不代表完整 A 阶段完成。
+
+- A1/A8：本批 native lifecycle/query 已实际接入三 roots、会话重装配和 HTTP，ready/withdraw ACK 及 shutdown draining 有真实回归。原 DaemonHostLifecyclePort 仍是 declared-debt（W4-E7），SO application 协调/根 composition、raw PID lock、托管租约执行权和退出恢复语义继续；local PID 只作诊断，不能作为远程执行身份。
+- A2/A8：五 JSON 文档消费者 await selected EvidenceDocumentCommands，原 domain 形状/默认 local import cleanup 保持。实际启动 root writer 注入、其他 EvidenceStore intake/import/materialize、上传、验证、工作区证据引用、下载及 blob 写入的完整逻辑能力仍需逐一迁移；不能用这五处 JSON 写入宣称全面对象存储接入。
+- A3/A4：工作区/Git 的全部消费者、两 LaunchLane、prepare/candidate effects 与清理仍按原矩阵收口。A5 的提交、durable receipt、事件游标、消息/取消及终态清理须整条效果链完成；A6 全 purpose 命令、A7 所有 worker/authority 和直接 HTTP、A8 全 roots/AC00 继续，完成后独立完整 A-G。
+
+227cfacc 主 CI37038117741 已 failure（44/6），Windows37038361399 failure 0/1；本批真实 QuestionSetV1 类型、range stream inclusive end 和 DE composition-root type export 修复保持原精确断言/manifest。76c564b 主 CI37034403145 已 cancelled（41 success、8 cancelled、1 aggregate failure），Windows37034643759 success。只交付新 exact-SHA hosted CI 证据才能确认本批正式行为；旧待终态文字作为历史保持。
+
+原 28 路径 scoped census 与 boundary 各执行一次；entry +3/import +12/SPI +1/exception +11/public +2/owner +22 为实际投影，SPI 不冒领 active。304 原 debt 条款整组逐字相同，273/31、target 69、implementation SCC 空和四规则不变，boundary added 空；匹配 canonical commit 后六增长回执一次退役。无 AW 本机 test/typecheck/build/service；并行 span 输出不纳入本批投影或提交。
+
+CS 独立 adapters、B/M0 与 AW-in-CS 真实部署均未开始。保持先完成平台中立 A1～A8 和独立完整 A-G，再在 CS 先部署 M0、增量 M1～M4 的既定顺序；RFC 继续，未达到最终关闭条件。
+
+## RFC-370 类型出口增量与原 active SPI 恢复（2026-10-03）
+
+首版 SOURCE28 `193a0c97303944b793cf098ff2faa89946dd8592cca6f5ca50a54033d94d5fc0` 与 METADATA17 `d1b498319866d70f916ac8bf32fd071eba0a447e2d741046ce59818dc8589377` 有限 PASS 保留，但未发布。原清单将 DE ProgramArtifactPort 的 from-type 再导出算作同路径第二次 composition binding，造成 active→declared-debt。仅 DE composition 一路径把出口改为 `export type { ProgramArtifactPort }`，复用原有 type import，整文件逆变换一致；单路径增量有限 PASS `38ca0e5cd13d8c8bc8af390afa963c82fe58600af080993f94966d7581c95443`。其余 27 路径逐字未变，复用原 PASS 组成 SOURCE28 `8ded9a42418055aa1674d4fb31360855f4a6ae66cdbe2781b20eddda68924dc1`，不重开 SOURCE 全量门。
+
+实际源码变化后只执行一次新 R2 scoped census/boundary，保留首版生成记录；观察边和 exceptions 逐项与首版相同，六实际增量仍为 1810→1813、5723→5735、38→39、5085→5096、1045→1047、25780→25802。ProgramArtifactPort 恢复 active 且只有一个 composition binding；required 汇总现为 18 active/21 declared-debt（原 HEAD 18/20），宿主新增 SPI 仍 declared-debt/W4-E7。新 sourceDigest `sha256:8c56bbb82686cd2fbc2be56d46cf794bc5f8a5ec664a2645ccaae5b1d7d9d884`；四原规则、304 条 debt、273/31、target 69、implementation SCC 空保持，boundary added 空。六回执只更新本会话精确未发布记录，在匹配 canonical commit 后一次退役；没有替他人移除回执。
+
+首版新节与全部旧正文/并行内容/门和 CI 历史完整保留。R2 METADATA 只检视实际变更的投影和新增记录；只做目标 format/lint、纯源码/AST/JSON/字节证明与原 scoped 生成，无 AW 本机 tests/typecheck/build/service。正式行为仍待新 exact-SHA hosted CI。完整 A1/A2/A3～A8/AC00/A-G 与后续独立 CS adapters、B/M0～M4 持续；尚无 AW-in-CS 实际部署，不关闭 RFC。

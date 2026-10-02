@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1810,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1813,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 A1/A2: the unchanged create-prefix rule observes exactly three used factories: createFileDaemonRuntimeQueries, createNativeDaemonHostLifecycle and createFileEvidenceDocumentCommands. The runtime query remains read-only; no scanner exemption is introduced."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5723,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5735,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A1 and CI repair: fifteen real edges replace three forbidden bootstrap type imports, a net twelve increase; the type-only local root export reuses its existing import and restores the single active ProgramArtifactPort composition binding under the original rule. DE ProgramArtifactPort now uses its composition-root export under the unchanged original boundary rules; daemon roots and route consume selected lifecycle/query contracts. Every original boundary clause is preserved."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -860,15 +866,21 @@
       "id": "rfc294-required-port-liveness",
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
-      "baseline": 38,
-      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
+      "baseline": 39,
+      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。",
+      "allowGrowth": {
+        "why": "RFC-370 A1: DaemonHostLifecyclePort has a real native provider and bootstrap consumers, but the unchanged original rule finds no SO application consumer or root composition binding. Preserve declared-debt with W4-E7; host application orchestration and composition cutover remain required before full A-G. This receipt does not claim active liveness."
+      }
     },
     {
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5085,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5096,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 A1: the unchanged exception projection records eleven net actual metadata entries. Preserve every original 273 inbound and 31 outbound clause, reason, retirement condition and bootstrap list; the original boundary report has zero additions. No rule or exception is broadened."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -881,8 +893,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1045,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1047,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 A1: two consumed public surfaces are DaemonRuntimeQueries at all three application roots and the daemon route, and DaemonRuntimeInfo re-exported for the original daemon-info utility. Preserve exact public contracts and original public-surface rules."
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -902,12 +917,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25780,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25802,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 A1/A2: twenty-five real owners are added and the three unchanged EvidenceBudget/Entry/BundleRecord shapes move from evidenceStore to DA domain, a net twenty-two increase. Native lifecycle, runtime query and JSON document-write adapters have real bounded consumers; actual document-write root injection and other physical evidence effects remain open."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:503074766d22ee23a9f8c7ec82568499e3e5b5d2d169945474ee08686f77aa58",
+    "sourceDigest": "sha256:8c56bbb82686cd2fbc2be56d46cf794bc5f8a5ec664a2645ccaae5b1d7d9d884",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +938,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "e31d09db9518020f3467f0996e19da1489ad51e1",
-    "contentDigest": "sha256:46aa29b06ca8918bc49243c35967fadd99028282298f024fa6b5f9e123bb2ddf",
+    "currentSnapshotSha": "227cfacc488b2150c62e0dc0bc28e032dfcd24f8",
+    "contentDigest": "sha256:bb054d7b9a47b3acf98f73c2e1e8d47f832c4fa628e1f36b2c3f8cb9473a0d9a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

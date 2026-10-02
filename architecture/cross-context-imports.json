@@ -11476,23 +11476,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:20ebe31ae5d72fb6e866",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort",
-      "toPath": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
-      "toSymbol": "ProgramArtifactPort",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/package/packageApplication.ts#$file",
@@ -11524,23 +11507,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels",
       "toPath": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts",
       "toSymbol": "createTaskExecutionReadModels",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "fromPath": "packages/backend/src/server.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:20fae361c573dd0a24f5",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort",
-      "toPath": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
-      "toSymbol": "ProgramArtifactPort",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -18618,6 +18584,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:34e848b7184898bb083f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#DaemonRuntimeQueries",
+      "toPath": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toSymbol": "DaemonRuntimeQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationTaskAccess.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/collaborationTaskAccess.ts",
       "fromSymbol": "$file",
@@ -19379,6 +19362,23 @@
       "toPath": "packages/backend/src/services/taskQuestions.ts",
       "toSymbol": "reconcileRoundEntriesTx",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:37a65df900006a79e193",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts#selectDaemonRuntimeQueries",
+      "toPath": "packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts",
+      "toSymbol": "selectDaemonRuntimeQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -33493,6 +33493,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6252c47b3067d5c00fa2",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#DaemonRuntimeQueries",
+      "toPath": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toSymbol": "DaemonRuntimeQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file",
       "fromPath": "packages/backend/src/routes/mcps.ts",
       "fromSymbol": "$file",
@@ -34613,6 +34630,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/util/daemonInfo.ts#$file",
+      "fromPath": "packages/backend/src/util/daemonInfo.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:66565303c54418d0900b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#$file",
+      "toPath": "packages/backend/src/modules/system-operations/public/types.ts",
+      "toSymbol": "DaemonRuntimeInfo",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file",
@@ -35375,6 +35409,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError",
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "ConflictError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonHostLifecycle.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonHostLifecycle.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:695eee2c4e4d2d38458c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/controlListener.ts#startControlListener",
+      "toPath": "packages/backend/src/services/controlListener.ts",
+      "toSymbol": "startControlListener",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -38440,6 +38491,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:71f3dbd49ae67473f187",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts#selectDaemonHostLifecycle",
+      "toPath": "packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts",
+      "toSymbol": "selectDaemonHostLifecycle",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts",
       "fromSymbol": "$file",
@@ -38673,6 +38741,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/runtimeManagement.ts#composeRuntimeManagement",
       "toPath": "packages/backend/src/modules/runtime-management/composition/runtimeManagement.ts",
       "toSymbol": "composeRuntimeManagement",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:72f7085c17118d1c7fcc",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts#$file",
+      "toPath": "packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts",
+      "toSymbol": "DaemonHostLifecyclePort",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -43640,6 +43725,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries.ts#$file",
+      "fromPath": "packages/backend/src/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:81f868059f8ec29f7440",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/daemonInfo.ts#readDaemonInfo",
+      "toPath": "packages/backend/src/util/daemonInfo.ts",
+      "toSymbol": "readDaemonInfo",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/packageResourceRows.ts#$file",
@@ -46615,6 +46717,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:8b490bac001463173e59",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file",
+      "toPath": "packages/backend/src/modules/digital-employee/composition.ts",
+      "toSymbol": "ProgramArtifactPort",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts#$file",
@@ -48279,6 +48398,23 @@
       "toPath": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "toSymbol": "ConcurrentTaskTransition",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/daemon.ts#$file",
+      "fromPath": "packages/backend/src/routes/daemon.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:907255719ecc7aecb813",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#DaemonRuntimeQueries",
+      "toPath": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toSymbol": "DaemonRuntimeQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -53753,23 +53889,6 @@
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "ForbiddenError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "fromPath": "packages/backend/src/cli/start.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:a0bd8ab451685af0d34d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E9",
-      "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort",
-      "toPath": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
-      "toSymbol": "ProgramArtifactPort",
-      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -59892,6 +60011,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b495f9eb78fc8199d150",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#DaemonRuntimeQueries",
+      "toPath": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toSymbol": "DaemonRuntimeQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts#$file",
@@ -64326,6 +64462,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/reviewMutationScope.ts#DatabaseReviewMutationScopeResolver",
       "toPath": "packages/backend/src/modules/collaboration/infrastructure/reviewMutationScope.ts",
       "toSymbol": "DatabaseReviewMutationScopeResolver",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c1a1610ad6646a5a5c00",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file",
+      "toPath": "packages/backend/src/modules/digital-employee/composition.ts",
+      "toSymbol": "ProgramArtifactPort",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -74412,6 +74565,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:dcaf2367442b77f879dd",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts#selectDaemonRuntimeQueries",
+      "toPath": "packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts",
+      "toSymbol": "selectDaemonRuntimeQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -74492,6 +74662,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeReactionExecutionProvider",
       "toPath": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
       "toSymbol": "composeReactionExecutionProvider",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:dd0d8614c0d25a5a040c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file",
+      "toPath": "packages/backend/src/modules/digital-employee/composition.ts",
+      "toSymbol": "ProgramArtifactPort",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -86447,10 +86634,10 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5085,
+    "architectureExceptions": 5096,
     "implementationSccs": 0,
-    "observedEdges": 5723,
-    "requiredPorts": 38,
+    "observedEdges": 5735,
+    "requiredPorts": 39,
     "targetEdges": 69
   },
   "finalCriterion": "Observed imports, offered/required/authority target edges and required-port liveness remain exact, referentially complete and role-preserving.",
@@ -98362,22 +98549,6 @@
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
-      "id": "import:20ebe31ae5d72fb6e866",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/digital-employee/composition/required-ports",
-      "syntax": "static-import",
-      "targetSymbol": "ProgramArtifactPort",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort"
-    },
-    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/application/package/packageApplication.ts",
@@ -98408,22 +98579,6 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionReadModels.ts#createTaskExecutionReadModels"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/server.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
-      "id": "import:20fae361c573dd0a24f5",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/digital-employee/composition/required-ports",
-      "syntax": "static-import",
-      "targetSymbol": "ProgramArtifactPort",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort"
     },
     {
       "edgeKind": "value",
@@ -105803,6 +105958,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:34e848b7184898bb083f",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "DaemonRuntimeQueries",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#DaemonRuntimeQueries"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/collaborationTaskAccess.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/collaborationTaskAccess.ts#$file",
@@ -106680,6 +106851,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/taskQuestions.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/taskQuestions.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:37a65df900006a79e193",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/composition/daemonHostLifecycle",
+      "syntax": "static-import",
+      "targetSymbol": "selectDaemonRuntimeQueries",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts#selectDaemonRuntimeQueries"
     },
     {
       "edgeKind": "value",
@@ -121740,6 +121927,22 @@
     {
       "edgeKind": "type",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:6252c47b3067d5c00fa2",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "DaemonRuntimeQueries",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#DaemonRuntimeQueries"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/mcps.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/mcps.ts#$file",
       "id": "import:6266a1e2b65f486a4949",
@@ -123066,6 +123269,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/events/committed/runtime.ts#publishCommittedEventsAfterCommit"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/util/daemonInfo.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/util/daemonInfo.ts#$file",
+      "id": "import:66565303c54418d0900b",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "DaemonRuntimeInfo",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/types.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
@@ -123976,6 +124195,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ConflictError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonHostLifecycle.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonHostLifecycle.ts#$file",
+      "id": "import:695eee2c4e4d2d38458c",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/services/controlListener",
+      "syntax": "static-import",
+      "targetSymbol": "startControlListener",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/controlListener.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/controlListener.ts#startControlListener"
     },
     {
       "edgeKind": "value",
@@ -127227,6 +127462,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:71f3dbd49ae67473f187",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/composition/daemonHostLifecycle",
+      "syntax": "static-import",
+      "targetSymbol": "selectDaemonHostLifecycle",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts#selectDaemonHostLifecycle"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/skill.ts#$file",
@@ -127480,6 +127731,22 @@
       "toContext": "runtime-management",
       "toFile": "packages/backend/src/modules/runtime-management/composition/runtimeManagement.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/runtimeManagement.ts#composeRuntimeManagement"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:72f7085c17118d1c7fcc",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/composition/daemonHostLifecycle",
+      "syntax": "static-import",
+      "targetSymbol": "DaemonHostLifecyclePort",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -129672,6 +129939,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/auth/actor.ts",
       "toOwnerEntryId": "owner:packages/backend/src/auth/actor.ts#Actor"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonHostLifecycle.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonHostLifecycle.ts#$file",
+      "id": "import:792bc9124cf3b3fd5d9f",
+      "owner": "system-operations",
+      "removeAfterWave": null,
+      "role": "required-implementation",
+      "specifier": "../../application/ports/daemonHostLifecycle",
+      "syntax": "static-import",
+      "targetSymbol": "DaemonHostLifecyclePort",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/application/ports/daemonHostLifecycle.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/daemonHostLifecycle.ts#DaemonHostLifecyclePort"
     },
     {
       "edgeKind": "value",
@@ -132664,6 +132947,22 @@
       "toContext": "digital-employee",
       "toFile": "packages/backend/src/modules/digital-employee/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "system-operations",
+      "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/fileDaemonRuntimeQueries.ts#$file",
+      "id": "import:81f868059f8ec29f7440",
+      "owner": "system-operations",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/daemonInfo",
+      "syntax": "static-import",
+      "targetSymbol": "readDaemonInfo",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/daemonInfo.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/daemonInfo.ts#readDaemonInfo"
     },
     {
       "edgeKind": "value",
@@ -135802,6 +136101,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:8b490bac001463173e59",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/digital-employee/composition",
+      "syntax": "static-import",
+      "targetSymbol": "ProgramArtifactPort",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "run-observability",
       "fromFile": "packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts",
@@ -137624,6 +137939,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/sqlite/taskLifecycle.ts#ConcurrentTaskTransition"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/routes/daemon.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/routes/daemon.ts#$file",
+      "id": "import:907255719ecc7aecb813",
+      "owner": "platform",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "DaemonRuntimeQueries",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#DaemonRuntimeQueries"
     },
     {
       "edgeKind": "value",
@@ -143400,22 +143731,6 @@
       "toContext": "external",
       "toFile": "external:drizzle-orm",
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "legacy",
-      "fromFile": "packages/backend/src/cli/start.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
-      "id": "import:a0bd8ab451685af0d34d",
-      "owner": "bootstrap",
-      "removeAfterWave": "W4-E9",
-      "role": "legacy-inbound",
-      "specifier": "@/modules/digital-employee/composition/required-ports",
-      "syntax": "static-import",
-      "targetSymbol": "ProgramArtifactPort",
-      "toContext": "digital-employee",
-      "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ProgramArtifactPort"
     },
     {
       "edgeKind": "type",
@@ -150186,6 +150501,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:b495f9eb78fc8199d150",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "DaemonRuntimeQueries",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#DaemonRuntimeQueries"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroups.ts",
@@ -154792,6 +155123,22 @@
       "toContext": "collaboration",
       "toFile": "packages/backend/src/modules/collaboration/infrastructure/reviewMutationScope.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/reviewMutationScope.ts#DatabaseReviewMutationScopeResolver"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:c1a1610ad6646a5a5c00",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/digital-employee/composition",
+      "syntax": "static-import",
+      "targetSymbol": "ProgramArtifactPort",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -165356,6 +165703,22 @@
     {
       "edgeKind": "value",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:dcaf2367442b77f879dd",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/composition/daemonHostLifecycle",
+      "syntax": "static-import",
+      "targetSymbol": "selectDaemonRuntimeQueries",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts#selectDaemonRuntimeQueries"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "id": "import:dccc4c1f1fb362e469db",
@@ -165432,6 +165795,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/digitalEmployeeExecution.ts#composeReactionExecutionProvider"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:dd0d8614c0d25a5a040c",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/digital-employee/composition",
+      "syntax": "static-import",
+      "targetSymbol": "ProgramArtifactPort",
+      "toContext": "digital-employee",
+      "toFile": "packages/backend/src/modules/digital-employee/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -178629,6 +179008,25 @@
       "symbol": "ApplicationConfigurationPersistencePort"
     },
     {
+      "compositionFiles": [],
+      "compositionOwnerEntryIds": [],
+      "consumerOwnerEntryIds": [],
+      "context": "system-operations",
+      "id": "required:system-operations:DaemonHostLifecyclePort",
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/ports/daemonHostLifecycle.ts#DaemonHostLifecyclePort",
+      "providerAdapters": [
+        {
+          "context": "system-operations",
+          "edgeId": "import:792bc9124cf3b3fd5d9f",
+          "file": "packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonHostLifecycle.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonHostLifecycle.ts#$file"
+        }
+      ],
+      "removeAfterWave": "W4-E7",
+      "status": "declared-debt",
+      "symbol": "DaemonHostLifecyclePort"
+    },
+    {
       "compositionFiles": [
         "packages/backend/src/modules/system-operations/composition.ts"
       ],
@@ -178866,7 +179264,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:503074766d22ee23a9f8c7ec82568499e3e5b5d2d169945474ee08686f77aa58",
+  "sourceDigest": "sha256:8c56bbb82686cd2fbc2be56d46cf794bc5f8a5ec664a2645ccaae5b1d7d9d884",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
