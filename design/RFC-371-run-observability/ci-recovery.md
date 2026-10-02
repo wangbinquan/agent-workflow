@@ -10,6 +10,12 @@
 
 无本机 AW 测试、类型检查、构建或服务。完整产品与 CS 托管实机联动仍按 remaining-work.md 的 owner 依赖推进，两个 RFC 仍 In Progress。
 
+## 2026-10-02 并行归档测试的 Windows 类型修复
+
+`d5b266c893d07694d5f9c19b24e3642ba6473d19` 的 [Windows36966192408](https://github.com/wangbinquan/agent-workflow/actions/runs/36966192408) completed/failure：backend Typecheck 在 `tests/rfc370-task-archive-content.test.ts:340` 报 TS2769，2,001 条事件夹具的 `kind: 'text'` 被 Array.from 回调推断为 string，与实际 nodeRunEvents.kind 严格枚举不匹配。该路径已经由原会话提交；本次只为这个字面量加 `as const`，实际事件、2,000+1 分批、顺序与原全部断言保持，不修改归档实现或其他会话在制品。目标格式/lint与独立 SOURCE 后交 hosted CI/Windows 默认流程核验，无本机 AW 类型检查或测试。
+
+原审批时序恢复提交 `064abf30a75096295192a84785ba952224831138` 已精确推送；其 [CI36967523680](https://github.com/wangbinquan/agent-workflow/actions/runs/36967523680) 单独记录，若后继触发自动取消，保留状态及祖先证明，不能冒充该 SHA 通过。d185ebfe 的全绿仅属于它本身，当前后继须重新验证。
+
 ## 首轮基线与根因
 
 - 当前基线 `f3bfc548fb25edfa95994e262730186820148f03`。[提交 CI 36658830125](https://github.com/wangbinquan/agent-workflow/actions/runs/36658830125) 终态 failure，48 success/2 failure。失败源是 dependency audit gate 的两条 fast-uri high 公告，CI required 随之失败；其余功能检查通过。

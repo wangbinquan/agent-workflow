@@ -1,3 +1,7 @@
+## 2026-10-02 RFC-371 CI 接续：已发布归档夹具的枚举收窄
+
+最新并行 d5b266c8 Windows36966192408 failure 定位为 rfc370-task-archive-content.test.ts 2,001 条事件夹具 kind 被推断为 string。只加 text 的 as const，保持真实枚举、原批次/顺序/归档/恢复全部断言与实现；该测试已由原会话发布，不收编其未提交源码。原审批 POST 时序恢复已精确推送064abf30，CI36967523680另记；新修复候选仅目标格式/lint与独立 SOURCE，正式 hosted CI/默认 Windows待核验。无本机 AW test/typecheck/build/service；下方共享并行及历史逐字保留，两 RFC不关闭。
+
 ## 2026-10-02 RFC-371 当前主 CI 全绿，原审批时序诊断接续
 
 main/origin 已同步 d185ebfe8332c9951e1ad6416a9a2447417b2931，主 CI36961953982 completed/success 50/50，同 SHA 默认 WebKit36962140176 completed/success 8/8。原 mixed report 失败仍保留且业务原因未确证；恢复诊断中的首次拒绝 POST 原时序，身份断言复用已有 afterRejectRuns，不增加 GET/固定延时/重试/预算，所有原流程和断言保留。该候选仅目标格式/lint及独立 SOURCE，精确 hosted 验证待推送。其他默认定时 SHA 与失败记录按 RFC371 ci-recovery 保留；CS producer/全退出集成及 AW-in-CS 联动继续，两 RFC 不关闭。共享 STATE 下方并行 RFC-370 候选与全部历史逐字保留。

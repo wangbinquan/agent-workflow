@@ -137,16 +137,14 @@ function memoryContent(
 }
 
 async function seedTask(db: ProviderNeutralDatabase) {
-  await db
-    .insert(users)
-    .values({
-      id: 'archive-user',
-      username: 'archive-user',
-      displayName: 'archive-user',
-      role: 'admin',
-      createdAt: NOW,
-      updatedAt: NOW,
-    })
+  await db.insert(users).values({
+    id: 'archive-user',
+    username: 'archive-user',
+    displayName: 'archive-user',
+    role: 'admin',
+    createdAt: NOW,
+    updatedAt: NOW,
+  })
   const definition = '{"$schema_version":2,"inputs":[],"nodes":[],"edges":[]}'
   await db
     .insert(workflows)
@@ -324,26 +322,22 @@ describeEachProvider('RFC-370 selected archive content', (harness) => {
   test('JSONL keeps the original 2000-row batches and complete event order', async () => {
     const db = harness.db
     await seedTask(db)
-    await db
-      .insert(nodeRuns)
-      .values({
-        id: 'archive-run',
-        taskId: ROOT,
-        nodeId: 'n1',
-        status: 'done',
-        startedAt: NOW - 11 * DAY,
-        finishedAt: NOW - 10 * DAY,
-      })
-    await db
-      .insert(nodeRunEvents)
-      .values(
-        Array.from({ length: 2_001 }, (_, index) => ({
-          nodeRunId: 'archive-run',
-          ts: NOW - 11 * DAY + index,
-          kind: 'text',
-          payload: `event-${index}`,
-        })),
-      )
+    await db.insert(nodeRuns).values({
+      id: 'archive-run',
+      taskId: ROOT,
+      nodeId: 'n1',
+      status: 'done',
+      startedAt: NOW - 11 * DAY,
+      finishedAt: NOW - 10 * DAY,
+    })
+    await db.insert(nodeRunEvents).values(
+      Array.from({ length: 2_001 }, (_, index) => ({
+        nodeRunId: 'archive-run',
+        ts: NOW - 11 * DAY + index,
+        kind: 'text' as const,
+        payload: `event-${index}`,
+      })),
+    )
     const store = memoryContent()
     const result = await runSweep(db, store.content)
     expect(result.skipped).toBe(0)
