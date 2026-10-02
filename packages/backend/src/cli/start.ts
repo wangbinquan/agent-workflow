@@ -1,6 +1,7 @@
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeFileApplicationConfigurationQueries } from '@/modules/system-operations/composition'
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
@@ -362,6 +363,7 @@ import { composeIntentWorkflowGraphValidation } from '@/modules/intent/compositi
 export interface StartOptions {
   port?: number
   host?: string
+  configuration?: ApplicationConfigurationQueries
   databasePreOpenRecovery?: DaemonDatabasePreOpenRecoveryPort
 }
 
@@ -520,6 +522,7 @@ async function composePostgresqlProviderSession(
     provider: input.provider,
     db,
     config: input.config,
+    configuration: input.configuration,
     token: input.token,
     appHome: Paths.root,
     configPath: Paths.config,
@@ -694,8 +697,8 @@ async function composePostgresqlProviderSession(
       ...committedEventProjectors,
     ],
     projectionLedger: committedEventProjectionLedger,
-    maxAttempts() {
-      const current = loadConfig(Paths.config)
+    async maxAttempts() {
+      const current = await input.configuration.read()
       return 1 + current.defaultNodeRetries + current.sessionRestartBudget
     },
   })
@@ -748,9 +751,9 @@ async function composePostgresqlProviderSession(
   // setter and its own `loadConfig` call, registered right here in BOTH engine
   // compositions — four registration sites for two knobs that are read at the
   // same instant, from the same file, by the same function. One provider now.
-  setMemoryDistillPolicyProvider(() => {
+  setMemoryDistillPolicyProvider(async () => {
     try {
-      return resolveDistillPolicy(loadConfig(Paths.config))
+      return resolveDistillPolicy(await input.configuration.read())
     } catch {
       return DEFAULT_DISTILL_POLICY
     }
@@ -760,7 +763,7 @@ async function composePostgresqlProviderSession(
     intervalMs: 1_000,
     beforeStart: () => runtime.memory.distillWorker.recoverRunning().then(() => undefined),
     async run() {
-      const current = loadConfig(Paths.config)
+      const current = await input.configuration.read()
       if (current.memoryDistillerEnabled === false) return
       await runtime.memory.distillWorker.tick({
         runtimeName: current.memoryDistillRuntime ?? null,
@@ -1030,6 +1033,7 @@ interface DaemonProviderSessionComposeInput {
   readonly provider: ResolvedDatabaseProviderRuntime
   readonly lifecycle: DaemonProviderSessionLifecycleInput
   readonly config: ReturnType<typeof loadConfig>
+  readonly configuration: ApplicationConfigurationQueries
   readonly token: string
   readonly secretBox: ReturnType<typeof createSecretBox>
   readonly dbVersion: number
@@ -1436,7 +1440,9 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   }
 
   // 3. Load config; honor logLevel if user set non-default in config.
-  let config = loadConfig(Paths.config)
+  const configuration =
+    opts.configuration ?? composeFileApplicationConfigurationQueries(Paths.config)
+  let config = await configuration.read()
   if (config.logLevel !== 'info') {
     configureLogger({ level: config.logLevel })
   }
@@ -1563,6 +1569,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
   })
   const sessionInput = Object.freeze({
     config,
+    configuration,
     token,
     secretBox,
     dbVersion,
@@ -1587,7 +1594,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
         if (databaseProviderTraits(lifecycleInput.provider).migrationRole !== 'target') {
           throw new Error('provider-session-source-retired')
         }
-        const nextConfig = loadConfig(Paths.config)
+        const nextConfig = await configuration.read()
         const nextProvider = resolveDatabaseProviderRuntime({
           config: nextConfig.database,
           sqlitePath: Paths.db,
@@ -1645,6 +1652,7 @@ async function composeSqliteProviderSession(
   const databaseProvider = requireDatabaseProviderRuntime(input.provider, 'sqlite')
   const {
     config,
+    configuration,
     token,
     secretBox,
     dbVersion,
@@ -1665,7 +1673,7 @@ async function composeSqliteProviderSession(
   registerTerminalWorkspacePrunePolicy(
     composeWebhookTerminalWorkspacePrunePolicy({
       db,
-      enabled: () => loadConfig(Paths.config).webhookTaskWorkspaceAutoCleanup,
+      enabled: async () => (await configuration.read()).webhookTaskWorkspaceAutoCleanup,
     }),
   )
   log.info('db ready', { path: Paths.db, dbVersion })
@@ -2389,7 +2397,7 @@ async function composeSqliteProviderSession(
       return mcpCatalog.queries.get(identity.actor, { id: mcpId })
     },
     loadRuntime: (name) => runtimeRegistry.getRuntime(name),
-    configuration: composeFileApplicationConfigurationQueries(Paths.config),
+    configuration,
     appHome: Paths.root,
   })
   const mcpProbeStore = composeMcpProbeStore(db)
@@ -2526,7 +2534,7 @@ async function composeSqliteProviderSession(
   const webhookDispatcher = createWebhookDispatcher({
     ...composeWebhookDispatchCore(db, secretBox, scheduledTaskRuntime.operations),
     identityAccess: integrationIdentityAccess,
-    getDefaultRuntime: async () => loadConfig(Paths.config).defaultRuntime,
+    getDefaultRuntime: async () => (await configuration.read()).defaultRuntime,
     terminalControl: webhookTerminalControl,
     ...createSqliteWebhookExecutionRuntime({
       taskExecutions: webhookTaskExecutions,
@@ -2719,8 +2727,8 @@ async function composeSqliteProviderSession(
       createCodeHostWebhookDeliveryConsumer(db, webhookDispatcher, missionEventContinuation),
     ],
     deliveryRetryLimits: {
-      current() {
-        const current = loadConfig(Paths.config)
+      async current() {
+        const current = await configuration.read()
         return {
           defaultNodeRetries: current.defaultNodeRetries,
           sessionRestartBudget: current.sessionRestartBudget,
@@ -2813,8 +2821,8 @@ async function composeSqliteProviderSession(
       ...committedEventProjectors,
     ],
     projectionLedger: committedEventProjectionLedger,
-    maxAttempts() {
-      const current = loadConfig(Paths.config)
+    async maxAttempts() {
+      const current = await configuration.read()
       return 1 + current.defaultNodeRetries + current.sessionRestartBudget
     },
   })
@@ -3018,6 +3026,7 @@ async function composeSqliteProviderSession(
     token,
     digitalEmployeePlatformTools,
     configPath: Paths.config,
+    configuration,
     daemonInfoPath: Paths.daemonInfo,
     // RFC-226: runtime readiness is not daemon health. Startup never executes
     // OpenCode; explicit runtime status/Test/use paths perform the version and
@@ -3229,9 +3238,9 @@ async function composeSqliteProviderSession(
   // setter and its own `loadConfig` call, registered right here in BOTH engine
   // compositions — four registration sites for two knobs that are read at the
   // same instant, from the same file, by the same function. One provider now.
-  setMemoryDistillPolicyProvider(() => {
+  setMemoryDistillPolicyProvider(async () => {
     try {
-      return resolveDistillPolicy(loadConfig(Paths.config))
+      return resolveDistillPolicy(await configuration.read())
     } catch {
       return DEFAULT_DISTILL_POLICY
     }
@@ -3253,7 +3262,7 @@ async function composeSqliteProviderSession(
       await memoryOperations.distillWorker.recoverRunning()
     },
     async run() {
-      const current = loadConfig(Paths.config)
+      const current = await configuration.read()
       if (current.memoryDistillerEnabled === false) return
       await memoryOperations.distillWorker.tick({
         runtimeName: current.memoryDistillRuntime ?? null,
@@ -3349,8 +3358,8 @@ async function composeSqliteProviderSession(
     },
     executionContracts: employeeExecutionContracts,
     retryLimits: {
-      current() {
-        const config = loadConfig(Paths.config)
+      async current() {
+        const config = await configuration.read()
         return {
           defaultNodeRetries: config.defaultNodeRetries,
           sessionRestartBudget: config.sessionRestartBudget,
@@ -3473,7 +3482,7 @@ async function composeSqliteProviderSession(
       ...intentDumpAuxiliaryBase.runtimeInventory,
       async resolveDefault() {
         const runtime = await intentPersistence.resolveIntentRuntime(
-          loadConfig(Paths.config).defaultRuntime ?? 'opencode',
+          (await configuration.read()).defaultRuntime ?? 'opencode',
         )
         return { name: runtime.name, protocol: runtime.protocol }
       },

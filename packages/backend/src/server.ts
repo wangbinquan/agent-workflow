@@ -308,7 +308,6 @@ import { mountWorktreeFilesRoutes, type WorktreeFilesRouteDeps } from '@/routes/
 import { mountAclEndpoints } from '@/routes/resourceAcl'
 import { mountPortArtifactRoutes } from '@/routes/port-artifacts'
 import { errorHandler, ForbiddenError, NotFoundError, ValidationError } from '@/util/errors'
-import { loadConfig } from '@/config'
 import { createLogger } from '@/util/log'
 import {
   composeDigitalEmployee,
@@ -802,6 +801,8 @@ export interface AppDeps {
   token: string
   /** Absolute path to config.json (lets tests use a temp file). */
   configPath: string
+  /** Selected live query shared by configuration consumers in this application. */
+  configuration?: ApplicationConfigurationQueries
   /**
    * Root used for immutable digital-employee program artifacts and isolated
    * contract fixtures. Production uses Paths.root; tests may pin a dedicated
@@ -1673,6 +1674,7 @@ function composeApplicationEventCenter(
   deps: SqliteAppDeps,
   developmentDeliveryProvider: DevelopmentDeliveryProvider,
   automation: EventCenterAutomationCapability,
+  configuration: ApplicationConfigurationQueries,
   unstarted?: UnstartedApplicationScope,
 ): EventCenterModule {
   const approvalGateway = composeApprovalGatewayRunnerFor(deps.db)
@@ -1710,8 +1712,8 @@ function composeApplicationEventCenter(
             ),
           ],
     deliveryRetryLimits: {
-      current() {
-        const config = loadConfig(deps.configPath)
+      async current() {
+        const config = await configuration.read()
         return {
           defaultNodeRetries: config.defaultNodeRetries,
           sessionRestartBudget: config.sessionRestartBudget,
@@ -1995,6 +1997,8 @@ export function composeSqliteApplicationDeps(
   unstarted?: UnstartedApplicationScope,
 ): SqliteAppComposition {
   const appHome = deps.appHome ?? Paths.root
+  const configuration =
+    deps.configuration ?? composeFileApplicationConfigurationQueries(deps.configPath)
   const workspacePresence = deps.workspacePresence ?? createFileWorkspacePresenceQueries()
   const repositoryBootstrap = composeRepositoryBootstrap(deps, appHome)
   const identityAccess = withIntegrationTriggerResources(
@@ -2184,6 +2188,7 @@ export function composeSqliteApplicationDeps(
             deps,
             repositoryBootstrap.developmentDeliveryProvider,
             eventAutomation,
+            configuration,
             unstarted,
           ),
         }
@@ -2289,7 +2294,7 @@ export function composeSqliteApplicationDeps(
         return mcpCatalog.queries.get(identity.actor, { id: mcpId })
       },
       loadRuntime: (name) => effectiveDeps.runtimeRegistry.getRuntime(name),
-      configuration: composeFileApplicationConfigurationQueries(effectiveDeps.configPath),
+      configuration,
       appHome: effectiveDeps.mcpRuntimeTestDependencies?.appHome ?? Paths.root,
       ...(effectiveDeps.mcpRuntimeTestDependencies?.runFn === undefined
         ? {}
@@ -2413,7 +2418,6 @@ export function composeSqliteApplicationDeps(
     auth: effectiveDeps.authRuntime,
     afterDisabled: async () => userRuntimeTests.reconcileDurableIntents(),
   })
-  const configuration = composeFileApplicationConfigurationQueries(effectiveDeps.configPath)
   const apiComposition = composeSqliteApiRouteMounts(
     effectiveDeps,
     identityAccess,
@@ -2847,6 +2851,7 @@ function composeSqliteApiRouteMounts(
       deps,
       deps.developmentDeliveryProvider,
       eventAutomation,
+      configuration,
       unstarted,
     )
   const digitalEmployeeAgentTemplates =
@@ -2865,8 +2870,8 @@ function composeSqliteApiRouteMounts(
       : { platformTools: deps.digitalEmployeePlatformTools }),
     executionContracts,
     retryLimits: {
-      current() {
-        const config = loadConfig(deps.configPath)
+      async current() {
+        const config = await configuration.read()
         return {
           defaultNodeRetries: config.defaultNodeRetries,
           sessionRestartBudget: config.sessionRestartBudget,
@@ -3317,7 +3322,7 @@ function composeSqliteApiRouteMounts(
       ...intentDumpAuxiliaryBase.runtimeInventory,
       async resolveDefault() {
         const runtime = await intentPersistence.resolveIntentRuntime(
-          loadConfig(deps.configPath).defaultRuntime ?? 'opencode',
+          (await configuration.read()).defaultRuntime ?? 'opencode',
         )
         return { name: runtime.name, protocol: runtime.protocol }
       },
@@ -3568,7 +3573,7 @@ function composeSqliteApiRouteMounts(
         identityAccess: scheduledIdentityAccess,
         scheduledTaskRuntime,
         buildScheduleLaunch: scheduledLaunch,
-        getDefaultRuntime: () => loadConfig(deps.configPath).defaultRuntime ?? null,
+        getDefaultRuntime: async () => (await configuration.read()).defaultRuntime ?? null,
       }),
     webhookEndpoints: (app) => {
       if (webhookEndpointService === null) return

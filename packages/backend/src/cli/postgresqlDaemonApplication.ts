@@ -13,6 +13,7 @@ import {
   composeFileApplicationConfigurationQueries,
 } from '@/modules/system-operations/composition'
 import type { ConfigConcurrencyHotApplyInput } from '@/modules/system-operations/public/commands'
+import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
@@ -375,6 +376,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly token: string
   readonly appHome: string
   readonly configPath: string
+  readonly configuration?: ApplicationConfigurationQueries
   readonly daemonInfoPath: string
   readonly lockPath: string
   readonly secretBox: SecretBox
@@ -514,6 +516,8 @@ export async function composePostgresqlApplication(
   phase: PostgresqlApplicationPhase,
 ): Promise<PostgresqlDaemonApplication> {
   const workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
+  const configuration =
+    input.configuration ?? composeFileApplicationConfigurationQueries(input.configPath)
   const realtimePolicy = composeDaemonRealtimePolicy({
     resourceVisibility: {
       canViewResource: (actor, type, row) =>
@@ -568,7 +572,7 @@ export async function composePostgresqlApplication(
     registerTerminalWorkspacePrunePolicy(
       composeWebhookTerminalWorkspacePrunePolicy({
         db: input.db,
-        enabled: () => loadConfig(input.configPath).webhookTaskWorkspaceAutoCleanup,
+        enabled: async () => (await configuration.read()).webhookTaskWorkspaceAutoCleanup,
       }),
     )
     const removedCredentialLeases = cleanupOrphanedGitCredentialLeases(input.appHome)
@@ -658,7 +662,7 @@ export async function composePostgresqlApplication(
       return await mcpCatalog.queries.get(identity.actor, { id: mcpId })
     },
     loadRuntime: (name) => core.runtimeRegistry.getRuntime(name),
-    configuration: composeFileApplicationConfigurationQueries(input.configPath),
+    configuration,
     appHome: input.appHome,
     // RFC-359 AC-6：与 `server.ts` 同形的条件展开（生产不传，取服务自己的默认）。
     ...(input.mcpRuntimeTestDependencies?.runFn === undefined
@@ -1137,7 +1141,6 @@ export async function composePostgresqlApplication(
 
   const codeWorkspace = composeLegacyCodeReadProviders(input.db).workspace
   const collaborationTaskAccess = createPostgresqlCollaborationTaskAccessPort(input.db)
-  const configuration = composeFileApplicationConfigurationQueries(input.configPath)
   const taskRoutes = Object.freeze({
     configuration,
     operations: taskExecutionProvider.routes.tasks,
@@ -1342,7 +1345,7 @@ export async function composePostgresqlApplication(
     persistence: composeWebhookDispatchPersistenceFor(input.db),
     deliveryPersistence: composeWebhookDeliveryPersistenceFor(input.db),
     identityAccess: integrationIdentityAccess,
-    getDefaultRuntime: async () => loadConfig(input.configPath).defaultRuntime,
+    getDefaultRuntime: async () => (await configuration.read()).defaultRuntime,
     ...createPostgresqlWebhookExecutionRuntime({
       taskExecutions: taskExecutionProvider.trigger.taskExecutions,
       digitalEmployeeWorkStart,
@@ -1395,8 +1398,8 @@ export async function composePostgresqlApplication(
         ]
       : [],
     deliveryRetryLimits: {
-      current() {
-        const current = loadConfig(input.configPath)
+      async current() {
+        const current = await configuration.read()
         return {
           defaultNodeRetries: current.defaultNodeRetries,
           sessionRestartBudget: current.sessionRestartBudget,
@@ -1414,7 +1417,7 @@ export async function composePostgresqlApplication(
       scheduledTaskRuntime,
       buildScheduleLaunch:
         input.buildScheduleLaunch ?? taskExecutionProvider.trigger.buildScheduleLaunch,
-      getDefaultRuntime: () => loadConfig(input.configPath).defaultRuntime ?? null,
+      getDefaultRuntime: async () => (await configuration.read()).defaultRuntime ?? null,
     }),
     webhookEndpoints: Object.freeze({
       webhookEndpointService: composeWebhookEndpointServiceDependencies({
@@ -1550,8 +1553,8 @@ export async function composePostgresqlApplication(
     },
     executionContracts,
     retryLimits: {
-      current() {
-        const current = loadConfig(input.configPath)
+      async current() {
+        const current = await configuration.read()
         return {
           defaultNodeRetries: current.defaultNodeRetries,
           sessionRestartBudget: current.sessionRestartBudget,
@@ -1850,7 +1853,7 @@ export async function composePostgresqlApplication(
   })
   const intentDumpAuxiliary = composeIntentDumpAuxiliaryQueries({
     persistence: intentPersistence,
-    defaultRuntime: loadConfig(input.configPath).defaultRuntime ?? 'opencode',
+    defaultRuntime: (await configuration.read()).defaultRuntime ?? 'opencode',
     platformInventory: intentPlatformInventory,
   })
   const intentSessionEvents = createIntentSessionWsPublisher()

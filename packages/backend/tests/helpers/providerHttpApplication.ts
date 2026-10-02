@@ -31,6 +31,7 @@ export type ProviderHttpApplicationInput = Pick<
   AppDeps,
   | 'token'
   | 'configPath'
+  | 'configuration'
   | 'dbVersion'
   | 'opencodeVersion'
   | 'workflowExactOperationHook'

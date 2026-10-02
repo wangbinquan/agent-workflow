@@ -370,6 +370,78 @@ function namedCalls(node: ts.Node, source: ts.SourceFile, name: string): ts.Call
 }
 
 describe('RFC-359 W29 complete unstarted application composition', () => {
+  // RFC-370: the four body digests below follow only selected query binding,
+  // receiver-preserving async reads and moving the lazy query factory earlier.
+  // Their original statement counts and every lifetime rule remain unchanged.
+  test('RFC-370 selects one live query in both roots and passes the daemon selection', () => {
+    for (const [source, owner, expected] of [
+      [
+        pg,
+        'composePostgresqlApplication',
+        'input.configuration??composeFileApplicationConfigurationQueries(input.configPath)',
+      ],
+      [
+        server,
+        'composeSqliteApplicationDeps',
+        'deps.configuration??composeFileApplicationConfigurationQueries(deps.configPath)',
+      ],
+    ] as const) {
+      const body = functionBody(source, owner)
+      const queries = descendants(
+        body,
+        (node) => ts.isVariableDeclaration(node) && node.name.getText(source) === 'configuration',
+      ) as ts.VariableDeclaration[]
+      expect(queries).toHaveLength(1)
+      expect(compact(queries[0]!.initializer!, source)).toBe(expected)
+      expect(namedCalls(body, source, 'composeFileApplicationConfigurationQueries')).toHaveLength(1)
+      const diagnostics = namedCalls(body, source, 'composeMcpDiagnostics')
+      expect(diagnostics).toHaveLength(1)
+      const argument = diagnostics[0]!.arguments[0]!
+      if (!ts.isObjectLiteralExpression(argument)) throw new Error('Missing diagnostics bindings')
+      expect(
+        argument.properties
+          .filter(
+            (property) =>
+              (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
+              property.name.getText(source) === 'configuration',
+          )
+          .map((property) => compact(property, source)),
+      ).toEqual(['configuration'])
+    }
+    const start = parse('src/cli/start.ts')
+    const body = functionBody(start, 'startCommand')
+    const queries = descendants(
+      body,
+      (node) => ts.isVariableDeclaration(node) && node.name.getText(start) === 'configuration',
+    ) as ts.VariableDeclaration[]
+    expect(queries).toHaveLength(1)
+    expect(compact(queries[0]!.initializer!, start)).toBe(
+      'opts.configuration??composeFileApplicationConfigurationQueries(Paths.config)',
+    )
+    for (const [owner, composer, expected] of [
+      [
+        'composePostgresqlProviderSession',
+        'composePostgresqlDaemonApplication',
+        'configuration:input.configuration',
+      ],
+      ['composeSqliteProviderSession', 'composeSqliteAppDeps', 'configuration'],
+    ] as const) {
+      const calls = namedCalls(functionBody(start, owner), start, composer)
+      expect(calls).toHaveLength(1)
+      const argument = calls[0]!.arguments[0]!
+      if (!ts.isObjectLiteralExpression(argument))
+        throw new Error('Missing daemon application bindings')
+      expect(
+        argument.properties
+          .filter(
+            (property) =>
+              (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
+              property.name.getText(start) === 'configuration',
+          )
+          .map((property) => compact(property, start)),
+      ).toEqual([expected])
+    }
+  })
   // RFC-371 adds one price application per selected provider, sharing its existing
   // runtime directory and DB. Only that property and its single HTTP mount change
   // the whole-body digests below (reviewed against a9fa45ed's parent).
@@ -694,7 +766,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // adapter (local by default). This next batch selects it once for the task
       // runtime and workgroup; the original full body survives the exact binding inverse.
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
-      '5150f54d476eb69e4cd47c00be5c28a4c3c250f12d4726fde0191a8a8f2abf27',
+      'dbd32773f0deb69f230e6ce19b4de81245dc7a666c5e5fa5ef51f3a0ac03bf15',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -762,7 +834,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-371: standalone task execution receives mandatory durable invocation accounting.
       // RFC-371: the same database now supplies the committed numeric source participant.
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
-      '649dc5f2d1e9e450eeb0e8a0e496f34266b51fc6e13512943f441eef21da9553',
+      'b7cf64e0d7da59d207122ec2cf1792a0f1240484d5399c2497043e3e743d831c',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -906,7 +978,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: Intent and webhook configuration bindings change; route order and lifetime stay fixed.
       // RFC-371: task observation queries bind the selected DB and TE facts inside one read snapshot.
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
-      'a1422d112d646560d03055a74c99f5e0ad33e049f3ce98855ebb1f03e240a908',
+      '57a6fb0ebeb185ebd9e700036f4ddeb283830e989a8ba722843180a3ecbc86cb',
     )
     expect(
       namedCalls(
@@ -919,7 +991,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // event-only delegated-context factory and the durable intent store, and drops the
     // source-neutral union target switch / root callback.
     expect(digest(oldEventCenterBody(), server)).toBe(
-      'bdb2113b0770368ea72bbf4c42815f9602753a61a90be2cfcda46bdf2d149187',
+      '08f37a0d92c9ec7f81a354e138d1bd5e18ffed631e3a676ed1120eb5eecb0c0c',
     )
     const eventBody = functionBody(server, 'composeApplicationEventCenter')
     expect(namedCalls(eventBody, server, 'composeEventCenter')).toHaveLength(1)
