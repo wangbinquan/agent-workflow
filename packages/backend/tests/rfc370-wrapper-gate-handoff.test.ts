@@ -4,7 +4,7 @@ import { expect, test } from 'bun:test'
 import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { WorkflowDefinition, WorkflowNode } from '@agent-workflow/shared'
-import { nodeRuns, tasks } from '../src/db/schema'
+import { nodeRuns, tasks, workflows } from '../src/db/schema'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { runScope } from '../src/modules/task-execution/composition/taskDagScope'
 import { createWrapperRunLedger } from '../src/modules/task-execution/composition/wrapperRunLifecycle'
@@ -518,9 +518,18 @@ describeEachProvider('RFC-370 wrapper handoff durable generation', (harness) => 
     const taskId = ulid()
     const runId = ulid()
     const progress = JSON.stringify({ kind: 'loop', iteration: 1, phase: 'inner-running' })
+    const workflowId = ulid()
+    await harness.db.insert(workflows).values({
+      id: workflowId,
+      name: 'handoff workflow fixture',
+      definition: JSON.stringify(nestedDefinition),
+    })
     await harness.db.insert(tasks).values({
       id: taskId,
       name: 'handoff fixture',
+      workflowId,
+      inputs: '{}',
+      startedAt: Date.now(),
       status: 'running',
       repoPath: 'installation:selected',
       worktreePath: 'workspace:selected',
