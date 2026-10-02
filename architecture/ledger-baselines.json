@@ -846,8 +846,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5784,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5790,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: six actual bootstrap type edges forward the existing complete MissionInputBlobPersistence and PluginInstallerPort through start/PostgreSQL/standalone HTTP, three edges per selected capability. No duplicated port is introduced; preserve the original classifier and already-published peer observation source."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +870,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5142,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5148,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 A2: the unchanged original rule registers those exact same six bootstrap type edges as exceptions. Preserve every original debt clause, 273 inbound/31 outbound, target 69 and retirement terms; no new boundary debt or executable edge is introduced."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -907,7 +913,7 @@
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:1f74f2fed6ed4b527f53de0264804b780142f0afd4d0d0b3f14e2a1b93cf77f8",
+    "sourceDigest": "sha256:4626f1c7d9de8c924798d48e360e0b690020a61b6ee3cf4b035b2622f92571ea",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +926,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "8d3ba556969adcc6ba40b347aa6d7ab5c951a27a",
-    "contentDigest": "sha256:331f927b7142dda5da733752078c6cc0b9b3b8db853106c080e6a76d2b183d8e",
+    "currentSnapshotSha": "1538a38024cb7861f8761cc1806a62f8c7eabc2c",
+    "contentDigest": "sha256:f902b27198b1a54baafee94cc6fb68f983bd3d985edb9bce9aeeeb4d1b6a7bf6",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -19466,6 +19466,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:37a4cadd297fb74abcc7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionInputUploads.ts#$file",
+      "toPath": "packages/backend/src/modules/development-automation/composition/missionInputUploads.ts",
+      "toSymbol": "MissionInputBlobPersistence",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
@@ -51579,6 +51596,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:998375d09762a5698b57",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionInputUploads.ts#$file",
+      "toPath": "packages/backend/src/modules/development-automation/composition/missionInputUploads.ts",
+      "toSymbol": "MissionInputBlobPersistence",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file",
@@ -56732,6 +56766,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a8320599dbc3c0ff09fb",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts#$file",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts",
+      "toSymbol": "PluginInstallerPort",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts",
       "fromSymbol": "$file",
@@ -59091,6 +59142,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "nodeRuns",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b0c1ce12be92b90f97f5",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts#$file",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts",
+      "toSymbol": "PluginInstallerPort",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -79036,6 +79104,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e82e812e7e355df02cde",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts#$file",
+      "toPath": "packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts",
+      "toSymbol": "PluginInstallerPort",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts",
       "fromSymbol": "$file",
@@ -81173,6 +81258,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#composeDigitalEmployee",
       "toPath": "packages/backend/src/modules/digital-employee/composition.ts",
       "toSymbol": "composeDigitalEmployee",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ede294953dada7fb2517",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionInputUploads.ts#$file",
+      "toPath": "packages/backend/src/modules/development-automation/composition/missionInputUploads.ts",
+      "toSymbol": "MissionInputBlobPersistence",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -87416,9 +87518,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5142,
+    "architectureExceptions": 5148,
     "implementationSccs": 0,
-    "observedEdges": 5784,
+    "observedEdges": 5790,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -107729,6 +107831,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/taskQuestions.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/taskQuestions.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:37a4cadd297fb74abcc7",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/missionInputUploads",
+      "syntax": "static-import",
+      "targetSymbol": "MissionInputBlobPersistence",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/missionInputUploads.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionInputUploads.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -142051,6 +142169,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:998375d09762a5698b57",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/missionInputUploads",
+      "syntax": "static-import",
+      "targetSymbol": "MissionInputBlobPersistence",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/missionInputUploads.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionInputUploads.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/scheduler.ts",
@@ -147748,6 +147882,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:a8320599dbc3c0ff09fb",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/pluginOperations",
+      "syntax": "static-import",
+      "targetSymbol": "PluginInstallerPort",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts#$file"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/sqliteTaskRouteLaunchOperations.ts#$file",
@@ -150305,6 +150455,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nodeRuns"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:b0c1ce12be92b90f97f5",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/pluginOperations",
+      "syntax": "static-import",
+      "targetSymbol": "PluginInstallerPort",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -171156,6 +171322,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:e82e812e7e355df02cde",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/resource-catalog/composition/pluginOperations",
+      "syntax": "static-import",
+      "targetSymbol": "PluginInstallerPort",
+      "toContext": "resource-catalog",
+      "toFile": "packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/pluginOperations.ts#$file"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/workgroup/launch.ts#$file",
@@ -173377,6 +173559,22 @@
       "toContext": "digital-employee",
       "toFile": "packages/backend/src/modules/digital-employee/composition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition.ts#composeDigitalEmployee"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:ede294953dada7fb2517",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E8",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/development-automation/composition/missionInputUploads",
+      "syntax": "static-import",
+      "targetSymbol": "MissionInputBlobPersistence",
+      "toContext": "development-automation",
+      "toFile": "packages/backend/src/modules/development-automation/composition/missionInputUploads.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/missionInputUploads.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -180861,7 +181059,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1f74f2fed6ed4b527f53de0264804b780142f0afd4d0d0b3f14e2a1b93cf77f8",
+  "sourceDigest": "sha256:4626f1c7d9de8c924798d48e360e0b690020a61b6ee3cf4b035b2622f92571ea",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

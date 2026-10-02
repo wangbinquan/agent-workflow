@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:1f74f2fed6ed4b527f53de0264804b780142f0afd4d0d0b3f14e2a1b93cf77f8`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:4626f1c7d9de8c924798d48e360e0b690020a61b6ee3cf4b035b2622f92571ea`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -30,9 +30,9 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 501 |
-| `architectureExceptions` | 5142 |
+| `architectureExceptions` | 5148 |
 | `backgroundJobs` | 345 |
-| `crossContextImports` | 5784 |
+| `crossContextImports` | 5790 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
 | `moduleSymbolOwners` | 25903 |
@@ -209,7 +209,7 @@
 | role | 数量 |
 | --- | --- |
 | legacy-outbound | 3341 |
-| legacy-inbound | 1617 |
+| legacy-inbound | 1623 |
 | infrastructure-external | 291 |
 | offered-consumption | 207 |
 | temporary-internal-debt | 89 |
@@ -224,7 +224,7 @@
 | rule | 数量 |
 | --- | --- |
 | legacy-outbound | 3341 |
-| legacy-inbound | 1617 |
+| legacy-inbound | 1623 |
 | temporary-internal-debt | 89 |
 | off-dag-offered | 83 |
 | no-circular | 6 |
@@ -236,12 +236,12 @@
 | removeAfterWave | 数量 |
 | --- | --- |
 | W9 | 2778 |
-| W9-D | 870 |
+| W9-D | 873 |
 | W4-E1 | 679 |
 | W4 | 201 |
 | W4-B | 187 |
 | W5 | 181 |
-| W4-E8 | 139 |
+| W4-E8 | 142 |
 | W4-E9 | 77 |
 | W2-D/W3/W5 | 9 |
 | RFC-371 | 8 |

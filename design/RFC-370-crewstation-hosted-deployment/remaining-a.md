@@ -215,3 +215,15 @@ A2其余evidence intake/blob/capture/import/materialize/上传/验证及TE/RC恢
 剩余 A2：RC 插件完整 CRUD/materialization/GC，TE 内容/prompt/scratch/archive/recovery 全消费，DA evidence intake/blob/capture/import/materialize/上传/验证/输出，DE 逻辑内容与工作区物化效果；A1 配置/安装/恢复其他读点也须按原矩阵核完。A3/A4 两 LaunchLane 与所有 workspace/Git；A5 submit/durable receipt/cursor/message/cancel/materials/terminal cleanup；A6 所有 purpose 命令；A7 worker/authority/直接HTTP/remote orphan 重启对账；A8 全 roots/AC00；随后独立完整 A-G 继续。CS重启应保留远程 task/receipt，不能批量按 native orphan 规则中断或取消。
 
 CS独立adapter及B/M0、M1～M4和实际 AW-in-CS 部署尚未开始。保持中立 A1～A8/完整 A-G 后写各层独立 CS adapters，在 CS先部署M0，再逐项收编能力；RFC持续，不关闭。
+
+## 2026-10-03 Mission 捕获/插件目录真根后的余项
+
+复用现有完整 MissionInputBlobPersistence 和 PluginInstallerPort，在 start/session/recompose、PG、SQLite HTTP、standalone HTTP 根选择同一个 prototype receiver，undefined 保持原 lazy native factory。原上传 application/persistence/route 和插件 application/local installer/schema 全文保持。两新增双 provider HTTP 回归覆盖 capture/install 持有 ACK 时无新增行、成功精确 SHA/字节或 cachedPath/version、失败无行/无 native 回退、临时上传收尾，以及同一 installer 的 checkForUpdate 参数/响应；每例20秒预算保持。
+
+首轮 SOURCE9 `7cf8c591e860555725d9ccc3a69edff55405e20b86cb9530a41106d05c5eb1d9` FAIL，两项 P2 为 PG call 对象重复字段（TS1117）、SQLite HTTP 漏透传。三路径 R2 独立 PASS `94d3cc13828a20e860ead3880e6073708caecb9ceee226d7ca5c9d2279ccfc62`，其他六路径和八控制逐字不变，组成九路径 PASS `7c310363c13f5d98ba4110bc7f87df0c62c3d05b04d3ddcbe791620ffea34759`；不重开全量门。R1 26 段恢复七份原全文，R2 四段恢复三份 R1 全文；新 AST 逐个定位真实 PG/SQLite HTTP call，字段唯一且 receiver/值正确，替换原失效的字符串计数。
+
+完整 A2 继续 evidence intake/import/materialization/验证输出、resource-package/runtime 插件与 GC、TE/DE 内容/recovery和worker archive；A3/A4 两 LaunchLane/全部workspace/Git，A5完整执行链，A6全部purpose，A7authority/worker/remote orphan恢复，A8全roots/AC00和独立完整A-G持续。随后独立CS adapters、B/M0先实际部署，再逐项M1～M4。尚无 AW-in-CS 部署，不关闭RFC；旧正文、全部门/CI历史及并行输出保持。
+
+上一批 b7c37804 主 [CI37070701985](https://github.com/wangbinquan/agent-workflow/actions/runs/37070701985) completed/cancelled（22 success、18 failure、10 cancelled），[Windows37070910393](https://github.com/wangbinquan/agent-workflow/actions/runs/37070910393) completed/failure 0/1。功能日志确认并行观测夹具 TS2345、runtime/runner 原断言、观测路由合同/MCP、测试引擎账本和前台样式/重试入口回归；Markdown 五项历史 run 链接为 GitHub502。owner 的两路径类型修正已发布1538a380，九候选/八控制/四规则不受影响，复用 source 门并基于此精确同步 SHA 生成；其余观测回归已协调 owner 接续。旧失败/取消保持，不将成功片段记为全套绿，正式行为等待新 exact-SHA hosted CI。
+
+原 scoped 投影只新增六 bootstrap type edges 及对应 exceptions；原40SPI/20active/20debt、304debt/273/31、target69、其余数量/metrics/SCC及四规则保持。详见 [功能门](./functional-gates.md) 的本批有限记录。

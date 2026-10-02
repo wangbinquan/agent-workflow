@@ -1,3 +1,15 @@
+## 2026-10-03 Mission 上传捕获和插件目录安装真根
+
+复用现有完整 MissionInputBlobPersistence 和 PluginInstallerPort，在 start/session/recompose、PG、SQLite HTTP、standalone HTTP 根选择同一个 prototype receiver，undefined 保持原 lazy native factory。原上传 application/persistence/route 和插件 application/local installer/schema 全文保持。两新增双 provider HTTP 回归覆盖 capture/install 持有 ACK 时无新增行、成功精确 SHA/字节或 cachedPath/version、失败无行/无 native 回退、临时上传收尾，以及同一 installer 的 checkForUpdate 参数/响应；每例20秒预算保持。
+
+首轮 SOURCE9 `7cf8c591e860555725d9ccc3a69edff55405e20b86cb9530a41106d05c5eb1d9` FAIL，两项 P2 为 PG call 对象重复字段（TS1117）、SQLite HTTP 漏透传。三路径 R2 独立 PASS `94d3cc13828a20e860ead3880e6073708caecb9ceee226d7ca5c9d2279ccfc62`，其他六路径和八控制逐字不变，组成九路径 PASS `7c310363c13f5d98ba4110bc7f87df0c62c3d05b04d3ddcbe791620ffea34759`；不重开全量门。R1 26 段恢复七份原全文，R2 四段恢复三份 R1 全文；新 AST 逐个定位真实 PG/SQLite HTTP call，字段唯一且 receiver/值正确，替换原失效的字符串计数。
+
+上一批 b7c37804 主 [CI37070701985](https://github.com/wangbinquan/agent-workflow/actions/runs/37070701985) completed/cancelled（22 success、18 failure、10 cancelled），[Windows37070910393](https://github.com/wangbinquan/agent-workflow/actions/runs/37070910393) completed/failure 0/1。功能日志确认并行观测夹具 TS2345、runtime/runner 原断言、观测路由合同/MCP、测试引擎账本和前台样式/重试入口回归；Markdown 五项历史 run 链接为 GitHub502。owner 的两路径类型修正已发布1538a380，九候选/八控制/四规则不受影响，复用 source 门并基于此精确同步 SHA 生成；其余观测回归已协调 owner 接续。旧失败/取消保持，不将成功片段记为全套绿，正式行为等待新 exact-SHA hosted CI。
+
+原官方 scoped census/boundary 各一次；imports5784→5790、exceptions5142→5148，只新增三根的两 existing type 共六条边。40 原 required SPI 全文（20 active/20 declared-debt）、entry1823、owner25903、public1053、background345、ambient501、全部 metrics、304 原 debt 条款、273/31、target69 和 implementation SCC 空保持。14 ambient 行地址只随真实 source 行号移动，语义 multiset 保持。sourceDigest `sha256:4626f1c7d9de8c924798d48e360e0b690020a61b6ee3cf4b035b2622f92571ea`；两真实增长在匹配 canonical commit 后一次退役。四新文档段落逆变换恢复原全文。无 AW 本机 tests/typecheck/build/service，只做目标 format/lint、纯源码/AST/JSON/字节证明与原 scoped 生成。
+
+完整 A2 继续 evidence intake/import/materialization/验证输出、resource-package/runtime 插件与 GC、TE/DE 内容/recovery和worker archive；A3/A4 两 LaunchLane/全部workspace/Git，A5完整执行链，A6全部purpose，A7authority/worker/remote orphan恢复，A8全roots/AC00和独立完整A-G持续。随后独立CS adapters、B/M0先实际部署，再逐项M1～M4。尚无 AW-in-CS 部署，不关闭RFC；旧正文、全部门/CI历史及并行输出保持。
+
 ## 2026-10-03 RFC-370 异步运行上下文与员工输入根接线
 
 两组独立有限功能门组成 SOURCE18 PASS `e0d025860e64c0606f6f2860a6a31df0880af9900ef0cd76fd0e9dcf1daff68e`。AttemptContextStorePort 独立落位，四个真实读取消费者等待异步 ACK；原 native factory 全文提取到独立 local adapter，同步默认读取和兼容出口保持。同一所选 receiver 贯穿 start/session、PG、SQLite 和 standalone HTTP。员工输入复用现有 EmployeeInputArtifactPort，三个启动根各自只选一次，同一实例交给上传与工作区物化；新增双 provider 真实 HTTP 保存 ACK 和失败回归，未在本机运行。
