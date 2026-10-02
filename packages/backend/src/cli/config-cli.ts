@@ -7,11 +7,34 @@
 //
 // Top-level keys only; for nested fields, set the whole nested object as JSON.
 
-import { applyConfigPatch, loadConfig } from '@/config'
+import type { Config } from '@agent-workflow/shared'
+import {
+  composeFileCliConfiguration,
+  type ApplicationConfigurationPersistencePort,
+} from '@/modules/system-operations/composition/cliConfiguration'
 import { Paths } from '@/util/paths'
 
-export function configGetCommand(args: string[]): { output: string } {
-  const cfg = loadConfig(Paths.config)
+export function configGetCommand(args: string[]): { output: string }
+export function configGetCommand(
+  args: string[],
+  selected: Pick<ApplicationConfigurationPersistencePort, 'load'>,
+): Promise<{ output: string }>
+export function configGetCommand(
+  args: string[],
+  selected?: Pick<ApplicationConfigurationPersistencePort, 'load'>,
+): { output: string } | Promise<{ output: string }> {
+  if (selected !== undefined) return readSelectedConfiguration(args, selected)
+  return formatConfigurationRead(args, composeFileCliConfiguration(Paths.config).load())
+}
+
+async function readSelectedConfiguration(
+  args: string[],
+  selected: Pick<ApplicationConfigurationPersistencePort, 'load'>,
+): Promise<{ output: string }> {
+  return formatConfigurationRead(args, await selected.load())
+}
+
+function formatConfigurationRead(args: string[], cfg: Config): { output: string } {
   if (args.length === 0) {
     return { output: JSON.stringify(cfg, null, 2) + '\n' }
   }
@@ -26,7 +49,31 @@ export function configGetCommand(args: string[]): { output: string } {
   return { output: formatValue(value) + '\n' }
 }
 
-export function configSetCommand(args: string[]): { output: string } {
+export function configSetCommand(args: string[]): { output: string }
+export function configSetCommand(
+  args: string[],
+  selected: Pick<ApplicationConfigurationPersistencePort, 'applyPatch'>,
+): Promise<{ output: string }>
+export function configSetCommand(
+  args: string[],
+  selected?: Pick<ApplicationConfigurationPersistencePort, 'applyPatch'>,
+): { output: string } | Promise<{ output: string }> {
+  if (selected !== undefined) return writeSelectedConfiguration(args, selected)
+  const { key, parsedValue } = parseConfigurationWrite(args)
+  const updated = composeFileCliConfiguration(Paths.config).applyPatch({ [key]: parsedValue })
+  return formatConfigurationWrite(key, updated)
+}
+
+async function writeSelectedConfiguration(
+  args: string[],
+  selected: Pick<ApplicationConfigurationPersistencePort, 'applyPatch'>,
+): Promise<{ output: string }> {
+  const { key, parsedValue } = parseConfigurationWrite(args)
+  const updated = await selected.applyPatch({ [key]: parsedValue })
+  return formatConfigurationWrite(key, updated)
+}
+
+function parseConfigurationWrite(args: string[]): { key: string; parsedValue: unknown } {
   if (args.length < 2) {
     throw new Error('usage: agent-workflow config set <key> <value>')
   }
@@ -36,7 +83,10 @@ export function configSetCommand(args: string[]): { output: string } {
     throw new Error('usage: agent-workflow config set <key> <value>')
   }
   const parsedValue = parseValue(rawValue)
-  const updated = applyConfigPatch(Paths.config, { [key]: parsedValue })
+  return { key, parsedValue }
+}
+
+function formatConfigurationWrite(key: string, updated: Config): { output: string } {
   const newValue = (updated as Record<string, unknown>)[key]
   return { output: `${key} = ${formatValue(newValue)}\n` }
 }
