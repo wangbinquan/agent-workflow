@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1813,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 A1/A2: the unchanged create-prefix rule observes exactly three used factories: createFileDaemonRuntimeQueries, createNativeDaemonHostLifecycle and createFileEvidenceDocumentCommands. The runtime query remains read-only; no scanner exemption is introduced."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -850,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5735,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 A1 and CI repair: fifteen real edges replace three forbidden bootstrap type imports, a net twelve increase; the type-only local root export reuses its existing import and restores the single active ProgramArtifactPort composition binding under the original rule. DE ProgramArtifactPort now uses its composition-root export under the unchanged original boundary rules; daemon roots and route consume selected lifecycle/query contracts. Every original boundary clause is preserved."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,20 +861,14 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
       "baseline": 39,
-      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。",
-      "allowGrowth": {
-        "why": "RFC-370 A1: DaemonHostLifecyclePort has a real native provider and bootstrap consumers, but the unchanged original rule finds no SO application consumer or root composition binding. Preserve declared-debt with W4-E7; host application orchestration and composition cutover remain required before full A-G. This receipt does not claim active liveness."
-      }
+      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
     },
     {
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5096,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 A1: the unchanged exception projection records eleven net actual metadata entries. Preserve every original 273 inbound and 31 outbound clause, reason, retirement condition and bootstrap list; the original boundary report has zero additions. No rule or exception is broadened."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -894,10 +882,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1047,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-370 A1: two consumed public surfaces are DaemonRuntimeQueries at all three application roots and the daemon route, and DaemonRuntimeInfo re-exported for the original daemon-info utility. Preserve exact public contracts and original public-surface rules."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -918,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25802,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 A1/A2: twenty-five real owners are added and the three unchanged EvidenceBudget/Entry/BundleRecord shapes move from evidenceStore to DA domain, a net twenty-two increase. Native lifecycle, runtime query and JSON document-write adapters have real bounded consumers; actual document-write root injection and other physical evidence effects remain open."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -938,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "227cfacc488b2150c62e0dc0bc28e032dfcd24f8",
-    "contentDigest": "sha256:bb054d7b9a47b3acf98f73c2e1e8d47f832c4fa628e1f36b2c3f8cb9473a0d9a",
+    "currentSnapshotSha": "d1d279f07d1a08c39314c7fb5d3270d5fdadf9da",
+    "contentDigest": "sha256:a708a770163acbe4a9b9734f7c8925cb47831c68bb8bc9414d3edd33efe345a3",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
