@@ -1,5 +1,6 @@
 // RFC-370 A-T2: standalone installation effects. Paths, the daemon lock,
 // durable file metadata and local copy recovery stay behind this adapter.
+import type { DaemonStartupLease } from '../../application/ports/daemonStartupLease'
 import type { DatabaseConfigurationPort } from '../../application/ports/databaseConfiguration'
 import type { DatabaseInstallationPort } from '../../application/ports/databaseInstallation'
 import type { OpenDbOptions } from '@/db/client'
@@ -25,7 +26,7 @@ export interface DatabaseSchemaUpgradeOptions extends ResolveDatabaseProviderRun
   readonly beforeSqliteOpen?: () => void | Promise<void>
   readonly lockPath: string
   /** Daemon start already owns this lock before pending restore. */
-  readonly lock?: Lock
+  readonly lock?: Pick<DaemonStartupLease, 'release'>
   readonly readConfig: DatabaseConfigurationPort['read']
   readonly writeConfig: DatabaseConfigurationPort['write']
   readonly history?: PostgresqlMigrationHistory

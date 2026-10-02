@@ -1,3 +1,7 @@
+import {
+  readDaemonStartupRecoveryAuthority,
+  type DaemonStartupLease,
+} from '@/modules/system-operations/composition'
 import type { ObservationTaskQueries } from '@/modules/run-observability/public/queries'
 import type { TaskObservationFactsQuery } from '@/modules/task-execution/public/queries'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
@@ -44,6 +48,7 @@ import { composeSkillCatalogBoot } from '@/modules/resource-catalog/composition/
 import { recoverInterruptedTaskDeletes } from '@/modules/task-execution/infrastructure/taskDeleteRecovery'
 import {
   createDaemonLockProof,
+  createDaemonRecoveryAuthorityProof,
   runTaskExecutionBootRecovery,
 } from '@/modules/task-execution/composition/bootRecovery'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -397,6 +402,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly daemonInfoPath: string
   readonly daemonRuntime?: DaemonRuntimeQueries
+  readonly daemonStartupLease?: DaemonStartupLease
   readonly lockPath: string
   readonly secretBox: SecretBox
   readonly workspacePresence?: WorkspacePresenceQueries
@@ -2243,11 +2249,19 @@ export async function composePostgresqlApplication(
     await runTaskExecutionBootRecovery({
       persistence: taskExecutionPersistence,
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(input.db),
-      lockProof: createDaemonLockProof({
-        lockPath: input.lockPath,
-        lockPid: process.pid,
-        daemonGeneration: input.provider.runtime.generationId,
-      }),
+      lockProof:
+        input.daemonStartupLease === undefined
+          ? createDaemonLockProof({
+              lockPath: input.lockPath,
+              lockPid: process.pid,
+              daemonGeneration: input.provider.runtime.generationId,
+            })
+          : createDaemonRecoveryAuthorityProof(
+              await readDaemonStartupRecoveryAuthority(
+                input.daemonStartupLease,
+                input.provider.runtime.generationId,
+              ),
+            ),
       codeHostProbe: (descriptor) =>
         probeCodeHostMutation({
           descriptor,

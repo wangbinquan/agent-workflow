@@ -158,13 +158,18 @@ function hostFixture(
       bindHost: '127.0.0.1',
       bindPort: 0,
       lock: {
-        pid: 818,
-        path: 'unused-local-lock',
+        diagnostics: Object.freeze({ fixture: 'listener-only' }),
+        recoveryAuthority() {
+          throw new Error('listener must not acquire a recovery authority')
+        },
         release() {
           if (!released) {
             released = true
             events.push('lock-release')
           }
+        },
+        releaseOnExit() {
+          this.release()
         },
       },
       daemonHost: host,

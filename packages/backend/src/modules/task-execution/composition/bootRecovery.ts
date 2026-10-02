@@ -44,6 +44,19 @@ export function createDaemonLockProof(input: {
   })
 }
 
+/** Bootstrap consumes an opaque acquired host receipt; native PID facts stay in its adapter. */
+export function createDaemonRecoveryAuthorityProof(input: {
+  readonly daemonGeneration: string
+  readonly acquiredAt: number
+  readonly receiptDigest: string
+}): ExclusiveDaemonLockProof {
+  return createExclusiveDaemonLockProof({
+    daemonGeneration: input.daemonGeneration,
+    acquiredAt: input.acquiredAt,
+    lockReceiptDigest: input.receiptDigest,
+  })
+}
+
 export interface TaskExecutionBootRecoveryInput {
   readonly persistence: Pick<TaskExecutionPersistence, 'recovery' | 'recoveryAdministration'>
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations

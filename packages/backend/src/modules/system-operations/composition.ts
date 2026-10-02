@@ -1,3 +1,28 @@
+import type {
+  DaemonStartupLease,
+  DaemonStartupLeasePort,
+} from './application/ports/daemonStartupLease'
+import {
+  acquireDaemonStartupLease,
+  readDaemonStartupRecoveryAuthority,
+  runDaemonStartupWithLease,
+} from './application/daemonStartupLease'
+import {
+  createNativeDaemonStartupLease,
+  type NativeDaemonStartupLeaseOptions,
+} from './infrastructure/local/nativeDaemonStartupLease'
+
+export type { DaemonStartupLease, DaemonStartupLeasePort }
+export { readDaemonStartupRecoveryAuthority, runDaemonStartupWithLease }
+
+/** Only the chosen provider is created; a selected failure never falls back locally. */
+export function composeDaemonStartupLease(input: {
+  readonly selected?: DaemonStartupLeasePort
+  readonly local: () => NativeDaemonStartupLeaseOptions
+}): Promise<DaemonStartupLease> {
+  return acquireDaemonStartupLease(input.selected ?? createNativeDaemonStartupLease(input.local()))
+}
+
 import type { DaemonHostLifecyclePort } from './application/ports/daemonHostLifecycle'
 import {
   runDaemonHostApplication,

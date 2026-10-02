@@ -118,7 +118,7 @@ import {
 import { createIntentSessionWsPublisher } from '@/modules/intent/composition/apply'
 import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import {
-  createDaemonLockProof,
+  createDaemonRecoveryAuthorityProof,
   runTaskExecutionBootRecovery,
 } from '@/modules/task-execution/composition/bootRecovery'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
@@ -145,6 +145,11 @@ import { invalidateCallGraphIndex } from '@/services/structuralDiff/callGraph/ex
 import { startBackupScheduler, maybePreMigrationBackup } from '@/services/backupScheduler'
 import {
   composeDaemonHostApplication,
+  composeDaemonStartupLease,
+  readDaemonStartupRecoveryAuthority,
+  runDaemonStartupWithLease,
+  type DaemonStartupLease,
+  type DaemonStartupLeasePort,
   type DaemonDatabasePreOpenRecoveryPort,
   prepareDatabasePreOpenRecovery,
 } from '@/modules/system-operations/composition'
@@ -174,7 +179,6 @@ import { mcpOperationCoordinator } from '@/services/resourceOperationCoordinator
 import { pluginOperationCoordinator } from '@/services/resourceOperationCoordinator'
 import { detectGitCapabilities, mergeTreeGateError, MIN_GIT_VERSION } from '@/services/gitVersion'
 import { setMemoryDistillPolicyProvider } from '@/modules/memory/composition'
-import { acquireLock, adoptCurrentProcessLock, DaemonLockHeldError, type Lock } from '@/util/lock'
 import {
   PRESENCE_CHANNEL,
   presenceBroadcaster,
@@ -185,7 +189,6 @@ import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
-import { readControlFile, requestShutdown } from '@/services/controlListener'
 import { buildWebSocketAdapter } from '@/ws/server'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -400,6 +403,7 @@ export interface StartOptions {
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   daemonHost?: DaemonHostLifecyclePort
+  startupLease?: DaemonStartupLeasePort
 }
 
 interface DaemonProviderHttpAdmission {
@@ -565,6 +569,7 @@ async function composePostgresqlProviderSession(
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     daemonRuntime: input.daemonRuntime,
+    daemonStartupLease: input.lock,
     token: input.token,
     appHome: Paths.root,
     configPath: Paths.config,
@@ -1093,7 +1098,7 @@ interface DaemonProviderSessionComposeInput {
   readonly migrationAdmission: DatabaseMigrationAdmission
   readonly sourceWriteWindow: DatabaseSourceWriteWindow
   readonly log: ReturnType<typeof createLogger>
-  readonly lock: Lock
+  readonly lock: DaemonStartupLease
   readonly migrationsFolder: string
   readonly digitalEmployeeTypePackageDriftPolicy: 'draft-overlay' | 'reject'
 }
@@ -1148,7 +1153,7 @@ export async function serveDaemon(input: {
   readonly token: string
   readonly bindHost: string
   readonly bindPort: number
-  readonly lock: Lock
+  readonly lock: DaemonStartupLease
   readonly daemonHost: DaemonHostLifecyclePort
   readonly log: ReturnType<typeof createLogger>
 }): Promise<never> {
@@ -1191,7 +1196,7 @@ export async function serveDaemon(input: {
       await input.bootstrap.stop()
     },
     releaseAuthority: () => input.lock.release(),
-    releaseAuthorityOnExit: () => input.lock.release(),
+    releaseAuthorityOnExit: () => input.lock.releaseOnExit(),
   })
   return await application.run()
 }
@@ -1214,49 +1219,6 @@ function devLockHandoffMs(): number {
  * drain, then waits for its lock. Normal `start` daemons never opt in and retain
  * the fail-fast singleton contract.
  */
-async function acquireStartLock(
-  lockPath: string,
-  onWait: (owner: DaemonLockHeldError, maxWaitMs: number) => void,
-  onShutdownRequested: (owner: DaemonLockHeldError) => void,
-  onSameProcessAdopted: (owner: DaemonLockHeldError) => void,
-): Promise<Lock> {
-  const maxWaitMs = devLockHandoffMs()
-  const deadline = Date.now() + maxWaitMs
-  let announced = false
-  let shutdownRequested = false
-  for (;;) {
-    try {
-      return acquireLock(lockPath)
-    } catch (error) {
-      const remaining = deadline - Date.now()
-      if (!(error instanceof DaemonLockHeldError) || maxWaitMs === 0 || remaining <= 0) {
-        throw error
-      }
-      if (error.pid === process.pid) {
-        const adopted = adoptCurrentProcessLock(lockPath)
-        onSameProcessAdopted(error)
-        return adopted
-      }
-      if (!announced) {
-        announced = true
-        onWait(error, maxWaitMs)
-      }
-      if (!shutdownRequested) {
-        const endpoint = readControlFile(Paths.controlFile)
-        if (endpoint !== null && endpoint.pid === error.pid) {
-          // The endpoint belongs to the live lock owner, but only an old dev
-          // generation may be replaced. A manually started daemon stays safe.
-          if (endpoint.devWatch !== true) throw error
-          const outcome = await requestShutdown(endpoint, Math.min(5_000, remaining))
-          if (outcome !== 'accepted') throw error
-          shutdownRequested = true
-          onShutdownRequested(error)
-        }
-      }
-      await Bun.sleep(Math.min(50, remaining))
-    }
-  }
-}
 
 interface DbCorruptionFailure extends Error {
   readonly dbPath: string
@@ -1349,326 +1311,304 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       ? 'draft-overlay'
       : 'reject'
 
-  // 2. Single-instance lock.
-  let lock: Lock
-  try {
-    lock = await acquireStartLock(
-      Paths.lock,
-      (owner, maxWaitMs) => {
-        log.info('waiting for previous daemon lock handoff', {
-          replacementPid: process.pid,
-          pid: owner.pid,
-          lock: owner.lockPath,
-          maxWaitMs,
-        })
-      },
-      (owner) => {
-        log.info('requested previous dev daemon shutdown', {
-          pid: owner.pid,
-          lock: owner.lockPath,
-        })
-      },
-      (owner) => {
-        log.info('adopted current-process lock for Bun watch generation', {
-          pid: owner.pid,
-          lock: owner.lockPath,
-        })
-      },
-    )
-  } catch (err) {
-    if (err instanceof DaemonLockHeldError) {
-      log.error('another daemon is already running', { pid: err.pid, lock: err.lockPath })
-      console.error(
-        `agent-workflow: another daemon is already running (PID ${err.pid})\n` +
-          `  lock file: ${err.lockPath}\n` +
-          `  if it is stale, remove the lock file manually and try again`,
-      )
-      process.exit(1)
-    }
-    throw err
-  }
-  log.info('lock acquired', { pid: lock.pid, lock: lock.path })
-  const daemonHost = selectDaemonHostLifecycle(opts.daemonHost, {
-    infoPath: Paths.daemonInfo,
-    controlPath: Paths.controlFile,
-    pid: lock.pid,
-    devWatch: devLockHandoffMs() > 0,
-  })
-
-  // 2.5 — RFC-213: resolve the migrations folder and apply a staged ("hot")
-  // restore BEFORE anything reads state. We hold the lock (acquired above), so
-  // exactly one process consumes it; the DB is not open yet. Impl-gate P2-12
-  // (2026-07-22): this used to run AFTER loadConfig, so the config.json the
-  // restore just brought back only took effect one restart later — moved ahead
-  // of loadConfig so the applying boot already runs on the restored config.
-  //
-  // P-5-05: in the compiled single-binary, the .sql files + meta/_journal.json
-  // live inside the executable. drizzle's migrator needs a filesystem path,
-  // so we extract them once per start into ~/.agent-workflow/runtime/migrations
-  // and point the migrator there.
-  // `ms` is deliberate: this step is O(number of migrations) filesystem
-  // writes and grows with every migration added. It once reached ~23.5s on a
-  // Windows CI runner and blew the e2e harness's 30s daemon-ready budget
-  // while being completely invisible in the logs — the duration is what makes
-  // that trend observable before it breaks something again.
-  const extractStartedAt = Date.now()
-  const migrationsFolder = await resolveMigrationsFolder({
-    // `force`: boot has always re-extracted unconditionally; keeping that keeps
-    // an interrupted previous extraction from surviving into this boot.
-    force: true,
-    onExtracted: (count, dir) => {
-      log.info('extracted embedded migrations', {
-        count,
-        ms: Date.now() - extractStartedAt,
-        dir,
-      })
-    },
-  })
-  const logicalSchemaContract = buildLogicalSchemaContract()
-  const preOpenRecovery = await prepareDatabasePreOpenRecovery({
-    contract: logicalSchemaContract,
-    migrationsFolder,
-    recovery: opts.databasePreOpenRecovery,
-  })
-  const schemaHistory = preOpenRecovery.history
-  // A failure inside applyPendingRestoreIfAny self-heals (impl-gate P1-1): the
-  // staged dir is quarantined and the boot continues on the untouched DB. The
-  // catch below only guards truly unexpected filesystem-level throws.
-  {
-    try {
-      const applied = await preOpenRecovery.applyStagedRestore()
-      if (applied) log.warn('staged restore applied on boot', { db: Paths.db })
-    } catch (err) {
-      lock.release()
-      console.error(
-        `agent-workflow: staged restore failed unexpectedly — refusing to boot with an unknown DB state.\n` +
-          `  ${err instanceof Error ? err.message : String(err)}\n` +
-          `  The pre-restore safety backup (if taken) is under ${join(Paths.root, 'backups')}/.\n` +
-          `  To abandon the staged restore and boot normally: rm -rf ${join(Paths.root, '.restore-pending')}`,
-      )
-      process.exit(1)
-    }
-  }
-
-  // 3. Load config; honor logLevel if user set non-default in config.
-  const applicationConfiguration =
-    opts.applicationConfiguration ??
-    composeApplicationConfigurationBinding({
-      kind: 'file',
-      configPath: Paths.config,
-      ...(opts.configuration === undefined ? {} : { queries: opts.configuration }),
-    })
-  const configuration = applicationConfiguration.queries
-  const runtimeLegacyConfiguration =
-    opts.runtimeLegacyConfiguration ?? composeFileRuntimeLegacyConfiguration(Paths.config)
-  let config = await configuration.read()
-  if (config.logLevel !== 'info') {
-    configureLogger({ level: config.logLevel })
-  }
-  log.info('config loaded', { path: Paths.config, language: config.language, theme: config.theme })
-
-  // 4. git version probe — RFC-130 D7: every node run merge-backs via
-  // `git merge-tree --write-tree` (git >= 2.38). On older git the daemon boots
-  // fine and every task dies at merge-back (AFTER its agent already ran) with a
-  // cryptic `merge-back-failed: git merge-tree: usage: ...` — refuse at boot
-  // instead. Unlike optional agent runtimes, git is a platform dependency for
-  // repository/worktree/snapshot/merge-back operations. Side effect: populate
-  // the RFC-034 capability cache read by resolveSubmoduleParams.
-  const gitCaps = await detectGitCapabilities()
-  const gitGateError = mergeTreeGateError(gitCaps)
-  if (gitGateError !== null) {
-    log.error('git incompatible', {
-      found: gitCaps.version?.raw ?? null,
-      requiredMinimum: MIN_GIT_VERSION,
-    })
-    console.error(
-      `agent-workflow: ${gitGateError}\n` +
-        `  upgrade git to >= ${MIN_GIT_VERSION} and restart; the daemon's PATH must resolve the upgraded binary.`,
-    )
-    lock.release()
-    process.exit(1)
-  }
-  log.info('git probe ok', { version: gitCaps.version?.raw ?? null })
-
-  // RFC-111 D10: claude-code is optional — probe it SOFT (warn only, NEVER
-  // refuse to start) when it is the configured default. RFC-226 makes OpenCode
-  // optional too, but deliberately does not probe it here at all: its
-  // version/build admission belongs to explicit runtime validation and use.
-  if (config.defaultRuntime === 'claude-code') {
-    const ccDriver = getRuntimeDriver('claude-code')
-    const claudeProbe = await ccDriver.probe(ccDriver.defaultBinary(config)[0]!)
-    if (!claudeProbe.compatible) {
-      log.warn('claude-code default runtime unavailable (nodes selecting it will fail)', {
-        binary: claudeProbe.binary,
-        found: claudeProbe.version,
-        requiredMinimum: ccDriver.minVersion,
-        reason: claudeProbe.incompatibleReason ?? 'not found',
-      })
-    } else {
-      log.info('claude-code probe ok', {
-        version: claudeProbe.version,
-        binary: claudeProbe.binary,
-      })
-    }
-  }
-
-  // Provider-independent bootstrap secrets are needed by either selected
-  // composition. They are created before opening a client, but no owner module
-  // receives them until its verified provider graph is composed below.
-  const secretBox = createSecretBox(Paths.secretKeyFile)
-  log.info('secret box ready', { keyFile: Paths.secretKeyFile })
-  const token = ensureTokenFile(Paths.tokenFile)
-  log.info('token ready', { tokenFile: Paths.tokenFile })
-  const dbVersion = existsSync(migrationsFolder)
-    ? readdirSync(migrationsFolder).filter((file) => file.endsWith('.sql')).length
-    : 0
-  // 5. DB — resolve the verified live generation before opening any provider
-  // client. The pointer is authoritative; config may supply mechanism settings
-  // but cannot silently select a different database.
-  const preparedDatabase = await prepareDaemonDatabaseProviderForBoot({
-    configuration: applicationConfiguration.databaseConfiguration,
-    installation: opts.databaseInstallation,
-    file: {
-      config: config.database,
-      sqlitePath: Paths.db,
-      generationPointerPath: Paths.databaseGenerationPointer,
-      operationsRoot: Paths.databaseMigrationsDir,
-      contract: logicalSchemaContract,
-      history: schemaHistory,
+  // 2. The selected startup provider supplies exclusivity and release ACKs.
+  const lock = await composeDaemonStartupLease({
+    selected: opts.startupLease,
+    local: () => ({
       lockPath: Paths.lock,
-      lock,
-      sqliteOptions: {
-        migrationsFolder,
-        synchronous: config.sqliteSynchronous,
-        pageCacheMib: config.sqlitePageCacheMib,
-        mmapMib: config.sqliteMmapMib,
-        slowQueryMs: config.sqliteSlowQueryMs,
-        skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
-      },
-      beforeSqliteOpen: () =>
-        maybePreMigrationBackup({
-          appHome: Paths.root,
-          dbPath: Paths.db,
-          migrationsFolder,
-          enabled: config.backupOnMigration,
-        }).then(() => undefined),
-    },
-  }).catch((err: unknown) => {
-    if (isDbCorruptionFailure(err)) {
-      // RFC-213 fail-closed: never serve a corrupt DB. Print the available
-      // backups + the exact restore command, then exit non-zero. The DB is
-      // unwritable, so this does NOT record a recovery_event.
-      lock.release()
-      process.stderr.write(formatDbCorruptionGuidance(err))
-      process.exit(1)
-    }
-    if (err instanceof DbSchemaDriftError) {
-      lock.release()
-      process.stderr.write(formatDbSchemaDriftGuidance(err))
-      process.exit(1)
-    }
-    throw err
+      controlPath: Paths.controlFile,
+      maxWaitMs: devLockHandoffMs(),
+      log,
+    }),
   })
-  config = { ...config, database: preparedDatabase.databaseConfig }
-  const databaseProvider = preparedDatabase.runtime
+  await runDaemonStartupWithLease(lock, async () => {
+    log.info('lock acquired', lock.diagnostics)
+    const daemonHost = selectDaemonHostLifecycle(opts.daemonHost, {
+      infoPath: Paths.daemonInfo,
+      controlPath: Paths.controlFile,
+      pid: process.pid,
+      devWatch: devLockHandoffMs() > 0,
+    })
 
-  // DB — open + apply migrations. dbVersion = number of SQL files in the
-  // bundled migrations folder (== the highest version we've applied, since
-  // openDb() applies all pending migrations on startup). The migrations folder
-  // itself (and any staged restore) was already resolved/applied at step 2.5.
-
-  // RFC-213/RFC-223: raw pre-migration safety backup BEFORE openDb applies
-  // migrations. A pending migration without its rollback generation is fatal;
-  // backupOnMigration=false is the operator's explicit opt-out.
-  // RFC-359 W3-T16：这里没有 provider 执行分支——按 provider 查表取会话装配器，
-  // bootstrap / resume / 监听全部走同一条中立序列（design §6 / §7 守卫 4）。
-  const bindHost = opts.host ?? config.bindHost
-  const bindPort = opts.port ?? config.bindPort ?? 0
-  const lifecycle = Object.freeze({
-    operationId: 'daemon-start',
-    provider: databaseProvider.provider,
-    generationId: databaseProvider.generation.payload.generationId,
-  })
-  const sessionInput = Object.freeze({
-    config,
-    configuration,
-    applicationConfiguration,
-    runtimeLegacyConfiguration,
-    taskArchive: opts.taskArchive,
-    skillContent: opts.skillContent,
-    employeePrograms: opts.employeePrograms,
-    evidenceRead: opts.evidenceRead,
-    evidenceDocumentCommands: opts.evidenceDocumentCommands,
-    daemonRuntime: daemonHost,
-    token,
-    secretBox,
-    dbVersion,
-    log,
-    lock,
-    migrationsFolder,
-    digitalEmployeeTypePackageDriftPolicy,
-  })
-  const { initial, bootstrap: daemonProviderBootstrap } = await composeDaemonProviderBootstrap({
-    initial: lifecycle,
-    composeInitial: (bindings) =>
-      composeDaemonProviderSession({
-        ...sessionInput,
-        ...bindings,
-        provider: databaseProvider,
-        lifecycle,
-      }),
-    sessionFactory: {
-      async create(lifecycleInput, bindings) {
-        // 只有迁移目标才会被重新装配；源 provider（SQLite）在割接后退役，不能再被当作
-        // 新会话的来源——判据取自 provider 特征表，不在这里写 provider 字面量。
-        if (databaseProviderTraits(lifecycleInput.provider).migrationRole !== 'target') {
-          throw new Error('provider-session-source-retired')
-        }
-        const nextConfig = await configuration.read()
-        const nextProvider = resolveDatabaseProviderRuntime({
-          config: nextConfig.database,
-          sqlitePath: Paths.db,
-          generationPointerPath: Paths.databaseGenerationPointer,
-          operationsRoot: Paths.databaseMigrationsDir,
-          contract: logicalSchemaContract,
+    // 2.5 — RFC-213: resolve the migrations folder and apply a staged ("hot")
+    // restore BEFORE anything reads state. We hold the lock (acquired above), so
+    // exactly one process consumes it; the DB is not open yet. Impl-gate P2-12
+    // (2026-07-22): this used to run AFTER loadConfig, so the config.json the
+    // restore just brought back only took effect one restart later — moved ahead
+    // of loadConfig so the applying boot already runs on the restored config.
+    //
+    // P-5-05: in the compiled single-binary, the .sql files + meta/_journal.json
+    // live inside the executable. drizzle's migrator needs a filesystem path,
+    // so we extract them once per start into ~/.agent-workflow/runtime/migrations
+    // and point the migrator there.
+    // `ms` is deliberate: this step is O(number of migrations) filesystem
+    // writes and grows with every migration added. It once reached ~23.5s on a
+    // Windows CI runner and blew the e2e harness's 30s daemon-ready budget
+    // while being completely invisible in the logs — the duration is what makes
+    // that trend observable before it breaks something again.
+    const extractStartedAt = Date.now()
+    const migrationsFolder = await resolveMigrationsFolder({
+      // `force`: boot has always re-extracted unconditionally; keeping that keeps
+      // an interrupted previous extraction from surviving into this boot.
+      force: true,
+      onExtracted: (count, dir) => {
+        log.info('extracted embedded migrations', {
+          count,
+          ms: Date.now() - extractStartedAt,
+          dir,
         })
-        if (
-          nextProvider.provider !== lifecycleInput.provider ||
-          nextProvider.generation.payload.generationId !== lifecycleInput.generationId
-        ) {
-          await nextProvider.close()
-          throw new Error('daemon-provider-target-generation-mismatch')
-        }
-        return (
-          await composeDaemonProviderSession({
-            ...sessionInput,
-            ...bindings,
-            config: nextConfig,
-            provider: nextProvider,
-            lifecycle: lifecycleInput,
-          })
-        ).session
       },
-    },
-    createMigrationAdmission: createDatabaseMigrationDaemonAdmission,
-    // RFC-349 —— 表投影是**进程级**的：`createPostgresqlDatabaseClient` 一构造就把
-    // 它改指到 PostgreSQL。割接失败时 current 会退回源 session，但投影不会自己退
-    // 回来，于是整个 daemon 的每一条 SQLite 查询都会以
-    // `no such table: agent_workflow.*` 收场。把选择权钉在**真正在服务的**那份
-    // composition 上，成功与失败两条路径都对。
-    onCurrentSelected: (session) => selectDatabaseSchemaProvider(session.provider),
-  })
-  await initial.session.resume(lifecycle)
-  await serveDaemon({
-    bootstrap: daemonProviderBootstrap,
-    authRuntime: initial.application.core.authRuntime,
-    databaseProvider: databaseProvider.provider,
-    token,
-    bindHost,
-    bindPort,
-    lock,
-    daemonHost,
-    log,
+    })
+    const logicalSchemaContract = buildLogicalSchemaContract()
+    const preOpenRecovery = await prepareDatabasePreOpenRecovery({
+      contract: logicalSchemaContract,
+      migrationsFolder,
+      recovery: opts.databasePreOpenRecovery,
+    })
+    const schemaHistory = preOpenRecovery.history
+    // A failure inside applyPendingRestoreIfAny self-heals (impl-gate P1-1): the
+    // staged dir is quarantined and the boot continues on the untouched DB. The
+    // catch below only guards truly unexpected filesystem-level throws.
+    {
+      try {
+        const applied = await preOpenRecovery.applyStagedRestore()
+        if (applied) log.warn('staged restore applied on boot', { db: Paths.db })
+      } catch (err) {
+        await lock.release()
+        console.error(
+          `agent-workflow: staged restore failed unexpectedly — refusing to boot with an unknown DB state.\n` +
+            `  ${err instanceof Error ? err.message : String(err)}\n` +
+            `  The pre-restore safety backup (if taken) is under ${join(Paths.root, 'backups')}/.\n` +
+            `  To abandon the staged restore and boot normally: rm -rf ${join(Paths.root, '.restore-pending')}`,
+        )
+        process.exit(1)
+      }
+    }
+
+    // 3. Load config; honor logLevel if user set non-default in config.
+    const applicationConfiguration =
+      opts.applicationConfiguration ??
+      composeApplicationConfigurationBinding({
+        kind: 'file',
+        configPath: Paths.config,
+        ...(opts.configuration === undefined ? {} : { queries: opts.configuration }),
+      })
+    const configuration = applicationConfiguration.queries
+    const runtimeLegacyConfiguration =
+      opts.runtimeLegacyConfiguration ?? composeFileRuntimeLegacyConfiguration(Paths.config)
+    let config = await configuration.read()
+    if (config.logLevel !== 'info') {
+      configureLogger({ level: config.logLevel })
+    }
+    log.info('config loaded', {
+      path: Paths.config,
+      language: config.language,
+      theme: config.theme,
+    })
+
+    // 4. git version probe — RFC-130 D7: every node run merge-backs via
+    // `git merge-tree --write-tree` (git >= 2.38). On older git the daemon boots
+    // fine and every task dies at merge-back (AFTER its agent already ran) with a
+    // cryptic `merge-back-failed: git merge-tree: usage: ...` — refuse at boot
+    // instead. Unlike optional agent runtimes, git is a platform dependency for
+    // repository/worktree/snapshot/merge-back operations. Side effect: populate
+    // the RFC-034 capability cache read by resolveSubmoduleParams.
+    const gitCaps = await detectGitCapabilities()
+    const gitGateError = mergeTreeGateError(gitCaps)
+    if (gitGateError !== null) {
+      log.error('git incompatible', {
+        found: gitCaps.version?.raw ?? null,
+        requiredMinimum: MIN_GIT_VERSION,
+      })
+      console.error(
+        `agent-workflow: ${gitGateError}\n` +
+          `  upgrade git to >= ${MIN_GIT_VERSION} and restart; the daemon's PATH must resolve the upgraded binary.`,
+      )
+      await lock.release()
+      process.exit(1)
+    }
+    log.info('git probe ok', { version: gitCaps.version?.raw ?? null })
+
+    // RFC-111 D10: claude-code is optional — probe it SOFT (warn only, NEVER
+    // refuse to start) when it is the configured default. RFC-226 makes OpenCode
+    // optional too, but deliberately does not probe it here at all: its
+    // version/build admission belongs to explicit runtime validation and use.
+    if (config.defaultRuntime === 'claude-code') {
+      const ccDriver = getRuntimeDriver('claude-code')
+      const claudeProbe = await ccDriver.probe(ccDriver.defaultBinary(config)[0]!)
+      if (!claudeProbe.compatible) {
+        log.warn('claude-code default runtime unavailable (nodes selecting it will fail)', {
+          binary: claudeProbe.binary,
+          found: claudeProbe.version,
+          requiredMinimum: ccDriver.minVersion,
+          reason: claudeProbe.incompatibleReason ?? 'not found',
+        })
+      } else {
+        log.info('claude-code probe ok', {
+          version: claudeProbe.version,
+          binary: claudeProbe.binary,
+        })
+      }
+    }
+
+    // Provider-independent bootstrap secrets are needed by either selected
+    // composition. They are created before opening a client, but no owner module
+    // receives them until its verified provider graph is composed below.
+    const secretBox = createSecretBox(Paths.secretKeyFile)
+    log.info('secret box ready', { keyFile: Paths.secretKeyFile })
+    const token = ensureTokenFile(Paths.tokenFile)
+    log.info('token ready', { tokenFile: Paths.tokenFile })
+    const dbVersion = existsSync(migrationsFolder)
+      ? readdirSync(migrationsFolder).filter((file) => file.endsWith('.sql')).length
+      : 0
+    // 5. DB — resolve the verified live generation before opening any provider
+    // client. The pointer is authoritative; config may supply mechanism settings
+    // but cannot silently select a different database.
+    const preparedDatabase = await prepareDaemonDatabaseProviderForBoot({
+      configuration: applicationConfiguration.databaseConfiguration,
+      installation: opts.databaseInstallation,
+      file: {
+        config: config.database,
+        sqlitePath: Paths.db,
+        generationPointerPath: Paths.databaseGenerationPointer,
+        operationsRoot: Paths.databaseMigrationsDir,
+        contract: logicalSchemaContract,
+        history: schemaHistory,
+        lockPath: Paths.lock,
+        lock,
+        sqliteOptions: {
+          migrationsFolder,
+          synchronous: config.sqliteSynchronous,
+          pageCacheMib: config.sqlitePageCacheMib,
+          mmapMib: config.sqliteMmapMib,
+          slowQueryMs: config.sqliteSlowQueryMs,
+          skipIntegrityCheck: process.env.AGENT_WORKFLOW_SKIP_INTEGRITY_CHECK === '1',
+        },
+        beforeSqliteOpen: () =>
+          maybePreMigrationBackup({
+            appHome: Paths.root,
+            dbPath: Paths.db,
+            migrationsFolder,
+            enabled: config.backupOnMigration,
+          }).then(() => undefined),
+      },
+    }).catch(async (err: unknown) => {
+      if (isDbCorruptionFailure(err)) {
+        // RFC-213 fail-closed: never serve a corrupt DB. Print the available
+        // backups + the exact restore command, then exit non-zero. The DB is
+        // unwritable, so this does NOT record a recovery_event.
+        await lock.release()
+        process.stderr.write(formatDbCorruptionGuidance(err))
+        process.exit(1)
+      }
+      if (err instanceof DbSchemaDriftError) {
+        await lock.release()
+        process.stderr.write(formatDbSchemaDriftGuidance(err))
+        process.exit(1)
+      }
+      throw err
+    })
+    config = { ...config, database: preparedDatabase.databaseConfig }
+    const databaseProvider = preparedDatabase.runtime
+
+    // DB — open + apply migrations. dbVersion = number of SQL files in the
+    // bundled migrations folder (== the highest version we've applied, since
+    // openDb() applies all pending migrations on startup). The migrations folder
+    // itself (and any staged restore) was already resolved/applied at step 2.5.
+
+    // RFC-213/RFC-223: raw pre-migration safety backup BEFORE openDb applies
+    // migrations. A pending migration without its rollback generation is fatal;
+    // backupOnMigration=false is the operator's explicit opt-out.
+    // RFC-359 W3-T16：这里没有 provider 执行分支——按 provider 查表取会话装配器，
+    // bootstrap / resume / 监听全部走同一条中立序列（design §6 / §7 守卫 4）。
+    const bindHost = opts.host ?? config.bindHost
+    const bindPort = opts.port ?? config.bindPort ?? 0
+    const lifecycle = Object.freeze({
+      operationId: 'daemon-start',
+      provider: databaseProvider.provider,
+      generationId: databaseProvider.generation.payload.generationId,
+    })
+    const sessionInput = Object.freeze({
+      config,
+      configuration,
+      applicationConfiguration,
+      runtimeLegacyConfiguration,
+      taskArchive: opts.taskArchive,
+      skillContent: opts.skillContent,
+      employeePrograms: opts.employeePrograms,
+      evidenceRead: opts.evidenceRead,
+      evidenceDocumentCommands: opts.evidenceDocumentCommands,
+      daemonRuntime: daemonHost,
+      token,
+      secretBox,
+      dbVersion,
+      log,
+      lock,
+      migrationsFolder,
+      digitalEmployeeTypePackageDriftPolicy,
+    })
+    const { initial, bootstrap: daemonProviderBootstrap } = await composeDaemonProviderBootstrap({
+      initial: lifecycle,
+      composeInitial: (bindings) =>
+        composeDaemonProviderSession({
+          ...sessionInput,
+          ...bindings,
+          provider: databaseProvider,
+          lifecycle,
+        }),
+      sessionFactory: {
+        async create(lifecycleInput, bindings) {
+          // 只有迁移目标才会被重新装配；源 provider（SQLite）在割接后退役，不能再被当作
+          // 新会话的来源——判据取自 provider 特征表，不在这里写 provider 字面量。
+          if (databaseProviderTraits(lifecycleInput.provider).migrationRole !== 'target') {
+            throw new Error('provider-session-source-retired')
+          }
+          const nextConfig = await configuration.read()
+          const nextProvider = resolveDatabaseProviderRuntime({
+            config: nextConfig.database,
+            sqlitePath: Paths.db,
+            generationPointerPath: Paths.databaseGenerationPointer,
+            operationsRoot: Paths.databaseMigrationsDir,
+            contract: logicalSchemaContract,
+          })
+          if (
+            nextProvider.provider !== lifecycleInput.provider ||
+            nextProvider.generation.payload.generationId !== lifecycleInput.generationId
+          ) {
+            await nextProvider.close()
+            throw new Error('daemon-provider-target-generation-mismatch')
+          }
+          return (
+            await composeDaemonProviderSession({
+              ...sessionInput,
+              ...bindings,
+              config: nextConfig,
+              provider: nextProvider,
+              lifecycle: lifecycleInput,
+            })
+          ).session
+        },
+      },
+      createMigrationAdmission: createDatabaseMigrationDaemonAdmission,
+      // RFC-349 —— 表投影是**进程级**的：`createPostgresqlDatabaseClient` 一构造就把
+      // 它改指到 PostgreSQL。割接失败时 current 会退回源 session，但投影不会自己退
+      // 回来，于是整个 daemon 的每一条 SQLite 查询都会以
+      // `no such table: agent_workflow.*` 收场。把选择权钉在**真正在服务的**那份
+      // composition 上，成功与失败两条路径都对。
+      onCurrentSelected: (session) => selectDatabaseSchemaProvider(session.provider),
+    })
+    await initial.session.resume(lifecycle)
+    await serveDaemon({
+      bootstrap: daemonProviderBootstrap,
+      authRuntime: initial.application.core.authRuntime,
+      databaseProvider: databaseProvider.provider,
+      token,
+      bindHost,
+      bindPort,
+      lock,
+      daemonHost,
+      log,
+    })
   })
 }
 
@@ -2211,11 +2151,9 @@ async function composeSqliteProviderSession(
 
   // 5b. RFC-359 W3-T4：boot 恢复四步（撤销旧 owner → 收割孤儿 run → 修 lease → 清算 effect 并释放 owner）
   // 是 provider 中立的一份序列（composition/bootRecovery.ts），PostgreSQL daemon 跑的是同一段。
-  const taskExecutionLockProof = createDaemonLockProof({
-    lockPath: lock.path,
-    lockPid: lock.pid,
-    daemonGeneration: DAEMON_GENERATION,
-  })
+  const taskExecutionLockProof = createDaemonRecoveryAuthorityProof(
+    await readDaemonStartupRecoveryAuthority(lock, DAEMON_GENERATION),
+  )
   await runTaskExecutionBootRecovery({
     persistence: taskExecutionPersistence,
     runtimeSessionLeases,
