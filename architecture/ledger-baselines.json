@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1792,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 approved A-T2/A-T3/A-T6: extract the existing installation seed marker effect, local plugin installer and selected lifecycle/content effects. Four additional named entries describe the same owner operations and their independent adapters; original writes, lifecycle events and transaction behavior remain. This is a one-shot receipt for the 54-path independently reviewed candidate."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -850,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5627,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 approved A-T2/A-T3/A-T6: twelve net observed edges wire selected workspace presence, classic version availability, installation completion and owner content queries through exact public/composition contracts. Source and local implementation selection are explicit; no wildcard or CS wire dependency is added. Temporary composition defaults close during A-T7."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,20 +861,14 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "requiredPorts",
       "baseline": 37,
-      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。",
-      "allowGrowth": {
-        "why": "RFC-370 H1: installation seed completion becomes a required fact/effect dependency in the actual offer orchestrator. Legacy boot wrappers select the local implementation once per call; selected installations await their own completion facts and acknowledgement. One additional live port retains both original seed owners and their ordering."
-      }
+      "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
     },
     {
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 4991,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 approved A seams: seven net exact classified imports describe the two bootstrap presence bindings and owner composition defaults/legacy completion wrapper. The new wrapper edge has explicit why, owner and RFC-370 A-T7 retirement in commons-debt. No scanner or existing assertion is relaxed."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -894,10 +882,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1047,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-370 approved A seams: three additional public contract entries expose selected catalog availability and installation completion through existing exact owner boundaries. They carry neutral facts/effects, preserve current DTOs and contain no CrewStation dependency."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -918,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 25670,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 approved A seams: twenty-two net owner entries cover the new neutral completion/content queries, independent local adapters and composition factories after moving the old inline implementations. Each remains with its original business owner; no new business state machine or foreign write owner is introduced."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -938,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0120088f8557ef7357b69e0d0294dd5575d3c842",
-    "contentDigest": "sha256:eba51a94785b128d8f901e2a9df6f40eb951de413ec8d1b9aa624f704097f193",
+    "currentSnapshotSha": "9e30ba934a6196665a1368e828ab905dd9472605",
+    "contentDigest": "sha256:6a2d539fe79174bd49b87a03e3c55ff828c845b7c0fa17ada25c36ced1f833e0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
