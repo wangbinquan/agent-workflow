@@ -50901,6 +50901,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:99a987ad8356be9a651d",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/doctorConfiguration.ts#composeFileDoctorConfigurationQueries",
+      "toPath": "packages/backend/src/modules/system-operations/composition/doctorConfiguration.ts",
+      "toSymbol": "composeFileDoctorConfigurationQueries",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeManagement.ts#$file",
       "fromPath": "packages/backend/src/modules/runtime-management/application/runtimeManagement.ts",
       "fromSymbol": "$file",
@@ -62629,6 +62646,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/config-cli.ts#$file",
+      "fromPath": "packages/backend/src/cli/config-cli.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:bd0a59bd663f650049be",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/cliConfiguration.ts#$file",
+      "toPath": "packages/backend/src/modules/system-operations/composition/cliConfiguration.ts",
+      "toSymbol": "composeFileCliConfiguration",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/auth/session.ts#$file",
@@ -70211,6 +70245,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d31ca12066438972f878",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts#$file",
+      "toPath": "packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts",
+      "toSymbol": "RuntimeLegacyConfigurationPort",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts#$file",
@@ -72979,6 +73030,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
       "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
       "toSymbol": "TaskNodeChangeV1",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "fromPath": "packages/backend/src/cli/doctor.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:da12e1421b362f4a4e1c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#ApplicationConfigurationQueries",
+      "toPath": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toSymbol": "ApplicationConfigurationQueries",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -76227,6 +76295,23 @@
       "toPath": "packages/backend/src/services/freshness.ts",
       "toSymbol": "pickLatestRunInFrame",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/config-cli.ts#$file",
+      "fromPath": "packages/backend/src/cli/config-cli.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e3c7f5f2fd281051133b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/cliConfiguration.ts#$file",
+      "toPath": "packages/backend/src/modules/system-operations/composition/cliConfiguration.ts",
+      "toSymbol": "ApplicationConfigurationPersistencePort",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -86005,9 +86090,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5059,
+    "architectureExceptions": 5064,
     "implementationSccs": 0,
-    "observedEdges": 5697,
+    "observedEdges": 5702,
     "requiredPorts": 38,
     "targetEdges": 69
   },
@@ -139969,6 +140054,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:99a987ad8356be9a651d",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/composition/doctorConfiguration",
+      "syntax": "static-import",
+      "targetSymbol": "composeFileDoctorConfigurationQueries",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/composition/doctorConfiguration.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/doctorConfiguration.ts#composeFileDoctorConfigurationQueries"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "runtime-management",
       "fromFile": "packages/backend/src/modules/runtime-management/application/runtimeManagement.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/application/runtimeManagement.ts#$file",
@@ -152560,6 +152661,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/config-cli.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/config-cli.ts#$file",
+      "id": "import:bd0a59bd663f650049be",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/composition/cliConfiguration",
+      "syntax": "static-import",
+      "targetSymbol": "composeFileCliConfiguration",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/composition/cliConfiguration.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/cliConfiguration.ts#$file"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/auth/session.ts",
@@ -160528,6 +160645,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationInvocationParticipant"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:d31ca12066438972f878",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/runtime-management/composition/runtimeRegistry",
+      "syntax": "static-import",
+      "targetSymbol": "RuntimeLegacyConfigurationPort",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/runtimeRegistry.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/legacy/agent.ts",
@@ -163454,6 +163587,22 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/types.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#ResourceMemoryScopeRef"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/doctor.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file",
+      "id": "import:da12e1421b362f4a4e1c",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/public/queries",
+      "syntax": "static-import",
+      "targetSymbol": "ApplicationConfigurationQueries",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/public/queries.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/public/queries.ts#ApplicationConfigurationQueries"
     },
     {
       "edgeKind": "value",
@@ -166878,6 +167027,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/freshness.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/freshness.ts#pickLatestRunInFrame"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/config-cli.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/config-cli.ts#$file",
+      "id": "import:e3c7f5f2fd281051133b",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/system-operations/composition/cliConfiguration",
+      "syntax": "static-import",
+      "targetSymbol": "ApplicationConfigurationPersistencePort",
+      "toContext": "system-operations",
+      "toFile": "packages/backend/src/modules/system-operations/composition/cliConfiguration.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/cliConfiguration.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -178008,7 +178173,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:33988b69dc58a8539704f77fe1225d04b42217b1f30ca869e5766b40c7663742",
+  "sourceDigest": "sha256:370ccf1ae8683da55f3037f049ffdf7499037bf2a06f7cf3eaec12e7eec7d92c",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

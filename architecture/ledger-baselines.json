@@ -846,8 +846,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5697,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5702,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 A1: the boot root consumes the existing RuntimeLegacyConfigurationPort type through its existing narrow composition, and config CLI consumes the existing persistence type and used file factory through one new SO purpose composition. Exactly three actual static-import symbol edges are added; the original import and boundary rules remain unchanged.\n\nThe same unpublished RFC-370 A1 candidate now also includes the independently reviewed doctor configuration entry. Its used SO purpose factory value import and existing public query type add exactly two real edges. The separate refresh CI correction changes no import count or scanner rule."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +870,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5059,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5064,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 A1: the original canonical exception projection records the same three real symbol edges. Only the config CLI type/value boundary pair is registered under SO ownership and A-T7 retirement. No directory exemption, bootstrap list, boundary clause or scanner rule is added or weakened.\n\nThe same unpublished RFC-370 A1 candidate adds the original projection of those two doctor imports; only its actual factory value R1 is registered under SO ownership and A-T7 retirement. The public query type remains accepted by the original rule, without any new clause or directory exemption."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +908,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25731,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25739,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 A1: exactly six original owner entries are added: the SO cliConfiguration composition file and five private used CLI helpers for selected reads/writes and unchanged parse/render policy. No new unused public factory or business policy is introduced; all original owner rules and old owner entries remain unchanged.\n\nThe same unpublished RFC-370 A1 candidate adds exactly the doctorConfiguration composition file and its production-consumed default query factory. The original checkConfig owner is retained; its selected error rendering and the refresh CI correction add no owner entry. Original owner rules remain unchanged."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:33988b69dc58a8539704f77fe1225d04b42217b1f30ca869e5766b40c7663742",
+    "sourceDigest": "sha256:370ccf1ae8683da55f3037f049ffdf7499037bf2a06f7cf3eaec12e7eec7d92c",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +929,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "f890ef85265f3c8e55768038dc0c948df473ca47",
-    "contentDigest": "sha256:087586637e2774907e421b07c2c4684b4d31c723fbd5574d2fd13c10a93f5f39",
+    "currentSnapshotSha": "ba47e5d24c4f8f95f27defb82545ea1766b0e7a9",
+    "contentDigest": "sha256:c192d8fe3997a7f730680d77a214c3fafda2288d335503eb3be89a4ffda56313",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

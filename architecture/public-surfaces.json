@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 954,
+    "consumers": 955,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
     "methods": 1132,
@@ -139087,6 +139087,7 @@
         "import:c678160f4a66661ac419",
         "import:c8df23c62f146ffc951b",
         "import:cb1a68456feac0d06b64",
+        "import:da12e1421b362f4a4e1c",
         "import:e50d1b1b10cfd8bc7215",
         "import:f8ece5e8919cd5b83027"
       ],
@@ -139125,6 +139126,7 @@
             "import:c678160f4a66661ac419",
             "import:c8df23c62f146ffc951b",
             "import:cb1a68456feac0d06b64",
+            "import:da12e1421b362f4a4e1c",
             "import:e50d1b1b10cfd8bc7215",
             "import:f8ece5e8919cd5b83027"
           ],
@@ -139205,6 +139207,12 @@
           "edgeId": "import:cb1a68456feac0d06b64",
           "file": "packages/backend/src/routes/plantuml.ts",
           "ownerEntryId": "owner:packages/backend/src/routes/plantuml.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:da12e1421b362f4a4e1c",
+          "file": "packages/backend/src/cli/doctor.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/doctor.ts#$file"
         },
         {
           "context": "legacy",
@@ -170524,7 +170532,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:33988b69dc58a8539704f77fe1225d04b42217b1f30ca869e5766b40c7663742",
+  "sourceDigest": "sha256:370ccf1ae8683da55f3037f049ffdf7499037bf2a06f7cf3eaec12e7eec7d92c",
   "targetContexts": [
     "collaboration",
     "development-automation",

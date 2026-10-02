@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1986,
+    "backendFiles": 1988,
     "frontendFiles": 642,
     "legacyFiles": 554,
-    "moduleFiles": 1432,
-    "productionFiles": 2788,
+    "moduleFiles": 1434,
+    "productionFiles": 2790,
     "sharedFiles": 160,
-    "symbolsIncludingFileRoots": 25731
+    "symbolsIncludingFileRoots": 25739
   },
   "entries": [
     {
@@ -2307,6 +2307,30 @@
       "currentLayer": "cli",
       "exported": false,
       "file": "packages/backend/src/cli/config-cli.ts",
+      "id": "owner:packages/backend/src/cli/config-cli.ts#formatConfigurationRead",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "formatConfigurationRead",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/config-cli.ts",
+      "id": "owner:packages/backend/src/cli/config-cli.ts#formatConfigurationWrite",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "formatConfigurationWrite",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/config-cli.ts",
       "id": "owner:packages/backend/src/cli/config-cli.ts#formatValue",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -2319,10 +2343,46 @@
       "currentLayer": "cli",
       "exported": false,
       "file": "packages/backend/src/cli/config-cli.ts",
+      "id": "owner:packages/backend/src/cli/config-cli.ts#parseConfigurationWrite",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "parseConfigurationWrite",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/config-cli.ts",
       "id": "owner:packages/backend/src/cli/config-cli.ts#parseValue",
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "parseValue",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/config-cli.ts",
+      "id": "owner:packages/backend/src/cli/config-cli.ts#readSelectedConfiguration",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "readSelectedConfiguration",
+      "targetContext": "bootstrap",
+      "targetLayer": "inbound"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "cli",
+      "exported": false,
+      "file": "packages/backend/src/cli/config-cli.ts",
+      "id": "owner:packages/backend/src/cli/config-cli.ts#writeSelectedConfiguration",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "writeSelectedConfiguration",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
@@ -3505,7 +3565,7 @@
     {
       "currentContext": "legacy",
       "currentLayer": "cli",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/cli/doctor.ts",
       "id": "owner:packages/backend/src/cli/doctor.ts#checkConfig",
       "removeAfterWave": "W9",
@@ -118400,6 +118460,18 @@
       "currentContext": "system-operations",
       "currentLayer": "composition",
       "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/cliConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/cliConfiguration.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
       "file": "packages/backend/src/modules/system-operations/composition/databaseMigration.ts",
       "id": "owner:packages/backend/src/modules/system-operations/composition/databaseMigration.ts#$file",
       "removeAfterWave": "W9-D",
@@ -118453,6 +118525,30 @@
       "removeAfterWave": "W9-D",
       "status": "current-module",
       "symbol": "LocalDatabaseMigrationOperations",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/composition/doctorConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/doctorConfiguration.ts#$file",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition/doctorConfiguration.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition/doctorConfiguration.ts#composeFileDoctorConfigurationQueries",
+      "removeAfterWave": "W9-D",
+      "status": "current-module",
+      "symbol": "composeFileDoctorConfigurationQueries",
       "targetContext": "system-operations",
       "targetLayer": "application"
     },
@@ -309504,5 +309600,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:33988b69dc58a8539704f77fe1225d04b42217b1f30ca869e5766b40c7663742"
+  "sourceDigest": "sha256:370ccf1ae8683da55f3037f049ffdf7499037bf2a06f7cf3eaec12e7eec7d92c"
 }
