@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 1966,
+    "backendFiles": 1967,
     "frontendFiles": 642,
     "legacyFiles": 554,
-    "moduleFiles": 1412,
-    "productionFiles": 2768,
+    "moduleFiles": 1413,
+    "productionFiles": 2769,
     "sharedFiles": 160,
-    "symbolsIncludingFileRoots": 25670
+    "symbolsIncludingFileRoots": 25671
   },
   "entries": [
     {
@@ -112859,6 +112859,18 @@
       "removeAfterWave": "W5",
       "status": "current-module",
       "symbol": "WorkspaceMaintenanceCompositionInput",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/composition/workspacePresence.ts",
+      "id": "owner:packages/backend/src/modules/source-control/composition/workspacePresence.ts#$file",
+      "removeAfterWave": "W5",
+      "status": "current-module",
+      "symbol": "$file",
       "targetContext": "source-control",
       "targetLayer": "application"
     },
@@ -308772,5 +308784,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e02e1036a16b249c3ed5f11ca06cbb2534a8e3efc5e820c591b2504447117680"
+  "sourceDigest": "sha256:f17caace561f83431fe26b33bd92c5a67538aa7433122ecf72907c6f8bdd1478"
 }

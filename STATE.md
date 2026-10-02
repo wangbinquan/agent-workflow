@@ -1,3 +1,11 @@
+## 2026-10-02 RFC-370 八批发布后的 CI 配套修复
+
+八批54源码/测试及 scoped canonical 已按十个小提交发布并精确同步 `165bb447dc0a8bc4f8e0e8ce9698512791a7477d`，其他在制文件逐字保持。其主 [CI36948285794](https://github.com/wangbinquan/agent-workflow/actions/runs/36948285794) 已 completed/failure、43 success/7 failure；同 SHA 的 [maintenance36948285743](https://github.com/wangbinquan/agent-workflow/actions/runs/36948285743) completed/success。正式失败不被有限 PASS 覆盖。
+
+限定修复已覆盖 actual Typecheck 的程序闭包 union 收窄和 evidence 夹具 direct actor、两个无人消费的新增 type-only 出口、SO 精确 public 目录遗漏，以及 TE 默认文件查询经 SC 大 barrel 引入的真实 value SCC。前三路径有限 PASS 后扩为六路径，完整候选独立有限 PASS；narrow composition 转发同一个现有 file factory，原零 SCC/层次/行为断言与债务规则完整保留。官方语料只纳入六路径：public1047→1045、owner25670→25671，其他计数不变；唯一真实 owner 增长按原协议一次登记并在发布后退役，正式恢复等修复 exact-SHA CI。
+
+员工附件五路径首门 finding 修正后有限 PASS；终态 presence 启动根十路径的新 missing fixture 首门 finding 已按原410语义修正，复读有限 PASS。其余 SC7、员工local4、插件6/GC3 保持冻结独立在制并排除本修复 canonical，完整 A-G、CS adapter 和 M0～M4 持续；无本机 AW test/typecheck/build/service。下方全部历史与并行输出保持。
+
 ## 2026-10-02 RFC-370 CI 恢复终态与八批发布
 
 修复提交 `3ac730f84c9430459efb6d8fe72a6db9f5e8a1ed` 的 [CI36945626088](https://github.com/wangbinquan/agent-workflow/actions/runs/36945626088) 已 completed/success，50/50 作业 success，headSha 严格核对。三平台观测 E2E 与原 macOS multipart 分片均通过；multipart 单次停滞原因仍未确证，未改测试预算，不把重验成功写成已修该原因。原失败记录保留。

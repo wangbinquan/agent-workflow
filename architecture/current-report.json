@@ -7,27 +7,17 @@
     "crossContextImports": 5627,
     "facades": 295,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25670,
+    "moduleSymbolOwners": 25671,
     "mutationEntrypoints": 1792,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1047,
+    "publicSurfaces": 1045,
     "transactionExternalEffects": 261
   },
   "metrics": {
     "ambientWiringEntries": 500,
     "appDepsConsumers": [],
-    "backendProductionFiles": 1966,
+    "backendProductionFiles": 1967,
     "backendValueSccs": [
-      [
-        "packages/backend/src/modules/source-control/composition.ts",
-        "packages/backend/src/modules/source-control/infrastructure/workspaceMaterializer.ts",
-        "packages/backend/src/modules/task-execution/composition/sqliteTaskExecutionContext.ts",
-        "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
-        "packages/backend/src/modules/task-execution/public/participants.ts",
-        "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
-        "packages/backend/src/services/gc.ts",
-        "packages/backend/src/services/taskExecutionParticipants.ts"
-      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -120,7 +110,7 @@
       },
       {
         "context": "source-control",
-        "files": 58
+        "files": 59
       },
       {
         "context": "system-operations",
@@ -135,7 +125,7 @@
         "files": 340
       }
     ],
-    "moduleFiles": 1412,
+    "moduleFiles": 1413,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -150,16 +140,6 @@
     ],
     "outboundBoundaryEdges": 31,
     "repoValueSccs": [
-      [
-        "packages/backend/src/modules/source-control/composition.ts",
-        "packages/backend/src/modules/source-control/infrastructure/workspaceMaterializer.ts",
-        "packages/backend/src/modules/task-execution/composition/sqliteTaskExecutionContext.ts",
-        "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
-        "packages/backend/src/modules/task-execution/public/participants.ts",
-        "packages/backend/src/platform/persistence/sqlite/systemWorkspaceGc.ts",
-        "packages/backend/src/services/gc.ts",
-        "packages/backend/src/services/taskExecutionParticipants.ts"
-      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -181,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e02e1036a16b249c3ed5f11ca06cbb2534a8e3efc5e820c591b2504447117680"
+  "sourceDigest": "sha256:f17caace561f83431fe26b33bd92c5a67538aa7433122ecf72907c6f8bdd1478"
 }

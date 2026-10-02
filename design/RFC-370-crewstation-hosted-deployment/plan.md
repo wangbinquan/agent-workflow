@@ -383,3 +383,11 @@ journaled repository preparation 七路径和员工 local 内容四路径各获�
 修复基准 `3ac730f84c9430459efb6d8fe72a6db9f5e8a1ed` 的 [CI36945626088](https://github.com/wangbinquan/agent-workflow/actions/runs/36945626088) 已 completed/success，50/50 作业 success，headSha 严格相同；观测 E2E 三平台及 macOS multipart 分片通过。multipart 单次停滞原因未确证，未修改预算或把重验成功冒称原因修复。原 012 的失败与所有有限门历史保留。
 
 八批54路径源内容不变，现在短发布临界区按八个小 source commit、canonical/docs、六项真实增长许可后继退役发布。官方语料仍只包括这54路径；新 journaled preparation7、员工 local4、物理插件6、generation GC3 的有限 PASS 候选继续独立在制，全部排除。插件首四路径 source oracle FAIL 与纠正后的六路径 PASS 均见 functional-gates；后续必须登记其实际兼容入边。发布后先验证新 exact-SHA CI，同时贯穿终态 presence 的真实启动根和员工附件异步完成事实，再继续 remaining-a 全组，完整 A-G 与 B/M0～M4 不提前关闭。
+
+### 八批发布与配套 CI 修复（2026-10-02）
+
+实际十个小 commit 的 tip `165bb447dc0a8bc4f8e0e8ce9698512791a7477d` 已同步远端，发布回执确认其他所有在制文件字节不变。主 CI36948285794已终态43 success/7 failure；同 SHA maintenance36948285743成功。五个实际后端失败分片与 Typecheck 日志收齐，范围是作者 async closure type narrowing、证据夹具 DirectAuthenticatedAuthority、两个新增零消费者 type 出口、SO 精确 public 目录名和 TE file default 经 SC barrel 的实际 value SCC。没有修改扫描或既有功能判据，也没有取消原运行。
+
+前三路径有限 PASS 后，将后两类遗漏补入六路径修复，完整候选独立有限 PASS。narrow SC composition 精确导出原 file factory，TE 只改变默认 import；所选实例、默认行为和业务状态机不改。官方 scoped 只包含六路径，TE value SCC 为零，public1047→1045、owner25670→25671，其他数值保持；新文件的唯一真实 owner 增长原协议记录一次并后继退役，正式恢复必须新 exact-SHA CI 全部终态。
+
+附件五路径的首次错误夹具已按真实 intake schema 修正并有限 PASS；启动根十路径的 missing 场景按原410语义修正且独立复读有限 PASS。这些候选和 SC7/员工local4/插件6/GC3不纳入 CI 修复 canonical。恢复后发布这些已复核 owner 切面，再继续 remaining-a 全组／A-G，然后 B/M0～M4；无本机 AW test/typecheck/build/service，RFC 保持 In Progress。

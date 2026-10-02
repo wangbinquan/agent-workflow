@@ -881,7 +881,7 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1047,
+      "baseline": 1045,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -902,12 +902,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 25670,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 25671,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 CI correction: one narrow Source Control standalone presence composition entry replaces the broad composition barrel as the Task persistence default. It reexports the identical existing file query and removes the real Task execution value SCC without changing lifecycle rules, selected adapters, scanner rules or business state. The single new module file owner is the only owner-count growth in this exact six-path repair."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:e02e1036a16b249c3ed5f11ca06cbb2534a8e3efc5e820c591b2504447117680",
+    "sourceDigest": "sha256:f17caace561f83431fe26b33bd92c5a67538aa7433122ecf72907c6f8bdd1478",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +923,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9e30ba934a6196665a1368e828ab905dd9472605",
-    "contentDigest": "sha256:6a2d539fe79174bd49b87a03e3c55ff828c845b7c0fa17ada25c36ced1f833e0",
+    "currentSnapshotSha": "165bb447dc0a8bc4f8e0e8ce9698512791a7477d",
+    "contentDigest": "sha256:f1bc75714836c462cbf4668a05141e8f8c22b9dabfca6db5326a0be267e675f6",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

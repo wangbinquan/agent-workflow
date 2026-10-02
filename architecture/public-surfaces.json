@@ -3,10 +3,10 @@
     "consumers": 951,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1134,
+    "methods": 1132,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21516,
-    "symbols": 1047
+    "recursiveFields": 21510,
+    "symbols": 1045
   },
   "entries": [
     {
@@ -105910,55 +105910,6 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "queries",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:isAvailable.$parameter:skill",
-          "type": "z.infer<typeof SkillSchema>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:isAvailable.$return",
-          "type": "boolean"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/queries.ts",
-      "id": "public:resource-catalog:queries:SkillContentAvailability",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "isAvailable",
-          "signatureDigest": "sha256:8f00061d50caba1bab44a45381a2fa1a718d8a8340fc89f53dc4ac448a09a6c7"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/queries.ts#$file",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "wire",
-      "signatureDigest": "sha256:48bd6a6374fa9001a8ac5f5a6ca28484d13639b7ead04bf4231fe6d6f9019a2d",
-      "status": "target-context-current-surface",
-      "symbol": "SkillContentAvailability",
-      "transaction": "none",
-      "unresolvedTypeRefs": [
-        "z.infer"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "request-authority",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 38,
         "maxUnionVariants": 14
       },
@@ -106615,63 +106566,6 @@
         "Extract",
         "z.infer"
       ],
-      "version": 1
-    },
-    {
-      "authority": "request-authority",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "resource-catalog",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "queries",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:exists.$parameter:reference.contentVersion",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:exists.$parameter:reference.id",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:exists.$return.$variant:0",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$method:exists.$return.$variant:1",
-          "type": "boolean"
-        }
-      ],
-      "file": "packages/backend/src/modules/resource-catalog/public/queries.ts",
-      "id": "public:resource-catalog:queries:SkillVersionPresenceQueries",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "exists",
-          "signatureDigest": "sha256:b2fe1a5d3e3809554a82e8c96d4c3858f8067ef44463720b51f7cf94a6e56991"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/queries.ts#$file",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "wire",
-      "signatureDigest": "sha256:4cfeb1628c4b4040bb5e28b36d1c9f75932170f15d4d10967e25446191b93465",
-      "status": "target-context-current-surface",
-      "symbol": "SkillVersionPresenceQueries",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -170607,7 +170501,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e02e1036a16b249c3ed5f11ca06cbb2534a8e3efc5e820c591b2504447117680",
+  "sourceDigest": "sha256:f17caace561f83431fe26b33bd92c5a67538aa7433122ecf72907c6f8bdd1478",
   "targetContexts": [
     "collaboration",
     "development-automation",

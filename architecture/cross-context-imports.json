@@ -37437,6 +37437,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7123a88cd2b27b0f22f7",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "temporary-internal-debt",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/workspacePresence.ts#$file",
+      "toPath": "packages/backend/src/modules/source-control/composition/workspacePresence.ts",
+      "toSymbol": "createFileWorkspacePresenceQueries",
+      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts#$file",
       "fromPath": "packages/backend/src/modules/development-automation/infrastructure/uploadPublicationReceipt.ts",
       "fromSymbol": "$file",
@@ -82383,23 +82400,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:f899ede74623f2662aee",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "rule": "temporary-internal-debt",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition.ts#$file",
-      "toPath": "packages/backend/src/modules/source-control/composition.ts",
-      "toSymbol": "createFileWorkspacePresenceQueries",
-      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
@@ -124634,6 +124634,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/runtime/index.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#isKnownRuntimeKind"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#$file",
+      "id": "import:7123a88cd2b27b0f22f7",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "temporary-internal-debt",
+      "specifier": "@/modules/source-control/composition/workspacePresence",
+      "syntax": "static-import",
+      "targetSymbol": "createFileWorkspacePresenceQueries",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/composition/workspacePresence.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition/workspacePresence.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -172284,22 +172300,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#affectedRows"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#$file",
-      "id": "import:f899ede74623f2662aee",
-      "owner": "task-execution",
-      "removeAfterWave": "W4-E1",
-      "role": "temporary-internal-debt",
-      "specifier": "@/modules/source-control/composition",
-      "syntax": "static-import",
-      "targetSymbol": "createFileWorkspacePresenceQueries",
-      "toContext": "source-control",
-      "toFile": "packages/backend/src/modules/source-control/composition.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition.ts#$file"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/runner.ts",
@@ -175707,7 +175707,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e02e1036a16b249c3ed5f11ca06cbb2534a8e3efc5e820c591b2504447117680",
+  "sourceDigest": "sha256:f17caace561f83431fe26b33bd92c5a67538aa7433122ecf72907c6f8bdd1478",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",
