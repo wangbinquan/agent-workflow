@@ -1,6 +1,22 @@
+## 2026-10-02 观测交付的 CI 真实失败追踪
+
+`e4d7dba7d8902b7374048492d643c09791ae9b20` 的 CI36955843850 已终态 failure。原 RFC-328 漏登记反例不再失败，但 RFC-317 高水位检查报告实际桥接登记 17、基线仍 16；共享 `architecture/ledger-baselines.json` 正含 RFC-370 尚未发布的其他登记与依赖，需协调完整文件的提交顺序，不能剥离其并行输出。默认九类定时 CI 的修正版中八类已 success，WebKit36953035986 为真实 failure：与本次主 CI 的 Chromium shard 3/3 同在 mixed wrapper/human 用例的 review rejection 后，`mixed_summary` 缺失 `aggregated-fanout-report`。当前只加强该公共 API 回归的初始 review 身份断言与错误 lineage/端口/prompt 诊断，以确定原报告在何处丢失；原状态、报告与人工审批断言、fixture、模型 stub、重试预算及超时保持。没有本机 AW test/typecheck/build/service；功能修复、基线协调、精确 hosted CI、定时 CI 和完整 RFC-371 继续，不写成完成。下方并行输出完整保留。
+
+## 2026-10-02 RFC-370 归档内容切面有限 PASS
+
+任务归档七路径由独立只读功能门复读 PASS，顺序指纹 `4d9650ac2082344a27779947ee3830d9cff079601ed8d888be12f6e632bdb344`。原共享协调器的选择、认领、导出表/JSONL、manifest、恢复、删库规则保持，只有内容 IO 接独立端口并 await；默认 local 恢复函数原体保持。新双 provider 回归覆盖 append/manifest/最终提交 ACK、写失败同 claim 重试、提交已完成但 ACK 丢失后恢复、2000行分批和 legacy restore 完成事实。纯源码 AST 对拍、目标格式/lint通过，未运行本机 AW test/typecheck/build/service，实际运行仍待发布后的 exact-SHA CI；真 boot roots 注入与完整 A2/A-G 尚未完成。
+
+原七组40源码候选逐项复算仍相同，归档七路径独立在制并排除其现有 canonical。并行补正 e4d7dba7d 已同步 main/origin；[CI36955843850](https://github.com/wangbinquan/agent-workflow/actions/runs/36955843850) completed/failure，46 success/4 failure：两后端同为既有条目数量判据，Ubuntu E2E 的 mixed_summary 缺少 aggregated-fanout-report，另为汇总。保留全部历史/并行内容，不把有限门记成正式全绿，RFC 继续。
+
 ## 2026-10-02 运行观测 CI 精确 composition 登记补正
 
 02940128f 的 CI36951130717 已终态 failure：macOS shard 4/6 与 Ubuntu shard 16/16 同为 RFC-328 exact bridge census 漏登记已发布的 SC workspacePresence → TE taskExecutionPersistence composition 边。该实际 standalone 默认只绑定中立 presence query，用于避开旧 composition 循环；本批仅补这一条完整路径登记及其 boot-root 注入后的退役说明，扫描规则、负向夹具和全部业务/事务判据保持。无本机 AW test/typecheck/build/service，正式结果等待补正后的 exact-SHA CI。六类修正版 hosted CI 已成功，full/WebKit/PostgreSQL 仍等终态；历史 failure/cancelled 保留，不关闭 RFC-371 或并行 RFC-370，下方共享历史完整保留。
+
+## 2026-10-02 RFC-370 七组有限候选与 CI 接续
+
+六路径修复及唯一增长许可退役已精确发布 `02940128ffd4918b19b998a23a5e27650d6d097b`，main/origin 同步且其他在制逐字保持。该 SHA 的 [主 CI36951130717](https://github.com/wangbinquan/agent-workflow/actions/runs/36951130717) 已 completed/failure、47 success/3 failure：类型、原 SO public 目录、RC 零消费者、TE 零 value SCC 等已通过，两个后端分片仍为同一个既有架构守卫 failure，汇总 failure；只记录该项状态与源码位置，完整恢复继续。[Windows36951130688](https://github.com/wangbinquan/agent-workflow/actions/runs/36951130688) completed/success，不能替代主 CI。
+
+七组40源码/回归路径各获独立有限功能 PASS，冻结为下一批候选：journaled preparation6、员工local4、插件安装6、generation GC3、附件异步完成5、终态 presence 真根10、提交预览 index6。准备工厂去掉未消费的公共转出口后，测试 type import 首门 P2 已只改到真实应用合同并复读 PASS；首门及旧 PASS 均保留。预览所选 index 等获取/释放，AW 原选择/错误/receipt 不变，临时 index、options 和清理独立 local；原真实 Git 断言保留。官方语料只纳入40路径，六项真实 R1 兼容记录各带 owner/退役条件；imports5627→5660、exception4991→5023、owner25671→25685、entry1792→1795、background338→339，public1045和 TE 零 SCC保持。五项实际增长许可按原协议登记，发布后再退役，不夹带其他源码或 CS 实现。完整 A1～A8/A-G、CS adapter 和 M0～M4持续，无本机 AW test/typecheck/build/service；下方全部历史/并行输出保持。
 
 ## 2026-10-02 RFC-370 八批发布后的 CI 配套修复
 

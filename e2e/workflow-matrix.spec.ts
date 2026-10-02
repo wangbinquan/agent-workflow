@@ -1170,6 +1170,10 @@ test('mixed wrappers + humans: clarified decision survives review rejection befo
 
   await waitForTask(task.id, (row) => row.status === 'awaiting_review' || row.status === 'failed')
   const firstReview = await waitForReview(task.id)
+  const firstReviewRuns = await nodeRuns(task.id)
+  expect(firstReviewRuns.runs.find((run) => run.id === firstReview.nodeRunId)?.nodeId).toBe(
+    'draft_review',
+  )
   const reject = await apiFetch(`/api/reviews/${firstReview.nodeRunId}/decision`, {
     method: 'POST',
     body: JSON.stringify({
@@ -1191,10 +1195,20 @@ test('mixed wrappers + humans: clarified decision survives review rejection befo
   expect(
     afterReject.status,
     JSON.stringify({
-      task: afterReject,
-      failedRuns: afterRejectRuns.runs
-        .filter((run) => run.status === 'failed')
-        .map(({ nodeId, failureCode, errorMessage }) => ({ nodeId, failureCode, errorMessage })),
+      task: { id: task.id, status: afterReject.status, errorMessage: afterReject.errorMessage },
+      runs: afterRejectRuns.runs.map((run) => ({
+        id: run.id,
+        nodeId: run.nodeId,
+        status: run.status,
+        containerRunId: run.containerRunId,
+        parentNodeRunId: run.parentNodeRunId,
+        iteration: run.iteration,
+        retryIndex: run.retryIndex,
+        failureCode: run.failureCode,
+        errorMessage: run.errorMessage,
+        ...(run.nodeId === 'mixed_summary' ? { promptText: run.promptText } : {}),
+      })),
+      outputs: afterRejectRuns.outputs,
     }),
   ).toBe('awaiting_review')
   const secondReview = await waitForReview(task.id, firstReview.reviewIteration + 1)
