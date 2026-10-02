@@ -106,6 +106,8 @@ export type {
   DigitalEmployeeWriterState,
 } from './composition/writerCutover'
 export { createEmployeeInputArtifactStore } from './infrastructure/inputArtifactStore'
+/** Bootstrap selects the existing program port through the context composition entry. */
+export type { ProgramArtifactPort }
 
 /** Worker-bootstrap composition for the context-owned temporary-input cleanup（两个 provider 同一份，RFC-359 W4-D7a）。 */
 export function composeDigitalEmployeeMaintenanceCommands(

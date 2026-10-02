@@ -1,4 +1,5 @@
 // RFC-370 A2: the new local adapters retain real bundle/file and inclusive-range behavior.
+// CI 37038117741 reproduced a range returning the full file; preserve the exact byte oracle.
 import { afterEach, expect, test } from 'bun:test'
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -46,6 +47,22 @@ test('local documents and stream handles retain exact bytes, missing entries and
   expect(await new Response(await handle.openAll()).text()).toBe(text)
   const actualRange = new Uint8Array(await new Response(await handle.open(2, 8)).arrayBuffer())
   expect(actualRange).toEqual(new TextEncoder().encode(text).slice(2, 9))
+  const bytes = new TextEncoder().encode(text)
+  const ranges: readonly (readonly [number, number])[] = [
+    [0, 0],
+    [bytes.length - 1, bytes.length - 1],
+    [9, 14],
+  ]
+  for (const [start, end] of ranges) {
+    const actual = new Uint8Array(await new Response(await handle.open(start, end)).arrayBuffer())
+    expect(actual).toEqual(bytes.slice(start, end + 1))
+  }
+  expect(await new Response(await handle.openAll()).text()).toBe(text)
+  const fresh = await downloads.open(entry.sha256)
+  if (fresh === null) throw new Error('expected a fresh local handle')
+  expect(new Uint8Array(await new Response(await fresh.open(2, 8)).arrayBuffer())).toEqual(
+    bytes.slice(2, 9),
+  )
   rmSync(store.blobPath(entry.sha256))
   expect(await downloads.open(entry.sha256)).toBeNull()
   expect(() =>

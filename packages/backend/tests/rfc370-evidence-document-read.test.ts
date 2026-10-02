@@ -10,6 +10,7 @@ import {
 } from '@/modules/development-automation/infrastructure/requirementMaterializer'
 import { createRequirementBundleRefPersistence } from '@/modules/development-automation/infrastructure/requirementBundleRefPersistence'
 import type { RequirementBundleManifestV1 } from '@/modules/development-automation/domain/requirementManifest'
+import type { QuestionSetV1 } from '@/modules/development-automation/domain/questionSet'
 import { describeEachProvider } from './helpers/eachProvider'
 import { buildPr3Fixture } from './helpers/rfc310Pr3Fixture'
 
@@ -25,7 +26,7 @@ describeEachProvider('RFC-370 selected requirement document reader', (harness) =
     const missionId = await fx.launchDirect('selected-documents')
     const submission = { title: 'Add feature', body: 'do the thing', uploads: [] }
     const digest = directSubmissionDigest(submission)
-    const question = {
+    const question: QuestionSetV1 = {
       schemaVersion: 1,
       missionRef: missionId,
       origin: 'platform',
