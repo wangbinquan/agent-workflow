@@ -71,10 +71,16 @@ export interface ProgramArtifactPort {
     readonly executableArtifactRef: string
     readonly executableDigest: string
     readonly parameterValuesRef: string | null
-  }): {
-    readonly source: string
-    readonly parameterValues: Readonly<Record<string, string | number | boolean>> | null
-  } | null
+  }):
+    | {
+        readonly source: string
+        readonly parameterValues: Readonly<Record<string, string | number | boolean>> | null
+      }
+    | null
+    | Promise<{
+        readonly source: string
+        readonly parameterValues: Readonly<Record<string, string | number | boolean>> | null
+      } | null>
 }
 
 /**

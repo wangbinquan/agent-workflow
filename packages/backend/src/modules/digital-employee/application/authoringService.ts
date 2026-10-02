@@ -969,7 +969,7 @@ export class DigitalEmployeeAuthoringService {
       targetRuntime.upgradeProgramSource !== undefined
     ) {
       const sourceImplementation = migration.source.content.implementation
-      const sourceArtifact = this.#programArtifacts.read(sourceImplementation)
+      const sourceArtifact = await this.#programArtifacts.read(sourceImplementation)
       if (sourceArtifact === null) {
         throw new AutomaticTypeUpgradeError(
           'program-source-unavailable',
@@ -1819,8 +1819,8 @@ export class DigitalEmployeeAuthoringService {
     const record = await this.#exactTool(input)
     const implementation: CreateToolRegistrationBody['implementation'] =
       record.content.implementation.kind === 'program'
-        ? (() => {
-            const artifact = this.#programArtifacts.read(record.content.implementation)
+        ? await (async () => {
+            const artifact = await this.#programArtifacts.read(record.content.implementation)
             if (artifact === null) {
               throw new ConflictError(
                 'employee-program-artifact-unavailable',
