@@ -72,7 +72,11 @@ export function composeRepositoryPreparationParticipant(input: {
         }
         const execution = prepareRepositoryWorkspace({
           journal: input.journal,
-          effects: { ...binding.effects, assertCurrent },
+          effects: {
+            assertCurrent,
+            resolveCommits: (facts) => binding.effects.resolveCommits(facts),
+            materialize: (request) => binding.effects.materialize(request),
+          },
           operation,
           source,
           now: input.now ?? Date.now,

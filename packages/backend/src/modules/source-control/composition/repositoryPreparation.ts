@@ -24,7 +24,8 @@ import { decodeRepositoryLaunchRef } from '../domain/repositoryLaunchRef'
 import { createRepositoryLaunchSnapshotInTx } from '../infrastructure/repositoryLaunchSnapshot'
 import { createRepositoryPreparationJournal } from '../infrastructure/repositoryPreparationJournal'
 import { composeRepositoryPreparationParticipant } from '../infrastructure/repositoryPreparationParticipant'
-import { createRepositoryPreparationEffects } from '../infrastructure/repositoryPreparationEffects'
+import { createFileRepositoryPreparationEffects } from '../infrastructure/local/fileRepositoryPreparationEffects'
+import type { RepositoryPreparationEffectFactory } from '../application/ports/repositoryPreparationEffects'
 import { composeRepositoryWorkspaceStore } from '../infrastructure/repositoryWorkspaceStore'
 import { cleanupRepositoryWorkspace } from '../application/repositoryPreparationCleanup'
 import type {
@@ -45,9 +46,28 @@ export function composeRepositoryPreparation(input: {
   secretBox?: SecretBox | undefined
   workspaceCleanupHook?: (event: WorkspaceCleanupHookEvent) => void | Promise<void>
   cloneTimeoutMs?: number | undefined
+  preparationEffects?: RepositoryPreparationEffectFactory
 }) {
   const journal = createRepositoryPreparationJournal(input.db)
   const driver = composeRepositoryPreparationParticipant({ journal })
+  const preparationEffects: RepositoryPreparationEffectFactory = input.preparationEffects ?? {
+    create(request) {
+      return createFileRepositoryPreparationEffects({
+        taskId: request.taskId,
+        appHome: input.appHome,
+        repositoryWorkspace: composeRepositoryWorkspaceStore(input.db),
+        ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
+        ...(input.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: input.cloneTimeoutMs }),
+        ...(request.workingBranch === undefined ? {} : { workingBranch: request.workingBranch }),
+        gitCommitIdentity: request.gitCommitIdentity,
+        signal: request.signal,
+        ...(input.workspaceCleanupHook === undefined
+          ? {}
+          : { workspaceCleanupHook: input.workspaceCleanupHook }),
+        assertCurrent: request.assertCurrent,
+      })
+    },
+  }
   return {
     async groupName(groupId: string): Promise<string> {
       return (await resolveRepoGroupLayout(composeRepositoryWorkspaceStore(input.db), groupId))
@@ -251,18 +271,12 @@ export function composeRepositoryPreparation(input: {
           'preparation operation not found',
         )
       const source = decodeRepositoryLaunchRef('preparation', record.snapshotRef)
-      const effects = createRepositoryPreparationEffects({
+      const effects = await preparationEffects.create({
         taskId: request.taskId,
-        appHome: input.appHome,
-        repositoryWorkspace: composeRepositoryWorkspaceStore(input.db),
-        ...(input.secretBox === undefined ? {} : { secretBox: input.secretBox }),
-        ...(input.cloneTimeoutMs === undefined ? {} : { cloneTimeoutMs: input.cloneTimeoutMs }),
+        operationRef: operation,
         ...(request.workingBranch === undefined ? {} : { workingBranch: request.workingBranch }),
         gitCommitIdentity: request.gitCommitIdentity,
         signal: request.signal,
-        ...(input.workspaceCleanupHook === undefined
-          ? {}
-          : { workspaceCleanupHook: input.workspaceCleanupHook }),
         assertCurrent: request.assertCurrent,
       })
       const scope = driver.bindEffect({ operation, source, effects })
