@@ -16,3 +16,4 @@ export function composeRuntimeRegistryOperations(
 }
 
 export type { RuntimeRegistryOperations } from '../application/ports/runtimeRegistry'
+export type { RuntimeLegacyConfigurationPort } from '../application/ports/runtimeRegistryEffects'

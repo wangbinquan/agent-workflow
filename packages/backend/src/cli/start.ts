@@ -357,6 +357,7 @@ import { enforceLimits } from '@/services/limits'
 import {
   initializeRuntimeRegistryBoot,
   composeFileRuntimeLegacyConfiguration,
+  type RuntimeLegacyConfigurationPort,
 } from '@/modules/runtime-management/composition/runtimeRegistry'
 import { createAsyncSkillRestoreMembership } from '@/modules/knowledge-evolution/public/participants'
 import { composeSkillMemoryFusionParticipantFactory } from '@/modules/memory/composition'
@@ -368,6 +369,7 @@ export interface StartOptions {
   host?: string
   configuration?: ApplicationConfigurationQueries
   applicationConfiguration?: ApplicationConfigurationBinding
+  runtimeLegacyConfiguration?: RuntimeLegacyConfigurationPort
   databasePreOpenRecovery?: DaemonDatabasePreOpenRecoveryPort
 }
 
@@ -542,7 +544,7 @@ async function composePostgresqlProviderSession(
   await initializeRuntimeRegistryBoot({
     operations: application.core.runtimeRegistry,
     config: input.config,
-    legacyConfiguration: composeFileRuntimeLegacyConfiguration(Paths.config),
+    legacyConfiguration: input.runtimeLegacyConfiguration,
     onRecoverableFailure(error) {
       input.log.warn('builtin runtime seed/migration on boot failed', {
         error: error instanceof Error ? error.message : String(error),
@@ -1037,6 +1039,7 @@ interface DaemonProviderSessionComposeInput {
   readonly config: ReturnType<typeof loadConfig>
   readonly configuration: ApplicationConfigurationQueries
   readonly applicationConfiguration: ApplicationConfigurationBinding
+  readonly runtimeLegacyConfiguration: RuntimeLegacyConfigurationPort
   readonly token: string
   readonly secretBox: ReturnType<typeof createSecretBox>
   readonly dbVersion: number
@@ -1451,6 +1454,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       ...(opts.configuration === undefined ? {} : { queries: opts.configuration }),
     })
   const configuration = applicationConfiguration.queries
+  const runtimeLegacyConfiguration =
+    opts.runtimeLegacyConfiguration ?? composeFileRuntimeLegacyConfiguration(Paths.config)
   let config = await configuration.read()
   if (config.logLevel !== 'info') {
     configureLogger({ level: config.logLevel })
@@ -1580,6 +1585,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     config,
     configuration,
     applicationConfiguration,
+    runtimeLegacyConfiguration,
     token,
     secretBox,
     dbVersion,
@@ -1664,6 +1670,7 @@ async function composeSqliteProviderSession(
     config,
     configuration,
     applicationConfiguration,
+    runtimeLegacyConfiguration,
     token,
     secretBox,
     dbVersion,
@@ -2383,7 +2390,7 @@ async function composeSqliteProviderSession(
   await initializeRuntimeRegistryBoot({
     operations: runtimeRegistry,
     config,
-    legacyConfiguration: composeFileRuntimeLegacyConfiguration(Paths.config),
+    legacyConfiguration: runtimeLegacyConfiguration,
     onRecoverableFailure(error) {
       log.warn('builtin runtime seed/migration on boot failed', {
         error: error instanceof Error ? error.message : String(error),
