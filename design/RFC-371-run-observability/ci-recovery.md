@@ -273,3 +273,13 @@ mixed report 原丢失根因仍未确证。复验已恢复最初的 reject POST 
 两个后端分片唯一失败都在 RFC-359 W5 原型别守卫：`submoduleRefresh.ts` 的初始化 `reconfigure()` 返回类型为 `boolean | Promise<boolean>`，直接 `void` 丢弃把新的无拒绝处理站点计入账本。原“只有同步值”的说明不足。当前共享文件已加入对 Promise 分支的明确拒绝处理及错误日志；提交保留这份并行输出的完整文件。旧同步入口保持同步、异步初始读取继续由调用者 await；热重配的失败仍传播、停止和在途排空断言保留。W5 账本、扫描算法、预算及断言不放宽，既有 `rfc370-submodule-refresh-configuration.test.ts` 和 W5 实际托管执行负责回归验证。
 
 另一个失败来自 gitleaks：`rfc370-config-applied-ack.test.ts` 第 20 行是用来隔离监听器的测试命名空间，未用于鉴权或外部请求；其历史提交为 `6f7bd418ceb831009291ca41e6c062d86701e973`。仅此原提交/路径/规则/行的指纹加入既有精确历史清单，当前原行加同行标注，测试值与同步/异步 ACK 全部断言保持。没有文件级、规则级或仓库级豁免，继续扫描完整历史。源码复核、修订自身主 CI 仍待；本机未运行 AW 测试、类型、构建或服务，两 RFC 继续 In Progress。
+
+## 2026-10-02 已退出 leader 的遗留进程组清理
+
+`9e8db61f0a96f43026e9614547e436cfb91aab61` 的 [主 CI 37012684652](https://github.com/wangbinquan/agent-workflow/actions/runs/37012684652) 已 completed/failure，44／50 作业成功。三种实际失败分别为组合根登记、Intent offered DAG 及 macOS5／6 的已退出 leader 遗留管道用例；原失败／日志完整保留。前两种架构修复由原会话通过后继 `7b64eb1f0` 等提交发布，不扩大账本或收编未交接文件。
+
+管道用例中，原运行器在 leader exit0 后等待 1000ms，再 TERM、完整 50ms grace 与 KILL；1600ms 的孙进程存活标记实际出现。本修订仅把真正的 post-exit 管道等待收紧为 250ms，原活跃 leader 的 wall／idle timeout、TERM／KILL 顺序、完整 killGrace、无条件整组 KILL、输出缓冲与部分结果、退出码及 interrupt 策略均保持。日志本身不足以还原精确 OS 调度时序，最终修复判断交本提交完整托管 CI。
+
+独立 DESIGN v1 的 P2／FAIL 保留：短窗口加原 650ms 等待会早于 1600ms marker 到期，只断言“文件没有出现”会使负例失去判别力。修订 v2 已独立 PASS；原用例增加实际 detached leader 的 PGID 日志、严格唯一解析与 safeInteger>0 断言，原 650ms 等待后以 `process.kill(-groupPid, 0)` 探测原整组。存活即失败，只有实际 Error.code===ESRCH 可判原组不存在，EPERM／其他异常继续抛出；原 marker 不存在和两项 <2s 断言全部保留，1600ms／650ms／10s timeout／50ms grace 不变。该观测不向后代发送额外终止信号，也不添加重试或 skip。
+
+四路径代码／测试／文档已落地，限定格式／lint、逐字逆变换证明、独立 SOURCE 与本提交精确 CI／原默认定时配置继续验证。本机没有执行 AW test／typecheck／build／E2E／服务。两个 RFC 仍 In Progress，其他产品和跨仓验收继续。

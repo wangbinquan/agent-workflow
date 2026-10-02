@@ -387,6 +387,7 @@ describe('local backend shard wall-clock timeout', () => {
         stderr: 'inherit',
       })
       console.log('successful-leader-exited')
+      console.log('pipe-holder-group:' + process.pid)
       process.exit(0)
     `
     try {
@@ -403,8 +404,24 @@ describe('local backend shard wall-clock timeout', () => {
       expect(result.durationMs).toBeLessThan(2_000)
       expect(performance.now() - startedAt).toBeLessThan(2_000)
       expect(result.output).toContain('successful-leader-exited')
-      expect(result.output).toContain('output pipes remained open for 1000ms')
+      expect(result.output).toContain('output pipes remained open for 250ms')
+      const groupLines = [...result.output.matchAll(/^pipe-holder-group:(\d+)$/gm)]
+      expect(groupLines).toHaveLength(1)
+      const groupPid = Number(groupLines[0]?.[1])
+      expect(Number.isSafeInteger(groupPid) && groupPid > 0).toBe(true)
       await Bun.sleep(650)
+      // The shorter drain returns before the marker is due. Probe the actual
+      // detached group so an un-killed descendant cannot make this check pass.
+      let groupAlive = false
+      try {
+        process.kill(-groupPid, 0)
+        groupAlive = true
+      } catch (error) {
+        if (!(error instanceof Error) || !('code' in error) || error.code !== 'ESRCH') {
+          throw error
+        }
+      }
+      expect(groupAlive).toBe(false)
       expect(existsSync(survivorMarker)).toBe(false)
     } finally {
       rmSync(runRoot, { recursive: true, force: true })

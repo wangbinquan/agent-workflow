@@ -253,3 +253,13 @@ RFC-370 owner 已明确暂停共享清单/Git 发布，让 RFC-371 先完成短�
 ### 2026-10-02 主 CI 精确接续
 
 原 `3bf8cc6c` 主 CI cancelled；同 SHA 九类默认定时检查已全部 success（25 成功作业）。后继 `ba47e5d24c4f8f95f27defb82545ea1766b0e7a9` 的主 CI `36997889808` failure、46/50 success：两个后端分片均由初始化 `void` Promise 无拒绝处理守卫报出，另有一个测试监听器标识的 gitleaks 误报及汇总失败。详细原错误与修订边界见 [CI 接续](./ci-recovery.md#2026-10-02-当前主-ci-的两项精确修正)。共享刷新文件的 Promise 拒绝处理输出完整保留；仅原测试行/历史指纹作精确标注，不放宽 W5 或扫描规则。本修订 SOURCE、精确远端主 CI 待完成，AW-R01 不关闭；托管实采、CS 全入口/CLI/平台测试与两 RFC 完整验收继续。
+
+## 2026-10-02 已退出 leader 的遗留进程组清理
+
+`9e8db61f0a96f43026e9614547e436cfb91aab61` 的 [主 CI 37012684652](https://github.com/wangbinquan/agent-workflow/actions/runs/37012684652) 已 completed/failure，44／50 作业成功。三种实际失败分别为组合根登记、Intent offered DAG 及 macOS5／6 的已退出 leader 遗留管道用例；原失败／日志完整保留。前两种架构修复由原会话通过后继 `7b64eb1f0` 等提交发布，不扩大账本或收编未交接文件。
+
+管道用例中，原运行器在 leader exit0 后等待 1000ms，再 TERM、完整 50ms grace 与 KILL；1600ms 的孙进程存活标记实际出现。本修订仅把真正的 post-exit 管道等待收紧为 250ms，原活跃 leader 的 wall／idle timeout、TERM／KILL 顺序、完整 killGrace、无条件整组 KILL、输出缓冲与部分结果、退出码及 interrupt 策略均保持。日志本身不足以还原精确 OS 调度时序，最终修复判断交本提交完整托管 CI。
+
+独立 DESIGN v1 的 P2／FAIL 保留：短窗口加原 650ms 等待会早于 1600ms marker 到期，只断言“文件没有出现”会使负例失去判别力。修订 v2 已独立 PASS；原用例增加实际 detached leader 的 PGID 日志、严格唯一解析与 safeInteger>0 断言，原 650ms 等待后以 `process.kill(-groupPid, 0)` 探测原整组。存活即失败，只有实际 Error.code===ESRCH 可判原组不存在，EPERM／其他异常继续抛出；原 marker 不存在和两项 <2s 断言全部保留，1600ms／650ms／10s timeout／50ms grace 不变。该观测不向后代发送额外终止信号，也不添加重试或 skip。
+
+四路径代码／测试／文档已落地，限定格式／lint、逐字逆变换证明、独立 SOURCE 与本提交精确 CI／原默认定时配置继续验证。本机没有执行 AW test／typecheck／build／E2E／服务。两个 RFC 仍 In Progress，其他产品和跨仓验收继续。

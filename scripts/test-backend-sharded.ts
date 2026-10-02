@@ -7,7 +7,7 @@ const MAX_LOCAL_SHARDS = 16
 const MAX_SHARD_TIMEOUT_MS = 86_400_000
 const MAX_SHARD_KILL_GRACE_MS = 60_000
 const POST_KILL_SETTLE_MS = 1_000
-const POST_EXIT_PIPE_DRAIN_MS = 1_000
+const POST_EXIT_PIPE_DRAIN_MS = 250
 
 // Real 10-core local-gate measurements (2026-08-13): four shards are the
 // highest cold-gate-safe default. Five once completed in 281.5s, but two later
