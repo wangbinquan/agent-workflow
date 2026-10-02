@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1814,
+    "entries": 1817,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -874,7 +874,7 @@
         "authority": "system",
         "authorization": true,
         "event": true,
-        "fenceOrOcc": true,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/cli/start.ts",
@@ -882,6 +882,7 @@
       "id": "mutation:packages/backend/src/cli/start.ts#startCommand",
       "missingControls": [
         "audit",
+        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
@@ -24112,6 +24113,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/application/daemonStartupLease.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/application/daemonStartupLease.ts#runDaemonStartupWithLease",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/application/daemonStartupLease.ts#runDaemonStartupWithLease",
+      "symbol": "runDaemonStartupWithLease",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -24770,6 +24796,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonHostLifecycle.ts#createNativeDaemonHostLifecycle",
       "symbol": "createNativeDaemonHostLifecycle",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonStartupLease.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonStartupLease.ts#createNativeDaemonStartupLease",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonStartupLease.ts#createNativeDaemonStartupLease",
+      "symbol": "createNativeDaemonStartupLease",
       "targetContext": "system-operations",
       "targetLayer": "infrastructure"
     },
@@ -26961,6 +27010,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#createDaemonLockProof",
       "symbol": "createDaemonLockProof",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#createDaemonRecoveryAuthorityProof",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#createDaemonRecoveryAuthorityProof",
+      "symbol": "createDaemonRecoveryAuthorityProof",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -43358,7 +43431,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:23a114c3710b4a2d04f4a6de85bc18de8b9a7ae8b39c5f0f39db8efa8549c98f",
+  "sourceDigest": "sha256:98461efc25aafde03970cd25c3067dc9a41bb27a946a67b253ea7ffc83560356",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

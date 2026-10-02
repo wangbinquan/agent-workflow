@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2010,
+    "backendFiles": 2013,
     "frontendFiles": 642,
     "legacyFiles": 554,
-    "moduleFiles": 1456,
-    "productionFiles": 2812,
+    "moduleFiles": 1459,
+    "productionFiles": 2815,
     "sharedFiles": 160,
-    "symbolsIncludingFileRoots": 25806
+    "symbolsIncludingFileRoots": 25819
   },
   "entries": [
     {
@@ -4423,18 +4423,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "$file",
-      "targetContext": "bootstrap",
-      "targetLayer": "inbound"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "cli",
-      "exported": false,
-      "file": "packages/backend/src/cli/start.ts",
-      "id": "owner:packages/backend/src/cli/start.ts#acquireStartLock",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "acquireStartLock",
       "targetContext": "bootstrap",
       "targetLayer": "inbound"
     },
@@ -117788,6 +117776,54 @@
       "currentContext": "system-operations",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/system-operations/application/daemonStartupLease.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/daemonStartupLease.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/daemonStartupLease.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/daemonStartupLease.ts#acquireDaemonStartupLease",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "acquireDaemonStartupLease",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/daemonStartupLease.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/daemonStartupLease.ts#readDaemonStartupRecoveryAuthority",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "readDaemonStartupRecoveryAuthority",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/daemonStartupLease.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/daemonStartupLease.ts#runDaemonStartupWithLease",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "runDaemonStartupWithLease",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/system-operations/application/databaseMigrationApplication.ts",
       "id": "owner:packages/backend/src/modules/system-operations/application/databaseMigrationApplication.ts#$file",
       "removeAfterWave": null,
@@ -118237,6 +118273,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "DaemonReadiness",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/application/ports/daemonStartupLease.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/daemonStartupLease.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/ports/daemonStartupLease.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/daemonStartupLease.ts#DaemonStartupLease",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DaemonStartupLease",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/ports/daemonStartupLease.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/daemonStartupLease.ts#DaemonStartupLeasePort",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DaemonStartupLeasePort",
+      "targetContext": "system-operations",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/application/ports/daemonStartupLease.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/application/ports/daemonStartupLease.ts#DaemonStartupRecoveryAuthority",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DaemonStartupRecoveryAuthority",
       "targetContext": "system-operations",
       "targetLayer": "application"
     },
@@ -118717,6 +118801,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "composeDaemonHostApplication",
+      "targetContext": "system-operations",
+      "targetLayer": "composition"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/composition.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/composition.ts#composeDaemonStartupLease",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "composeDaemonStartupLease",
       "targetContext": "system-operations",
       "targetLayer": "composition"
     },
@@ -121261,6 +121357,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "NativeDaemonHostOptions",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonStartupLease.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonStartupLease.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonStartupLease.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonStartupLease.ts#acquireStartLock",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "acquireStartLock",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonStartupLease.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonStartupLease.ts#createNativeDaemonStartupLease",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createNativeDaemonStartupLease",
+      "targetContext": "system-operations",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "system-operations",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonStartupLease.ts",
+      "id": "owner:packages/backend/src/modules/system-operations/infrastructure/local/nativeDaemonStartupLease.ts#NativeDaemonStartupLeaseOptions",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NativeDaemonStartupLeaseOptions",
       "targetContext": "system-operations",
       "targetLayer": "infrastructure"
     },
@@ -130313,6 +130457,18 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "createDaemonLockProof",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#createDaemonRecoveryAuthorityProof",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "createDaemonRecoveryAuthorityProof",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -310405,5 +310561,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:23a114c3710b4a2d04f4a6de85bc18de8b9a7ae8b39c5f0f39db8efa8549c98f"
+  "sourceDigest": "sha256:98461efc25aafde03970cd25c3067dc9a41bb27a946a67b253ea7ffc83560356"
 }

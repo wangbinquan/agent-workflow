@@ -197,3 +197,11 @@ CS 独立 adapters、B/M0 与 AW-in-CS 真实部署均未开始。保持先完�
 e0c42a53 main37050645456 completed/failure（44/6），Windows37050766328 success1/1，原失败完整保留。三测试 CI 守卫补正有限 PASS `430fd59c328c035fa1268b82e7526eda61090259062728795fd885370e73bb53`：实际 void count6→3、新真实 serve fixture调用1、RFC254两功能断言迁实际owner；规则/其他段落不变。复用12门组成SOURCE15 `d00525b2a6b937195b3acbf572a0643996dcc9d440cb9908442b359fa5ef9fcf`，尚待新 exact-SHA hosted CI，不冒称正式通过。原scoped生成只一次，四真实增长及原条款/数量保护见 [功能门](./functional-gates.md)，无本机AW runtime检查。
 
 CS独立adapters、B/M0和实际AW-in-CS部署仍未开始。先中立A1～A8及独立完整A-G，再CS M0实际部署、逐项M1～M4；旧正文、所有门/CI历史和并行输出保持，不关闭RFC。
+
+## 2026-10-03 启动租约后的余项
+
+A1本批收口外层startup claim及neutral recovery receipt：同一selected lease贯穿真实roots/重装配，失败等待release ACK，默认native获取/错误/proof保持。首门两个P2、R2和组合14路径有限PASS见 [功能门](./functional-gates.md)。完整A7仍须托管执行权、所有worker/直接HTTP authority与remote orphan重启对账；不能以本机启动锁释放协议代替。
+
+fd02主CI37056660544失败46/4、Windows37056797584成功1/1保留；两个CI测试修正有限PASS并纳入16路径，七实际账本增长按原协议登记/匹配提交后退役。只做静态检查、纯证明和原scoped生成，正式行为待新exact-SHA CI。原304条debt、四规则及peer span/UI输出保持。
+
+A2其余evidence intake/blob/capture/import/materialize/上传/验证及TE/RC恢复，A3/A4两LaunchLane和所有workspace/Git，A5完整执行链，A6所有purpose，A7执行权恢复，A8全roots/AC00与独立完整A-G继续。随后CS独立adapter、B/M0实际部署再M1～M4；无AW-in-CS部署，不关闭RFC。

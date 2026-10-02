@@ -616,3 +616,11 @@ A2 归档真实根九路径有限独立 PASS，指纹 `f9a5659c85fb50b3a0158e9d1
 原 scoped census/boundary 各一次，entry+1/import+4/exception+4/owner+4为真实投影；四原规则、304 debt、273/31、target69及implementation SCC空保持。四增长匹配 canonical 后独立退役。三个补正测试不影响 production corpus/digest额外输入，复用原生成；无本机 AW test/typecheck/build/service，旧全文/并行内容/门及 CI 历史保持。
 
 后续仍按既定矩阵完成 raw lock/authority、全部证据物理效果、A3～A8/AC00，再独立完整 A-G；不得凭此批 active SPI 关闭整个 A1 或 A 阶段。然后各层独立 CS adapters，B/M0先实际部署，增量 M1～M4。尚无 AW-in-CS 实际部署，不关闭 RFC。
+
+## 2026-10-03 启动租约与 CI 修复接续
+
+启动租约14路径组合有限PASS，首门两个P2及三路径R2保留；实际acquire→diagnostics/host→boot失败→release ACK纳入统一生命周期，原native算法/proof兼容、同一lease重装配及W29原数量保持。CI两测试路径另获有限PASS；16路径复用组成当前source候选，没有重开未变门。详见 [功能门](./functional-gates.md) 新节。
+
+fd02主CI37056660544终态46/4 failure、Windows37056797584 success1/1完整留档。本批修复真实调用账本缺数、bootstrap窗口截断和macOS全文件读取超时，保持原规则/判据/预算；正式结论等待新exact-SHA CI。scoped原生成各一次，七实际增长按原provenance协议登记并在匹配canonical后退役，peer owner/span/UI与全部旧记录保持。
+
+下一步继续A2完整内容效果、A3/A4工作区/Git、A5材料/执行/清理、A6purpose命令、A7完整执行权/恢复和A8所有roots/AC00；完整A-G通过后才编写各层独立CS adapters，B/M0先实际部署再M1～M4。启动lease不关闭整个A1/A7；尚无AW-in-CS部署，RFC继续。无本机AW test/typecheck/build/service。

@@ -1,3 +1,11 @@
+## 2026-10-03 RFC-370 启动租约与精确 CI 补正
+
+启动租约14路径组合有限功能 PASS `8ccd6aa4ca93efd3090e8ff0b7df6704704c00a62c87966b203effc35eee15db`：原 PID 锁算法进入独立 SO native adapter，真实 start、PG/SQLite boot、provider 重装配共享同一 acquired lease；启动失败等待 release ACK，旧锁文件/错误/开发接管与 proof digest 语义保持。首门 FAIL/两个 P2 及三路径 R2 PASS 完整保留。该租约只覆盖启动 claim；全 A7 执行权和远程 orphan 恢复继续。
+
+上一批 `fd02ad70d48d10446e00fa378be6a80da80edf52` 的 [主 CI37056660544](https://github.com/wangbinquan/agent-workflow/actions/runs/37056660544) completed/failure，46 success、4 failure；[Windows37056797584](https://github.com/wangbinquan/agent-workflow/actions/runs/37056797584) completed/success 1/1。三个后端功能作业日志定位调用账本基线4/5、初始 bootstrap 的700字节窗口截断及macOS文件URL扫描超时；现保留真实fixture、原regex/判据/5秒预算，补正确基线、完整AST跨度和64项分批异步读取。两测试路径有限PASS，不作为正式CI通过。
+
+本批16个source/test路径复用两组独立结论，原scoped census/boundary各一次，七实际增长按原协议登记/匹配canonical后退役；原四规则、304条debt及并行span/UI全文保持。详见 [功能门](design/RFC-370-crewstation-hosted-deployment/functional-gates.md)。仅目标静态检查、源码/字节/JSON证明和原生成，无本机AW test/typecheck/build/service。完整A1～A8/A-G、CS独立adapters及B/M0～M4继续，尚无AW-in-CS部署，不关闭RFC；全部旧门与CI历史保留。
+
 ## RFC-370 类型出口增量与原 active SPI 恢复（2026-10-03）
 
 首版 SOURCE28 `193a0c97303944b793cf098ff2faa89946dd8592cca6f5ca50a54033d94d5fc0` 与 METADATA17 `d1b498319866d70f916ac8bf32fd071eba0a447e2d741046ce59818dc8589377` 有限 PASS 保留，但未发布。原清单将 DE ProgramArtifactPort 的 from-type 再导出算作同路径第二次 composition binding，造成 active→declared-debt。仅 DE composition 一路径把出口改为 `export type { ProgramArtifactPort }`，复用原有 type import，整文件逆变换一致；单路径增量有限 PASS `38ca0e5cd13d8c8bc8af390afa963c82fe58600af080993f94966d7581c95443`。其余 27 路径逐字未变，复用原 PASS 组成 SOURCE28 `8ded9a42418055aa1674d4fb31360855f4a6ae66cdbe2781b20eddda68924dc1`，不重开 SOURCE 全量门。

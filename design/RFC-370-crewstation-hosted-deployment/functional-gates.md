@@ -425,3 +425,15 @@ EvidenceDocumentCommands 由 DA composition type 出口进入 StartOptions、pro
 ## 2026-10-03 本批 METADATA 归因增量补正
 
 首门 METADATA17 指纹 `d98265ceefccd4dfc7e8d952e9918fddc0ef0a947263a78176008d480589bbdc` 有限 FAIL/P2 保留：新 entry +1 的回执和本批新节误写为 composeDaemonHostApplication；原清单相对 before 的唯一新增 mutation entry 实为 runDaemonHostApplication，后者由该已消费的 composition root 调用。仅修正这两处本会话新归因文字，原数量、全部扫描规则、SOURCE15 和其他15个 metadata 路径逐字不变；不重复 census、growth registrar 或 SOURCE 全量门。增长首登记证明保留，四项仍按相同数量在匹配 canonical 后一次退役。其余首门已核对项复用，只检视两路径有限增量，正式行为仍待新 exact-SHA hosted CI；完整 RFC 和部署继续。
+
+## 2026-10-03 启动租约及 CI 守卫的有限交付
+
+SOURCE14 首候选 `28535e5a3b30b442d15105f6e2ac3fc4ad120b43b283946953b81ebc74153740` 有限 FAIL/两个 P2 保留：新root oracle用了错误的准备工厂名，acquire ACK后的diagnostics getter/host选择不在release lifetime内。只修三个路径，有限R2 PASS `2caa8655a9ebe56a8f89dc4d7174e278df9974f5c690a29fd8a561ad1b6bc8a6`；四定位段恢复三份首候选全文，其他11路径和7控制逐字保持，形成组合SOURCE14 PASS `8ccd6aa4ca93efd3090e8ff0b7df6704704c00a62c87966b203effc35eee15db`，未重开全量门。新增prototype getter同步失败回归等待held release ACK后返回同一原Error；原断言/预算保持。
+
+同一neutral lease经start/session/recompose及PG/SQLite recovery proof真实绑定。native adapter的获取/错误/开发接管算法在明确的options替换后恢复原完整body，PID只留默认native诊断和原本机proof兼容。selected acquisition/receipt失败无本机回退；boot失败/release失败分别可观察。W29只更新PG body摘要为 `f16eeb4203b530e19ddfb255365443423980bbfff913c874533ff8cc7485410a`，168/49/65 statements、8 phase、SQLite/HTTP/event digest和原规则保持；R2三路径未触及projection输入，复用该唯一回执。启动claim不替代完整A7执行权、远程运行检查或重启恢复。
+
+已发布fd02的主CI37056660544终态46 success/4 failure，同SHA Windows37056797584 success1/1。实际三个失败backend jobs111002929614、111002929704、111002930044定位：startup调用表5行/基线4；初始bootstrap源码窗口700字节截断；macOS全文件同步读扫描8029ms超原5000ms预算。两个测试路径有限PASS `a45693cdc22fa7158224d629ccf5763996f3177769d7a67163708260f14e0cc8`，七定位段恢复完整before：完整且唯一await bootstrap AST跨度2039字符仍用原regex；全文件/SELF/regex/逐行诊断/默认5s保持，64项Promise.all读取后按原顺序收齐，读失败仍使测试失败，新增行号和HTTP/fileURLToPath兼容fixture。真实startup fixture行完整保留，仅按实际基线4→5登记增长。两组复用形成SOURCE16组合PASS `28e7219be0ef2ffca9d622f59b23c88fb21fcd6dd81018577807990261694acc`，正式运行等新exact-SHA hosted CI，原FAIL/失败历史保留。
+
+官方scoped census只含HEAD fd02加本批16路径，四原规则按committed HEAD读取；peer Canonical三条span owner WIP在内存排除，文件未改。原census/boundary各只执行一次，sourceDigest `sha256:98461efc25aafde03970cd25c3067dc9a41bb27a946a67b253ea7ffc83560356`。实际七增长：entry1814→1817（runDaemonStartupWithLease/native factory/TE converter）；background342→344（原分类器记录receipt reader/converter）；imports5739→5756（18新增/1替换）；required39→40（new startup SPI active，原39条逐字保持，20 active/20 declared-debt）；exceptions5100→5115（16新增/1替换）；owner25806→25819（14新增/1旧CLI owner退役）；startup调用基线4→5。每项why对应实际entry/edge，七receipt匹配canonical提交后一次退役。304条debt全文、273/31、target69、public1047、ambient500、implementation SCC空及unresolved first-party空保持；boundary added空。
+
+只做目标format/lint、纯源码/AST/JSON/字节证明和原生成，无本机AW test/typecheck/build/service。四份文档仅新增独立格式节，删除新增节即恢复旧全文；全部并行输出、首门findings及CI历史保持。此门仅覆盖本批，完整A1～A8/AC00/A-G继续，随后CS独立adapters、B/M0实际部署和M1～M4，尚无AW-in-CS部署，不关闭RFC。

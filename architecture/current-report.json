@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 500,
-    "architectureExceptions": 5100,
-    "backgroundJobs": 342,
-    "crossContextImports": 5739,
+    "architectureExceptions": 5115,
+    "backgroundJobs": 344,
+    "crossContextImports": 5756,
     "facades": 295,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 25806,
-    "mutationEntrypoints": 1814,
+    "moduleSymbolOwners": 25819,
+    "mutationEntrypoints": 1817,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 1047,
     "transactionExternalEffects": 261
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 500,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2010,
+    "backendProductionFiles": 2013,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 342,
+    "backgroundEntries": 344,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -114,7 +114,7 @@
       },
       {
         "context": "system-operations",
-        "files": 68
+        "files": 71
       },
       {
         "context": "task-catalog",
@@ -125,7 +125,7 @@
         "files": 343
       }
     ],
-    "moduleFiles": 1456,
+    "moduleFiles": 1459,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:23a114c3710b4a2d04f4a6de85bc18de8b9a7ae8b39c5f0f39db8efa8549c98f"
+  "sourceDigest": "sha256:98461efc25aafde03970cd25c3067dc9a41bb27a946a67b253ea7ffc83560356"
 }
