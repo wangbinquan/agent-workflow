@@ -107,6 +107,10 @@ import type {
   DirectAuthenticatedAuthority,
 } from '@/modules/identity-access/public/participants'
 import { composeClassicCatalogs } from '@/modules/resource-catalog/composition/classicCatalogs'
+import {
+  selectSkillContentDependencies,
+  type SkillContentBinding,
+} from '@/modules/resource-catalog/composition/skillContentBinding'
 import type { AgentResourceIntegrityComposition } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
 import { composeMcpCatalog } from '@/modules/resource-catalog/composition/mcpOperations'
@@ -760,6 +764,8 @@ export function composePostgresqlDaemonProviderCore(
 }
 
 export interface AppDeps {
+  /** The same complete store selection serves skill editing and boot recovery. */
+  skillContent?: SkillContentBinding
   /** Selected archive store for standalone HTTP composition. */
   taskArchive?: TaskArchiveContentBinding
   /** Daemon HTTP reuses the exact archive command used by boot recovery. */
@@ -2328,7 +2334,7 @@ export function composeSqliteApplicationDeps(
   })
   const classicCatalogs = composeClassicCatalogs({
     db: effectiveDeps.db,
-    appHome: Paths.root,
+    ...selectSkillContentDependencies(effectiveDeps.skillContent, Paths.root),
     runtimeProfiles: { get: (name) => effectiveDeps.runtimeRegistry.getRuntime(name) },
     restoreMembership: createAsyncSkillRestoreMembership(
       composeSkillMemoryFusionParticipantFactory(),

@@ -367,6 +367,10 @@ type PostgresqlProviderRuntime = Extract<
 >
 
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import {
+  selectSkillContentDependencies,
+  type SkillContentBinding,
+} from '@/modules/resource-catalog/composition/skillContentBinding'
 
 export interface PostgresqlDaemonApplicationInput {
   readonly provider: PostgresqlProviderRuntime
@@ -380,6 +384,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly configuration?: ApplicationConfigurationQueries
   readonly applicationConfiguration?: ApplicationConfigurationBinding
   readonly taskArchive?: TaskArchiveContentBinding
+  readonly skillContent?: SkillContentBinding
   readonly daemonInfoPath: string
   readonly lockPath: string
   readonly secretBox: SecretBox
@@ -595,7 +600,7 @@ export async function composePostgresqlApplication(
   // 读技能。fail-closed：不包 try，屏障失败即 daemon 不起。此前 PG daemon 从未装配它。
   const skillCatalogBoot = composeSkillCatalogBoot({
     db: input.db,
-    appHome: input.appHome,
+    ...selectSkillContentDependencies(input.skillContent, input.appHome),
   })
   if (phase.kind === 'daemon') {
     {
@@ -642,7 +647,7 @@ export async function composePostgresqlApplication(
   const memoryCatalog = memoryOperations.catalog
   const classicCatalogs = composeClassicCatalogs({
     db: input.db,
-    appHome: input.appHome,
+    ...selectSkillContentDependencies(input.skillContent, input.appHome),
     runtimeProfiles: { get: (name) => core.runtimeRegistry.getRuntime(name) },
     // RFC-353 T7：回滚该退回哪些记忆归 knowledge-evolution 裁定；它消费 memory 的
     // participant，resource-catalog 只收到一个「给事务、还 id」的窄端口。

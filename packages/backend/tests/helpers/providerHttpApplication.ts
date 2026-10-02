@@ -34,6 +34,7 @@ export type ProviderHttpApplicationInput = Pick<
   | 'configuration'
   | 'applicationConfiguration'
   | 'taskArchive'
+  | 'skillContent'
   | 'dbVersion'
   | 'opencodeVersion'
   | 'workflowExactOperationHook'

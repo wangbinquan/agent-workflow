@@ -372,6 +372,10 @@ import { composeSkillVersionCommitParticipantFactory } from '@/modules/resource-
 import { composeIntentWorkflowGraphValidation } from '@/modules/intent/composition/graphValidation'
 
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import {
+  selectSkillContentDependencies,
+  type SkillContentBinding,
+} from '@/modules/resource-catalog/composition/skillContentBinding'
 
 export interface StartOptions {
   port?: number
@@ -382,6 +386,7 @@ export interface StartOptions {
   databasePreOpenRecovery?: DaemonDatabasePreOpenRecoveryPort
   databaseInstallation?: DaemonDatabaseInstallationPort
   taskArchive?: TaskArchiveContentBinding
+  skillContent?: SkillContentBinding
 }
 
 interface DaemonProviderHttpAdmission {
@@ -542,6 +547,7 @@ async function composePostgresqlProviderSession(
     configuration: input.configuration,
     applicationConfiguration: input.applicationConfiguration,
     taskArchive: input.taskArchive,
+    skillContent: input.skillContent,
     token: input.token,
     appHome: Paths.root,
     configPath: Paths.config,
@@ -1059,6 +1065,7 @@ interface DaemonProviderSessionComposeInput {
   readonly applicationConfiguration: ApplicationConfigurationBinding
   readonly runtimeLegacyConfiguration: RuntimeLegacyConfigurationPort
   readonly taskArchive?: TaskArchiveContentBinding
+  readonly skillContent?: SkillContentBinding
   readonly token: string
   readonly secretBox: ReturnType<typeof createSecretBox>
   readonly dbVersion: number
@@ -1609,6 +1616,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     applicationConfiguration,
     runtimeLegacyConfiguration,
     taskArchive: opts.taskArchive,
+    skillContent: opts.skillContent,
     token,
     secretBox,
     dbVersion,
@@ -1830,7 +1838,7 @@ async function composeSqliteProviderSession(
   })
   const classicCatalogs = composeClassicCatalogs({
     db,
-    appHome: Paths.root,
+    ...selectSkillContentDependencies(input.skillContent, Paths.root),
     runtimeProfiles: { get: (name) => providerCore.runtimeRegistry.getRuntime(name) },
     // The owner of memory membership supplies the same restore participant to
     // both providers; constructing this bundle performs no database or file IO.
@@ -2180,7 +2188,7 @@ async function composeSqliteProviderSession(
   // orphan reaping, reconcilers, seeders, schedulers, fusion, or HTTP can run.
   const skillCatalogBoot: SkillCatalogBootParticipant = composeSkillCatalogBoot({
     db,
-    appHome: Paths.root,
+    ...selectSkillContentDependencies(input.skillContent, Paths.root),
   })
   {
     const report = await skillCatalogBoot.runIdentityMigrationBarrier()
@@ -3075,6 +3083,7 @@ async function composeSqliteProviderSession(
     taskExecutionReadModels: taskExecutionRuntime.readModels,
     taskRouteLaunch: taskExecutionProvider.routeLaunch,
     taskArchiveMaintenance: taskExecutionProvider.archive,
+    skillContent: input.skillContent,
     memoryOperations,
     databaseMigration: databaseMigration,
     collaborationContext,
