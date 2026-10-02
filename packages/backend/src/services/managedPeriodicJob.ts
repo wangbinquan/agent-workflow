@@ -23,6 +23,8 @@ export interface ManagedPeriodicJobOptions<Handle = ReturnType<typeof setTimeout
 export interface ManagedPeriodicJobHandle {
   reconfigure: (delayMs: unknown) => boolean
   stop: () => void
+  /** Wait for the admitted tick, including asynchronous configuration and cleanup. */
+  awaitIdle: () => Promise<void>
 }
 
 /** Non-overlapping periodic job whose cadence can be changed after Config save. */
@@ -36,6 +38,7 @@ export function createManagedPeriodicJob<Handle = ReturnType<typeof setTimeout>>
   let delayMs: number | null = null
   let timer: Handle | null = null
   let pendingRearm = false
+  let active: Promise<void> | null = null
 
   const clearArmed = (): void => {
     if (timer === null) return
@@ -53,10 +56,11 @@ export function createManagedPeriodicJob<Handle = ReturnType<typeof setTimeout>>
         return
       }
       running = true
-      void Promise.resolve()
+      const run = Promise.resolve()
         .then(opts.run)
         .catch((error) => opts.onError?.(error))
         .finally(() => {
+          if (active === run) active = null
           running = false
           if (!enabled || timer !== null) return
           if (pendingRearm || ownerGeneration === generation) {
@@ -64,6 +68,7 @@ export function createManagedPeriodicJob<Handle = ReturnType<typeof setTimeout>>
             arm(generation)
           }
         })
+      active = run
     }, delayMs)
     timers.unref?.(timer)
   }
@@ -96,6 +101,9 @@ export function createManagedPeriodicJob<Handle = ReturnType<typeof setTimeout>>
       delayMs = null
       pendingRearm = false
       clearArmed()
+    },
+    async awaitIdle() {
+      while (active !== null) await active
     },
   }
 }
