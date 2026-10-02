@@ -163,3 +163,4 @@ export const recoveryStatusViewSchema = z
   })
   .strict()
 export type RecoveryStatusView = z.infer<typeof recoveryStatusViewSchema>
+export type { DaemonRuntimeInfo } from '../domain/daemonRuntime'

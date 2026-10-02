@@ -12,11 +12,10 @@
 
 import type { Hono } from 'hono'
 import { registerRoute } from '@/routes/registry'
-import { readDaemonInfo } from '@/util/daemonInfo'
-import { Paths } from '@/util/paths'
+import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
 
 export interface DaemonRouteDependencies {
-  readonly daemonInfoPath?: string
+  readonly runtime: DaemonRuntimeQueries
 }
 
 export function mountDaemonRoutes(app: Hono, deps: DaemonRouteDependencies): void {
@@ -29,8 +28,8 @@ export function mountDaemonRoutes(app: Hono, deps: DaemonRouteDependencies): voi
       tokenAccess: 'allow',
       summary: 'Daemon bind host/port and process info',
     },
-    (c) => {
-      return c.json(readDaemonInfo(deps.daemonInfoPath ?? Paths.daemonInfo))
+    async (c) => {
+      return c.json(await deps.runtime.readCurrent())
     },
   )
 }

@@ -183,9 +183,9 @@ import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { getRuntimeDriver } from '@/services/runtime'
 import { Paths } from '@/util/paths'
-import { readControlFile, requestShutdown, startControlListener } from '@/services/controlListener'
+import { readControlFile, requestShutdown } from '@/services/controlListener'
 import { buildWebSocketAdapter } from '@/ws/server'
-import { existsSync, readdirSync, statSync, unlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { DAEMON_CADENCE } from '@/services/daemonCadence'
 import { startMaintenanceService } from '@/platform/background/maintenanceService'
@@ -376,8 +376,13 @@ import {
   selectSkillContentDependencies,
   type SkillContentBinding,
 } from '@/modules/resource-catalog/composition/skillContentBinding'
-import type { ProgramArtifactPort } from '@/modules/digital-employee/composition/required-ports'
+import type { ProgramArtifactPort } from '@/modules/digital-employee/composition'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
+import {
+  selectDaemonHostLifecycle,
+  type DaemonHostLifecyclePort,
+} from '@/modules/system-operations/composition/daemonHostLifecycle'
+import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
 
 export interface StartOptions {
   port?: number
@@ -391,6 +396,7 @@ export interface StartOptions {
   skillContent?: SkillContentBinding
   employeePrograms?: ProgramArtifactPort
   evidenceRead?: EvidenceReadBinding
+  daemonHost?: DaemonHostLifecyclePort
 }
 
 interface DaemonProviderHttpAdmission {
@@ -554,6 +560,7 @@ async function composePostgresqlProviderSession(
     skillContent: input.skillContent,
     employeePrograms: input.employeePrograms,
     evidenceRead: input.evidenceRead,
+    daemonRuntime: input.daemonRuntime,
     token: input.token,
     appHome: Paths.root,
     configPath: Paths.config,
@@ -1074,6 +1081,7 @@ interface DaemonProviderSessionComposeInput {
   readonly skillContent?: SkillContentBinding
   readonly employeePrograms?: ProgramArtifactPort
   readonly evidenceRead?: EvidenceReadBinding
+  readonly daemonRuntime: DaemonRuntimeQueries
   readonly token: string
   readonly secretBox: ReturnType<typeof createSecretBox>
   readonly dbVersion: number
@@ -1122,8 +1130,11 @@ function composeDaemonProviderSession(
  * `bootstrap.stop()` → 收控制口与锁 → exit」，provider 专属的收尾全部在各自会话的
  * `providerCloseParticipants` 里、两侧同一组 id。
  */
-async function serveDaemon(input: {
-  readonly bootstrap: DaemonProviderBootstrap
+export async function serveDaemon(input: {
+  readonly bootstrap: Pick<
+    DaemonProviderBootstrap,
+    'runBusinessRequest' | 'tryUpgrade' | 'fetch' | 'websocketHandlers' | 'stop'
+  >
   readonly authRuntime: Pick<
     PostgresqlDaemonApplication['core']['authRuntime'],
     'isBootstrapRequired'
@@ -1133,6 +1144,7 @@ async function serveDaemon(input: {
   readonly bindHost: string
   readonly bindPort: number
   readonly lock: Lock
+  readonly daemonHost: DaemonHostLifecyclePort
   readonly log: ReturnType<typeof createLogger>
 }): Promise<never> {
   const server = Bun.serve({
@@ -1152,19 +1164,22 @@ async function serveDaemon(input: {
   const baseUrl = `http://${server.hostname}:${server.port}/`
   input.log.info('listening', { url: baseUrl, databaseProvider: input.databaseProvider })
 
-  const removeDaemonInfo = (): void => {
-    try {
-      unlinkSync(Paths.daemonInfo)
-    } catch {
-      // already removed or never written
-    }
-  }
+  const waitForHostExit = (): Promise<never> => new Promise(() => {})
+  const readinessInFlight = new Set<Promise<void>>()
   let shuttingDown = false
-  const shutdown = async (signal: string): Promise<void> => {
+  const shutdown = async (signal: string, terminate = true): Promise<void> => {
     if (shuttingDown) return
     shuttingDown = true
+    const admittedReadiness = [...readinessInFlight]
     input.log.info('shutting down', { signal, databaseProvider: input.databaseProvider })
-    removeDaemonInfo()
+    try {
+      await input.daemonHost.withdrawReady()
+    } catch (error) {
+      input.log.warn('daemon readiness withdrawal error', {
+        databaseProvider: input.databaseProvider,
+        error: describeDaemonProviderSessionFailure(error),
+      })
+    }
     await server.stop(true)
     try {
       await input.bootstrap.stop()
@@ -1177,57 +1192,74 @@ async function serveDaemon(input: {
         error: describeDaemonProviderSessionFailure(error),
       })
     }
-    controlListener.close()
+    try {
+      await (await controlListener).close()
+    } catch (error) {
+      input.log.warn('daemon control close error', {
+        databaseProvider: input.databaseProvider,
+        error: describeDaemonProviderSessionFailure(error),
+      })
+    }
+    if (admittedReadiness.length > 0) {
+      // A ready write admitted before shutdown can commit after the first
+      // withdrawal. Settle it and its final withdrawal before the host exits.
+      await Promise.allSettled(admittedReadiness)
+      try {
+        await input.daemonHost.withdrawReady()
+      } catch (error) {
+        input.log.warn('daemon readiness withdrawal error', {
+          databaseProvider: input.databaseProvider,
+          error: describeDaemonProviderSessionFailure(error),
+        })
+      }
+    }
     input.lock.release()
-    process.exit(0)
+    if (terminate) await input.daemonHost.terminate(0)
   }
-  const controlListener = startControlListener({
-    controlFilePath: Paths.controlFile,
-    devWatch: devLockHandoffMs() > 0,
-    onShutdown: () => {
-      removeDaemonInfo()
-      void shutdown('control-shutdown')
-    },
-  })
-  process.on('SIGTERM', () => {
-    removeDaemonInfo()
-    void shutdown('SIGTERM')
-  })
-  process.on('SIGINT', () => {
-    removeDaemonInfo()
-    void shutdown('SIGINT')
-  })
-  process.on('exit', () => {
-    removeDaemonInfo()
-    controlListener.close()
-    input.lock.release()
-  })
-
-  writeFileSync(
-    Paths.daemonInfo,
-    JSON.stringify(
-      {
-        pid: input.lock.pid,
-        host: server.hostname,
-        port: server.port,
+  const controlListener = Promise.resolve().then(() =>
+    input.daemonHost.subscribeShutdown({
+      onShutdown: shutdown,
+      onExit: () => input.lock.release(),
+      onFailure: (error) => {
+        input.log.warn('daemon shutdown error', {
+          databaseProvider: input.databaseProvider,
+          error: describeDaemonProviderSessionFailure(error),
+        })
+      },
+    }),
+  )
+  try {
+    await controlListener
+    if (shuttingDown) return await waitForHostExit()
+    const readinessPublication = Promise.resolve().then(() =>
+      input.daemonHost.publishReady({
+        // This constructor always binds TCP; the Bun Server type also covers Unix sockets.
+        host: server.hostname!,
+        port: server.port!,
         url: baseUrl,
         startedAt: new Date().toISOString(),
-      },
-      null,
-      2,
-    ),
-  )
-  const browserUrl = readyBrowserUrl(
-    baseUrl,
-    input.token,
-    await input.authRuntime.isBootstrapRequired(),
-  )
-  process.stdout.write(
-    `\nagent-workflow ready — open this URL in your browser:\n  ${browserUrl}\n\n`,
-  )
-  await new Promise<void>(() => {
-    /* never resolves */
-  })
+      }),
+    )
+    readinessInFlight.add(readinessPublication)
+    try {
+      await readinessPublication
+    } finally {
+      readinessInFlight.delete(readinessPublication)
+    }
+    if (shuttingDown) return await waitForHostExit()
+    const bootstrapRequired = await input.authRuntime.isBootstrapRequired()
+    if (shuttingDown) return await waitForHostExit()
+    const browserUrl = readyBrowserUrl(baseUrl, input.token, bootstrapRequired)
+    await input.daemonHost.announceReady(browserUrl)
+  } catch (error) {
+    // A requested shutdown owns its drain; a late startup error must not exit
+    // the process before that drain finishes. Otherwise unwind before returning
+    // the original startup failure to the CLI's existing error handler.
+    if (shuttingDown) return await waitForHostExit()
+    await shutdown('startup-failed', false)
+    throw error
+  }
+  await waitForHostExit()
   throw new Error('daemon-listener-returned')
 }
 
@@ -1423,6 +1455,12 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     throw err
   }
   log.info('lock acquired', { pid: lock.pid, lock: lock.path })
+  const daemonHost = selectDaemonHostLifecycle(opts.daemonHost, {
+    infoPath: Paths.daemonInfo,
+    controlPath: Paths.controlFile,
+    pid: lock.pid,
+    devWatch: devLockHandoffMs() > 0,
+  })
 
   // 2.5 — RFC-213: resolve the migrations folder and apply a staged ("hot")
   // restore BEFORE anything reads state. We hold the lock (acquired above), so
@@ -1627,6 +1665,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     skillContent: opts.skillContent,
     employeePrograms: opts.employeePrograms,
     evidenceRead: opts.evidenceRead,
+    daemonRuntime: daemonHost,
     token,
     secretBox,
     dbVersion,
@@ -1694,6 +1733,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     bindHost,
     bindPort,
     lock,
+    daemonHost,
     log,
   })
 }
@@ -3075,6 +3115,7 @@ async function composeSqliteProviderSession(
     configuration,
     applicationConfiguration,
     daemonInfoPath: Paths.daemonInfo,
+    daemonRuntime: input.daemonRuntime,
     // RFC-226: runtime readiness is not daemon health. Startup never executes
     // OpenCode; explicit runtime status/Test/use paths perform the version and
     // RFC-227 byte-frozen runtime admission instead.

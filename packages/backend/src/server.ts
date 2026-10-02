@@ -14,7 +14,11 @@ import {
   composeHttpAuthenticationMiddleware,
 } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
-import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
+import type {
+  ApplicationConfigurationQueries,
+  DaemonRuntimeQueries,
+} from '@/modules/system-operations/public/queries'
+import { selectDaemonRuntimeQueries } from '@/modules/system-operations/composition/daemonHostLifecycle'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
@@ -111,7 +115,7 @@ import {
   selectSkillContentDependencies,
   type SkillContentBinding,
 } from '@/modules/resource-catalog/composition/skillContentBinding'
-import type { ProgramArtifactPort } from '@/modules/digital-employee/composition/required-ports'
+import type { ProgramArtifactPort } from '@/modules/digital-employee/composition'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 import type { AgentResourceIntegrityComposition } from '@/modules/resource-catalog/composition/agentResourceIntegrity'
 import { composeDigitalEmployeeAgentTemplateCatalogFor } from '@/modules/resource-catalog/composition/digitalEmployeeAgentTemplateCatalog'
@@ -835,6 +839,8 @@ export interface AppDeps {
    * tests inject a temp file. Read by GET /api/daemon.
    */
   daemonInfoPath?: string
+  /** Selected current host facts; shared with startup readiness publication. */
+  daemonRuntime?: DaemonRuntimeQueries
   /**
    * Legacy-compatible health field. RFC-226 production startup never probes
    * optional OpenCode and therefore passes null; tests may inject a string to
@@ -3503,7 +3509,10 @@ function composeSqliteApiRouteMounts(
         maintenanceStatus: deps.maintenanceStatus,
         databaseTelemetry: deps.databaseTelemetry,
       }),
-    daemon: (app) => mountDaemonRoutes(app, deps),
+    daemon: (app) =>
+      mountDaemonRoutes(app, {
+        runtime: selectDaemonRuntimeQueries(deps.daemonRuntime, { infoPath: deps.daemonInfoPath }),
+      }),
     plantuml: (app) => mountPlantumlRoutes(app, { configuration }),
     runtime: (app) => mountRuntimeRoutes(app, runtimeManagement.models),
     runtimes: (app) => mountRuntimesRoutes(app, runtimeManagement.runtimes),

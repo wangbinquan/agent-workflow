@@ -10,6 +10,7 @@ import type {
   DatabaseMigrationOperationInput,
   DatabaseMigrationStatusView,
   DatabaseRuntimeOverview,
+  DaemonRuntimeInfo,
   LocalSystemOperationContext,
   PlanLocalRestoreInput,
   RecoveryStatusView,
@@ -85,4 +86,9 @@ export interface DatabaseMigrationQueries {
 /** Current configuration, read on demand through the selected storage adapter. */
 export interface ApplicationConfigurationQueries {
   read(): Config | Promise<Config>
+}
+
+/** Effective host binding, distinct from the configuration for the next boot. */
+export interface DaemonRuntimeQueries {
+  readCurrent(): DaemonRuntimeInfo | null | Promise<DaemonRuntimeInfo | null>
 }

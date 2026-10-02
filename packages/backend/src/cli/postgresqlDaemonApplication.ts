@@ -13,7 +13,11 @@ import {
   type ApplicationConfigurationBinding,
 } from '@/modules/system-operations/composition/applicationConfiguration'
 import type { ConfigConcurrencyHotApplyInput } from '@/modules/system-operations/public/commands'
-import type { ApplicationConfigurationQueries } from '@/modules/system-operations/public/queries'
+import type {
+  ApplicationConfigurationQueries,
+  DaemonRuntimeQueries,
+} from '@/modules/system-operations/public/queries'
+import { selectDaemonRuntimeQueries } from '@/modules/system-operations/composition/daemonHostLifecycle'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
@@ -371,7 +375,7 @@ import {
   selectSkillContentDependencies,
   type SkillContentBinding,
 } from '@/modules/resource-catalog/composition/skillContentBinding'
-import type { ProgramArtifactPort } from '@/modules/digital-employee/composition/required-ports'
+import type { ProgramArtifactPort } from '@/modules/digital-employee/composition'
 import type { EvidenceReadBinding } from '@/modules/development-automation/composition/evidenceReadBinding'
 
 export interface PostgresqlDaemonApplicationInput {
@@ -390,6 +394,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly employeePrograms?: ProgramArtifactPort
   readonly evidenceRead?: EvidenceReadBinding
   readonly daemonInfoPath: string
+  readonly daemonRuntime?: DaemonRuntimeQueries
   readonly lockPath: string
   readonly secretBox: SecretBox
   readonly workspacePresence?: WorkspacePresenceQueries
@@ -2007,7 +2012,9 @@ export async function composePostgresqlApplication(
       maintenanceStatus: input.maintenanceStatus,
       databaseTelemetry: input.provider.telemetry,
     }),
-    daemon: Object.freeze({ daemonInfoPath: input.daemonInfoPath }),
+    daemon: Object.freeze({
+      runtime: selectDaemonRuntimeQueries(input.daemonRuntime, { infoPath: input.daemonInfoPath }),
+    }),
     plantuml: Object.freeze({ configuration }),
     runtime: runtimeManagement.models,
     runtimes: runtimeManagement.runtimes,

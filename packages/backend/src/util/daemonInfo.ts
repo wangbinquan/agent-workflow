@@ -11,14 +11,9 @@
 
 import { existsSync, readFileSync } from 'node:fs'
 import { Paths } from '@/util/paths'
+import type { DaemonRuntimeInfo } from '@/modules/system-operations/public/types'
 
-export interface DaemonInfo {
-  pid: number
-  host: string
-  port: number
-  url: string
-  startedAt: string
-}
+export type DaemonInfo = DaemonRuntimeInfo
 
 /**
  * Read the daemon run-info file. Returns null when it is absent (daemon not
