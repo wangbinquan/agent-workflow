@@ -291,13 +291,19 @@ test('源码锁：两个 daemon 入口都在 HTTP 之前跑同一段 boot 恢复
   const start = readFileSync(resolve(cli, 'start.ts'), 'utf8')
   expect(start).toContain('await runTaskExecutionBootRecovery({')
   expect(start).not.toContain('createExclusiveDaemonLockProof(')
+  expect(start).toMatch(
+    /await recoverInterruptedTaskDeletes\(\s*db,\s*undefined,\s*input\.taskDeletionEffects,?\s*\)/,
+  )
   expect(start.indexOf('await runTaskExecutionBootRecovery({')).toBeLessThan(
-    start.indexOf('await recoverInterruptedTaskDeletes(db)'),
+    start.indexOf('await recoverInterruptedTaskDeletes('),
   )
   const daemon = readFileSync(resolve(cli, 'postgresqlDaemonApplication.ts'), 'utf8')
+  expect(daemon).toMatch(
+    /await recoverInterruptedTaskDeletes\(\s*input\.db,\s*undefined,\s*input\.taskDeletionEffects,?\s*\)/,
+  )
   const gate = daemon.indexOf('skillCatalogBoot.activateAvailabilityGate()')
   const recovery = daemon.indexOf('await runTaskExecutionBootRecovery({', gate)
-  const deleteRecovery = daemon.indexOf('await recoverInterruptedTaskDeletes(input.db)', recovery)
+  const deleteRecovery = daemon.indexOf('await recoverInterruptedTaskDeletes(', recovery)
   const httpCreate = daemon.indexOf('const app = createComposedApp', deleteRecovery)
   expect(gate).toBeGreaterThan(-1)
   expect(recovery).toBeGreaterThan(gate)
