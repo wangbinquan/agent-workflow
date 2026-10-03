@@ -1,3 +1,4 @@
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-050 — locks the output-language directive plumbing in the distiller.
 //
@@ -116,6 +117,7 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
       const db = harness.db
       const memory = {
         store: new DrizzleMemoryDistillWorkStore(db),
+        nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
         reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
           db,
           createFileReviewArtifactContent(root),
@@ -123,6 +125,7 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
       }
       await runDistill({
         store: memory.store,
+        nodeRunPrompts: memory.nodeRunPrompts,
         reviewedArtifacts: memory.reviewedArtifacts,
         runFn,
         job: {
@@ -150,6 +153,7 @@ describe('RFC-050 buildDistillerUserPrompt — output language directive', () =>
       })
       await runDistill({
         store: memory.store,
+        nodeRunPrompts: memory.nodeRunPrompts,
         reviewedArtifacts: memory.reviewedArtifacts,
         runFn,
         job: {

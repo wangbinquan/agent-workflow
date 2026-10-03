@@ -1,3 +1,8 @@
+import { join } from 'node:path'
+import {
+  composeNodeRunPromptOperations,
+  selectNodeRunPromptOperations,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
@@ -128,6 +133,8 @@ export function composeTaskExecutionTestRuntime(
   return composeTaskExecutionRuntime({
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
+      nodeRunPromptsFor: (appHome) =>
+        composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
       db,
       ...singleProcessDeploymentPorts(db),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db),
@@ -259,6 +266,10 @@ export function runTaskWithRealTestTopology(
   const persistence = options.persistence ?? createTaskExecutionPersistence(options.db)
   const runtimeSessionLeases =
     options.runtimeSessionLeases ?? createRuntimeSessionLeaseOperations(options.db)
+  const nodeRunPrompts = selectNodeRunPromptOperations(
+    options.nodeRunPrompts,
+    join(options.appHome, 'runs'),
+  )
   const nodeRunRuntime = options.nodeRunRuntime ?? composeNodeRunRuntimePersistence(options.db)
   const runtimeRegistry = options.runtimeRegistry ?? composeRuntimeRegistryOperations(options.db)
   const repositoryPublicationTransport =
@@ -272,6 +283,7 @@ export function runTaskWithRealTestTopology(
   const runtime = composeTaskExecutionRuntime({
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
+      nodeRunPromptsFor: () => nodeRunPrompts,
       db: options.db,
       ...singleProcessDeploymentPorts(options.db),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(options.db),
@@ -297,6 +309,7 @@ export function runTaskWithRealTestTopology(
   return driveTaskEngineApplication(
     {
       ...options,
+      nodeRunPrompts,
       identityAccess,
       memoryInjectionQueries,
       observationInvocations,

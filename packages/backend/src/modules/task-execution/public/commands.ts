@@ -1,3 +1,4 @@
+export { nodeRunPromptRelPath, storeNodeRunPrompt } from '../composition/nodeRunPrompts'
 import type {
   Agent,
   ClarifyDirective,

@@ -1,3 +1,4 @@
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
@@ -22,7 +23,7 @@ import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { resolve, join } from 'node:path'
 
 import { createInMemoryDb } from '@/db/client'
 import { docVersions, nodeRuns, taskRepos, tasks, users, workflows } from '@/db/schema'
@@ -211,6 +212,8 @@ describe('RFC-359 任务执行读模型的装配身份（SQLite 组合根）', (
     const runtime = composeTaskExecutionRuntime({
       readModels,
       participants: createTaskExecutionRuntimeParticipants({
+        nodeRunPromptsFor: (appHome) =>
+          composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
         db: sqlite,
         ...singleProcessDeploymentPorts(sqlite),
         childLaunchWorkgroup: composeTestChildLaunchWorkgroup(sqlite),

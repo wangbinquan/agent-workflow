@@ -1,3 +1,4 @@
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-367 closeout — the three acceptance items that had no named lock yet.
 //
@@ -177,6 +178,7 @@ describeEachProvider('RFC-367 distill evidence invariants (AC-7/AC-8/AC-10)', (h
   ): RunDistillOptions => ({
     // No sinkFactory => the REAL memory_distill_events writer.
     store: new DrizzleMemoryDistillWorkStore(db),
+    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome(), 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(appHome()),

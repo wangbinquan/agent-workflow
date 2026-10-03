@@ -1,4 +1,8 @@
-import type { TaskDeletionEffects } from '@/modules/task-execution/public/types'
+import type {
+  NodeRunPromptContentEffects,
+  TaskDeletionEffects,
+} from '@/modules/task-execution/public/types'
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/composition'
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import {
@@ -433,6 +437,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly taskDeletionEffects?: TaskDeletionEffects
+  readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -577,7 +582,11 @@ export async function composePostgresqlApplication(
   input: PostgresqlApplicationInput,
   phase: PostgresqlApplicationPhase,
 ): Promise<PostgresqlDaemonApplication> {
-  const workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
+  const nodeRunPrompts = composeNodeRunPromptOperations(
+      input.nodeRunPromptContentEffects,
+      join(input.appHome, 'runs'),
+    ),
+    workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
   const applicationConfiguration =
     input.applicationConfiguration ??
     composeApplicationConfigurationBinding({
@@ -684,6 +693,7 @@ export async function composePostgresqlApplication(
   })
   const memoryOperations = composePostgresqlMemoryOperations({
     db: input.db,
+    nodeRunPrompts,
     reviewedArtifacts: {
       // RFC-359 W11：记忆要读已评审产物、评审上下文又要记忆的蒸馏命令面。环打在**词法作用域**
       // 上，不再打在一个可空槽上：`boundCollaborationContext` 是同一作用域里的 `const`，
@@ -1054,6 +1064,7 @@ export async function composePostgresqlApplication(
   const taskExecutionProvider = composePostgresqlTaskExecutionProviderRuntime(input.db, {
     archive: input.taskArchive,
     runtime: {
+      nodeRunPromptsFor: () => nodeRunPrompts,
       workspacePresence,
       observationInvocations: composeLocalInvocationObservations(
         input.db,
@@ -1113,6 +1124,7 @@ export async function composePostgresqlApplication(
     },
     routes: () => ({
       effects: input.taskDeletionEffects,
+      nodeRunPrompts,
       collaboration: boundCollaborationContext,
       users: identityAccess.userDirectory,
       owners: composeOwnerIdentityQueries(input.db),

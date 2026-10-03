@@ -105,7 +105,8 @@ import { join } from 'node:path'
 import { ulid } from 'ulid'
 import { setDwStateTx } from '@/services/workgroup/state'
 import type { SecretBox } from '@/auth/secretBox'
-import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
+import type { NodeRunPromptOperations } from '@/modules/task-execution/public/types'
+import { selectNodeRunPromptOperations } from '@/modules/task-execution/public/participants'
 
 import { buildLaunchCollabRows } from '@/services/taskCollab'
 import { getWorkflow } from '@/services/workflow'
@@ -4726,7 +4727,9 @@ export async function loadTaskFailureCodes(
 export async function getTaskNodeRuns(
   db: LegacyProviderNeutralDatabase,
   taskId: string,
+  selectedNodeRunPrompts?: NodeRunPromptOperations,
 ): Promise<TaskNodeRuns> {
+  const nodeRunPrompts = selectNodeRunPromptOperations(selectedNodeRunPrompts)
   const task = await getTask(db, taskId)
   if (task === null) {
     throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
@@ -4843,99 +4846,101 @@ export async function getTaskNodeRuns(
   // 'answered' is NOT gated — viewing history on any task is fine.
   const clarifyTaskDead = task.status === 'canceled' || task.status === 'failed'
 
-  const runs: NodeRun[] = runRows.map((r) => {
-    const dvForRun = dvRowsByRun.get(r.id) ?? []
-    const reviewTiming = deriveReviewRoundTiming(r, dvForRun)
-    // RFC-158: canvas click target for this review run. Gated on a renderable
-    // current round (round !== null ⟺ has a doc_version ⟺ getReviewDetail won't
-    // 404), then awaiting (live) vs decided (human conclusion). null for
-    // non-review rows, empty-list reviews (zero doc_version), pending/system
-    // current rounds. Same selectCurrentReviewRound getReviewDetail renders with.
-    //
-    // 'awaiting' additionally requires the current representative to be PENDING:
-    // an awaiting_review run whose current round is an EMPTY list (dispatch
-    // parks awaiting WITHOUT minting a new doc_version, review.ts:688-700) has
-    // only OLD decided rows as its representative — clicking would open that
-    // stale round, not the empty live one, so it must be null instead (impl-gate
-    // reopened-empty regression; mirrors the first-round R5 zero-doc case).
-    const round = selectCurrentReviewRound(dvForRun)
-    let reviewNavKind: 'awaiting' | 'decided' | null = null
-    if (round !== null) {
-      if (r.status === 'awaiting_review') {
-        if (round.representative.decision === 'pending') reviewNavKind = 'awaiting'
-      } else if (isHumanReviewConclusion(round.representative)) {
-        reviewNavKind = 'decided'
+  const runs: NodeRun[] = await Promise.all(
+    runRows.map(async (r) => {
+      const dvForRun = dvRowsByRun.get(r.id) ?? []
+      const reviewTiming = deriveReviewRoundTiming(r, dvForRun)
+      // RFC-158: canvas click target for this review run. Gated on a renderable
+      // current round (round !== null ⟺ has a doc_version ⟺ getReviewDetail won't
+      // 404), then awaiting (live) vs decided (human conclusion). null for
+      // non-review rows, empty-list reviews (zero doc_version), pending/system
+      // current rounds. Same selectCurrentReviewRound getReviewDetail renders with.
+      //
+      // 'awaiting' additionally requires the current representative to be PENDING:
+      // an awaiting_review run whose current round is an EMPTY list (dispatch
+      // parks awaiting WITHOUT minting a new doc_version, review.ts:688-700) has
+      // only OLD decided rows as its representative — clicking would open that
+      // stale round, not the empty live one, so it must be null instead (impl-gate
+      // reopened-empty regression; mirrors the first-round R5 zero-doc case).
+      const round = selectCurrentReviewRound(dvForRun)
+      let reviewNavKind: 'awaiting' | 'decided' | null = null
+      if (round !== null) {
+        if (r.status === 'awaiting_review') {
+          if (round.representative.decision === 'pending') reviewNavKind = 'awaiting'
+        } else if (isHumanReviewConclusion(round.representative)) {
+          reviewNavKind = 'decided'
+        }
       }
-    }
-    // RFC-161: clarify / cross-clarify canvas nav. null for non-clarify runs (no
-    // round in the map) and canceled/abandoned rounds; 'awaiting' suppressed on a
-    // dead task (orphaned awaiting).
-    let clarifyNavKind = clarifyNavKindForRoundStatus(latestRoundByRun.get(r.id)?.status)
-    if (clarifyNavKind === 'awaiting' && clarifyTaskDead) clarifyNavKind = null
-    return {
-      id: r.id,
-      taskId: r.taskId,
-      nodeId: r.nodeId,
-      parentNodeRunId: r.parentNodeRunId,
-      iteration: r.iteration,
-      shardKey: r.shardKey,
-      retryIndex: r.retryIndex,
-      // RFC-189 — the authoritative lw workgroup round ordinal (NULL elsewhere).
-      wgRound: r.wgRound ?? null,
-      // RFC-182 P1-3 — wire the mint cause for wg-aware history labels.
-      rerunCause: r.rerunCause ?? null,
-      reviewIteration: r.reviewIteration,
-      // RFC-354 — the frame (generation row + breadcrumb) for grouping / labels.
-      containerRunId: r.containerRunId ?? null,
-      scopePath: r.scopePath ?? '',
-      status: r.status,
-      startedAt: r.startedAt,
-      finishedAt: r.finishedAt,
-      pid: r.pid,
-      exitCode: r.exitCode,
-      errorMessage: r.errorMessage,
-      // RFC-203 T4: RFC-145 machine-readable failure code, now surfaced so
-      // the UI can localize failure copy instead of parsing errorMessage.
-      failureCode: (r.failureCode ?? null) as FailureCode | null,
-      // RFC-243: child task launched by this call node_run (link + live status).
-      childTaskId: r.childTaskId ?? null,
-      supersededByReview: (r.supersededByReview ?? null) as 'iterated' | 'rejected' | null,
-      rolledBack: r.rolledBack ?? null,
-      promptText: readNodeRunPrompt(r),
-      tokInput: r.tokInput,
-      tokOutput: r.tokOutput,
-      tokTotal: r.tokTotal,
-      tokCacheCreate: r.tokCacheCreate,
-      tokCacheRead: r.tokCacheRead,
-      // RFC-026: surface opencode session id to the UI so a clarify-inline
-      // chip can render + operators can copy it for local debugging.
-      opencodeSessionId: r.opencodeSessionId,
-      // RFC-046: parse the post-budget-clip memory snapshot the runner
-      // persisted at inject time. Malformed payloads degrade to null + log
-      // (the column is JSON written by the runner; nothing user-supplied,
-      // so corruption should be impossible, but defensive at the API edge
-      // beats a 5xx on the whole task detail page).
-      injectedMemories: parseInjectedSnapshotJson(r.injectedMemoriesJson),
-      // RFC-049: structured port-validation failures captured by the runner
-      // (NULL for successful runs or runs that failed for any reason other
-      // than port-content validation). Same defensive-parse contract as
-      // injectedMemories — corrupted payloads degrade to null rather than
-      // throw the whole task detail response.
-      portValidationFailures: parsePortValidationFailuresJson(r.portValidationFailuresJson),
-      // RFC-075: commit&push metadata on framework-synthesized commit rows
-      // (NULL on every regular node_run). Defensive parse: corrupt payloads
-      // degrade to null rather than 5xx the whole task-detail response.
-      commitPush: parseCommitPushJson(r.commitPushJson),
-      // RFC-078: review-round display anchor (see reviewRoundStart.ts). Null for
-      // non-review rows; the UI falls back to startedAt when null.
-      reviewRoundStartedAt: reviewTiming?.roundStartedAt ?? null,
-      reviewDecidedAt: reviewTiming?.decidedAt ?? null,
-      // RFC-158: task-detail canvas click target (see schemas/task.ts).
-      reviewNavKind,
-      // RFC-161: clarify / cross-clarify canvas click target (see schemas/task.ts).
-      clarifyNavKind,
-    }
-  })
+      // RFC-161: clarify / cross-clarify canvas nav. null for non-clarify runs (no
+      // round in the map) and canceled/abandoned rounds; 'awaiting' suppressed on a
+      // dead task (orphaned awaiting).
+      let clarifyNavKind = clarifyNavKindForRoundStatus(latestRoundByRun.get(r.id)?.status)
+      if (clarifyNavKind === 'awaiting' && clarifyTaskDead) clarifyNavKind = null
+      return {
+        id: r.id,
+        taskId: r.taskId,
+        nodeId: r.nodeId,
+        parentNodeRunId: r.parentNodeRunId,
+        iteration: r.iteration,
+        shardKey: r.shardKey,
+        retryIndex: r.retryIndex,
+        // RFC-189 — the authoritative lw workgroup round ordinal (NULL elsewhere).
+        wgRound: r.wgRound ?? null,
+        // RFC-182 P1-3 — wire the mint cause for wg-aware history labels.
+        rerunCause: r.rerunCause ?? null,
+        reviewIteration: r.reviewIteration,
+        // RFC-354 — the frame (generation row + breadcrumb) for grouping / labels.
+        containerRunId: r.containerRunId ?? null,
+        scopePath: r.scopePath ?? '',
+        status: r.status,
+        startedAt: r.startedAt,
+        finishedAt: r.finishedAt,
+        pid: r.pid,
+        exitCode: r.exitCode,
+        errorMessage: r.errorMessage,
+        // RFC-203 T4: RFC-145 machine-readable failure code, now surfaced so
+        // the UI can localize failure copy instead of parsing errorMessage.
+        failureCode: (r.failureCode ?? null) as FailureCode | null,
+        // RFC-243: child task launched by this call node_run (link + live status).
+        childTaskId: r.childTaskId ?? null,
+        supersededByReview: (r.supersededByReview ?? null) as 'iterated' | 'rejected' | null,
+        rolledBack: r.rolledBack ?? null,
+        promptText: await nodeRunPrompts.read(r),
+        tokInput: r.tokInput,
+        tokOutput: r.tokOutput,
+        tokTotal: r.tokTotal,
+        tokCacheCreate: r.tokCacheCreate,
+        tokCacheRead: r.tokCacheRead,
+        // RFC-026: surface opencode session id to the UI so a clarify-inline
+        // chip can render + operators can copy it for local debugging.
+        opencodeSessionId: r.opencodeSessionId,
+        // RFC-046: parse the post-budget-clip memory snapshot the runner
+        // persisted at inject time. Malformed payloads degrade to null + log
+        // (the column is JSON written by the runner; nothing user-supplied,
+        // so corruption should be impossible, but defensive at the API edge
+        // beats a 5xx on the whole task detail page).
+        injectedMemories: parseInjectedSnapshotJson(r.injectedMemoriesJson),
+        // RFC-049: structured port-validation failures captured by the runner
+        // (NULL for successful runs or runs that failed for any reason other
+        // than port-content validation). Same defensive-parse contract as
+        // injectedMemories — corrupted payloads degrade to null rather than
+        // throw the whole task detail response.
+        portValidationFailures: parsePortValidationFailuresJson(r.portValidationFailuresJson),
+        // RFC-075: commit&push metadata on framework-synthesized commit rows
+        // (NULL on every regular node_run). Defensive parse: corrupt payloads
+        // degrade to null rather than 5xx the whole task-detail response.
+        commitPush: parseCommitPushJson(r.commitPushJson),
+        // RFC-078: review-round display anchor (see reviewRoundStart.ts). Null for
+        // non-review rows; the UI falls back to startedAt when null.
+        reviewRoundStartedAt: reviewTiming?.roundStartedAt ?? null,
+        reviewDecidedAt: reviewTiming?.decidedAt ?? null,
+        // RFC-158: task-detail canvas click target (see schemas/task.ts).
+        reviewNavKind,
+        // RFC-161: clarify / cross-clarify canvas click target (see schemas/task.ts).
+        clarifyNavKind,
+      }
+    }),
+  )
 
   // RFC-078: re-sort with review rows keyed on their round anchor (not their
   // pinned started_at), so a review lands after the content it reviews instead

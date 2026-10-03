@@ -61,6 +61,8 @@ import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
  * 看起来「两侧不同」，只是**谁来构造**的差别——SQLite 由装配方交、PG 在工厂里现造；
  * 那从来不是引擎差异，合并后一律由装配方交。
  */
+import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
+
 export interface TaskExecutionRuntimeParticipantsInput {
   readonly workspacePresence: WorkspacePresenceQueries
   readonly observationInvocations: ObservationInvocationParticipant
@@ -71,6 +73,7 @@ export interface TaskExecutionRuntimeParticipantsInput {
   /** 运行时**档案**注册表（`getRuntime(name)`）——与下面的 `stop` 同名不同物。 */
   readonly runtimeRegistry: RuntimeExecutionQueries
   readonly nodeRunRuntime: NodeRunRuntimePersistence
+  readonly nodeRunPromptsFor: (appHome: string) => NodeRunPromptOperations
   readonly operationConfiguration?: TaskOperationConfigurationQueries
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics
@@ -129,6 +132,7 @@ export function createTaskExecutionRuntimeParticipants(
           runtimeSessionLeases: input.runtimeSessionLeases,
           runtimeRegistry: input.runtimeRegistry,
           nodeRunRuntime: input.nodeRunRuntime,
+          nodeRunPrompts: input.nodeRunPromptsFor(request.appHome),
           ...(input.operationConfiguration === undefined
             ? {}
             : { operationConfiguration: input.operationConfiguration }),

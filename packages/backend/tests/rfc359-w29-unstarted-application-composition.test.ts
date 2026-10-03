@@ -838,7 +838,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
       // RFC-371: the complete report service shares the selected source generation and numeric owner.
-      '8a8da1ceff53ba76d3b2b4c2a98cc6123eba354c1d1689a396fddb6015ea5118',
+      '7d2cf34a4e26f38df877f455f7a6f67b0ffaf76effd5824aac982c8dbb4ce6ff',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -906,7 +906,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-371: standalone task execution receives mandatory durable invocation accounting.
       // RFC-371: the same database now supplies the committed numeric source participant.
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
-      '276037f758529e490ced65abb98202317ba45478620b3c3d7e462acb550fd6a5',
+      '5764566331c6b048d1933e658cac01c56ad8445cf719b485e19a199da2654a87',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -1053,7 +1053,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
       // RFC-371: the mounted task queries now use the same complete report service and source generation.
-      '6dff8fc2259b246422c5c06446cc8e38914cc2a9bcbe4ca68daa0c8dee086c97',
+      '374ef43f3b8659b4e26acb185a18496ae9bd3365884b71aaa4b2a84323e25681',
     )
     expect(
       namedCalls(

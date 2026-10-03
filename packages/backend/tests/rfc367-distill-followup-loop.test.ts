@@ -1,3 +1,4 @@
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-367 T6 — runDistill's protocol follow-up loop.
 //
@@ -147,6 +148,7 @@ describeEachProvider('RFC-367 runDistill follow-up loop', (harness) => {
       setRootSessionId: async () => {},
       markTerminal: async () => {},
     })),
+    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome(), 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(appHome()),

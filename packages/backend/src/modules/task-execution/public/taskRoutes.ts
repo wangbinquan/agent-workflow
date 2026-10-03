@@ -20,6 +20,7 @@ import type {
 } from '@agent-workflow/shared'
 
 import type { Actor } from '@/auth/actor'
+import type { NodeRunPromptOperations } from './types'
 
 /** Provider-neutral filters accepted by the classic task-list HTTP surface. */
 export interface TaskRouteListFilters {
@@ -57,6 +58,7 @@ export interface TaskRouteDeleteResult {
 
 /** Closed TaskExecution command/query face consumed by `/api/tasks`. */
 export interface TaskRouteOperations {
+  readonly nodeRunPrompts: NodeRunPromptOperations
   list(filters: TaskRouteListFilters): Promise<readonly TaskSummary[]>
   listItems(filters: TaskRouteListFilters): Promise<readonly TaskListItem[]>
   get(taskId: string): Promise<Task | null>

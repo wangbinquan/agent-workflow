@@ -1,3 +1,4 @@
+import type { NodeRunPromptReader } from '@/modules/task-execution/public/queries'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { createMemoryDistillQueries } from './application/distillQueries'
@@ -64,6 +65,7 @@ function composeMemoryOperations(input: {
   readonly workStore: MemoryDistillWorkStore
   readonly runtimeResolver: MemoryDistillRuntimeResolver
   readonly reviewedArtifacts: MemoryDistillReviewedArtifactReader
+  readonly nodeRunPrompts: NodeRunPromptReader
   readonly injectionQueries: MemoryInjectionQueries
   readonly catalog?: MemoryCatalogOperations
 }): MemoryOperations {
@@ -84,6 +86,7 @@ function composeMemoryOperations(input: {
           ...options,
           store: input.workStore,
           reviewedArtifacts: input.reviewedArtifacts,
+          nodeRunPrompts: input.nodeRunPrompts,
           runtimeResolver: input.runtimeResolver,
         }),
       start: (options: MemoryDistillWorkerOptions = {}) =>
@@ -91,6 +94,7 @@ function composeMemoryOperations(input: {
           ...options,
           store: input.workStore,
           reviewedArtifacts: input.reviewedArtifacts,
+          nodeRunPrompts: input.nodeRunPrompts,
           runtimeResolver: input.runtimeResolver,
         }),
       recoverRunning: async () => await recoverRunning(input.workStore),
@@ -129,6 +133,7 @@ export interface MemoryCatalogBinding {
 export interface ComposeMemoryOperationsOptions {
   readonly db: ProviderNeutralDatabase
   readonly reviewedArtifacts: MemoryDistillReviewedArtifactReader
+  readonly nodeRunPrompts: NodeRunPromptReader
   readonly injectionQueries?: MemoryInjectionQueries
   readonly catalogBinding?: MemoryCatalogBinding
 }
@@ -150,6 +155,7 @@ export function composeMemoryOperationsFor(
     workStore: new DrizzleMemoryDistillWorkStore(input.db),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(input.db),
     reviewedArtifacts: input.reviewedArtifacts,
+    nodeRunPrompts: input.nodeRunPrompts,
     injectionQueries: input.injectionQueries ?? composeMemoryInjectionQueriesFor(input.db),
     ...(input.catalogBinding === undefined
       ? {}

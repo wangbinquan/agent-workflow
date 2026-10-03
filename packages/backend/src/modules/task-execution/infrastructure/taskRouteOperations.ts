@@ -129,7 +129,9 @@ import { getWorkflow } from '@/services/workflow'
 import type { WorkflowCatalogDetail } from '@/modules/resource-catalog/public/types'
 import { parseInjectedSnapshotJson } from '@/modules/memory/public/types'
 import { loadTaskFailureCodes, projectWorkflowSnapshotForRead } from '@/services/task'
-import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
+import { join } from 'node:path'
+import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
+import { selectNodeRunPromptOperations } from '../composition/nodeRunPrompts'
 import { pickFreshestRun } from '@/services/freshness'
 import { assertNotBuiltin } from '@/services/systemResources'
 import { compareNodeRunsForTimeline, deriveReviewRoundTiming } from '@/services/reviewRoundStart'
@@ -188,6 +190,7 @@ const RETRYABLE_TASK_STATUSES = [
  * PG 绑定的依赖面现在 `extends` 它、只把 `db` 收窄成 PG 客户端。
  */
 export interface TaskRouteOperationsDependencies {
+  readonly nodeRunPrompts?: NodeRunPromptOperations
   readonly db: ProviderNeutralDatabase
   readonly collaboration: CollaborationCommandContext<'taskExecutionReadModels'>
   /**
@@ -920,9 +923,10 @@ function commitPush(raw: string | null) {
  * （变异实证：把 PG 侧 `reviewNavKind = 'awaiting'` 改成 `null`，当场红）。
  */
 export async function taskNodeRunsProjection(
-  dependencies: Readonly<{ db: ProviderNeutralDatabase }>,
+  dependencies: Readonly<{ db: ProviderNeutralDatabase; nodeRunPrompts?: NodeRunPromptOperations }>,
   taskId: string,
 ) {
+  const nodeRunPrompts = selectNodeRunPromptOperations(dependencies.nodeRunPrompts)
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
   const [runRows, versions, rounds] = await Promise.all([
@@ -969,62 +973,70 @@ export async function taskNodeRunsProjection(
       latestRoundByRun.set(round.intermediaryNodeRunId, round)
     }
   }
-  const runs: NodeRun[] = runRows.map((row) => {
-    const runVersions = versionsByRun.get(row.id) ?? []
-    const timing = deriveReviewRoundTiming(row, runVersions)
-    const currentRound = selectCurrentReviewRound(runVersions)
-    let reviewNavKind: 'awaiting' | 'decided' | null = null
-    if (currentRound !== null) {
-      if (row.status === 'awaiting_review' && currentRound.representative.decision === 'pending') {
-        reviewNavKind = 'awaiting'
-      } else if (isHumanReviewConclusion(currentRound.representative)) {
-        reviewNavKind = 'decided'
+  const runs: NodeRun[] = await Promise.all(
+    runRows.map(async (row) => {
+      const runVersions = versionsByRun.get(row.id) ?? []
+      const timing = deriveReviewRoundTiming(row, runVersions)
+      const currentRound = selectCurrentReviewRound(runVersions)
+      let reviewNavKind: 'awaiting' | 'decided' | null = null
+      if (currentRound !== null) {
+        if (
+          row.status === 'awaiting_review' &&
+          currentRound.representative.decision === 'pending'
+        ) {
+          reviewNavKind = 'awaiting'
+        } else if (isHumanReviewConclusion(currentRound.representative)) {
+          reviewNavKind = 'decided'
+        }
       }
-    }
-    let clarifyNavKind = clarifyNavKindForRoundStatus(latestRoundByRun.get(row.id)?.status)
-    if (clarifyNavKind === 'awaiting' && (task.status === 'canceled' || task.status === 'failed')) {
-      clarifyNavKind = null
-    }
-    return NodeRunSchema.parse({
-      id: row.id,
-      taskId: row.taskId,
-      nodeId: row.nodeId,
-      parentNodeRunId: row.parentNodeRunId,
-      iteration: row.iteration,
-      shardKey: row.shardKey,
-      retryIndex: row.retryIndex,
-      wgRound: row.wgRound ?? null,
-      rerunCause: row.rerunCause ?? null,
-      reviewIteration: row.reviewIteration,
-      // RFC-354 — the frame (generation row + breadcrumb) for grouping / labels.
-      containerRunId: row.containerRunId ?? null,
-      scopePath: row.scopePath ?? '',
-      status: row.status,
-      startedAt: row.startedAt,
-      finishedAt: row.finishedAt,
-      pid: row.pid,
-      exitCode: row.exitCode,
-      errorMessage: row.errorMessage,
-      failureCode: row.failureCode ?? null,
-      childTaskId: row.childTaskId ?? null,
-      supersededByReview: row.supersededByReview ?? null,
-      rolledBack: row.rolledBack ?? null,
-      promptText: readNodeRunPrompt(row),
-      tokInput: row.tokInput,
-      tokOutput: row.tokOutput,
-      tokTotal: row.tokTotal,
-      tokCacheCreate: row.tokCacheCreate,
-      tokCacheRead: row.tokCacheRead,
-      opencodeSessionId: row.opencodeSessionId,
-      injectedMemories: parseInjectedSnapshotJson(row.injectedMemoriesJson),
-      portValidationFailures: parsePortValidationFailuresJson(row.portValidationFailuresJson),
-      commitPush: commitPush(row.commitPushJson),
-      reviewRoundStartedAt: timing?.roundStartedAt ?? null,
-      reviewDecidedAt: timing?.decidedAt ?? null,
-      reviewNavKind,
-      clarifyNavKind,
-    })
-  })
+      let clarifyNavKind = clarifyNavKindForRoundStatus(latestRoundByRun.get(row.id)?.status)
+      if (
+        clarifyNavKind === 'awaiting' &&
+        (task.status === 'canceled' || task.status === 'failed')
+      ) {
+        clarifyNavKind = null
+      }
+      return NodeRunSchema.parse({
+        id: row.id,
+        taskId: row.taskId,
+        nodeId: row.nodeId,
+        parentNodeRunId: row.parentNodeRunId,
+        iteration: row.iteration,
+        shardKey: row.shardKey,
+        retryIndex: row.retryIndex,
+        wgRound: row.wgRound ?? null,
+        rerunCause: row.rerunCause ?? null,
+        reviewIteration: row.reviewIteration,
+        // RFC-354 — the frame (generation row + breadcrumb) for grouping / labels.
+        containerRunId: row.containerRunId ?? null,
+        scopePath: row.scopePath ?? '',
+        status: row.status,
+        startedAt: row.startedAt,
+        finishedAt: row.finishedAt,
+        pid: row.pid,
+        exitCode: row.exitCode,
+        errorMessage: row.errorMessage,
+        failureCode: row.failureCode ?? null,
+        childTaskId: row.childTaskId ?? null,
+        supersededByReview: row.supersededByReview ?? null,
+        rolledBack: row.rolledBack ?? null,
+        promptText: await nodeRunPrompts.read(row),
+        tokInput: row.tokInput,
+        tokOutput: row.tokOutput,
+        tokTotal: row.tokTotal,
+        tokCacheCreate: row.tokCacheCreate,
+        tokCacheRead: row.tokCacheRead,
+        opencodeSessionId: row.opencodeSessionId,
+        injectedMemories: parseInjectedSnapshotJson(row.injectedMemoriesJson),
+        portValidationFailures: parsePortValidationFailuresJson(row.portValidationFailuresJson),
+        commitPush: commitPush(row.commitPushJson),
+        reviewRoundStartedAt: timing?.roundStartedAt ?? null,
+        reviewDecidedAt: timing?.decidedAt ?? null,
+        reviewNavKind,
+        clarifyNavKind,
+      })
+    }),
+  )
   // RFC-078 —— 评审行的时间线锚是它这一轮**内容**的时间，不是槽位首次打开时钉住的
   // `started_at`；没有这次重排，评审行会排在它所评审的产物**之前**。SQLite 侧
   // `services/task.ts:getTaskNodeRuns` 一直做这一步（`runs.sort(compareNodeRunsForTimeline)`）。
@@ -2376,6 +2388,10 @@ export async function retryNodeProjection(
 export function createTaskRouteOperations(
   dependencies: TaskRouteOperationsDependencies,
 ): TaskRouteOperations & Pick<TaskRepairOperations, 'automaticRepair'> {
+  const nodeRunPrompts = selectNodeRunPromptOperations(
+    dependencies.nodeRunPrompts,
+    dependencies.appHome === undefined ? Paths.runsDir : join(dependencies.appHome, 'runs'),
+  )
   const resumeTaskAs = async (actor: Actor, taskId: string): Promise<void> => {
     await dependencies.children.resume(
       { taskId, runtime: dependencies.resumeRuntimeFor(actor, taskId) },
@@ -2405,6 +2421,7 @@ export function createTaskRouteOperations(
   })
 
   const operations: TaskRouteOperations = {
+    nodeRunPrompts,
     // 列表三件：筛选 / 倒序 / 告警数 / owner 身份 / 子任务数由 `rfc359-w7` 的 A1–A5 对拍锁住。
     list: (filters) => taskListSummariesProjection(dependencies.db, filters),
     listItems: (filters) =>
@@ -2478,7 +2495,7 @@ export function createTaskRouteOperations(
         },
         input,
       ),
-    nodeRuns: (taskId) => taskNodeRunsProjection({ db: dependencies.db }, taskId),
+    nodeRuns: (taskId) => taskNodeRunsProjection({ db: dependencies.db, nodeRunPrompts }, taskId),
     diff: (taskId) => taskDiffProjection({ db: dependencies.db }, taskId),
     stdout: (taskId, nodeRunId) =>
       nodeRunStdoutProjection({ db: dependencies.db }, taskId, nodeRunId),

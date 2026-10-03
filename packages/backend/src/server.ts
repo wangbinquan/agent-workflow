@@ -431,9 +431,15 @@ import {
   type SchedulerDriverPort,
 } from '@/modules/task-execution/public/commands'
 import type {
+  NodeRunPromptContentEffects,
+  NodeRunPromptOperations,
   TaskDeletionEffects,
   TaskExecutionReadModels,
 } from '@/modules/task-execution/public/types'
+import {
+  composeNodeRunPromptOperations,
+  selectNodeRunPromptOperations,
+} from '@/modules/task-execution/composition/nodeRunPrompts'
 import {
   createCollaborationCommandContext,
   createSqliteCollaborationTaskAccessPort,
@@ -812,6 +818,8 @@ export interface AppDeps {
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   taskDeletionEffects?: TaskDeletionEffects
+  nodeRunPromptContentEffects?: NodeRunPromptContentEffects
+  nodeRunPrompts?: NodeRunPromptOperations
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -2072,6 +2080,10 @@ export function composeSqliteApplicationDeps(
   unstarted?: UnstartedApplicationScope,
 ): SqliteAppComposition {
   const appHome = deps.appHome ?? Paths.root
+  const nodeRunPrompts =
+    deps.nodeRunPrompts === undefined
+      ? composeNodeRunPromptOperations(deps.nodeRunPromptContentEffects, join(appHome, 'runs'))
+      : selectNodeRunPromptOperations(deps.nodeRunPrompts)
   const applicationConfiguration =
     deps.applicationConfiguration ??
     composeApplicationConfigurationBinding({
@@ -2120,6 +2132,7 @@ export function composeSqliteApplicationDeps(
       : composeTaskExecutionRuntime({
           participants: createTaskExecutionRuntimeParticipants({
             db: deps.db,
+            nodeRunPromptsFor: () => nodeRunPrompts,
             workspacePresence,
             observationInvocations: composeLocalInvocationObservations(
               deps.db,
@@ -2202,6 +2215,7 @@ export function composeSqliteApplicationDeps(
     deps.memoryOperations ??
     composeSqliteMemoryOperations({
       db: deps.db,
+      nodeRunPrompts,
       injectionQueries: memoryInjectionQueries,
       reviewedArtifacts: {
         // RFC-359 W11：记忆要读已评审产物、评审上下文要记忆的蒸馏命令面——环打在词法作用域上。
@@ -2347,6 +2361,7 @@ export function composeSqliteApplicationDeps(
   })
   const effectiveDeps: SqliteComposedAppDeps = {
     ...runtimeDeps,
+    nodeRunPrompts,
     workspacePresence,
     ...repositoryBootstrap,
     // RFC-317 T54：装配落在 bootstrap。HTTP 与 MCP operation adapter
@@ -2785,6 +2800,7 @@ function composeSqliteApiRouteMounts(
   const codeWorkspace = composeLegacyCodeReadProviders(deps.db).workspace
   const taskRouteOperations = createTaskRouteOperations({
     effects: deps.taskDeletionEffects,
+    nodeRunPrompts: deps.nodeRunPrompts,
     db: deps.db,
     collaboration: deps.collaborationContext,
     // RFC-359 AC-1（第 3 刀）：列表行的 owner 身份投影由组合根装配，与 PostgreSQL 同形。

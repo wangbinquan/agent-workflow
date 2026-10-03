@@ -1,3 +1,5 @@
+export { readNodeRunPrompt } from '../composition/nodeRunPrompts'
+export type { NodeRunPromptReader } from '../application/ports/nodeRunPromptContent'
 import { decodeWrapperProgress } from '../domain/wrapperProgress'
 export type { TaskOperationConfigurationQueries } from '../application/ports/taskOperationConfiguration'
 export {

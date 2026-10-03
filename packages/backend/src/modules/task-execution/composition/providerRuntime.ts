@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+import { composeNodeRunPromptOperations } from './nodeRunPrompts'
 import type { DbClient } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { FusionEngineTaskOperations } from '@/modules/knowledge-evolution/public/participants'
@@ -226,6 +228,7 @@ type SqliteRuntimeParticipantsAssembled =
   | 'lifecycle'
   | 'activity'
   | 'stop'
+  | 'nodeRunPromptsFor'
 
 export interface SqliteTaskExecutionProviderRuntimeDependencies<
   C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
@@ -237,7 +240,8 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
     // 由本组合根从 `routeLaunch.workgroup` 取，装配方不必交第二份。
     SqliteRuntimeParticipantsAssembled
   > &
-    Required<Pick<TaskExecutionRuntimeParticipantsInput, 'codeHostConnections'>>
+    Required<Pick<TaskExecutionRuntimeParticipantsInput, 'codeHostConnections'>> &
+    Partial<Pick<TaskExecutionRuntimeParticipantsInput, 'nodeRunPromptsFor'>>
   readonly routeLaunch: Omit<SqliteTaskRouteLaunchDependencies, 'db'>
   readonly routes: (context: TaskExecutionProviderRouteContext) => Omit<
     TaskRouteOperationsDependencies,
@@ -271,6 +275,10 @@ export function composeSqliteTaskExecutionProviderRuntime<
     db,
     persistence,
     ...dependencies.runtime,
+    nodeRunPromptsFor:
+      dependencies.runtime.nodeRunPromptsFor === undefined
+        ? (appHome) => composeNodeRunPromptOperations(undefined, join(appHome, 'runs'))
+        : dependencies.runtime.nodeRunPromptsFor,
     childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
     taskDagCollaboration: createTaskDagCollaborationOperations(db),
     processConcurrencyScope: db,
@@ -403,8 +411,14 @@ export function composeSqliteTaskExecutionProviderRuntime<
  */
 export interface PostgresqlTaskExecutionRuntimeDependencies extends Omit<
   TaskExecutionRuntimeParticipantsInput,
-  'db' | 'persistence' | 'runtimeSessionLeases' | 'memoryInjectionQueries' | 'childLaunchWorkgroup'
+  | 'db'
+  | 'persistence'
+  | 'runtimeSessionLeases'
+  | 'memoryInjectionQueries'
+  | 'childLaunchWorkgroup'
+  | 'nodeRunPromptsFor'
 > {
+  readonly nodeRunPromptsFor?: TaskExecutionRuntimeParticipantsInput['nodeRunPromptsFor']
   readonly childLaunchWorkgroup: TaskExecutionRuntimeParticipantsInput['childLaunchWorkgroup']
   /** 装配方选定的凭据读取面；PostgreSQL 执行绝不回头开一条 SQLite 兜底。 */
   readonly codeHostConnections: CodeHostConnectionsService
@@ -464,6 +478,10 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   })
   const participants = createTaskExecutionRuntimeParticipants({
     ...dependencies.runtime,
+    nodeRunPromptsFor:
+      dependencies.runtime.nodeRunPromptsFor === undefined
+        ? (appHome) => composeNodeRunPromptOperations(undefined, join(appHome, 'runs'))
+        : dependencies.runtime.nodeRunPromptsFor,
     db,
     persistence,
     runtimeSessionLeases:

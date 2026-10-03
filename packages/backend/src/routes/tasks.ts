@@ -1018,6 +1018,8 @@ export function mountTaskRoutes(app: Hono, deps: TaskRouteDependencies): void {
           taskExecutionReadModels.sessions,
           c.req.param('id'),
           c.req.param('nodeRunId'),
+          {},
+          operations.nodeRunPrompts,
         ),
       )
     },

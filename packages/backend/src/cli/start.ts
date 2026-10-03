@@ -1,4 +1,8 @@
-import type { TaskDeletionEffects } from '@/modules/task-execution/public/types'
+import type {
+  NodeRunPromptContentEffects,
+  TaskDeletionEffects,
+} from '@/modules/task-execution/public/types'
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/composition'
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
@@ -436,6 +440,7 @@ export interface StartOptions {
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   taskDeletionEffects?: TaskDeletionEffects
+  nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -597,6 +602,7 @@ async function composePostgresqlProviderSession(
 
   const application = await composePostgresqlDaemonApplication({
     taskDeletionEffects: input.taskDeletionEffects,
+    nodeRunPromptContentEffects: input.nodeRunPromptContentEffects,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
     provider: input.provider,
     db,
@@ -1164,6 +1170,7 @@ interface DaemonProviderSessionComposeInput {
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly taskDeletionEffects?: TaskDeletionEffects
+  readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   readonly maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -1607,6 +1614,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     })
     const sessionInput = Object.freeze({
       taskDeletionEffects: opts.taskDeletionEffects,
+      nodeRunPromptContentEffects: opts.nodeRunPromptContentEffects,
       automationWorkspaceEffects: opts.automationWorkspaceEffects,
       config,
       configuration,
@@ -1712,6 +1720,10 @@ async function composeSqliteProviderSession(
   input: DaemonProviderSessionComposeInput,
 ): Promise<ComposedDaemonProviderSession> {
   const databaseProvider = requireDatabaseProviderRuntime(input.provider, 'sqlite')
+  const nodeRunPrompts = composeNodeRunPromptOperations(
+    input.nodeRunPromptContentEffects,
+    Paths.runsDir,
+  )
   const {
     config,
     configuration,
@@ -1875,6 +1887,7 @@ async function composeSqliteProviderSession(
   const runtimeRegistry = providerCore.runtimeRegistry
   const memoryOperations = composeSqliteMemoryOperations({
     db,
+    nodeRunPrompts,
     injectionQueries: memoryInjectionQueries,
     reviewedArtifacts: {
       read: async (finalPath) =>
@@ -1945,6 +1958,7 @@ async function composeSqliteProviderSession(
     composeSqliteTaskExecutionProviderRuntime(db, {
       archive: input.taskArchive,
       runtime: {
+        nodeRunPromptsFor: () => nodeRunPrompts,
         workspacePresence,
         observationInvocations: composeLocalInvocationObservations(
           db,
@@ -2030,6 +2044,7 @@ async function composeSqliteProviderSession(
           })
         return {
           effects: input.taskDeletionEffects,
+          nodeRunPrompts,
           collaboration: routeCollaborationContext,
           // RFC-359 AC-1（第 13 刀下）：`startDepsFor` 整格消失——`syncWorkflow` 是这条路上
           // 最后一个要 legacy `StartTaskDeps` 的路由动词，合一之后路由层不再持有它。
@@ -3104,6 +3119,7 @@ async function composeSqliteProviderSession(
   })
   const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
     completeObservationReports: observationReports.queries,
+    nodeRunPrompts,
     taskDeletionEffects: input.taskDeletionEffects,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
     providerCore,

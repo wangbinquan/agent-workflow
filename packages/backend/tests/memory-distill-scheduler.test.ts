@@ -1,3 +1,4 @@
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-041 — distill scheduler tests (PR2 scope).
 //
@@ -68,6 +69,7 @@ function createMemoryDistillTestContext(db: ProviderNeutralDatabase) {
   return {
     store: new DrizzleMemoryDistillWorkStore(db),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
+    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(root),
@@ -85,6 +87,7 @@ type MemoryTestContext = ReturnType<typeof createMemoryDistillTestContext>
 function workerDeps(memory: MemoryTestContext) {
   return {
     store: memory.store,
+    nodeRunPrompts: memory.nodeRunPrompts,
     reviewedArtifacts: memory.reviewedArtifacts,
     runtimeResolver: memory.runtimeResolver,
   }

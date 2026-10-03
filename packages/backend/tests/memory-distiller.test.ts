@@ -45,7 +45,11 @@ import { sqliteMemoryInjectionStore } from './helpers/memoryInjection'
 type MemoryTestContext = ReturnType<typeof createSqliteMemoryDistillTestContext>
 
 function distillDeps(memory: MemoryTestContext) {
-  return { store: memory.store, reviewedArtifacts: memory.reviewedArtifacts }
+  return {
+    store: memory.store,
+    nodeRunPrompts: memory.nodeRunPrompts,
+    reviewedArtifacts: memory.reviewedArtifacts,
+  }
 }
 
 /** RFC-367: the seam is `runFn` (runSystemAgent) and the payload is normalized
@@ -223,10 +227,12 @@ describeEachProvider('loadSourceEvents + loadScopeContexts', (harness) => {
       finishedAt: null,
     })
 
-    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
-      job,
-      feedbackJob,
-    ])
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [job, feedbackJob],
+      memory.nodeRunPrompts,
+    )
     expect(loaded.clarify.length).toBe(1)
     expect(loaded.clarify[0]!.id).toBe(clarifyId)
     expect(loaded.feedback.length).toBe(1)

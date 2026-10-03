@@ -50,7 +50,8 @@ import { createInvocationUsageCapture } from './runtime/usage'
 import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 
-import { storeNodeRunPrompt } from '@/services/nodeRunPrompt'
+import type { NodeRunPromptOperations } from '@/modules/task-execution/public/types'
+import { selectNodeRunPromptOperations } from '@/modules/task-execution/public/participants'
 import {
   createProcessEffectAttemptObserver,
   type ProcessEffectAttemptObserver,
@@ -195,6 +196,7 @@ function changedGitControlFields(before: GitControlSnapshot, after: GitControlSn
 }
 
 export interface RunNodeOptions {
+  nodeRunPrompts?: NodeRunPromptOperations
   taskId: string
   /** ULID of a pre-existing node_runs row in 'pending' state. */
   nodeRunId: string
@@ -573,6 +575,10 @@ export interface RunResult {
 export { pickRuntimeHead } from './runtime/head'
 
 export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
+  const nodeRunPrompts = selectNodeRunPromptOperations(
+    opts.nodeRunPrompts,
+    join(opts.appHome, 'runs'),
+  )
   const log = opts.log ?? createLogger('runner')
   // A resumed/follow-up process is a new invocation even when nodeRunId is reused.
   const invocationId = ulid()
@@ -925,7 +931,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // rfc053-allow-direct-status-write -- writing non-status field
   await opts.persistence.nodeExecution.patch({
     nodeRunId: opts.nodeRunId,
-    values: storeNodeRunPrompt(opts.taskId, opts.nodeRunId, prompt, join(opts.appHome, 'runs')),
+    values: await nodeRunPrompts.store(opts.taskId, opts.nodeRunId, prompt),
   })
   // RFC-053: mark-running enforces pending → running.
   await opts.persistence.nodeRuns.transition({

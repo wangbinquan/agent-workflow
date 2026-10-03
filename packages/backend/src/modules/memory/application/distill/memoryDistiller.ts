@@ -49,7 +49,7 @@ import {
   parseSessionTree,
   redactGitUrl,
 } from '@agent-workflow/shared'
-import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
+import type { NodeRunPromptReader } from '@/modules/task-execution/public/queries'
 import { Paths } from '@/util/paths'
 import type { RuntimeKind, SystemAgentOutputEvidence } from '@/services/runtime/types'
 import {
@@ -112,6 +112,7 @@ export interface DistillResult {
 export interface RunDistillOptions {
   store: MemoryDistillWorkStore
   reviewedArtifacts: MemoryDistillReviewedArtifactReader
+  nodeRunPrompts: NodeRunPromptReader
   job: MemoryDistillJob
   /**
    * Sibling jobs sharing the same debounce_key that the scheduler decided
@@ -250,6 +251,7 @@ export async function loadSourceEvents(
   store: MemoryDistillWorkStore,
   reviewedArtifacts: MemoryDistillReviewedArtifactReader,
   jobs: MemoryDistillJob[],
+  nodeRunPrompts: NodeRunPromptReader,
   budget: SourceContextBudget = DEFAULT_SOURCE_CONTEXT_BUDGET,
 ): Promise<LoadedSourceEvents> {
   const clarifyIds = jobs.filter((j) => j.sourceKind === 'clarify').map((j) => j.sourceEventId)
@@ -284,9 +286,14 @@ export async function loadSourceEvents(
     })
   }
 
-  const transcriptsByClarifyId = await loadClarifyTranscripts(store, clarifyRows, budget)
+  const transcriptsByClarifyId = await loadClarifyTranscripts(
+    store,
+    clarifyRows,
+    nodeRunPrompts,
+    budget,
+  )
   const reviewBodiesByDvId = await loadReviewBodies(reviewedArtifacts, reviewRows, budget)
-  const agentRun = await loadAgentRunSources(store, agentRunIds, budget)
+  const agentRun = await loadAgentRunSources(store, agentRunIds, nodeRunPrompts, budget)
   const taskRun = await loadTaskRunSources(store, taskRunIds, budget)
 
   return {
@@ -349,6 +356,7 @@ interface SourceContextResult {
 async function loadClarifyTranscripts(
   store: MemoryDistillWorkStore,
   clarifyRows: readonly MemoryDistillClarifyWorkRecord[],
+  nodeRunPrompts: NodeRunPromptReader,
   budget: SourceContextBudget,
 ): Promise<Map<string, SourceContextResult>> {
   const out = new Map<string, SourceContextResult>()
@@ -360,6 +368,7 @@ async function loadClarifyTranscripts(
   const byRun = await renderNodeRunTranscripts(
     store,
     sourceRunIds,
+    nodeRunPrompts,
     budget.clarifyTranscriptMaxBytes,
   )
   for (const c of clarifyRows) {
@@ -388,6 +397,7 @@ async function loadClarifyTranscripts(
 async function loadAgentRunSources(
   store: MemoryDistillWorkStore,
   ids: readonly string[],
+  nodeRunPrompts: NodeRunPromptReader,
   budget: SourceContextBudget,
 ): Promise<LoadedSourceEvents['agentRun']> {
   if (ids.length === 0) return []
@@ -396,6 +406,7 @@ async function loadAgentRunSources(
   const transcripts = await renderNodeRunTranscripts(
     store,
     rows.map((r) => r.id),
+    nodeRunPrompts,
     budget.agentTranscriptMaxBytes,
   )
   const outputRows =
@@ -417,27 +428,29 @@ async function loadAgentRunSources(
     const scope = await store.findTaskScope(taskId)
     if (scope !== null) snapshots.set(taskId, scope.workflowSnapshot)
   }
-  return rows.map((row) => {
-    const transcript = transcripts.get(row.id) ?? { md: null, reason: 'disabled by config' }
-    const injected = readInjectedMemories(row.injectedMemoriesJson, budget)
-    return {
-      id: row.id,
-      taskId: row.taskId,
-      nodeId: row.nodeId,
-      agentName: agentNameOfSnapshotNode(snapshots.get(row.taskId) ?? null, row.nodeId),
-      status: row.status,
-      durationMs:
-        row.startedAt !== null && row.finishedAt !== null ? row.finishedAt - row.startedAt : null,
-      failureCode: row.failureCode,
-      errorMessage: row.errorMessage,
-      promptMd: readNodeRunPrompt(row),
-      injectedMemories: injected.entries,
-      injectedMemoriesReason: injected.reason,
-      transcriptMd: transcript.md,
-      transcriptReason: transcript.reason,
-      outputs: outputsByRun.get(row.id) ?? [],
-    }
-  })
+  return await Promise.all(
+    rows.map(async (row) => {
+      const transcript = transcripts.get(row.id) ?? { md: null, reason: 'disabled by config' }
+      const injected = readInjectedMemories(row.injectedMemoriesJson, budget)
+      return {
+        id: row.id,
+        taskId: row.taskId,
+        nodeId: row.nodeId,
+        agentName: agentNameOfSnapshotNode(snapshots.get(row.taskId) ?? null, row.nodeId),
+        status: row.status,
+        durationMs:
+          row.startedAt !== null && row.finishedAt !== null ? row.finishedAt - row.startedAt : null,
+        failureCode: row.failureCode,
+        errorMessage: row.errorMessage,
+        promptMd: await nodeRunPrompts.read(row),
+        injectedMemories: injected.entries,
+        injectedMemoriesReason: injected.reason,
+        transcriptMd: transcript.md,
+        transcriptReason: transcript.reason,
+        outputs: outputsByRun.get(row.id) ?? [],
+      }
+    }),
+  )
 }
 
 /**
@@ -599,6 +612,7 @@ function outputNodeIds(workflowSnapshot: string): Set<string> {
 async function renderNodeRunTranscripts(
   store: MemoryDistillWorkStore,
   runIds: readonly string[],
+  nodeRunPrompts: NodeRunPromptReader,
   maxBytes: number,
 ): Promise<Map<string, SourceContextResult>> {
   const out = new Map<string, SourceContextResult>()
@@ -636,7 +650,7 @@ async function renderNodeRunTranscripts(
       // transcript content itself carries the context the distiller needs.
       const tree = parseSessionTree({
         rootSessionId: run.opencodeSessionId,
-        promptText: readNodeRunPrompt(run),
+        promptText: await nodeRunPrompts.read(run),
         startedAt: run.startedAt,
         primaryAgentName: 'agent',
         events,
@@ -1086,6 +1100,7 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
       options.store,
       options.reviewedArtifacts,
       options.siblings,
+      options.nodeRunPrompts,
       sourceContextBudget,
     ),
     loadScopeContexts(options.store, scope),

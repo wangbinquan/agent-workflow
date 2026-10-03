@@ -21,7 +21,8 @@ import type {
   TaskSessionRunSource,
 } from '@/modules/task-execution/public/types'
 import { readArchivedEvents } from '@/services/eventsArchive'
-import { readNodeRunPrompt } from '@/services/nodeRunPrompt'
+import type { NodeRunPromptOperations } from '@/modules/task-execution/public/types'
+import { selectNodeRunPromptOperations } from '@/modules/task-execution/public/participants'
 import { DomainError, NotFoundError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 
@@ -52,7 +53,9 @@ export async function getSessionTree(
   nodeRunId: string,
   /** 测试注入:把两段上限调到几十条，才测得出「超限时根还对不对」。 */
   caps: { rootPrefix?: number; tail?: number } = {},
+  selectedNodeRunPrompts?: NodeRunPromptOperations,
 ): Promise<{ tree: SessionTree }> {
+  const nodeRunPrompts = selectNodeRunPromptOperations(selectedNodeRunPrompts)
   const prefixCap = caps.rootPrefix ?? SESSION_ROOT_PREFIX_CAP
   const tailCap = caps.tail ?? SESSION_TAIL_CAP
   const source = await readModel.find({
@@ -88,7 +91,9 @@ export async function getSessionTree(
   // session_id with sibling node_runs in this task (RFC-026 inline
   // clarify reruns), unify their events + treat each round's promptText
   // as a separate user message in the merged conversation flow.
-  const inlineSiblings = source.siblings.map(materializeInlineSibling)
+  const inlineSiblings = await Promise.all(
+    source.siblings.map((run) => materializeInlineSibling(run, nodeRunPrompts)),
+  )
   const targetNodeRunIds = inlineSiblings.map((s) => s.id)
   const promptText = inlineSiblings[0]!.promptBody
   const startedAt = inlineSiblings[0]!.startedAt
@@ -182,10 +187,13 @@ interface InlineSiblingRow {
  * (legacy / isolated mode), returns just [run] so the rest of
  * getSessionTree degrades to the pre-merge single-attempt query.
  */
-function materializeInlineSibling(run: TaskSessionRunSource): InlineSiblingRow {
+async function materializeInlineSibling(
+  run: TaskSessionRunSource,
+  nodeRunPrompts: NodeRunPromptOperations,
+): Promise<InlineSiblingRow> {
   return {
     id: run.id,
-    promptBody: readNodeRunPrompt(run),
+    promptBody: await nodeRunPrompts.read(run),
     startedAt: run.startedAt,
     retryIndex: run.retryIndex,
   }

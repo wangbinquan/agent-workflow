@@ -1,3 +1,4 @@
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
@@ -168,6 +169,8 @@ function sharedInput(
 function sqliteParticipants(db: ProviderNeutralDatabase): TaskExecutionRuntimeParticipants {
   const client = db as unknown as DbClient
   return createTaskExecutionRuntimeParticipants({
+    nodeRunPromptsFor: (appHome) =>
+      composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
     ...sharedInput(db),
     ...singleProcessDeploymentPorts(client),
   })
@@ -198,6 +201,8 @@ function postgresqlParticipants(db: ProviderNeutralDatabase): TaskExecutionRunti
     stop: executionModule.runtimeRegistry,
   }
   return createTaskExecutionRuntimeParticipants({
+    nodeRunPromptsFor: (appHome) =>
+      composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
     ...input,
     taskDagCollaboration: createTaskDagCollaborationOperations(db),
     processConcurrencyScope: {},

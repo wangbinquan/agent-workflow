@@ -1,3 +1,5 @@
+import { join } from 'node:path'
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
 import { composeWebhookIngressTransport } from '@/modules/integration/composition/webhookIngress'
@@ -127,6 +129,7 @@ export async function createProductionPerformanceApplication(
   })
   const memoryOperations = composeMemoryOperationsFor({
     db,
+    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(appHome),

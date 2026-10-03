@@ -22,6 +22,8 @@ import type { WorkgroupTurnsOperations } from '../application/ports/workgroupTur
 import type { ChildExecutionLaunchOperations } from '../application/ports/childExecutionLaunchOperations'
 import type { TaskOperationConfigurationQueries } from '../application/ports/taskOperationConfiguration'
 
+import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
+
 export interface RunTaskOptions {
   taskId: string
   /** Required in bound production execution; fixtures select their participant explicitly. */
@@ -37,6 +39,8 @@ export interface RunTaskOptions {
   /** RFC-349 bootstrap-selected runtime registry aggregate. */
   runtimeRegistry?: RuntimeExecutionQueries
   nodeRunRuntime?: NodeRunRuntimePersistence
+  /** Live prompt content selection, bound again for every child drive. */
+  nodeRunPrompts?: NodeRunPromptOperations
   /** Collaboration-owned DAG scheduling projection selected by bootstrap. */
   taskDagCollaboration?: TaskDagCollaborationOperations
   /** Collaboration-owned node/review/clarify mechanics selected by bootstrap. */
@@ -207,6 +211,7 @@ export type BoundRunTaskOptions = RunTaskOptions & {
   readonly runtimeSessionLeases: RuntimeSessionLeaseOperations
   readonly runtimeRegistry: RuntimeExecutionQueries
   readonly nodeRunRuntime: NodeRunRuntimePersistence
+  readonly nodeRunPrompts: NodeRunPromptOperations
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics
   readonly workgroupTurns: WorkgroupTurnsOperations

@@ -1,3 +1,4 @@
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-043 T3 — locks the new capture-side behaviour added to runDistill:
 //   1. attempts === 0 path writes user_prompt_md + dedup_snapshot_ids_json
@@ -40,6 +41,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 function createMemoryDistillTestContext(db: ProviderNeutralDatabase) {
   return {
     store: new DrizzleMemoryDistillWorkStore(db),
+    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome(), 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(appHome()),
@@ -141,6 +143,7 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
     const runFn = fakeRun({ stderrTail: 'some warning' })
     await runDistill({
       store: memory.store,
+      nodeRunPrompts: memory.nodeRunPrompts,
       reviewedArtifacts: memory.reviewedArtifacts,
       job,
       siblings: [job],
@@ -173,6 +176,7 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
     const runFn = fakeRun()
     await runDistill({
       store: memory.store,
+      nodeRunPrompts: memory.nodeRunPrompts,
       reviewedArtifacts: memory.reviewedArtifacts,
       job,
       siblings: [job],
@@ -199,6 +203,7 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
     await expect(
       runDistill({
         store: memory.store,
+        nodeRunPrompts: memory.nodeRunPrompts,
         reviewedArtifacts: memory.reviewedArtifacts,
         job,
         siblings: [job],
@@ -232,6 +237,7 @@ describeEachProvider('runDistill RFC-043 capture extensions', (harness) => {
     await expect(
       runDistill({
         store: memory.store,
+        nodeRunPrompts: memory.nodeRunPrompts,
         reviewedArtifacts: memory.reviewedArtifacts,
         job,
         siblings: [job],

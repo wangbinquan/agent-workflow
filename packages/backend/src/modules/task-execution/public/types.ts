@@ -1,3 +1,8 @@
+export type {
+  NodeRunPromptContentEffects,
+  NodeRunPromptOperations,
+  PromptStorage,
+} from '../application/ports/nodeRunPromptContent'
 export type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 export type { TaskArchiveContentBinding } from '../composition/taskArchiveMaintenance'
 

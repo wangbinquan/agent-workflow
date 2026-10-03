@@ -46,6 +46,7 @@ import type {
   MemoryDistillTaskScopeRecord,
   MemoryDistillWorkStore,
 } from '@/modules/memory/application/ports/distillWorkStore'
+import type { NodeRunPromptReader } from '@/modules/task-execution/public/queries'
 import type { MemoryDistillJobRecord } from '@/modules/memory/application/ports/distillReadStore'
 
 const log = createLogger('memory-distill-scheduler')
@@ -385,6 +386,7 @@ export async function computeEligibleScopes(
 export interface DistillTickOptions {
   store: MemoryDistillWorkStore
   reviewedArtifacts: MemoryDistillReviewedArtifactReader
+  nodeRunPrompts: NodeRunPromptReader
   runtimeResolver: MemoryDistillRuntimeResolver
   /** RFC-367 test seam; production uses `runSystemAgent`. */
   runFn?: RunDistillOptions['runFn']
@@ -458,6 +460,7 @@ export async function distillTick(options: DistillTickOptions): Promise<{
       const result = await runDistill({
         store: options.store,
         reviewedArtifacts: options.reviewedArtifacts,
+        nodeRunPrompts: options.nodeRunPrompts,
         job: rowToDistillJob(head),
         siblings: siblings.map(rowToDistillJob),
         runFn: options.runFn,
@@ -513,6 +516,7 @@ export async function distillTick(options: DistillTickOptions): Promise<{
 export interface StartLoopOptions {
   store: MemoryDistillWorkStore
   reviewedArtifacts: MemoryDistillReviewedArtifactReader
+  nodeRunPrompts: NodeRunPromptReader
   runtimeResolver: MemoryDistillRuntimeResolver
   runFn?: RunDistillOptions['runFn']
   /** Settings.memoryDistillerEnabled — when false, ticker is a no-op shell. */
@@ -570,6 +574,7 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
     distillTick({
       store: options.store,
       reviewedArtifacts: options.reviewedArtifacts,
+      nodeRunPrompts: options.nodeRunPrompts,
       runtimeResolver: options.runtimeResolver,
       runFn: options.runFn,
       runtimeName: options.runtimeName,

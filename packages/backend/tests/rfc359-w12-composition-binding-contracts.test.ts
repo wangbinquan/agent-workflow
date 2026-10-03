@@ -74,6 +74,7 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
   test('memory: a catalog binding yields a usable catalog through every composition name', async () => {
     const options = {
       db: harness.db,
+      nodeRunPrompts: { read: unexpectedExecution },
       reviewedArtifacts: { read: unexpectedExecution },
       catalogBinding: {
         contexts: composeIdentityAccess(harness.db).contexts,
@@ -105,7 +106,11 @@ describeEachProvider('RFC-359 W12 —— composition binding contracts', (harnes
   })
 
   test('memory: omitted or optional bindings keep the distill-only contract', async () => {
-    const options = { db: harness.db, reviewedArtifacts: { read: unexpectedExecution } }
+    const options = {
+      db: harness.db,
+      nodeRunPrompts: { read: unexpectedExecution },
+      reviewedArtifacts: { read: unexpectedExecution },
+    }
     const omitted = composeMemoryOperationsFor(options)
     const optionalInput: ComposeMemoryOperationsOptions = options
     const optional = composeMemoryOperationsFor(optionalInput)

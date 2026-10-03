@@ -1,3 +1,4 @@
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-359 AC12: command contexts must retain the capabilities actually supplied at
 // construction. Complete routes cannot accept a base or partially composed context;
@@ -63,6 +64,7 @@ import { DESIGNER, freshTaskId, seedTask } from './helpers/questionDispatchFixtu
 function composeCapabilities(db: ProviderNeutralDatabase, appHome: string) {
   const memory = composeMemoryOperationsFor({
     db,
+    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(appHome),

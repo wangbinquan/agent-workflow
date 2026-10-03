@@ -1,3 +1,4 @@
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-044 — distiller source-context loader + builder unit tests.
 //
@@ -48,6 +49,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 function createMemoryDistillTestContext(db: ProviderNeutralDatabase, root = appHome()) {
   return {
     store: new DrizzleMemoryDistillWorkStore(db),
+    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(root),
@@ -232,9 +234,12 @@ describeEachProvider('loadSourceEvents — clarify transcript', (harness) => {
     await insertTextEvent(db, sourceRunId, 1, 'I will start by reading the routes.')
     await insertTextEvent(db, sourceRunId, 2, 'Should the endpoint live in /api/hello?')
 
-    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
-      mkClarifyJob(taskId, clarifyId),
-    ])
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkClarifyJob(taskId, clarifyId)],
+      memory.nodeRunPrompts,
+    )
     expect(loaded.clarify.length).toBe(1)
     const c = loaded.clarify[0]!
     expect(c.sourceTranscriptMd).not.toBeNull()
@@ -248,9 +253,12 @@ describeEachProvider('loadSourceEvents — clarify transcript', (harness) => {
     const sourceRunId = await seedSourceAgentNodeRun(db, taskId)
     const { clarifyId } = await seedClarifySession(db, taskId, sourceRunId)
     // intentionally no events
-    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
-      mkClarifyJob(taskId, clarifyId),
-    ])
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkClarifyJob(taskId, clarifyId)],
+      memory.nodeRunPrompts,
+    )
     const c = loaded.clarify[0]!
     expect(c.sourceTranscriptMd).toBeNull()
     expect(c.sourceTranscriptReason).toContain('no events')
@@ -269,6 +277,7 @@ describeEachProvider('loadSourceEvents — clarify transcript', (harness) => {
       memory.store,
       memory.reviewedArtifacts,
       [mkClarifyJob(taskId, clarifyId)],
+      memory.nodeRunPrompts,
       {
         // RFC-366 扩了 SourceContextBudget（agent/task 两类新源各自的字节上限）；
         // 这里铺默认值，本用例断言的仍然只是它自己那两项。
@@ -293,6 +302,7 @@ describeEachProvider('loadSourceEvents — clarify transcript', (harness) => {
       memory.store,
       memory.reviewedArtifacts,
       [mkClarifyJob(taskId, clarifyId)],
+      memory.nodeRunPrompts,
       {
         // RFC-366 扩了 SourceContextBudget（agent/task 两类新源各自的字节上限）；
         // 这里铺默认值，本用例断言的仍然只是它自己那两项。
@@ -369,9 +379,12 @@ describeEachProvider('loadSourceEvents — review body', (harness) => {
   test('reads body file when present', async () => {
     const { taskId } = await seedTask(db)
     const dvId = await seedReview(taskId, '# Hello\n\nworld')
-    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
-      mkReviewJob(taskId, dvId),
-    ])
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkReviewJob(taskId, dvId)],
+      memory.nodeRunPrompts,
+    )
     const r = loaded.review[0]!
     expect(r.reviewedBodyMd).toBe('# Hello\n\nworld')
     expect(r.reviewedBodyReason).toBeNull()
@@ -380,9 +393,12 @@ describeEachProvider('loadSourceEvents — review body', (harness) => {
   test('falls back to null + reason when body file is missing', async () => {
     const { taskId } = await seedTask(db)
     const dvId = await seedReview(taskId, null, 'docs/missing.md')
-    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
-      mkReviewJob(taskId, dvId),
-    ])
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkReviewJob(taskId, dvId)],
+      memory.nodeRunPrompts,
+    )
     const r = loaded.review[0]!
     expect(r.reviewedBodyMd).toBeNull()
     expect(r.reviewedBodyReason).toContain('unreadable')
@@ -396,6 +412,7 @@ describeEachProvider('loadSourceEvents — review body', (harness) => {
       memory.store,
       memory.reviewedArtifacts,
       [mkReviewJob(taskId, dvId)],
+      memory.nodeRunPrompts,
       {
         // RFC-366 扩了 SourceContextBudget（agent/task 两类新源各自的字节上限）；
         // 这里铺默认值，本用例断言的仍然只是它自己那两项。
@@ -417,6 +434,7 @@ describeEachProvider('loadSourceEvents — review body', (harness) => {
       memory.store,
       memory.reviewedArtifacts,
       [mkReviewJob(taskId, dvId)],
+      memory.nodeRunPrompts,
       {
         // RFC-366 扩了 SourceContextBudget（agent/task 两类新源各自的字节上限）；
         // 这里铺默认值，本用例断言的仍然只是它自己那两项。
@@ -481,9 +499,12 @@ describe('loadSourceEvents — clarify transcript (SQLite orphan fixture)', () =
     await db.run(sql`PRAGMA foreign_keys = OFF`)
     await db.delete(nodeRuns).where(eq(nodeRuns.id, orphanRunId))
     await db.run(sql`PRAGMA foreign_keys = ON`)
-    const loaded = await loadSourceEvents(memory.store, memory.reviewedArtifacts, [
-      mkClarifyJob(taskId, clarifyId),
-    ])
+    const loaded = await loadSourceEvents(
+      memory.store,
+      memory.reviewedArtifacts,
+      [mkClarifyJob(taskId, clarifyId)],
+      memory.nodeRunPrompts,
+    )
     const c = loaded.clarify[0]!
     expect(c.sourceTranscriptMd).toBeNull()
     expect(c.sourceTranscriptReason).toContain('not found')

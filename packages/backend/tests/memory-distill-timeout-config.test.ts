@@ -1,3 +1,4 @@
+import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // 记忆蒸馏超时：默认值 + 可配置 + 全链路接线。
 //
@@ -45,6 +46,7 @@ function createContext(db: ProviderNeutralDatabase) {
   return {
     store: new DrizzleMemoryDistillWorkStore(db),
     runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(db),
+    nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(root, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(
       db,
       createFileReviewArtifactContent(root),
@@ -160,6 +162,7 @@ describeEachProvider('memory distill timeout — default and override', (harness
     const job = jobFor(taskId)
     await runDistill({
       store: ctx.store,
+      nodeRunPrompts: ctx.nodeRunPrompts,
       reviewedArtifacts: ctx.reviewedArtifacts,
       job,
       siblings: [job],
@@ -174,6 +177,7 @@ describeEachProvider('memory distill timeout — default and override', (harness
     const job = jobFor(taskId)
     await runDistill({
       store: ctx.store,
+      nodeRunPrompts: ctx.nodeRunPrompts,
       reviewedArtifacts: ctx.reviewedArtifacts,
       job,
       siblings: [job],
@@ -197,6 +201,7 @@ describeEachProvider('memory distill timeout — scheduler plumbing', (harness) 
   function deps() {
     return {
       store: ctx.store,
+      nodeRunPrompts: ctx.nodeRunPrompts,
       reviewedArtifacts: ctx.reviewedArtifacts,
       runtimeResolver: ctx.runtimeResolver,
     }
