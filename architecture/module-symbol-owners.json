@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2026,
+    "backendFiles": 2028,
     "frontendFiles": 643,
     "legacyFiles": 557,
-    "moduleFiles": 1469,
-    "productionFiles": 2830,
+    "moduleFiles": 1471,
+    "productionFiles": 2832,
     "sharedFiles": 161,
-    "symbolsIncludingFileRoots": 25903
+    "symbolsIncludingFileRoots": 25907
   },
   "entries": [
     {
@@ -30872,6 +30872,30 @@
       "currentContext": "development-automation",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/development-automation/application/ports/evidenceArtifacts.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/evidenceArtifacts.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/ports/evidenceArtifacts.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/evidenceArtifacts.ts#EvidenceArtifactPort",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "EvidenceArtifactPort",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/development-automation/application/ports/migrationPersistence.ts",
       "id": "owner:packages/backend/src/modules/development-automation/application/ports/migrationPersistence.ts#$file",
       "removeAfterWave": null,
@@ -41612,42 +41636,6 @@
       "currentContext": "development-automation",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/development-automation/infrastructure/evidenceStore.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/evidenceStore.ts#assertSafeRelPath",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "assertSafeRelPath",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/development-automation/infrastructure/evidenceStore.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/evidenceStore.ts#EvidenceStore",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "EvidenceStore",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "infrastructure",
-      "exported": false,
-      "file": "packages/backend/src/modules/development-automation/infrastructure/evidenceStore.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/evidenceStore.ts#hashFileStreaming",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "hashFileStreaming",
-      "targetContext": "development-automation",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "development-automation",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts",
       "id": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#$file",
       "removeAfterWave": null,
@@ -41869,6 +41857,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createFileEvidenceDownloadQueries",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceStore.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceStore.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceStore.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceStore.ts#assertSafeRelPath",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertSafeRelPath",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceStore.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceStore.ts#EvidenceStore",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "EvidenceStore",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceStore.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceStore.ts#hashFileStreaming",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "hashFileStreaming",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -43321,6 +43357,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "placeUploadSeed",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/uploadPlacement.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/uploadPlacement.ts#seedPublications",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "seedPublications",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -311569,5 +311617,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c879c9db43ff7efc54ca564261d2d6a34c4099376d731bf202a8ff418d693f5f"
+  "sourceDigest": "sha256:954ca22d88be78bbb544504040a5d39d052e84e7558288fdc19b74e468f04bcf"
 }

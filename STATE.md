@@ -1,3 +1,15 @@
+## 2026-10-03 DA 证据物化与写入的完整能力根
+
+复用既有 MissionInputBlobPersistence、evidence content/document/download/context 完整合同，新增 EvidenceArtifactPort 只补逻辑 blob/bundle 物化和存在性 effects。原 EvidenceStore/native class 与 helper 全文迁至 infrastructure/local，旧入口保持兼容导出；选中的 complete prototype receiver 沿 start/session/recompose、PG、SQLite HTTP 和 standalone HTTP 根传入 DA、DE pipeline 与 Mission。原调用方的 staging、receipt、digest 和验证业务规则保留；等待所选物化、adopt 和 JSON 写入 ACK 后再发布 durable 引用，失败保持原错误语义并清理暂存。
+
+SOURCE24 首轮 `d11853a87eb2650d6cff3daeedfade4dd888d5bb538b28845b00bebfe9f6067e` FAIL：同一物理 seed 在新增 await 窗口重放会重复物化/rename，以及新增 mode 判据遗漏原 Windows 分支。两路径 R2 `9bea70b062bc5003855d54f9b9550ad08662dbb29bb3cfc2be9ac47f3edcc7c6` 独立 PASS：复用原 KeyedSerialQueue，以 seedsRoot+planDigest 的实际物理地址串行发布并在持锁后重查；失败释放、后继重建，原 win32 判据恢复。其余 22 路径和 8 控制不变，组成 SOURCE24 PASS `e3b2d0095d7bcab431c2e3587023bade8efe76904129847ae928f065343b4bba`；保留首轮 FAIL，未重跑已完成全量 source 门。155 段逆变换恢复 19 份原全文及 native 迁移原文；10 个实际 root call 的新字段唯一、选中 receiver 正确，原 9 个核心 native 方法 token 逐字保持。
+
+本批原 scoped census 与边界报告各一次；imports5790→5794、exceptions5148→5152（3 条 EvidenceArtifactPort bootstrap type 边与 1 条既有 KeyedSerialQueue value 边），owner25903→25907（3 旧 native owner 迁移，7 新位置 owner，净增 4）。entry1823、public1053、background345、ambient501、全部 40 required SPI 全文（20 active/20 declared-debt）、304 原 debt 条款、273/31、target69、implementation SCC 空和 unresolved 空保持。13 ambient 地址只随真实行号移动，语义 multiset 保持；moduleFiles1469→1471、backendProductionFiles2026→2028，仅本批两个 DA source 文件。sourceDigest `sha256:954ca22d88be78bbb544504040a5d39d052e84e7558288fdc19b74e468f04bcf`。只登记 3 个真实 inventory 增长，匹配 canonical commit 后退役；后续自有 RC/SC/Worker WIP 与并行 EOF 统计均从本候选原统计中排除，保留现场文件。四独立新文档段落经逆变换恢复原全文，四条原规则未变。
+
+此前 f3eedc6aa9cd380dbcc6b32b83be1f58da591752 的主 [CI37074418502](https://github.com/wangbinquan/agent-workflow/actions/runs/37074418502) completed/failure，50 项为 33 success/17 failure；[Windows37074493098](https://github.com/wangbinquan/agent-workflow/actions/runs/37074493098) completed/success，1/1。已保留原失败功能日志和归属，不能据部分 green 关闭。并行观测 owner 的源码1873e606、canonical cf83e1c5、正常退役655d1e8b已发布并交接共享窗口；同步0/0后复用完全未变的24+8 source 门，以655d1e8b原分类生成本批登记。owner追踪其 exact-SHA CI，本批运行行为等发布后的新 exact-SHA hosted CI；没有运行 AW 本机 tests/typecheck/build/service，已做定点 format/lint、纯源码/AST/JSON/字节证明与原 scoped 生成。
+
+完整 A2 仍需 resource-package/runtime 插件与 GC、TE/DE 内容/recovery、全部 worker archive 和其它读取/物化链；A3/A4 两 LaunchLane/全部 workspace/Git，A5 完整执行链，A6 全部 purpose，A7 authority/worker/remote orphan 恢复，A8 全 roots/AC00 和独立完整 A-G 持续。只有完整 A-G 通过后编写独立 CS adapters；B/M0 先实际部署，再逐项 M1～M4。当前尚无 CS production adapter 或 AW-in-CS 实际部署，不关闭 RFC；原正文、门/CI 历史和全部并行输出保留。
+
 ## 2026-10-03 Mission 上传捕获和插件目录安装真根
 
 复用现有完整 MissionInputBlobPersistence 和 PluginInstallerPort，在 start/session/recompose、PG、SQLite HTTP、standalone HTTP 根选择同一个 prototype receiver，undefined 保持原 lazy native factory。原上传 application/persistence/route 和插件 application/local installer/schema 全文保持。两新增双 provider HTTP 回归覆盖 capture/install 持有 ACK 时无新增行、成功精确 SHA/字节或 cachedPath/version、失败无行/无 native 回退、临时上传收尾，以及同一 installer 的 checkForUpdate 参数/响应；每例20秒预算保持。
