@@ -31,6 +31,7 @@ import { createEmployeeInputArtifactStore } from '@/modules/digital-employee/inf
 import type { ReactionExecutionPlan as EmployeeReactionExecutionPlan } from '@/modules/digital-employee/domain/runtimeModel'
 import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
 import { staticCachedRepositoryPreparation } from './helpers/staticCachedRepositoryPreparation'
+import { createHeldEmployeeCaseFactory } from './fixtures/rfc370-employee-case-held-effects'
 
 setDefaultTimeout(120_000)
 
@@ -348,6 +349,7 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
     const copyEntered = Promise.withResolvers<void>()
     const copyRelease = Promise.withResolvers<void>()
     const copiedBlobs: string[] = []
+    const checkpointEffects = createHeldEmployeeCaseFactory()
     const selectedInputArtifacts = {
       async copyBlobTo(blobRef: string, target: string) {
         expect(this).toBe(selectedInputArtifacts)
@@ -365,7 +367,7 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       reactionRounds: createEmployeeReactionRoundQueries(db),
       inputArtifacts: selectedInputArtifacts,
       repositoryPreparation: staticCachedRepositoryPreparation(db),
-      sourceControl: bindEmployeeCaseWorkspaceParticipant(),
+      sourceControl: bindEmployeeCaseWorkspaceParticipant({ effects: checkpointEffects.effects }),
       conflictMerge: bindConflictMergeParticipant(),
       now: () => 10,
     })
@@ -395,8 +397,30 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
       expect(firstSettled).toBe(false)
       expect(copiedBlobs).toEqual([artifact.blobRef])
       expect(await db.select().from(employeeCaseWorkspaces).all()).toEqual([])
+      copyRelease.resolve()
+      await Promise.race([
+        checkpointEffects.copyEntered.promise,
+        firstPending.then((outcome) => {
+          if (outcome.kind === 'error') throw outcome.error
+          throw new Error('workspace preparation settled before selected checkpoint copy')
+        }),
+      ])
+      expect(firstSettled).toBe(false)
+      expect(await db.select().from(employeeRoundWorkspaceStates).all()).toEqual([])
+      checkpointEffects.copyRelease.resolve()
+      await Promise.race([
+        checkpointEffects.closeEntered.promise,
+        firstPending.then((outcome) => {
+          if (outcome.kind === 'error') throw outcome.error
+          throw new Error('workspace preparation settled before selected checkpoint close ACK')
+        }),
+      ])
+      expect(firstSettled).toBe(false)
+      expect(await db.select().from(employeeRoundWorkspaceStates).all()).toEqual([])
     } finally {
       copyRelease.resolve()
+      checkpointEffects.copyRelease.resolve()
+      checkpointEffects.closeRelease.resolve()
       await firstPending
     }
     const firstOutcome = await firstPending

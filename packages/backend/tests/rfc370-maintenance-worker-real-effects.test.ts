@@ -29,16 +29,17 @@ function phaseChannel() {
   const channel = new BroadcastChannel(name)
   const received: Phase[] = []
   const pending = new Map<string, (phase: Phase) => void>()
-  channel.onmessage = (event) => {
-    const phase = event.data as Phase
+  const observe = (phase: Phase) => {
     const resolvePhase = pending.get(phase.type)
     if (resolvePhase) {
       pending.delete(phase.type)
       resolvePhase(phase)
     } else received.push(phase)
   }
+  channel.onmessage = (event) => observe(event.data as Phase)
   return {
     name,
+    observe,
     release(phase: string) {
       channel.postMessage({ type: `release-${phase}` })
     },
@@ -64,6 +65,16 @@ function phaseChannel() {
   }
 }
 
+function scenarioFailure(error: unknown, events: readonly MaintenanceWorkerEvent[]): Error {
+  const observed = events.filter((event) =>
+    ['ready', 'active', 'completed', 'degraded', 'drained'].includes(event.type),
+  )
+  return new Error(
+    `selected Worker scenario failed: ${error instanceof Error ? error.message : String(error)}; events=${JSON.stringify(observed)}`,
+    { cause: error },
+  )
+}
+
 function terminalReceipt() {
   let resolveReceipt!: (event: Extract<MaintenanceWorkerEvent, { type: 'completed' }>) => void
   const promise = new Promise<Extract<MaintenanceWorkerEvent, { type: 'completed' }>>((resolve) => {
@@ -78,8 +89,8 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
     const database = openProviderMaintenanceWorkerDatabase(harness, appHome)
     const phases = phaseChannel()
     const events: MaintenanceWorkerEvent[] = []
-    const ready = Promise.withResolvers<void>()
     let supervisor: MaintenanceWorkerSupervisor | undefined
+    let failed: { readonly error: unknown } | undefined
     try {
       supervisor = startMaintenanceWorkerSupervisor({
         appHome,
@@ -92,11 +103,12 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
         },
         onEvent(event) {
           events.push(event)
-          if (event.type === 'ready') ready.resolve()
+          if (event.type === 'ready')
+            phases.observe({ type: 'worker-ready', instanceRef: 'supervisor' })
         },
       })
       await phases.wait('factory-entered')
-      await ready.promise
+      await phases.wait('worker-ready')
       phases.release('fault')
       await phases.wait('drain-received')
       await phases.wait('dispose-entered')
@@ -111,6 +123,8 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
       await pausing
       expect(paused).toBe(true)
       expect(supervisor.live().state).toBe('stopped')
+    } catch (error) {
+      failed = { error }
     } finally {
       phases.release('dispose')
       await supervisor?.stop(1_000)
@@ -118,6 +132,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
       await database.dispose()
       rmSync(appHome, { recursive: true, force: true })
     }
+    if (failed !== undefined) throw scenarioFailure(failed.error, events)
   }, 40_000)
 
   for (const collectFailure of [false, true]) {
@@ -130,6 +145,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
       const events: MaintenanceWorkerEvent[] = []
       const completed = terminalReceipt()
       let supervisor: MaintenanceWorkerSupervisor | undefined
+      let failed: { readonly error: unknown } | undefined
       try {
         await store.enqueue({
           id: runId,
@@ -190,6 +206,9 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
         await drain
         expect(events.some((event) => event.type === 'drained')).toBe(true)
         expect(supervisor.live().state).toBe('stopped')
+        expect(events.filter((event) => event.type === 'degraded')).toEqual([])
+      } catch (error) {
+        failed = { error }
       } finally {
         phases.release('init')
         phases.release('collect')
@@ -199,6 +218,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
         await database.dispose()
         rmSync(appHome, { recursive: true, force: true })
       }
+      if (failed !== undefined) throw scenarioFailure(failed.error, events)
     }, 40_000)
   }
 
@@ -210,6 +230,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
     const events: MaintenanceWorkerEvent[] = []
     const runId = randomUUID()
     let supervisor: MaintenanceWorkerSupervisor | undefined
+    let failed: { readonly error: unknown } | undefined
     try {
       await store.enqueue({
         id: runId,
@@ -249,6 +270,9 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
       phases.release('dispose')
       await paused
       expect(events.filter((event) => event.type === 'drained')).toHaveLength(1)
+      expect(events.filter((event) => event.type === 'degraded')).toEqual([])
+    } catch (error) {
+      failed = { error }
     } finally {
       phases.release('init')
       phases.release('dispose')
@@ -257,6 +281,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
       await database.dispose()
       rmSync(appHome, { recursive: true, force: true })
     }
+    if (failed !== undefined) throw scenarioFailure(failed.error, events)
   }, 40_000)
 })
 
