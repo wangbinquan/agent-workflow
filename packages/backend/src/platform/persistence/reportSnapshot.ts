@@ -1,4 +1,5 @@
 import type { DbClient } from '@/db/client'
+import { unhandledDatabaseProvider } from './databaseProviders'
 import type { PostgresqlDatabaseRuntime } from './postgresqlRuntime'
 import { originalPostgresqlReportSnapshot } from './reportPostgresqlSnapshot'
 import { originalSqliteReportSnapshot } from './reportSqliteSnapshot'
@@ -10,7 +11,7 @@ export type OriginalReportDatabaseBinding =
 export function originalReportSnapshotSession(
   binding: OriginalReportDatabaseBinding,
 ): ReportSnapshotSession {
-  return binding.provider === 'sqlite'
-    ? originalSqliteReportSnapshot(binding)
-    : originalPostgresqlReportSnapshot(binding.runtime)
+  if (binding.provider === 'sqlite') return originalSqliteReportSnapshot(binding)
+  if (binding.provider === 'postgresql') return originalPostgresqlReportSnapshot(binding.runtime)
+  return unhandledDatabaseProvider(binding)
 }

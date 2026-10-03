@@ -73,16 +73,18 @@ function attemptContinuation(taskId: string, cursor: string | undefined): string
     throw new RangeError('Observation attempt cursor changed task')
   return value[2]
 }
-const attemptFields = {
-  id: nodeRuns.id,
-  nodeId: nodeRuns.nodeId,
-  status: nodeRuns.status,
-  startedAt: nodeRuns.startedAt,
-  finishedAt: nodeRuns.finishedAt,
-  retryIndex: nodeRuns.retryIndex,
-  iteration: nodeRuns.iteration,
-  wgRound: nodeRuns.wgRound,
-  reviewIteration: nodeRuns.reviewIteration,
+function attemptFields() {
+  return {
+    id: nodeRuns.id,
+    nodeId: nodeRuns.nodeId,
+    status: nodeRuns.status,
+    startedAt: nodeRuns.startedAt,
+    finishedAt: nodeRuns.finishedAt,
+    retryIndex: nodeRuns.retryIndex,
+    iteration: nodeRuns.iteration,
+    wgRound: nodeRuns.wgRound,
+    reviewIteration: nodeRuns.reviewIteration,
+  }
 }
 
 /** Bind to the snapshot handle supplied by bootstrap; do not open another transaction. */
@@ -221,7 +223,7 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
         throw new RangeError('Attempt page size must be 1 through 1000')
       const after = attemptContinuation(taskId, page.after)
       const rows = await db
-        .select(attemptFields)
+        .select(attemptFields())
         .from(nodeRuns)
         .where(
           and(
@@ -243,7 +245,7 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
       if (!Number.isInteger(limit) || limit < 1 || limit > 1000)
         throw new RangeError('Attempt limit must be 1 through 1000')
       const rows = await db
-        .select(attemptFields)
+        .select(attemptFields())
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .orderBy(asc(nodeRuns.id))

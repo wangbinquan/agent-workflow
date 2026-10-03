@@ -35,11 +35,17 @@ test('original SQLite WAL file reads and TEMP writes are exact and never pin the
         cacheWrite: '4',
         output: '5',
       })
-      await expect(
-        Promise.resolve().then(() =>
-          snapshot.executor.run(sql`UPDATE report_input SET value='forbidden'`),
-        ),
-      ).rejects.toThrow('original reads')
+      let rejectedWrite: unknown
+      try {
+        await snapshot.executor.run(sql`UPDATE report_input SET value='forbidden'`)
+      } catch (error) {
+        rejectedWrite = error
+      }
+      expect(rejectedWrite).toBeInstanceOf(Error)
+      expect((rejectedWrite as Error).cause).toBeInstanceOf(Error)
+      expect(((rejectedWrite as Error).cause as Error).message).toBe(
+        'Report input only supports original reads',
+      )
     })
     expect(original.query('SELECT value FROM report_input').get()).toEqual({ value: 'after' })
     expect(

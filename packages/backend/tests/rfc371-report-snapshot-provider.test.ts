@@ -5,6 +5,12 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { originalReportSnapshotSession } from '@/platform/persistence/reportSnapshot'
 import type { ReportWorkspace, ReportWorkingPage } from '@/platform/persistence/reportWorkspace'
 
+test('an unsupported report provider cannot silently select another implementation', () => {
+  expect(() => originalReportSnapshotSession({ provider: 'unsupported' } as never)).toThrow(
+    'unhandled database provider: unsupported',
+  )
+})
+
 describeEachProvider('original complete report snapshot', (harness) => {
   test('concurrent reports and an original owner transaction retain independent private rows', async () => {
     await harness.executeFixtureDdl(
@@ -117,11 +123,16 @@ describeEachProvider('original complete report snapshot', (harness) => {
       await snapshot.workspace.upsert('control', [{ key: 'one', document: 'second' }])
       expect(await snapshot.workspace.get<string>('control', 'one')).toBe('second')
       expect(await snapshot.workspace.get<string>('control', 'two')).toBe('unchanged')
-      await expect(
-        Promise.resolve().then(() =>
-          snapshot.executor.run(sql`UPDATE rfc371_original_report_input SET value='forbidden'`),
-        ),
-      ).rejects.toThrow('original reads')
+      let rejectedWrite: unknown
+      try {
+        await snapshot.executor.run(sql`UPDATE rfc371_original_report_input SET value='forbidden'`)
+      } catch (error) {
+        rejectedWrite = error
+      }
+      expect(rejectedWrite).toBeInstanceOf(Error)
+      let boundary = rejectedWrite as Error
+      while (boundary.cause instanceof Error) boundary = boundary.cause
+      expect(boundary.message).toBe('Report input only supports original reads')
       return snapshot.snapshotId
     })
     await expect(retained!.page('original-rows', null)).rejects.toThrow('closed')

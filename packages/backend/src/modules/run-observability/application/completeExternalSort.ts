@@ -19,7 +19,8 @@ async function* runRows<T>(
   signal?: AbortSignal,
 ): AsyncGenerator<SortRow<T>> {
   let after: string | null = null,
-    previous: string | undefined
+    previous: string | undefined,
+    expected = 0n
   for (;;) {
     signal?.throwIfAborted()
     const page: CompleteWorkingPage<SortRow<T>> = await workspace.page<SortRow<T>>(
@@ -28,8 +29,8 @@ async function* runRows<T>(
       100,
     )
     for (const row of page.items) {
-      if (previous !== undefined && row.key <= previous)
-        throw new Error('External sort workspace order did not advance')
+      if (row.key !== completeOrdinalKey(expected++))
+        throw new Error('External sort workspace is missing an original row')
       previous = row.key
       yield row.document
     }
@@ -37,6 +38,38 @@ async function* runRows<T>(
     if (!page.items.length || page.nextCursor !== previous || page.nextCursor === after)
       throw new Error('External sort workspace cursor did not advance')
     after = page.nextCursor
+  }
+}
+async function* verifiedRecords<T>(
+  workspace: CompleteWorkingRows,
+  namespace: string,
+  claims: string,
+  count: bigint,
+  compare: (a: SortRow<T>, b: SortRow<T>) => number,
+  signal?: AbortSignal,
+): AsyncGenerator<T> {
+  let seen = 0n,
+    previous: SortRow<T> | undefined,
+    buffer: Array<{ key: string; document: string }> = []
+  try {
+    for await (const row of runRows<T>(workspace, namespace, signal)) {
+      if (!/^(0|[1-9]\d*)$/.test(row.ordinal) || BigInt(row.ordinal) >= count)
+        throw new Error('External sort original ordinal is invalid')
+      if (previous && compare(previous, row) > 0)
+        throw new Error('External sort original ordering changed')
+      buffer.push({ key: completeOrdinalKey(BigInt(row.ordinal)), document: row.ordinal })
+      if (buffer.length === 500) {
+        await workspace.insert(claims, buffer)
+        buffer = []
+      }
+      seen++
+      previous = row
+      yield row.record
+    }
+    if (buffer.length) await workspace.insert(claims, buffer)
+    if (seen !== count) throw new Error('External sort original population is incomplete')
+  } finally {
+    await workspace.clear(claims)
   }
 }
 function push<T>(
@@ -174,13 +207,20 @@ export async function completeExternalSort<T>(input: {
     pass++
     runs = nextRuns
   }
+  let replay = 0n
   return {
     rows: String(count),
     runs: String(originalRuns),
     records: async function* () {
       if (!count) return
-      for await (const row of runRows<T>(input.workspace, namespace(pass, 0n), input.signal))
-        yield row.record
+      yield* verifiedRecords<T>(
+        input.workspace,
+        namespace(pass, 0n),
+        `${input.namespace}/verified/${replay++}`,
+        count,
+        compare,
+        input.signal,
+      )
     },
   }
 }

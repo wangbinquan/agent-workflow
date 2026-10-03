@@ -167,4 +167,22 @@ describe('complete external merge sorting', () => {
     })
     await expect(collect(result.records())).rejects.toThrow('advance')
   })
+  test('missing tail, middle, duplicate original ordinals and malformed identities cannot become a complete report', async () => {
+    for (const corrupt of ['tail', 'middle', 'duplicate', 'invalid'] as const) {
+      const working = workingRows(),
+        sorted = await completeExternalSort({
+          workspace: working.workspace,
+          namespace: corrupt,
+          records: sequence([0, 1, 2, 3, 4]),
+          compare: (a: number, b: number) => a - b,
+        })
+      const [name, rows] = [...working.namespaces][0]!
+      if (corrupt === 'tail') rows.delete(completeOrdinalKey(4n))
+      if (corrupt === 'middle') rows.delete(completeOrdinalKey(2n))
+      if (corrupt === 'duplicate') rows.set(completeOrdinalKey(4n), { record: 4, ordinal: '3' })
+      if (corrupt === 'invalid') rows.set(completeOrdinalKey(4n), { record: 4, ordinal: '04' })
+      await expect(collect(sorted.records())).rejects.toThrow()
+      expect([...working.namespaces.keys()]).toEqual([name])
+    }
+  })
 })
