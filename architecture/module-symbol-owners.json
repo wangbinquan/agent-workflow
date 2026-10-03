@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2055,
+    "backendFiles": 2058,
     "frontendFiles": 643,
     "legacyFiles": 565,
-    "moduleFiles": 1490,
-    "productionFiles": 2859,
+    "moduleFiles": 1493,
+    "productionFiles": 2862,
     "sharedFiles": 161,
-    "symbolsIncludingFileRoots": 26041
+    "symbolsIncludingFileRoots": 26057
   },
   "entries": [
     {
@@ -30560,6 +30560,78 @@
       "currentContext": "development-automation",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/development-automation/application/ports/automationWorkspaceEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/automationWorkspaceEffects.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/ports/automationWorkspaceEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/automationWorkspaceEffects.ts#AutomationWorkspaceDirectoryEntry",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AutomationWorkspaceDirectoryEntry",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/ports/automationWorkspaceEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/automationWorkspaceEffects.ts#AutomationWorkspaceEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AutomationWorkspaceEffects",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/ports/automationWorkspaceEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/automationWorkspaceEffects.ts#AutomationWorkspaceEffectsFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AutomationWorkspaceEffectsFactory",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/ports/automationWorkspaceEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/automationWorkspaceEffects.ts#AutomationWorkspaceFileFacts",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AutomationWorkspaceFileFacts",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/application/ports/automationWorkspaceEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/automationWorkspaceEffects.ts#Completion",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Completion",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/development-automation/application/ports/configResourceStore.ts",
       "id": "owner:packages/backend/src/modules/development-automation/application/ports/configResourceStore.ts#$file",
       "removeAfterWave": null,
@@ -31429,6 +31501,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ChildMissionPort",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/application/ports/reconcilerPorts.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/reconcilerPorts.ts#Completion",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Completion",
       "targetContext": "development-automation",
       "targetLayer": "application"
     },
@@ -41228,6 +41312,54 @@
       "currentContext": "development-automation",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/automationWorkspaceEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/automationWorkspaceEffects.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/automationWorkspaceEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/automationWorkspaceEffects.ts#Completion",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Completion",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/automationWorkspaceEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/automationWorkspaceEffects.ts#selectedAutomationWorkspaceEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "selectedAutomationWorkspaceEffects",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/automationWorkspaceEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/automationWorkspaceEffects.ts#withAutomationWorkspaceEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "withAutomationWorkspaceEffects",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/development-automation/infrastructure/childMissionParticipant.ts",
       "id": "owner:packages/backend/src/modules/development-automation/infrastructure/childMissionParticipant.ts#$file",
       "removeAfterWave": null,
@@ -41809,6 +41941,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createAttemptContextStore",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects.ts#createFileAutomationWorkspaceEffectsFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileAutomationWorkspaceEffectsFactory",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -42829,6 +42985,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "protectedRootSnapshotDigest",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/protectedSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/protectedSnapshot.ts#readProtectedRootSnapshot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "readProtectedRootSnapshot",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -43965,10 +44133,34 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/development-automation/infrastructure/workspaceValidator.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/workspaceValidator.ts#readBusinessTreeSnapshot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "readBusinessTreeSnapshot",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/workspaceValidator.ts",
       "id": "owner:packages/backend/src/modules/development-automation/infrastructure/workspaceValidator.ts#validateWorkspaceOutcome",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "validateWorkspaceOutcome",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/workspaceValidator.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/workspaceValidator.ts#validateWorkspaceOutcomeInScope",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "validateWorkspaceOutcomeInScope",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -313225,5 +313417,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:434537f7d3db3267dc631ad7b1b77dcee32d626423539c56f90d7031a010fea8"
+  "sourceDigest": "sha256:0f079fea01a5169edbb0c51157a4e230ae267e8ace337f966f46f9942749f305"
 }

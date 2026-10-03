@@ -691,3 +691,16 @@ Worker cause 诊断的有限 DESIGN/SOURCE2 均 PASS，SOURCE 指纹 `1e854c0d42
 前批 `12c82946bf43f5bd6ed82c3d086a4f2a8b662781` 主 CI `37098130275` 已 completed/failure（35 success、15 failure、50 jobs），Windows `37098130258` failure，maintenance `37098130248` success。三个纯测试修正另已推送 `68bc1ce5`；其主 CI `37101610276` 在本节冻结快照仍 in_progress，未取得全绿终态。全部旧失败、取消和首门修正保留。本批正式行为仍以发布后 exact-SHA hosted CI 为准；本机只作原 census、纯源码/AST/JSON证明及目标 format/lint，没有 AW test/typecheck/build/service。
 
 完整 A1–A8/AC00/A-G 尚未关闭。下一项继续 DA workspace 原 protected/business snapshot 与验证效果，随后完成其余内容、工作区/Git、执行、命令和执行权切面；CS 独立 adapters 与 B/M0 实际部署、M1–M4 仍按已批准顺序实施，尚无 AW-in-CS 部署，不关闭 RFC。
+
+
+## 2026-10-03 DA workspace 效果切面实施接续
+
+DA workspace 完整效果切面的有限 DESIGN PASS 指纹 `5171146df940948a8cc2e265a08f1358b9cef9708c1c0e486067b39b940fda06`。原 SOURCE19 指纹 `aa3f369a5df7d1d1c738052e872850bacbb6f80b07bbdac7e22a2872a94cad24` 的首次 FAIL/P2 完整保留：真实 Case 成功夹具缺少 ReactionRound 外键父行。只在新增测试补齐合法 round，并明确 native 字节值比较；单路径 SOURCE-R2 PASS 指纹 `6cc20311c3076d90c0e60dbf7b60d0283ea7df4f707d81d3e55cb1639202f37d`，其余18路径、9控制、5原证据未变。合成19路径 SOURCE 完整通过指纹 `1595b66a6ff5b103f9536c87834dd0e439859e0310749e6ac4bd7746e42cd70d`，不把首次 FAIL 改写为 PASS。
+
+完整 factory 的 resolve/parent/acquire 与 scope 的12项操作由同一 selected receiver 执行；默认独立 local adapter 保留原 Node 操作，显式选择只用完整选择。protected/business snapshot、workspace validation、初始上传/输入材料、冲突/冻结平台工件与 hydration 全部串行等待操作和 close ACK；原 digest、DTO、判断与持久化顺序保留。Agent orchestrator 的 capture/validate 两处等待完成，九个真实 CLI/PG/HTTP binder 贯穿同一工厂；CLI 三份配置与 HTTP 测试 helper 同步。原84个物理操作及其参数、18个完整 CPU/DB 函数、两个 owner 的全部持久化调用、旧validator断言与预算均有一次成功的纯源码/AST逆向证明；W29 仅按原 normalizer 更新实际 PG 与 HTTP mount 投影，SQLite/events 和原168/49/65计数、八PG phase不变。
+
+官方 scoped census 只读已提交 `dcdc249ff50bac893edbf8c19b6ad12cd264e0b6` 加本批19冻结路径，6223项非本批源码读该基准的精确 committed bytes，排除并保留并行7项源码 WIP（1 tracked、6 untracked）。四个原规则保持，边界新增为0。实际 mutation1832→1833、observed imports5821→5824、原 exception投影5177→5180、symbol owners26041→26057；三个实际根只新增工厂类型引用，原行和退休说明保持，16个实际 owner新增。13项ambient仅变行号，background352/ambient501、public1057、40 required SPI、304 debt、69 target edges和空implementation SCC保持。四项实际增长登记一次，matching canonical commit 后以正常后继提交退役；source digest `sha256:0f079fea01a5169edbb0c51157a4e230ae267e8ace337f966f46f9942749f305`。
+
+前批 `13e72ad8326a85add6f5c73532a33848458288ac` 主 CI `37103290740` 已 completed/failure（47 success、3 failure、50 jobs），Windows `37103290747` 与 maintenance `37103290722` 均 completed/success。两个真实失败分片为 macOS 原报表数据库文件判据和 Ubuntu 的四个真实 PG Worker用例；聚合失败另计。真实 Worker cause 已显示查询 `agent_workflow.maintenance_runs` relation不存在，原时间预算未改。并行原报表文件修正 `c5cba4ee` 与配套 `c01f1dec` 完整保留；本会话两个 Worker fixture 文件另已精确发布 `dcdc249f`，通过完整 DESIGN/SOURCE-R2（原 env 类型 FAIL保留），从调用时的已定义环境值启动实际 source Worker；生产 Worker/runtime/协议/DDL未变。该 SHA 主 CI `37107720458` 已启动，创建回执状态为 pending，尚未取得全绿终态；不能称 Worker 修复已验收。本批正式行为仍交发布后 exact-SHA hosted CI。本机只做原 census、纯源码/AST/JSON证明和目标 format/lint，无 AW test/typecheck/build/service。
+
+完整 A1–A8/AC00/A-G 继续：内容与恢复、其余工作区/Git、完整 Agent 材料/执行/清理、专用命令和执行权仍须逐组接线与完整功能复核。CS 独立 adapters 与 B/M0真实部署、M1–M4按批准顺序实施，尚无 AW-in-CS部署，不关闭RFC。
