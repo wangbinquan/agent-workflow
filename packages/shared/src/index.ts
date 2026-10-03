@@ -183,3 +183,4 @@ export * from './uploadNaming'
 // 两边不可能对不上（此前对不上两次，都是用户在 UI 上撞出来的）。
 export * from './developmentConfigCreate'
 export * from './schemas/observationTasks'
+export * from './schemas/observationComplete'

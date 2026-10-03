@@ -4,6 +4,7 @@ import type {
   ObservationAttemptFacts,
   ObservationTaskFacts,
   ObservationTaskPageQuery,
+  ObservationSourceBacklog,
 } from '@agent-workflow/shared'
 import type { UsageLedgerRecord } from '../domain/usageLedger'
 import type { PlatformObservation } from '../domain/platformObservation'
@@ -25,4 +26,5 @@ export interface CompleteObservationSources {
   captures(taskId: string): CompleteSourceReader<UsageCaptureReceipt>
   platform(binding: PlatformObservationBinding): CompleteSourceReader<PlatformObservation>
   platformState(binding: PlatformObservationBinding): Promise<PlatformSyncState>
+  backlog(taskId: string): Promise<ObservationSourceBacklog>
 }

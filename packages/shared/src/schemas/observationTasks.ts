@@ -135,6 +135,8 @@ export interface ObservationTaskFacts {
 export interface ObservationAttemptFacts {
   readonly id: string
   readonly nodeId: string
+  /** Frozen owner node kind; absent historical proof stays unknown. */
+  readonly computeKind?: 'agent' | 'non-agent' | 'unknown'
   readonly status: string
   readonly startedAt: number | null
   readonly finishedAt: number | null

@@ -108,5 +108,11 @@ export function createCompleteObservationSources(input: {
         }),
       ),
     platformState: (binding) => platform.state(binding),
+    async backlog(taskId) {
+      const [state] = await tasks.sourceBacklog([taskId])
+      if (!state || state.taskId !== taskId)
+        throw new Error('Original Task source backlog proof missing')
+      return state
+    },
   }
 }

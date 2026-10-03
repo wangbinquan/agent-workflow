@@ -47,7 +47,7 @@ export async function readUsageCapturePage(
   const rows = await db
     .select({
       invocationId: observationUsageCaptures.invocationId,
-      document: observationUsageCaptures.summary,
+      document: observationUsageCaptures.document,
       sourceId: observationUsageCaptures.sourceId,
       sourceCursor: observationUsageCaptures.sourceCursor,
       nativeRootKey: observationUsageCaptures.nativeRootKey,

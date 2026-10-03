@@ -21,6 +21,7 @@ import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import type { TaskObservationFactsQuery } from '../public/queries'
 import { createObservationSpanSources } from './observationSpanSources'
+import { observationAttemptKinds } from './taskObservationKinds'
 
 const canRead = (actor: Actor) =>
   actor.permissions.has('tasks:read:all') || actor.permissions.has('tasks:read:own')
@@ -237,7 +238,7 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
       const items = rows.slice(0, page.limit),
         last = items.at(-1)
       return {
-        items,
+        items: await observationAttemptKinds(db, taskId, items),
         nextCursor: rows.length > page.limit && last ? JSON.stringify([1, taskId, last.id]) : null,
       }
     },
@@ -251,7 +252,10 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
         .orderBy(asc(nodeRuns.id))
         .limit(limit + 1)
         .all()
-      return { items: rows.slice(0, limit), truncated: rows.length > limit }
+      return {
+        items: await observationAttemptKinds(db, taskId, rows.slice(0, limit)),
+        truncated: rows.length > limit,
+      }
     },
   }
 }
