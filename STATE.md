@@ -1,3 +1,13 @@
+## 2026-10-04 端口归档确切 SHA CI 修复
+
+已发布 34e49589e9bc26c6ea9f3da8a1f9f90f367a29c6 的主 CI37158988630 completed/failure（35 success、15 failure），Windows37158988639 completed/failure；maintenance37158988628 与 OpenCode37158988629 completed/success。全部原完整日志和终态保留。四个后端失败作业只重复本批两处 AST oracle 与零 consumer public 别名；Typecheck 也包含本批 Readonly/HTTP 夹具错误。并行观测 Typecheck、三个 frontend shard3 与六个观测 E2E 作业已按实际日志归属协调，不修改其 WIP，不记整套通过。
+
+有限 CI-REPAIR-DESIGN 与独立 SOURCE2 均 PASS；源码指纹 51ddb4adf2cbcb5e15971b61ff7fa97f3c1405fac563f685fd28a86f54ce16cd。仅两个 owned 文件六处修正：Readonly 夹具接收、dbVersion17、同一 HTTP Response/Promise 归一化、准确三 runNode 顺序、同时检查两真实 mount、删除无消费者的 PortArtifactLinkTarget 独立 public reexport。内部完整效果合同、原 receiver、全部68个expect操作数除两 mount 覆盖强化的一处、9个测试名称/预算及 ACK 行为保留；原 C2 账本测试不改。
+
+共享清单基于并行已发布 a3f7bfc2559114ab7ac9bc42f33ebf147c8ad5c9，加冻结 SOURCE2、四份 exact committed 原规则生成一次。sourceDigest 为 sha256:a897ad0775a6e2cdd914c32029d75e7f8830987ae1b0028e4baad4b8e3d52597。真实投影仅移除一个 public symbol（1101→1100）及其四个递归字段；其它 collections、129项原有序账本/why、required SPI、target edges、implementation SCC、guard 与债务记录保持。不新增 growth permit 或退役提交；C2 两向精确相等由原规则的纯 JSON/源码计数证明。
+
+本机仅定向 format/lint、纯 AST/字节/JSON 与原 census，未运行 AW test/typecheck/build/service。正式修复仍须新的确切 SHA hosted CI。完整 A1–A8/AC00/A-G、独立 CS adapters 和 B/M0–M4 按已批准顺序继续；尚无 AW-in-CS 实际部署，不关闭 RFC。
+
 ## 2026-10-04 端口归档内容切面的有限接线
 
 SOURCE36 首次四项 P2 FAIL 原样保留；有限 SOURCE4 修复了 fanout 两处所选 operations 漏传、任意 Error.message 转换、真实 Agent.outputKinds 夹具和 Windows 原路径 oracle，独立复核 PASS。随后原 canonical 首次生成在任何清单写入前发现 Buffer 与 extends:Omit 两项 opaque 不匹配，17 份元数据保持；中间 inline import 类型的 lint FAIL 同样保留。原规则和 opaque 名单不改。

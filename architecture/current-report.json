@@ -10,7 +10,7 @@
     "moduleSymbolOwners": 26419,
     "mutationEntrypoints": 1857,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1101,
+    "publicSurfaces": 1100,
     "transactionExternalEffects": 267
   },
   "metrics": {
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cce6e08058cf1f21df255f9688a98c100352cb0832cdc7d565dce2e4ddb41d37"
+  "sourceDigest": "sha256:a897ad0775a6e2cdd914c32029d75e7f8830987ae1b0028e4baad4b8e3d52597"
 }

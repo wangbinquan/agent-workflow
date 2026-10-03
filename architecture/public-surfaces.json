@@ -5,8 +5,8 @@
     "governedFieldSurfaces": 5,
     "methods": 1228,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 23392,
-    "symbols": 1101
+    "recursiveFields": 23388,
+    "symbols": 1100
   },
   "entries": [
     {
@@ -177928,57 +177928,6 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "task-execution",
-      "dataClass": "confidential",
-      "direction": "offered",
-      "entrypoint": "types",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.kind",
-          "type": "'inside'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.relativePath",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:1.kind",
-          "type": "'outside'"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$variant:2",
-          "type": "null"
-        }
-      ],
-      "file": "packages/backend/src/modules/task-execution/public/types.ts",
-      "id": "public:task-execution:types:PortArtifactLinkTarget",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:d0bb63dfb291d590d77f6d2a598cb6f6591ce2b3d4d07a7fc748d49914c05246",
-      "status": "target-context-current-surface",
-      "symbol": "PortArtifactLinkTarget",
-      "transaction": "none",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "none",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 27,
         "maxUnionVariants": 13
       },
@@ -183941,7 +183890,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:cce6e08058cf1f21df255f9688a98c100352cb0832cdc7d565dce2e4ddb41d37",
+  "sourceDigest": "sha256:a897ad0775a6e2cdd914c32029d75e7f8830987ae1b0028e4baad4b8e3d52597",
   "targetContexts": [
     "collaboration",
     "development-automation",
