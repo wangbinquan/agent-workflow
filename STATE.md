@@ -1,3 +1,15 @@
+## 2026-10-04 Node-run prompt 内容与真实启动根接线
+
+RFC-370 的 prompt 存储切面归 task-execution application/composition，文件写读只留独立 local adapter。完整 effects/operations 只由 undefined 选本机默认；显式 null/不完整选择不逐方法回落，冻结 prototype/private receiver 保持身份。UTF-8 4096 字节阈值、完整列 fallback、空文本优先、旧相对引用和复合本机写读保持。runner 在 content ACK 后才 patch，patch ACK 后才 mark-running；detail、session sibling、agent/clarify 蒸馏及真实定时循环等待同一选定 reader。三实际根在 session 初建和重装配时各选择一次服务，PG 的现有 tasks.operations 原样进入 HTTP；SQLite preselected 优先并保留外部 memoryOperations。
+
+首次有限 SOURCE39 FAIL 的三个 P2 完整保留，REPAIR4 PASS 只关闭诊断转换、callable Promise ACK 和定时 reader 漏传；其它35 owned/38 controls 未变。SOURCE39-COMPOSITE 与 ROOT-SOURCE4 PASS、PUBLIC-CONTRACTS-SOURCE10 PASS、W29 三摘要有限 SOURCE1 PASS 合为 SOURCE45，指纹 001636f787e73a5439dcce0087d364645c20c0aa91c5cf8fa9f408508e332217；原129段逆补丁/111数据库子树/449断言/119名称预算证明复用，三根23段逆补丁与一项声明形状逆补丁、新根回归的44原断言/7名称预算保持。W29 保留并行观测正式提交的 PG 170 旧基线与全部计数/阶段/生命周期判据，只改 prompt 引起的三个摘要，不改原 normalizer。
+
+六条新增 R1 的原失败记录保留；PUBLIC-CONTRACTS-DESIGN10 与 SOURCE10 80687f0f61ac2016eb6289bdc08182cf76fb58b68c89c3559ab22255e62cb0ca 通过后，三份同步 helper 原函数 AST 原样迁入 composition，旧服务改走 exact public/commands、queries、types，三个旧消费者只改 selector 的 public/participants import。构造器不公开，三个根与 ACK 顺序不变。unit 原54断言/11名称预算和全原AST保留，新增公开合同函数身份及完整receiver/heldACK回归；修正后纯 committed-rule 边界复查新增为0，无新债务条款。
+
+架构清单输入是 committed 0b8910ab8d88fff0df68dad416169895d6fc1165 加本批45源码，非 owned 源码和原规则使用 exact committed blobs，保留并排除并行 WIP。原 generator/renderer 各只执行一次；实际增长 rfc294-mutation-entrypoints、rfc294-cross-context-observed-imports、rfc294-architecture-exceptions、rfc294-public-surfaces、rfc294-module-symbol-owners 按 matching canonical 登记并以后继正常退役，未引入新条款或降低判据。修复提交15b31c26aff56d2a8dd3dff2afd73620b4457654的主CI37132327843已completed/success、50/50；此记录不冒充本批SOURCE45的CI，发布后仍跟踪其确切SHA。未运行本机AW tests/typecheck/build/services。完整A1–A8/AC00/A-G、独立CS adapters和B/M0～M4仍开放，尚无AW-in-CS真实部署。
+
+原生成规则只销账一条已消失的 memory 蒸馏→旧 prompt service 的 R2；原304条完整记录留在 before 证据，其余303条全文、理由与退役条件保持。registered findings、40 required SPI、69 target edges 和空 implementation SCC 均不变。
+
 ## 2026-10-04 RFC-371 完整报告 CI 修正接续
 
 0294 的主 CI37135042998 已 completed/cancelled（13 success、25 failure、12 cancelled），实际失败保留。十二路径候选修正类型/原PG导入、合法内部Task夹具、标准组件/样式、唯一页签与实际Tab/panel关联，并用原W29 normalizer对已发布来源修正170个PG声明及真实report分支；原断言/预算/规则保持。原官方scope只读 committed47773+十二路径、排除并保留prompt/memory WIP，13产物和129库存静态核对通过、无增长许可；详情见 design/RFC-371-run-observability/remaining-work.md。新exact-SHA CI、其他实际失败、完整native/追踪EOF、规模/真实任务/页面验收和CS八组件部署继续，两个RFC不关闭。

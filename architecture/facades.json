@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 298,
-    "thinFacades": 51
+    "thinFacades": 52
   },
   "entries": [
     {
@@ -2427,20 +2427,17 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:5b30eee8a2e36ca0b4a4",
-        "import:7ced36a6d99c2aee4672"
+        "import:1cab346b551945966e2a",
+        "import:26719faf602887a2c7d2",
+        "import:f02c95c178c849026ddb",
+        "import:fdd4d37a274fc699173d"
       ],
-      "exportedSymbols": [
-        "PromptStorage",
-        "nodeRunPromptRelPath",
-        "readNodeRunPrompt",
-        "storeNodeRunPrompt"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/nodeRunPrompt.ts",
       "id": "facade:packages/backend/src/services/nodeRunPrompt.ts",
       "ownerEntryId": "owner:packages/backend/src/services/nodeRunPrompt.ts#$file",
       "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -3508,6 +3505,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:2077adb281ac6413cafe",
         "import:647d2f3472f9ceefca7f",
         "import:67576bc58043c5f2d0af",
         "import:6c106e47305a3b3ebdc5",
@@ -3522,6 +3520,7 @@
         "import:d3b53e3b0101dae3dc04",
         "import:dba082fcaa3501c2d332",
         "import:ddb1a9cb8d5a6063f9cf",
+        "import:de51dddefd44d47d947e",
         "import:ef6d239c3d1ca57471ef",
         "import:f8a4030fdfccacbf609e"
       ],
@@ -4615,8 +4614,10 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:04b6266a4ce33123bf23",
         "import:402d2d0abfa866168ddc",
-        "import:aafa840419142282eb13"
+        "import:aafa840419142282eb13",
+        "import:de3fe7a080dfe8fdc572"
       ],
       "exportedSymbols": [
         "getSessionTree"
@@ -5284,6 +5285,7 @@
         "import:3bf779c696831f7e9dde",
         "import:41c8ee752dc430e2e37b",
         "import:436b89729bbdc645fa0d",
+        "import:4a93b859aa65886ec3a7",
         "import:4de2fc6d281dcc1d22e5",
         "import:519c37546cf4d1f5cb2f",
         "import:52aebe854233bde53a8c",
@@ -5344,6 +5346,7 @@
         "import:f86b86987121f16fad5b",
         "import:f96695582381ac496ce2",
         "import:f9c0f42c30b13bf58133",
+        "import:f9f11cc547df6f57e2e8",
         "import:fb38b7958d8b4c8551ba",
         "import:ffa4a1eec74d8b9f1819"
       ],
@@ -6380,5 +6383,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ef43059cd7a0c4a8934cf65c09265c35531432b34258794898ce7d8107ff668e"
+  "sourceDigest": "sha256:437b8d973bcf09e78b47eadf1dfb59c43556bcb3541a93ea063421f136c38289"
 }

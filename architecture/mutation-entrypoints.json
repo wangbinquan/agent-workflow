@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1847,
+    "entries": 1849,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -26736,6 +26736,31 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/ports/nodeRunPromptContent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/ports/nodeRunPromptContent.ts#SynchronousNodeRunPromptContentEffects",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nodeRunPromptContent.ts#SynchronousNodeRunPromptContentEffects",
+      "symbol": "SynchronousNodeRunPromptContentEffects",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -29774,6 +29799,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#createLegacySqliteNodeRunOperations",
       "symbol": "createLegacySqliteNodeRunOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/fileNodeRunPromptContent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/local/fileNodeRunPromptContent.ts#createFileNodeRunPromptContent",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/fileNodeRunPromptContent.ts#createFileNodeRunPromptContent",
+      "symbol": "createFileNodeRunPromptContent",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -44162,7 +44212,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:ef43059cd7a0c4a8934cf65c09265c35531432b34258794898ce7d8107ff668e",
+  "sourceDigest": "sha256:437b8d973bcf09e78b47eadf1dfb59c43556bcb3541a93ea063421f136c38289",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46192,8 +46242,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#1857:tasks",
-        "line": 1857,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#1869:tasks",
+        "line": 1869,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#syncWorkflow",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -46208,8 +46258,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#2183:tasks",
-        "line": 2183,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#2195:tasks",
+        "line": 2195,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#retryNodeProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -46640,8 +46690,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#2472:tasks",
-        "line": 2472,
+        "id": "task-authority:packages/backend/src/services/task.ts#2473:tasks",
+        "line": 2473,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -46656,8 +46706,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#2600:taskExecutionIntents",
-        "line": 2600,
+        "id": "task-authority:packages/backend/src/services/task.ts#2601:taskExecutionIntents",
+        "line": 2601,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -46672,8 +46722,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#2658:tasks",
-        "line": 2658,
+        "id": "task-authority:packages/backend/src/services/task.ts#2659:tasks",
+        "line": 2659,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#startTaskImpl",
         "requiredBrandedProof": "CanonicalContinuationRequest",
         "revisionPredicate": "expected-task-revision-and-active-intent-unique",
@@ -46688,8 +46738,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/task.ts",
-        "id": "task-authority:packages/backend/src/services/task.ts#4518:tasks",
-        "line": 4518,
+        "id": "task-authority:packages/backend/src/services/task.ts#4519:tasks",
+        "line": 4519,
         "ownerEntryId": "owner:packages/backend/src/services/task.ts#runDeferredRepoPreparation",
         "requiredBrandedProof": "OwnershipToken+OwnedTaskTx",
         "revisionPredicate": "exact-owner-id-daemon-generation-epoch-and-claimed-state",

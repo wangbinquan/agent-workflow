@@ -609,3 +609,13 @@ PG 摘要 `23e198e5a2d9bfb4bfbb53f6b7e9f6e51318159258db7293fa21bded160f88fc`→`
 两测试独立 DESIGN2 PASS `998e7dd582a3feaa791972749352a36d22ccd1d0affb0bafad1be4bedb93078b`、SOURCE2 PASS `272d550cf15340b96bb404b809656a96d6edf2d84edaedb52dadd11e45e9101d`。原两项前滚调用断言映射到同一恢复体的await effects.move/await effects.swapStaged，再增3项锁完整awaited scope与local adapter原native调用；所有其它原断言/测试名/预算保持。原64项断言→67项；孪生体测试15项保持，仅该消费者名单2→1实际localadapter，定义点/homonyms/forkedFrom和全部引用/陈旧名单校验不变。两份旧全文按四段逆向恢复，45 controls稳定；不修改生产代码，两测试均在原sourceDigest生产语料之外，复用一次成功census。
 
 本次发布分为Task源码17路径、这两项RC测试精确补正、canonical/docs17路径及匹配5项增长回执的正常后继退役，合计36个独立允许路径。Task17组合指纹 `2ba0bcf17579d97c758fce16161ff36295d521f4c6a6516f4f63b4a2e33526b1` 保持，完整A-G/CS adapters/真实部署仍开放。canonical另有6项原Task写点位置投影：恢复238→249与256→267、路由1855→1857与2181→2183、TaskDelete328→325与364→361；除实际id/line外各字段和原31个DB调用子树保持，不改业务写入规则，不新增条款或预算。
+
+## 2026-10-04 Prompt 内容与真实根的有限组合
+
+SOURCE39 原 FAIL f0a7f541c39b52ad1f18ca8ee824d0a343d6b1bafb1d35d1bfbbf7f03246acdc 保留，三个 P2 由有限 REPAIR4 PASS 425973713cbbb5042791946e79bab6020838f3e1831201638c2fb1a7b2531afd 关闭；35原owned/38 controls 未变。原全逆/DB/断言证明不重跑。ROOT-DESIGN3 PASS 98061bac4799bcab6a3a07daa549390732516c49c5b41f6d3c4d26fbf4dc0995；peer 发布并交还窗口后 ROOT-SOURCE4 PASS cb4d876b3dd193a1bbe34c86e5cc96bcdc68979d2649323610aa03752fc8406d，4 owned/76 controls/18 evidence 首末稳定。限定 W29 SOURCE1 PASS 2365266035a4c201191de7844ff3c8dd2226bc25e85d455aa38adbdfee170541 保留原 normalizer 和并行170计数基线，只改变三个真实摘要。最终 SOURCE45 001636f787e73a5439dcce0087d364645c20c0aa91c5cf8fa9f408508e332217，不重做成功的 SOURCE39/42门。
+
+效果与真实消费覆盖 UTF-8 阈值、opaque reference、完整 frozen receiver、同步/异步任意拒绝原因 fallback、object/callable Promise held ACK、runner store→patch→mark-running、detail/session ordered reads、agent/clarify transcript 和真实 memory composition timer。hosted 回归照原预算运行；本机只做限定格式/lint及纯AST/JSON/字节证明。META17 使用 0b8910ab8d88fff0df68dad416169895d6fc1165 的 committed 非owned/规则加45owned生成原canonical，其余303条原债务全文/判据与全部手写旧文保留；只按实际 rfc294-mutation-entrypoints、rfc294-cross-context-observed-imports、rfc294-architecture-exceptions、rfc294-public-surfaces、rfc294-module-symbol-owners 增长登记并在matching canonical后继退役。有限门不替代完整AC00/A-G或新exact-SHA CI。CS adapters、B/M0真实部署及M1–M4继续。
+
+六条新增 R1 的原失败记录保留；PUBLIC-CONTRACTS-DESIGN10 与 SOURCE10 80687f0f61ac2016eb6289bdc08182cf76fb58b68c89c3559ab22255e62cb0ca 通过后，三份同步 helper 原函数 AST 原样迁入 composition，旧服务改走 exact public/commands、queries、types，三个旧消费者只改 selector 的 public/participants import。构造器不公开，三个根与 ACK 顺序不变。unit 原54断言/11名称预算和全原AST保留，新增公开合同函数身份及完整receiver/heldACK回归；修正后纯 committed-rule 边界复查新增为0，无新债务条款。
+
+原生成规则只销账一条已消失的 memory 蒸馏→旧 prompt service 的 R2；原304条完整记录留在 before 证据，其余303条全文、理由与退役条件保持。registered findings、40 required SPI、69 target edges 和空 implementation SCC 均不变。
