@@ -1,7 +1,11 @@
+import type { ResourcePackageRecoveryEffectsFactory } from '../application/package/recoveryContentEffects'
+import {
+  selectedResourcePackageRecoveryEffects,
+  withResourcePackageRecoveryEffects,
+} from './recoveryContentEffects'
 import { pluginCachedPathQuery } from './pluginCachedPathQuery'
-import { assertManagedPath, errorValue } from './resourcePackageMaintenancePaths'
-import { existsSync, mkdirSync, rmSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { errorValue } from './resourcePackageMaintenancePaths'
+
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 
@@ -14,14 +18,7 @@ import type {
   ResourcePackageApplyJournalSnapshot,
   ResourcePackageApplyMaintenanceLog,
 } from '../application/resourcePackageMaintenance'
-import { cleanupOpDirs, opCandidateDir, opStagedDir, swapInStaged } from './legacy/skillFsPublish'
-import { hashRegularFileTree } from './legacy/skillHash'
-import {
-  realDirectoryChainState,
-  skillFilesAbs,
-  skillRootAbs,
-  skillVersionAbs,
-} from './legacy/skillIdentityPaths'
+
 import { markSkillBootVerified, unmarkSkillBootVerified } from './legacy/skillBootVerify'
 import { assertCommittedApplyReceipt } from '../domain/resourcePackageApplyReceipt'
 import { resourcePackageSkillRecoveryDisposition } from '../domain/resourcePackageSkillRecovery'
@@ -82,17 +79,19 @@ async function publishStagedVersion(
   db: ProviderNeutralDatabase,
   appHome: string,
   artifact: LegacySkillVersionArtifact,
+  factory: ResourcePackageRecoveryEffectsFactory,
 ): Promise<void> {
   const staged = artifact.staged
   if (staged.noop !== null) return
-  const filesDir = skillFilesAbs(appHome, staged.skillId)
-  const versionDir = skillVersionAbs(appHome, staged.skillId, staged.newVersion)
-  assertManagedPath(appHome, filesDir)
-  assertManagedPath(appHome, versionDir)
+  const filesDir = factory.live(staged.skillId)
+  const versionDir = factory.version(staged.skillId, staged.newVersion)
+  factory.assertManaged(appHome, filesDir)
+  factory.assertManaged(appHome, versionDir)
   if (
-    resolve(staged.filesDir) !== resolve(filesDir) ||
-    resolve(staged.versionDir) !== resolve(versionDir) ||
-    resolve(staged.stagingDir) !== resolve(opStagedDir(filesDir, staged.publishId))
+    factory.normalize(staged.filesDir) !== factory.normalize(filesDir) ||
+    factory.normalize(staged.versionDir) !== factory.normalize(versionDir) ||
+    factory.normalize(staged.stagingDir) !==
+      factory.normalize(factory.staged(filesDir, staged.publishId))
   ) {
     throw new Error('resource-package-skill-version-artifact-path-mismatch')
   }
@@ -114,25 +113,30 @@ async function publishStagedVersion(
     // live 树一个字节都不动，只清掉这次操作留下的 staged / backup / candidate。
     // 与 PostgreSQL 侧一样**不**补 `markSkillBootVerified`——启动复核由启动复核器负责，
     // 在这里补一次会造出一条只有 SQLite 才有的分支。
-    cleanupOpDirs(filesDir, staged.publishId)
-    rmSync(opCandidateDir(versionDir, staged.publishId), { recursive: true, force: true })
+    await withResourcePackageRecoveryEffects(factory, async (effects) => {
+      await effects.cleanupOperation(filesDir, staged.publishId)
+      await effects.removeDirectory(factory.candidate(versionDir, staged.publishId))
+    })
     return
   }
   if (disposition === 'reject-missing-generation') {
     throw new Error(`resource-package-skill-publication-missing:${staged.skillId}`)
   }
 
-  mkdirSync(dirname(filesDir), { recursive: true })
-  swapInStaged(filesDir, staged.publishId)
-  if (
-    realDirectoryChainState(skillRootAbs(appHome, staged.skillId), filesDir) !== 'real-directory'
-  ) {
-    throw new Error('resource-package-skill-live-directory-invalid')
-  }
-  if (hashRegularFileTree(filesDir) !== staged.newHash) {
-    throw new Error('resource-package-skill-live-hash-mismatch')
-  }
-  cleanupOpDirs(filesDir, staged.publishId)
+  await withResourcePackageRecoveryEffects(factory, async (effects) => {
+    await effects.createDirectory(factory.parent(filesDir))
+    await effects.swapStaged(filesDir, staged.publishId)
+    if (
+      (await effects.directoryChainState(factory.root(staged.skillId), filesDir)) !==
+      'real-directory'
+    ) {
+      throw new Error('resource-package-skill-live-directory-invalid')
+    }
+    if ((await effects.hashRegularTree(filesDir)) !== staged.newHash) {
+      throw new Error('resource-package-skill-live-hash-mismatch')
+    }
+    await effects.cleanupOperation(filesDir, staged.publishId)
+  })
   const opId = staged.opId
   if (opId !== null)
     await databaseSessionFor(db).transaction(async (tx) => await finishOperation(tx, opId))
@@ -144,19 +148,24 @@ async function compensateArtifact(
   appHome: string,
   pluginsDir: string,
   artifact: LegacyArtifact,
+  factory: ResourcePackageRecoveryEffectsFactory,
 ): Promise<void> {
   switch (artifact.kind) {
     case 'plugin-install':
-      assertManagedPath(pluginsDir, artifact.generationDir)
-      rmSync(artifact.generationDir, { recursive: true, force: true })
+      factory.assertManaged(pluginsDir, artifact.generationDir)
+      await withResourcePackageRecoveryEffects(factory, (effects) =>
+        effects.removeDirectory(artifact.generationDir),
+      )
       return
     case 'skill-stage': {
-      const skillDir = skillRootAbs(appHome, artifact.skillId)
-      assertManagedPath(appHome, skillDir)
-      if (resolve(artifact.skillDir) !== resolve(skillDir)) {
+      const skillDir = factory.root(artifact.skillId)
+      factory.assertManaged(appHome, skillDir)
+      if (factory.normalize(artifact.skillDir) !== factory.normalize(skillDir)) {
         throw new Error('resource-package-skill-root-path-mismatch')
       }
-      rmSync(skillDir, { recursive: true, force: true })
+      await withResourcePackageRecoveryEffects(factory, (effects) =>
+        effects.removeDirectory(skillDir),
+      )
       await databaseSessionFor(db).transaction(async (tx) => {
         await tx.delete(skills).where(eq(skills.id, artifact.skillId))
         await abandonOperation(tx, artifact.opId)
@@ -165,19 +174,22 @@ async function compensateArtifact(
     }
     case 'skill-version-stage': {
       const staged = artifact.staged
-      const filesDir = skillFilesAbs(appHome, staged.skillId)
-      const versionDir = skillVersionAbs(appHome, staged.skillId, staged.newVersion)
-      assertManagedPath(appHome, filesDir)
-      assertManagedPath(appHome, versionDir)
+      const filesDir = factory.live(staged.skillId)
+      const versionDir = factory.version(staged.skillId, staged.newVersion)
+      factory.assertManaged(appHome, filesDir)
+      factory.assertManaged(appHome, versionDir)
       if (
-        resolve(staged.filesDir) !== resolve(filesDir) ||
-        resolve(staged.versionDir) !== resolve(versionDir) ||
-        resolve(staged.stagingDir) !== resolve(opStagedDir(filesDir, staged.publishId))
+        factory.normalize(staged.filesDir) !== factory.normalize(filesDir) ||
+        factory.normalize(staged.versionDir) !== factory.normalize(versionDir) ||
+        factory.normalize(staged.stagingDir) !==
+          factory.normalize(factory.staged(filesDir, staged.publishId))
       ) {
         throw new Error('resource-package-skill-version-artifact-path-mismatch')
       }
-      cleanupOpDirs(filesDir, staged.publishId)
-      rmSync(versionDir, { recursive: true, force: true })
+      await withResourcePackageRecoveryEffects(factory, async (effects) => {
+        await effects.cleanupOperation(filesDir, staged.publishId)
+        await effects.removeDirectory(versionDir)
+      })
       const opId = staged.opId
       if (opId !== null)
         await databaseSessionFor(db).transaction(async (tx) => await abandonOperation(tx, opId))
@@ -189,6 +201,7 @@ async function rollForwardArtifacts(input: {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly artifacts: readonly LegacyArtifact[]
+  readonly effectsFactory: ResourcePackageRecoveryEffectsFactory
   readonly log?: ResourcePackageApplyMaintenanceLog
 }): Promise<void> {
   const pendingVersions: LegacySkillVersionArtifact[] = []
@@ -203,7 +216,12 @@ async function rollForwardArtifacts(input: {
       }
       if (artifact.kind === 'plugin-install') {
         const row = await pluginCachedPathQuery(input.db, artifact).get()
-        if (row !== undefined && !existsSync(row.cachedPath)) {
+        if (
+          row !== undefined &&
+          !(await withResourcePackageRecoveryEffects(input.effectsFactory, (effects) =>
+            effects.exists(row.cachedPath),
+          ))
+        ) {
           throw new Error(`resource-package-plugin-publication-missing:${artifact.pluginId}`)
         }
         continue
@@ -236,7 +254,7 @@ async function rollForwardArtifacts(input: {
   for (const artifact of pendingVersions) unmarkSkillBootVerified(artifact.staged.skillId)
   for (const artifact of pendingVersions) {
     try {
-      await publishStagedVersion(input.db, input.appHome, artifact)
+      await publishStagedVersion(input.db, input.appHome, artifact, input.effectsFactory)
     } catch (error) {
       failure ??= errorValue(error)
     }
@@ -249,7 +267,9 @@ export function createSqliteResourcePackageApplyArtifactRecovery(input: {
   readonly appHome: string
   readonly pluginsDir: string
   readonly log?: ResourcePackageApplyMaintenanceLog
+  readonly effectsFactory?: ResourcePackageRecoveryEffectsFactory
 }): ResourcePackageApplyArtifactRecoveryPort {
+  const factory = selectedResourcePackageRecoveryEffects(input.effectsFactory, input.appHome)
   return Object.freeze({
     async rollForward(journal: ResourcePackageApplyJournalSnapshot) {
       // RFC-359 W10（判据缺口 13a）：回放之前先过**信封门**——committed 就必须带回执，
@@ -262,6 +282,7 @@ export function createSqliteResourcePackageApplyArtifactRecovery(input: {
       await rollForwardArtifacts({
         db: input.db,
         appHome: input.appHome,
+        effectsFactory: factory,
         artifacts: parseArtifacts(journal.preparedArtifactsJson),
         ...(input.log === undefined ? {} : { log: input.log }),
       })
@@ -270,7 +291,7 @@ export function createSqliteResourcePackageApplyArtifactRecovery(input: {
       let failure: Error | undefined
       for (const artifact of [...parseArtifacts(journal.preparedArtifactsJson)].reverse()) {
         try {
-          await compensateArtifact(input.db, input.appHome, input.pluginsDir, artifact)
+          await compensateArtifact(input.db, input.appHome, input.pluginsDir, artifact, factory)
         } catch (error) {
           failure ??= errorValue(error)
         }

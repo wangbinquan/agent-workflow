@@ -9,7 +9,14 @@ const MaintenanceWorkerEffectsDescriptorSchema = z
     exportName: z.string().min(1),
     configurationJson: z.string(),
     capabilities: z
-      .array(z.enum(['taskArchive', 'resourcePackageRecovery', 'pluginGenerationGc']))
+      .array(
+        z.enum([
+          'taskArchive',
+          'resourcePackageRecovery',
+          'pluginGenerationGc',
+          'resourcePackageRecoveryContent',
+        ]),
+      )
       .min(1)
       .refine((values) => new Set(values).size === values.length, 'duplicate effect selection'),
   })

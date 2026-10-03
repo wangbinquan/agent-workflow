@@ -688,6 +688,7 @@ async function initialise(
         appHome,
         pluginsDir: join(appHome, 'plugins'),
         artifacts: workerEffects?.resourcePackageRecovery,
+        recoveryEffectsFactory: workerEffects?.resourcePackageRecoveryContent,
       })
       const resourcePackageMaintenanceCommand: ResourcePackageApplyMaintenanceCommand =
         resourcePackageMaintenance.command
@@ -790,6 +791,7 @@ async function initialise(
         appHome,
         pluginsDir: join(appHome, 'plugins'),
         artifacts: workerEffects?.resourcePackageRecovery,
+        recoveryEffectsFactory: workerEffects?.resourcePackageRecoveryContent,
         // Worker 线程不跑 apply：正在执行的 journal id 由主线程随 payload 送进来
         // （`converge({ activeApplyIds })`），这里的查询面没有消费者。
         activitySource: { activeApplyIds: () => [] },

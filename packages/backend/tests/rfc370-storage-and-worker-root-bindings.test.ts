@@ -387,3 +387,20 @@ test('all nine actual automation workspace roots bind the complete factory from 
     }
   }
 })
+
+test('both real maintenance Worker composers bind the selected recovery content without moving their database owner', () => {
+  const source = load('platform/background/maintenanceWorker.ts')
+  for (const name of [
+    'composePostgresqlResourcePackageApplyMaintenance',
+    'composeSqliteResourcePackageApplyMaintenance',
+  ]) {
+    const call = oneRoot(source, name)
+    expect(compact(property(call, source, 'recoveryEffectsFactory'), source)).toBe(
+      'workerEffects?.resourcePackageRecoveryContent',
+    )
+    expect(compact(property(call, source, 'artifacts'), source)).toBe(
+      'workerEffects?.resourcePackageRecovery',
+    )
+    expect(property(call, source, 'db')).toBeDefined()
+  }
+})

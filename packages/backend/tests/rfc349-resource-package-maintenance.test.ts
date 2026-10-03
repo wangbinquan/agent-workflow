@@ -165,6 +165,13 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
       ),
       'utf8',
     )
+    const nativeRecovery = readFileSync(
+      join(
+        root,
+        'src/modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts',
+      ),
+      'utf8',
+    )
 
     expect(publicCommands).toContain('export interface ResourcePackageApplyMaintenanceCommand')
     expect(publicQueries).toContain('export interface ResourcePackageApplyActivityQuery')
@@ -175,10 +182,15 @@ describe('RFC-349 provider-neutral Resource Package maintenance', () => {
     expect(composition).toContain('activityTracker: activity.tracker')
     expect(composition.match(/journal: createResourcePackageApplyJournalPort\(/g)).toHaveLength(2)
     expect(journalSource).toContain('.from(resourceBundleApplies)')
-    expect(sqlite).toContain('swapInStaged(filesDir, staged.publishId)')
-    expect(postgresql).toContain('restoreFromBackup(liveDirectory, input.artifact.operationId)')
+    expect(sqlite).toContain('await effects.swapStaged(filesDir, staged.publishId)')
+    expect(postgresql).toContain(
+      'await effects.restoreBackup(liveDirectory, input.artifact.operationId)',
+    )
     expect(postgresql).toContain("disposition === 'cleanup-superseded'")
-    expect(postgresql).toContain('hashRegularFileTree(liveDirectory)')
+    expect(postgresql).toContain('await effects.hashRegularTree(liveDirectory)')
+    expect(nativeRecovery).toContain('return swapInStaged(liveReference, publicationId)')
+    expect(nativeRecovery).toContain('return restoreFromBackup(liveReference, publicationId)')
+    expect(nativeRecovery).toContain('return hashRegularFileTree(reference)')
     expect(postgresql).not.toContain('sqliteResourcePackageMaintenance')
   })
 })

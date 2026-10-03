@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
+import { eq } from 'drizzle-orm'
+import { resourceBundleApplies } from '@/db/schema'
 
 import type { MaintenanceWorkerEvent } from '@/platform/background/maintenanceProtocol'
 import {
@@ -85,6 +87,127 @@ function terminalReceipt() {
 }
 
 describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => {
+  for (const closeFailure of [false, true]) {
+    test(`the actual Worker retains AW compensation semantics and awaits content close ${closeFailure ? 'failure' : 'ACK'}`, async () => {
+      const appHome = mkdtempSync(join(tmpdir(), 'rfc370-worker-recovery-content-'))
+      const database = openProviderMaintenanceWorkerDatabase(harness, appHome)
+      const store = createMaintenanceRunStore(database.db)
+      const phases = phaseChannel(),
+        runId = randomUUID(),
+        journalId = randomUUID()
+      const events: MaintenanceWorkerEvent[] = []
+      const completed = terminalReceipt()
+      let supervisor: MaintenanceWorkerSupervisor | undefined
+      let failed: { readonly error: unknown } | undefined
+      try {
+        await database.db.insert(resourceBundleApplies).values({
+          id: journalId,
+          scope: 'package',
+          key: journalId,
+          actorUserId: 'worker-content-actor',
+          state: 'prepared',
+          preparedArtifactsJson: JSON.stringify([
+            {
+              kind: 'plugin-install',
+              operationId: randomUUID(),
+              pluginId: randomUUID(),
+              generationId: randomUUID(),
+              generationDirectory: 'logical:worker-generation',
+            },
+          ]),
+          receiptJson: null,
+          error: null,
+          createdAt: 0,
+          updatedAt: 0,
+        })
+        await store.enqueue({
+          id: runId,
+          jobKey: 'intentRecovery',
+          jobClass: 'recovery',
+          slotKey: runId,
+          payload: {},
+          scheduledAt: 0,
+          now: 0,
+        })
+        supervisor = startMaintenanceWorkerSupervisor({
+          appHome,
+          databaseInit: database.databaseInit,
+          workerFactory: database.workerFactory,
+          effectsBootstrap: {
+            moduleSpecifier: new URL(
+              './fixtures/rfc370-resource-package-recovery-effects.mjs',
+              import.meta.url,
+            ).href,
+            exportName: 'createEffects',
+            configurationJson: JSON.stringify({
+              channelName: phases.name,
+              holdClose: true,
+              holdDispose: true,
+              closeFailure,
+            }),
+            capabilities: ['resourcePackageRecoveryContent'],
+          },
+          onEvent(event) {
+            events.push(event)
+            if (event.type === 'completed' && event.runId === runId) completed.resolve(event)
+          },
+        })
+        const factory = await phases.wait('factory-entered')
+        expect((await phases.wait('recovery-remove-entered')).instanceRef).toBe(factory.instanceRef)
+        expect((await phases.wait('content-close-entered')).instanceRef).toBe(factory.instanceRef)
+        expect(await store.read(runId)).toMatchObject({ state: 'running', attempt: 1 })
+        expect(
+          (
+            await database.db
+              .select()
+              .from(resourceBundleApplies)
+              .where(eq(resourceBundleApplies.id, journalId))
+              .get()
+          )?.state,
+        ).toBe('prepared')
+        expect(events.some((event) => event.type === 'completed')).toBe(false)
+        let drained = false
+        const draining = supervisor.drain(15_000).then(() => {
+          drained = true
+        })
+        await phases.wait('drain-received')
+        phases.release('content-close')
+        expect((await phases.wait('dispose-entered')).instanceRef).toBe(factory.instanceRef)
+        const receipt = await completed.promise
+        // Original converge retains failed content for retry; the maintenance job itself completes.
+        expect(receipt.outcome).toBe('succeeded')
+        expect(receipt.counters.failed).toBe(closeFailure ? 0 : 1)
+        expect(
+          (
+            await database.db
+              .select()
+              .from(resourceBundleApplies)
+              .where(eq(resourceBundleApplies.id, journalId))
+              .get()
+          )?.state,
+        ).toBe(closeFailure ? 'prepared' : 'failed')
+        expect(await store.read(runId)).toMatchObject({ state: 'succeeded', attempt: 1 })
+        expect(drained).toBe(false)
+        expect(events.some((event) => event.type === 'drained')).toBe(false)
+        phases.release('dispose')
+        await draining
+        expect(supervisor.live().state).toBe('stopped')
+        expect(events.filter((event) => event.type === 'degraded')).toEqual([])
+      } catch (error) {
+        failed = { error }
+      } finally {
+        phases.release('init')
+        phases.release('content-close')
+        phases.release('dispose')
+        await supervisor?.stop(1_000)
+        phases.close()
+        await database.dispose()
+        rmSync(appHome, { recursive: true, force: true })
+      }
+      if (failed !== undefined) throw scenarioFailure(failed.error, events)
+    }, 40_000)
+  }
+
   test('fault drain followed by pause sends two real frames and waits for selected release', async () => {
     const appHome = mkdtempSync(join(tmpdir(), 'rfc370-worker-double-drain-'))
     const database = openProviderMaintenanceWorkerDatabase(harness, appHome)

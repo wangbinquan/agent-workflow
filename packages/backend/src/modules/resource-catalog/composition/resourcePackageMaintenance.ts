@@ -15,6 +15,8 @@ import { createResourcePackageApplyJournalPort } from '../infrastructure/resourc
 import { createSqliteResourcePackageApplyArtifactRecovery } from '../infrastructure/sqliteResourcePackageMaintenance'
 import type { ResourcePackageApplyMaintenanceCommand } from '../public/commands'
 import type { ResourcePackageApplyActivityQuery } from '../public/queries'
+import type { ResourcePackageRecoveryEffectsFactory } from '../application/package/recoveryContentEffects'
+import { selectedResourcePackageRecoveryEffects } from '../infrastructure/recoveryContentEffects'
 
 export type { ResourcePackageApplyArtifactRecoveryPort }
 
@@ -76,10 +78,22 @@ export function composeSqliteResourcePackageApplyMaintenance(input: {
   readonly pluginsDir: string
   readonly activitySource: ResourcePackageApplyActivitySource
   readonly artifacts?: ResourcePackageApplyArtifactRecoveryPort
+  readonly recoveryEffectsFactory?: ResourcePackageRecoveryEffectsFactory
   readonly now?: () => number
   readonly log?: Logger
 }): ResourcePackageApplyMaintenance {
   const log = input.log ?? createLogger('resourcePackageMaintenance')
+  if (
+    input.artifacts !== undefined &&
+    input.artifacts !== null &&
+    input.recoveryEffectsFactory !== undefined
+  ) {
+    throw new Error('resource-package-recovery-selections-conflict')
+  }
+  const effectsFactory =
+    input.artifacts === undefined || input.artifacts === null
+      ? selectedResourcePackageRecoveryEffects(input.recoveryEffectsFactory, input.appHome)
+      : undefined
   return Object.freeze({
     command: createResourcePackageApplyMaintenanceCommand({
       journal: createResourcePackageApplyJournalPort(input.db),
@@ -92,11 +106,13 @@ export function composeSqliteResourcePackageApplyMaintenance(input: {
             db: input.db,
             appHome: input.appHome,
             pluginsDir: input.pluginsDir,
+            effectsFactory,
           }),
           createSqliteResourcePackageApplyArtifactRecovery({
             db: input.db,
             appHome: input.appHome,
             pluginsDir: input.pluginsDir,
+            effectsFactory,
             log: maintenanceLog(log),
           }),
         ),
@@ -112,11 +128,23 @@ export function composePostgresqlResourcePackageApplyMaintenance(input: {
   readonly appHome: string
   readonly pluginsDir: string
   readonly artifacts?: ResourcePackageApplyArtifactRecoveryPort
+  readonly recoveryEffectsFactory?: ResourcePackageRecoveryEffectsFactory
   readonly now?: () => number
   readonly log?: Logger
 }): PostgresqlResourcePackageApplyMaintenance {
   const activity = createResourcePackageApplyActivityRegistry()
   const log = input.log ?? createLogger('resourcePackageMaintenance')
+  if (
+    input.artifacts !== undefined &&
+    input.artifacts !== null &&
+    input.recoveryEffectsFactory !== undefined
+  ) {
+    throw new Error('resource-package-recovery-selections-conflict')
+  }
+  const effectsFactory =
+    input.artifacts === undefined || input.artifacts === null
+      ? selectedResourcePackageRecoveryEffects(input.recoveryEffectsFactory, input.appHome)
+      : undefined
   return Object.freeze({
     command: createResourcePackageApplyMaintenanceCommand({
       journal: createResourcePackageApplyJournalPort(input.db),
@@ -126,6 +154,7 @@ export function composePostgresqlResourcePackageApplyMaintenance(input: {
           db: input.db,
           appHome: input.appHome,
           pluginsDir: input.pluginsDir,
+          effectsFactory,
         }),
       ...(input.now === undefined ? {} : { now: input.now }),
       log: maintenanceLog(log),

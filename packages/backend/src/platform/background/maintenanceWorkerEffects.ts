@@ -2,11 +2,13 @@ import type { TaskArchiveContentBinding } from '@/modules/task-execution/public/
 import type {
   PluginGenerationFilesystemGcPort,
   ResourcePackageApplyArtifactRecoveryPort,
+  ResourcePackageRecoveryEffectsFactory,
 } from '@/modules/resource-catalog/public/types'
 
 export interface MaintenanceWorkerEffectsSelections {
   readonly taskArchive?: TaskArchiveContentBinding
   readonly resourcePackageRecovery?: ResourcePackageApplyArtifactRecoveryPort
+  readonly resourcePackageRecoveryContent?: ResourcePackageRecoveryEffectsFactory
   readonly pluginGenerationGc?: PluginGenerationFilesystemGcPort
 }
 
@@ -58,11 +60,17 @@ function selectEffects(
   capabilities: readonly MaintenanceWorkerEffectsCapability[],
 ): MaintenanceWorkerEffectsSelections {
   completeMethods(environment, ['dispose'], 'environment')
-  if (capabilities.length === 0 || new Set(capabilities).size !== capabilities.length)
+  if (
+    capabilities.length === 0 ||
+    new Set(capabilities).size !== capabilities.length ||
+    (capabilities.includes('resourcePackageRecovery') &&
+      capabilities.includes('resourcePackageRecoveryContent'))
+  )
     throw new Error('maintenance-worker-effects-invalid-selection')
   const selection: {
     taskArchive?: TaskArchiveContentBinding
     resourcePackageRecovery?: ResourcePackageApplyArtifactRecoveryPort
+    resourcePackageRecoveryContent?: ResourcePackageRecoveryEffectsFactory
     pluginGenerationGc?: PluginGenerationFilesystemGcPort
   } = {}
   for (const family of capabilities) {
@@ -99,6 +107,27 @@ function selectEffects(
         const recovery = environment.resourcePackageRecovery
         completeMethods(recovery, ['rollForward', 'compensate'], family)
         selection.resourcePackageRecovery = recovery
+        break
+      }
+      case 'resourcePackageRecoveryContent': {
+        const recovery = environment.resourcePackageRecoveryContent
+        completeMethods(
+          recovery,
+          [
+            'root',
+            'live',
+            'version',
+            'staged',
+            'candidate',
+            'normalize',
+            'parent',
+            'storedReference',
+            'assertManaged',
+            'acquire',
+          ],
+          family,
+        )
+        selection.resourcePackageRecoveryContent = recovery
         break
       }
       case 'pluginGenerationGc': {

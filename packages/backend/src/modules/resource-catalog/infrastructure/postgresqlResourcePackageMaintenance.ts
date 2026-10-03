@@ -1,27 +1,23 @@
+import type { ResourcePackageRecoveryEffectsFactory } from '../application/package/recoveryContentEffects'
+import {
+  selectedResourcePackageRecoveryEffects,
+  withResourcePackageRecoveryEffects,
+} from './recoveryContentEffects'
 import { pluginCachedPathQuery } from './pluginCachedPathQuery'
-import { assertManagedPath, errorValue } from './resourcePackageMaintenancePaths'
-import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
+import { errorValue } from './resourcePackageMaintenancePaths'
+
 import { BUNDLE_RESOURCE_TYPES } from '@agent-workflow/shared'
 import { and, eq } from 'drizzle-orm'
 import { z } from 'zod'
 
 import { skills, skillVersions } from '@/db/schema'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { safeJoin } from '@/util/safePath'
+
 import type {
   ResourcePackageApplyArtifactRecoveryPort,
   ResourcePackageApplyJournalSnapshot,
 } from '../application/resourcePackageMaintenance'
-import {
-  cleanupOpDirs,
-  opCandidateDir,
-  opStagedDir,
-  restoreFromBackup,
-  swapInStaged,
-} from './legacy/skillFsPublish'
-import { hashRegularFileTree } from './legacy/skillHash'
-import { skillFilesAbs, skillVersionAbs } from './legacy/skillIdentityPaths'
+
 import { markSkillBootVerified } from './legacy/skillBootVerify'
 import { assertCommittedApplyReceipt } from '../domain/resourcePackageApplyReceipt'
 import {
@@ -150,28 +146,27 @@ export const postgresqlResourcePackageSkillRecoveryDisposition =
 function assertSkillArtifactPaths(input: {
   readonly artifact: PostgresqlSkillArtifact
   readonly appHome: string
+  readonly effectsFactory: ResourcePackageRecoveryEffectsFactory
   readonly liveDirectory: string
   readonly versionDirectory: string
 }): void {
   const { artifact } = input
-  const expectedLive = skillFilesAbs(input.appHome, artifact.skillId)
-  const expectedVersion = skillVersionAbs(
-    input.appHome,
-    artifact.skillId,
-    skillArtifactVersion(artifact),
-  )
+  const factory = input.effectsFactory
+  const expectedLive = factory.live(artifact.skillId)
+  const expectedVersion = factory.version(artifact.skillId, skillArtifactVersion(artifact))
   if (
-    resolve(input.liveDirectory) !== resolve(expectedLive) ||
-    resolve(input.versionDirectory) !== resolve(expectedVersion) ||
-    resolve(artifact.stagingDirectory) !== resolve(opStagedDir(expectedLive, artifact.operationId))
+    factory.normalize(input.liveDirectory) !== factory.normalize(expectedLive) ||
+    factory.normalize(input.versionDirectory) !== factory.normalize(expectedVersion) ||
+    factory.normalize(artifact.stagingDirectory) !==
+      factory.normalize(factory.staged(expectedLive, artifact.operationId))
   ) {
     throw new Error('resource-package-skill-artifact-path-mismatch')
   }
   if (artifact.kind === 'skill-stage') {
-    if (resolve(artifact.targetDirectory) !== resolve(expectedLive)) {
+    if (factory.normalize(artifact.targetDirectory) !== factory.normalize(expectedLive)) {
       throw new Error('resource-package-skill-artifact-target-mismatch')
     }
-  } else if (resolve(artifact.versionDirectory) !== resolve(expectedVersion)) {
+  } else if (factory.normalize(artifact.versionDirectory) !== factory.normalize(expectedVersion)) {
     throw new Error('resource-package-skill-artifact-version-mismatch')
   }
 }
@@ -179,14 +174,17 @@ function assertSkillArtifactPaths(input: {
 async function rollForwardSkillArtifact(input: {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
+  readonly effectsFactory: ResourcePackageRecoveryEffectsFactory
   readonly artifact: PostgresqlSkillArtifact
 }): Promise<void> {
+  const factory = input.effectsFactory
   const version = skillArtifactVersion(input.artifact)
-  const expectedLiveDirectory = skillFilesAbs(input.appHome, input.artifact.skillId)
-  const expectedVersionDirectory = skillVersionAbs(input.appHome, input.artifact.skillId, version)
+  const expectedLiveDirectory = factory.live(input.artifact.skillId)
+  const expectedVersionDirectory = factory.version(input.artifact.skillId, version)
   assertSkillArtifactPaths({
     artifact: input.artifact,
     appHome: input.appHome,
+    effectsFactory: factory,
     liveDirectory: expectedLiveDirectory,
     versionDirectory: expectedVersionDirectory,
   })
@@ -200,10 +198,11 @@ async function rollForwardSkillArtifact(input: {
     artifactVersion: version,
   })
   if (disposition === 'cleanup-deleted' || disposition === 'cleanup-superseded') {
-    cleanupOpDirs(expectedLiveDirectory, input.artifact.operationId)
-    rmSync(opCandidateDir(expectedVersionDirectory, input.artifact.operationId), {
-      recursive: true,
-      force: true,
+    await withResourcePackageRecoveryEffects(factory, async (effects) => {
+      await effects.cleanupOperation(expectedLiveDirectory, input.artifact.operationId)
+      await effects.removeDirectory(
+        factory.candidate(expectedVersionDirectory, input.artifact.operationId),
+      )
     })
     return
   }
@@ -227,55 +226,60 @@ async function rollForwardSkillArtifact(input: {
   if (snapshot === undefined || snapshot.contentHash === null) {
     throw new Error(`resource-package-skill-snapshot-missing:${input.artifact.skillId}:${version}`)
   }
-  const liveDirectory = safeJoin(input.appHome, skill.managedPath)
-  const versionDirectory = safeJoin(input.appHome, snapshot.filesPath)
+  const liveDirectory = factory.storedReference(skill.managedPath)
+  const versionDirectory = factory.storedReference(snapshot.filesPath)
   assertSkillArtifactPaths({
     artifact: input.artifact,
     appHome: input.appHome,
+    effectsFactory: factory,
     liveDirectory,
     versionDirectory,
   })
-  const candidateDirectory = opCandidateDir(versionDirectory, input.artifact.operationId)
-  assertManagedPath(input.appHome, candidateDirectory)
+  const candidateDirectory = factory.candidate(versionDirectory, input.artifact.operationId)
+  factory.assertManaged(input.appHome, candidateDirectory)
 
-  if (existsSync(versionDirectory)) {
-    if (hashRegularFileTree(versionDirectory) !== snapshot.contentHash) {
-      throw new Error('resource-package-skill-version-hash-mismatch')
+  await withResourcePackageRecoveryEffects(factory, async (effects) => {
+    if (await effects.exists(versionDirectory)) {
+      if ((await effects.hashRegularTree(versionDirectory)) !== snapshot.contentHash) {
+        throw new Error('resource-package-skill-version-hash-mismatch')
+      }
+      await effects.removeDirectory(candidateDirectory)
+    } else {
+      if (!(await effects.exists(candidateDirectory))) {
+        throw new Error('resource-package-skill-version-candidate-missing')
+      }
+      await effects.createDirectory(factory.parent(versionDirectory), 0o700)
+      await effects.move(candidateDirectory, versionDirectory)
     }
-    rmSync(candidateDirectory, { recursive: true, force: true })
-  } else {
-    if (!existsSync(candidateDirectory)) {
-      throw new Error('resource-package-skill-version-candidate-missing')
+    await effects.swapStaged(liveDirectory, input.artifact.operationId)
+    if ((await effects.hashRegularTree(liveDirectory)) !== snapshot.contentHash) {
+      throw new Error('resource-package-skill-live-hash-mismatch')
     }
-    mkdirSync(dirname(versionDirectory), { recursive: true, mode: 0o700 })
-    renameSync(candidateDirectory, versionDirectory)
-  }
-  swapInStaged(liveDirectory, input.artifact.operationId)
-  if (hashRegularFileTree(liveDirectory) !== snapshot.contentHash) {
-    throw new Error('resource-package-skill-live-hash-mismatch')
-  }
-  cleanupOpDirs(liveDirectory, input.artifact.operationId)
+    await effects.cleanupOperation(liveDirectory, input.artifact.operationId)
+  })
   markSkillBootVerified(input.artifact.skillId)
 }
 
-function compensateSkillArtifact(input: {
+async function compensateSkillArtifact(input: {
   readonly appHome: string
+  readonly effectsFactory: ResourcePackageRecoveryEffectsFactory
   readonly artifact: PostgresqlSkillArtifact
-}): void {
+}): Promise<void> {
+  const factory = input.effectsFactory
   const version = skillArtifactVersion(input.artifact)
-  const liveDirectory = skillFilesAbs(input.appHome, input.artifact.skillId)
-  const versionDirectory = skillVersionAbs(input.appHome, input.artifact.skillId, version)
+  const liveDirectory = factory.live(input.artifact.skillId)
+  const versionDirectory = factory.version(input.artifact.skillId, version)
   assertSkillArtifactPaths({
     artifact: input.artifact,
     appHome: input.appHome,
+    effectsFactory: factory,
     liveDirectory,
     versionDirectory,
   })
-  restoreFromBackup(liveDirectory, input.artifact.operationId)
-  cleanupOpDirs(liveDirectory, input.artifact.operationId)
-  rmSync(opCandidateDir(versionDirectory, input.artifact.operationId), {
-    recursive: true,
-    force: true,
+  await withResourcePackageRecoveryEffects(factory, async (effects) => {
+    await effects.restoreBackup(liveDirectory, input.artifact.operationId)
+    await effects.cleanupOperation(liveDirectory, input.artifact.operationId)
+    await effects.removeDirectory(factory.candidate(versionDirectory, input.artifact.operationId))
   })
 }
 
@@ -283,7 +287,9 @@ export function createPostgresqlResourcePackageApplyArtifactRecovery(input: {
   readonly db: ProviderNeutralDatabase
   readonly appHome: string
   readonly pluginsDir: string
+  readonly effectsFactory?: ResourcePackageRecoveryEffectsFactory
 }): ResourcePackageApplyArtifactRecoveryPort {
+  const factory = selectedResourcePackageRecoveryEffects(input.effectsFactory, input.appHome)
   return Object.freeze({
     async rollForward(journal: ResourcePackageApplyJournalSnapshot) {
       const receipt = parseReceipt(journal)
@@ -293,7 +299,12 @@ export function createPostgresqlResourcePackageApplyArtifactRecovery(input: {
           assertOperationInReceipt(receipt, artifact)
           if (artifact.kind === 'plugin-install') {
             const plugin = await pluginCachedPathQuery(input.db, artifact).get()
-            if (plugin !== undefined && !existsSync(plugin.cachedPath)) {
+            if (
+              plugin !== undefined &&
+              !(await withResourcePackageRecoveryEffects(factory, (effects) =>
+                effects.exists(plugin.cachedPath),
+              ))
+            ) {
               throw new Error(`resource-package-plugin-publication-missing:${artifact.pluginId}`)
             }
             continue
@@ -301,6 +312,7 @@ export function createPostgresqlResourcePackageApplyArtifactRecovery(input: {
           await rollForwardSkillArtifact({
             db: input.db,
             appHome: input.appHome,
+            effectsFactory: factory,
             artifact,
           })
         } catch (error) {
@@ -314,11 +326,17 @@ export function createPostgresqlResourcePackageApplyArtifactRecovery(input: {
       for (const artifact of [...parseArtifacts(journal.preparedArtifactsJson)].reverse()) {
         try {
           if (artifact.kind === 'plugin-install') {
-            assertManagedPath(input.pluginsDir, artifact.generationDirectory)
-            rmSync(artifact.generationDirectory, { recursive: true, force: true })
+            factory.assertManaged(input.pluginsDir, artifact.generationDirectory)
+            await withResourcePackageRecoveryEffects(factory, (effects) =>
+              effects.removeDirectory(artifact.generationDirectory),
+            )
             continue
           }
-          compensateSkillArtifact({ appHome: input.appHome, artifact })
+          await compensateSkillArtifact({
+            appHome: input.appHome,
+            artifact,
+            effectsFactory: factory,
+          })
         } catch (error) {
           failure ??= errorValue(error)
         }

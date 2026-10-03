@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import ts from 'typescript'
 import type { TaskArchiveContentBinding } from '@/modules/task-execution/composition/taskArchiveMaintenance'
+import type { ResourcePackageRecoveryEffectsFactory } from '@/modules/resource-catalog/public/types'
 import {
   openMaintenanceWorkerEffectsScope,
   type MaintenanceWorkerEffectsCapability,
@@ -35,6 +36,109 @@ const descriptor = (
 })
 
 const context = { appHome: 'logical:worker-home', instanceRef: 'worker-instance-one' }
+
+class PrototypeRecoveryContent implements ResourcePackageRecoveryEffectsFactory {
+  readonly #prefix: string
+  constructor(prefix: string) {
+    this.#prefix = prefix
+    Object.freeze(this)
+  }
+  root(id: string) {
+    return `${this.#prefix}/${id}`
+  }
+  live(id: string) {
+    return `${this.root(id)}/files`
+  }
+  version(id: string, version: number) {
+    return `${this.root(id)}/v${version}`
+  }
+  staged(reference: string, publication: string) {
+    return `${reference}.staged-${publication}`
+  }
+  candidate(reference: string, publication: string) {
+    return `${reference}.candidate-${publication}`
+  }
+  normalize(reference: string) {
+    return reference
+  }
+  parent(reference: string) {
+    return reference.slice(0, reference.lastIndexOf('/'))
+  }
+  storedReference(reference: string) {
+    return `${this.#prefix}/${reference}`
+  }
+  assertManaged(_root: string, _reference: string) {}
+  acquire(): never {
+    throw new Error('selection-must-not-open-content')
+  }
+}
+
+test('the new complete content selection retains its frozen prototype receiver without opening it', async () => {
+  const content = new PrototypeRecoveryContent('logical:store')
+  let disposed = false
+  const scope = openMaintenanceWorkerEffectsScope({
+    descriptor: descriptor(['resourcePackageRecoveryContent']),
+    context,
+    importModule: async () => ({
+      createEffects: () => ({
+        resourcePackageRecoveryContent: content,
+        dispose() {
+          disposed = true
+        },
+      }),
+    }),
+  })
+  const selected = await scope.ready
+  expect(selected.resourcePackageRecoveryContent).toBe(content)
+  expect(selected.resourcePackageRecoveryContent?.live('skill')).toBe('logical:store/skill/files')
+  expect(selected.resourcePackageRecoveryContent?.storedReference('saved')).toBe(
+    'logical:store/saved',
+  )
+  expect(selected.resourcePackageRecovery).toBeUndefined()
+  expect(selected.taskArchive).toBeUndefined()
+  expect(selected.pluginGenerationGc).toBeUndefined()
+  await scope.dispose()
+  expect(disposed).toBe(true)
+})
+
+for (const conflict of [false, true]) {
+  test(`content ${conflict ? 'conflicting old selection' : 'incomplete factory'} fails readiness and awaits environment release`, async () => {
+    const entered = gate(),
+      closing = gate()
+    let disposed = false
+    const environment = {
+      resourcePackageRecoveryContent: conflict
+        ? new PrototypeRecoveryContent('logical:store')
+        : ({} as ResourcePackageRecoveryEffectsFactory),
+      resourcePackageRecovery: { async rollForward() {}, async compensate() {} },
+      async dispose() {
+        entered.release()
+        await closing.promise
+        disposed = true
+      },
+    }
+    const scope = openMaintenanceWorkerEffectsScope({
+      descriptor: descriptor(
+        conflict
+          ? ['resourcePackageRecoveryContent', 'resourcePackageRecovery']
+          : ['resourcePackageRecoveryContent'],
+      ),
+      context,
+      importModule: async () => ({ createEffects: () => environment }),
+    })
+    await expect(scope.ready).rejects.toThrow(
+      conflict
+        ? 'maintenance-worker-effects-invalid-selection'
+        : 'maintenance-worker-effects-incomplete:resourcePackageRecoveryContent',
+    )
+    const disposal = scope.dispose()
+    await entered.promise
+    expect(disposed).toBe(false)
+    closing.release()
+    await disposal
+    expect(disposed).toBe(true)
+  })
+}
 
 class PrototypeEnvironment implements MaintenanceWorkerEffectsEnvironment {
   readonly #calls: string[]
@@ -262,6 +366,26 @@ const init = {
   appHome: 'fixture-home',
   sqlite: { synchronous: 'NORMAL' as const, pageCacheMib: 8, mmapMib: 0, busyTimeoutMs: 50 },
 }
+
+test('only the existing v2 descriptor gains the content family; original requests retain their phase decisions', () => {
+  const effects = descriptor(['resourcePackageRecoveryContent'])
+  const wrapped = createMaintenanceWorkerEffectsInit(init, effects)
+  const frame = readMaintenanceWorkerEffectsFrame(wrapped)
+  expect(frame.effects).toEqual(effects)
+  expect(frame.request).toEqual(init)
+  for (const phase of ['idle', 'initialising', 'ready'] as const)
+    expect(routeMaintenanceWorkerRequest(phase, frame.request)).toEqual(
+      routeMaintenanceWorkerRequest(phase, init),
+    )
+  expect(readMaintenanceWorkerEffectsFrame(init).request).toBe(init)
+  expect(() => readMaintenanceWorkerEffectsFrame({ ...wrapped, version: 1 })).toThrow()
+  expect(() =>
+    createMaintenanceWorkerEffectsInit(
+      init,
+      descriptor(['resourcePackageRecoveryContent', 'resourcePackageRecoveryContent']),
+    ),
+  ).toThrow()
+})
 
 test('the selected wrapper reuses the complete original phase decision table', () => {
   const wrapped = createMaintenanceWorkerEffectsInit(init, descriptor(['pluginGenerationGc']))

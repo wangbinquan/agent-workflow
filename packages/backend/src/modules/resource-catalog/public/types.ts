@@ -1,4 +1,5 @@
 export type { ResourcePackageApplyArtifactRecoveryPort } from '../application/resourcePackageMaintenance'
+export type { ResourcePackageRecoveryEffectsFactory } from '../application/package/recoveryContentEffects'
 export type { PluginGenerationFilesystemGcPort } from '../application/ports/pluginGenerationGc'
 
 import type {
