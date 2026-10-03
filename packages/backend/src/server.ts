@@ -1,3 +1,4 @@
+import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/composition'
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import type { ObservationTaskQueries } from '@/modules/run-observability/public/queries'
 import type { TaskObservationFactsQuery } from '@/modules/task-execution/public/queries'
@@ -803,6 +804,7 @@ export interface AppDeps {
   workspaceContent?: WorkspaceContentEffectsFactory
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
+  automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -2009,6 +2011,7 @@ function composeFallbackDevelopmentAutomation(
     drive: (missionId) => automation.drive(missionId),
   })
   const automation = composeDevelopmentAutomation({
+    automationWorkspaceEffects: deps.automationWorkspaceEffects,
     repositoryBaselines: deps.repositoryBaselines,
     db: deps.db,
     appHome,
@@ -2908,6 +2911,7 @@ function composeSqliteApiRouteMounts(
   }
   const approvalGateway = composeApprovalGatewayRunnerFor(deps.db)
   const developmentWorkspace = composeDevelopmentEmployeeWorkspace({
+    automationWorkspaceEffects: deps.automationWorkspaceEffects,
     db: deps.db,
     appHome,
     reactionRounds: createEmployeeReactionRoundQueries(deps.db),
@@ -3059,6 +3063,7 @@ function composeSqliteApiRouteMounts(
         executionContracts,
       }),
       platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
+        automationWorkspaceEffects: deps.automationWorkspaceEffects,
         repositoryBaselines: deps.repositoryBaselines,
         evidenceArtifacts: deps.evidenceArtifacts,
         reactionRounds: createEmployeeReactionRoundQueries(deps.db),

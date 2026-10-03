@@ -1,3 +1,4 @@
+import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/composition'
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
@@ -430,6 +431,7 @@ export interface StartOptions {
   workspaceContent?: WorkspaceContentEffectsFactory
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
+  automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -590,6 +592,7 @@ async function composePostgresqlProviderSession(
   })
 
   const application = await composePostgresqlDaemonApplication({
+    automationWorkspaceEffects: input.automationWorkspaceEffects,
     provider: input.provider,
     db,
     config: input.config,
@@ -1143,6 +1146,7 @@ interface DaemonProviderSessionComposeInput {
   readonly workspaceContent?: WorkspaceContentEffectsFactory
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
+  readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -1585,6 +1589,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       generationId: databaseProvider.generation.payload.generationId,
     })
     const sessionInput = Object.freeze({
+      automationWorkspaceEffects: opts.automationWorkspaceEffects,
       config,
       configuration,
       applicationConfiguration,
@@ -2696,6 +2701,7 @@ async function composeSqliteProviderSession(
     }
   })()
   const developmentAutomation = composeDevelopmentAutomation({
+    automationWorkspaceEffects: input.automationWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     db,
     appHome: Paths.root,
@@ -3054,6 +3060,7 @@ async function composeSqliteProviderSession(
     ],
   })
   const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
+    automationWorkspaceEffects: input.automationWorkspaceEffects,
     providerCore,
     token,
     digitalEmployeePlatformTools,
@@ -3378,6 +3385,7 @@ async function composeSqliteProviderSession(
     input.employeeInputArtifacts ??
     createEmployeeInputArtifactStore(join(Paths.root, 'artifacts', 'employee-inputs'))
   const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
+    automationWorkspaceEffects: input.automationWorkspaceEffects,
     db,
     appHome: Paths.root,
     reactionRounds: createEmployeeReactionRoundQueries(db),
@@ -3454,6 +3462,7 @@ async function composeSqliteProviderSession(
         executionContracts: employeeExecutionContracts,
       }),
       platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
+        automationWorkspaceEffects: input.automationWorkspaceEffects,
         repositoryBaselines: input.repositoryBaselines,
         evidenceArtifacts: input.evidenceArtifacts,
         reactionRounds: createEmployeeReactionRoundQueries(db),

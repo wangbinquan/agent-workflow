@@ -835,7 +835,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // only the runtime method parameter and configSnapshot reference changed.
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
-      '5346030ec4e939ff93e30ff6eba57e349067a41871be09cec8d9b2ba121e58e8',
+      '23e198e5a2d9bfb4bfbb53f6b7e9f6e51318159258db7293fa21bded160f88fc',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -1049,7 +1049,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
-      '3740c25c22fa8d0fb99a0c0fcb5e24b809940177433980da684719be92f07ca5',
+      'd3807fcbfcc458c3a8e1312f9e294b52a689d2776de82e3d37a95869c77bb851',
     )
     expect(
       namedCalls(

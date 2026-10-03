@@ -1,3 +1,4 @@
+import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/composition'
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import {
   readDaemonStartupRecoveryAuthority,
@@ -427,6 +428,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly workspaceContent?: WorkspaceContentEffectsFactory
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
+  readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -1514,6 +1516,7 @@ export async function composePostgresqlApplication(
     createEmployeeInputArtifactStore(join(input.appHome, 'artifacts', 'employee-inputs'))
   const employeeReactionRounds = createEmployeeReactionRoundQueries(input.db)
   const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
+    automationWorkspaceEffects: input.automationWorkspaceEffects,
     db: input.db,
     appHome: input.appHome,
     reactionRounds: employeeReactionRounds,
@@ -1531,6 +1534,7 @@ export async function composePostgresqlApplication(
   })
   const employeeDelivery = buildDevelopmentDeliveryDeps(developmentDeliveryProvider)
   const employeePlatformWorkItems = composeDevelopmentEmployeePlatformWorkItems({
+    automationWorkspaceEffects: input.automationWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     evidenceArtifacts: input.evidenceArtifacts,
     db: input.db,
@@ -1732,6 +1736,7 @@ export async function composePostgresqlApplication(
     },
   }
   const developmentAutomation = composeDevelopmentAutomation({
+    automationWorkspaceEffects: input.automationWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     db: input.db,
     appHome: input.appHome,

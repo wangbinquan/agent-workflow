@@ -60,6 +60,7 @@ const fields = {
   workspaceContent: 'WorkspaceContentEffectsFactory',
   employeeCaseWorkspaceEffects: 'EmployeeCaseWorkspaceEffectsFactory',
   repositoryBaselines: 'RepositoryBaselineEffectsFactory',
+  automationWorkspaceEffects: 'AutomationWorkspaceEffectsFactory',
 } as const
 
 test('all eight actual baseline owners forward the selected factory from their lexical root parameter', () => {
@@ -328,6 +329,61 @@ test('public root types expose existing complete contracts without adding partia
         expect(member.questionToken).toBeDefined()
         expect(member.type?.getText(source)).toBe(type)
       }
+    }
+  }
+})
+
+test('all nine actual automation workspace roots bind the complete factory from their lexical receiver', () => {
+  const roots = [
+    'composeDevelopmentAutomation',
+    'composeDevelopmentEmployeeWorkspace',
+    'composeDevelopmentEmployeePlatformWorkItems',
+  ] as const
+  for (const [path, receiver, ownerNames] of [
+    [
+      'cli/start.ts',
+      'input',
+      [
+        'composeSqliteProviderSession',
+        'composeSqliteProviderSession',
+        'composeSqliteProviderSession',
+      ],
+    ],
+    [
+      'cli/postgresqlDaemonApplication.ts',
+      'input',
+      [
+        'composePostgresqlApplication',
+        'composePostgresqlApplication',
+        'composePostgresqlApplication',
+      ],
+    ],
+    [
+      'server.ts',
+      'deps',
+      [
+        'composeFallbackDevelopmentAutomation',
+        'composeSqliteApiRouteMounts',
+        'composeSqliteApiRouteMounts',
+      ],
+    ],
+  ] as const) {
+    const source = load(path)
+    for (const [index, name] of roots.entries()) {
+      const calls = namedCalls(source, source, name)
+      expect(calls).toHaveLength(1)
+      const call = calls[0]!
+      expect(
+        compact(property(objectArgument(call), source, 'automationWorkspaceEffects'), source),
+      ).toBe(receiver + '.automationWorkspaceEffects')
+      let owner: ts.Node | undefined = call.parent
+      while (owner !== undefined && !ts.isFunctionDeclaration(owner)) owner = owner.parent
+      if (owner === undefined || !ts.isFunctionDeclaration(owner))
+        throw new Error('workspace lexical owner missing')
+      expect(owner.name?.text).toBe(ownerNames[index])
+      expect(
+        owner.parameters.some((parameter) => compact(parameter.name, source) === receiver),
+      ).toBe(true)
     }
   }
 })
