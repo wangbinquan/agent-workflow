@@ -1,6 +1,7 @@
 import { Database } from 'bun:sqlite'
 import { drizzle } from 'drizzle-orm/bun-sqlite'
 import { randomUUID } from 'node:crypto'
+import { realpathSync } from 'node:fs'
 import type { DbClient } from '@/db/client'
 import * as schema from '@/db/schema'
 import { databaseSessionFor } from './databaseTransaction'
@@ -63,10 +64,11 @@ function originalIdentity(
   // This actual main relation read freezes the WAL view before any source owner query.
   sqlite.query('SELECT name FROM main.sqlite_schema LIMIT 1').get()
   const databases = sqlite.query('PRAGMA database_list').all() as { name: string; file: string }[]
+  const mainFile = databases.find((row) => row.name === 'main')?.file
   if (
     filename &&
     filename !== ':memory:' &&
-    databases.find((row) => row.name === 'main')?.file !== filename
+    (!mainFile || realpathSync(mainFile) !== realpathSync(filename))
   )
     throw new Error('Original report database file changed')
   const version = sqlite.query('PRAGMA data_version').get() as { data_version: number }
