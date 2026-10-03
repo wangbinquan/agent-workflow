@@ -131,9 +131,20 @@ describe('P1-5 · 收敛器必须真的被生产代码调用', () => {
     expect(recovery).toContain('rollForwardSkillArtifact(')
     // 「真的前滚」= 把候选目录改名成版本目录、再把暂存内容换进 live，并逐字节校验哈希。
     // 只 +1 的实现里这三句一句都不会有。
-    expect(recovery).toContain('renameSync(candidateDirectory, versionDirectory)')
-    expect(recovery).toContain('swapInStaged(liveDirectory, input.artifact.operationId)')
+    expect(recovery).toContain('await effects.move(candidateDirectory, versionDirectory)')
+    expect(recovery).toContain(
+      'await effects.swapStaged(liveDirectory, input.artifact.operationId)',
+    )
     expect(recovery).toContain("throw new Error('resource-package-skill-live-hash-mismatch')")
+    // RFC-370: the same awaited recovery operations retain their original native mechanisms.
+    const native = read(
+      'src/modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts',
+    )
+    expect(recovery).toContain(
+      'await withResourcePackageRecoveryEffects(factory, async (effects) => {',
+    )
+    expect(native).toContain('renameSync(sourceReference, targetReference)')
+    expect(native).toContain('return swapInStaged(liveReference, publicationId)')
   })
 })
 

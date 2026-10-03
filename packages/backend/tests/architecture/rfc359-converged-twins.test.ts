@@ -158,8 +158,7 @@ const CONVERGED_TWINS: readonly ConvergedTwin[] = [
     fn: 'assertManagedPath',
     definedIn: `${B}modules/resource-catalog/infrastructure/resourcePackageMaintenancePaths.ts`,
     consumers: [
-      `${B}modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts`,
-      `${B}modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts`,
+      `${B}modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts`,
     ],
     forkedFrom: [
       `${B}modules/resource-catalog/infrastructure/sqliteResourcePackageMaintenance.ts`,
