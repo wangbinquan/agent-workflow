@@ -5531,9 +5531,9 @@
   "denominator": {
     "ambientWiring": 501,
     "disabled": 9,
-    "entries": 353,
+    "entries": 356,
     "executionLocal": 41,
-    "longRunning": 91,
+    "longRunning": 94,
     "managed": 11,
     "periodic": 212
   },
@@ -7709,6 +7709,27 @@
     },
     {
       "dependencies": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts#createFileResourcePackageRecoveryEffectsFactory",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts#createFileResourcePackageRecoveryEffectsFactory",
+      "phase": "unknown",
+      "symbol": "createFileResourcePackageRecoveryEffectsFactory",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [],
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityInspector.ts",
       "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillIdentityInspector.ts#prepareHuskSweep",
@@ -7837,6 +7858,48 @@
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/postgresqlResourcePackageMaintenance.ts#postgresqlResourcePackageSkillRecoveryDisposition",
       "phase": "unknown",
       "symbol": "postgresqlResourcePackageSkillRecoveryDisposition",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts#selectedResourcePackageRecoveryEffects",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": false,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts#selectedResourcePackageRecoveryEffects",
+      "phase": "unknown",
+      "symbol": "selectedResourcePackageRecoveryEffects",
+      "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts#withResourcePackageRecoveryEffects",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": true,
+        "start": false,
+        "state": true,
+        "stop": false
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts#withResourcePackageRecoveryEffects",
+      "phase": "unknown",
+      "symbol": "withResourcePackageRecoveryEffects",
       "targetContext": "resource-catalog"
     },
     {
@@ -9754,29 +9817,6 @@
       ],
       "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:832",
-      "kind": "periodic",
-      "lifecycle": {
-        "health": true,
-        "readiness": true,
-        "run": true,
-        "start": true,
-        "state": true,
-        "stop": true
-      },
-      "lifetime": "daemon",
-      "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
-      "phase": "unknown",
-      "symbol": "$setInterval:832",
-      "targetContext": "platform"
-    },
-    {
-      "dependencies": [
-        "timer"
-      ],
-      "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
-      "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:834",
       "kind": "periodic",
       "lifecycle": {
@@ -9792,6 +9832,29 @@
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
       "phase": "unknown",
       "symbol": "$setInterval:834",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [
+        "timer"
+      ],
+      "file": "packages/backend/src/platform/background/maintenanceWorker.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/background/maintenanceWorker.ts#$setInterval:836",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": true,
+        "readiness": true,
+        "run": true,
+        "start": true,
+        "state": true,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#$file",
+      "phase": "unknown",
+      "symbol": "$setInterval:836",
       "targetContext": "platform"
     },
     {
@@ -13301,5 +13364,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:37b29c54a9d1d5f61a0fde8521926856a63af8fc517de9162b26902563a97883"
+  "sourceDigest": "sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef"
 }

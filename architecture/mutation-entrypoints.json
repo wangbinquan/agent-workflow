@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1834,
+    "entries": 1835,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -18208,6 +18208,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageArtifacts.ts#publishImmutableVersion",
       "symbol": "publishImmutableVersion",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts#createFileResourcePackageRecoveryEffectsFactory",
+      "missingControls": [
+        "audit",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts#createFileResourcePackageRecoveryEffectsFactory",
+      "symbol": "createFileResourcePackageRecoveryEffectsFactory",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -43847,7 +43870,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:37b29c54a9d1d5f61a0fde8521926856a63af8fc517de9162b26902563a97883",
+  "sourceDigest": "sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

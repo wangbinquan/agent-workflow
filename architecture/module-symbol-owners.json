@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2071,
+    "backendFiles": 2074,
     "frontendFiles": 643,
     "legacyFiles": 565,
-    "moduleFiles": 1506,
-    "productionFiles": 2876,
+    "moduleFiles": 1509,
+    "productionFiles": 2879,
     "sharedFiles": 162,
-    "symbolsIncludingFileRoots": 26113
+    "symbolsIncludingFileRoots": 26124
   },
   "entries": [
     {
@@ -78667,6 +78667,54 @@
       "currentContext": "resource-catalog",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/application/package/recoveryContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/package/recoveryContentEffects.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/application/package/recoveryContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/package/recoveryContentEffects.ts#Completion",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Completion",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/package/recoveryContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/package/recoveryContentEffects.ts#ResourcePackageRecoveryEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ResourcePackageRecoveryEffects",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/application/package/recoveryContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/application/package/recoveryContentEffects.ts#ResourcePackageRecoveryEffectsFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ResourcePackageRecoveryEffectsFactory",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/application/participants/intentContextResourceAuthorization.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/application/participants/intentContextResourceAuthorization.ts#$file",
       "removeAfterWave": null,
@@ -98431,6 +98479,30 @@
       "currentContext": "resource-catalog",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileResourcePackageRecoveryEffects.ts#createFileResourcePackageRecoveryEffectsFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileResourcePackageRecoveryEffectsFactory",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillContentReader.ts",
       "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillContentReader.ts#$file",
       "removeAfterWave": null,
@@ -100896,6 +100968,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "skillArtifactVersion",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts#Completion",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Completion",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts#requireCompleteFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "requireCompleteFactory",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts#selectedResourcePackageRecoveryEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "selectedResourcePackageRecoveryEffects",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "resource-catalog",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/resource-catalog/infrastructure/recoveryContentEffects.ts#withResourcePackageRecoveryEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "withResourcePackageRecoveryEffects",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -314089,5 +314221,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:37b29c54a9d1d5f61a0fde8521926856a63af8fc517de9162b26902563a97883"
+  "sourceDigest": "sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef"
 }

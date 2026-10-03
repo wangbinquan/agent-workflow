@@ -715,3 +715,27 @@ DA workspace 完整效果切面的有限 DESIGN PASS 指纹 `5171146df940948a8cc
 原官方 scoped census 只读已提交 `6942511731dcaaf501756671e5dc99cc9d28efbd` 加本批3冻结路径，所有非本批源码精确读取 committed bytes，排除并保留并行 WIP。12 JSON 与 status 使用四个原规则；全部 inventory 行、账本、原债务、required SPI、target edges 与 metrics 完整保持，不新增 growth 回执。只更新原精确源码投影及 provenance，source digest `sha256:4028cc01a4a986f8b89b20d8a6613b927bff01ea0122b763031999b4248efc1d`。四份手写文档以增量保留全文，status 仅原 renderer生成。
 
 完整 A1–A8/AC00/A-G 仍开放。下一组继续资源包恢复的存储效果；CS 独立 adapters、B/M0 真实部署、M1–M4 按已批准顺序实施。尚无 AW-in-CS 部署，不关闭 RFC。
+
+
+## 2026-10-03 资源包恢复内容实施增量
+
+资源包恢复内容切面有限 SOURCE 门通过，指纹 `70845648e44cf0a51a33617374abe452ad83037004f2f890030edef597acdfe9`，16 路径（11 旧、5 新）。原 DESIGN 首门一条 P2 和 DESIGN-R2 PASS 都保留：RFC-349 的三处旧 native 消费断言迁移到实际 owner 调用，同时增加原本机 helper 的三处实际绑定断言。完整工厂十项、scope 十项，同步／异步选择及 prototype/private/frozen receiver 保持，缺选择才默认本机；显式不完整选择不会逐方法回落。acquire／内容／close 全部结算后才回到 AW 的 finish／abandon／boot mark／journal settle，body 和 close 单一任意拒绝保留原值，双失败保留顺序。CS adapter 尚未实现。
+
+SQLite／PG 两个 owner 保留原 receipt、代际、快照、DB query／transaction、批次顺序与两种旧新工件格式的 fallback。SQLite modern primary 与 legacy owner 共用同一所选完整工厂。旧 artifacts 整体 override 保持惰性默认，新 content 工厂与有效旧整体 override 同时选择时只报告明确冲突。Worker 第四能力 resourcePackageRecoveryContent 从 RC exact public/types 进入两种实际维护 composition，原 v1 init／事件／作业命令／factory-before-DB／drain／dispose 保留；只有原 v2 描述符 enum 增项。引用归所选 adapter 解释；AW 仍拥有原 sorted-relative-name/NUL/content/NUL 树 digest，不把 CS 原始对象 digest 当树 digest。
+
+一次原调用 census 与有限逆向证明核对 83 处原内容／引用 operand、15 处 AW 业务／数据库调用、原完整查询和 11 个旧文件全文；原断言、时间预算和全部 control 保持。纯证明 helper 的 R1–R3 空行逆变换失败记录保留，R4 成功；不是 runtime 验收。新增 logical/native、双 provider journal／代际／held close／可重试，以及 source Worker BroadcastChannel 的真实作业与 drain 回归。只做目标 format/lint、纯 AST/JSON/byte 证明及原 scoped census，不运行本机 AW test/typecheck/build/service。
+
+原 scoped census 只读取已提交基准 `6cd43bd7728f3b1c150a2c2783d515ce6f7c26e2` 加冻结16路径，所有非本批源码均从 exact committed blobs 读取，排除并保留并行 WIP。正式投影：entries 1834→1835（新增1／删除0／同id改动0）；entries 353→356（新增4／删除1／同id改动0）；ambientWiringEntries 501→501（新增0／删除0／同id改动0）；entries 26113→26124（新增11／删除0／同id改动0）；entries 1057→1059（新增2／删除0／同id改动0）；observedEdges 5829→5830（新增2／删除1／同id改动0）；architectureExceptions 5184→5185（新增2／删除1／同id改动0）；requiredPorts 40→40（新增0／删除0／同id改动0）。原规则、全部 required SPI、commons debt／target edges 不扩大；实际正增长按原 allowGrowth 协议登记 6 条消费回执，matching canonical 正常提交后再按原协议退役。已匹配观测源码及 canonical 的5条旧 growth 保留历史理由并正常消费；本批六条新 growth 只覆盖原分类器的实际增长，background净增3来自native factory／selector／scope helper的long-running库存分类，原Worker interval只移动行号，不声称新增timer。source digest `sha256:ef5b32f6b2e08ec16741a663c2d4094d60b9e89f541b68c9274e881831bef29c`；四份手写文档增量保留全文，status 仍由原 renderer 生成。
+
+前批 CI 修复 `7d12700944180f9aa1c70104ad47778548995e09` 已取得确切 SHA 终态：[主 CI37113530050](https://github.com/wangbinquan/agent-workflow/actions/runs/37113530050) completed/success，50/50；[Windows37113592469](https://github.com/wangbinquan/agent-workflow/actions/runs/37113592469) completed/success。694 的原失败和此前所有 FAIL／cancelled 历史完整保留。7d 不匹配 maintenance push filters，不声称存在对应 maintenance run。本批16路径正式运行行为仍必须由发布后的新 exact-SHA hosted CI 验证。
+
+完整 A1–A8／AC00／A-G 继续，其他 RC content/runtime、TE prompt/material/workspace/Git 与完整执行／执行权／composition 尚待完成。有限恢复切面 PASS 不关闭完整 A-G。独立 CS adapters、B/M0 实际部署先行及逐步 M1–M4 保持已批准顺序；尚无 AW-in-CS 部署，不关闭 RFC。
+
+
+## RFC-370 资源恢复公共合同修正与最终候选（2026-10-03）
+
+前段记录的是本批首次16路径候选及其首次投影，尚未发布。原公共 consumer 守卫随后显示额外公开的 ResourcePackageRecoveryEffects 没有直接 consumer；首次 META 纯证明因此 FAIL，完整13产物、日志及全文快照保留。只有 Worker 真正消费的 Factory 需要 exact public 出口。独立有限 DESIGN-R3 PASS `09edd13ea0adffa5d36b13968e2f8478ac1577691c5b7bfb100c5237996904a5` 后，仅删除这一未发布 scope type alias，保留原 application 完整十方法 scope、factory 返回合同及所有实现和测试；单文件 SOURCE-R2 PASS `d666183e7fccbea6f4949c0148876b02d17c1c1db010ebd487c6b5d974a50716`，另外15路径及31 controls完整保持。原 SOURCE16 PASS 与单路径修正组合成当前16路径候选 `089c38dd6788b1a4448e2fdb9b540ac6ed4c03a82505df0697d2e9bd82460ca3`，两个独立回执保留；不改写首次通过或失败记录。
+
+因本批源码内容变化，按原规则只为这个新候选执行一次 scoped census，原首次成功生成器和证明均不重跑。基准仍为 `6cd43bd7728f3b1c150a2c2783d515ce6f7c26e2`，排除所有未发布并行源码；最终库存为 entries 1834→1835；entries 353→356；ambientWiringEntries 501→501；entries 26113→26124；entries 1057→1058；observedEdges 5829→5830；architectureExceptions 5184→5185；requiredPorts 40→40。公共面1057→1058只新增已消费的完整Factory，不新增零consumer债。六项实际正增长按原 allowGrowth协议登记；已匹配观测SOURCE25/canonical的五条旧回执保留理由并消费，本批matching canonical正常提交后再退役六条。修正后的source digest `sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef`。前次未发布growth及文档也保留为首轮历史，四份完整原手写文档和首次增量均保留，本段只作追加。40 required SPI、304 commons debt、69 target edges、原四个生成规则均保持，不新增边界债。
+
+7d主CI37113530050 completed/success 50/50、Windows37113592469 completed/success是前批精确SHA证据；本批行为仍待发布后新的exact-SHA hosted CI。未运行本机AW test/typecheck/build/service。完整A1–A8/AC00/A-G、CS独立adapters、B/M0真实部署及M1–M4按已批准顺序继续，RFC不关闭。

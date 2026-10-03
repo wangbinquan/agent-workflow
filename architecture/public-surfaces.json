@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 973,
+    "consumers": 974,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1158,
+    "methods": 1168,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21773,
-    "symbols": 1057
+    "recursiveFields": 21797,
+    "symbols": 1058
   },
   "entries": [
     {
@@ -114826,6 +114826,237 @@
     {
       "authority": "none",
       "budget": {
+        "maxMethods": 10,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:81c5e533c76ea9e8031c"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:acquire.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:acquire.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:assertManaged.$parameter:reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:assertManaged.$parameter:rootReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:assertManaged.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:candidate.$parameter:publicationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:candidate.$parameter:versionReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:candidate.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:live.$parameter:skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:live.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:normalize.$parameter:reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:normalize.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:parent.$parameter:reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:parent.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:root.$parameter:skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:root.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:staged.$parameter:liveReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:staged.$parameter:publicationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:staged.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:storedReference.$parameter:reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:storedReference.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:version.$parameter:skillId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:version.$parameter:version",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:version.$return",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:ResourcePackageRecoveryEffectsFactory",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:81c5e533c76ea9e8031c"
+          ],
+          "name": "acquire",
+          "signatureDigest": "sha256:332dfe943c69ecb91ca789021e33818d9ddcb47b4d210ca916ce4475c160eab1"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:81c5e533c76ea9e8031c"
+          ],
+          "name": "assertManaged",
+          "signatureDigest": "sha256:95542cf6e8d9f15a16b18845af2a9497661cde58c978555520a3a88cd7ba84b8"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:81c5e533c76ea9e8031c"
+          ],
+          "name": "candidate",
+          "signatureDigest": "sha256:932d5b262b82bf67c308efd4c40ba192c4435581153e201d21349176c6a4b0f3"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:81c5e533c76ea9e8031c"
+          ],
+          "name": "live",
+          "signatureDigest": "sha256:f0fccf89a1e145be338692c1cc81cc66c96d2c46873a7d56401da77ac5110d0f"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:81c5e533c76ea9e8031c"
+          ],
+          "name": "normalize",
+          "signatureDigest": "sha256:4f56e88d1c545086bc7060b7f343789a449960edaa7424c772865c17a5ec58d5"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:81c5e533c76ea9e8031c"
+          ],
+          "name": "parent",
+          "signatureDigest": "sha256:46c7744ae2ccd497301cae25729d3ef61290710d76f31941918f6c1070583fb9"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:81c5e533c76ea9e8031c"
+          ],
+          "name": "root",
+          "signatureDigest": "sha256:ae66955f50132948080dc71a3f4ad5b6fad96b63aadd581df70a013c5924c5ea"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:81c5e533c76ea9e8031c"
+          ],
+          "name": "staged",
+          "signatureDigest": "sha256:520d70b6194632f093fd0361c0ee1102ece9c7951ab3909be15600f091a2bfca"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:81c5e533c76ea9e8031c"
+          ],
+          "name": "storedReference",
+          "signatureDigest": "sha256:434fb11b30d2ea741440c35b6125dd89db219c649f626852a6293db7327ddae4"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:81c5e533c76ea9e8031c"
+          ],
+          "name": "version",
+          "signatureDigest": "sha256:d671d9ddebc5eb08cea95f883243c2b83011abc75c1c86329f0593eac973546f"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:81c5e533c76ea9e8031c",
+          "file": "packages/backend/src/platform/background/maintenanceWorkerEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorkerEffects.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:4196e5bc13ec5c2067a802191fe9654dc57b76ba15fed6b53899351b9c8c5dd2",
+      "status": "target-context-current-surface",
+      "symbol": "ResourcePackageRecoveryEffectsFactory",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
@@ -172742,7 +172973,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:37b29c54a9d1d5f61a0fde8521926856a63af8fc517de9162b26902563a97883",
+  "sourceDigest": "sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef",
   "targetContexts": [
     "collaboration",
     "development-automation",
