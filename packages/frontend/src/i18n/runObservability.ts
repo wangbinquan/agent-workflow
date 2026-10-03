@@ -29,6 +29,9 @@ export const runObservabilityZh = {
   backParentTask: '返回上级任务',
 
   traceTitle: '执行片段',
+  traceCompleteCount: '完整执行片段 {{total}} 条',
+  tracePriorRepairExact: '已关联 {{total}} 个此前执行的片段补充，本次不会重复计为新调用。',
+  attemptDialogTitle: '尝试 {{node}}',
   traceHint: '按实际原生调用展示工具、模型和子 Agent。缺少原生时间的片段保留未知边界。',
   tracePartial:
     '片段来源或时间尚不完整，当前展示已确认的信息。Token 与人民币估值仍按原用量证据统计。',
@@ -330,6 +333,10 @@ export const runObservabilityEn: RunObservabilityMessages = {
   p95: 'Completed task wall time P95',
   backParentTask: 'Back to parent task',
   traceTitle: 'Execution spans',
+  traceCompleteCount: 'Complete execution spans: {{total}}',
+  tracePriorRepairExact:
+    '{{total}} earlier spans have additional evidence. They are not counted as new calls in this invocation.',
+  attemptDialogTitle: 'Attempt {{node}}',
   traceHint:
     'Tools, models and child agents follow actual native calls. Missing native times remain unknown.',
   tracePartial:

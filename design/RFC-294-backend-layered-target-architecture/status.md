@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:c20e1782af2613abe2354e5b78c6a2baa3b6afd4a6c897642dce15fb38505861`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:007e7d3b11f6341ddbba23230e3dc0de1d555d73b5a28f9715f438717ceaaa57`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2122 |
+| backend production TS 文件 | 2125 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1544 / 18 |
+| `modules/**` 文件 / 非空 context | 1547 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 359 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 277 / 30 |
+| RFC-317 boundary census（inbound / outbound） | 273 / 30 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -35,10 +35,10 @@
 | `crossContextImports` | 5944 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 26359 |
+| `moduleSymbolOwners` | 26376 |
 | `mutationEntrypoints` | 1852 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1071 |
+| `publicSurfaces` | 1075 |
 | `transactionExternalEffects` | 267 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -58,8 +58,8 @@
 | resource-catalog / composition | 37 |
 | collaboration / application | 36 |
 | development-automation / domain | 34 |
+| run-observability / application | 32 |
 | task-execution / domain | 32 |
-| run-observability / application | 30 |
 | intent / application | 29 |
 | source-control / infrastructure | 28 |
 | system-operations / infrastructure | 27 |
@@ -75,7 +75,7 @@
 | integration / composition | 18 |
 | intent / domain | 18 |
 | runtime-management / application | 18 |
-| run-observability / ports | 16 |
+| run-observability / ports | 17 |
 | code-capability / infrastructure | 15 |
 | development-automation / composition | 15 |
 | collaboration / domain | 14 |
@@ -235,8 +235,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2863 |
-| W9-D | 896 |
+| W9 | 2869 |
+| W9-D | 890 |
 | W4-E1 | 693 |
 | W4 | 201 |
 | W4-B | 187 |
@@ -262,7 +262,7 @@
 | system-operations | 69 |
 | identity-access | 65 |
 | digital-employee | 51 |
-| runtime-management | 43 |
+| runtime-management | 47 |
 | development-automation | 39 |
 | knowledge-evolution | 25 |
 | execution-contract | 22 |
@@ -274,7 +274,7 @@
 | run-observability | 7 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1071）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1075）
 
 | context | 数量 |
 | --- | --- |

@@ -389,6 +389,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-371（Codex）：OpenCode 原生文件格式的元数据夹具，机械归类 real-file-database；
   // AW 来源存储、分页与投影仍由 rfc371-span-source-provider 的双 provider 回归验证。
   'rfc371-native-span-capture.test.ts: 1',
+  // RFC-371：OpenCode 原生固定 SQLite 文件完整 EOF/Worker 夹具，归类 real-file-database；
+  // AW 原始持久来源、完整投影与人民币关联在 complete-spans-provider 等双 provider 用例验证。
+  'rfc371-native-usage-pass.test.ts: 1',
   // RFC-371：真实原 WAL 文件快照与 TEMP 可写性；通用报告行为另由两个 provider 实际验证。
   'rfc371-report-snapshot-file.test.ts: 1',
   'runner-subagent-live-capture.test.ts: 6',

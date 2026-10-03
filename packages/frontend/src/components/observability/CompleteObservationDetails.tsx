@@ -20,6 +20,7 @@ import { CompleteInvocationRows, CompleteAllocationRows } from './CompleteObserv
 import { useCompleteObservationPage, type ReadyObservationReport } from './completeReportClient'
 import { ObservationNativeCapture } from './ObservationNativeCapture'
 import { ObservationPlatformCapture } from './ObservationPlatformCapture'
+import { CompleteObservationTrace } from './CompleteObservationTrace'
 
 type Attempt = CompleteObservationAttempt & { readonly taskId: string; readonly taskName: string }
 type NativeCapture = ObservationCaptureCommit & {
@@ -173,7 +174,7 @@ export function CompleteObservationTimeline({
         <Dialog
           open
           onClose={() => setSelected(null)}
-          title={selected.attempt.nodeId}
+          title={t('runObservability.attemptDialogTitle', { node: selected.attempt.nodeId })}
           size="lg"
           triggerRef={attemptTrigger}
         >
@@ -183,6 +184,7 @@ export function CompleteObservationTimeline({
               report={report}
               parent={JSON.stringify(['attempt', selected.attempt.id])}
             />
+            <CompleteObservationTrace report={report} nodeRunId={selected.attempt.id} />
           </div>
         </Dialog>
       )}

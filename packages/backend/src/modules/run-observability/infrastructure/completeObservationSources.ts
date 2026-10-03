@@ -108,6 +108,35 @@ export function createCompleteObservationSources(input: {
         }),
       ),
     platformState: (binding) => platform.state(binding),
+    spans: (taskId) =>
+      reader('spans', taskId, async (after) => {
+        if (!tasks.spanSources) throw new Error('Complete span source is not installed')
+        const page = await tasks.spanSources({
+          taskId,
+          carrierInvocationIds: [],
+          allTaskCarriers: true,
+          sourceNamespace: null,
+          scopeHash: sha256Hex(JSON.stringify(['complete-spans', snapshotId, taskId])),
+          after,
+          limit: pageSize,
+        })
+        if (page.nextCursor !== null && (page.scannedSources < 1 || page.nextCursor === after))
+          throw new Error('Original span source did not advance')
+        return {
+          items:
+            page.scannedSources === 0
+              ? []
+              : [
+                  {
+                    records: page.records,
+                    scannedSources: page.scannedSources,
+                    watermark: page.watermark,
+                    issues: page.issues,
+                  },
+                ],
+          nextCursor: page.nextCursor,
+        }
+      }),
     async backlog(taskId) {
       const [state] = await tasks.sourceBacklog([taskId])
       if (!state || state.taskId !== taskId)

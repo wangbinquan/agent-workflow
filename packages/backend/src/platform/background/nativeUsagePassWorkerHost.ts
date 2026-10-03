@@ -1,7 +1,7 @@
 import type {
   NativeUsagePassIdentity,
   NativeUsagePassPage,
-} from '@/modules/runtime-management/application/ports/nativeUsagePass'
+} from '@/modules/runtime-management/public/participants'
 import type {
   NativeUsagePassRequest,
   NativeUsagePassWorkerEvent,

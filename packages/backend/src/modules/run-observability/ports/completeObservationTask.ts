@@ -11,6 +11,7 @@ import type { CompleteObservationSources } from './completeObservationSources'
 import type { CompleteWorkingRows } from './completeWorkingRows'
 import type { CompleteSourceReceipt } from './completeReport'
 import type { CompleteUsageWorkspace } from './completeUsageWorkspace'
+import type { CompleteSpanProjection } from './completeObservationSpans'
 
 export interface CompleteObservationContribution extends UsageContributionEvidence {
   readonly invocationId: string
@@ -28,6 +29,8 @@ export interface CompleteInvocationWorking {
   emptyCostVisible: boolean
 }
 export interface CompleteObservationTaskInput {
+  /** Full original trace evidence is retained for a requested Task, separately from display pages. */
+  readonly trace?: boolean
   readonly task: ObservationTaskFacts
   readonly sources: CompleteObservationSources
   readonly asOf: number
@@ -72,4 +75,11 @@ export interface CompleteObservationTaskBuild {
   readonly allocationsNamespace: string
   readonly nativeCapturesNamespace: string
   readonly platformCapturesNamespace: string
+  readonly trace?: {
+    readonly spansNamespace: string
+    readonly capturesNamespace: string
+    readonly statusesNamespace: string
+    readonly receipt: CompleteSourceReceipt | null
+    readonly projection: CompleteSpanProjection
+  }
 }

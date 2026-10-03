@@ -5,6 +5,7 @@ import type {
   ObservationTaskFacts,
   ObservationTaskPageQuery,
   ObservationSourceBacklog,
+  ObservationSpanSourcePage,
 } from '@agent-workflow/shared'
 import type { UsageLedgerRecord } from '../domain/usageLedger'
 import type { PlatformObservation } from '../domain/platformObservation'
@@ -27,4 +28,7 @@ export interface CompleteObservationSources {
   platform(binding: PlatformObservationBinding): CompleteSourceReader<PlatformObservation>
   platformState(binding: PlatformObservationBinding): Promise<PlatformSyncState>
   backlog(taskId: string): Promise<ObservationSourceBacklog>
+  spans?(
+    taskId: string,
+  ): CompleteSourceReader<Omit<ObservationSpanSourcePage, 'nextCursor' | 'truncated'>>
 }

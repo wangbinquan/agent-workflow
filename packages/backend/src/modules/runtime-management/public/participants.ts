@@ -130,3 +130,11 @@ export type {
   NativeUsageCapture,
   NativeUsageCaptureIdentity,
 } from '../application/ports/nativeUsageCapture'
+
+/** The accepted runtime owner supplies the original store and full-pass identity. */
+export { openOpencodeUsagePass } from '../infrastructure/opencodeUsagePass'
+export type {
+  NativeUsagePassIdentity,
+  NativeUsagePassPage,
+  NativeUsagePassReader,
+} from '../application/ports/nativeUsagePass'

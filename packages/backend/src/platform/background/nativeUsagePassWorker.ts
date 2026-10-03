@@ -1,5 +1,7 @@
-import { openOpencodeUsagePass } from '@/modules/runtime-management/infrastructure/opencodeUsagePass'
-import type { NativeUsagePassReader } from '@/modules/runtime-management/application/ports/nativeUsagePass'
+import {
+  openOpencodeUsagePass,
+  type NativeUsagePassReader,
+} from '@/modules/runtime-management/public/participants'
 import type {
   NativeUsagePassWorkerEvent,
   NativeUsagePassWorkerInput,

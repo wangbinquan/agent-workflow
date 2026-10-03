@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2122,
-    "frontendFiles": 650,
+    "backendFiles": 2125,
+    "frontendFiles": 651,
     "legacyFiles": 578,
-    "moduleFiles": 1544,
-    "productionFiles": 2935,
+    "moduleFiles": 1547,
+    "productionFiles": 2939,
     "sharedFiles": 163,
-    "symbolsIncludingFileRoots": 26359
+    "symbolsIncludingFileRoots": 26376
   },
   "entries": [
     {
@@ -108151,6 +108151,54 @@
       "currentContext": "run-observability",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/run-observability/application/completeObservationSpanDetails.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/completeObservationSpanDetails.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/application/completeObservationSpanDetails.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/completeObservationSpanDetails.ts#buildCompleteObservationSpanDetails",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "buildCompleteObservationSpanDetails",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/application/completeObservationSpanDetails.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/completeObservationSpanDetails.ts#CaptureRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "CaptureRow",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/application/completeObservationSpanDetails.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/completeObservationSpanDetails.ts#TraceFold",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TraceFold",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/run-observability/application/completeObservationTask.ts",
       "id": "owner:packages/backend/src/modules/run-observability/application/completeObservationTask.ts#$file",
       "removeAfterWave": null,
@@ -108216,6 +108264,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "consumeCompleteSource",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/application/completeSpanProjection.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/completeSpanProjection.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/application/completeSpanProjection.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/application/completeSpanProjection.ts#projectCompleteObservationSpans",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "projectCompleteObservationSpans",
       "targetContext": "run-observability",
       "targetLayer": "application"
     },
@@ -110526,12 +110598,36 @@
     {
       "currentContext": "run-observability",
       "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/spanProjection.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/spanProjection.ts#immutableSpanEvidence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "immutableSpanEvidence",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
       "exported": false,
       "file": "packages/backend/src/modules/run-observability/domain/spanProjection.ts",
       "id": "owner:packages/backend/src/modules/run-observability/domain/spanProjection.ts#merge",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "merge",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/spanProjection.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/spanProjection.ts#mergeSpanState",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "mergeSpanState",
       "targetContext": "run-observability",
       "targetLayer": "domain"
     },
@@ -110574,12 +110670,36 @@
     {
       "currentContext": "run-observability",
       "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/spanProjection.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/spanProjection.ts#sameSpanEvidence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "sameSpanEvidence",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
       "exported": false,
       "file": "packages/backend/src/modules/run-observability/domain/spanProjection.ts",
       "id": "owner:packages/backend/src/modules/run-observability/domain/spanProjection.ts#terminal",
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "terminal",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/spanProjection.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/spanProjection.ts#unknownSpanState",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "unknownSpanState",
       "targetContext": "run-observability",
       "targetLayer": "domain"
     },
@@ -112128,6 +112248,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "CompleteObservationSources",
+      "targetContext": "run-observability",
+      "targetLayer": "ports"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "ports",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/ports/completeObservationSpans.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/ports/completeObservationSpans.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "ports"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "ports",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/ports/completeObservationSpans.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/ports/completeObservationSpans.ts#CompleteProjectedSpan",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "CompleteProjectedSpan",
+      "targetContext": "run-observability",
+      "targetLayer": "ports"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "ports",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/ports/completeObservationSpans.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/ports/completeObservationSpans.ts#CompleteSpanProjection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "CompleteSpanProjection",
       "targetContext": "run-observability",
       "targetLayer": "ports"
     },
@@ -233367,6 +233523,30 @@
       "currentContext": "frontend",
       "currentLayer": "components",
       "exported": false,
+      "file": "packages/frontend/src/components/observability/CompleteObservationTrace.tsx",
+      "id": "owner:packages/frontend/src/components/observability/CompleteObservationTrace.tsx#$file",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "$file",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": true,
+      "file": "packages/frontend/src/components/observability/CompleteObservationTrace.tsx",
+      "id": "owner:packages/frontend/src/components/observability/CompleteObservationTrace.tsx#CompleteObservationTrace",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "CompleteObservationTrace",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": false,
       "file": "packages/frontend/src/components/observability/CompleteObservationTrend.tsx",
       "id": "owner:packages/frontend/src/components/observability/CompleteObservationTrend.tsx#$file",
       "removeAfterWave": null,
@@ -294579,6 +294759,30 @@
       "currentContext": "shared",
       "currentLayer": "contracts",
       "exported": false,
+      "file": "packages/shared/src/schemas/observationComplete.ts",
+      "id": "owner:packages/shared/src/schemas/observationComplete.ts#CompleteObservationTraceIdentity",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "CompleteObservationTraceIdentity",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/schemas/observationComplete.ts",
+      "id": "owner:packages/shared/src/schemas/observationComplete.ts#CompleteObservationTraceStatus",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "CompleteObservationTraceStatus",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": false,
       "file": "packages/shared/src/schemas/observationInvocation.ts",
       "id": "owner:packages/shared/src/schemas/observationInvocation.ts#$file",
       "removeAfterWave": null,
@@ -317043,5 +317247,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c20e1782af2613abe2354e5b78c6a2baa3b6afd4a6c897642dce15fb38505861"
+  "sourceDigest": "sha256:007e7d3b11f6341ddbba23230e3dc0de1d555d73b5a28f9715f438717ceaaa57"
 }

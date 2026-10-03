@@ -6,22 +6,26 @@ import type {
   ObservationSpanState,
 } from '@agent-workflow/shared'
 
-const same = (left: unknown, right: unknown) => JSON.stringify(left) === JSON.stringify(right)
+export const sameSpanEvidence = (left: unknown, right: unknown) =>
+  JSON.stringify(left) === JSON.stringify(right)
+const same = sameSpanEvidence
 const terminal = (value: ObservationSpanState['status']) =>
   ['success', 'error', 'cancelled'].includes(value)
-const unknownState = (): ObservationSpanState => ({
+export const unknownSpanState = (): ObservationSpanState => ({
   startedAt: null,
   endedAt: null,
   nativeObservedAt: null,
   status: 'unknown',
 })
-const immutable = ({
+const unknownState = unknownSpanState
+export const immutableSpanEvidence = ({
   state: _state,
   capturedAt: _at,
   issues: _issues,
   ...value
 }: ObservationSpanFact) => value
-function merge(
+const immutable = immutableSpanEvidence
+export function mergeSpanState(
   left: ObservationSpanState,
   right: ObservationSpanState,
 ): ObservationSpanState | null {
@@ -50,6 +54,7 @@ function merge(
           : 'unknown',
   }
 }
+const merge = mergeSpanState
 export interface ProjectedSpan {
   readonly creation: ObservationSpanFact
   fact: ObservationSpanFact

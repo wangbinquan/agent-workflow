@@ -22,6 +22,7 @@ import type {
 import { completeWorkingCache } from './completeWorkingCache'
 import { completeWorkingTraversal } from './completeWorkingTraversal'
 import { buildCompleteObservationTiming } from './completeObservationTiming'
+import { buildCompleteObservationSpanDetails } from './completeObservationSpanDetails'
 
 type Invocation = AcceptedObservationInvocation & { readonly metrics: CompleteObservationMetrics }
 interface Candidate {
@@ -176,7 +177,20 @@ export async function selectCompleteObservationTask(
     ))
       if (await input.rows.get(space('invocations'), input.keyOf(row.document.invocationId)))
         await input.rows.insert(target, [row])
+  const trace = original.trace
+    ? {
+        ...(await buildCompleteObservationSpanDetails(input, original.trace.projection, {
+          namespace: space('trace'),
+          invocationsNamespace: space('invocations'),
+          allocationsNamespace: space('allocations'),
+          attemptsNamespace: space('attempts'),
+        })),
+        projection: original.trace.projection,
+        receipt: original.trace.receipt,
+      }
+    : undefined
   return {
+    ...(trace ? { trace } : {}),
     sourceGaps: original.sourceGaps,
     fold,
     originalNumericRecords: String(numericRecords),

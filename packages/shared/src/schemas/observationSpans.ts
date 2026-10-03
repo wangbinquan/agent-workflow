@@ -205,6 +205,8 @@ export interface ObservationTaskSpansQuery {
 export interface ObservationSpanSourceInput {
   readonly taskId: string
   readonly carrierInvocationIds: readonly string[]
+  /** Complete snapshot readers validate retained carriers through their original owner workspace. */
+  readonly allTaskCarriers?: boolean
   readonly sourceNamespace: string | null
   readonly scopeHash: string
   readonly after?: string | null

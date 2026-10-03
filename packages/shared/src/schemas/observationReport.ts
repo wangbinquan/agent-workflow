@@ -20,6 +20,9 @@ export const COMPLETE_OBSERVATION_SECTIONS = [
   'platform-captures',
   'dimension-tasks',
   'receipts',
+  'span-facts',
+  'span-captures',
+  'span-statuses',
 ] as const
 export type CompleteObservationSection = (typeof COMPLETE_OBSERVATION_SECTIONS)[number]
 export const CompleteObservationReportQuerySchema = ObservationOverviewQuerySchema

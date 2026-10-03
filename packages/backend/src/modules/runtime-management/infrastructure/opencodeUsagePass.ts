@@ -205,9 +205,9 @@ export function openOpencodeUsagePass(
           }
           if (!current.parts_done) {
             // Extract only numeric/model fields. Text/tool bodies are never buffered or transported.
-            const row = db
-              .query<PartRow, [string, string | null]>(
-                `SELECT p.id,p.session_id,p.message_id,p.time_created,
+            // Keep the non-null continuation as an actual composite-index range.
+            // A nullable OR makes SQLite rescan every prior part for every original row.
+            const fields = `SELECT p.id,p.session_id,p.message_id,p.time_created,
               json_extract(p.data,'$.type') AS kind,
               CASE WHEN json_type(p.data,'$.tokens.input') IN ('integer','real','text') THEN json_extract(p.data,'$.tokens.input') END AS input,
               CASE WHEN json_type(p.data,'$.tokens.output') IN ('integer','real','text') THEN json_extract(p.data,'$.tokens.output') END AS output,
@@ -217,9 +217,21 @@ export function openOpencodeUsagePass(
               CASE WHEN json_extract(m.data,'$.role')='assistant' THEN json_extract(m.data,'$.providerID') END AS provider,
               CASE WHEN json_extract(m.data,'$.role')='assistant' THEN json_extract(m.data,'$.modelID') END AS model
               FROM part p LEFT JOIN message m ON m.id=p.message_id AND m.session_id=p.session_id
-              WHERE p.session_id=?1 AND (?2 IS NULL OR p.id>?2) ORDER BY p.id LIMIT 1`,
-              )
-              .get(current.id, current.part_after)
+              `
+            const row =
+              current.part_after === null
+                ? db
+                    .query<
+                      PartRow,
+                      [string]
+                    >(fields + ' WHERE p.session_id=?1 ORDER BY p.id LIMIT 1')
+                    .get(current.id)
+                : db
+                    .query<
+                      PartRow,
+                      [string, string]
+                    >(fields + ' WHERE p.session_id=?1 AND p.id>?2 ORDER BY p.id LIMIT 1')
+                    .get(current.id, current.part_after)
             if (!row) {
               if (
                 db
@@ -275,12 +287,20 @@ export function openOpencodeUsagePass(
             ).get(row.id, current.id)
             continue
           }
-          const child = db
-            .query<SessionRow, [string, string | null]>(
-              `SELECT id,parent_id FROM session
-            WHERE parent_id=?1 AND (?2 IS NULL OR id>?2) ORDER BY id LIMIT 1`,
-            )
-            .get(current.id, current.child_after)
+          const child =
+            current.child_after === null
+              ? db
+                  .query<
+                    SessionRow,
+                    [string]
+                  >('SELECT id,parent_id FROM session WHERE parent_id=?1 ORDER BY id LIMIT 1')
+                  .get(current.id)
+              : db
+                  .query<
+                    SessionRow,
+                    [string, string]
+                  >('SELECT id,parent_id FROM session WHERE parent_id=?1 AND id>?2 ORDER BY id LIMIT 1')
+                  .get(current.id, current.child_after)
           if (!child) {
             db.query<unknown, [string]>('UPDATE temp.native_pass_queue SET done=1 WHERE id=?').get(
               current.id,

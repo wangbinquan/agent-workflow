@@ -4,6 +4,8 @@ import {
   ObservationPricePageQuerySchema,
   ObservationTaskPageQuerySchema,
   SaveObservationPriceSchema,
+  type CompleteObservationInvocation,
+  type CompleteObservationTraceStatus,
 } from '@agent-workflow/shared'
 import { actorOf } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
@@ -59,6 +61,57 @@ export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependen
       if (!raw.nodeRunId || !Number.isInteger(limit) || limit < 1 || limit > 200)
         throw new ValidationError('invalid-query', 'Invalid span query')
       try {
+        if (deps.reports) {
+          if (!raw.reportId)
+            throw new ValidationError(
+              'invalid-query',
+              'Read spans from a complete frozen Task report',
+            )
+          const report = await deps.reports.status(actorOf(c), raw.reportId)
+          if (report.state !== 'ready' || report.header.taskId !== c.req.param('id'))
+            throw new ValidationError(
+              'invalid-query',
+              'Complete Task report is not ready or changed scope',
+            )
+          const attemptParent = JSON.stringify(['attempt', raw.nodeRunId])
+          const attempt = await deps.reports.page<CompleteObservationTraceStatus>(
+            actorOf(c),
+            raw.reportId,
+            { section: 'span-statuses', parent: attemptParent, limit: 1 },
+          )
+          if (!attempt.items.some((row) => row.nodeRunId === raw.nodeRunId))
+            throw new NotFoundError(
+              'attempt-not-found',
+              'Attempt not found in complete Task report',
+            )
+          const parent = raw.invocationId
+            ? JSON.stringify(['invocation', raw.nodeRunId, raw.invocationId])
+            : attemptParent
+          if (raw.invocationId) {
+            const invocation = await deps.reports.page<CompleteObservationInvocation>(
+              actorOf(c),
+              raw.reportId,
+              { section: 'invocations', parent, limit: 1 },
+            )
+            if (
+              !invocation.items.some(
+                (row) => row.nodeRunId === raw.nodeRunId && row.invocationId === raw.invocationId,
+              )
+            )
+              throw new NotFoundError(
+                'invocation-not-found',
+                'Invocation not found in complete Task report attempt',
+              )
+          }
+          return c.json(
+            await deps.reports.page(actorOf(c), raw.reportId, {
+              section: 'span-facts',
+              parent,
+              ...(raw.after ? { after: raw.after } : {}),
+              limit,
+            }),
+          )
+        }
         const result = await deps.tasks.spans?.(actorOf(c), c.req.param('id'), {
           nodeRunId: raw.nodeRunId,
           ...(raw.invocationId ? { invocationId: raw.invocationId } : {}),

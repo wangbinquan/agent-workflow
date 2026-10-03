@@ -16,7 +16,7 @@ export function createObservationSpanSources(db: ProviderNeutralDatabase) {
       !Number.isInteger(input.limit) ||
       input.limit < 1 ||
       input.limit > 200 ||
-      input.carrierInvocationIds.length > 1000 ||
+      (!input.allTaskCarriers && input.carrierInvocationIds.length > 1000) ||
       !input.scopeHash
     )
       throw new RangeError('Invalid observation span page')
@@ -94,7 +94,7 @@ export function createObservationSpanSources(db: ProviderNeutralDatabase) {
       const items: ObservationSpanSourceRecord[] = []
       try {
         const frame = parseObservationCapturedUsage(JSON.parse(row.document!))
-        if (carriers.has(frame.invocationId)) {
+        if (input.allTaskCarriers || carriers.has(frame.invocationId)) {
           for (const [index, fact] of (frame.spanFacts ?? []).entries())
             if (
               input.sourceNamespace === null ||

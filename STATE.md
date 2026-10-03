@@ -9754,3 +9754,13 @@ SOURCE7首次FAIL发现JSON布尔值被SQLite转成0/1，原失败保留；只�
 原官方一次成功AST在committed9bdc加冻结8路径生成13产物；初次private输入缓冲不完整和report-only遗漏write均保留，不当作成功。四provenance用原函数派生，129库存原静态核对PASS；五实际增长为mutation1849→1852、background358→359、observed imports5936→5944、exceptions5281→5289、symbol owners26329→26359。原规则、所有旧债条款、SPI和target保持；matching canonical之后正常后继退役一次allowGrowth，不重复扫描。后继37b9仅peer测试/文档，不改变本批生产与原规则输入。
 
 这是尚未接入正式producer的采集底座，不能写成最大任务/调用等所有限制已移除。原owner的完整durable baseline/page ACK、原emission冻结与全部pending revision高水/原fence、原数值来源append同事务及v2完成证明仍须实现；原v1与追踪上限尚未移除。CS新0018吞吐候选的原10001/20025断言约21.12s通过，正式SOURCE/CI/部署待。本批还需精确发布和新CI，默认及定时E2E、真实规模/模型任务/四桶人民币/浏览器等继续，开发producer OFF，两RFC In Progress。
+
+## RFC-371：完整 Task 追踪与原 native reader CI 接续（2026-10-04）
+
+完整报告遍历原持久 span source 至实际 EOF，接受归属、原创建/修订与未知规则保持；冻结报告新增 span-facts/captures/statuses 续页，全部四桶与可见 CNY 链接来自完整原 allocations。Task 内维度筛选保留精确匹配追踪和完整原 source receipt；spans 别名按原 attempt/invocation 精确保留集合读到最后一页；缺捕获保留已知原时间边界，不显示完整数值或时长。第一轮三处 P2/FAIL 原件保留，SOURCE21-v3 增量组合 PASS，指纹 b161cfe01decd7189059c5e6fffb6841665e9aa85bcafddef967f8e78a0c000a。新真实双 provider 1001 attempts/invocations、20021 spans、10001 usage 与筛选/别名/前端用例已写，行为仍须 hosted CI。
+
+57f6c293 主 CI37151884308 已 completed/failure：原 native 60002parts/1025sessions/depth80/10001steps 用例在 macOS 耗时111.127s，原60s预算保留。本批首查询和严格 session/id、parent/id keyset 续页分开，原字段/序列/ACK/摘要/EOF保持，新增空主键失败回归；Worker 三路径经过原 runtime-management exact public；原 native 固定 SQLite fixture 的一个真实 Database 调用精确登记。SOURCE7 独立 PASS，指纹65b45c956e40672aaba59d20110736cd9d593d2590ef3bdd21924ba08893cda5。无本机 AW tests/types/build/service。
+
+原 scoped census 使用已提交57f6及冻结28路径，排除并保留全部并行 WIP；13原产物/129库存/provenance原规则核对通过。只有 actual public1071→1075、symbol26359→26376 和原硬编码库存320→321 三项增长，匹配提交消费后由正常后继退役。source digest sha256:007e7d3b11f6341ddbba23230e3dc0de1d555d73b5a28f9715f438717ceaaa57。第一次遗漏原 --write 的 report-only 调用不产生清单，失败记录保留，正式写产物只用随后的同候选原 generator；初版META库存未同步实际新增记录导致FAIL，修正版沿原321计数修正，保留原规则、条目及预算。
+
+原生 reader 仍未接到正式 producer。AW/CS 的 session/step/part/ancestor、baseline、历史 owner 总量上限与持久 v2 baseline/emission/source ACK 继续；不得称完整统计。正式 E2E、定时 CI、100K Task/10M usage、真实模型四桶/CNY、浏览器与 CS 最终本机部署仍待，CS 开发 producer保持OFF，两个RFC保持InProgress。完整共享 STATE 其余输出原字节保留。

@@ -183,6 +183,25 @@ test('one frozen page requires owner ACK, retries exact bytes, and keeps the ori
   expect(newer).toEqual(['before', 'later'])
 })
 
+test('the first part range includes malformed empty original keys instead of silently skipping them', () => {
+  const f = fixture()
+  f.part('', 'root', 'step-finish')
+  f.part('later', 'root', 'step-finish')
+  const reader = f.open(1)
+  const first = reader.next(reader.initialCursor)
+  reader.acknowledge(first.ordinal, first.payloadDigest)
+  expect(() => reader.next(first.nextCursor!)).toThrow('Native part cursor unavailable')
+})
+
+test('the first child range includes malformed empty session keys and cannot seal a complete subset', () => {
+  const f = fixture()
+  f.session('', 'root')
+  const reader = f.open(1)
+  const first = reader.next(reader.initialCursor)
+  reader.acknowledge(first.ordinal, first.payloadDigest)
+  expect(() => reader.next(first.nextCursor!)).toThrow('Native child cursor unavailable')
+})
+
 test('packet byte bounds and scan page size preserve the same EOF fingerprint and exact four buckets', () => {
   const f = fixture()
   for (let n = 0; n < 101; n++)

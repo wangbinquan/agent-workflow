@@ -28,6 +28,8 @@ import { allocateCompleteObservationUsage } from './completeObservationAllocatio
 import { buildCompleteObservationTiming } from './completeObservationTiming'
 import { completeWorkingCache } from './completeWorkingCache'
 import { completeWorkingPages } from './completeWorkingTraversal'
+import { projectCompleteObservationSpans } from './completeSpanProjection'
+import { buildCompleteObservationSpanDetails } from './completeObservationSpanDetails'
 
 /** Complete original Task population; no accepted invocation, attempt or numeric evidence is capped. */
 export async function buildCompleteObservationTask(
@@ -136,7 +138,16 @@ export async function buildCompleteObservationTask(
     namespace: space('timing'),
     signal: input.signal,
   })
+  const projection = input.trace ? await projectCompleteObservationSpans(input) : null
+  const trace = projection
+    ? {
+        ...(await buildCompleteObservationSpanDetails(input, projection)),
+        receipt: projection.receipt,
+        projection,
+      }
+    : undefined
   return {
+    ...(trace ? { trace } : {}),
     sourceGaps,
     summary: {
       task: input.task,

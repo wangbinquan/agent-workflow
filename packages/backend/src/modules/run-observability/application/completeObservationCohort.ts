@@ -5,6 +5,7 @@ import type {
   CompleteObservationTask,
   CompleteObservationTrend,
   ObservationTaskFacts,
+  ObservationSpanDetail,
 } from '@agent-workflow/shared'
 import { completeOrdinalKey } from '../domain/completeOrdinal'
 import { parseObservationSelection } from '../domain/analysisDimensions'
@@ -97,12 +98,16 @@ export async function buildCompleteObservationCohort(
   )) {
     const task = row.document,
       taskSpace = space('task-' + input.keyOf(task.id))
-    const taskInput = { ...input, task, namespace: taskSpace }
+    const taskInput = { ...input, task, namespace: taskSpace, trace: input.task !== undefined }
     const original = await buildCompleteObservationTask(taskInput)
     sourceTasks++
     for (const receipt of original.sourceReceipts)
       await input.rows.insert(space('receipts'), [
         { key: completeOrdinalKey(receiptOrdinal++), document: receipt },
+      ])
+    if (original.trace?.receipt)
+      await input.rows.insert(space('receipts'), [
+        { key: completeOrdinalKey(receiptOrdinal++), document: original.trace.receipt },
       ])
     for await (const state of completeWorkingTraversal<PlatformSyncState>(
       input.rows,
@@ -166,6 +171,13 @@ export async function buildCompleteObservationCohort(
       await dimensions.addInvocation(task, invocation, completeMetricsFold(invocation.metrics))
       await output.append('invocations', task.id, invocation.invocationId, invocation)
       await output.append('invocations', null, invocation.invocationId, invocation)
+      if (invocation.nodeRunId !== null)
+        await output.append(
+          'invocations',
+          JSON.stringify(['invocation', invocation.nodeRunId, invocation.invocationId]),
+          invocation.invocationId,
+          invocation,
+        )
       if (invocation.nodeRunId !== null)
         await output.append(
           'invocations',
@@ -233,6 +245,43 @@ export async function buildCompleteObservationCohort(
           await output.append('attempts', null, item.key, attempt)
         }
       }
+    }
+    if (build.trace) {
+      for (const [section, namespace] of [
+        ['span-facts', build.trace.spansNamespace],
+        ['span-captures', build.trace.capturesNamespace],
+        ['span-statuses', build.trace.statusesNamespace],
+      ] as const)
+        for await (const item of completeWorkingTraversal<{
+          readonly nodeRunId: string
+          readonly detail?: ObservationSpanDetail
+        }>(input.rows, namespace, input.signal)) {
+          const parent = JSON.stringify(['attempt', item.document.nodeRunId]),
+            document = section === 'span-facts' ? item.document.detail : item.document
+          await output.append(
+            section,
+            parent,
+            input.keyOf(JSON.stringify([task.id, item.key])),
+            document,
+          )
+          await output.append(
+            section,
+            null,
+            input.keyOf(JSON.stringify([task.id, item.key])),
+            document,
+          )
+          if (section === 'span-facts' && item.document.detail)
+            await output.append(
+              section,
+              JSON.stringify([
+                'invocation',
+                item.document.nodeRunId,
+                item.document.detail.fact.invocationId,
+              ]),
+              input.keyOf(JSON.stringify([task.id, item.key])),
+              document,
+            )
+        }
     }
   }
   if (sourceTasks !== BigInt(taskSource.rows))

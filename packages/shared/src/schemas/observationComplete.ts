@@ -57,3 +57,25 @@ export interface CompleteObservationTask {
   readonly attemptCount: string
   readonly timing: CompleteObservationTiming
 }
+
+interface CompleteObservationTraceIdentity {
+  readonly taskId: string
+  readonly nodeRunId: string
+}
+export type CompleteObservationTraceStatus = CompleteObservationTraceIdentity &
+  (
+    | {
+        readonly state: 'not-ready'
+        readonly reasons: readonly string[]
+        /** Boundaries of retained original facts, not a complete duration or count. */
+        readonly knownRange: { readonly from: number; readonly to: number } | null
+      }
+    | { readonly state: 'not-applicable' }
+    | {
+        readonly state: 'complete'
+        readonly spanCount: string
+        readonly captureCount: string
+        readonly priorRepairCount: string
+        readonly range: { readonly from: number; readonly to: number } | null
+      }
+  )
