@@ -163,7 +163,16 @@ function emit(event: MaintenanceWorkerEvent): void {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
+  const messages: string[] = []
+  const seen = new Set<unknown>()
+  let current = error
+  while (!seen.has(current)) {
+    seen.add(current)
+    messages.push(current instanceof Error ? current.message : String(current))
+    if (!(current instanceof Error) || current.cause === undefined) break
+    current = current.cause
+  }
+  return messages.join(' <- ')
 }
 
 installMaintenanceWorkerErrorBoundary({

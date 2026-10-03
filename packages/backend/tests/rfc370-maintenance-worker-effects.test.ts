@@ -486,3 +486,42 @@ for (const failureAt of ['dispose', 'pool-close'] as const) {
     expect(lifetime.events).toEqual([])
   })
 }
+
+function actualWorkerErrorMessage(): (error: unknown) => string {
+  const source = ts.createSourceFile(
+    'maintenanceWorker.ts',
+    readFileSync(
+      new URL('../src/platform/background/maintenanceWorker.ts', import.meta.url),
+      'utf8',
+    ),
+    ts.ScriptTarget.Latest,
+    true,
+  )
+  const declaration = source.statements.find(
+    (node): node is ts.FunctionDeclaration =>
+      ts.isFunctionDeclaration(node) && node.name?.text === 'errorMessage',
+  )
+  if (!declaration?.body) throw new Error('missing actual Worker failure formatter')
+  const actual = ts.transpileModule(declaration.getText(source), {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None },
+  }).outputText
+  return new Function(`${actual}\nreturn errorMessage;`)() as (error: unknown) => string
+}
+
+test('actual Worker failure messages retain the original query cause and terminate circular chains', () => {
+  const message = actualWorkerErrorMessage()
+  expect(message(new Error('original plain failure'))).toBe('original plain failure')
+  expect(message('original primitive failure')).toBe('original primitive failure')
+  expect(message(undefined)).toBe('undefined')
+  expect(message(null)).toBe('null')
+  const nativeCause = new Error('original database failure')
+  const query = new Error('original query wrapper', { cause: nativeCause })
+  expect(message(new Error('worker init wrapper', { cause: query }))).toBe(
+    'worker init wrapper <- original query wrapper <- original database failure',
+  )
+  expect(message(new Error('original wrapper', { cause: 42 }))).toBe('original wrapper <- 42')
+  const outer = new Error('outer')
+  const inner = new Error('inner', { cause: outer })
+  outer.cause = inner
+  expect(message(outer)).toBe('outer <- inner')
+})
