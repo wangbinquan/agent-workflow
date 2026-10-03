@@ -1,4 +1,5 @@
 // RFC-370 A2: complete selected evidence receiver at every real root and dual-provider HTTP.
+// Exact 694 CI repair: preserve the selected EvidenceStore default after reference-factory migration.
 import { afterEach, expect, test } from 'bun:test'
 import { dirname, join } from 'node:path'
 import { existsSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
@@ -68,7 +69,10 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
   expect(start.text).toContain('...sessionInput,')
   const composition = load('modules/development-automation/composition.ts')
   expect(composition.text).toContain(
-    "deps.evidenceArtifacts ?? new EvidenceStore(join(deps.appHome, 'evidence'))",
+    "deps.evidenceArtifacts ?? new EvidenceStore(factory.resolve(deps.appHome, 'evidence'))",
+  )
+  expect(composition.text).toContain(
+    'const factory = selectedAutomationWorkspaceEffects(deps.automationWorkspaceEffects)',
   )
   for (const [path, expression, count] of [
     ['infrastructure/actionWorkspace.ts', 'deps.evidence.materializeBundle', 2],

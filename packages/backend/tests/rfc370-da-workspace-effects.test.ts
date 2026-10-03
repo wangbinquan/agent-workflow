@@ -1,4 +1,5 @@
 // RFC-370: complete selected workspace effects retain serial content and close ACKs.
+// Exact 694 CI repair: launch-frozen submission and complete fake port retain the close ACK oracle.
 import { afterEach, describe, expect, test } from 'bun:test'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -447,6 +448,12 @@ describeEachProvider('RFC-370 actual DA selected workspace ordering', (harness) 
                 businessTreeDigest: 'b'.repeat(64),
               }
             },
+            adopt() {
+              return {
+                workspacePath: 'logical:action-workspace',
+                businessTreeDigest: 'b'.repeat(64),
+              }
+            },
             discard() {},
           },
           attemptContext: {
@@ -466,7 +473,7 @@ describeEachProvider('RFC-370 actual DA selected workspace ordering', (harness) 
       (
         await fixture.materializer.stashDirectSubmission({
           missionId,
-          submission: { title: 'Update', body: 'do the work', uploads: [] },
+          submission: { title: 'Add feature', body: 'do the thing', uploads: [] },
         })
       ).ok,
     ).toBe(true)

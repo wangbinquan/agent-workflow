@@ -879,7 +879,7 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
         if (
           pre?.conflict === undefined ||
           !(await withAutomationWorkspaceEffects(factory, (effects) =>
-            effects.exists(pre.conflict.workspacePath),
+            effects.exists(pre!.conflict!.workspacePath),
           ))
         ) {
           if (state !== null && attempt.mode !== 'fresh-scene') {
