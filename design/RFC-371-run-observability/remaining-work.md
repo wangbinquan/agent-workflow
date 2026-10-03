@@ -310,7 +310,6 @@ SOURCE v2 的唯一 P2 已按实际事件顺序修正，完整 v3 独立功能�
 
 完整限定实现门 v4 的唯一 P2 是许可理由及发布说明把派生字段预算误写为不变；原 FAIL 与逐文件回执保留。当前只修正该许可 why、用原 provenance 函数重算 ledger 摘要，并列出上述两项实际数字。另 12 份生成产物和全部 48 代码路径逐字未变；纯治理投影复用原 census，未重跑 scanner 或本机测试。窄增量复核、新发布及精确 hosted CI 继续，不关闭 RFC 或开启 CS 开发 producer。
 
-
 ## 2026-10-03 完整 EOF 底座接续
 
 用户要求统计不能漏任何一条。任务、调用、用量、采集分别沿原 owner 游标读到真正 EOF；单页大小、排序块、合并路数和缓存容量只限制一次传输或内存占用，不限制总体数量。新底座保留原身份，在专用原数据库快照的 TEMP 工作区内进行稳定外部排序、四桶覆盖选择和逐条派生分配，尚未切换正式接口和页面。
@@ -320,7 +319,6 @@ SOURCE v2 的唯一 P2 已按实际事件顺序修正，完整 v3 独立功能�
 原官方 scoped census 在该 source SHA 上生成完整 13 产物，排除并保留他人 EmployeeCase/CI 在制源码；报告只读尝试和缺少 seed 增长的静态 FAIL 均保留。纯治理投影复用生成结果，仅登记五项实际增长：mutation 1826→1829、observed imports 5809→5814、exceptions 5167→5171、symbol owners 25932→26021、physical SQLite fixture 文件 319→320。原 scanner、规则、40 required SPI、304 debt、target 69、273 inbound/31 outbound、background 352、public 1056 与 ambient 501 不变。SOURCE digest `sha256:15e57a059a299e942017fa56f89c6a025ebb98955013158876b8246da9639a79`；129 原库存静态核对通过。增长回执需在匹配 canonical 提交后由正常后继提交退役。
 
 正式报告构建、分页缓存/接口、页面切换、native v2 的完整基线与原完成证明、100K Task/10M usage、真任务四桶/人民币和新 exact-SHA CI 仍待。既有正式链路的截断仍是待修缺陷，不能称为完整统计，也不能以本次底座 SOURCE 或旧真实任务回执替代新全量验收。CS 开发 producer 保持 OFF，两个 RFC 保持 In Progress。
-
 
 ### 2026-10-03 全量报表正式入口与分类呈现候选
 
@@ -332,13 +330,11 @@ UI 保留完整报告身份和各节分页位置，任务贡献与原始调用/�
 
 这批候选仍待正式发布和新 exact-SHA hosted CI，不能据源码审阅宣称线上已全量。现存原生用量 v1 的会话/步骤/parts 上限、完整基线及 durable v2 完成证明、追踪的调用/尝试和页数上限仍须落地消除；100K Task/10M usage 的实际性能、真实任务四桶/人民币与浏览器验收继续，AW 默认定时 WebKit 功能失败仍需修复。CS 786489b859062dd77a0c4278eb937882d4839f69 的 CI 37130953072 六项已全部成功，包括实机 e2e；新的 emptyDir 写入权限修复和约定八组件本机部署由必要部署依赖会话继续，实际运行版本与新任务验收待交接。两个 RFC 保持 In Progress，CS 开发 producer 保持 OFF，不把历史任务证据当作新全量验收。
 
-
 ### 2026-10-04 全量报告已发布，继续消除原生与追踪上限
 
 上述 SOURCE/META 候选已通过精确共享主干发布进入 0294e8de8a8660a3170a2600f60c7876506ddf81，98 个文件的暂存和提交内容逐一匹配，推后 main 与 origin/main 为 0/0，共享 index 为空，无关在制改动保持。对应主 CI 37135042998、Windows 37135043001 和默认触发的 visual/maintenance 定时作业已启动，尚不能据启动状态宣称通过。原正式统计别名和新正式页面已进入远端源代码，实际服务版本和行为还待新 CI 与真实运行验收。
 
 按原 RFC-317 高水守卫，在正常后继候选中仅退役匹配的九条一次性 allowGrowth，129 个库存的数值、全部规则、SPI、债务和分类判据不变；使用原 provenance 函数记录实际已发布祖先。本次退役复用原 AST 结果，无新扫描或本机 AW 测试。原生采集 durable v2、完整基线和 EOF 完成证明、执行追踪无总页数上限、真实规模及真实任务验收继续；不声明所有限制已去掉，不开启 CS 开发 producer，不关闭任何 RFC。
-
 
 ### 2026-10-04 完整报告的首轮 CI 缺陷修正
 
@@ -348,7 +344,6 @@ UI 保留完整报告身份和各节分页位置，任务贡献与原始调用/�
 
 其余实际 CI 缺陷继续逐项修复：新增报告表的迁移/归档/schema 投影、原生数值映射及原生产事实接线和 E2E，不能据本批称主 CI 全绿。CS 目录权限修正 d2ab5f349d20a3d24fe564b27024b5ec4dec90e7 已发布；该提交的真实 module 10001 行用例有 65002ms hook 超时，另五作业不能代签失败，新八组件部署仍未执行。完整 native v2、追踪 EOF、100K Task/10M usage、真正任务四桶/人民币及正式浏览器验收继续，所有人口上限尚未清零，两个 RFC 均保持 In Progress。
 
-
 ### 2026-10-04 完整报告 CI 第二批修复与剩余上限
 
 已发布 0b8910ab8d88fff0df68dad416169895d6fc1165 的主 CI 37139017700 已 completed/failure，26 success、24 failure；完整原失败日志和第一批失败回执保持。第二批 SOURCE25 v2 独立功能审阅通过：原始报告计数保持十进制字符串，实际写入量使用原计数行 CAS；原 visibility 前缀改用精确前缀比较，报告身份继续绑定实际有效权限与 accessRevision；Worker 异常拒绝和完整 drain 保持。真实 PostgreSQL 夹具使用原 native driver，只在三项明确 cleanup ACK 故障中注入失败，不伪造 SQL 行。五张真实派生缓存表使原 roster 变为 208 source / 202 active，六张 archive-only 名单不变；迁移头、路由、hash builder 与实际 provider 分支登记相应更新，原断言与预算保持。
@@ -356,3 +351,15 @@ UI 保留完整报告身份和各节分页位置，任务贡献与原始调用/�
 首次 META v1 发现 provider-aware 构建入口目录不符原规则，原 FAIL 保留。后继实际把入口移入既有 platform/persistence，两个正式根和两个测试只改对应 import，完整保留 489919 已提交的并行 Task 输出；没有放宽 relocation matcher 或增加债务。原官方 scoped census 在 committed 489919 加冻结 SOURCE25 上生成 13 产物，四项 provenance 使用原函数派生，129 个原库存静态核对通过，零新增长许可。schema 格式化后的原机器语义和完整有序人类 ledger 通过原静态比较；私有原字节差异诊断保持，不把格式差异写成逻辑失败。没有运行本机 AW tests/typecheck/build/services，新行为仍待本次发布后 exact-SHA hosted CI。
 
 本批修复不是“所有限制已移除”：原生 Token v1 的 session/step/part 上限、完整 durable baseline/EOF 和原 owner 高水修订协议、追踪尝试与调用页数上限、原任务/算力明细交互恢复、100K Task/10M usage 实际性能、默认及定时 CI、真实任务四桶/人民币和正式浏览器验收均继续。完整数据未能证明时必须不返回数值小计，不能以传输分页冒充人口截断。CS 9b287d488916a6029fc2a433ca3522f03fdb3aa4 的精确 CI 37139454921 六项成功；本机约定八组件部署已完成并验证实际 OCI、236 migrations 和 spool 写入，但原 10001 行测试的性能余量、新真实任务与页面验收仍待。CS 开发 producer 保持 OFF，两个 RFC 保持 In Progress。
+
+### 2026-10-04 原生完整 EOF reader 与 Worker 底座
+
+完整汇总修复9b0ea034805001ef910d3a13464dca9a3e9b620a已精确发布，原主CI37146254800为completed/cancelled，9 success、1 failure、40 cancelled，不能写成通过。包含它的9bdc8323a99c0de2ca955ca0945ba063ef927382主CI37146579007为completed/failure，41 success、9 failure；原prompt测试补正由其owner发布37b9a84，六项观测E2E仍由本会话修复，旧日志保持。
+
+原生新reader在实际SQLite只读快照中以磁盘TEMP队列和part/child keyset持续到真实EOF，无session、part、step或depth人口上限。session父引用、未完成step、未知四桶/模型/时间及不可用原源保留；计数与序号保持十进制字符串，只限制一页传输量。一个冻结pending页、精确ACK游标、前后与累计摘要和完整EOF指纹用于重送，Worker承担原native数据库读取并在失败/取消后等待实际退出。额外Worker入口加入真实单二进制编译清单，原streaming-hash规则只登记实际createHash消费。
+
+SOURCE7首次FAIL发现JSON布尔值被SQLite转成0/1，原失败保留；只用原json_type的integer/real/text读取五个token字段，布尔/null/composite保持未知。SOURCE7-v2与最后SOURCE8-v3有限独立PASS，指纹31e3b9dab7b733c46bd279f75d538a81c9ab9f5fd840c59f6e1c671d65e76a9e。新真实fixture覆盖60002 parts（50001非数字、10001数字）、1025 sessions、depth80、冻结快照/重送/ACK、不同分页边界和实际Worker；原布尔语义按同一原SQLite读取器逐桶比较。测试已写入，尚未运行新的托管CI，本机仅定向format/lint和原纯AST/JSON/字节证明。
+
+原官方一次成功AST在committed9bdc加冻结8路径生成13产物；初次private输入缓冲不完整和report-only遗漏write均保留，不当作成功。四provenance用原函数派生，129库存原静态核对PASS；五实际增长为mutation1849→1852、background358→359、observed imports5936→5944、exceptions5281→5289、symbol owners26329→26359。原规则、所有旧债条款、SPI和target保持；matching canonical之后正常后继退役一次allowGrowth，不重复扫描。后继37b9仅peer测试/文档，不改变本批生产与原规则输入。
+
+这是尚未接入正式producer的采集底座，不能写成最大任务/调用等所有限制已移除。原owner的完整durable baseline/page ACK、原emission冻结与全部pending revision高水/原fence、原数值来源append同事务及v2完成证明仍须实现；原v1与追踪上限尚未移除。CS新0018吞吐候选的原10001/20025断言约21.12s通过，正式SOURCE/CI/部署待。本批还需精确发布和新CI，默认及定时E2E、真实规模/模型任务/四桶人民币/浏览器等继续，开发producer OFF，两RFC In Progress。

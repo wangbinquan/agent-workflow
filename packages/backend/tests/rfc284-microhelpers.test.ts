@@ -89,6 +89,8 @@ describe('RFC-284 T7 — 唯一性文本锁', () => {
         'modules/development-automation/infrastructure/uploadPlacement.ts',
         // RFC-371: streams every original receipt into one digest, without a full-population array.
         'modules/run-observability/infrastructure/completeObservationSourceRevision.ts',
+        // RFC-371 native EOF reader streams the original session/part traversal, without a population array.
+        'modules/runtime-management/infrastructure/opencodeUsagePass.ts',
         // RFC-308 policy/profile content-addressed receipts:
         'modules/source-control/domain/taskCommitPolicy.ts',
         'modules/source-control/domain/workspaceExcludeProfile.ts',

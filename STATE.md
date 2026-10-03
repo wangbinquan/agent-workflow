@@ -108,7 +108,6 @@ d3b13937 的主 CI 实际终态为 31 成功/19 失败/50，手动 Windows 为�
 
 正式报告构建、分页缓存/接口、页面切换、native v2 的完整基线与原完成证明、100K Task/10M usage、真任务四桶/人民币和新 exact-SHA CI 仍待。既有正式链路的截断仍是待修缺陷，不能称为完整统计，也不能以本次底座 SOURCE 或旧真实任务回执替代新全量验收。CS 开发 producer 保持 OFF，两个 RFC 保持 In Progress。
 
-
 ## RFC-370：SOURCE28 workspace / package / Worker 接线（2026-10-03）
 
 本批完成两个 provider 的 workspace tree/file 内容选择、资源包 skill/plugin/export 完整 owner 接线，以及 maintenance Worker 内重建的三类完整效果（archive、包恢复、plugin GC）。所选对象的原 receiver、逻辑引用、ACK 与失败语义贯穿实际装配入口；CLI 初始和替换 session 传递同一完整选择。重复 drain 共用包含 heartbeat、效果 dispose 和 provider close 的完整关闭 Promise，不能提前发出 drained。
@@ -9681,6 +9680,7 @@ M1 验收：跑通 `创 agent → 创 skill → 通过 API/curl 创线性 workfl
 原 scoped census/boundary 各一次，四规则及原304条 debt、273/31、target69、implementation SCC空保持；actual entry1813→1814、imports5735→5739、exceptions5096→5100、owner25802→25806，四真实增长匹配 canonical 后一次退役。宿主 required SPI 由原规则观察到 application consumer、native provider、唯一 root composition 而成为 active；39项现19 active/20 declared-debt。新 digest `sha256:23a114c3710b4a2d04f4a6de85bc18de8b9a7ae8b39c5f0f39db8efa8549c98f`。三个 CI 测试不在生产语料/两个 digest 额外输入内，不再运行 generator。旧门/CI/并行正文保持，无 AW 本机 test/typecheck/build/service。
 
 A1 raw lock/执行 authority、A2 其他物理证据效果及 A3～A8/AC00/独立完整 A-G 继续；本门不关闭完整 A 阶段。完成后编写各层独立 CS adapters，B/M0 先实际部署，再逐项 M1～M4；尚无 AW-in-CS 实际部署，不关闭 RFC。
+
 ## 2026-10-03 完整统计 EOF 与 CI 修复接续
 
 统计仍不得限制任务、调用、用量或原生记录总量。外部排序新增原序号唯一性、连续工作行、稳定顺序与最终 EOF 数量核对，丢尾、丢中间、重复序号和损坏身份均拒绝生成完整报告。原数据库分派穷举到 never，任务 attempt 字段改为调用时读取；真实 WAL 和双 provider 的只读输入回归均核对原 Error.cause 边界。
@@ -9689,7 +9689,6 @@ A1 raw lock/执行 authority、A2 其他物理证据效果及 A3～A8/AC00/独�
 
 正式接口/页面切换、完整 native v2、报告 worker/cache、100K Task/10M usage、真实任务与浏览器四类 Token/人民币核对继续；旧统计截断仍是未完成的缺陷。CS 已接原数据库/owner 的新完整报告接口候选，但未发布部署或切换正式页面；开发 producer 保持 OFF。两个 RFC 保持 In Progress，下方并行会话输出完整保留。
 
-
 ## RFC-370 资源恢复公共合同修正与最终候选（2026-10-03）
 
 前段记录的是本批首次16路径候选及其首次投影，尚未发布。原公共 consumer 守卫随后显示额外公开的 ResourcePackageRecoveryEffects 没有直接 consumer；首次 META 纯证明因此 FAIL，完整13产物、日志及全文快照保留。只有 Worker 真正消费的 Factory 需要 exact public 出口。独立有限 DESIGN-R3 PASS `09edd13ea0adffa5d36b13968e2f8478ac1577691c5b7bfb100c5237996904a5` 后，仅删除这一未发布 scope type alias，保留原 application 完整十方法 scope、factory 返回合同及所有实现和测试；单文件 SOURCE-R2 PASS `d666183e7fccbea6f4949c0148876b02d17c1c1db010ebd487c6b5d974a50716`，另外15路径及31 controls完整保持。原 SOURCE16 PASS 与单路径修正组合成当前16路径候选 `089c38dd6788b1a4448e2fdb9b540ac6ed4c03a82505df0697d2e9bd82460ca3`，两个独立回执保留；不改写首次通过或失败记录。
@@ -9697,7 +9696,6 @@ A1 raw lock/执行 authority、A2 其他物理证据效果及 A3～A8/AC00/独�
 因本批源码内容变化，按原规则只为这个新候选执行一次 scoped census，原首次成功生成器和证明均不重跑。基准仍为 `6cd43bd7728f3b1c150a2c2783d515ce6f7c26e2`，排除所有未发布并行源码；最终库存为 entries 1834→1835；entries 353→356；ambientWiringEntries 501→501；entries 26113→26124；entries 1057→1058；observedEdges 5829→5830；architectureExceptions 5184→5185；requiredPorts 40→40。公共面1057→1058只新增已消费的完整Factory，不新增零consumer债。六项实际正增长按原 allowGrowth协议登记；已匹配观测SOURCE25/canonical的五条旧回执保留理由并消费，本批matching canonical正常提交后再退役六条。修正后的source digest `sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef`。前次未发布growth及文档也保留为首轮历史，四份完整原手写文档和首次增量均保留，本段只作追加。40 required SPI、304 commons debt、69 target edges、原四个生成规则均保持，不新增边界债。
 
 7d主CI37113530050 completed/success 50/50、Windows37113592469 completed/success是前批精确SHA证据；本批行为仍待发布后新的exact-SHA hosted CI。未运行本机AW test/typecheck/build/service。完整A1–A8/AC00/A-G、CS独立adapters、B/M0真实部署及M1–M4按已批准顺序继续，RFC不关闭。
-
 
 ## RFC-370 Task 删除与恢复效果切面（2026-10-03）
 
@@ -9711,7 +9709,6 @@ TE 拥有目录引用/复合存在并删除内容合同和完整效果选择；S
 
 完整A1–A8/AC00/A-G仍开放，继续其它内容/工作区/Git、Agent材料与执行、所有purpose命令、执行权/恢复/实际roots。独立CS adapters仍在完整A-G之后；B/M0先真实部署，再逐项M1–M4。尚无AW-in-CS实际部署，不关闭RFC。
 
-
 ### Task W29 摘要补正与最终 SOURCE17（2026-10-03）
 
 在已通过的有限 SOURCE16 基础上，只新增原 W29 unstarted application 测试的一项两字符串补正。独立 DESIGN1-W29 PASS `f07e8b30e06f5be4db1cedf9108238dc635944734a746ad3501a06ba1c7dd119`，SOURCE1-W29 PASS `0ec568ebec71fa09d7e7a5d5ce85431a1e1e7283a969155c4c0ffbb82dac4391`；最终有限 SOURCE17 组合 `2ba0bcf17579d97c758fce16161ff36295d521f4c6a6516f4f63b4a2e33526b1` 保留原 SOURCE16 FAIL、根测试 SOURCE1-R2 PASS 和本次 SOURCE1-W29 PASS，不重复完整源码门或将首次 FAIL 改写为通过。
@@ -9722,7 +9719,6 @@ PG 摘要 `23e198e5a2d9bfb4bfbb53f6b7e9f6e51318159258db7293fa21bded160f88fc`→`
 
 并行两份观测夹具修正 SHA `2d9e660936f25d5147bfbb5b0118f110e90947e1` 的Windows37120910643已取得 completed/success（1/1）；此前资源恢复 SHA87356a1f 的失败/取消终态与实际日志仍保留，不据后继Windows单项成功声称旧SHA或整套CI通过。完整A1–A8/A-G、后续独立CS适配器和AW在CS的真实部署仍未完成，继续实施。
 
-
 ### 已发布资源恢复 CI 源码断言补正（2026-10-03）
 
 观测夹具修正 SHA `2d9e660936f25d5147bfbb5b0118f110e90947e1` 的主CI37120550528已取得 completed/failure：45 success，4个backend分片及required失败；Windows37120910643 completed/success。四个backend失败对应两项已发布RC迁移遗漏的旧源码定位：P1-5 committed重放仍查旧renameSync/swapInStaged位置，RFC359孪生体消费名单仍查两个旧provider位置。完整原失败日志与终态快照保持，不重跑或改写失败结论。
@@ -9731,7 +9727,6 @@ PG 摘要 `23e198e5a2d9bfb4bfbb53f6b7e9f6e51318159258db7293fa21bded160f88fc`→`
 
 本次发布分为Task源码17路径、这两项RC测试精确补正、canonical/docs17路径及匹配5项增长回执的正常后继退役，合计36个独立允许路径。Task17组合指纹 `2ba0bcf17579d97c758fce16161ff36295d521f4c6a6516f4f63b4a2e33526b1` 保持，完整A-G/CS adapters/真实部署仍开放。canonical另有6项原Task写点位置投影：恢复238→249与256→267、路由1855→1857与2181→2183、TaskDelete328→325与364→361；除实际id/line外各字段和原31个DB调用子树保持，不改业务写入规则，不新增条款或预算。
 
-
 ### 2026-10-04 完整报告 CI 第二批修复与剩余上限
 
 已发布 0b8910ab8d88fff0df68dad416169895d6fc1165 的主 CI 37139017700 已 completed/failure，26 success、24 failure；完整原失败日志和第一批失败回执保持。第二批 SOURCE25 v2 独立功能审阅通过：原始报告计数保持十进制字符串，实际写入量使用原计数行 CAS；原 visibility 前缀改用精确前缀比较，报告身份继续绑定实际有效权限与 accessRevision；Worker 异常拒绝和完整 drain 保持。真实 PostgreSQL 夹具使用原 native driver，只在三项明确 cleanup ACK 故障中注入失败，不伪造 SQL 行。五张真实派生缓存表使原 roster 变为 208 source / 202 active，六张 archive-only 名单不变；迁移头、路由、hash builder 与实际 provider 分支登记相应更新，原断言与预算保持。
@@ -9739,3 +9734,15 @@ PG 摘要 `23e198e5a2d9bfb4bfbb53f6b7e9f6e51318159258db7293fa21bded160f88fc`→`
 首次 META v1 发现 provider-aware 构建入口目录不符原规则，原 FAIL 保留。后继实际把入口移入既有 platform/persistence，两个正式根和两个测试只改对应 import，完整保留 489919 已提交的并行 Task 输出；没有放宽 relocation matcher 或增加债务。原官方 scoped census 在 committed 489919 加冻结 SOURCE25 上生成 13 产物，四项 provenance 使用原函数派生，129 个原库存静态核对通过，零新增长许可。schema 格式化后的原机器语义和完整有序人类 ledger 通过原静态比较；私有原字节差异诊断保持，不把格式差异写成逻辑失败。没有运行本机 AW tests/typecheck/build/services，新行为仍待本次发布后 exact-SHA hosted CI。
 
 本批修复不是“所有限制已移除”：原生 Token v1 的 session/step/part 上限、完整 durable baseline/EOF 和原 owner 高水修订协议、追踪尝试与调用页数上限、原任务/算力明细交互恢复、100K Task/10M usage 实际性能、默认及定时 CI、真实任务四桶/人民币和正式浏览器验收均继续。完整数据未能证明时必须不返回数值小计，不能以传输分页冒充人口截断。CS 9b287d488916a6029fc2a433ca3522f03fdb3aa4 的精确 CI 37139454921 六项成功；本机约定八组件部署已完成并验证实际 OCI、236 migrations 和 spool 写入，但原 10001 行测试的性能余量、新真实任务与页面验收仍待。CS 开发 producer 保持 OFF，两个 RFC 保持 In Progress。
+
+### 2026-10-04 原生完整 EOF reader 与 Worker 底座
+
+完整汇总修复9b0ea034805001ef910d3a13464dca9a3e9b620a已精确发布，原主CI37146254800为completed/cancelled，9 success、1 failure、40 cancelled，不能写成通过。包含它的9bdc8323a99c0de2ca955ca0945ba063ef927382主CI37146579007为completed/failure，41 success、9 failure；原prompt测试补正由其owner发布37b9a84，六项观测E2E仍由本会话修复，旧日志保持。
+
+原生新reader在实际SQLite只读快照中以磁盘TEMP队列和part/child keyset持续到真实EOF，无session、part、step或depth人口上限。session父引用、未完成step、未知四桶/模型/时间及不可用原源保留；计数与序号保持十进制字符串，只限制一页传输量。一个冻结pending页、精确ACK游标、前后与累计摘要和完整EOF指纹用于重送，Worker承担原native数据库读取并在失败/取消后等待实际退出。额外Worker入口加入真实单二进制编译清单，原streaming-hash规则只登记实际createHash消费。
+
+SOURCE7首次FAIL发现JSON布尔值被SQLite转成0/1，原失败保留；只用原json_type的integer/real/text读取五个token字段，布尔/null/composite保持未知。SOURCE7-v2与最后SOURCE8-v3有限独立PASS，指纹31e3b9dab7b733c46bd279f75d538a81c9ab9f5fd840c59f6e1c671d65e76a9e。新真实fixture覆盖60002 parts（50001非数字、10001数字）、1025 sessions、depth80、冻结快照/重送/ACK、不同分页边界和实际Worker；原布尔语义按同一原SQLite读取器逐桶比较。测试已写入，尚未运行新的托管CI，本机仅定向format/lint和原纯AST/JSON/字节证明。
+
+原官方一次成功AST在committed9bdc加冻结8路径生成13产物；初次private输入缓冲不完整和report-only遗漏write均保留，不当作成功。四provenance用原函数派生，129库存原静态核对PASS；五实际增长为mutation1849→1852、background358→359、observed imports5936→5944、exceptions5281→5289、symbol owners26329→26359。原规则、所有旧债条款、SPI和target保持；matching canonical之后正常后继退役一次allowGrowth，不重复扫描。后继37b9仅peer测试/文档，不改变本批生产与原规则输入。
+
+这是尚未接入正式producer的采集底座，不能写成最大任务/调用等所有限制已移除。原owner的完整durable baseline/page ACK、原emission冻结与全部pending revision高水/原fence、原数值来源append同事务及v2完成证明仍须实现；原v1与追踪上限尚未移除。CS新0018吞吐候选的原10001/20025断言约21.12s通过，正式SOURCE/CI/部署待。本批还需精确发布和新CI，默认及定时E2E、真实规模/模型任务/四桶人民币/浏览器等继续，开发producer OFF，两RFC In Progress。
