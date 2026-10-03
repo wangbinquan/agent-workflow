@@ -61,6 +61,13 @@ import { createEventsArchiveMaintenanceCommand } from './eventsArchiveMaintenanc
 import { installMaintenanceWorkerErrorBoundary } from './maintenanceWorkerErrorBoundary'
 import { MAINTENANCE_PROTOCOL_VERSION, type MaintenanceWorkerEvent } from './maintenanceProtocol'
 import {
+  openMaintenanceWorkerEffectsScope,
+  type MaintenanceWorkerEffectsDescriptor,
+  type MaintenanceWorkerEffectsScope,
+  type MaintenanceWorkerEffectsSelections,
+} from './maintenanceWorkerEffects'
+import { readMaintenanceWorkerEffectsFrame } from './maintenanceWorkerEffectsProtocol'
+import {
   routeMaintenanceWorkerRequest,
   type MaintenanceWorkerInitRequest,
 } from './maintenanceWorkerMessageRouter'
@@ -97,6 +104,8 @@ let taskArchiveMaintenanceCommand: TaskArchiveMaintenanceCommand | null = null
 let tokenCallAudit: TokenCallAuditParticipant | null = null
 let pluginGenerationGcCommand: PluginGenerationGcCommand | null = null
 let maintenanceExecutionFence: MaintenanceExecutionFence | null = null
+let workerEffectsScope: MaintenanceWorkerEffectsScope | null = null
+let workerEffects: MaintenanceWorkerEffectsSelections | null = null
 let appHome = ''
 let processing = false
 let draining = false
@@ -106,6 +115,7 @@ let active: { runId: string; leaseToken: string } | null = null
 let pollTimer: ReturnType<typeof setInterval> | null = null
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null
 let heartbeatInFlight: Promise<void> | null = null
+let connectionClosing: Promise<void> | null = null
 let statementTimings: TimingHistogram | null = null
 let transactionTimings: TimingHistogram | null = null
 let sliceDiagnostics: MaintenanceSliceDiagnostics | null = null
@@ -257,32 +267,59 @@ async function settleWithBusyBackoff(
   }
 }
 
-async function closeConnection(): Promise<void> {
-  if (pollTimer !== null) clearInterval(pollTimer)
-  if (heartbeatTimer !== null) clearInterval(heartbeatTimer)
-  pollTimer = null
-  heartbeatTimer = null
-  await heartbeatInFlight?.catch(() => undefined)
-  heartbeatInFlight = null
-  const current = db
-  const currentPostgresqlRuntime = postgresqlRuntime
-  db = null
-  store = null
-  postgresqlRuntime = null
-  systemOperations = null
-  workspaceMaintenanceCommand = null
-  developmentAutomationMaintenance = null
-  digitalEmployeeMaintenance = null
-  intentMaintenanceCommands = null
-  integrationMaintenanceCommands = null
-  taskRecoveryOperations = null
-  taskArchiveMaintenanceCommand = null
-  tokenCallAudit = null
-  pluginGenerationGcCommand = null
-  maintenanceExecutionFence = null
-  initialised = false
-  ;(current as unknown as { $client?: { close(): void } } | null)?.$client?.close()
-  await currentPostgresqlRuntime?.close()
+function closeConnection(): Promise<void> {
+  connectionClosing ??= (async () => {
+    if (pollTimer !== null) clearInterval(pollTimer)
+    if (heartbeatTimer !== null) clearInterval(heartbeatTimer)
+    pollTimer = null
+    heartbeatTimer = null
+    await heartbeatInFlight?.catch(() => undefined)
+    heartbeatInFlight = null
+    const current = db
+    const currentPostgresqlRuntime = postgresqlRuntime
+    const currentEffectsScope = workerEffectsScope
+    db = null
+    store = null
+    postgresqlRuntime = null
+    systemOperations = null
+    workspaceMaintenanceCommand = null
+    developmentAutomationMaintenance = null
+    digitalEmployeeMaintenance = null
+    intentMaintenanceCommands = null
+    integrationMaintenanceCommands = null
+    taskRecoveryOperations = null
+    taskArchiveMaintenanceCommand = null
+    tokenCallAudit = null
+    pluginGenerationGcCommand = null
+    maintenanceExecutionFence = null
+    initialised = false
+    const closeFailures: unknown[] = []
+    if (currentEffectsScope !== null) {
+      try {
+        await currentEffectsScope.dispose()
+        if (workerEffectsScope === currentEffectsScope) {
+          workerEffectsScope = null
+          workerEffects = null
+        }
+      } catch (error) {
+        // Keep the failed scope: another drain must not report a false release ACK.
+        closeFailures.push(error)
+      }
+    }
+    try {
+      ;(current as unknown as { $client?: { close(): void } } | null)?.$client?.close()
+      await currentPostgresqlRuntime?.close()
+    } catch (error) {
+      closeFailures.push(error)
+    }
+    if (closeFailures.length === 1) throw closeFailures[0]
+    if (closeFailures.length > 1)
+      throw new AggregateError(
+        closeFailures,
+        'maintenance-worker-effects-and-database-close-failed',
+      )
+  })()
+  return connectionClosing
 }
 
 async function drainIfReady(): Promise<void> {
@@ -524,13 +561,31 @@ async function processQueue(): Promise<void> {
   }
 }
 
-async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
+async function initialise(
+  parsed: MaintenanceWorkerInitRequest,
+  effectsDescriptor?: MaintenanceWorkerEffectsDescriptor,
+): Promise<void> {
   initialising = true
   try {
     if (parsed.catalogDigest !== MAINTENANCE_CATALOG_DIGEST) {
       throw new Error('maintenance-worker-catalog-digest-mismatch')
     }
+    // A new idle generation must wait for the previous complete close ACK.
+    if (connectionClosing !== null) {
+      await connectionClosing
+      connectionClosing = null
+    }
+    if (workerEffectsScope !== null)
+      throw new Error('maintenance-worker-effects-previous-environment-not-released')
     appHome = parsed.appHome
+    if (effectsDescriptor !== undefined) {
+      const scope = openMaintenanceWorkerEffectsScope({
+        descriptor: effectsDescriptor,
+        context: { appHome, instanceRef: `aw-maintenance-worker:${ulid()}` },
+      })
+      workerEffectsScope = scope
+      workerEffects = await scope.ready
+    }
     if ('database' in parsed) {
       // The maintenance Worker owns a dedicated, deliberately small pool. It
       // cannot consume the foreground request pool and never opens db.sqlite.
@@ -546,7 +601,10 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       )
       const taskExecution = createTaskExecutionPersistence(client)
       taskRecoveryOperations = taskExecution.recoveryAdministration
-      taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(client)
+      taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(
+        client,
+        workerEffects?.taskArchive,
+      )
       workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand((isMaterializingTask) =>
         composeWorkspacePreparationMaintenance({
           db: client,
@@ -564,7 +622,8 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       tokenCallAudit = createTokenCallAudit(client)
       pluginGenerationGcCommand = composePluginGenerationGcCommand(
         client,
-        createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
+        workerEffects?.pluginGenerationGc ??
+          createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
       )
       maintenanceExecutionFence = createMaintenanceExecutionFence(client)
       developmentAutomationMaintenance = composeDevelopmentAutomationMaintenanceCommands(client)
@@ -619,6 +678,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
         db: client,
         appHome,
         pluginsDir: join(appHome, 'plugins'),
+        artifacts: workerEffects?.resourcePackageRecovery,
       })
       const resourcePackageMaintenanceCommand: ResourcePackageApplyMaintenanceCommand =
         resourcePackageMaintenance.command
@@ -660,7 +720,10 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       )
       const taskExecution = createTaskExecutionPersistence(sqliteDb)
       taskRecoveryOperations = taskExecution.recoveryAdministration
-      taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(sqliteDb)
+      taskArchiveMaintenanceCommand = createDrizzleTaskArchiveMaintenanceCommand(
+        sqliteDb,
+        workerEffects?.taskArchive,
+      )
       workspaceMaintenanceCommand = createWorkerWorkspaceMaintenanceCommand((isMaterializingTask) =>
         composeWorkspacePreparationMaintenance({
           db: sqliteDb,
@@ -717,6 +780,7 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
         db: sqliteDb,
         appHome,
         pluginsDir: join(appHome, 'plugins'),
+        artifacts: workerEffects?.resourcePackageRecovery,
         // Worker 线程不跑 apply：正在执行的 journal id 由主线程随 payload 送进来
         // （`converge({ activeApplyIds })`），这里的查询面没有消费者。
         activitySource: { activeApplyIds: () => [] },
@@ -738,7 +802,8 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
       tokenCallAudit = createTokenCallAudit(sqliteDb)
       pluginGenerationGcCommand = composePluginGenerationGcCommand(
         sqliteDb,
-        createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
+        workerEffects?.pluginGenerationGc ??
+          createPluginGenerationFilesystemGcPort(join(appHome, 'plugins')),
       )
       maintenanceExecutionFence = createMaintenanceExecutionFence(sqliteDb)
       store = createMaintenanceRunStore(sqliteDb)
@@ -807,13 +872,14 @@ async function initialise(parsed: MaintenanceWorkerInitRequest): Promise<void> {
 
 self.onmessage = (event: MessageEvent<unknown>) => {
   try {
+    const frame = readMaintenanceWorkerEffectsFrame(event.data)
     const action = routeMaintenanceWorkerRequest(
       initialised ? 'ready' : initialising ? 'initialising' : 'idle',
-      event.data,
+      frame.request,
     )
     switch (action.kind) {
       case 'initialise':
-        void initialise(action.request).catch(async (error: unknown) => {
+        void initialise(action.request, frame.effects).catch(async (error: unknown) => {
           await closeConnection()
           emit({
             type: 'degraded',

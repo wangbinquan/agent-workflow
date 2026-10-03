@@ -1,3 +1,5 @@
+export type { TaskArchiveContentBinding } from '../composition/taskArchiveMaintenance'
+
 // RFC-303 exact public vocabulary. Cross-context callers may depend on these
 // types, never on task rows, activeTasks, scheduler, GC, or process internals.
 import type { ClarifyDirective, TaskActorRole, TaskStatus } from '@agent-workflow/shared'

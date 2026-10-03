@@ -7,6 +7,9 @@ import {
   type MaintenanceWorkerRequest,
 } from './maintenanceProtocol'
 import { MAINTENANCE_CATALOG_DIGEST } from './maintenanceCatalog'
+import type { MaintenanceWorkerInitRequest } from './maintenanceWorkerMessageRouter'
+import type { MaintenanceWorkerEffectsDescriptor } from './maintenanceWorkerEffects'
+import { createMaintenanceWorkerEffectsInit } from './maintenanceWorkerEffectsProtocol'
 
 declare const AW_COMPILED_BUILD: boolean | undefined
 
@@ -34,6 +37,7 @@ interface MaintenanceWorkerSupervisorCommonOptions {
   readonly onDelta?: (runId: string, job: MaintenanceJobKey, delta: MaintenanceWorkerDelta) => void
   readonly onEvent?: (event: MaintenanceWorkerEvent) => void
   readonly workerFactory?: () => WorkerLike
+  readonly effectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   readonly now?: () => number
   readonly heartbeatTimeoutMs?: number
   readonly setTimer?: (fn: () => void, ms: number) => unknown
@@ -356,13 +360,15 @@ export function startMaintenanceWorkerSupervisor(
         }
         scheduleSpawn()
       })
-      post({
+      const init: MaintenanceWorkerInitRequest = {
         type: 'init',
         version: MAINTENANCE_PROTOCOL_VERSION,
         catalogDigest: MAINTENANCE_CATALOG_DIGEST,
         appHome: options.appHome,
         ...options.databaseInit,
-      })
+      }
+      if (options.effectsBootstrap === undefined) post(init)
+      else next.postMessage(createMaintenanceWorkerEffectsInit(init, options.effectsBootstrap))
       handshakeTimer = setTimer(
         () => scheduleRestart('maintenance worker handshake timed out', true),
         10_000,

@@ -1,3 +1,6 @@
+export type { ResourcePackageApplyArtifactRecoveryPort } from '../application/resourcePackageMaintenance'
+export type { PluginGenerationFilesystemGcPort } from '../application/ports/pluginGenerationGc'
+
 import type {
   McpRuntimeTestCancelRequest,
   McpRuntimeTestCreateRequest,
