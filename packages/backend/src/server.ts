@@ -1,3 +1,4 @@
+import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import type { ObservationTaskQueries } from '@/modules/run-observability/public/queries'
 import type { TaskObservationFactsQuery } from '@/modules/task-execution/public/queries'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
@@ -801,6 +802,7 @@ export interface AppDeps {
   resourcePackageSkillContent?: SkillPackageContentReader
   workspaceContent?: WorkspaceContentEffectsFactory
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
+  repositoryBaselines?: RepositoryBaselineEffectsFactory
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -2007,6 +2009,7 @@ function composeFallbackDevelopmentAutomation(
     drive: (missionId) => automation.drive(missionId),
   })
   const automation = composeDevelopmentAutomation({
+    repositoryBaselines: deps.repositoryBaselines,
     db: deps.db,
     appHome,
     evidenceArtifacts: deps.evidenceArtifacts,
@@ -2321,6 +2324,7 @@ export function composeSqliteApplicationDeps(
       },
     )
   const developmentMissionOperations = composeDevelopmentMissionOperations({
+    repositoryBaselines: deps.repositoryBaselines,
     db: runtimeDeps.db,
     deliveryProvider: repositoryBootstrap.developmentDeliveryProvider,
     admissionLookup: runtimeDeps.developmentAdmissionLookup,
@@ -3055,6 +3059,7 @@ function composeSqliteApiRouteMounts(
         executionContracts,
       }),
       platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
+        repositoryBaselines: deps.repositoryBaselines,
         evidenceArtifacts: deps.evidenceArtifacts,
         reactionRounds: createEmployeeReactionRoundQueries(deps.db),
         db: deps.db,

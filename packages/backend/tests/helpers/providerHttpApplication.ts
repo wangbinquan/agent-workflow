@@ -46,6 +46,7 @@ export type ProviderHttpApplicationInput = Pick<
   | 'resourcePackageSkillContent'
   | 'workspaceContent'
   | 'employeeCaseWorkspaceEffects'
+  | 'repositoryBaselines'
   | 'evidenceDocumentCommands'
   | 'daemonRuntime'
   | 'dbVersion'

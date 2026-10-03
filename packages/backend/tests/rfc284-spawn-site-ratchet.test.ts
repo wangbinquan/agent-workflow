@@ -128,7 +128,7 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
     count: 2,
     why: 'SCIP runIndexer 的 SpawnFn 注入缝（别名绑定 + 调用）；T17 已换树杀（stub 无 pid 走原 kill 缝）。',
   },
-  'modules/development-automation/infrastructure/gitBaselineReader.ts': {
+  'modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts': {
     governance: 'short-lived',
     count: 1,
     why:

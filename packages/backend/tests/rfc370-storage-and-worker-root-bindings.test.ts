@@ -59,7 +59,89 @@ const fields = {
   resourcePackageSkillContent: 'SkillPackageContentReader',
   workspaceContent: 'WorkspaceContentEffectsFactory',
   employeeCaseWorkspaceEffects: 'EmployeeCaseWorkspaceEffectsFactory',
+  repositoryBaselines: 'RepositoryBaselineEffectsFactory',
 } as const
+
+test('all eight actual baseline owners forward the selected factory from their lexical root parameter', () => {
+  for (const [path, roots, receiver, owners] of [
+    [
+      'cli/start.ts',
+      ['composeDevelopmentAutomation', 'composeDevelopmentEmployeePlatformWorkItems'],
+      'input',
+      ['composeSqliteProviderSession', 'composeSqliteProviderSession'],
+    ],
+    [
+      'cli/postgresqlDaemonApplication.ts',
+      [
+        'composeDevelopmentAutomation',
+        'composeDevelopmentEmployeePlatformWorkItems',
+        'composeDevelopmentMissionOperations',
+      ],
+      'input',
+      [
+        'composePostgresqlApplication',
+        'composePostgresqlApplication',
+        'composePostgresqlApplication',
+      ],
+    ],
+    [
+      'server.ts',
+      [
+        'composeDevelopmentAutomation',
+        'composeDevelopmentEmployeePlatformWorkItems',
+        'composeDevelopmentMissionOperations',
+      ],
+      'deps',
+      [
+        'composeFallbackDevelopmentAutomation',
+        'composeSqliteApiRouteMounts',
+        'composeSqliteApplicationDeps',
+      ],
+    ],
+  ] as const) {
+    const source = load(path)
+    for (const [index, root] of roots.entries()) {
+      const calls = namedCalls(source, source, root)
+      expect(calls).toHaveLength(1)
+      const call = calls[0]!
+      expect(compact(property(objectArgument(call), source, 'repositoryBaselines'), source)).toBe(
+        `${receiver}.repositoryBaselines`,
+      )
+      let owner: ts.Node | undefined = call.parent
+      while (owner !== undefined && !ts.isFunctionDeclaration(owner)) owner = owner.parent
+      if (owner === undefined || !ts.isFunctionDeclaration(owner))
+        throw new Error('baseline lexical root missing')
+      expect(owner.name?.text).toBe(owners[index])
+      expect(owner.parameters.some((param) => compact(param.name, source) === receiver)).toBe(true)
+    }
+  }
+})
+
+test('three original baseline policies receive the same selected factory at their actual call arguments', () => {
+  for (const [path, name, expected] of [
+    [
+      'modules/development-automation/composition.ts',
+      'createActionBaselineResolver',
+      ['persistence.repositoryLocations', 'deps.repositoryBaselines'],
+    ],
+    [
+      'modules/development-automation/composition/missionOperations.ts',
+      'createRepositoryBaselineResolverFromLocations',
+      ['persistence.repositories', 'deps.repositoryBaselines'],
+    ],
+    [
+      'modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts',
+      'createGitBaselineReader',
+      ['input.baselineRepoPath', 'input.baselineSha', 'input.repositoryBaselines'],
+    ],
+  ] as const) {
+    const source = load(path)
+    const calls = namedCalls(source, source, name)
+    expect(calls).toHaveLength(1)
+    expect(calls[0]!.arguments.map((argument) => compact(argument, source))).toEqual([...expected])
+  }
+})
+
 function forwarded(value: ts.ObjectLiteralExpression, source: ts.SourceFile, receiver: string) {
   for (const key of Object.keys(fields))
     expect(compact(property(value, source, key), source)).toBe(`${receiver}.${key}`)

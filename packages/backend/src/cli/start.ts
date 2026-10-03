@@ -1,3 +1,4 @@
+import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import {
@@ -428,6 +429,7 @@ export interface StartOptions {
   resourcePackageSkillContent?: SkillPackageContentReader
   workspaceContent?: WorkspaceContentEffectsFactory
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
+  repositoryBaselines?: RepositoryBaselineEffectsFactory
   maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -605,6 +607,7 @@ async function composePostgresqlProviderSession(
     resourcePackageSkillContent: input.resourcePackageSkillContent,
     workspaceContent: input.workspaceContent,
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
+    repositoryBaselines: input.repositoryBaselines,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -1139,6 +1142,7 @@ interface DaemonProviderSessionComposeInput {
   readonly resourcePackageSkillContent?: SkillPackageContentReader
   readonly workspaceContent?: WorkspaceContentEffectsFactory
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
+  readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -1597,6 +1601,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       resourcePackageSkillContent: opts.resourcePackageSkillContent,
       workspaceContent: opts.workspaceContent,
       employeeCaseWorkspaceEffects: opts.employeeCaseWorkspaceEffects,
+      repositoryBaselines: opts.repositoryBaselines,
       maintenanceEffectsBootstrap: opts.maintenanceEffectsBootstrap,
       evidenceRead: opts.evidenceRead,
       evidenceDocumentCommands: opts.evidenceDocumentCommands,
@@ -2691,6 +2696,7 @@ async function composeSqliteProviderSession(
     }
   })()
   const developmentAutomation = composeDevelopmentAutomation({
+    repositoryBaselines: input.repositoryBaselines,
     db,
     appHome: Paths.root,
     evidenceArtifacts: input.evidenceArtifacts,
@@ -3086,6 +3092,7 @@ async function composeSqliteProviderSession(
     resourcePackageSkillContent: input.resourcePackageSkillContent,
     workspaceContent: input.workspaceContent,
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
+    repositoryBaselines: input.repositoryBaselines,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -3447,6 +3454,7 @@ async function composeSqliteProviderSession(
         executionContracts: employeeExecutionContracts,
       }),
       platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
+        repositoryBaselines: input.repositoryBaselines,
         evidenceArtifacts: input.evidenceArtifacts,
         reactionRounds: createEmployeeReactionRoundQueries(db),
         db,

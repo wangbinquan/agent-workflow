@@ -1,3 +1,4 @@
+import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import {
   readDaemonStartupRecoveryAuthority,
   type DaemonStartupLease,
@@ -425,6 +426,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly resourcePackageSkillContent?: SkillPackageContentReader
   readonly workspaceContent?: WorkspaceContentEffectsFactory
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
+  readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -1529,6 +1531,7 @@ export async function composePostgresqlApplication(
   })
   const employeeDelivery = buildDevelopmentDeliveryDeps(developmentDeliveryProvider)
   const employeePlatformWorkItems = composeDevelopmentEmployeePlatformWorkItems({
+    repositoryBaselines: input.repositoryBaselines,
     evidenceArtifacts: input.evidenceArtifacts,
     db: input.db,
     appHome: input.appHome,
@@ -1729,6 +1732,7 @@ export async function composePostgresqlApplication(
     },
   }
   const developmentAutomation = composeDevelopmentAutomation({
+    repositoryBaselines: input.repositoryBaselines,
     db: input.db,
     appHome: input.appHome,
     evidenceArtifacts: input.evidenceArtifacts,
@@ -1760,6 +1764,7 @@ export async function composePostgresqlApplication(
     }),
   })
   const developmentMissions = composeDevelopmentMissionOperations({
+    repositoryBaselines: input.repositoryBaselines,
     db: input.db,
     deliveryProvider: developmentDeliveryProvider,
     admissionLookup: developmentAdmissionLookup,
