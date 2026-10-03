@@ -97,7 +97,7 @@ const mockEnv = {
 function invoke(
   db: ProviderNeutralDatabase,
   h: Awaited<ReturnType<typeof fixture>>,
-  content: MemoryPortArtifactContent,
+  content: Readonly<MemoryPortArtifactContent>,
 ) {
   return runNode({
     taskId: h.taskId,
@@ -405,15 +405,18 @@ describeEachProvider('RFC-370 real port artifact consumers', (harness) => {
       configPath: join(h.root, 'config.json'),
       appHome: h.root,
       opencodeVersion: '1.14.25',
+      dbVersion: 17,
       portArtifactContentEffects: content,
     })
     const headers = { Authorization: 'Bearer tok' },
       path = '/api/tasks/' + h.taskId + '/port-artifacts/' + h.nodeRunId + '/report'
     let settled = false
-    const pending = application.app.request(path + '?item=0', { headers }).then((response) => {
-      settled = true
-      return response
-    })
+    const pending = Promise.resolve(application.app.request(path + '?item=0', { headers })).then(
+      (response) => {
+        settled = true
+        return response
+      },
+    )
     try {
       await Promise.race([
         entered.promise,
@@ -480,8 +483,8 @@ test('all three actual runNode launch sites bind the same artifact operations as
   expect(found).toHaveLength(3)
   expect(found.map((call) => objectFields(call.arguments[0]!, sf).get('portArtifacts'))).toEqual([
     'opts.portArtifacts',
-    'opts.portArtifacts',
     'state.opts.portArtifacts',
+    'opts.portArtifacts',
   ])
 })
 
@@ -547,9 +550,11 @@ test('PG and HTTP roots share one selected service between runtime, review and t
   expect(server.text).toContain(
     'portArtifactReaderFor: () => selectPortArtifactReader(deps.portArtifacts, appHome)',
   )
-  expect(calls(server, server, 'mountPortArtifactRoutes')[0]!.arguments[1]!.getText(server)).toBe(
-    'deps',
-  )
+  expect(
+    calls(server, server, 'mountPortArtifactRoutes').map((call) =>
+      call.arguments[1]!.getText(server),
+    ),
+  ).toEqual(['input.taskExecution.portArtifacts', 'deps'])
 })
 
 test('ordinary scheduler and repair dispatch use the selected factory; body read stays inside the original lock', () => {

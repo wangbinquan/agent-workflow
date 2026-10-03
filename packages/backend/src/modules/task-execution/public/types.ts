@@ -5,7 +5,6 @@ export type {
   PortArtifactReadItem,
   PortArtifactWorkspaceFile,
   PortArtifactArchiveNamespace,
-  PortArtifactLinkTarget,
   PortArtifactArchiveRequest,
   PortArtifactReadRequest,
   PortArtifactOperations,
