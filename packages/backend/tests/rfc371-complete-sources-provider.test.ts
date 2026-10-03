@@ -109,7 +109,7 @@ describeEachProvider('RFC-371 complete original source pages', (harness) => {
       .values({
         ...user,
         passwordHash: 'fixture',
-        mustChangePassword: false,
+        forcePasswordChange: false,
         createdAt: NOW,
         updatedAt: NOW,
       })
@@ -127,7 +127,7 @@ describeEachProvider('RFC-371 complete original source pages', (harness) => {
             id: id('run', start + i),
             taskId: id('task', 0),
             nodeId: 'node',
-            status: 'done',
+            status: 'done' as const,
             startedAt: NOW,
             finishedAt: NOW + i,
           })),

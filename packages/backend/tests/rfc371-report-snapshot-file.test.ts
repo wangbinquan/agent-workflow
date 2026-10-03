@@ -29,7 +29,14 @@ test('original SQLite WAL file reads and TEMP writes are exact and never pin the
       await snapshot.workspace.insert('temp', [
         { key: 'row', document: { input: '12', cacheRead: '3', cacheWrite: '4', output: '5' } },
       ])
-      expect(await snapshot.workspace.get('temp', 'row')).toEqual({
+      expect(
+        await snapshot.workspace.get<{
+          input: string
+          cacheRead: string
+          cacheWrite: string
+          output: string
+        }>('temp', 'row'),
+      ).toEqual({
         input: '12',
         cacheRead: '3',
         cacheWrite: '4',

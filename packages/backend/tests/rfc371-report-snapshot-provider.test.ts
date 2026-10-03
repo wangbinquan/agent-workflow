@@ -17,10 +17,8 @@ describeEachProvider('original complete report snapshot', (harness) => {
       'CREATE TABLE rfc371_original_report_queue (id text PRIMARY KEY,value text NOT NULL)',
     )
     await harness.db.run(sql`INSERT INTO rfc371_original_report_queue VALUES('stable','original')`)
-    const session = originalReportSnapshotSession({
-      ...harness.applicationBinding,
-      generationId: 'original-test-generation',
-    })
+    const binding = { ...harness.applicationBinding, generationId: 'original-test-generation' }
+    const session = originalReportSnapshotSession(binding)
     const work = (key: string) =>
       session.run(async ({ workspace, executor, snapshotId }) => {
         expect(await workspace.page('queue', null)).toEqual({ items: [], nextCursor: null })
@@ -57,10 +55,8 @@ describeEachProvider('original complete report snapshot', (harness) => {
     })
   }, 30000)
   test('a concurrent failure or cancellation cannot leave private rows in the next report', async () => {
-    const session = originalReportSnapshotSession({
-      ...harness.applicationBinding,
-      generationId: 'original-test-generation',
-    })
+    const binding = { ...harness.applicationBinding, generationId: 'original-test-generation' }
+    const session = originalReportSnapshotSession(binding)
     for (const mode of ['failure', 'cancellation'] as const) {
       const controller = new AbortController()
       const failed = session.run(async ({ workspace }) => {
@@ -85,10 +81,8 @@ describeEachProvider('original complete report snapshot', (harness) => {
       'CREATE TABLE rfc371_original_report_input (id text PRIMARY KEY,value text NOT NULL)',
     )
     await harness.db.run(sql`INSERT INTO rfc371_original_report_input VALUES('original','before')`)
-    const session = originalReportSnapshotSession({
-      ...harness.applicationBinding,
-      generationId: 'original-test-generation',
-    })
+    const binding = { ...harness.applicationBinding, generationId: 'original-test-generation' }
+    const session = originalReportSnapshotSession(binding)
     let retained: ReportWorkspace | undefined
     const snapshotId = await session.run(async (snapshot) => {
       retained = snapshot.workspace
@@ -148,10 +142,8 @@ describeEachProvider('original complete report snapshot', (harness) => {
     })
   }, 60000)
   test('duplicate, invalid, source and interruption errors discard the job and allow a fresh whole snapshot', async () => {
-    const session = originalReportSnapshotSession({
-      ...harness.applicationBinding,
-      generationId: 'original-test-generation',
-    })
+    const binding = { ...harness.applicationBinding, generationId: 'original-test-generation' }
+    const session = originalReportSnapshotSession(binding)
     await expect(
       session.run(async ({ workspace }) =>
         workspace.insert('duplicates', [
