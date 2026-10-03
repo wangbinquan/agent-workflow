@@ -60,3 +60,43 @@ test('lookup never persists asynchronously; final spans follow actual reaping an
   expect(capture).not.toContain('appendEvents(')
   expect(capture).not.toContain('nextRevision(')
 })
+
+// Two independent final writes regressed the original numeric repair rejection
+// contract. Both source batches must share one final transaction, with no event replay.
+test('post-reap native metadata and model corrections share one final write', () => {
+  const final = text.slice(
+    text.indexOf('processSettlement = runResult'),
+    text.indexOf('let gitMutationViolation'),
+  )
+  const subtree = ts.createSourceFile('final.ts', final, ts.ScriptTarget.Latest, true)
+  const writes: ts.CallExpression[] = []
+  walk(subtree, (node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText(subtree) === 'opts.persistence.nodeExecution.appendEvents'
+    )
+      writes.push(node)
+  })
+  expect(writes).toHaveLength(1)
+  expect(final).toContain('const observations = [...modelRevisions, ...spanFacts]')
+  expect(final.indexOf('nativeSpanCapture.finish')).toBeLessThan(
+    final.indexOf('const observations = [...modelRevisions, ...spanFacts]'),
+  )
+  expect(final.indexOf('nativeUsageCapture?.finish')).toBeLessThan(
+    final.indexOf('const observations = [...modelRevisions, ...spanFacts]'),
+  )
+  const input = writes[0]!.arguments[0]!
+  if (!ts.isObjectLiteralExpression(input))
+    throw new Error('Final write must use the original persistence contract')
+  expect(input.properties.find(ts.isPropertyAssignment)?.initializer.getText(subtree)).toBe(
+    'opts.nodeRunId',
+  )
+  expect(
+    input.properties.some(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        property.name.getText(subtree) === 'events' &&
+        property.initializer.getText(subtree) === '[]',
+    ),
+  ).toBe(true)
+})

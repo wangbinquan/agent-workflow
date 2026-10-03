@@ -50,12 +50,17 @@ const span = (key: string, complete = true): ObservationSpanDetail => ({
   usage: { input: '10', cacheRead: '20', cacheWrite: '3', output: '4' },
   cost: { currency: 'CNY', amountDecimal: '0.000123', completeness: 'complete' },
 })
-function fixture(initial?: string) {
+function fixture(initial?: string, initialFailures = 0) {
   const paths: URL[] = [],
     changes: (string | undefined)[] = []
+  let failures = initialFailures
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input) => {
     const url = new URL(String(input))
     paths.push(url)
+    if (failures > 0) {
+      failures--
+      throw new Error('native-span-source-unavailable')
+    }
     const page: ObservationTaskSpans = {
       taskId: 'task',
       nodeRunId: 'run',
@@ -90,7 +95,7 @@ function fixture(initial?: string) {
       <Page />
     </QueryClientProvider>,
   )
-  return { paths, changes }
+  return { paths, changes, client, failNext: () => failures++ }
 }
 test('unknown native times show no full-attempt bar, while model details show four buckets and exact CNY', async () => {
   const f = fixture()
@@ -125,4 +130,22 @@ test('a restored span URL loads continuation in its original attempt scope and n
   expect(validateObservationSearch({ task: 'task', attempt: 'run', span: 'second' })).toMatchObject(
     { task: 'task', attempt: 'run', span: 'second' },
   )
+})
+
+// The shared retry action must recover an unavailable source without replacing
+// retained native rows on a later failed refetch (RFC-214 CI regression).
+test('the public error retry restores spans and a failed refetch keeps existing native rows', async () => {
+  const f = fixture(undefined, 1)
+  fireEvent.click(await screen.findByRole('button', { name: i18n.t('common.retry') }))
+  const row = await screen.findByRole('button', { name: '模型 · 实际模型' })
+  expect(f.paths).toHaveLength(2)
+  f.failNext()
+  await f.client.invalidateQueries({ queryKey: ['run-observability', 'spans', 'task', 'run'] })
+  expect(await screen.findByRole('button', { name: i18n.t('common.retry') })).not.toBeNull()
+  expect(screen.getByRole('button', { name: '模型 · 实际模型' })).toBe(row)
+  fireEvent.click(screen.getByRole('button', { name: i18n.t('common.retry') }))
+  await waitFor(() =>
+    expect(screen.queryByRole('button', { name: i18n.t('common.retry') })).toBeNull(),
+  )
+  expect(f.paths).toHaveLength(4)
 })

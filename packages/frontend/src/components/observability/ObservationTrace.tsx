@@ -72,20 +72,14 @@ export default function ObservationTrace(props: {
   const pages = query.data?.pages ?? [],
     partial = pages.some((page) => page.partial)
   if (query.isPending) return <LoadingState />
-  if (query.isError) return <ErrorBanner error={query.error} />
+  if (query.isError && !query.data)
+    return <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
   return (
     <div className="stack--md observation-trace" ref={panel}>
       <div className="observation-trace__header">
         <h3>{t('runObservability.traceTitle')}</h3>
-        <button
-          type="button"
-          className="btn btn--ghost btn--sm"
-          onClick={() => void query.refetch()}
-          disabled={query.isFetching}
-        >
-          {t('runObservability.traceRefresh')}
-        </button>
       </div>
+      {query.isError && <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />}
       <p className="muted">{t('runObservability.traceHint')}</p>
       {partial && (
         <NoticeBanner tone="warning" size="compact">

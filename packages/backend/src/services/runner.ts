@@ -30,6 +30,7 @@ import type {
   PriorOutputUpdateContext,
   ReviewPromptContext,
   TriggerContext,
+  ObservationCapturedUsage,
 } from '@agent-workflow/shared'
 import {
   DAEMON_SHUTDOWN_ABORT_REASON,
@@ -1382,14 +1383,14 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       nativeSpanCapture.bindRoot(binding)
     }
     const flushSpanFacts = async () => {
-      const observations = nativeSpanCapture?.flush(Date.now()) ?? []
-      if (!observations.length) return
+      const spanFacts = nativeSpanCapture?.flush(Date.now()) ?? []
+      if (!spanFacts.length) return
       try {
         await persistRunnerWrite('node-run-observation/spans', () =>
           opts.persistence.nodeExecution.appendEvents({
             nodeRunId: opts.nodeRunId,
             events: [],
-            observations,
+            observations: spanFacts,
           }),
         )
       } catch {
@@ -1910,30 +1911,24 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // 之前。
     await stdoutEvents.flush()
     await stderrEvents.flush()
-    if (localObservationAccepted && nativeSpanCapture && runResult.outcome !== 'unreaped') {
+    if (localObservationAccepted && runResult.outcome !== 'unreaped') {
+      const observedAt = Date.now()
+      let spanFacts: readonly ObservationCapturedUsage[] = [],
+        modelRevisions: readonly ObservationCapturedUsage[] = []
       try {
-        const observations = await nativeSpanCapture.finish(
-          observationRoots,
-          Date.now(),
-          runResult.drainTimedOut || runResult.pumpError || nativeSessionIdentityInvalidObserved
-            ? ['native-span-output-incomplete']
-            : [],
-        )
-        if (observations.length)
-          await persistRunnerWrite('node-run-observation/spans-final', () =>
-            opts.persistence.nodeExecution.appendEvents({
-              nodeRunId: opts.nodeRunId,
-              events: [],
-              observations,
-            }),
-          )
+        spanFacts = nativeSpanCapture
+          ? await nativeSpanCapture.finish(
+              observationRoots,
+              observedAt,
+              runResult.drainTimedOut || runResult.pumpError || nativeSessionIdentityInvalidObserved
+                ? ['native-span-output-incomplete']
+                : [],
+            )
+          : []
       } catch {
         log.warn('node-run-observation-span-final-failed', { nodeRunId: opts.nodeRunId })
       }
-    }
-    if (localObservationAccepted && runResult.outcome !== 'unreaped') {
       try {
-        const observedAt = Date.now()
         const observations = [
           ...captureUsage.retryModels(observedAt),
           ...(nativeUsageCapture?.finish(
@@ -1942,6 +1937,17 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
             runResult.drainTimedOut || runResult.pumpError ? ['native-output-incomplete'] : [],
           ) ?? []),
         ]
+        modelRevisions = observations
+      } catch (error) {
+        log.warn('node-run-observation-model-revision-failed', {
+          nodeRunId: opts.nodeRunId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      }
+      // Reaping produces one atomic final write. Metadata and numeric readers
+      // fail independently; a failed write never replays either batch.
+      const observations = [...modelRevisions, ...spanFacts]
+      try {
         if (observations.length)
           await persistRunnerWrite('node-run-observation/model-revision', () =>
             opts.persistence.nodeExecution.appendEvents({
@@ -1953,10 +1959,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       } catch (error) {
         // Original numeric evidence remains durable and unpriced. A metadata
         // repair failure cannot turn a successful process into a failed task.
-        log.warn('node-run-observation-model-revision-failed', {
-          nodeRunId: opts.nodeRunId,
-          error: error instanceof Error ? error.message : String(error),
-        })
+        if (modelRevisions.length)
+          log.warn('node-run-observation-model-revision-failed', {
+            nodeRunId: opts.nodeRunId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        if (spanFacts.length)
+          log.warn('node-run-observation-span-final-failed', { nodeRunId: opts.nodeRunId })
       }
     }
     let gitMutationViolation: string | undefined

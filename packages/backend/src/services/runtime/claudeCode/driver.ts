@@ -515,7 +515,7 @@ export const claudeCodeDriver: RuntimeDriver = {
       env.CLAUDE_CONFIG_DIR && isAbsolute(env.CLAUDE_CONFIG_DIR)
         ? resolve(env.CLAUDE_CONFIG_DIR)
         : env.HOME && isAbsolute(env.HOME)
-          ? resolve(env.HOME, '.claude')
+          ? resolve(env.HOME, DEFAULT_CONFIG_DIR_PROFILE['claude-code'].name)
           : null
     const sourceNamespace = sha256Hex(
       JSON.stringify(root ? ['claude-native-root', root] : ['claude-invocation', invocationId]),

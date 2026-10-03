@@ -1,3 +1,6 @@
+.observation-trace {
+  min-width: 0;
+}
 .observation-trace__header {
   display: flex;
   flex-wrap: wrap;

@@ -55,3 +55,19 @@ SOURCE v2 的唯一 P2 已按实际事件顺序修正，完整 v3 独立功能�
 完整实现门 v5 已通过，65 路径发布于 `7135c4092bea766742a637a2d998312633811cd0`；随后的 `aa6e75a4cfb35ec0a80b9f2466d6f6d9ee0c514b` 只按原机制退役精确八条增长许可，其他计数、理由和产物保持。推送后 main/origin 精确一致、索引为空。主 CI 与九类原默认定时配置均在 aa6 上验收，不能据此提前宣称全部通过。
 
 [Windows 定时 CI 37068423865](https://github.com/wangbinquan/agent-workflow/actions/runs/37068423865) 的 Typecheck 实际失败：片段来源回归把允许历史 `sourceId=null` 的已受理响应类型，当成要求新来源 ID 的受理请求传入 store。修正该夹具为直接由原 `AcceptObservationInvocationSchema` 创建请求，保留相同输入与全部分页、ACK、归属断言；生产合同、旧响应兼容性与 CNY 均未放宽。这是单一回归文件的类型修正，没有运行 AW 本机测试或类型检查；限定检查、独立功能复核、新提交及 hosted CI 仍须完成。原失败回执保留，两个 RFC 继续 In Progress。
+
+## 2026-10-03：原 hosted CI 的观测回归修复
+
+`1538a38024cb7861f8761cc1806a62f8c7eabc2c` 的默认 Windows 作业 [37073283228](https://github.com/wangbinquan/agent-workflow/actions/runs/37073283228) 已成功；这只证明原受理 schema fixture 类型修复，main 作业 [37072798608](https://github.com/wangbinquan/agent-workflow/actions/runs/37072798608) 是 cancelled，不能代替整仓通过。此前默认夜间矩阵除 Windows 与 WebKit 外均成功；WebKit [37068435779](https://github.com/wangbinquan/agent-workflow/actions/runs/37068435779) 的原双轮澄清前置只出现 `clarify_a`，不是统计页面的交互失败，仍独立定位，不调大预算或减少原两轮断言。
+
+原失败日志定位到新增观测输出对既有 runner/界面/登记的影响。本批保留所有原断言，修复如下：
+
+- 原进程确定回收后，同一个 `nodeRunId` 的最终数值修订与原生跨度在一次原 appendEvents 中一起持久化；两种 reader 独立读取与失败记录保持，不能让跨度读取失败丢掉 Token 修订。普通跨度 flush 显式传入 spanFacts，避免原数值修订 AST 守卫把它误作数值修补。新增实际 AST 断言验证一次共同写入及两种完成读取在它之前；原迟到数值、拒绝/成功 runner 回归不删改。
+- Claude Code 原生目录名复用实际 DEFAULT_CONFIG_DIR_PROFILE，沿用原配置目录和 HOME 边界，不新增硬编码例外。
+- trace 根使用对应命名空间 CSS；读取失败复用 ErrorBanner 的标准重试。原缓存行在同范围临时读取错误时仍可供取证，错误明确显示；初读失败不伪造空 trace。新增组件回归验证标准重试及错误后保留原行身份。本批不改变统计错误时禁止显示当前范围的部分总量这一新要求。
+- 在原 contract registry 增加精确 GET tasks/:id/spans 叶子，沿用401/权限/原真实 provider 成功路径。原 MCP surface ledger 增加这个精确叶子的具名 `not-in-scope` 行，与原三条观测读取路由同组，后续 MCP 查询仍在 remaining-work；不新增 wildcard、不削弱原 route guard。
+- 原 engine-hardcoding ledger 仅登记实际 OpenCode 原生 SQLite 文件回归的一次构造，原因是供应商物理文件格式；服务数据库的 SQLite/PG 剧本保持。此次是可见的精确库存增长，不宣称该库存没有改变，也不增加未迁移生产债务或改计数/断言阈值。
+
+仅对自有九文件做格式/lint 与原官方 AST 静态登记；没有运行 AW 本机测试、类型、构建或服务。固定 `f3eedc6aa9cd380dbcc6b32b83be1f58da591752` 加九个冻结文件的私有中间输出，排除其他会话在制源。独立 SOURCE v1 确认九文件功能修复通过，但整批发布依据 FAIL：实际 MCP 库存 398→399、原生文件 engine 库存 318→319，中间 bundle 没有更新对应基线；四份治理 payload 的 contentDigest 也没有刷新。该中间 bundle 不允许原样提交或作为远端通过依据，旧失败回执保留。
+
+发布分两笔正常提交：先精确提交十个已审源/文档文件到共享 main，再以这个真实 source SHA 和具名库存增长原因生成十三份正式 canonical。原 scanner、计数守卫和断言不改；两项增长必须精确登记，全部治理 contentDigest 刷新，currentSnapshotSha 绑定实际 source SHA。正式生成候选独立复核通过后才提交登记、push 累积提交并核对远端 exact-SHA CI；下一笔非增长提交正常退役瞬时 allowGrowth，不能改已推历史。此段不是正式 canonical、远端绿、部署或 RFC 完成回执，实际结果另记。
