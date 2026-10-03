@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1829,
+    "entries": 1830,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -23757,6 +23757,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileEmployeeCaseWorkspaceEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/fileEmployeeCaseWorkspaceEffects.ts#createFileEmployeeCaseWorkspaceEffectsFactory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileEmployeeCaseWorkspaceEffects.ts#createFileEmployeeCaseWorkspaceEffectsFactory",
+      "symbol": "createFileEmployeeCaseWorkspaceEffectsFactory",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": false,
@@ -43723,7 +43748,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:15e57a059a299e942017fa56f89c6a025ebb98955013158876b8246da9639a79",
+  "sourceDigest": "sha256:6e7cf15a54e3de47f76d18172ed34ae8d6ba6c651d5ce6d352ebe2610626ae13",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

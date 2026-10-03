@@ -672,3 +672,9 @@ CI 修复提交 `3ff61d9eba0b129953d09d966235d7a2b3ca633c` 的主 CI `3708780597
 下一步 EmployeeCase 使用完整、可异步的 FS/raw Git 操作 scope；Git argv 的 literal 与 opaque reference operand 显式区分，三个 clone/fetch 引用由 adapter materialize，原业务参数及顺序不变。8 个原操作、6 个实际 binder、3 个 checkpoint consumer 属于下一独立源码候选，本批未实施。
 
 完整 A1–A8/A-G 仍开放。本批不等于其他 Worker 效果、execution authority、workspace/Git、物化快照、执行流和全部装配入口的闭合。后续先实施已通过有限 DESIGN v2 的 EmployeeCase 完整效果范围，再继续剩余中性切面；CS adapter、B/M0 实际部署和 M1–M4 验收尚未实施。
+
+## 2026-10-03 Employee case 内容/Git 接续
+
+已完成 SOURCE18 的实现与有限独立功能检视：SC 独立端口及 native 包、原 8 个操作的 scope 生命周期、三处 DA checkpoint 等待，以及 SQLite CLI、PostgreSQL CLI 与 SQLite HTTP 两组业务 binder 的完整工厂传递。原 CLI 字段冻结和 session replacement 传递保留，新 held checkpoint 验收同时等待内容与 close。
+
+本批同时修正 d3 已确认的 content root 自由变量、W29 闭包断言、resource fixture opId 和格式错误。PG Worker 诊断/失败断言补齐后仍待 hosted 真实错误，不能把该项写成已修复。发布、精确 SHA CI 与所有后续 A 项继续；A-G、CS adapter 与 M0 不因这一有限切面提前关闭。

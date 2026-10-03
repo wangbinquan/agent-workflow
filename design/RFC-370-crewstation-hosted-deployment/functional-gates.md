@@ -499,3 +499,15 @@ Worker 有限 DESIGN v2 PASS；SOURCE26 首轮 FAIL 的 `SOURCE26-P2-1`（重复
 CI 修复提交 `3ff61d9eba0b129953d09d966235d7a2b3ca633c` 的主 CI `37087805975` 为 50/50 success，Windows `37087878452` 的第二次 attempt 为 1/1 success。保留第一次 attempt 的三个既有 code-intel 5000 ms timeout；未放宽断言或时间预算。该 CI 仅证明修复提交，本批 SOURCE28 的正式 whole-repository 结论待发布后的 exact-SHA CI。
 
 完整 A1–A8/A-G 仍开放。本批不等于其他 Worker 效果、execution authority、workspace/Git、物化快照、执行流和全部装配入口的闭合。后续先实施已通过有限 DESIGN v2 的 EmployeeCase 完整效果范围，再继续剩余中性切面；CS adapter、B/M0 实际部署和 M1–M4 验收尚未实施。
+
+## 2026-10-03 Employee case workspace effects SOURCE18 有限门
+
+SOURCE17 指纹 `930ebee55111fcbf066edd335389f3308723b40a5afa6505825fd7576f26251a` 与 Worker SOURCE1 指纹 `1b1ffa3c5faa947708262370859dd9d94bf7dda451b42a622a998262ecf98a99` 分别取得独立功能 PASS，无确定 P1/P2；完整 18 文件候选指纹为 `78b9dce9dcf9b91bb4557221059a170387b619426568e07e9eb786993e3bbfef`。检视首末 source/control 哈希一致，检视范围只覆盖这组文件。
+
+EmployeeCaseWorkspaceEffectsFactory 选择完整 scope；14 个方法、原 receiver、完整 prototype 与关闭确认由同一 owner 管理。原 8 个业务操作、38 个原机制调用和 10 次 Git 的 cwd/值/顺序保留；仅显式 reference operand 在 native adapter 内物化。恢复基线复用已选 scope，选择或执行失败不回落 native。checkpoint/discard 支持异步完成，三个 DA 消费点在内容和 close 确认后继续。
+
+源码回归证据覆盖不触碰真实文件系统的完整 selected scope、held copy/read/move/close、错误与关闭错误保留，以及两个 provider 的真实 checkpoint 内容/close 双确认场景。真实 Worker 用例保留原所有断言、清理顺序和预算；ready 使用已有 phase deadline，失败在清理后保留 cause 与已收到的事件，GC/boot-drain 明确拒绝 degraded。这些用例尚须 hosted 执行。
+
+d3 主 CI 的 19 个实际失败日志和两份 Windows 实际结论保留。四项已确认回归已修正，PG Worker 实际失败原因仍未确认；有限 SOURCE PASS 不代替 CI，也不关闭 A3/A4、完整 A-G 或 CS 部署。
+
+本批原 classifier 的实际投影为：mutation 1829→1830、observed imports 5814→5817、architecture exceptions 5171→5174、symbol owners 26021→26031；只登记对应的 4 个正常增长回执。background 352、public surfaces 1056、304 条原债务、40 个 required SPI 和 69 个 target edges 不变，新增边界为 0。原 13 个产物由原生成器生成一次；其余 6217 个非本批源文件读取真实已提交基线字节。

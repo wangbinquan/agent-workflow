@@ -255,3 +255,13 @@ workspace content 完整读取和三类 Worker 效果已有中性选择入口，
 CI 修复提交 `3ff61d9eba0b129953d09d966235d7a2b3ca633c` 的主 CI `37087805975` 为 50/50 success，Windows `37087878452` 的第二次 attempt 为 1/1 success。保留第一次 attempt 的三个既有 code-intel 5000 ms timeout；未放宽断言或时间预算。该 CI 仅证明修复提交，本批 SOURCE28 的正式 whole-repository 结论待发布后的 exact-SHA CI。
 
 完整 A1–A8/A-G 仍开放。本批不等于其他 Worker 效果、execution authority、workspace/Git、物化快照、执行流和全部装配入口的闭合。后续先实施已通过有限 DESIGN v2 的 EmployeeCase 完整效果范围，再继续剩余中性切面；CS adapter、B/M0 实际部署和 M1–M4 验收尚未实施。
+
+## 2026-10-03 Employee case workspace effects SOURCE18 接续状态
+
+本批中性切面是 SC Employee case 内容/Git，而不是 CS 生产适配。14 方法完整 scope 通过工厂选择，native 实现置于本层独立 local adapter；8 个原业务操作保留原布局、digest、Git 参数和业务裁决。源码证明核对 38 个原机制调用、10 个 Git 有序投影、两份 DA owner 的完整 AST 逆投影，以及 6 个实际 binder 的参数词法作用域。3 个 checkpoint 消费点支持完成类型并等待 ACK。
+
+SOURCE17/SOURCE1 的独立功能检视均 PASS；真实双 provider held checkpoint 与真实 Worker 用例仅编写，尚待精确 SHA hosted run。d3 的 31/19/50 主 CI 终态、Windows 失败/取消和 maintenance 成功分别保留，四项确定回归已修正，PG Worker 根因未确认。新诊断显式保留 ready/active/completed/degraded/drained 事件，并使 degraded boot-drain 不能产生成功结论。
+
+后续 DA 冻结产物读写与树快照仍有原生机制：原调用 census 已记录，下一切面需逐项保留原文件事实、读取形式、复制选项、顺序与 digest，并在内容/close 确认后再推进原持久化状态。Action/LaunchLane、其他 workspace/Git、执行与 Worker authority、A8 装配和完整 A-G 仍继续；CS adapter 和实际 M0 部署尚未开始。
+
+本批原 classifier 的实际投影为：mutation 1829→1830、observed imports 5814→5817、architecture exceptions 5171→5174、symbol owners 26021→26031；只登记对应的 4 个正常增长回执。background 352、public surfaces 1056、304 条原债务、40 个 required SPI 和 69 个 target edges 不变，新增边界为 0。原 13 个产物由原生成器生成一次；其余 6217 个非本批源文件读取真实已提交基线字节。

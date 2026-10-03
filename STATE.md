@@ -1,3 +1,9 @@
+## 2026-10-03 RFC-370 Employee case workspace effects 与 d3 CI 接续
+
+Employee case 工作区内容/Git 的 SOURCE18 候选已完成两份有限独立功能检视：SOURCE17 与 Worker 诊断 SOURCE1 均 PASS。完整 14 方法 scope、8 个原业务操作、38 个原机制调用、10 个 Git cwd/有序参数和 6 个实际装配点已作源码证明；DA 的三处 checkpoint 消费等待内容与 close ACK 后继续。新本机证据只包含纯 AST/JSON/字节证明和定向格式/静态 lint，没有运行 AW 本机测试、typecheck、build 或服务。
+
+d3b13937 的主 CI 实际终态为 31 成功/19 失败/50，手动 Windows 为失败，定时 Windows 为取消，maintenance 为成功。SOURCE18 修正已确认的 SQLite content root 自由变量、W29 闭包断言、resource fixture opId 与格式回归；PG Worker 仅补有界 ready 等待、事件/cause 诊断及 degraded 失败断言，根因仍未确认。新候选仍须精确发布 SHA 的 hosted CI。A3/A4、完整 A-G、CS adapter、M0 部署及 M1–M4 均保持开放。
+
 ## 2026-10-03 完整 EOF 底座接续
 
 用户要求统计不能漏任何一条。任务、调用、用量、采集分别沿原 owner 游标读到真正 EOF；单页大小、排序块、合并路数和缓存容量只限制一次传输或内存占用，不限制总体数量。新底座保留原身份，在专用原数据库快照的 TEMP 工作区内进行稳定外部排序、四桶覆盖选择和逐条派生分配，尚未切换正式接口和页面。
