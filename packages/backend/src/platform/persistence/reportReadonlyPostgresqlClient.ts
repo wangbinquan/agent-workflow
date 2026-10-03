@@ -33,6 +33,7 @@ export function reportReadonlyPostgresqlClient(
   }
   return new Proxy(base, {
     get(target, key, receiver) {
+      if (key === '$provider') return 'postgresql'
       if (key === 'all') return raw
       if (key === 'get') return async (q: SQLWrapper) => (await raw(q))[0]
       if (key === 'values')

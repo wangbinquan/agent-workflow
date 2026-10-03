@@ -1,6 +1,9 @@
 import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/composition'
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
-import type { ObservationTaskQueries } from '@/modules/run-observability/public/queries'
+import type {
+  CompleteObservationReportQueries,
+  ObservationTaskQueries,
+} from '@/modules/run-observability/public/queries'
 import type { TaskObservationFactsQuery } from '@/modules/task-execution/public/queries'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
@@ -901,6 +904,8 @@ export interface AppDeps {
   webhookIngressPersistence?: WebhookIngressPersistence
   /** RFC-349 bootstrap-selected runtime registry. */
   runtimeRegistry?: RuntimeRegistryOperations
+  /** Both formal provider roots supply full reports; direct legacy fixtures may omit them. */
+  completeObservationReports?: CompleteObservationReportQueries
   /** Daemon-scoped live concurrency mutation composed by bootstrap. */
   configConcurrencyHotApply?: ConfigConcurrencyHotApplyCommand
   /**
@@ -3557,6 +3562,7 @@ function composeSqliteApiRouteMounts(
       }),
     observability: (app) =>
       mountObservationRoutes(app, {
+        reports: deps.completeObservationReports,
         ...composeObservationPricing({ db: deps.db, runtimes: runtimeManagement.observations }),
         tasks: composeTaskObservations({
           db: deps.db,

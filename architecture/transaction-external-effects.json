@@ -1,7 +1,7 @@
 {
   "denominator": {
-    "coLocatedCandidates": 27,
-    "transactionCallbacks": 261
+    "coLocatedCandidates": 28,
+    "transactionCallbacks": 267
   },
   "entries": [
     {
@@ -2654,6 +2654,80 @@
     },
     {
       "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#transaction:185",
+      "line": 185,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#publishCompleteReport",
+      "status": "clear",
+      "symbol": "publishCompleteReport",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [
+        "push"
+      ],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
+      "finalCriterion": "commit-intent-then-effect",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#transaction:45",
+      "line": 45,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPage",
+      "status": "co-located-risk",
+      "symbol": "stageCompleteReportPage",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#transaction:118",
+      "line": 118,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#completeObservationReportCache",
+      "status": "clear",
+      "symbol": "completeObservationReportCache",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#transaction:175",
+      "line": 175,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#completeObservationReportCache",
+      "status": "clear",
+      "symbol": "completeObservationReportCache",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#transaction:54",
+      "line": 54,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#completeObservationReportCache",
+      "status": "clear",
+      "symbol": "completeObservationReportCache",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts",
+      "finalCriterion": "no-external-effect-observed",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#transaction:86",
+      "line": 86,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#completeObservationReportCache",
+      "status": "clear",
+      "symbol": "completeObservationReportCache",
+      "targetContext": "run-observability",
+      "transactionCallee": "transaction"
+    },
+    {
+      "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
       "id": "tx:packages/backend/src/modules/run-observability/infrastructure/invocationPersistence.ts#transaction:69",
@@ -3196,7 +3270,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:683e591d4e6b7e563e33f46e915a06f296bbc92116b5339e20af5d607c8e8516",
+  "sourceDigest": "sha256:e905c2396180e79ff9021144da18caaba6ada859029e579054b9c1e2fabe3585",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

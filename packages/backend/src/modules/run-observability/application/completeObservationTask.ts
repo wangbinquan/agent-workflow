@@ -48,6 +48,7 @@ export async function buildCompleteObservationTask(
     String(BigInt(local.rows) + BigInt(platform.usageCount)),
   )
   await context.invocations.flush()
+  const sourceGaps = [...context.fold.gaps]
   const attemptFolds = completeWorkingCache<CompleteObservationFold>(
     input.rows,
     space('attempt-folds'),
@@ -113,6 +114,7 @@ export async function buildCompleteObservationTask(
       ) {
         completeObservationGap(fold, 'invocation-unobserved')
         completeObservationGap(context.fold, 'invocation-unobserved')
+        if (!sourceGaps.includes('invocation-unobserved')) sourceGaps.push('invocation-unobserved')
       }
       enriched.push({
         key: row.key,
@@ -122,8 +124,10 @@ export async function buildCompleteObservationTask(
     await input.rows.upsert(space('attempts'), enriched)
   }
   const backlog = await input.sources.backlog(input.task.id)
-  if (backlog.pendingRecords !== 0)
+  if (backlog.pendingRecords !== 0) {
     completeObservationGap(context.fold, 'source-projection-pending')
+    sourceGaps.push('source-projection-pending')
+  }
   const timing = await buildCompleteObservationTiming({
     task: input.task,
     asOf: input.asOf,
@@ -133,6 +137,7 @@ export async function buildCompleteObservationTask(
     signal: input.signal,
   })
   return {
+    sourceGaps,
     summary: {
       task: input.task,
       metrics: completeObservationMetrics(context.fold),
@@ -140,6 +145,7 @@ export async function buildCompleteObservationTask(
       timing,
     },
     fold: context.fold,
+    originalNumericRecords: String(BigInt(local.rows) + BigInt(platform.usageCount)),
     sourceReceipts: [attempts, invocations, captures, local, ...platform.receipts],
     attemptsNamespace: space('attempts'),
     invocationsNamespace: space('ready-invocations'),

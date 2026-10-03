@@ -320,3 +320,14 @@ SOURCE v2 的唯一 P2 已按实际事件顺序修正，完整 v3 独立功能�
 原官方 scoped census 在该 source SHA 上生成完整 13 产物，排除并保留他人 EmployeeCase/CI 在制源码；报告只读尝试和缺少 seed 增长的静态 FAIL 均保留。纯治理投影复用生成结果，仅登记五项实际增长：mutation 1826→1829、observed imports 5809→5814、exceptions 5167→5171、symbol owners 25932→26021、physical SQLite fixture 文件 319→320。原 scanner、规则、40 required SPI、304 debt、target 69、273 inbound/31 outbound、background 352、public 1056 与 ambient 501 不变。SOURCE digest `sha256:15e57a059a299e942017fa56f89c6a025ebb98955013158876b8246da9639a79`；129 原库存静态核对通过。增长回执需在匹配 canonical 提交后由正常后继提交退役。
 
 正式报告构建、分页缓存/接口、页面切换、native v2 的完整基线与原完成证明、100K Task/10M usage、真任务四桶/人民币和新 exact-SHA CI 仍待。既有正式链路的截断仍是待修缺陷，不能称为完整统计，也不能以本次底座 SOURCE 或旧真实任务回执替代新全量验收。CS 开发 producer 保持 OFF，两个 RFC 保持 In Progress。
+
+
+### 2026-10-03 全量报表正式入口与分类呈现候选
+
+全量报告底座 SOURCE58、完整来源筛选 SOURCE6、三个正式启动根及 HTTP SOURCE6、UI v3、原始 Worker v2 和移除新增值循环的 SOURCE4 已通过有限独立功能审阅。保留此前 UI、Worker、循环检测的失败候选和回执。正式 SQLite/PG 根接入同一原始提供者的快照与 Worker；既有统计 GET 别名转到完整报告状态，未完成报告不返回数值小计。报表生成先遍历所有原始任务与来源到 EOF，再作筛选和精确整数分类累计；每页传输量和列表展示量不会截断来源集合。分类为输入、缓存读取、缓存写入、输出和总 Token；费用保持人民币，验收费率仍只代表明确标记的验证配置。
+
+UI 保留完整报告身份和各节分页位置，任务贡献与原始调用/分配记录使用同一报告。趋势图保留实际 Token 数值并显示可键盘聚焦区间的四类精确数值；返回按钮复用公共样式。完整任务从筛选上下文打开时按任务自身整体构建，返回后恢复父级筛选、报告和页码。原正式任务弹窗的返回焦点回归保留原测试预算，修复实际任务行稍晚挂载时提前消费恢复状态的问题。新增真实原始 SQLite/PG Worker、全量筛选及 UI 回归已写入，尚未以本机测试执行来代替托管 CI。
+
+原官方 AST 在已发布 15b31c26aff56d2a8dd3dff2afd73620b4457654 加 84 个精确候选路径上生成 13 产物，排除并保留他人的未提交来源。此次候选已修复首轮检测出的 Stage/Store 值循环，没有新增 SCC 许可。实际九项库存增长为 mutation 1837→1847、transaction callbacks 261→267、background 356→358、ambient 501→504、observed imports 5837→5915、exceptions 5191→5263、public 1060→1063、symbol owners 26136→26308、真实 Tab 调用点 20→21；原扫描规则、40 个 required SPI、304 条债务、target 69、273 inbound/31 outbound 和既有字段预算保留。sourceDigest 为 sha256:e905c2396180e79ff9021144da18caaba6ada859029e579054b9c1e2fabe3585。增长理由仅登记实际新条目，匹配 canonical 提交后的正常后继提交需退役这些一次性回执。
+
+这批候选仍待正式发布和新 exact-SHA hosted CI，不能据源码审阅宣称线上已全量。现存原生用量 v1 的会话/步骤/parts 上限、完整基线及 durable v2 完成证明、追踪的调用/尝试和页数上限仍须落地消除；100K Task/10M usage 的实际性能、真实任务四桶/人民币与浏览器验收继续，AW 默认定时 WebKit 功能失败仍需修复。CS 786489b859062dd77a0c4278eb937882d4839f69 的 CI 37130953072 六项已全部成功，包括实机 e2e；新的 emptyDir 写入权限修复和约定八组件本机部署由必要部署依赖会话继续，实际运行版本与新任务验收待交接。两个 RFC 保持 In Progress，CS 开发 producer 保持 OFF，不把历史任务证据当作新全量验收。

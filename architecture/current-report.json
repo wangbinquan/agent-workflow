@@ -1,22 +1,22 @@
 {
   "kind": "current-architecture-report",
   "manifestDenominators": {
-    "ambientWiring": 501,
-    "architectureExceptions": 5191,
-    "backgroundJobs": 356,
-    "crossContextImports": 5837,
+    "ambientWiring": 504,
+    "architectureExceptions": 5263,
+    "backgroundJobs": 358,
+    "crossContextImports": 5915,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26136,
-    "mutationEntrypoints": 1837,
+    "moduleSymbolOwners": 26308,
+    "mutationEntrypoints": 1847,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1060,
-    "transactionExternalEffects": 261
+    "publicSurfaces": 1063,
+    "transactionExternalEffects": 267
   },
   "metrics": {
-    "ambientWiringEntries": 501,
+    "ambientWiringEntries": 504,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2078,
+    "backendProductionFiles": 2113,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -25,7 +25,7 @@
         "packages/backend/src/util/git.ts"
       ]
     ],
-    "backgroundEntries": 356,
+    "backgroundEntries": 358,
     "directNativeIntervalFiles": [
       "packages/backend/src/modules/digital-employee/application/osWorker.ts",
       "packages/backend/src/modules/event-center/application/eventCenterWorker.ts",
@@ -48,7 +48,7 @@
       "packages/backend/src/services/stuckTaskDetector.ts"
     ],
     "directNativeIntervals": 22,
-    "directNativeTimers": 77,
+    "directNativeTimers": 78,
     "inboundBoundaryEdges": 273,
     "knownViolations": 8,
     "moduleContexts": [
@@ -102,7 +102,7 @@
       },
       {
         "context": "run-observability",
-        "files": 74
+        "files": 98
       },
       {
         "context": "runtime-management",
@@ -122,10 +122,10 @@
       },
       {
         "context": "task-execution",
-        "files": 348
+        "files": 349
       }
     ],
-    "moduleFiles": 1513,
+    "moduleFiles": 1538,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:683e591d4e6b7e563e33f46e915a06f296bbc92116b5339e20af5d607c8e8516"
+  "sourceDigest": "sha256:e905c2396180e79ff9021144da18caaba6ada859029e579054b9c1e2fabe3585"
 }

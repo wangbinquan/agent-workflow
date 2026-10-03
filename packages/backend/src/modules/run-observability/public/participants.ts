@@ -7,6 +7,11 @@ import type {
   ObservationSpanSourcePage,
 } from '@agent-workflow/shared'
 
+export type {
+  CompleteObservationBuildResult,
+  CompleteObservationStoredReport,
+} from '../ports/completeObservationReport'
+
 /** Execution supplies frozen facts; bootstrap selects the accounting authority. */
 export type ObservationInvocationStart = Omit<AcceptObservationInvocation, 'authority'> & {
   readonly runtime: Extract<AcceptObservationInvocation['authority'], { kind: 'local' }>['runtime']

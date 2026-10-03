@@ -3,6 +3,8 @@ import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-au
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
+import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
+import { observationReportBuild } from '@/platform/background/observationReportBuild'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
@@ -712,6 +714,15 @@ async function composePostgresqlProviderSession(
     closeParticipantId: 'mcp-runtime-tests-final-close',
     service: runtime.mcpRuntimeTests,
   })
+  const observationReportBindings = await createPausableDaemonRuntimeServiceBindings({
+    runtimeId: 'observation-reports',
+    closeParticipantId: 'observation-reports-final-close',
+    service: {
+      pause: () => runtime.observationReports.stop(),
+      resume: async () => runtime.observationReports.start(),
+      stop: () => runtime.observationReports.stop(),
+    },
+  })
   const taskExecutionBindings = await _bindTaskExecutionProviderBackground(
     runtime.taskExecution.background,
     {
@@ -1097,6 +1108,7 @@ async function composePostgresqlProviderSession(
       taskExecutionBindings.runtimeFactory,
       maintenanceBindings.runtimeFactory,
       mcpRuntimeBindings.runtimeFactory,
+      observationReportBindings.runtimeFactory,
     ],
     backgroundWriterFactories: [
       webhookTerminalRuntimeFactory,
@@ -1119,6 +1131,7 @@ async function composePostgresqlProviderSession(
       taskExecutionBindings.closeParticipant,
       maintenanceBindings.closeParticipant,
       mcpRuntimeBindings.closeParticipant,
+      observationReportBindings.closeParticipant,
       gracefulTaskShutdown,
       webhookTerminalClose,
     ],
@@ -3069,7 +3082,28 @@ async function composeSqliteProviderSession(
       developmentEmployeeTypePackage.descriptorJson,
     ],
   })
+  const observationBuild = observationReportBuild(
+    { provider: 'sqlite', db, generationId: databaseProvider.generation.payload.generationId },
+    Paths.root,
+  )
+  const observationReports = composeCompleteObservationReports({
+    db,
+    generation: databaseProvider.generation.payload.generationId,
+    appHome: Paths.root,
+    heartbeatDuringRead: observationBuild.heartbeatDuringRead,
+    build: (report, _spool, signal) => observationBuild.build(report, signal),
+  })
+  const observationReportBindings = await createPausableDaemonRuntimeServiceBindings({
+    runtimeId: 'observation-reports',
+    closeParticipantId: 'observation-reports-final-close',
+    service: {
+      pause: () => observationReports.worker.stop(),
+      resume: async () => observationReports.worker.start(),
+      stop: () => observationReports.worker.stop(),
+    },
+  })
   const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
+    completeObservationReports: observationReports.queries,
     taskDeletionEffects: input.taskDeletionEffects,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
     providerCore,
@@ -3656,6 +3690,7 @@ async function composeSqliteProviderSession(
     taskExecutionBackgroundBindings.runtimeFactory,
     maintenanceRuntimeBindings.runtimeFactory,
     mcpRuntimeTestBindings.runtimeFactory,
+    observationReportBindings.runtimeFactory,
   ] satisfies readonly DaemonProviderRuntimeHandleFactory[])
   // RFC-349 — the MR terminal-control worker owns an interval timer and a
   // fire-and-forget drain against the SQLite client. A migration freeze must
@@ -3729,6 +3764,7 @@ async function composeSqliteProviderSession(
     taskExecutionBackgroundBindings.closeParticipant,
     maintenanceRuntimeBindings.closeParticipant,
     mcpRuntimeTestBindings.closeParticipant,
+    observationReportBindings.closeParticipant,
     gracefulTaskShutdown,
     webhookTerminalClose,
   ] satisfies readonly DaemonProviderCloseParticipant[])

@@ -52,6 +52,7 @@ const gitCredentialHelperEntry = join(backendSrc, 'util', 'gitCredentialHelper.t
 const WORKER_ENTRIES = [
   join(backendSrc, 'services', 'backupVacuumWorker.ts'),
   join(backendSrc, 'platform', 'background', 'maintenanceWorker.ts'),
+  join(backendSrc, 'platform', 'background', 'observationReportWorker.ts'),
   join(backendSrc, 'platform', 'persistence', 'sqliteLogicalSourceWorker.ts'),
 ]
 // Test-only external executables are owned by the unified system mock package.

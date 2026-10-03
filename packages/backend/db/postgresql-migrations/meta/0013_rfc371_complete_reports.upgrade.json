@@ -1,0 +1,1180 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:a76becc4828a1999aca866a29860fa5ba23e6cad21fd9eecbe48434fe8f18cc1', 202, 6)"
+    },
+    "beforeDigest": "sha256:1c1f406262bfda906d2cef0a01405c59ceefdd7bd45ffd7017d6d42b5464745a"
+  },
+  "digest": "sha256:110425dac62e7c9ac1cff61e7b93aff67846613fe46c5fead7e8faca3502346b",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "observation_report_counts",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_report_counts\" (\n  \"report_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"section\" TEXT COLLATE \"C\" NOT NULL,\n  \"parent\" TEXT COLLATE \"C\" NOT NULL,\n  \"total\" TEXT COLLATE \"C\" NOT NULL DEFAULT '0',\n  \"actual\" TEXT COLLATE \"C\" NOT NULL DEFAULT '0',\n  \"declared\" BOOLEAN NOT NULL DEFAULT FALSE,\n  CONSTRAINT \"observation_report_counts_pkey\" PRIMARY KEY (\"report_id\", \"section\", \"parent\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "observation_report_pages",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_report_pages\" (\n  \"report_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"ordinal\" TEXT COLLATE \"C\" NOT NULL,\n  \"previous_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"items_count\" BIGINT NOT NULL,\n  CONSTRAINT \"observation_report_pages_pkey\" PRIMARY KEY (\"report_id\", \"ordinal\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "observation_report_receipts",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_report_receipts\" (\n  \"report_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"key\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_report_receipts_pkey\" PRIMARY KEY (\"report_id\", \"key\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "observation_report_rows",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_report_rows\" (\n  \"report_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"ordinal\" TEXT COLLATE \"C\" NOT NULL,\n  \"section\" TEXT COLLATE \"C\" NOT NULL,\n  \"parent\" TEXT COLLATE \"C\" NOT NULL,\n  \"key\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_report_rows_pkey\" PRIMARY KEY (\"report_id\", \"ordinal\")\n)"
+    },
+    {
+      "kind": "table",
+      "logicalId": "observation_reports",
+      "sql": "CREATE TABLE \"agent_workflow\".\"observation_reports\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"generation\" TEXT COLLATE \"C\" NOT NULL,\n  \"owner\" TEXT COLLATE \"C\" NOT NULL,\n  \"actor_scope\" TEXT COLLATE \"C\" NOT NULL,\n  \"request\" TEXT COLLATE \"C\" NOT NULL,\n  \"state\" TEXT COLLATE \"C\" NOT NULL,\n  \"report\" TEXT COLLATE \"C\" NOT NULL,\n  \"manifest\" TEXT COLLATE \"C\",\n  \"progress\" TEXT COLLATE \"C\" NOT NULL,\n  \"lease_until\" BIGINT NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"observation_reports_pkey\" PRIMARY KEY (\"id\")\n)"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_report_rows:index:observation_report_row_identity_idx",
+      "sql": "CREATE UNIQUE INDEX \"observation_report_row_identity_idx\" ON \"agent_workflow\".\"observation_report_rows\" (\"report_id\", \"section\", \"parent\", \"key\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_report_rows:index:observation_report_row_page_idx",
+      "sql": "CREATE INDEX \"observation_report_row_page_idx\" ON \"agent_workflow\".\"observation_report_rows\" (\"report_id\", \"section\", \"parent\", \"ordinal\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_reports:index:observation_report_request_idx",
+      "sql": "CREATE UNIQUE INDEX \"observation_report_request_idx\" ON \"agent_workflow\".\"observation_reports\" (\"request_key\")"
+    },
+    {
+      "kind": "index",
+      "logicalId": "observation_reports:index:observation_report_recovery_idx",
+      "sql": "CREATE INDEX \"observation_report_recovery_idx\" ON \"agent_workflow\".\"observation_reports\" (\"state\", \"lease_until\")"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_report_counts:fk:observation_report_counts_report_id_observation_reports_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_counts\" ADD CONSTRAINT \"observation_report_counts_report_id_observation_reports_id_fk\" FOREIGN KEY (\"report_id\") REFERENCES \"agent_workflow\".\"observation_reports\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_report_pages:check:observation_report_page_size_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_pages\" ADD CONSTRAINT \"observation_report_page_size_ck\" CHECK (\"items_count\" BETWEEN 1 AND 500)"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_report_pages:fk:observation_report_pages_report_id_observation_reports_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_pages\" ADD CONSTRAINT \"observation_report_pages_report_id_observation_reports_id_fk\" FOREIGN KEY (\"report_id\") REFERENCES \"agent_workflow\".\"observation_reports\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_report_receipts:fk:observation_report_receipts_report_id_observation_reports_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_receipts\" ADD CONSTRAINT \"observation_report_receipts_report_id_observation_reports_id_fk\" FOREIGN KEY (\"report_id\") REFERENCES \"agent_workflow\".\"observation_reports\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_report_rows:fk:observation_report_rows_report_id_observation_reports_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_rows\" ADD CONSTRAINT \"observation_report_rows_report_id_observation_reports_id_fk\" FOREIGN KEY (\"report_id\") REFERENCES \"agent_workflow\".\"observation_reports\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "observation_reports:check:observation_report_state_ck",
+      "sql": "ALTER TABLE \"agent_workflow\".\"observation_reports\" ADD CONSTRAINT \"observation_report_state_ck\" CHECK (\"state\" IN ('building','not-ready','failed','ready'))"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:a76becc4828a1999aca866a29860fa5ba23e6cad21fd9eecbe48434fe8f18cc1', active_table_count = 202, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:adabb68099bbd7e59fd320b658db36b20786fcaecafe8994a0721f624e0bdaa6' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:adabb68099bbd7e59fd320b658db36b20786fcaecafe8994a0721f624e0bdaa6",
+    "planDigest": "sha256:a487e253ae4c6517d04445d013b67f783c0aba51053bb4d2ac5f39875f7b9dc3"
+  },
+  "id": "0013_rfc371_complete_reports",
+  "indexAdditions": [
+    {
+      "position": 133,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_report_counts",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_report_counts\" (\n  \"report_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"section\" TEXT COLLATE \"C\" NOT NULL,\n  \"parent\" TEXT COLLATE \"C\" NOT NULL,\n  \"total\" TEXT COLLATE \"C\" NOT NULL DEFAULT '0',\n  \"actual\" TEXT COLLATE \"C\" NOT NULL DEFAULT '0',\n  \"declared\" BOOLEAN NOT NULL DEFAULT FALSE,\n  CONSTRAINT \"observation_report_counts_pkey\" PRIMARY KEY (\"report_id\", \"section\", \"parent\")\n)"
+      }
+    },
+    {
+      "position": 134,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_report_pages",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_report_pages\" (\n  \"report_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"ordinal\" TEXT COLLATE \"C\" NOT NULL,\n  \"previous_digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"digest\" TEXT COLLATE \"C\" NOT NULL,\n  \"items_count\" BIGINT NOT NULL,\n  CONSTRAINT \"observation_report_pages_pkey\" PRIMARY KEY (\"report_id\", \"ordinal\")\n)"
+      }
+    },
+    {
+      "position": 135,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_report_receipts",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_report_receipts\" (\n  \"report_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"key\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_report_receipts_pkey\" PRIMARY KEY (\"report_id\", \"key\")\n)"
+      }
+    },
+    {
+      "position": 136,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_report_rows",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_report_rows\" (\n  \"report_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"ordinal\" TEXT COLLATE \"C\" NOT NULL,\n  \"section\" TEXT COLLATE \"C\" NOT NULL,\n  \"parent\" TEXT COLLATE \"C\" NOT NULL,\n  \"key\" TEXT COLLATE \"C\" NOT NULL,\n  \"document\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"observation_report_rows_pkey\" PRIMARY KEY (\"report_id\", \"ordinal\")\n)"
+      }
+    },
+    {
+      "position": 137,
+      "statement": {
+        "kind": "table",
+        "logicalId": "observation_reports",
+        "sql": "CREATE TABLE \"agent_workflow\".\"observation_reports\" (\n  \"id\" TEXT COLLATE \"C\" NOT NULL,\n  \"request_key\" TEXT COLLATE \"C\" NOT NULL,\n  \"generation\" TEXT COLLATE \"C\" NOT NULL,\n  \"owner\" TEXT COLLATE \"C\" NOT NULL,\n  \"actor_scope\" TEXT COLLATE \"C\" NOT NULL,\n  \"request\" TEXT COLLATE \"C\" NOT NULL,\n  \"state\" TEXT COLLATE \"C\" NOT NULL,\n  \"report\" TEXT COLLATE \"C\" NOT NULL,\n  \"manifest\" TEXT COLLATE \"C\",\n  \"progress\" TEXT COLLATE \"C\" NOT NULL,\n  \"lease_until\" BIGINT NOT NULL,\n  \"created_at\" BIGINT NOT NULL,\n  \"updated_at\" BIGINT NOT NULL,\n  CONSTRAINT \"observation_reports_pkey\" PRIMARY KEY (\"id\")\n)"
+      }
+    },
+    {
+      "position": 439,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_report_rows:index:observation_report_row_identity_idx",
+        "sql": "CREATE UNIQUE INDEX \"observation_report_row_identity_idx\" ON \"agent_workflow\".\"observation_report_rows\" (\"report_id\", \"section\", \"parent\", \"key\")"
+      }
+    },
+    {
+      "position": 440,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_report_rows:index:observation_report_row_page_idx",
+        "sql": "CREATE INDEX \"observation_report_row_page_idx\" ON \"agent_workflow\".\"observation_report_rows\" (\"report_id\", \"section\", \"parent\", \"ordinal\")"
+      }
+    },
+    {
+      "position": 441,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_reports:index:observation_report_request_idx",
+        "sql": "CREATE UNIQUE INDEX \"observation_report_request_idx\" ON \"agent_workflow\".\"observation_reports\" (\"request_key\")"
+      }
+    },
+    {
+      "position": 442,
+      "statement": {
+        "kind": "index",
+        "logicalId": "observation_reports:index:observation_report_recovery_idx",
+        "sql": "CREATE INDEX \"observation_report_recovery_idx\" ON \"agent_workflow\".\"observation_reports\" (\"state\", \"lease_until\")"
+      }
+    },
+    {
+      "position": 772,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_report_counts:fk:observation_report_counts_report_id_observation_reports_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_counts\" ADD CONSTRAINT \"observation_report_counts_report_id_observation_reports_id_fk\" FOREIGN KEY (\"report_id\") REFERENCES \"agent_workflow\".\"observation_reports\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 773,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_report_pages:check:observation_report_page_size_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_pages\" ADD CONSTRAINT \"observation_report_page_size_ck\" CHECK (\"items_count\" BETWEEN 1 AND 500)"
+      }
+    },
+    {
+      "position": 774,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_report_pages:fk:observation_report_pages_report_id_observation_reports_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_pages\" ADD CONSTRAINT \"observation_report_pages_report_id_observation_reports_id_fk\" FOREIGN KEY (\"report_id\") REFERENCES \"agent_workflow\".\"observation_reports\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 775,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_report_receipts:fk:observation_report_receipts_report_id_observation_reports_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_receipts\" ADD CONSTRAINT \"observation_report_receipts_report_id_observation_reports_id_fk\" FOREIGN KEY (\"report_id\") REFERENCES \"agent_workflow\".\"observation_reports\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 776,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_report_rows:fk:observation_report_rows_report_id_observation_reports_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_report_rows\" ADD CONSTRAINT \"observation_report_rows_report_id_observation_reports_id_fk\" FOREIGN KEY (\"report_id\") REFERENCES \"agent_workflow\".\"observation_reports\" (\"id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    },
+    {
+      "position": 777,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "observation_reports:check:observation_report_state_ck",
+        "sql": "ALTER TABLE \"agent_workflow\".\"observation_reports\" ADD CONSTRAINT \"observation_report_state_ck\" CHECK (\"state\" IN ('building','not-ready','failed','ready'))"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 129,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "report_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "section",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "parent",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "\"0\"",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "total",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "'0'",
+              "sqlite": "'0'"
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "\"0\"",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "actual",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "'0'",
+              "sqlite": "'0'"
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "literal",
+            "defaultValue": "false",
+            "enumValues": [],
+            "hasDefault": true,
+            "identity": false,
+            "logicalCodec": "boolean",
+            "name": "declared",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": "FALSE",
+              "sqlite": "0"
+            },
+            "providerType": {
+              "postgresql": "boolean",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["report_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "observation_reports",
+            "name": "observation_report_counts_report_id_observation_reports_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "observation_report_counts",
+        "indexes": [],
+        "migrationKey": ["report_id", "section", "parent"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["report_id", "section", "parent"],
+        "providerTables": {
+          "postgresql": "observation_report_counts",
+          "sqlite": "observation_report_counts"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationReportCounts",
+        "sourceTable": "observation_report_counts",
+        "unique": []
+      }
+    },
+    {
+      "position": 130,
+      "table": {
+        "checks": [
+          {
+            "columns": [],
+            "expression": "\"observation_report_pages\".\"items_count\" BETWEEN 1 AND 500",
+            "name": "observation_report_page_size_ck"
+          }
+        ],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "report_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "ordinal",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "previous_digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "digest",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "integer",
+            "name": "items_count",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["report_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "observation_reports",
+            "name": "observation_report_pages_report_id_observation_reports_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "observation_report_pages",
+        "indexes": [],
+        "migrationKey": ["report_id", "ordinal"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["report_id", "ordinal"],
+        "providerTables": {
+          "postgresql": "observation_report_pages",
+          "sqlite": "observation_report_pages"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationReportPages",
+        "sourceTable": "observation_report_pages",
+        "unique": []
+      }
+    },
+    {
+      "position": 131,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "report_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "key",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "document",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["report_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "observation_reports",
+            "name": "observation_report_receipts_report_id_observation_reports_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "observation_report_receipts",
+        "indexes": [],
+        "migrationKey": ["report_id", "key"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["report_id", "key"],
+        "providerTables": {
+          "postgresql": "observation_report_receipts",
+          "sqlite": "observation_report_receipts"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationReportReceipts",
+        "sourceTable": "observation_report_receipts",
+        "unique": []
+      }
+    },
+    {
+      "position": 132,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "report_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "ordinal",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "section",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "parent",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "key",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "document",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["report_id"],
+            "foreignColumns": ["id"],
+            "foreignTable": "observation_reports",
+            "name": "observation_report_rows_report_id_observation_reports_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "observation_report_rows",
+        "indexes": [
+          {
+            "columns": ["report_id", "section", "parent", "key"],
+            "name": "observation_report_row_identity_idx",
+            "unique": true,
+            "where": null
+          },
+          {
+            "columns": ["report_id", "section", "parent", "ordinal"],
+            "name": "observation_report_row_page_idx",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["report_id", "ordinal"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["report_id", "ordinal"],
+        "providerTables": {
+          "postgresql": "observation_report_rows",
+          "sqlite": "observation_report_rows"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationReportRows",
+        "sourceTable": "observation_report_rows",
+        "unique": [
+          {
+            "columns": ["report_id", "section", "parent", "key"],
+            "expression": null,
+            "name": "observation_report_row_identity_idx"
+          }
+        ]
+      }
+    },
+    {
+      "position": 133,
+      "table": {
+        "checks": [
+          {
+            "columns": [],
+            "expression": "\"observation_reports\".\"state\" IN ('building','not-ready','failed','ready')",
+            "name": "observation_report_state_ck"
+          }
+        ],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "request_key",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "generation",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "owner",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "actor_scope",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "request",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": ["building", "not-ready", "failed", "ready"],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "state",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "report",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "manifest",
+            "nullable": true,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "progress",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "lease_until",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "created_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "epoch-milliseconds",
+            "name": "updated_at",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "bigint",
+              "sqlite": "integer"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [],
+        "id": "observation_reports",
+        "indexes": [
+          {
+            "columns": ["request_key"],
+            "name": "observation_report_request_idx",
+            "unique": true,
+            "where": null
+          },
+          {
+            "columns": ["state", "lease_until"],
+            "name": "observation_report_recovery_idx",
+            "unique": false,
+            "where": null
+          }
+        ],
+        "migrationKey": ["id"],
+        "ownerContext": "run-observability",
+        "primaryKey": ["id"],
+        "providerTables": {
+          "postgresql": "observation_reports",
+          "sqlite": "observation_reports"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "run-observability",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "observationReports",
+        "sourceTable": "observation_reports",
+        "unique": [
+          {
+            "columns": ["request_key"],
+            "expression": null,
+            "name": "observation_report_request_idx"
+          }
+        ]
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:ce56bc9f85762f944bbdbb1471d125ee6b411ecb44989158a90b29863704cccd",
+  "sequence": 13,
+  "sqlDigest": "sha256:184cbe9a1b25ec7726d74aec7381a380eb25f994523eb209fb41fa0ba4bdbcc2",
+  "sqlFile": "0013_rfc371_complete_reports.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1791024689215,
+        "hash": "407c4a7be667dd792482b63687009553ac0e0afa4d1f37797a6720f2df4445c2",
+        "index": 236,
+        "tag": "0237_rfc371_complete_reports"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:848eec1018909979180f20338af9afa20bcae93f004e528e4ce6e177b8139608",
+      "count": 236,
+      "last": {
+        "folderMillis": 1790626002689,
+        "hash": "378716da843e02dcebc109d6186945b0680617c9e8e320a3d9d6d8343e633e40",
+        "index": 235,
+        "tag": "0236_rfc371_native_usage_captures"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:49ebde5f32bdeff7412d0ce40fc8bad8987ba3dd2d18784f96b1a8016f6d663c",
+      "count": 237,
+      "last": {
+        "folderMillis": 1791024689215,
+        "hash": "407c4a7be667dd792482b63687009553ac0e0afa4d1f37797a6720f2df4445c2",
+        "index": 236,
+        "tag": "0237_rfc371_complete_reports"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:a76becc4828a1999aca866a29860fa5ba23e6cad21fd9eecbe48434fe8f18cc1",
+    "planDigest": "sha256:a7f16c1caa66c7ca4d92c182d4fadd4000486edeef524d7315fc014a4f8c465a"
+  },
+  "version": 2
+}

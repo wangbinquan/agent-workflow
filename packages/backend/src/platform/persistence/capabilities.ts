@@ -136,6 +136,8 @@ export interface EngineCapabilities {
 
   /** 事务级 advisory lock，跨进程协调用。PG：`pg_advisory_xact_lock`；SQLite no-op。 */
   advisoryLock(tx: DatabaseTransaction, key: string): Promise<void>
+  /** A live original report snapshot fences recovery without blocking another process. */
+  tryAdvisoryLock(tx: DatabaseTransaction, key: string): Promise<boolean>
 
   /**
    * 手写 SQL 里 `FROM <table>` 之后的索引提示。SQLite：`INDEXED BY "<index>"`（让聚合扫覆盖索引而不是
@@ -344,6 +346,9 @@ export function createSqliteCapabilities(): EngineCapabilities {
     async advisoryLock() {
       // 单进程单写者；跨进程协调由 daemon 级 flock 承担。
     },
+    async tryAdvisoryLock() {
+      return true
+    },
     indexHint: (indexName) => sql`INDEXED BY ${sql.identifier(indexName)}`,
     greatest: (left, right) => sql`max(${left}, ${right})`,
     jsonMemberText: (document, member) => {
@@ -439,6 +444,12 @@ export function createPostgresqlCapabilities(): EngineCapabilities {
     claimLockClause: () => sql`for update skip locked`,
     async advisoryLock(tx, key) {
       await tx.run(sql`select pg_advisory_xact_lock(hashtextextended(${key}, 0))`)
+    },
+    async tryAdvisoryLock(tx, key) {
+      const row = (await tx.get(
+        sql`select pg_try_advisory_xact_lock(hashtextextended(${key}, 0)) as acquired`,
+      )) as { acquired?: boolean } | undefined
+      return row?.acquired === true
     },
     indexHint: () => sql``,
     greatest: (left, right) => sql`greatest(${left}, ${right})`,

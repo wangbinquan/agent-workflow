@@ -1,0 +1,17 @@
+.complete-observation-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.complete-observation-task-bar {
+  width: 0.65rem;
+  background: var(--muted);
+  opacity: 0.65;
+  align-self: end;
+  flex-shrink: 0;
+}
+.complete-observation-pager .action-row {
+  flex-wrap: wrap;
+}

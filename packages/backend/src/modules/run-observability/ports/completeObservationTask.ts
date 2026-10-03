@@ -61,8 +61,11 @@ export interface CompleteObservationTaskInput {
   }>
 }
 export interface CompleteObservationTaskBuild {
+  /** Missing source population cannot be hidden by selecting an otherwise known invocation. */
+  readonly sourceGaps: readonly string[]
   readonly summary: CompleteObservationTask
   readonly fold: CompleteObservationFold
+  readonly originalNumericRecords: string
   readonly sourceReceipts: readonly CompleteSourceReceipt[]
   readonly attemptsNamespace: string
   readonly invocationsNamespace: string

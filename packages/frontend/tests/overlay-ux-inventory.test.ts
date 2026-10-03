@@ -122,6 +122,9 @@ const OVERLAY_CALLSITES = {
   },
   // RFC-371: attempt inspection and focus restoration are rendered in rfc371-run-observability.
   'components/observability/RunObservability.tsx': { family: 'task-execution', count: 1 },
+  // Full-report call, attempt and dimension inspections share Dialog and have rendered coverage.
+  'components/observability/CompleteObservationDetails.tsx': { family: 'task-execution', count: 2 },
+  'components/observability/CompleteRunObservability.tsx': { family: 'task-execution', count: 1 },
   // RFC-321 — connection rebind and deletion can revoke personal credentials;
   // rfc269-code-host-settings.test.tsx owns both rendered confirmations.
   'components/settings/CodeHostsSection.tsx': {

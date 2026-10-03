@@ -12,12 +12,17 @@ import { ObservationPriceError } from '../../domain/priceError'
 import { parseObservationSelection } from '../../domain/analysisDimensions'
 import type { ObservationPricingCommands } from '../../ports/pricingCommands'
 import type { ObservationPricingQueries } from '../../ports/pricingQueries'
-import type { ObservationTaskQueries } from '../../public/queries'
+import type { CompleteObservationReportQueries, ObservationTaskQueries } from '../../public/queries'
+import {
+  completeObservationHttpRead,
+  mountCompleteObservationRoutes,
+} from './completeObservationRoutes'
 
 export interface ObservationRouteDependencies {
   readonly commands: ObservationPricingCommands
   readonly queries: ObservationPricingQueries
   readonly tasks: ObservationTaskQueries
+  readonly reports?: CompleteObservationReportQueries
 }
 async function mapped<T>(operation: () => Promise<T>): Promise<T> {
   try {
@@ -38,6 +43,7 @@ function validateDimensionQuery(query: Readonly<Record<string, string>>): void {
   }
 }
 export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependencies): void {
+  if (deps.reports) mountCompleteObservationRoutes(app, deps.reports)
   const readGate = { permissions: ['tasks:read'] as const, tokenAccess: 'allow' as const }
   registerRoute(
     app,
@@ -80,6 +86,12 @@ export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependen
       validateDimensionQuery(raw)
       const query = ObservationOverviewQuerySchema.safeParse(raw)
       if (!query.success) throw new ValidationError('invalid-query', 'Invalid observation window')
+      if (deps.reports)
+        return c.json(
+          await completeObservationHttpRead(() =>
+            deps.reports!.request(actorOf(c), query.data, 'full-alias'),
+          ),
+        )
       return c.json(await deps.tasks.overview(actorOf(c), query.data))
     },
   )
@@ -94,6 +106,18 @@ export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependen
     async (c) => {
       const raw = c.req.query()
       validateDimensionQuery(raw)
+      if (deps.reports) {
+        if (raw.after !== undefined)
+          throw new ValidationError('invalid-query', 'Page the immutable complete report instead')
+        const { limit: _legacyPageSize, ...filters } = raw
+        const query = ObservationOverviewQuerySchema.safeParse(filters)
+        if (!query.success) throw new ValidationError('invalid-query', 'Invalid observation window')
+        return c.json(
+          await completeObservationHttpRead(() =>
+            deps.reports!.request(actorOf(c), query.data, 'full-alias'),
+          ),
+        )
+      }
       const query = ObservationTaskPageQuerySchema.safeParse(raw)
       if (!query.success) throw new ValidationError('invalid-query', 'Invalid observation query')
       try {
@@ -113,6 +137,17 @@ export function mountObservationRoutes(app: Hono, deps: ObservationRouteDependen
       summary: 'Read task, agent and attempt observations in one snapshot',
     },
     async (c) => {
+      if (deps.reports) {
+        const raw = c.req.query()
+        validateDimensionQuery(raw)
+        const query = ObservationOverviewQuerySchema.safeParse(raw)
+        if (!query.success) throw new ValidationError('invalid-query', 'Invalid observation window')
+        return c.json(
+          await completeObservationHttpRead(() =>
+            deps.reports!.request(actorOf(c), query.data, 'full-alias', c.req.param('id')),
+          ),
+        )
+      }
       const result = await deps.tasks.detail(actorOf(c), c.req.param('id'))
       if (!result) throw new NotFoundError('task-not-found', 'Task not found')
       return c.json(result)

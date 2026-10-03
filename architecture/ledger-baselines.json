@@ -748,8 +748,11 @@
       "id": "frontend-true-tab-callsites",
       "file": "packages/frontend/tests/tab-callsite-contract.test.ts",
       "symbol": "TRUE_TAB_CALLSITES",
-      "baseline": 20,
-      "why": "RFC-317：真正实现 tab 语义的调用点存量（`文件::id`）。这份清单是 tab 契约的被测面，新增一处就要人确认它确实按 tab 语义接线。RFC-359 W7 第二波按判据 C 补入网。"
+      "baseline": 21,
+      "why": "RFC-317：真正实现 tab 语义的调用点存量（`文件::id`）。这份清单是 tab 契约的被测面，新增一处就要人确认它确实按 tab 语义接线。RFC-359 W7 第二波按判据 C 补入网。",
+      "allowGrowth": {
+        "why": "RFC-371 complete report UI: 20 -> 21. One exact new CompleteRunObservability true-tab callsite, retaining the old component and its original regressions. Source 15b31c26aff56d2a8dd3dff2afd73620b4457654."
+      }
     },
     {
       "id": "frontend-overlay-family-owners",
@@ -811,8 +814,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1837,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1847,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original-source reports: 1837 -> 1847. Ten original classifier entries for full report cache stage/seal/publish, original Task fact enumeration, Worker lifecycle/host, and snapshot lease handoff; existing authority and guard rules are unchanged. Source 15b31c26aff56d2a8dd3dff2afd73620b4457654."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -825,29 +831,41 @@
       "id": "rfc294-transaction-callbacks",
       "file": "architecture/transaction-external-effects.json",
       "symbol": "entries",
-      "baseline": 261,
-      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。"
+      "baseline": 267,
+      "why": "RFC-294 N1：全部 transaction callback 及其外部效果候选分母；风险项只能收敛为 commit-intent-then-effect。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original-source reports: 261 -> 267. Six actual cache staging/publishing/failure and original provider lease transaction callbacks; preserve the original effect-token classifier including its in-memory push observation. Source 15b31c26aff56d2a8dd3dff2afd73620b4457654."
+      }
     },
     {
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 356,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 358,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original-source reports: 356 -> 358. Two exact AST entries: the full report Worker host and the service timeout expression. The latter is the original classifier projection of setTimeout, not a claim that a new periodic product job runs. Source 15b31c26aff56d2a8dd3dff2afd73620b4457654."
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
       "file": "architecture/background-jobs.json",
       "symbol": "ambientWiringEntries",
-      "baseline": 501,
-      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
+      "baseline": 504,
+      "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original-source reports: 501 -> 504. Three complete-report route registrations; twenty-one existing registration IDs move with source line numbers, with their original registration behavior preserved. Source 15b31c26aff56d2a8dd3dff2afd73620b4457654."
+      }
     },
     {
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5837,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5915,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original-source reports: 5837 -> 5915. Seventy-eight exact type/value import observations from complete original-source traversal, report cache/channel/Worker composition and three formal startup roots; original boundary classification and rule definitions are retained. Source 15b31c26aff56d2a8dd3dff2afd73620b4457654."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +885,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5191,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5263,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original-source reports: 5191 -> 5263. Seventy-two derived classifications of the new import observations under the original scanner, role, expiry and mutation rules; no new rule exemptions or SCC allowances are added. Source 15b31c26aff56d2a8dd3dff2afd73620b4457654."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -881,8 +902,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1060,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1063,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original-source reports: 1060 -> 1063. Three explicit full report public surfaces in run-observability (query/participant contracts), retaining existing governed field surfaces and consumer contracts. Source 15b31c26aff56d2a8dd3dff2afd73620b4457654."
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -902,12 +926,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26136,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26308,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original-source reports: 26136 -> 26308. One hundred seventy-three added symbol owners and one removed cleanup owner after cleanup extraction; net one hundred seventy-two. They describe the exact report sources, Worker/channel/lease, cache, UI and shared schema paths, under the existing owner classifier. Source 15b31c26aff56d2a8dd3dff2afd73620b4457654."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:683e591d4e6b7e563e33f46e915a06f296bbc92116b5339e20af5d607c8e8516",
+    "sourceDigest": "sha256:e905c2396180e79ff9021144da18caaba6ada859029e579054b9c1e2fabe3585",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +947,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "c8412b8f070b44639aa65f3a3abd125a25b718a0",
-    "contentDigest": "sha256:cf8d9e667c9f236f99b22a344a5ce045a1df13eb6310f98906b9f4dd15679e5b",
+    "currentSnapshotSha": "15b31c26aff56d2a8dd3dff2afd73620b4457654",
+    "contentDigest": "sha256:a8ce0b9a8edf2c004511537bcd2bfdd8baf8d7249512e1e52cf23079dada5c8d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

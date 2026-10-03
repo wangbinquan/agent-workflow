@@ -550,11 +550,11 @@ export const ROUTE_UX_INVENTORY = {
     header: { mode: 'direct', sourceFile: 'routes/tasks.tsx', primitive: 'PageHeader' },
   },
   // RFC-371: one query-backed surface switches between task cohort and task /
-  // attempt inspection. RunObservability owns the shared PageHeader and Dialog.
+  // attempt inspection. CompleteRunObservability owns the shared PageHeader and Dialog.
   '@/routes/observability#Route': {
     surface: '/observability',
     classification: 'specialized',
-    owners: [rendered('rfc371-run-observability.test.tsx')],
+    owners: [rendered('rfc371-complete-report-ui.test.tsx')],
   },
   '@/routes/tasks.new#TaskWizardRoute': {
     surface: '/tasks/new',

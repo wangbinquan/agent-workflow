@@ -49,6 +49,14 @@ import { providerAwareSqliteTable } from './providerSchema'
 
 const sqliteTable = providerAwareSqliteTable(physicalSqliteTable)
 
+export {
+  observationReports,
+  observationReportPages,
+  observationReportRows,
+  observationReportCounts,
+  observationReportReceipts,
+} from './observationReports'
+
 // RFC-371: platform snapshot generations and their cursor are swapped atomically.
 export const observationPlatformSources = sqliteTable('observation_platform_sources', {
   id: text('id').primaryKey(),

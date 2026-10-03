@@ -1,22 +1,20 @@
 import { randomUUID } from 'node:crypto'
-import type { PostgresqlDatabaseRuntime, PostgresqlReservedConnection } from './postgresqlRuntime'
+import type { PostgresqlDatabaseRuntime } from './postgresqlRuntime'
 import { compilePostgresqlSql } from './postgresqlSql'
 import { reportReadonlyPostgresqlClient } from './reportReadonlyPostgresqlClient'
 import { CREATE_REPORT_WORKING_TABLE, privateReportWorkspace } from './reportWorkspace'
-import type { OriginalReportSnapshot, ReportSnapshotSession } from './reportSnapshotTypes'
-async function cleanup(connection: PostgresqlReservedConnection, error: unknown) {
-  try {
-    await connection.unsafe('ROLLBACK')
-    await connection.unsafe('DROP TABLE IF EXISTS pg_temp.aw_report_workspace')
-  } catch (cleanupError) {
-    throw new AggregateError(
-      error === undefined ? [cleanupError] : [error, cleanupError],
-      'Original report snapshot cleanup failed',
-    )
-  } finally {
-    connection.release()
-  }
-}
+import type {
+  OriginalReportSnapshot,
+  ReportSnapshotSession,
+  OriginalReportLease,
+} from './reportSnapshotTypes'
+import { cleanupOriginalPostgresqlReport } from './reportPostgresqlCleanup'
+import {
+  acquireOriginalReportLease,
+  assertOriginalReportLease,
+  handoffOriginalReportLease,
+} from './reportSnapshotLease'
+import { originalPostgresqlReportReadChannel } from './reportReadChannel'
 /** TEMP setup precedes READ ONLY; the same original pool channel serves all reads and working rows. */
 export function originalPostgresqlReportSnapshot(
   runtime: PostgresqlDatabaseRuntime,
@@ -25,12 +23,21 @@ export function originalPostgresqlReportSnapshot(
     async run<T>(
       work: (snapshot: OriginalReportSnapshot) => Promise<T>,
       signal?: AbortSignal,
+      lease?: OriginalReportLease,
     ): Promise<T> {
       signal?.throwIfAborted()
       const connection = await runtime.providerPool().reserve({ signal })
       let active = false,
         failure: unknown
+      let locked = false
       try {
+        if (lease) {
+          if (lease.generation !== runtime.generationId)
+            throw new Error('Original report lease generation changed')
+          locked = await acquireOriginalReportLease(connection, lease)
+          if (!locked) throw new Error('Original report reader is already active')
+          await assertOriginalReportLease(connection, lease)
+        }
         await connection.unsafe('BEGIN')
         await connection.unsafe(
           CREATE_REPORT_WORKING_TABLE.replaceAll('TEXT NOT NULL', 'TEXT COLLATE "C" NOT NULL') +
@@ -74,19 +81,21 @@ export function originalPostgresqlReportSnapshot(
           ]),
           generationId: runtime.generationId,
           asOf,
+          readChannel: originalPostgresqlReportReadChannel(connection, () => active, signal),
         })
         signal?.throwIfAborted()
         const current = await connection.unsafe('SELECT pg_current_snapshot()::text AS position')
         if (current[0]?.position !== source.position)
           throw new Error('Original report snapshot changed')
         await connection.unsafe('COMMIT')
+        if (lease) await handoffOriginalReportLease(connection, lease)
         return result
       } catch (error) {
         failure = error
         throw error
       } finally {
         active = false
-        await cleanup(connection, failure)
+        await cleanupOriginalPostgresqlReport(connection, failure, locked ? lease : undefined)
       }
     },
   }

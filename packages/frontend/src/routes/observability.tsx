@@ -1,9 +1,7 @@
 import { createRoute } from '@tanstack/react-router'
 import { TaskStatusSchema, ObservationDimensionSelectionSchema } from '@agent-workflow/shared'
-import {
-  RunObservability,
-  type ObservationSearch,
-} from '@/components/observability/RunObservability'
+import type { ObservationSearch } from '@/components/observability/RunObservability'
+import { CompleteRunObservability } from '@/components/observability/CompleteRunObservability'
 import { Route as RootRoute } from './__root'
 
 export function validateObservationSearch(raw: Record<string, unknown>): ObservationSearch {
@@ -74,7 +72,7 @@ function Page() {
   const search = Route.useSearch(),
     navigate = Route.useNavigate()
   return (
-    <RunObservability
+    <CompleteRunObservability
       search={search}
       onChange={(next) => {
         const openingTask = !search.task && !!next.task

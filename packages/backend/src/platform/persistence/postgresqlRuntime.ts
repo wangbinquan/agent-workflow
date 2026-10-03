@@ -17,6 +17,8 @@ export interface SqlRows extends PromiseLike<readonly Record<string, unknown>[]>
 export interface PostgresqlReservedConnection {
   unsafe(query: string, parameters?: readonly unknown[]): SqlRows
   release(): void
+  /** Bun ReservedSQL closes this physical channel, not the original pool. */
+  close?(options?: { readonly timeout?: number }): Promise<void>
 }
 
 export interface PostgresqlPool {

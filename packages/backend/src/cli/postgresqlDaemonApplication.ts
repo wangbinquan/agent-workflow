@@ -11,6 +11,8 @@ import { composeObservationUsageSource } from '@/modules/task-execution/composit
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
+import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
+import { observationReportBuild } from '@/platform/background/observationReportBuild'
 import { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
@@ -526,6 +528,7 @@ export interface PostgresqlDaemonApplication {
  * builders and cannot accidentally re-compose a second provider graph.
  */
 export interface PostgresqlDaemonApplicationRuntime {
+  readonly observationReports: ReturnType<typeof composeCompleteObservationReports>['worker']
   readonly taskExecution: SelectedPostgresqlTaskExecutionProviderRuntime
   /**
    * RFC-359 —— 装配好的协作命令上下文。暴露它不是为了给 daemon 用（daemon 不碰它），
@@ -2041,8 +2044,21 @@ export async function composePostgresqlApplication(
       ? {}
       : { runtimeDiagnosticTestDependencies: input.runtimeDiagnosticTestDependencies }),
   })
+  const observationBuild = observationReportBuild(
+    { provider: 'postgresql', runtime: input.provider.runtime },
+    input.appHome,
+  )
+  const observationReports = composeCompleteObservationReports({
+    db: input.db,
+    generation: input.provider.runtime.generationId,
+    appHome: input.appHome,
+    heartbeatDuringRead: observationBuild.heartbeatDuringRead,
+    build: (report, _spool, signal) => observationBuild.build(report, signal),
+  })
   const platformRoutes: PostgresqlAppCompositionInput['platform'] = Object.freeze({
     observability: {
+      // Unstarted application scopes are explicit legacy contract fixtures, not serving daemons.
+      ...(phase.kind === 'daemon' ? { reports: observationReports.queries } : {}),
       ...composeObservationPricing({ db: input.db, runtimes: runtimeManagement.observations }),
       tasks: composeTaskObservations({
         db: input.db,
@@ -2474,6 +2490,7 @@ export async function composePostgresqlApplication(
     identityAccess: core.identityAccess,
   })
   const runtime: PostgresqlDaemonApplicationRuntime = Object.freeze({
+    observationReports: observationReports.worker,
     taskExecution: taskExecutionProvider,
     collaborationContext: boundCollaborationContext,
     scheduledTasks: scheduledTaskRuntime,
