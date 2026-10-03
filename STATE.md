@@ -1,3 +1,11 @@
+## 2026-10-04 Prompt 同毫秒 sibling 夹具 CI 修正
+
+确切 SHA `37b9a84a908993b64985e7eb62c5b2bd6d6bcb87` 的主 CI37148836427 completed/failure，42 success/8 failure；macOS 后端分片及 Lint/Typecheck/Format 通过，Ubuntu6 唯一后端失败在本批新 prompt binding 夹具。原 session 查询按 ID 升序，detail/legacy 按 startedAt 再 ID；两个随机 ULID 在同毫秒可反序，使所选 read 调用顺序断言失败，而正文结果仍正确。只让 sourceRun 夹具使用同一 monotonicFactory 生成 ID，保留原生产排序和全部176个expect AST、10个测试名称/预算及 store→patch→mark-running/held ACK 断言。
+
+有限 SOURCE1 独立功能门 PASS，指纹 `247568754fcdefe55e0eca6eb0627f4a1e8badff160d005b31d69c00e20168fe`，1 owned/4 controls/4 evidence 首末稳定；两段逆变换恢复完整旧测试，目标format/lint及纯AST证明通过。生产及canonical不变，不重复生成；无本机AW test/typecheck/build/service。保留旧失败及六个观测 E2E job 的完整日志，其归属由原并行会话接续；新正式行为仍待修复提交 exact-SHA hosted CI。
+
+归档内容候选在单独有限功能门中发现 fanout 两处所选效果遗漏、任意 Error.message 转换、新 Agent.outputKinds 夹具及 Windows 原路径 oracle 四项，首 FAIL 将保留并另行修复，不纳入此次提交。完整RFC370/A1–A8/AC00/A-G、CS独立adapters及B/M0–M4继续；尚无AW-in-CS实际部署，不关闭RFC。
+
 ## 2026-10-04 Prompt 用户模板 CI 补正
 
 确切 SHA `9bdc8323a99c0de2ca955ca0945ba063ef927382` 的主 CI37146579007 已 completed/failure，41 success/9 failure；两后端分片唯一失败是原 prompt ACK-order 夹具，六个 E2E 失败属于并行观测页面，原完整日志保留并已最小必要协调。原 prototype/receiver 补正已到达 store，但夹具只设置 Agent 系统 bodyMd，用户模板为空，故长正文断言报错。只在实际 runNode 对象新增 `promptTemplate` 长正文参数；原176个expect AST、10测试名称/预算及其余全部字节保持，原 store→patch→mark-running 与双 held ACK 断言不变。

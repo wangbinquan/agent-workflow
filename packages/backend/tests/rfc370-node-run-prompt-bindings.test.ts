@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { eq } from 'drizzle-orm'
-import { ulid } from 'ulid'
+import { monotonicFactory, ulid } from 'ulid'
 import ts from 'typescript'
 import type { Agent } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -35,8 +35,11 @@ function held<T>() {
   return { promise, resolve }
 }
 
+// Session siblings use ID order, so same-millisecond fixture attempts must be monotonic.
+const sourceRunId = monotonicFactory()
+
 async function sourceRun(db: ProviderNeutralDatabase, taskId: string, retryIndex = 0) {
-  const id = ulid()
+  const id = sourceRunId()
   await db.insert(nodeRuns).values({
     id,
     taskId,
