@@ -1,3 +1,14 @@
+## 2026-10-03 完整 EOF 底座接续
+
+用户要求统计不能漏任何一条。任务、调用、用量、采集分别沿原 owner 游标读到真正 EOF；单页大小、排序块、合并路数和缓存容量只限制一次传输或内存占用，不限制总体数量。新底座保留原身份，在专用原数据库快照的 TEMP 工作区内进行稳定外部排序、四桶覆盖选择和逐条派生分配，尚未切换正式接口和页面。
+
+完整 SOURCE31 v2 已独立 PASS，原 v1 的并发 P2/FAIL 保留。内存 SQLite 的 TEMP 创建、工作和清理已全部进入原 snapshotRead 同一租约；新增真实双 provider 的并发报告、既有 owner 事务、失败/取消后续报告和临时数据隔离回归。文件路径使用实际原 WAL 文件，PG 使用原 pool 的一次 reserve。源码本地提交 `9d539605a6c35c4fb6ef223aaae8b0280445189f`，此段不证明其 hosted 行为、远端发布或正式页面已完成。
+
+原官方 scoped census 在该 source SHA 上生成完整 13 产物，排除并保留他人 EmployeeCase/CI 在制源码；报告只读尝试和缺少 seed 增长的静态 FAIL 均保留。纯治理投影复用生成结果，仅登记五项实际增长：mutation 1826→1829、observed imports 5809→5814、exceptions 5167→5171、symbol owners 25932→26021、physical SQLite fixture 文件 319→320。原 scanner、规则、40 required SPI、304 debt、target 69、273 inbound/31 outbound、background 352、public 1056 与 ambient 501 不变。SOURCE digest `sha256:15e57a059a299e942017fa56f89c6a025ebb98955013158876b8246da9639a79`；129 原库存静态核对通过。增长回执需在匹配 canonical 提交后由正常后继提交退役。
+
+正式报告构建、分页缓存/接口、页面切换、native v2 的完整基线与原完成证明、100K Task/10M usage、真任务四桶/人民币和新 exact-SHA CI 仍待。既有正式链路的截断仍是待修缺陷，不能称为完整统计，也不能以本次底座 SOURCE 或旧真实任务回执替代新全量验收。CS 开发 producer 保持 OFF，两个 RFC 保持 In Progress。
+
+
 ## RFC-370：SOURCE28 workspace / package / Worker 接线（2026-10-03）
 
 本批完成两个 provider 的 workspace tree/file 内容选择、资源包 skill/plugin/export 完整 owner 接线，以及 maintenance Worker 内重建的三类完整效果（archive、包恢复、plugin GC）。所选对象的原 receiver、逻辑引用、ACK 与失败语义贯穿实际装配入口；CLI 初始和替换 session 传递同一完整选择。重复 drain 共用包含 heartbeat、效果 dispose 和 provider close 的完整关闭 Promise，不能提前发出 drained。

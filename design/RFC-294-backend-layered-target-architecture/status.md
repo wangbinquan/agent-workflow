@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:d7cd21a663d5fde3d45b5bf92bbc204ab35a92f4e365a18ff552d9b4c72f542f`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:15e57a059a299e942017fa56f89c6a025ebb98955013158876b8246da9639a79`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2032 |
+| backend production TS 文件 | 2051 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1473 / 18 |
+| `modules/**` 文件 / 非空 context | 1486 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 501 |
-| `architectureExceptions` | 5167 |
+| `architectureExceptions` | 5171 |
 | `backgroundJobs` | 352 |
-| `crossContextImports` | 5809 |
+| `crossContextImports` | 5814 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 25932 |
-| `mutationEntrypoints` | 1826 |
+| `moduleSymbolOwners` | 26021 |
+| `mutationEntrypoints` | 1829 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1056 |
 | `transactionExternalEffects` | 261 |
@@ -71,29 +71,29 @@
 | task-execution / engine | 20 |
 | integration / composition | 18 |
 | intent / domain | 18 |
+| run-observability / domain | 17 |
 | runtime-management / application | 17 |
 | code-capability / infrastructure | 15 |
 | development-automation / composition | 15 |
+| run-observability / application | 15 |
 | collaboration / domain | 14 |
 | digital-employee / application | 14 |
-| run-observability / domain | 14 |
+| run-observability / ports | 13 |
 | runtime-management / infrastructure | 13 |
 | identity-access / infrastructure | 12 |
-| run-observability / application | 12 |
 | system-operations / composition | 12 |
 | code-capability / domain | 11 |
 | digital-employee / infrastructure | 11 |
 | memory / application | 11 |
 | resource-catalog / domain | 11 |
+| run-observability / infrastructure | 11 |
 | intent / infrastructure | 10 |
 | memory / domain | 9 |
-| run-observability / ports | 9 |
 | source-control / domain | 9 |
 | collaboration / composition | 8 |
 | event-center / application | 8 |
 | intent / composition | 8 |
 | knowledge-evolution / domain | 8 |
-| run-observability / infrastructure | 8 |
 | development-automation / engine | 7 |
 | memory / infrastructure | 7 |
 | runtime-management / composition | 7 |
@@ -148,7 +148,7 @@
 
 | targetContext | 数量 |
 | --- | --- |
-| platform | 185 |
+| platform | 191 |
 | task-execution | 74 |
 | resource-catalog | 51 |
 | runtime-management | 48 |
@@ -208,9 +208,9 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3342 |
+| legacy-outbound | 3346 |
 | legacy-inbound | 1641 |
-| infrastructure-external | 291 |
+| infrastructure-external | 292 |
 | offered-consumption | 207 |
 | temporary-internal-debt | 89 |
 | off-dag-offered | 83 |
@@ -223,7 +223,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3342 |
+| legacy-outbound | 3346 |
 | legacy-inbound | 1641 |
 | temporary-internal-debt | 89 |
 | off-dag-offered | 83 |
@@ -235,8 +235,8 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 2782 |
-| W9-D | 882 |
+| W9 | 2785 |
+| W9-D | 883 |
 | W4-E1 | 679 |
 | W4 | 201 |
 | W4-B | 187 |

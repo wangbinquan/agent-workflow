@@ -3,9 +3,9 @@
     "consumers": 972,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1157,
+    "methods": 1158,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21764,
+    "recursiveFields": 21770,
     "symbols": 1056
   },
   "entries": [
@@ -166272,10 +166272,10 @@
     {
       "authority": "request-authority",
       "budget": {
-        "maxMethods": 5,
+        "maxMethods": 6,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 75,
-        "maxUnionVariants": 38
+        "maxTransitiveLeafFields": 81,
+        "maxUnionVariants": 40
       },
       "consumerEdgeIds": [
         "import:0f0f0c7c9b99f8905c51",
@@ -166286,6 +166286,39 @@
       "direction": "offered",
       "entrypoint": "queries",
       "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
+          "fieldPath": "$method:attemptPage.$parameter:page.after",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:attemptPage.$parameter:page.limit",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:attemptPage.$parameter:taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:attemptPage.$return.items",
+          "type": "readonly ObservationAttemptFacts[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:attemptPage.$return.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:attemptPage.$return.nextCursor.$variant:1",
+          "type": "null"
+        },
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:attempts.$parameter:limit",
@@ -166698,6 +166731,7 @@
       "file": "packages/backend/src/modules/task-execution/public/queries.ts",
       "id": "public:task-execution:queries:TaskObservationFactsQuery",
       "members": [
+        "attemptPage",
         "attempts",
         "get",
         "list",
@@ -166705,6 +166739,11 @@
         "spanSources"
       ],
       "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "attemptPage",
+          "signatureDigest": "sha256:40100d06251c7c931afa7ba105aa7211c9ff3e292ce79400334db37d1c63b3b4"
+        },
         {
           "consumerEdgeIds": [],
           "name": "attempts",
@@ -166754,7 +166793,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:57e68e0b3aacf82a5c11085eeafe935d9c99b13f249051e4ad7f3dedb3922b47",
+      "signatureDigest": "sha256:ed1186977cf22aade84b148fdfcd9a56511996137f4d255c9a06b7e8417b741b",
       "status": "target-context-current-surface",
       "symbol": "TaskObservationFactsQuery",
       "transaction": "none",
@@ -172648,7 +172687,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d7cd21a663d5fde3d45b5bf92bbc204ab35a92f4e365a18ff552d9b4c72f542f",
+  "sourceDigest": "sha256:15e57a059a299e942017fa56f89c6a025ebb98955013158876b8246da9639a79",
   "targetContexts": [
     "collaboration",
     "development-automation",
