@@ -58,7 +58,7 @@ export function CompleteObservationTrend({
                   onMouseEnter={() => setActiveKey(row.key)}
                   onClick={() => onRange(row.from, row.to)}
                 >
-                  <span className="observation-trend__values">
+                  <span className="observation-trend__scale">
                     <span>
                       {t('runObservability.exactTaskCount', {
                         tasks: BigInt(row.tasks).toLocaleString(i18n.language),

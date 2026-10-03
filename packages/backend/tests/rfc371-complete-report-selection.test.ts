@@ -126,7 +126,7 @@ async function cloneTasks(harness: ProviderHarness, count: number, outsideAgent 
           parentTaskId: !outsideAgent && n === 0 ? task.id : null,
           startedAt: !outsideAgent && n === 0 ? COMPLETE_NOW - 1000 : COMPLETE_NOW,
           deletedAt: n === 1 ? COMPLETE_NOW : null,
-          repoMode: n === 2 ? ('internal' as const) : task.repoMode,
+          spaceKind: n === 2 ? ('internal' as const) : task.spaceKind,
         })),
       )
       .run()
@@ -206,6 +206,13 @@ describeEachProvider('RFC-371 complete dimension selection on original source', 
   test('202 matching Tasks retain deleted/internal and out-of-window descendants without a population limit', async () => {
     await seedCompleteTask(harness, 1, 2)
     await cloneTasks(harness, 201)
+    expect(
+      await harness.db
+        .select({ spaceKind: tasks.spaceKind })
+        .from(tasks)
+        .where(eq(tasks.id, 'selected-task-2'))
+        .get(),
+    ).toEqual({ spaceKind: 'internal' })
     const report = await build(harness, agent)
     expect(report.taskSource.rows).toBe('202')
     expect(report.summary.inventory.tasks).toBe('202')

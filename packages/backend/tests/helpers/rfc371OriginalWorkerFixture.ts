@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { openDb } from '@/db/client'
-import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlClient'
+import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   createPostgresqlDatabaseRuntime,
   type PostgresqlDatabaseRuntime,

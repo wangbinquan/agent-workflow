@@ -255,7 +255,7 @@ export function CompleteRunObservability({
             }}
           />
           <TabBar
-            idPrefix="run-observation"
+            idPrefix="complete-run-observation"
             ariaLabel={t('runObservability.title')}
             active={tab}
             tabs={(['overview', 'tasks', 'agents', 'usage', 'performance'] as const).map((key) => ({
@@ -300,8 +300,8 @@ export function CompleteRunObservability({
           {...(!search.task
             ? {
                 role: 'tabpanel',
-                id: tabDomIds('run-observation', tab).panelId,
-                'aria-labelledby': tabDomIds('run-observation', tab).tabId,
+                id: tabDomIds('complete-run-observation', tab).panelId,
+                'aria-labelledby': tabDomIds('complete-run-observation', tab).tabId,
               }
             : {})}
         >

@@ -715,7 +715,9 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-370: one shared on-demand configuration reader is composed for HTTP consumers.
     // RFC-370: one daemon-scoped selected presence query, shared by task and workgroup resume.
     // RFC-370 adds one selected read/write binding declaration; all original phase statements remain.
-    expect(restored.statements).toHaveLength(168)
+    // RFC-371 adds the build adapter and the original-source report service.
+    // Both declarations remain inside the original composition; phase and lifetime checks stay intact.
+    expect(restored.statements).toHaveLength(170)
     expect(namedCalls(body, pg, 'composeRuntimeManagement')).toHaveLength(1)
     // RFC-359 AC-10：摘要随 `runFrameBackfillOnBoot({ provider: 'postgresql', db })` →
     // `({ db })` 更新。`FrameBackfillDatabase` 的 provider 标签是摆设（联合两个成员结构逐字
@@ -835,7 +837,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // only the runtime method parameter and configSnapshot reference changed.
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
-      '06d482d3e3d8af1133f15d02f53242fc86d708e20da494fd169b04e55bafd284',
+      // RFC-371: the complete report service shares the selected source generation and numeric owner.
+      '8a8da1ceff53ba76d3b2b4c2a98cc6123eba354c1d1689a396fddb6015ea5118',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -1049,7 +1052,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
-      'bfcc15d74b7f6e582aefb88a8611a9ae0cca09ce4f15ee840ecf0e6b5144f8ac',
+      // RFC-371: the mounted task queries now use the same complete report service and source generation.
+      '6dff8fc2259b246422c5c06446cc8e38914cc2a9bcbe4ca68daa0c8dee086c97',
     )
     expect(
       namedCalls(
@@ -1110,9 +1114,16 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     const alternatives = descendants(pgBody, (node) => isDaemonChoice(node, pg))
       .filter(ts.isConditionalExpression)
       .map((node) => compact(node.whenFalse, pg))
+    // RFC-371 adds exactly one serving-daemon report binding. Explicit unstarted
+    // contract fixtures keep the empty alternative; all three original choices remain.
+    const reportChoices = descendants(pgBody, (node) => isDaemonChoice(node, pg))
+      .filter(ts.isConditionalExpression)
+      .filter((node) => compact(node.whenTrue, pg) === '{reports:observationReports.queries}')
+    expect(reportChoices.map((node) => compact(node.whenFalse, pg))).toEqual(['{}'])
     expect(alternatives).toEqual([
       'phase.scope.createMcpRuntimeTests',
       '(input.opencodeVersion??null)',
+      '{}',
       '(input.workflowRuntime??Object.freeze({}))',
     ])
   })

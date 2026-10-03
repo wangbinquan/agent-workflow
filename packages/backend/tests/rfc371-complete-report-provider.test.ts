@@ -14,7 +14,7 @@ import { completeObservationFileSpool } from '@/modules/run-observability/infras
 import { completeObservationReportCache } from '@/modules/run-observability/infrastructure/completeObservationReportStore'
 import { completeObservationActorScope } from '@/modules/run-observability/infrastructure/completeObservationReportDocuments'
 import { completeObservationReportService } from '@/modules/run-observability/application/completeObservationReportService'
-import type { CompleteObservationTask } from '@agent-workflow/shared'
+import type { CompleteObservationTask, CompleteObservationReportPage } from '@agent-workflow/shared'
 import { COMPLETE_NOW, seedCompleteTask } from './helpers/rfc371CompleteTaskFixture'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -75,7 +75,7 @@ describeEachProvider('RFC-371 full report publication and retained pages', (harn
               parentTaskId: n === 0 ? original.id : null,
               startedAt: n === 0 ? COMPLETE_NOW - 1000 : COMPLETE_NOW,
               deletedAt: n === 1 ? COMPLETE_NOW : null,
-              repoMode: n === 2 ? ('internal' as const) : original.repoMode,
+              spaceKind: n === 2 ? ('internal' as const) : original.spaceKind,
             }
           }),
         )
@@ -138,11 +138,12 @@ describeEachProvider('RFC-371 full report publication and retained pages', (harn
       const rows: CompleteObservationTask[] = []
       let after: string | null = null
       do {
-        const page = await service.page<CompleteObservationTask>(actor, reportId, {
-          section: 'tasks',
-          ...(after === null ? {} : { after }),
-          limit: 100,
-        })
+        const page: CompleteObservationReportPage<CompleteObservationTask> =
+          await service.page<CompleteObservationTask>(actor, reportId, {
+            section: 'tasks',
+            ...(after === null ? {} : { after }),
+            limit: 100,
+          })
         expect(page.total).toBe('202')
         expect(page.items.length).toBeLessThanOrEqual(100)
         rows.push(...page.items)

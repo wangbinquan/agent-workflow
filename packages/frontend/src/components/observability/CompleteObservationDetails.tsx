@@ -10,6 +10,7 @@ import type {
   ObservationTaskDetail,
 } from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
+import { EmptyState } from '@/components/EmptyState'
 import { Dialog } from '@/components/Dialog'
 import { ExecutionSwimlane } from '@/components/ExecutionSwimlane'
 import { TableViewport } from '@/components/TableViewport'
@@ -211,7 +212,7 @@ export function CompleteObservationCaptures({ report }: { report: ReadyObservati
             />
           ) : (
             <Card title={t('runObservability.nativeCaptureTitle')}>
-              <p className="muted">{t('runObservability.emptyCaptures')}</p>
+              <EmptyState title={t('runObservability.emptyCaptures')} size="compact" />
             </Card>
           )
         }
@@ -222,7 +223,7 @@ export function CompleteObservationCaptures({ report }: { report: ReadyObservati
             <ObservationPlatformCapture rows={rows} />
           ) : (
             <Card title={t('runObservability.platformCaptureTitle')}>
-              <p className="muted">{t('runObservability.emptyCaptures')}</p>
+              <EmptyState title={t('runObservability.emptyCaptures')} size="compact" />
             </Card>
           )
         }

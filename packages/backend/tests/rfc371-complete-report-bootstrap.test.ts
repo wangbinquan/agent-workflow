@@ -70,7 +70,7 @@ describeEachProvider('RFC-371 serving report routes and provider lifetime', (har
       },
     })
     const parameters = new URLSearchParams(
-      Object.entries(filters).map(([key, value]) => [key, String(value)]),
+      Object.entries(filters).map(([key, value]): [string, string] => [key, String(value)]),
     )
     const url = '/api/observability/overview?' + parameters
     let handle: Awaited<ReturnType<typeof bindings.runtimeFactory.start>> | undefined

@@ -1,3 +1,7 @@
+## 2026-10-04 RFC-371 完整报告 CI 修正接续
+
+0294 的主 CI37135042998 已 completed/cancelled（13 success、25 failure、12 cancelled），实际失败保留。十二路径候选修正类型/原PG导入、合法内部Task夹具、标准组件/样式、唯一页签与实际Tab/panel关联，并用原W29 normalizer对已发布来源修正170个PG声明及真实report分支；原断言/预算/规则保持。原官方scope只读 committed47773+十二路径、排除并保留prompt/memory WIP，13产物和129库存静态核对通过、无增长许可；详情见 design/RFC-371-run-observability/remaining-work.md。新exact-SHA CI、其他实际失败、完整native/追踪EOF、规模/真实任务/页面验收和CS八组件部署继续，两个RFC不关闭。
+
 ## RFC-370：资源包恢复内容切面（2026-10-03）
 
 资源包恢复内容切面有限 SOURCE 门通过，指纹 `70845648e44cf0a51a33617374abe452ad83037004f2f890030edef597acdfe9`，16 路径（11 旧、5 新）。原 DESIGN 首门一条 P2 和 DESIGN-R2 PASS 都保留：RFC-349 的三处旧 native 消费断言迁移到实际 owner 调用，同时增加原本机 helper 的三处实际绑定断言。完整工厂十项、scope 十项，同步／异步选择及 prototype/private/frozen receiver 保持，缺选择才默认本机；显式不完整选择不会逐方法回落。acquire／内容／close 全部结算后才回到 AW 的 finish／abandon／boot mark／journal settle，body 和 close 单一任意拒绝保留原值，双失败保留顺序。CS adapter 尚未实现。

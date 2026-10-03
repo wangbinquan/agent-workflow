@@ -1,5 +1,6 @@
 // RFC-371: the formal surface reads a sealed full report; display pages never become statistics.
 import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
@@ -220,7 +221,10 @@ afterEach(() => {
 })
 
 test('formal route uses the complete report surface and keeps the legacy regression owner separate', () => {
-  const route = readFileSync(new URL('../src/routes/observability.tsx', import.meta.url), 'utf8')
+  const route = readFileSync(
+    resolve(import.meta.dirname, '../src/routes/observability.tsx'),
+    'utf8',
+  )
   expect(route).toContain('<CompleteRunObservability')
   expect(route).not.toContain('<RunObservability')
 })
@@ -228,7 +232,13 @@ test('all 1001 Tasks remain reachable with frozen exact totals, four buckets and
   const f = fixture()
   const total = BigInt(metrics.tokens.total).toLocaleString('zh')
   await screen.findByRole('button', { name: '任务 0' })
-  const summary = screen.getByRole('heading', { name: '完整 Token 消耗' }).closest('.card')!
+  const activeTab = screen.getByRole('tab', { selected: true })
+  const activePanel = screen.getByRole('tabpanel')
+  expect(activeTab.getAttribute('aria-controls')).toBe(activePanel.id)
+  expect(activePanel.getAttribute('aria-labelledby')).toBe(activeTab.id)
+  const summary = screen
+    .getByRole('heading', { name: '完整 Token 消耗' })
+    .closest<HTMLElement>('.card')!
   expect(within(summary).getByText(total)).toBeTruthy()
   for (const bucket of ['input', 'cacheRead', 'cacheWrite', 'output'] as const) {
     expect(summary.querySelector('[data-token-bucket="' + bucket + '"] dd')?.textContent).toBe(
@@ -246,7 +256,7 @@ test('all 1001 Tasks remain reachable with frozen exact totals, four buckets and
     expect(summary.textContent).toContain(total)
     const next = screen.getByRole('button', { name: '下一页' })
     if (page < 10) fireEvent.click(next)
-    else expect(next).toBeDisabled()
+    else expect((next as HTMLButtonElement).disabled).toBe(true)
   }
   expect(visited.size).toBe(1001)
   expect(f.requests.every((row) => row.path.startsWith('/api/observability/reports'))).toBe(true)
@@ -356,7 +366,7 @@ test('returning from a Task preserves the full report, current display page and 
   fireEvent.click(await screen.findByRole('button', { name: '任务 100' }))
   await screen.findByRole('heading', { name: '任务 100' })
   const back = screen.getByRole('button', { name: /返回统计分析/ })
-  expect(back).toHaveClass('page__heading-back')
+  expect(back.classList.contains('page__heading-back')).toBe(true)
   fireEvent.click(back)
   await screen.findByRole('button', { name: '任务 100' })
   expect(screen.queryByRole('button', { name: '任务 0' })).toBeNull()

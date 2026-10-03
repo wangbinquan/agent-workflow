@@ -194,7 +194,10 @@ export function completeObservationReportCache(
       terminal(id, owner, { state: 'failed', reportId: id, error, retryable: true }),
     assertReadable: (actor, report) =>
       session.snapshotRead((tx) => assertStoredCompleteReport(tx, actor, report)),
-    async page<T>(report, query): Promise<CompleteObservationReportPage<T>> {
+    async page<T>(
+      report: Parameters<CompleteObservationReportCache['page']>[0],
+      query: Parameters<CompleteObservationReportCache['page']>[1],
+    ): Promise<CompleteObservationReportPage<T>> {
       return session.snapshotRead(async (tx) => {
         await assertStoredCompleteReport(tx, report.request.actor, report)
         const scope = and(

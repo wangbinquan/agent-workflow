@@ -1,6 +1,7 @@
 // RFC-371: actual Worker success/cancellation and real max=1 reserved-channel cleanup are hosted gates.
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
+import type { CompleteObservationReportPage } from '@agent-workflow/shared'
 import { sql } from 'drizzle-orm'
 import { buildActor } from '@/auth/actor'
 import { observationReportBuild } from '@/platform/background/observationReportBuild'
@@ -79,11 +80,15 @@ describeEachProvider('RFC-371 original live source through a real report Worker'
       let after: string | null = null,
         read = 0n
       do {
-        const page = await service.queries.page(actor, reportId, {
-          section: 'invocations',
-          limit: 200,
-          ...(after ? { after } : {}),
-        })
+        const page: CompleteObservationReportPage<unknown> = await service.queries.page(
+          actor,
+          reportId,
+          {
+            section: 'invocations',
+            limit: 200,
+            ...(after ? { after } : {}),
+          },
+        )
         expect(page.total).toBe('1001')
         read += BigInt(page.items.length)
         after = page.nextCursor

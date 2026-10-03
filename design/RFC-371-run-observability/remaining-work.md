@@ -338,3 +338,12 @@ UI 保留完整报告身份和各节分页位置，任务贡献与原始调用/�
 上述 SOURCE/META 候选已通过精确共享主干发布进入 0294e8de8a8660a3170a2600f60c7876506ddf81，98 个文件的暂存和提交内容逐一匹配，推后 main 与 origin/main 为 0/0，共享 index 为空，无关在制改动保持。对应主 CI 37135042998、Windows 37135043001 和默认触发的 visual/maintenance 定时作业已启动，尚不能据启动状态宣称通过。原正式统计别名和新正式页面已进入远端源代码，实际服务版本和行为还待新 CI 与真实运行验收。
 
 按原 RFC-317 高水守卫，在正常后继候选中仅退役匹配的九条一次性 allowGrowth，129 个库存的数值、全部规则、SPI、债务和分类判据不变；使用原 provenance 函数记录实际已发布祖先。本次退役复用原 AST 结果，无新扫描或本机 AW 测试。原生采集 durable v2、完整基线和 EOF 完成证明、执行追踪无总页数上限、真实规模及真实任务验收继续；不声明所有限制已去掉，不开启 CS 开发 producer，不关闭任何 RFC。
+
+
+### 2026-10-04 完整报告的首轮 CI 缺陷修正
+
+已发布 0294 的主 CI 37135042998 已 completed/cancelled，13 success、25 failure、12 cancelled；保留全部原失败日志，不以取消或局部成功代签通过。此次十二路径候选修复真实类型/导入/合法内部 Task 夹具、Vite 源码读取与标准断言、公共空状态/趋势 CSS，以及真实页签的唯一标识和 Tab/panel 双向关联。W29 保留全部原 normalizer，直接读取已发布 15b31/47773 证明 PG 两个新增声明、原五个 control/event body 及 SQLite deps 49；只按完整报告真实接线更新 PG 170 和两个摘要。新增 daemon-only report 选择保持三个原分支，并独立精确断言 unstarted fixture 的唯一空分支。首次审阅发现的 Tab/panel 不一致保留，后继增加实际关联断言。原业务断言、预算和治理规则不放宽。
+
+原官方 scoped AST 只扫描 committed 47773 加这十二个冻结路径，排除并保留 prompt/memory 的未提交输出；原生成结果复用于四份 provenance 投影，不重新扫描。13 产物、129 库存静态核对通过，所有库存数值保持，无新增增长许可；sourceDigest 为 sha256:ef43059cd7a0c4a8934cf65c09265c35531432b34258794898ce7d8107ff668e。首次私有无 write 调用只输出 report、未形成完整产物，原记录保留；首次 provenance 静态失败四项也保留。没有本机 AW test/typecheck/build/service，正式行为仍待新 exact-SHA CI。
+
+其余实际 CI 缺陷继续逐项修复：新增报告表的迁移/归档/schema 投影、原生数值映射及原生产事实接线和 E2E，不能据本批称主 CI 全绿。CS 目录权限修正 d2ab5f349d20a3d24fe564b27024b5ec4dec90e7 已发布；该提交的真实 module 10001 行用例有 65002ms hook 超时，另五作业不能代签失败，新八组件部署仍未执行。完整 native v2、追踪 EOF、100K Task/10M usage、真正任务四桶/人民币及正式浏览器验收继续，所有人口上限尚未清零，两个 RFC 均保持 In Progress。
