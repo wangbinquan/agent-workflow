@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1849,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 prompt content: the unchanged classifier records the private synchronous write-compatible effects interface and the independent native content factory. Original business/database writes retain their owner and body."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -850,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5936,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 prompt content: actual complete content/operations/reader contracts and SQLite/PG/HTTP roots, memory reader and legacy public consumers add 23 edges and remove two old direct prompt reads. No classifier or boundary exception is changed."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -874,10 +868,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5281,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 prompt content: original canonical classification follows the real 23 added and two removed import edges; its exception projection changes by 18. The six temporary services-to-composition R1 edges were corrected through exact public APIs and add no debt clause."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -891,10 +882,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1071,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-370 prompt content: eight actually consumed public symbols cover complete async effects/operations/reader and retained synchronous legacy reference/store/read/type plus neutral whole-operations selection. The consumer matrices of three existing fields in two existing public symbols gain actual consumers; their field types and shapes remain unchanged. No public provider constructor or new required SPI is offered."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -915,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 26329,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 prompt content: four new TE-owned port/application/composition/native files add 27 actual owners and relocate six old service symbols, net 21. Original synchronous helpers move with identical function AST; file IO remains in the local adapter."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -935,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "0b8910ab8d88fff0df68dad416169895d6fc1165",
-    "contentDigest": "sha256:62c72dcc55ad496d778a0867e082ad82920b38affb41abbcd305621bc05714f0",
+    "currentSnapshotSha": "043e43733a0cc08e02b3cc59d7d923a9c32509e6",
+    "contentDigest": "sha256:f07452232eedf08b4b8323b93a6b772793f3c45e3a23962ad47052a185884b1d",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
