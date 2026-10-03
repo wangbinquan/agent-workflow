@@ -628,7 +628,7 @@ export async function launchAgentAttempt(
     bundles,
     workspacePath: workspace.workspacePath,
     businessTreeDigest: workspace.businessTreeDigest,
-    preStateJson: ports.workspaceValidation!.capturePreState(workspace.workspacePath),
+    preStateJson: await ports.workspaceValidation!.capturePreState(workspace.workspacePath),
     manifestSansNonce: {
       ...manifest,
       protocol: { port: 'agent-result', outcomeSchemaId: manifest.protocol.outcomeSchemaId },
@@ -1130,7 +1130,7 @@ export async function collectAgentAttempt(
   }
 
   // 步骤 5-7：workspace 对拍。
-  const validated = ports.workspaceValidation.validate({
+  const validated = await ports.workspaceValidation.validate({
     workspacePath: preState.workspacePath,
     preStateJson: preState.preStateJson,
     // completed（read-only 完成）对现场的要求与 no-change 相同：必须 clean。

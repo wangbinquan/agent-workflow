@@ -1,3 +1,6 @@
+import type { AutomationWorkspaceEffectsFactory } from './application/ports/automationWorkspaceEffects'
+export type { AutomationWorkspaceEffectsFactory }
+import { selectedAutomationWorkspaceEffects } from './infrastructure/automationWorkspaceEffects'
 import type { RepositoryBaselineEffectsFactory } from './application/ports/repositoryBaselineEffects'
 // development-automation 装配入口（RFC-310）。
 //
@@ -10,8 +13,6 @@ import type { RepositoryBaselineEffectsFactory } from './application/ports/repos
 // 组装（modules/integration/composition/requirementSource.ts），本文件不得
 // 跨 context import 其内部（rfc294 preflight 债务账本为空增长）。
 // Agent launcher / MR·pipeline collector 端口随 PR-5/PR-6/PR-7 注入。
-
-import { join } from 'node:path'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 export { createDevelopmentDeliveryProvider } from './infrastructure/developmentDeliveryProvider'
@@ -213,6 +214,7 @@ export interface DevelopmentAutomationModule {
 }
 
 export interface DevelopmentAutomationCompositionOptions {
+  readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly appHome: string
   readonly evidenceContents?: EvidenceContentQueries
@@ -269,11 +271,14 @@ function composeDevelopmentAutomationFromPersistence(
   deps: DevelopmentAutomationCompositionOptions,
   persistence: DevelopmentAutomationPersistenceBundle,
 ): DevelopmentAutomationModule {
+  const factory = selectedAutomationWorkspaceEffects(deps.automationWorkspaceEffects)
+
   const now = (): number => Date.now()
   const store = persistence.store
   const lookup = deps.admissionLookup ?? persistence.admissionLookup
   const snapshots = persistence.snapshots
-  const evidence = deps.evidenceArtifacts ?? new EvidenceStore(join(deps.appHome, 'evidence'))
+  const evidence =
+    deps.evidenceArtifacts ?? new EvidenceStore(factory.resolve(deps.appHome, 'evidence'))
   const evidenceContents = deps.evidenceRead?.contents ?? deps.evidenceContents ?? evidence.contents
   const evidenceDownloads = deps.evidenceRead?.downloads ?? evidence.downloads
   const materializer = createRequirementMaterializer({
@@ -283,11 +288,11 @@ function composeDevelopmentAutomationFromPersistence(
     store,
     snapshots,
     evidence,
-    stagingRoot: join(deps.appHome, 'evidence', 'staging'),
+    stagingRoot: factory.resolve(deps.appHome, 'evidence', 'staging'),
     ...(deps.requirementSource === undefined ? {} : { source: deps.requirementSource }),
     now,
   })
-  const seedsRoot = join(deps.appHome, 'evidence', 'seeds')
+  const seedsRoot = factory.resolve(deps.appHome, 'evidence', 'seeds')
   const templates = persistence.actionTemplates
   const verificationProfiles = persistence.verificationProfiles
   const playbookSaga = persistence.playbookSaga
@@ -324,7 +329,11 @@ function composeDevelopmentAutomationFromPersistence(
     actionWorkspace: {
       materialize: (input) =>
         materializeActionWorkspace(
-          { evidence, seedsRoot, workspacesRoot: join(deps.appHome, 'workspaces', 'actions') },
+          {
+            evidence,
+            seedsRoot,
+            workspacesRoot: factory.resolve(deps.appHome, 'workspaces', 'actions'),
+          },
           input,
         ),
       adopt: (input) => adoptActionWorkspace({ evidence }, input),
@@ -338,7 +347,7 @@ function composeDevelopmentAutomationFromPersistence(
         return row === null ? null : (JSON.parse(row.contentJson) as unknown)
       },
     },
-    workspaceValidation: createWorkspaceValidationAdapter(),
+    workspaceValidation: createWorkspaceValidationAdapter(factory),
     repositoryFacts: persistence.repositoryFacts,
     ...(deps.candidateDelivery === undefined ? {} : { candidateDelivery: deps.candidateDelivery }),
     ...(deps.repoRemote === undefined ? {} : { repoRemote: deps.repoRemote }),
@@ -371,7 +380,7 @@ function composeDevelopmentAutomationFromPersistence(
             prepare: (input: Parameters<ConflictMergePort['prepare']>[0]) =>
               deps.conflictMerge!.prepare({
                 ...input,
-                workspacesRoot: join(deps.appHome, 'workspaces', 'conflicts'),
+                workspacesRoot: factory.resolve(deps.appHome, 'workspaces', 'conflicts'),
               }),
             finish: (input: Parameters<ConflictMergePort['finish']>[0]) =>
               deps.conflictMerge!.finish(input),

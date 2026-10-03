@@ -11,15 +11,17 @@
 // 业务树路径全部由本文件 walk 以 `/` 构造（repo-relative by construction），
 // 前缀判断用普通串联而非模板字面量。
 
-import { lstatSync, readdirSync, readFileSync, readlinkSync, statSync } from 'node:fs'
-import { join } from 'node:path'
-
+import type {
+  AutomationWorkspaceEffects,
+  AutomationWorkspaceEffectsFactory,
+} from '../application/ports/automationWorkspaceEffects'
+import { withAutomationWorkspaceEffects } from './automationWorkspaceEffects'
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 import { sha256Hex } from '@/util/hash'
 import type { CapabilityWorkspaceMode } from '../domain/capabilityDefinition'
 import {
   diffProtectedRoots,
-  snapshotProtectedRoots,
+  readProtectedRootSnapshot,
   type ProtectedRootSnapshot,
   type SnapshotViolation,
 } from './protectedSnapshot'
@@ -29,30 +31,34 @@ import {
  * `.agent-workflow`（evidence/platform 归 protected roots 对拍面）。目录本身
  * 不记：空目录增删不构成业务改动。
  */
-export function businessTreeSnapshot(root: string): Map<string, string> {
+export async function readBusinessTreeSnapshot(
+  root: string,
+  factory: AutomationWorkspaceEffectsFactory,
+  effects: AutomationWorkspaceEffects,
+): Promise<Map<string, string>> {
   const out = new Map<string, string>()
-  const walk = (rel: string): void => {
-    const abs = rel === '' ? root : join(root, rel)
-    const st = lstatSync(abs, { throwIfNoEntry: false })
+  const walk = async (rel: string): Promise<void> => {
+    const abs = rel === '' ? root : factory.resolve(root, rel)
+    const st = await effects.inspect(abs, false)
     if (!st) return
-    if (st.isSymbolicLink()) {
-      out.set(rel, `l:${readlinkSync(abs)}`)
+    if (st.kind === 'symlink') {
+      out.set(rel, `l:${await effects.readLink(abs)}`)
       return
     }
-    if (st.isDirectory()) {
-      for (const name of readdirSync(abs).sort()) {
+    if (st.kind === 'directory') {
+      for (const name of [...(await effects.listNames(abs))].sort()) {
         const childRel = rel === '' ? name : `${rel}/${name}`
         if (childRel === '.git' || childRel === PLATFORM_WORKSPACE_DIR) continue
-        walk(childRel)
+        await walk(childRel)
       }
       return
     }
-    if (st.isFile()) {
+    if (st.kind === 'file') {
       const mode = (st.mode & 0o111) !== 0 ? 'x' : 'r'
-      out.set(rel, `f:${mode}:${sha256Hex(readFileSync(abs))}`)
+      out.set(rel, `f:${mode}:${sha256Hex(await effects.readBytes(abs))}`)
     }
   }
-  walk('')
+  await walk('')
   return out
 }
 
@@ -123,14 +129,21 @@ function boundary(
   return { ok: false, kind: 'boundary', code, paths: [...paths].sort(), detail }
 }
 
-export function validateWorkspaceOutcome(
+export async function validateWorkspaceOutcomeInScope(
   input: WorkspaceValidationInput,
-): WorkspaceValidationOutcome {
+  factory: AutomationWorkspaceEffectsFactory,
+  effects: AutomationWorkspaceEffects,
+): Promise<WorkspaceValidationOutcome> {
   // 5) protected roots 对拍（必须最先跑：一旦违规现场即不可信，后续不看）。
-  const after = snapshotProtectedRoots(input.protectedRoots, {
-    skipPrefixes: input.protectedSkipPrefixes,
-    skipPrefixesByRoot: input.protectedSkipPrefixesByRoot,
-  })
+  const after = await readProtectedRootSnapshot(
+    input.protectedRoots,
+    {
+      skipPrefixes: input.protectedSkipPrefixes,
+      skipPrefixesByRoot: input.protectedSkipPrefixesByRoot,
+    },
+    factory,
+    effects,
+  )
   const protectedViolations: SnapshotViolation[] = diffProtectedRoots(input.preProtected, after)
   if (protectedViolations.length > 0) {
     return boundary(
@@ -144,7 +157,7 @@ export function validateWorkspaceOutcome(
   }
 
   // 业务树 delta（平台独立计算）。
-  const post = businessTreeSnapshot(input.workspacePath)
+  const post = await readBusinessTreeSnapshot(input.workspacePath, factory, effects)
   const changed: string[] = []
   const removed: string[] = []
   for (const [rel, sig] of input.preBusinessTree) {
@@ -163,10 +176,11 @@ export function validateWorkspaceOutcome(
   if (newSymlinks.length > 0) {
     return boundary('symlink-created', newSymlinks, 'symlink introduced into the business tree')
   }
-  const hardlinks = [...added, ...changed].filter((rel) => {
-    const st = lstatSync(join(input.workspacePath, rel), { throwIfNoEntry: false })
-    return st !== undefined && st.isFile() && st.nlink > 1
-  })
+  const hardlinks: string[] = []
+  for (const rel of [...added, ...changed]) {
+    const st = await effects.inspect(factory.resolve(input.workspacePath, rel), false)
+    if (st !== undefined && st.kind === 'file' && st.nlink > 1) hardlinks.push(rel)
+  }
   if (hardlinks.length > 0) {
     return boundary('hardlink-created', hardlinks, 'hardlinked file introduced (escape vector)')
   }
@@ -221,8 +235,8 @@ export function validateWorkspaceOutcome(
   }
   let totalBytes = 0
   for (const rel of [...added, ...changed]) {
-    const st = statSync(join(input.workspacePath, rel), { throwIfNoEntry: false })
-    if (st?.isFile()) totalBytes += st.size
+    const st = await effects.inspect(factory.resolve(input.workspacePath, rel), true)
+    if (st?.kind === 'file') totalBytes += st.size
   }
   if (totalBytes > input.budget.maxTotalBytes) {
     return boundary(
@@ -252,4 +266,22 @@ export function validateWorkspaceOutcome(
   return delta.length === 0
     ? { ok: true, kind: 'clean' }
     : { ok: true, kind: 'changed', changedPaths: delta }
+}
+
+export function businessTreeSnapshot(
+  root: string,
+  factory?: AutomationWorkspaceEffectsFactory,
+): Promise<Map<string, string>> {
+  return withAutomationWorkspaceEffects(factory, (effects, selected) =>
+    readBusinessTreeSnapshot(root, selected, effects),
+  )
+}
+
+export function validateWorkspaceOutcome(
+  input: WorkspaceValidationInput,
+  factory?: AutomationWorkspaceEffectsFactory,
+): Promise<WorkspaceValidationOutcome> {
+  return withAutomationWorkspaceEffects(factory, (effects, selected) =>
+    validateWorkspaceOutcomeInScope(input, selected, effects),
+  )
 }

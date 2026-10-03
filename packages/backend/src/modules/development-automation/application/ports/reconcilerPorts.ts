@@ -1,3 +1,4 @@
+type Completion<T> = T | Promise<T>
 // RFC-310 PR-2 —— reconciler 消费的窄执行端口（T26）。
 //
 // application 层只认这些接口；生产实现由 provider adapter 经装配点注入
@@ -351,7 +352,7 @@ export type { AttemptContextStorePort } from './attemptContextStore'
  * pre-state 以 opaque JSON 跨 reconcile 轮传递）。
  */
 export interface WorkspaceValidationPort {
-  capturePreState(workspacePath: string): string
+  capturePreState(workspacePath: string): Completion<string>
   validate(input: {
     readonly workspacePath: string
     readonly preStateJson: string
@@ -361,7 +362,7 @@ export interface WorkspaceValidationPort {
     readonly preservePaths: readonly string[]
     readonly editablePaths: readonly string[]
     readonly budget: { readonly maxChangedFiles: number; readonly maxTotalBytes: number }
-  }):
+  }): Completion<
     | { readonly ok: true; readonly kind: 'clean' }
     | { readonly ok: true; readonly kind: 'changed'; readonly changedPaths: readonly string[] }
     | {
@@ -377,6 +378,7 @@ export interface WorkspaceValidationPort {
         readonly code: string
         readonly detail: string
       }
+  >
 }
 
 /** PR-5 —— repo remote 定位（push 目标与默认 target 分支；URL 解封在装配点）。 */

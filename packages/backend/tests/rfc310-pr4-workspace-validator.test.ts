@@ -86,8 +86,8 @@ async function freshScene(): Promise<Scene> {
   )
   const ws = materialized.workspacePath
   const roots = { 'git-meta': join(ws, '.git'), evidence: join(ws, '.agent-workflow') }
-  const pre = snapshotProtectedRoots(roots)
-  const preTree = businessTreeSnapshot(ws)
+  const pre = await snapshotProtectedRoots(roots)
+  const preTree = await businessTreeSnapshot(ws)
   return {
     ws,
     pre,
@@ -111,17 +111,17 @@ async function freshScene(): Promise<Scene> {
   }
 }
 
-const codeOf = (r: ReturnType<typeof validateWorkspaceOutcome>): string =>
+const codeOf = (r: Awaited<ReturnType<typeof validateWorkspaceOutcome>>): string =>
   r.ok ? r.kind : `${r.kind}:${'code' in r ? r.code : ''}`
 
 describe('rfc310 pr4 — workspace validator', () => {
   test('clean workspace with clean outcome passes; platform computes changedPaths itself', async () => {
     const scene = await freshScene()
-    expect(codeOf(scene.validate({ outcome: 'no-change' }))).toBe('clean')
+    expect(codeOf(await scene.validate({ outcome: 'no-change' }))).toBe('clean')
 
     writeFileSync(join(scene.ws, 'src', 'app.ts'), 'export const x = 2\n')
     writeFileSync(join(scene.ws, 'src', 'new.ts'), 'export const y = 1\n')
-    const out = scene.validate({ outcome: 'changed' })
+    const out = await scene.validate({ outcome: 'changed' })
     expect(out.ok).toBe(true)
     if (out.ok && out.kind === 'changed') {
       expect(out.changedPaths).toEqual(['src/app.ts', 'src/new.ts'])
@@ -133,7 +133,7 @@ describe('rfc310 pr4 — workspace validator', () => {
     const scene = await freshScene()
     // Agent 在自己 workspace 里“git commit”的最小现场：改 refs/HEAD 附近文件。
     writeFileSync(join(scene.ws, '.git', 'COMMIT_EDITMSG'), 'sneaky commit\n')
-    const out = scene.validate({ outcome: 'changed' })
+    const out = await scene.validate({ outcome: 'changed' })
     expect(codeOf(out)).toBe('boundary:protected-root-write')
     if (!out.ok && out.kind === 'boundary') {
       expect(out.paths.some((p) => p.startsWith('git-meta:'))).toBe(true)
@@ -145,20 +145,22 @@ describe('rfc310 pr4 — workspace validator', () => {
     const scene = await freshScene()
     mkdirSync(join(scene.ws, '.agent-workflow'), { recursive: true })
     writeFileSync(join(scene.ws, '.agent-workflow', 'planted.txt'), 'x')
-    expect(codeOf(scene.validate({ outcome: 'changed' }))).toBe('boundary:protected-root-write')
+    expect(codeOf(await scene.validate({ outcome: 'changed' }))).toBe(
+      'boundary:protected-root-write',
+    )
     rmSync(join(scene.ws, '..'), { recursive: true, force: true })
   })
 
   test('symlink and hardlink introduction are escape violations', async () => {
     const scene = await freshScene()
     symlinkSync('/etc/passwd', join(scene.ws, 'src', 'link.ts'))
-    expect(codeOf(scene.validate({ outcome: 'changed' }))).toBe('boundary:symlink-created')
+    expect(codeOf(await scene.validate({ outcome: 'changed' }))).toBe('boundary:symlink-created')
     unlinkSync(join(scene.ws, 'src', 'link.ts'))
 
     const outside = join(tmpdir(), `rfc310-pr4-outside-${Date.now()}.txt`)
     writeFileSync(outside, 'outside')
     linkSync(outside, join(scene.ws, 'src', 'hard.ts'))
-    expect(codeOf(scene.validate({ outcome: 'changed' }))).toBe('boundary:hardlink-created')
+    expect(codeOf(await scene.validate({ outcome: 'changed' }))).toBe('boundary:hardlink-created')
     rmSync(join(scene.ws, '..'), { recursive: true, force: true })
     rmSync(outside, { force: true })
   })
@@ -166,7 +168,7 @@ describe('rfc310 pr4 — workspace validator', () => {
   test('read-only capability: any business write is a boundary violation, not a retryable mismatch', async () => {
     const scene = await freshScene()
     writeFileSync(join(scene.ws, 'src', 'app.ts'), 'export const x = 3\n')
-    expect(codeOf(scene.validate({ outcome: 'no-change', workspaceMode: 'read-only' }))).toBe(
+    expect(codeOf(await scene.validate({ outcome: 'no-change', workspaceMode: 'read-only' }))).toBe(
       'boundary:read-only-workspace-write',
     )
     rmSync(join(scene.ws, '..'), { recursive: true, force: true })
@@ -175,34 +177,34 @@ describe('rfc310 pr4 — workspace validator', () => {
   test('upload contract: preserve untouchable; editable neither deletable nor mode-changeable', async () => {
     const scene = await freshScene()
     writeFileSync(join(scene.ws, 'docs', 'spec.md'), 'tampered\n')
-    expect(codeOf(scene.validate({ outcome: 'changed', preservePaths: ['docs/spec.md'] }))).toBe(
-      'boundary:preserve-upload-modified',
-    )
+    expect(
+      codeOf(await scene.validate({ outcome: 'changed', preservePaths: ['docs/spec.md'] })),
+    ).toBe('boundary:preserve-upload-modified')
     writeFileSync(join(scene.ws, 'docs', 'spec.md'), 'spec v1\n')
 
     unlinkSync(join(scene.ws, 'docs', 'notes.md'))
-    expect(codeOf(scene.validate({ outcome: 'changed', editablePaths: ['docs/notes.md'] }))).toBe(
-      'boundary:upload-target-removed',
-    )
+    expect(
+      codeOf(await scene.validate({ outcome: 'changed', editablePaths: ['docs/notes.md'] })),
+    ).toBe('boundary:upload-target-removed')
     writeFileSync(join(scene.ws, 'docs', 'notes.md'), 'notes v1\n')
 
     chmodSync(join(scene.ws, 'docs', 'notes.md'), 0o755)
-    expect(codeOf(scene.validate({ outcome: 'changed', editablePaths: ['docs/notes.md'] }))).toBe(
-      'boundary:upload-mode-changed',
-    )
+    expect(
+      codeOf(await scene.validate({ outcome: 'changed', editablePaths: ['docs/notes.md'] })),
+    ).toBe('boundary:upload-mode-changed')
     rmSync(join(scene.ws, '..'), { recursive: true, force: true })
   })
 
   test('writable prefixes fence writes; budgets are enforced', async () => {
     const scene = await freshScene()
     writeFileSync(join(scene.ws, 'README.md'), 'outside allowlist\n')
-    expect(codeOf(scene.validate({ outcome: 'changed', writablePrefixes: ['src'] }))).toBe(
+    expect(codeOf(await scene.validate({ outcome: 'changed', writablePrefixes: ['src'] }))).toBe(
       'boundary:write-outside-allowlist',
     )
     writeFileSync(join(scene.ws, 'src', 'a.ts'), 'a\n')
     expect(
       codeOf(
-        scene.validate({
+        await scene.validate({
           outcome: 'changed',
           budget: { maxChangedFiles: 1, maxTotalBytes: 10 * 1024 * 1024 },
         }),
@@ -213,11 +215,11 @@ describe('rfc310 pr4 — workspace validator', () => {
 
   test('outcome/workspace mismatches are semantic (retryable with feedback)', async () => {
     const scene = await freshScene()
-    expect(codeOf(scene.validate({ outcome: 'changed' }))).toBe(
+    expect(codeOf(await scene.validate({ outcome: 'changed' }))).toBe(
       'semantic:outcome-workspace-mismatch',
     )
     writeFileSync(join(scene.ws, 'src', 'app.ts'), 'export const x = 4\n')
-    expect(codeOf(scene.validate({ outcome: 'no-change' }))).toBe(
+    expect(codeOf(await scene.validate({ outcome: 'no-change' }))).toBe(
       'semantic:outcome-workspace-mismatch',
     )
     rmSync(join(scene.ws, '..'), { recursive: true, force: true })
@@ -225,7 +227,7 @@ describe('rfc310 pr4 — workspace validator', () => {
 
   test('production snapshot keeps the exact PR-0 probe semantics (same tree, same digest)', async () => {
     const scene = await freshScene()
-    const production = snapshotProtectedRoots(scene.roots)
+    const production = await snapshotProtectedRoots(scene.roots)
     const probe = probeSnapshot(scene.roots)
     expect(production.digest).toBe(probe.digest)
     rmSync(join(scene.ws, '..'), { recursive: true, force: true })

@@ -1,3 +1,8 @@
+import type { AutomationWorkspaceEffectsFactory } from '../application/ports/automationWorkspaceEffects'
+import {
+  selectedAutomationWorkspaceEffects,
+  withAutomationWorkspaceEffects,
+} from './automationWorkspaceEffects'
 // RFC-310 PR-4 —— attempt 编排的 infrastructure 支撑件（composition 注入用）。
 //
 // 1. AttemptContextStore：pre-state JSON 冻结为 evidence 内容寻址 blob（Agent
@@ -7,21 +12,22 @@
 //    `<ws>/.git`、evidence = `<ws>/.agent-workflow`）也钉在这里，launch 轮拍
 //    与 collect 轮重拍必须同一约定。
 
-import { join } from 'node:path'
-
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
 import type { WorkspaceValidationPort } from '../application/ports/reconcilerPorts'
-import { snapshotProtectedRoots, type ProtectedRootSnapshot } from './protectedSnapshot'
-import { businessTreeSnapshot, validateWorkspaceOutcome } from './workspaceValidator'
+import { readProtectedRootSnapshot, type ProtectedRootSnapshot } from './protectedSnapshot'
+import { readBusinessTreeSnapshot, validateWorkspaceOutcomeInScope } from './workspaceValidator'
 import type { CapabilityWorkspaceMode } from '../domain/capabilityDefinition'
 
 export { createAttemptContextStore } from './local/fileAttemptContextStore'
 
 /** launch/collect 两轮共用的 protected roots 约定。 */
-function protectedRootsOf(workspacePath: string): Record<string, string> {
+function protectedRootsOf(
+  workspacePath: string,
+  factory: AutomationWorkspaceEffectsFactory,
+): Record<string, string> {
   return {
-    'git-meta': join(workspacePath, '.git'),
-    evidence: join(workspacePath, PLATFORM_WORKSPACE_DIR),
+    'git-meta': factory.resolve(workspacePath, '.git'),
+    evidence: factory.resolve(workspacePath, PLATFORM_WORKSPACE_DIR),
   }
 }
 
@@ -75,34 +81,52 @@ function reviveProtected(value: SerializedPreState['protected']): ProtectedRootS
   }
 }
 
-export function createWorkspaceValidationAdapter(): WorkspaceValidationPort {
+export function createWorkspaceValidationAdapter(
+  chosen?: AutomationWorkspaceEffectsFactory,
+): WorkspaceValidationPort {
+  const factory = selectedAutomationWorkspaceEffects(chosen)
   return {
     capturePreState(workspacePath) {
-      const pre: SerializedPreState = {
-        protected: serializeProtected(
-          snapshotProtectedRoots(protectedRootsOf(workspacePath), {
-            skipPrefixesByRoot: PROTECTED_SKIP_PREFIXES_BY_ROOT,
-          }),
-        ),
-        business: [...businessTreeSnapshot(workspacePath).entries()],
-      }
-      return JSON.stringify(pre)
+      return withAutomationWorkspaceEffects(factory, async (effects) => {
+        const pre: SerializedPreState = {
+          protected: serializeProtected(
+            await readProtectedRootSnapshot(
+              protectedRootsOf(workspacePath, factory),
+              {
+                skipPrefixesByRoot: PROTECTED_SKIP_PREFIXES_BY_ROOT,
+              },
+              factory,
+              effects,
+            ),
+          ),
+          business: [
+            ...(await readBusinessTreeSnapshot(workspacePath, factory, effects)).entries(),
+          ],
+        }
+        return JSON.stringify(pre)
+      })
     },
     validate(input) {
       const pre = JSON.parse(input.preStateJson) as SerializedPreState
-      return validateWorkspaceOutcome({
-        workspacePath: input.workspacePath,
-        preProtected: reviveProtected(pre.protected),
-        protectedRoots: protectedRootsOf(input.workspacePath),
-        protectedSkipPrefixesByRoot: PROTECTED_SKIP_PREFIXES_BY_ROOT,
-        preBusinessTree: new Map(pre.business),
-        outcome: input.outcome,
-        workspaceMode: input.workspaceMode as CapabilityWorkspaceMode,
-        writablePrefixes: input.writablePrefixes,
-        preservePaths: input.preservePaths,
-        editablePaths: input.editablePaths,
-        budget: input.budget,
-      })
+      return withAutomationWorkspaceEffects(factory, (effects) =>
+        validateWorkspaceOutcomeInScope(
+          {
+            workspacePath: input.workspacePath,
+            preProtected: reviveProtected(pre.protected),
+            protectedRoots: protectedRootsOf(input.workspacePath, factory),
+            protectedSkipPrefixesByRoot: PROTECTED_SKIP_PREFIXES_BY_ROOT,
+            preBusinessTree: new Map(pre.business),
+            outcome: input.outcome,
+            workspaceMode: input.workspaceMode as CapabilityWorkspaceMode,
+            writablePrefixes: input.writablePrefixes,
+            preservePaths: input.preservePaths,
+            editablePaths: input.editablePaths,
+            budget: input.budget,
+          },
+          factory,
+          effects,
+        ),
+      )
     },
   }
 }

@@ -1,17 +1,14 @@
+import type {
+  AutomationWorkspaceEffects,
+  AutomationWorkspaceEffectsFactory,
+} from '../application/ports/automationWorkspaceEffects'
+import {
+  selectedAutomationWorkspaceEffects,
+  withAutomationWorkspaceEffects,
+} from '../infrastructure/automationWorkspaceEffects'
 import type { WorkspaceFailureClass } from '@/modules/digital-employee/public/types'
 import { repoRelativePathSchema } from '../domain/requirementManifest'
-import {
-  chmodSync,
-  constants,
-  copyFileSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-} from 'node:fs'
-import { dirname, join } from 'node:path'
+
 import { z } from 'zod'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
@@ -175,10 +172,13 @@ function reviveProtected(value: SerializedPreState['protected']): ProtectedRootS
   }
 }
 
-function rootsOf(workspacePath: string): Record<string, string> {
+function rootsOf(
+  workspacePath: string,
+  factory: AutomationWorkspaceEffectsFactory,
+): Record<string, string> {
   return {
-    'git-meta': join(workspacePath, '.git'),
-    evidence: join(workspacePath, PLATFORM_WORKSPACE_DIR),
+    'git-meta': factory.resolve(workspacePath, '.git'),
+    evidence: factory.resolve(workspacePath, PLATFORM_WORKSPACE_DIR),
   }
 }
 
@@ -255,54 +255,79 @@ function frozenPlatformArtifactRefs(refs: readonly string[]): FrozenPlatformArti
   )
 }
 
-function requirePlainDirectory(path: string, label: string): void {
-  const stat = lstatSync(path, { throwIfNoEntry: false })
-  if (stat === undefined || stat.isSymbolicLink() || !stat.isDirectory()) {
+async function requirePlainDirectory(
+  path: string,
+  label: string,
+  _factory: AutomationWorkspaceEffectsFactory,
+  effects: AutomationWorkspaceEffects,
+): Promise<void> {
+  const stat = await effects.inspect(path, false)
+  if (stat === undefined || stat.kind === 'symlink' || !(stat.kind === 'directory')) {
     throw new Error(`${label} is not a plain directory: ${path}`)
   }
 }
 
-function requirePlainDirectoryPath(root: string, relativeDirectory: string): void {
-  requirePlainDirectory(root, 'frozen artifact source workspace')
+async function requirePlainDirectoryPath(
+  root: string,
+  relativeDirectory: string,
+  factory: AutomationWorkspaceEffectsFactory,
+  effects: AutomationWorkspaceEffects,
+): Promise<void> {
+  await requirePlainDirectory(root, 'frozen artifact source workspace', factory, effects)
   let current = root
   for (const segment of relativeDirectory.split('/').filter((part) => part.length > 0)) {
-    current = join(current, segment)
-    requirePlainDirectory(current, 'frozen artifact source path')
+    current = factory.resolve(current, segment)
+    await requirePlainDirectory(current, 'frozen artifact source path', factory, effects)
   }
 }
 
-function ensurePlainDirectoryPath(root: string, relativeDirectory: string): void {
-  requirePlainDirectory(root, 'frozen artifact target workspace')
+async function ensurePlainDirectoryPath(
+  root: string,
+  relativeDirectory: string,
+  factory: AutomationWorkspaceEffectsFactory,
+  effects: AutomationWorkspaceEffects,
+): Promise<void> {
+  await requirePlainDirectory(root, 'frozen artifact target workspace', factory, effects)
   let current = root
   for (const segment of relativeDirectory.split('/').filter((part) => part.length > 0)) {
-    current = join(current, segment)
-    const stat = lstatSync(current, { throwIfNoEntry: false })
+    current = factory.resolve(current, segment)
+    const stat = await effects.inspect(current, false)
     if (stat === undefined) {
-      mkdirSync(current)
+      await effects.createDirectory(current, false)
       continue
     }
-    if (stat.isSymbolicLink() || !stat.isDirectory()) {
+    if (stat.kind === 'symlink' || !(stat.kind === 'directory')) {
       throw new Error(`frozen artifact target path is not a plain directory: ${current}`)
     }
   }
 }
 
-function copyFrozenPlatformEntry(source: string, target: string): void {
-  const sourceStat = lstatSync(source, { throwIfNoEntry: false })
-  if (sourceStat === undefined || sourceStat.isSymbolicLink()) {
+async function copyFrozenPlatformEntry(
+  source: string,
+  target: string,
+  factory: AutomationWorkspaceEffectsFactory,
+  effects: AutomationWorkspaceEffects,
+): Promise<void> {
+  const sourceStat = await effects.inspect(source, false)
+  if (sourceStat === undefined || sourceStat.kind === 'symlink') {
     throw new Error(`frozen platform artifact is missing or linked: ${source}`)
   }
-  if (sourceStat.isDirectory()) {
-    const targetStat = lstatSync(target, { throwIfNoEntry: false })
-    if (targetStat === undefined) mkdirSync(target)
-    else if (targetStat.isSymbolicLink() || !targetStat.isDirectory()) {
+  if (sourceStat.kind === 'directory') {
+    const targetStat = await effects.inspect(target, false)
+    if (targetStat === undefined) await effects.createDirectory(target, false)
+    else if (targetStat.kind === 'symlink' || !(targetStat.kind === 'directory')) {
       throw new Error(`frozen artifact target is not a plain directory: ${target}`)
     }
-    const sourceNames = readdirSync(source).sort()
+    const sourceNames = [...(await effects.listNames(source))].sort()
     for (const name of sourceNames) {
-      copyFrozenPlatformEntry(join(source, name), join(target, name))
+      await copyFrozenPlatformEntry(
+        factory.resolve(source, name),
+        factory.resolve(target, name),
+        factory,
+        effects,
+      )
     }
-    const extras = readdirSync(target)
+    const extras = (await effects.listNames(target))
       .filter((name) => !sourceNames.includes(name))
       .sort()
     if (extras.length > 0) {
@@ -310,32 +335,36 @@ function copyFrozenPlatformEntry(source: string, target: string): void {
     }
     return
   }
-  if (!sourceStat.isFile() || sourceStat.nlink > 1) {
+  if (!(sourceStat.kind === 'file') || sourceStat.nlink > 1) {
     throw new Error(`frozen platform artifact is not a plain file: ${source}`)
   }
-  const sourceContent = readFileSync(source)
-  const targetStat = lstatSync(target, { throwIfNoEntry: false })
+  const sourceContent = await effects.readBytes(source)
+  const targetStat = await effects.inspect(target, false)
   if (targetStat === undefined) {
-    copyFileSync(source, target, constants.COPYFILE_EXCL)
-    chmodSync(target, sourceStat.mode & 0o777)
+    await effects.copyFile(source, target, true)
+    await effects.setMode(target, sourceStat.mode & 0o777)
     return
   }
-  if (targetStat.isSymbolicLink() || !targetStat.isFile() || targetStat.nlink > 1) {
+  if (targetStat.kind === 'symlink' || !(targetStat.kind === 'file') || targetStat.nlink > 1) {
     throw new Error(`frozen artifact target is not a plain file: ${target}`)
   }
-  if (!readFileSync(target).equals(sourceContent)) {
+  if (!Buffer.from(await effects.readBytes(target)).equals(sourceContent)) {
     throw new Error(`frozen artifact target disagrees with its source: ${target}`)
   }
 }
 
-function hydrateFrozenPlatformArtifacts(input: {
-  readonly appHome: string
-  readonly workspacePath: string
-  readonly refs: readonly string[]
-}): FrozenPlatformArtifactRef[] {
+async function hydrateFrozenPlatformArtifacts(
+  input: {
+    readonly appHome: string
+    readonly workspacePath: string
+    readonly refs: readonly string[]
+  },
+  factory: AutomationWorkspaceEffectsFactory,
+  effects: AutomationWorkspaceEffects,
+): Promise<FrozenPlatformArtifactRef[]> {
   const artifacts = frozenPlatformArtifactRefs(input.refs)
   for (const artifact of artifacts) {
-    const sourceWorkspace = join(
+    const sourceWorkspace = factory.resolve(
       input.appHome,
       'workspaces',
       'employee-cases',
@@ -343,13 +372,20 @@ function hydrateFrozenPlatformArtifacts(input: {
       'scene',
       'workspace',
     )
-    requirePlainDirectory(sourceWorkspace, 'frozen artifact source workspace')
+    await requirePlainDirectory(
+      sourceWorkspace,
+      'frozen artifact source workspace',
+      factory,
+      effects,
+    )
     const artifactParent = artifact.path.split('/').slice(0, -1).join('/')
-    requirePlainDirectoryPath(sourceWorkspace, artifactParent)
-    ensurePlainDirectoryPath(input.workspacePath, artifactParent)
-    copyFrozenPlatformEntry(
-      join(sourceWorkspace, artifact.path),
-      join(input.workspacePath, artifact.path),
+    await requirePlainDirectoryPath(sourceWorkspace, artifactParent, factory, effects)
+    await ensurePlainDirectoryPath(input.workspacePath, artifactParent, factory, effects)
+    await copyFrozenPlatformEntry(
+      factory.resolve(sourceWorkspace, artifact.path),
+      factory.resolve(input.workspacePath, artifact.path),
+      factory,
+      effects,
     )
   }
   return artifacts
@@ -370,21 +406,28 @@ function hasImplementationPlanReview(plan: z.infer<typeof planSchema>): boolean 
   )
 }
 
-function preStateWithFrozenPlatformArtifacts(input: {
-  readonly pre: SerializedPreState
-  readonly plan: z.infer<typeof planSchema>
-  readonly workspacePath: string
-  readonly artifacts: readonly FrozenPlatformArtifactRef[]
-}): SerializedPreState {
+async function preStateWithFrozenPlatformArtifacts(
+  input: {
+    readonly pre: SerializedPreState
+    readonly plan: z.infer<typeof planSchema>
+    readonly workspacePath: string
+    readonly artifacts: readonly FrozenPlatformArtifactRef[]
+  },
+  factory: AutomationWorkspaceEffectsFactory,
+): Promise<SerializedPreState> {
   if (input.artifacts.length === 0) return input.pre
-  const actual = snapshotProtectedRoots(rootsOf(input.workspacePath), {
-    skipPrefixesByRoot: skipPrefixes(
-      input.plan.workspacePolicy,
-      input.plan.caseRef.id,
-      input.plan.workItemRef,
-      hasImplementationPlanReview(input.plan),
-    ),
-  })
+  const actual = await snapshotProtectedRoots(
+    rootsOf(input.workspacePath, factory),
+    {
+      skipPrefixesByRoot: skipPrefixes(
+        input.plan.workspacePolicy,
+        input.plan.caseRef.id,
+        input.plan.workItemRef,
+        hasImplementationPlanReview(input.plan),
+      ),
+    },
+    factory,
+  )
   const prior = reviveProtected(input.pre.protected)
   const entries = new Map(
     [...prior.entries.entries()].map(([root, paths]) => [root, new Map(paths)] as const),
@@ -458,17 +501,22 @@ function businessChangedPaths(
   return [...paths].filter((path) => before.get(path) !== after.get(path)).sort()
 }
 
-function directoryContainsFile(root: string): boolean {
-  if (!existsSync(root)) return false
-  const pending = [root]
-  while (pending.length > 0) {
-    const current = pending.pop()!
-    for (const entry of readdirSync(current, { withFileTypes: true })) {
-      if (entry.isFile()) return true
-      if (entry.isDirectory()) pending.push(join(current, entry.name))
+async function directoryContainsFile(
+  root: string,
+  factory: AutomationWorkspaceEffectsFactory,
+): Promise<boolean> {
+  return withAutomationWorkspaceEffects(factory, async (effects) => {
+    if (!(await effects.exists(root))) return false
+    const pending = [root]
+    while (pending.length > 0) {
+      const current = pending.pop()!
+      for (const entry of await effects.listEntries(current)) {
+        if (entry.kind === 'file') return true
+        if (entry.kind === 'directory') pending.push(factory.resolve(current, entry.name))
+      }
     }
-  }
-  return false
+    return false
+  })
 }
 
 const changedWorkspaceValidationSchema = z
@@ -540,6 +588,7 @@ export function createDevelopmentEmployeeCaseWorkspaceDetailReader(
 }
 
 export interface DevelopmentEmployeeWorkspaceCompositionInput {
+  readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly persistence: EmployeeWorkspacePersistence
   readonly appHome: string
   /**
@@ -617,14 +666,15 @@ export interface DevelopmentEmployeeWorkspaceCompositionInput {
 function composeDevelopmentEmployeeWorkspaceFromPersistence(
   input: DevelopmentEmployeeWorkspaceCompositionInput,
 ): DevelopmentEmployeeWorkspaceParticipant {
+  const factory = selectedAutomationWorkspaceEffects(input.automationWorkspaceEffects)
   const sourceControl = input.sourceControl
   const now = input.now ?? Date.now
   const caseDirectory = (caseId: string) =>
-    join(input.appHome, 'workspaces', 'employee-cases', stableIdentityComponent(caseId))
-  const sceneRoot = (caseId: string) => join(caseDirectory(caseId), 'scene')
-  const workspacePath = (caseId: string) => join(sceneRoot(caseId), 'workspace')
+    factory.resolve(input.appHome, 'workspaces', 'employee-cases', stableIdentityComponent(caseId))
+  const sceneRoot = (caseId: string) => factory.resolve(caseDirectory(caseId), 'scene')
+  const workspacePath = (caseId: string) => factory.resolve(sceneRoot(caseId), 'workspace')
   const checkpointRoot = (caseId: string, roundId: string) =>
-    join(caseDirectory(caseId), 'checkpoints', roundId)
+    factory.resolve(caseDirectory(caseId), 'checkpoints', roundId)
 
   /**
    * A completed write round can be followed by a preempting provider fact before
@@ -702,11 +752,17 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
       if (plan.workspacePolicy.mode === 'none') return { kind: 'scratch' }
       const issue = resolveIssue(plan)
       const hydrateArtifacts = (targetWorkspacePath: string) =>
-        hydrateFrozenPlatformArtifacts({
-          appHome: input.appHome,
-          workspacePath: targetWorkspacePath,
-          refs: issue.materialArtifactRefs,
-        })
+        withAutomationWorkspaceEffects(factory, (effects) =>
+          hydrateFrozenPlatformArtifacts(
+            {
+              appHome: input.appHome,
+              workspacePath: targetWorkspacePath,
+              refs: issue.materialArtifactRefs,
+            },
+            factory,
+            effects,
+          ),
+        )
       const platformInputPaths = (
         artifacts: readonly FrozenPlatformArtifactRef[],
       ): readonly string[] => [
@@ -736,44 +792,46 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
           baselineRepoPath: repository.localPath,
           baselineSha: baseline.baselineSha,
         })
-        for (const upload of issue.request.uploads) {
-          const blobRef = upload.artifactRef.slice('employee-input:'.length)
-          const target = join(workspacePath(plan.caseRef.id), upload.targetPath)
-          mkdirSync(dirname(target), { recursive: true })
-          await input.inputArtifacts.copyBlobTo(blobRef, target)
-        }
-        const requirementsRoot = join(
-          workspacePath(plan.caseRef.id),
-          PLATFORM_WORKSPACE_DIR,
-          'inputs',
-          'requirements',
-          platformCaseKey,
-        )
-        const pipelineRoot = join(
-          workspacePath(plan.caseRef.id),
-          PLATFORM_WORKSPACE_DIR,
-          'pipeline',
-          platformCaseKey,
-        )
-        mkdirSync(requirementsRoot, { recursive: true })
-        mkdirSync(join(requirementsRoot, 'uploads'), { recursive: true })
-        mkdirSync(join(requirementsRoot, 'external'), { recursive: true })
-        mkdirSync(join(requirementsRoot, 'review'), { recursive: true })
-        mkdirSync(pipelineRoot, { recursive: true })
-        writeFileSync(
-          join(requirementsRoot, 'request.json'),
-          JSON.stringify(
-            {
-              schemaVersion: 1,
-              body: issue.request.body,
-              externalId: issue.request.externalId,
-              workingBranch: issue.request.workingBranch,
-              uploads: issue.request.uploads,
-            },
-            null,
-            2,
-          ),
-        )
+        await withAutomationWorkspaceEffects(factory, async (effects) => {
+          for (const upload of issue.request.uploads) {
+            const blobRef = upload.artifactRef.slice('employee-input:'.length)
+            const target = factory.resolve(workspacePath(plan.caseRef.id), upload.targetPath)
+            await effects.createDirectory(factory.parent(target), true)
+            await input.inputArtifacts.copyBlobTo(blobRef, target)
+          }
+          const requirementsRoot = factory.resolve(
+            workspacePath(plan.caseRef.id),
+            PLATFORM_WORKSPACE_DIR,
+            'inputs',
+            'requirements',
+            platformCaseKey,
+          )
+          const pipelineRoot = factory.resolve(
+            workspacePath(plan.caseRef.id),
+            PLATFORM_WORKSPACE_DIR,
+            'pipeline',
+            platformCaseKey,
+          )
+          await effects.createDirectory(requirementsRoot, true)
+          await effects.createDirectory(factory.resolve(requirementsRoot, 'uploads'), true)
+          await effects.createDirectory(factory.resolve(requirementsRoot, 'external'), true)
+          await effects.createDirectory(factory.resolve(requirementsRoot, 'review'), true)
+          await effects.createDirectory(pipelineRoot, true)
+          await effects.writeText(
+            factory.resolve(requirementsRoot, 'request.json'),
+            JSON.stringify(
+              {
+                schemaVersion: 1,
+                body: issue.request.body,
+                externalId: issue.request.externalId,
+                workingBranch: issue.request.workingBranch,
+                uploads: issue.request.uploads,
+              },
+              null,
+              2,
+            ),
+          )
+        })
         const timestamp = now()
         row = {
           caseId: plan.caseRef.id,
@@ -818,7 +876,12 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
         let state = existingState
         let pre =
           state === null ? undefined : (JSON.parse(state.preStateJson) as SerializedPreState)
-        if (pre?.conflict === undefined || !existsSync(pre.conflict.workspacePath)) {
+        if (
+          pre?.conflict === undefined ||
+          !(await withAutomationWorkspaceEffects(factory, (effects) =>
+            effects.exists(pre.conflict.workspacePath),
+          ))
+        ) {
           if (state !== null && attempt.mode !== 'fresh-scene') {
             throw new Error('conflict scene is missing; a fresh-scene retry is required')
           }
@@ -826,7 +889,7 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
             baselineRepoPath: repositoryLocalPath,
             sourceSha: mergeRequest.headSha,
             targetSha: mergeRequest.targetSha,
-            workspacesRoot: join(
+            workspacesRoot: factory.resolve(
               caseDirectory(plan.caseRef.id),
               'conflicts',
               plan.roundRef,
@@ -838,52 +901,67 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
               `conflict scene preparation failed: ${prepared.code}: ${prepared.detail}`,
             )
           }
-          const requirementsRoot = join(
-            prepared.workspacePath,
-            PLATFORM_WORKSPACE_DIR,
-            'inputs',
-            'requirements',
-            platformCaseKey,
-          )
-          const pipelineRoot = join(
-            prepared.workspacePath,
-            PLATFORM_WORKSPACE_DIR,
-            'pipeline',
-            platformCaseKey,
-          )
-          mkdirSync(requirementsRoot, { recursive: true })
-          mkdirSync(pipelineRoot, { recursive: true })
-          const canonicalWorkspace = workspacePath(plan.caseRef.id)
-          copyFrozenPlatformEntry(
-            join(
-              canonicalWorkspace,
+          await withAutomationWorkspaceEffects(factory, async (effects) => {
+            const requirementsRoot = factory.resolve(
+              prepared.workspacePath,
               PLATFORM_WORKSPACE_DIR,
               'inputs',
               'requirements',
               platformCaseKey,
-            ),
-            requirementsRoot,
-          )
-          copyFrozenPlatformEntry(
-            join(canonicalWorkspace, PLATFORM_WORKSPACE_DIR, 'pipeline', platformCaseKey),
-            pipelineRoot,
-          )
+            )
+            const pipelineRoot = factory.resolve(
+              prepared.workspacePath,
+              PLATFORM_WORKSPACE_DIR,
+              'pipeline',
+              platformCaseKey,
+            )
+            await effects.createDirectory(requirementsRoot, true)
+            await effects.createDirectory(pipelineRoot, true)
+            const canonicalWorkspace = workspacePath(plan.caseRef.id)
+            await copyFrozenPlatformEntry(
+              factory.resolve(
+                canonicalWorkspace,
+                PLATFORM_WORKSPACE_DIR,
+                'inputs',
+                'requirements',
+                platformCaseKey,
+              ),
+              requirementsRoot,
+              factory,
+              effects,
+            )
+            await copyFrozenPlatformEntry(
+              factory.resolve(
+                canonicalWorkspace,
+                PLATFORM_WORKSPACE_DIR,
+                'pipeline',
+                platformCaseKey,
+              ),
+              pipelineRoot,
+              factory,
+              effects,
+            )
+          })
           const checkpoint = await sourceControl.checkpoint({
             workspacePath: prepared.workspacePath,
             checkpointRoot: checkpointRoot(plan.caseRef.id, `${plan.roundRef}-${attempt.ordinal}`),
           })
           pre = {
             protected: serializeProtected(
-              snapshotProtectedRoots(rootsOf(prepared.workspacePath), {
-                skipPrefixesByRoot: skipPrefixes(
-                  plan.workspacePolicy,
-                  plan.caseRef.id,
-                  plan.workItemRef,
-                  hasImplementationPlanReview(plan),
-                ),
-              }),
+              await snapshotProtectedRoots(
+                rootsOf(prepared.workspacePath, factory),
+                {
+                  skipPrefixesByRoot: skipPrefixes(
+                    plan.workspacePolicy,
+                    plan.caseRef.id,
+                    plan.workItemRef,
+                    hasImplementationPlanReview(plan),
+                  ),
+                },
+                factory,
+              ),
             ),
-            business: [...businessTreeSnapshot(prepared.workspacePath).entries()],
+            business: [...(await businessTreeSnapshot(prepared.workspacePath, factory)).entries()],
             conflict: {
               workspacePath: prepared.workspacePath,
               sourceSha: mergeRequest.headSha,
@@ -908,13 +986,16 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
         }
         const conflict = pre?.conflict
         if (conflict === undefined) throw new Error('conflict scene state was not persisted')
-        const artifacts = hydrateArtifacts(conflict.workspacePath)
-        const expandedPre = preStateWithFrozenPlatformArtifacts({
-          pre: pre!,
-          plan,
-          workspacePath: conflict.workspacePath,
-          artifacts,
-        })
+        const artifacts = await hydrateArtifacts(conflict.workspacePath)
+        const expandedPre = await preStateWithFrozenPlatformArtifacts(
+          {
+            pre: pre!,
+            plan,
+            workspacePath: conflict.workspacePath,
+            artifacts,
+          },
+          factory,
+        )
         if (JSON.stringify(expandedPre) !== state!.preStateJson) {
           state = {
             ...state!,
@@ -956,28 +1037,38 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
           checkpointRoot: checkpointRoot(plan.caseRef.id, plan.roundRef),
           expectedCheckpointDigest: initialState.checkpointDigest,
         })
-      } else if (!existsSync(workspacePath(plan.caseRef.id))) {
+      } else if (
+        !(await withAutomationWorkspaceEffects(factory, (effects) =>
+          effects.exists(workspacePath(plan.caseRef.id)),
+        ))
+      ) {
         throw new Error('employee case workspace is missing; explicit recovery is required')
       }
 
-      const artifacts = hydrateArtifacts(workspacePath(plan.caseRef.id))
+      const artifacts = await hydrateArtifacts(workspacePath(plan.caseRef.id))
       let state = initialState
       if (state === null) {
         const checkpoint = await sourceControl.checkpoint({
           workspacePath: workspacePath(plan.caseRef.id),
           checkpointRoot: checkpointRoot(plan.caseRef.id, plan.roundRef),
         })
-        const protectedSnapshot = snapshotProtectedRoots(rootsOf(workspacePath(plan.caseRef.id)), {
-          skipPrefixesByRoot: skipPrefixes(
-            plan.workspacePolicy,
-            plan.caseRef.id,
-            plan.workItemRef,
-            hasImplementationPlanReview(plan),
-          ),
-        })
+        const protectedSnapshot = await snapshotProtectedRoots(
+          rootsOf(workspacePath(plan.caseRef.id), factory),
+          {
+            skipPrefixesByRoot: skipPrefixes(
+              plan.workspacePolicy,
+              plan.caseRef.id,
+              plan.workItemRef,
+              hasImplementationPlanReview(plan),
+            ),
+          },
+          factory,
+        )
         const preState: SerializedPreState = {
           protected: serializeProtected(protectedSnapshot),
-          business: [...businessTreeSnapshot(workspacePath(plan.caseRef.id)).entries()],
+          business: [
+            ...(await businessTreeSnapshot(workspacePath(plan.caseRef.id), factory)).entries(),
+          ],
         }
         const timestamp = now()
         state = {
@@ -993,12 +1084,15 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
         }
         await input.persistence.insertRoundState(state, 'error')
       } else {
-        const expandedPre = preStateWithFrozenPlatformArtifacts({
-          pre: JSON.parse(state.preStateJson) as SerializedPreState,
-          plan,
-          workspacePath: workspacePath(plan.caseRef.id),
-          artifacts,
-        })
+        const expandedPre = await preStateWithFrozenPlatformArtifacts(
+          {
+            pre: JSON.parse(state.preStateJson) as SerializedPreState,
+            plan,
+            workspacePath: workspacePath(plan.caseRef.id),
+            artifacts,
+          },
+          factory,
+        )
         if (JSON.stringify(expandedPre) !== state.preStateJson) {
           state = {
             ...state,
@@ -1020,12 +1114,15 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
             'error',
           )
         } else {
-          const expandedPre = preStateWithFrozenPlatformArtifacts({
-            pre: JSON.parse(existingAttempt.preStateJson) as SerializedPreState,
-            plan,
-            workspacePath: workspacePath(plan.caseRef.id),
-            artifacts,
-          })
+          const expandedPre = await preStateWithFrozenPlatformArtifacts(
+            {
+              pre: JSON.parse(existingAttempt.preStateJson) as SerializedPreState,
+              plan,
+              workspacePath: workspacePath(plan.caseRef.id),
+              artifacts,
+            },
+            factory,
+          )
           if (JSON.stringify(expandedPre) !== existingAttempt.preStateJson) {
             await input.persistence.updateRoundState({
               roundId: plan.roundRef,
@@ -1070,7 +1167,7 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
       const pre = JSON.parse(state.preStateJson) as SerializedPreState
       const beforeBusiness = new Map(pre.business)
       const activeWorkspacePath = pre.conflict?.workspacePath ?? workspacePath(round.caseId)
-      const afterBusiness = businessTreeSnapshot(activeWorkspacePath)
+      const afterBusiness = await businessTreeSnapshot(activeWorkspacePath, factory)
       let outcome: 'changed' | 'no-change' | 'needs-information' | 'blocked'
       let decodedOutput: unknown = null
       if (request.outputJson !== null) {
@@ -1122,30 +1219,35 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
         outcome = businessDelta(beforeBusiness, afterBusiness) ? 'changed' : 'no-change'
       }
       const issue = resolveIssue(plan)
-      let verdict = validateWorkspaceOutcome({
-        workspacePath: activeWorkspacePath,
-        preProtected: reviveProtected(pre.protected),
-        protectedRoots: rootsOf(activeWorkspacePath),
-        protectedSkipPrefixesByRoot: skipPrefixes(
-          plan.workspacePolicy,
-          plan.caseRef.id,
-          plan.workItemRef,
-          hasImplementationPlanReview(plan),
-        ),
-        preBusinessTree: beforeBusiness,
-        outcome,
-        workspaceMode:
-          plan.workspacePolicy.mode === 'write' ? 'edit-business-files' : plan.workspacePolicy.mode,
-        writablePrefixes: pre.conflict?.conflictPaths ?? plan.workspacePolicy.writablePrefixes,
-        preservePaths: [],
-        editablePaths:
-          pre.conflict === undefined
-            ? issue.request.uploads.flatMap((upload) =>
-                upload.placement === 'repository' ? [upload.targetPath] : [],
-              )
-            : [],
-        budget: { maxChangedFiles: 2_000, maxTotalBytes: 128 * 1024 * 1024 },
-      })
+      let verdict = await validateWorkspaceOutcome(
+        {
+          workspacePath: activeWorkspacePath,
+          preProtected: reviveProtected(pre.protected),
+          protectedRoots: rootsOf(activeWorkspacePath, factory),
+          protectedSkipPrefixesByRoot: skipPrefixes(
+            plan.workspacePolicy,
+            plan.caseRef.id,
+            plan.workItemRef,
+            hasImplementationPlanReview(plan),
+          ),
+          preBusinessTree: beforeBusiness,
+          outcome,
+          workspaceMode:
+            plan.workspacePolicy.mode === 'write'
+              ? 'edit-business-files'
+              : plan.workspacePolicy.mode,
+          writablePrefixes: pre.conflict?.conflictPaths ?? plan.workspacePolicy.writablePrefixes,
+          preservePaths: [],
+          editablePaths:
+            pre.conflict === undefined
+              ? issue.request.uploads.flatMap((upload) =>
+                  upload.placement === 'repository' ? [upload.targetPath] : [],
+                )
+              : [],
+          budget: { maxChangedFiles: 2_000, maxTotalBytes: 128 * 1024 * 1024 },
+        },
+        factory,
+      )
       if (
         !verdict.ok &&
         verdict.kind === 'semantic' &&
@@ -1169,8 +1271,8 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
         directOutput.data.outcome === 'completed' &&
         plan.workItemRef === 'prepare-materials' &&
         issue.request.externalId !== null &&
-        !directoryContainsFile(
-          join(
+        !(await directoryContainsFile(
+          factory.resolve(
             activeWorkspacePath,
             PLATFORM_WORKSPACE_DIR,
             'inputs',
@@ -1178,7 +1280,8 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
             stableIdentityComponent(plan.caseRef.id),
             'external',
           ),
-        )
+          factory,
+        ))
       ) {
         verdict = {
           ok: false,

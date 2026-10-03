@@ -9,9 +9,11 @@
 // hash 走 util/hash 单步 idiom（RFC-284 T7 文本锁：本 context 的 createHash
 // 合法集不因此再增文件）。
 
-import { readdirSync, readFileSync, statSync } from 'node:fs'
-import { join } from 'node:path'
-
+import type {
+  AutomationWorkspaceEffects,
+  AutomationWorkspaceEffectsFactory,
+} from '../application/ports/automationWorkspaceEffects'
+import { withAutomationWorkspaceEffects } from './automationWorkspaceEffects'
 import { sha256Hex } from '@/util/hash'
 
 export interface ProtectedRootSnapshot {
@@ -46,36 +48,38 @@ export function protectedRootSnapshotDigest(
   return sha256Hex(parts.join(''))
 }
 
-function walk(
+async function walk(
   absRoot: string,
   rel: string,
   out: Map<string, string>,
   skipPrefixes: readonly string[],
-): void {
+  factory: AutomationWorkspaceEffectsFactory,
+  effects: AutomationWorkspaceEffects,
+): Promise<void> {
   // rel/skipPrefixes 都是本文件 walk 以 '/' 构造的快照键（非 host path），
   // 前缀判断用普通串联（rfc254 posix-path-prefix 棘轮只认模板字面量形态）。
   if (rel !== '' && skipPrefixes.some((p) => rel === p || rel.startsWith(p + '/'))) return
-  const abs = rel === '' ? absRoot : join(absRoot, rel)
-  const st = statSync(abs, { throwIfNoEntry: false })
+  const abs = rel === '' ? absRoot : factory.resolve(absRoot, rel)
+  const st = await effects.inspect(abs, true)
   if (!st) return
-  if (st.isSymbolicLink()) {
-    out.set(rel, `<link>:${readFileSync(abs, 'utf8')}`)
+  if (st.kind === 'symlink') {
+    out.set(rel, `<link>:${await effects.readText(abs)}`)
     return
   }
-  if (st.isDirectory()) {
+  if (st.kind === 'directory') {
     if (rel !== '') out.set(rel + '/', '<dir>')
-    for (const name of readdirSync(abs).sort()) {
-      walk(absRoot, rel === '' ? name : `${rel}/${name}`, out, skipPrefixes)
+    for (const name of [...(await effects.listNames(abs))].sort()) {
+      await walk(absRoot, rel === '' ? name : `${rel}/${name}`, out, skipPrefixes, factory, effects)
     }
     return
   }
-  if (st.isFile()) {
-    out.set(rel, sha256Hex(readFileSync(abs)))
+  if (st.kind === 'file') {
+    out.set(rel, sha256Hex(await effects.readBytes(abs)))
   }
 }
 
 /** 对若干受保护 roots（label → 绝对路径）做稳定快照。root 不存在时记为空集（出现即 added）。 */
-export function snapshotProtectedRoots(
+export async function readProtectedRootSnapshot(
   roots: Record<string, string>,
   opts: {
     readonly skipPrefixes?: readonly string[]
@@ -85,13 +89,15 @@ export function snapshotProtectedRoots(
      * bookkeeping without weakening the evidence root.
      */
     readonly skipPrefixesByRoot?: Readonly<Record<string, readonly string[]>>
-  } = {},
-): ProtectedRootSnapshot {
+  },
+  factory: AutomationWorkspaceEffectsFactory,
+  effects: AutomationWorkspaceEffects,
+): Promise<ProtectedRootSnapshot> {
   const entries = new Map<string, Map<string, string>>()
   for (const label of Object.keys(roots).sort()) {
     const files = new Map<string, string>()
     const skipPrefixes = [...(opts.skipPrefixes ?? []), ...(opts.skipPrefixesByRoot?.[label] ?? [])]
-    walk(roots[label]!, '', files, skipPrefixes)
+    await walk(roots[label]!, '', files, skipPrefixes, factory, effects)
     entries.set(label, files)
   }
   return { entries, digest: protectedRootSnapshotDigest(entries) }
@@ -117,4 +123,14 @@ export function diffProtectedRoots(
     }
   }
   return violations
+}
+
+export function snapshotProtectedRoots(
+  roots: Record<string, string>,
+  opts: Parameters<typeof readProtectedRootSnapshot>[1] = {},
+  factory?: AutomationWorkspaceEffectsFactory,
+): Promise<ProtectedRootSnapshot> {
+  return withAutomationWorkspaceEffects(factory, (effects, selected) =>
+    readProtectedRootSnapshot(roots, opts, selected, effects),
+  )
 }

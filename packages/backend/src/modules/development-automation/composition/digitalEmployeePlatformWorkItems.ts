@@ -1,6 +1,10 @@
+import type { AutomationWorkspaceEffectsFactory } from '../application/ports/automationWorkspaceEffects'
+import {
+  selectedAutomationWorkspaceEffects,
+  withAutomationWorkspaceEffects,
+} from '../infrastructure/automationWorkspaceEffects'
 import type { RepositoryBaselineEffectsFactory } from '../application/ports/repositoryBaselineEffects'
-import { lstatSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+
 import { z } from 'zod'
 
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
@@ -125,6 +129,7 @@ const employeeUploadPlanSchema = z
 type EmployeeUploadPlan = z.infer<typeof employeeUploadPlanSchema>
 
 async function resolveEmployeeUploadPlan(input: {
+  readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly uploads: readonly z.infer<typeof issueSchema>['request']['uploads'][number][]
   readonly baselineRepoPath: string
@@ -134,6 +139,7 @@ async function resolveEmployeeUploadPlan(input: {
   | { readonly ok: true; readonly plan: EmployeeUploadPlan | null }
   | { readonly ok: false; readonly code: string; readonly detail: string }
 > {
+  const factory = selectedAutomationWorkspaceEffects(input.automationWorkspaceEffects)
   const repositoryUploads = input.uploads.filter((upload) => upload.placement === 'repository')
   if (repositoryUploads.length === 0) return { ok: true, plan: null }
   const baseline = createGitBaselineReader(
@@ -161,13 +167,14 @@ async function resolveEmployeeUploadPlan(input: {
           ? 'create'
           : stat.sha256 !== uploadSha256
             ? 'replace'
-            : (() => {
-                const target = join(input.workspaceRoot, upload.targetPath)
-                const finalStat = lstatSync(target, { throwIfNoEntry: false })
-                return finalStat?.isFile() && sha256Hex(readFileSync(target)) === uploadSha256
+            : await withAutomationWorkspaceEffects(factory, async (effects) => {
+                const target = factory.resolve(input.workspaceRoot, upload.targetPath)
+                const finalStat = await effects.inspect(target, false)
+                return finalStat?.kind === 'file' &&
+                  sha256Hex(await effects.readBytes(target)) === uploadSha256
                   ? 'already-present'
                   : 'replace'
-              })(),
+              }),
       uploadSha256,
     })
   }
@@ -400,6 +407,7 @@ function reviewMarkerToken(marker: string): string {
 }
 
 export interface DevelopmentEmployeePlatformWorkItemsCompositionInput {
+  readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly persistence: EmployeePlatformWorkItemPersistence
   readonly appHome: string
@@ -669,6 +677,8 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
     },
   ): Promise<string>
 } {
+  const factory = selectedAutomationWorkspaceEffects(input.automationWorkspaceEffects)
+
   const candidateOps = input.sourceControl
   const delivery = input.sourceControl
   const workspaceOps = input.sourceControl
@@ -679,11 +689,11 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
   let pipelineEvidenceStore: EvidenceStore | undefined
   const evidenceStore = (): EvidenceArtifactPort =>
     input.evidenceArtifacts ??
-    (pipelineEvidenceStore ??= new EvidenceStore(join(input.appHome, 'evidence')))
+    (pipelineEvidenceStore ??= new EvidenceStore(factory.resolve(input.appHome, 'evidence')))
   const caseDirectory = (caseId: string) =>
-    join(input.appHome, 'workspaces', 'employee-cases', stableIdentityComponent(caseId))
-  const sceneRoot = (caseId: string) => join(caseDirectory(caseId), 'scene')
-  const workspacePath = (caseId: string) => join(sceneRoot(caseId), 'workspace')
+    factory.resolve(input.appHome, 'workspaces', 'employee-cases', stableIdentityComponent(caseId))
+  const sceneRoot = (caseId: string) => factory.resolve(caseDirectory(caseId), 'scene')
+  const workspacePath = (caseId: string) => factory.resolve(sceneRoot(caseId), 'workspace')
 
   const currentWorkspace = async (caseId: string) => {
     const current = await input.persistence.currentWorkspace(caseId)
@@ -862,7 +872,7 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
           const caseKey = stableIdentityComponent(plan.caseRef.id)
           const pipelineRelativeRoot = `${PLATFORM_WORKSPACE_DIR}/pipeline/${caseKey}`
           const snapshotRelativeRoot = `${pipelineRelativeRoot}/${manifest.bundleId}`
-          const destination = join(workspacePath(plan.caseRef.id), snapshotRelativeRoot)
+          const destination = factory.resolve(workspacePath(plan.caseRef.id), snapshotRelativeRoot)
           // Completed rounds may still reference evidence from an earlier
           // failed attempt. A later green/pending snapshot must not erase that
           // audit material; materialize only the current immutable bundle and
@@ -1504,6 +1514,7 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
         }
         const summarySource = issue.state.deliveryContent.commitMessage
         const resolvedUploadPlan = await resolveEmployeeUploadPlan({
+          automationWorkspaceEffects: factory,
           repositoryBaselines: input.repositoryBaselines,
           uploads: issue.state.request.uploads,
           baselineRepoPath: repository.localPath,
@@ -1693,7 +1704,7 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
             summary: `MR 创建或绑定失败：${ensured.code} · ${ensured.detail}`,
           })
         }
-        const publishedCheckpoint = join(
+        const publishedCheckpoint = factory.resolve(
           caseDirectory(plan.caseRef.id),
           'published',
           candidate.candidateRef,
@@ -1814,8 +1825,9 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
           return output({ status: 'blocked', summary: 'MR 头已变化，冲突修复现场必须重新生成' })
         }
         if (
-          businessTreeSnapshotDigest(businessTreeSnapshot(conflict.workspacePath)) !==
-          validation.data.postBusinessDigest
+          businessTreeSnapshotDigest(
+            await businessTreeSnapshot(conflict.workspacePath, factory),
+          ) !== validation.data.postBusinessDigest
         ) {
           return output({
             status: 'blocked',
