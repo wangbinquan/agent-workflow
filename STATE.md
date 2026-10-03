@@ -1,3 +1,11 @@
+## RFC-371：原 SQLite 路径别名的完整快照 CI 修复（2026-10-03）
+
+精确 13e72ad8326a85add6f5c73532a33848458288ac 主 CI37103290740 completed/failure：47 success、3 failure（含 required 聚合）。macOS3 的原 WAL 文件用例在原 main.file 与 Bun filename 的直接字符串比较处失败；Windows37103290747 和 maintenance37103290722 success。本批按实际物理 realpath 比较两个已存在文件，仍拒绝缺 main 或不同物理路径，保留原 WAL 专用快照、TEMP 工作区和输入写入拒绝。direct、dot-path、symlink 三例各保留全部 8 项原断言及默认预算，无本机 AW 行为测试、类型、构建或服务。SOURCE2 独立 PASS，源码提交 c5cba4ee8d87a03323d1709053e0dc4f5a4ee214；行为仍待新 exact-SHA hosted CI，未把后继证据追记为旧 run 通过。
+
+原官方 scoped AST census 在该已提交源码上仅执行一次，保留并排除其他会话的未提交源码。完整 13 产物、129 原库存核对及 provenance 验证通过；全部 inventory 数量不变，不新增 allowGrowth，不更改原生成规则、required SPI、边界或旧债务。sourceDigest sha256:434537f7d3db3267dc631ad7b1b77dcee32d626423539c56f90d7031a010fea8。只更新实际源码投影及精确 provenance。
+
+AW 正式报告构建、全量缓存接口/页面切换、native v2、真规模及真任务仍开放。CS 全量报告和正式页面仍在本机会话候选验证，开发 producer OFF。两个 RFC 保持 In Progress，尚不能称为正式页面和部署验收完成。
+
 ## RFC-370：DA baseline 与 Worker 实际 cause 接续（2026-10-03）
 
 DA RepositoryBaselineEffects 的有限 DESIGN 与 SOURCE16 均 PASS，SOURCE 指纹 `67e296f121682683c51ba5af88fe6525ab3900a9a492838773e7deb2b8c51ef5`。完整 acquire/readHead/bindFileReader/close 生命周期复用原 BaselineFileReader、BaselineStat 和 SC Git outcome；两个 head resolver、上传上下文及三个 owner 由八个真实装配点传入同一 selected factory。原 SHA、Git binary cat-file/Bun.file/stream hash/finally rm 正文与 DB mapper 保持；每次 stat 使用独立 scope 并等待 close ACK，未提供选择时才使用独立本机 adapter。完整 receiver、held ACK、失败和 body/close 聚合回归已写，尚须 hosted 运行。
