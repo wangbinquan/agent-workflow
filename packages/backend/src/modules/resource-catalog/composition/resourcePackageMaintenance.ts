@@ -16,6 +16,8 @@ import { createSqliteResourcePackageApplyArtifactRecovery } from '../infrastruct
 import type { ResourcePackageApplyMaintenanceCommand } from '../public/commands'
 import type { ResourcePackageApplyActivityQuery } from '../public/queries'
 
+export type { ResourcePackageApplyArtifactRecoveryPort }
+
 export interface ResourcePackageApplyMaintenance {
   readonly command: ResourcePackageApplyMaintenanceCommand
   readonly activity: ResourcePackageApplyActivityQuery

@@ -363,6 +363,13 @@ import {
 } from './postgresqlDaemonApplication'
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
+import type { MaintenanceWorkerEffectsDescriptor } from '@/platform/background/maintenanceWorkerEffects'
+import type { WorkspaceContentEffectsFactory } from '@/modules/source-control/composition'
+import type {
+  ResourcePackageSkillArtifactOwner,
+  ResourcePackagePluginArtifactOwner,
+  SkillPackageContentReader,
+} from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import {
   createPostgresqlHumanGateContinuationRecoveryQueries,
   createPostgresqlHumanGateTerminalSweepCommand,
@@ -413,6 +420,11 @@ export interface StartOptions {
   missionInputBlobs?: MissionInputBlobPersistence
   pluginInstaller?: PluginInstallerPort
   evidenceArtifacts?: EvidenceArtifactPort
+  resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
+  resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
+  resourcePackageSkillContent?: SkillPackageContentReader
+  workspaceContent?: WorkspaceContentEffectsFactory
+  maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -584,6 +596,10 @@ async function composePostgresqlProviderSession(
     missionInputBlobs: input.missionInputBlobs,
     pluginInstaller: input.pluginInstaller,
     evidenceArtifacts: input.evidenceArtifacts,
+    resourcePackageSkillArtifacts: input.resourcePackageSkillArtifacts,
+    resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
+    resourcePackageSkillContent: input.resourcePackageSkillContent,
+    workspaceContent: input.workspaceContent,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -638,6 +654,7 @@ async function composePostgresqlProviderSession(
           generationId: input.provider.generation.payload.generationId,
           database: input.config.database,
         },
+        effectsBootstrap: input.maintenanceEffectsBootstrap,
         ...handlers,
       }),
     appHome: Paths.root,
@@ -1112,6 +1129,11 @@ interface DaemonProviderSessionComposeInput {
   readonly missionInputBlobs?: MissionInputBlobPersistence
   readonly pluginInstaller?: PluginInstallerPort
   readonly evidenceArtifacts?: EvidenceArtifactPort
+  readonly resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
+  readonly resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
+  readonly resourcePackageSkillContent?: SkillPackageContentReader
+  readonly workspaceContent?: WorkspaceContentEffectsFactory
+  readonly maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -1564,6 +1586,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       missionInputBlobs: opts.missionInputBlobs,
       pluginInstaller: opts.pluginInstaller,
       evidenceArtifacts: opts.evidenceArtifacts,
+      resourcePackageSkillArtifacts: opts.resourcePackageSkillArtifacts,
+      resourcePackagePluginArtifacts: opts.resourcePackagePluginArtifacts,
+      resourcePackageSkillContent: opts.resourcePackageSkillContent,
+      workspaceContent: opts.workspaceContent,
+      maintenanceEffectsBootstrap: opts.maintenanceEffectsBootstrap,
       evidenceRead: opts.evidenceRead,
       evidenceDocumentCommands: opts.evidenceDocumentCommands,
       attemptContext: opts.attemptContext,
@@ -2945,6 +2972,7 @@ async function composeSqliteProviderSession(
             busyTimeoutMs: 50,
           },
         },
+        effectsBootstrap: input.maintenanceEffectsBootstrap,
         ...handlers,
       }),
     appHome: Paths.root,
@@ -3046,6 +3074,10 @@ async function composeSqliteProviderSession(
     missionInputBlobs: input.missionInputBlobs,
     pluginInstaller: input.pluginInstaller,
     evidenceArtifacts: input.evidenceArtifacts,
+    resourcePackageSkillArtifacts: input.resourcePackageSkillArtifacts,
+    resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
+    resourcePackageSkillContent: input.resourcePackageSkillContent,
+    workspaceContent: input.workspaceContent,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,

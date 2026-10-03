@@ -25,7 +25,10 @@ import { selectDaemonRuntimeQueries } from '@/modules/system-operations/composit
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
 import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/queries'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
-import { createWorkspaceContentScope } from '@/modules/source-control/composition'
+import {
+  createWorkspaceContentScope,
+  type WorkspaceContentEffectsFactory,
+} from '@/modules/source-control/composition'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
 import { composeNodeRunRuntimePersistence } from '@/modules/task-execution/composition/nodeRunRuntime'
 import { composeRuntimeSelectionParticipantInTx } from '@/modules/runtime-management/composition/runtimeSelection'
@@ -122,6 +125,9 @@ import { composeIntegrationTriggerResourceSnapshotFactory } from '@/modules/reso
 import {
   composePostgresqlResourcePackageCatalog,
   composePostgresqlResourcePackageProvider,
+  type ResourcePackageSkillArtifactOwner,
+  type ResourcePackagePluginArtifactOwner,
+  type SkillPackageContentReader,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { createPostgresqlResourcePackageExecutionAdapter } from '@/services/resourcePackage/executionAdapter'
@@ -413,6 +419,10 @@ export interface PostgresqlDaemonApplicationInput {
   readonly missionInputBlobs?: MissionInputBlobPersistence
   readonly pluginInstaller?: PluginInstallerPort
   readonly evidenceArtifacts?: EvidenceArtifactPort
+  readonly resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
+  readonly resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
+  readonly resourcePackageSkillContent?: SkillPackageContentReader
+  readonly workspaceContent?: WorkspaceContentEffectsFactory
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -879,38 +889,44 @@ export async function composePostgresqlApplication(
     }),
     mcpLifecycle: createMcpTransactionLifecycle(),
     capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({ db: input.db }),
-    pluginInstaller: Object.freeze({
-      plannedGenerationDirectory(
-        request: Parameters<
-          NonNullable<
-            PostgresqlResourcePackageProviderInput['pluginInstaller']
-          >['plannedGenerationDirectory']
-        >[0],
-      ) {
-        return plannedGenerationDir(
-          request.pluginId,
-          request.spec,
-          request.generationId,
-          request.pluginsDir,
-        )
-      },
-      async install(
-        request: Parameters<
-          NonNullable<PostgresqlResourcePackageProviderInput['pluginInstaller']>['install']
-        >[0],
-      ) {
-        const installed = await installPlugin(request.pluginId, request.spec, {
-          generationId: request.generationId,
-          pluginsDir: request.pluginsDir,
-        })
-        return {
-          cachedPath: installed.cachedPath,
-          resolvedVersion: installed.resolvedVersion,
-          sourceKind: installed.sourceKind,
-          generationDirectory: installed.generationDir,
+    skillArtifacts: input.resourcePackageSkillArtifacts,
+    skillPackageContent: input.resourcePackageSkillContent,
+    ...(input.resourcePackagePluginArtifacts === undefined
+      ? {
+          pluginInstaller: Object.freeze({
+            plannedGenerationDirectory(
+              request: Parameters<
+                NonNullable<
+                  PostgresqlResourcePackageProviderInput['pluginInstaller']
+                >['plannedGenerationDirectory']
+              >[0],
+            ) {
+              return plannedGenerationDir(
+                request.pluginId,
+                request.spec,
+                request.generationId,
+                request.pluginsDir,
+              )
+            },
+            async install(
+              request: Parameters<
+                NonNullable<PostgresqlResourcePackageProviderInput['pluginInstaller']>['install']
+              >[0],
+            ) {
+              const installed = await installPlugin(request.pluginId, request.spec, {
+                generationId: request.generationId,
+                pluginsDir: request.pluginsDir,
+              })
+              return {
+                cachedPath: installed.cachedPath,
+                resolvedVersion: installed.resolvedVersion,
+                sourceKind: installed.sourceKind,
+                generationDirectory: installed.generationDir,
+              }
+            },
+          }),
         }
-      },
-    }),
+      : { pluginArtifacts: input.resourcePackagePluginArtifacts }),
   })
   const resourcePackageAtomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
     db: input.db,
@@ -1195,7 +1211,8 @@ export async function composePostgresqlApplication(
     operations: taskExecutionProvider.routes.tasks,
     workspaceQueries: composeTaskWorkspaceQueries({
       load: taskExecutionProvider.routes.tasks.get,
-      contentScope: createWorkspaceContentScope,
+      contentScope: (workspaceRef) =>
+        createWorkspaceContentScope(workspaceRef, input.workspaceContent),
     }),
     taskExecutionReadModels: taskExecutionProvider.readModels,
     taskRecoveryOperations: taskExecutionProvider.recovery,

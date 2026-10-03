@@ -26,6 +26,12 @@ import {
   type ResourcePackageProviderComposition,
 } from './resourcePackageOperations'
 
+export type {
+  ResourcePackageSkillArtifactOwner,
+  ResourcePackagePluginArtifactOwner,
+  SkillPackageContentReader,
+}
+
 export interface PostgresqlResourcePackageProviderComposition extends ResourcePackageProviderComposition {
   readonly mutationSessionFactory: PostgresqlResourcePackageMutationSessionFactory
 }

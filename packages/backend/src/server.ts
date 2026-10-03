@@ -215,7 +215,10 @@ import { composeSqliteFusionOperations } from '@/modules/knowledge-evolution/com
 import { createSqliteFusionEngineTaskOperations } from '@/modules/task-execution/infrastructure/fusionEngineTaskOperations'
 import { createTaskRouteOperations } from '@/modules/task-execution/infrastructure/taskRouteOperations'
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
-import { createWorkspaceContentScope } from '@/modules/source-control/composition'
+import {
+  createWorkspaceContentScope,
+  type WorkspaceContentEffectsFactory,
+} from '@/modules/source-control/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
 import { createChildTaskLifecycleParticipant } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
@@ -453,6 +456,9 @@ import { createResourcePackagePluginInstaller } from '@/services/resourcePackage
 import {
   composePostgresqlResourcePackageCatalog,
   composePostgresqlResourcePackageProvider,
+  type ResourcePackageSkillArtifactOwner,
+  type ResourcePackagePluginArtifactOwner,
+  type SkillPackageContentReader,
 } from '@/modules/resource-catalog/composition/postgresqlResourcePackageCatalog'
 import { createPostgresqlResourcePackageAtomicApplyOperations } from '@/platform/persistence/postgresqlResourcePackageAtomicApply'
 import { createPostgresqlCapabilityTemplatePackageMutationOwner } from '@/modules/code-capability/composition/capabilityTemplateOperations'
@@ -789,6 +795,10 @@ export interface AppDeps {
   missionInputBlobs?: MissionInputBlobPersistence
   pluginInstaller?: PluginInstallerPort
   evidenceArtifacts?: EvidenceArtifactPort
+  resourcePackageSkillArtifacts?: ResourcePackageSkillArtifactOwner
+  resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
+  resourcePackageSkillContent?: SkillPackageContentReader
+  workspaceContent?: WorkspaceContentEffectsFactory
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -2427,7 +2437,11 @@ export function composeSqliteApplicationDeps(
       capabilityTemplates: createPostgresqlCapabilityTemplatePackageMutationOwner({
         db: effectiveDeps.db,
       }),
-      pluginInstaller: createResourcePackagePluginInstaller(),
+      skillArtifacts: effectiveDeps.resourcePackageSkillArtifacts,
+      skillPackageContent: effectiveDeps.resourcePackageSkillContent,
+      ...(effectiveDeps.resourcePackagePluginArtifacts === undefined
+        ? { pluginInstaller: createResourcePackagePluginInstaller() }
+        : { pluginArtifacts: effectiveDeps.resourcePackagePluginArtifacts }),
     })
     const atomicApply = createPostgresqlResourcePackageAtomicApplyOperations({
       db: effectiveDeps.db,
@@ -2853,7 +2867,8 @@ function composeSqliteApiRouteMounts(
     operations: taskRouteOperations,
     workspaceQueries: composeTaskWorkspaceQueries({
       load: taskRouteOperations.get,
-      contentScope: createWorkspaceContentScope,
+      contentScope: (workspaceRef) =>
+        createWorkspaceContentScope(workspaceRef, effectiveDeps.workspaceContent),
     }),
     taskExecutionReadModels: deps.taskExecutionReadModels,
     taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,

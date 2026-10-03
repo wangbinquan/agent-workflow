@@ -4,6 +4,8 @@ import type { PluginGenerationFilesystemGcPort } from '../application/ports/plug
 import type { PluginGenerationGcCommand } from '../public/commands'
 import { createPluginGenerationReferenceReadPort } from '../infrastructure/pluginGenerationGc'
 
+export type { PluginGenerationFilesystemGcPort }
+
 /** RFC-359 W4-D17 —— 插件代际清扫命令一份装配（此前 SQLite / PG 各一份只做绑定的具名装配）。 */
 export function composePluginGenerationGcCommand(
   db: ProviderNeutralDatabase,

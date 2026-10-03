@@ -1,0 +1,192 @@
+// RFC-370: check each real call argument rather than matching unrelated source text.
+import { expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
+import ts from 'typescript'
+
+const load = (path: string) =>
+  ts.createSourceFile(
+    path,
+    readFileSync(new URL('../src/' + path, import.meta.url), 'utf8'),
+    ts.ScriptTarget.Latest,
+    true,
+  )
+const compact = (node: ts.Node, source: ts.SourceFile) => node.getText(source).replace(/\s/g, '')
+function descendants<T extends ts.Node>(
+  root: ts.Node,
+  predicate: (node: ts.Node) => node is T,
+): T[] {
+  const found: T[] = []
+  const visit = (node: ts.Node) => {
+    if (predicate(node)) found.push(node)
+    ts.forEachChild(node, visit)
+  }
+  visit(root)
+  return found
+}
+function namedCalls(root: ts.Node, source: ts.SourceFile, name: string) {
+  return descendants(
+    root,
+    (node): node is ts.CallExpression =>
+      ts.isCallExpression(node) && compact(node.expression, source) === name,
+  )
+}
+function objectArgument(call: ts.CallExpression): ts.ObjectLiteralExpression {
+  expect(call.arguments).toHaveLength(1)
+  const value = call.arguments[0]!
+  if (!ts.isObjectLiteralExpression(value)) throw new Error('explicit root object required')
+  const names = value.properties
+    .filter((node) => ts.isPropertyAssignment(node) || ts.isShorthandPropertyAssignment(node))
+    .map((node) => node.name!.getText())
+  expect(new Set(names).size).toBe(names.length)
+  return value
+}
+function property(value: ts.ObjectLiteralExpression, source: ts.SourceFile, key: string) {
+  const properties = value.properties.filter(
+    (node): node is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(node) && compact(node.name, source) === key,
+  )
+  expect(properties).toHaveLength(1)
+  return properties[0]!.initializer
+}
+function oneRoot(source: ts.SourceFile, name: string) {
+  const calls = namedCalls(source, source, name)
+  expect(calls).toHaveLength(1)
+  return objectArgument(calls[0]!)
+}
+const fields = {
+  resourcePackageSkillArtifacts: 'ResourcePackageSkillArtifactOwner',
+  resourcePackagePluginArtifacts: 'ResourcePackagePluginArtifactOwner',
+  resourcePackageSkillContent: 'SkillPackageContentReader',
+  workspaceContent: 'WorkspaceContentEffectsFactory',
+} as const
+function forwarded(value: ts.ObjectLiteralExpression, source: ts.SourceFile, receiver: string) {
+  for (const key of Object.keys(fields))
+    expect(compact(property(value, source, key), source)).toBe(`${receiver}.${key}`)
+}
+
+test('CLI initial and replacement sessions forward the same selected storage objects and Worker descriptor', () => {
+  const source = load('cli/start.ts')
+  forwarded(oneRoot(source, 'composePostgresqlDaemonApplication'), source, 'input')
+  forwarded(oneRoot(source, 'composeSqliteAppDeps'), source, 'input')
+  const session = descendants(
+    source,
+    (node): node is ts.VariableDeclaration =>
+      ts.isVariableDeclaration(node) && compact(node.name, source) === 'sessionInput',
+  )
+  expect(session).toHaveLength(1)
+  const initializer = session[0]!.initializer
+  if (!initializer || !ts.isCallExpression(initializer)) throw new Error('frozen session required')
+  expect(compact(initializer.expression, source)).toBe('Object.freeze')
+  const value = objectArgument(initializer)
+  forwarded(value, source, 'opts')
+  expect(compact(property(value, source, 'maintenanceEffectsBootstrap'), source)).toBe(
+    'opts.maintenanceEffectsBootstrap',
+  )
+  const sessions = namedCalls(source, source, 'composeDaemonProviderSession')
+  expect(sessions).toHaveLength(2)
+  for (const call of sessions) {
+    const argument = objectArgument(call)
+    const spreads = argument.properties.filter(ts.isSpreadAssignment)
+    expect(
+      spreads.filter((node) => compact(node.expression, source) === 'sessionInput'),
+    ).toHaveLength(1)
+    expect(
+      argument.properties.some(
+        (node) => node.name && Object.hasOwn(fields, compact(node.name, source)),
+      ),
+    ).toBe(false)
+  }
+  const workers = namedCalls(source, source, 'startMaintenanceWorkerSupervisor')
+  expect(workers).toHaveLength(2)
+  for (const call of workers) {
+    const argument = objectArgument(call)
+    expect(compact(property(argument, source, 'effectsBootstrap'), source)).toBe(
+      'input.maintenanceEffectsBootstrap',
+    )
+    expect(property(argument, source, 'databaseInit')).toBeDefined()
+    expect(argument.properties.filter(ts.isSpreadAssignment)).toHaveLength(1)
+  }
+})
+
+test('both actual HTTP composers select complete workspace and package owners with lazy native defaults', () => {
+  for (const [path, receiver] of [
+    ['cli/postgresqlDaemonApplication.ts', 'input'],
+    ['server.ts', 'effectiveDeps'],
+  ] as const) {
+    const source = load(path)
+    const workspace = oneRoot(source, 'composeTaskWorkspaceQueries')
+    const scope = property(workspace, source, 'contentScope')
+    if (!ts.isArrowFunction(scope)) throw new Error('selected scope must retain owner lifetime')
+    expect(scope.parameters).toHaveLength(1)
+    expect(scope.parameters[0]!.name.getText(source)).toBe('workspaceRef')
+    const scopes = namedCalls(scope.body, source, 'createWorkspaceContentScope')
+    expect(scopes).toHaveLength(1)
+    expect(scopes[0]!.arguments.map((node) => compact(node, source))).toEqual([
+      'workspaceRef',
+      `${receiver}.workspaceContent`,
+    ])
+
+    const packages = oneRoot(source, 'composePostgresqlResourcePackageProvider')
+    expect(compact(property(packages, source, 'skillArtifacts'), source)).toBe(
+      `${receiver}.resourcePackageSkillArtifacts`,
+    )
+    expect(compact(property(packages, source, 'skillPackageContent'), source)).toBe(
+      `${receiver}.resourcePackageSkillContent`,
+    )
+    const spreads = packages.properties.filter(ts.isSpreadAssignment)
+    expect(spreads).toHaveLength(1)
+    const selection = spreads[0]!.expression
+    if (
+      !ts.isParenthesizedExpression(selection) ||
+      !ts.isConditionalExpression(selection.expression)
+    )
+      throw new Error('native package construction must stay inside its lazy branch')
+    const choice = selection.expression
+    expect(compact(choice.condition, source)).toBe(
+      `${receiver}.resourcePackagePluginArtifacts===undefined`,
+    )
+    if (
+      !ts.isObjectLiteralExpression(choice.whenTrue) ||
+      !ts.isObjectLiteralExpression(choice.whenFalse)
+    )
+      throw new Error('complete selected and native owner branches required')
+    expect(choice.whenTrue.properties).toHaveLength(1)
+    expect(choice.whenFalse.properties).toHaveLength(1)
+    expect(property(choice.whenTrue, source, 'pluginInstaller')).toBeDefined()
+    expect(compact(property(choice.whenFalse, source, 'pluginArtifacts'), source)).toBe(
+      `${receiver}.resourcePackagePluginArtifacts`,
+    )
+    expect(
+      namedCalls(choice.whenFalse, source, 'createResourcePackagePluginInstaller'),
+    ).toHaveLength(0)
+  }
+})
+
+test('public root types expose existing complete contracts without adding partial callback ports', () => {
+  for (const [path, names] of [
+    ['cli/start.ts', ['StartOptions', 'DaemonProviderSessionComposeInput']],
+    ['cli/postgresqlDaemonApplication.ts', ['PostgresqlDaemonApplicationInput']],
+    ['server.ts', ['AppDeps']],
+  ] as const) {
+    const source = load(path)
+    for (const name of names) {
+      const interfaces = source.statements.filter(
+        (node): node is ts.InterfaceDeclaration =>
+          ts.isInterfaceDeclaration(node) && node.name.text === name,
+      )
+      expect(interfaces).toHaveLength(1)
+      const expected =
+        path === 'cli/start.ts'
+          ? { ...fields, maintenanceEffectsBootstrap: 'MaintenanceWorkerEffectsDescriptor' }
+          : fields
+      for (const [key, type] of Object.entries(expected)) {
+        const members = interfaces[0]!.members.filter((node) => node.name?.getText(source) === key)
+        expect(members).toHaveLength(1)
+        const member = members[0]!
+        if (!ts.isPropertySignature(member)) throw new Error('complete optional port type required')
+        expect(member.questionToken).toBeDefined()
+        expect(member.type?.getText(source)).toBe(type)
+      }
+    }
+  }
+})
