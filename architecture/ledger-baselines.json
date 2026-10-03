@@ -902,12 +902,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26031,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26032,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371 original EOF completeness verification adds the actual verifiedRecords helper: original scoped census symbol owners 26031 to 26032, with original provider dispatch and call-time schema fix. Exact source 687ba3a907854a9140bedecdf2c9dfef0c56c434; no count, direction, source, assertion, or prior debt rule relaxed."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:6e7cf15a54e3de47f76d18172ed34ae8d6ba6c651d5ce6d352ebe2610626ae13",
+    "sourceDigest": "sha256:12c8417a6b5d53a3658c667a675109b2b5c49478952b4d94d087553b4f35e3cd",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +923,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "c46cc3ae5ed5dcf082f2bb039f3db6547349d6aa",
-    "contentDigest": "sha256:1594e813361ff0770e48e9917cfe7eec9aa6c7194564a784c3c52b8d6ec80876",
+    "currentSnapshotSha": "687ba3a907854a9140bedecdf2c9dfef0c56c434",
+    "contentDigest": "sha256:3c0ab3ceccd7671cdf65d985d68d77aeb27428d3ea202f934316c3f9c77358fa",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

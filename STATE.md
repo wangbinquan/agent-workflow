@@ -9587,3 +9587,10 @@ M1 验收：跑通 `创 agent → 创 skill → 通过 API/curl 创线性 workfl
 原 scoped census/boundary 各一次，四规则及原304条 debt、273/31、target69、implementation SCC空保持；actual entry1813→1814、imports5735→5739、exceptions5096→5100、owner25802→25806，四真实增长匹配 canonical 后一次退役。宿主 required SPI 由原规则观察到 application consumer、native provider、唯一 root composition 而成为 active；39项现19 active/20 declared-debt。新 digest `sha256:23a114c3710b4a2d04f4a6de85bc18de8b9a7ae8b39c5f0f39db8efa8549c98f`。三个 CI 测试不在生产语料/两个 digest 额外输入内，不再运行 generator。旧门/CI/并行正文保持，无 AW 本机 test/typecheck/build/service。
 
 A1 raw lock/执行 authority、A2 其他物理证据效果及 A3～A8/AC00/独立完整 A-G 继续；本门不关闭完整 A 阶段。完成后编写各层独立 CS adapters，B/M0 先实际部署，再逐项 M1～M4；尚无 AW-in-CS 实际部署，不关闭 RFC。
+## 2026-10-03 完整统计 EOF 与 CI 修复接续
+
+统计仍不得限制任务、调用、用量或原生记录总量。外部排序新增原序号唯一性、连续工作行、稳定顺序与最终 EOF 数量核对，丢尾、丢中间、重复序号和损坏身份均拒绝生成完整报告。原数据库分派穷举到 never，任务 attempt 字段改为调用时读取；真实 WAL 和双 provider 的只读输入回归均核对原 Error.cause 边界。
+
+本批 SOURCE v1 的 memory SQLite 断言 P2/FAIL 保留，窄修后的 7 路径 SOURCE v2 独立 PASS。源码提交 `687ba3a907854a9140bedecdf2c9dfef0c56c434`；原 scoped census 生成 13 产物，仅 symbol owners 26031→26032 增长一条，原 129 库存和所有规则保持。本机只有定向 format/lint 和纯 AST/JSON 投影，不运行 AW test/typecheck/build/service。发布及 exact-SHA hosted CI 待核对，不能冒领旧 CI 或并行 CI 成功。
+
+正式接口/页面切换、完整 native v2、报告 worker/cache、100K Task/10M usage、真实任务与浏览器四类 Token/人民币核对继续；旧统计截断仍是未完成的缺陷。CS 已接原数据库/owner 的新完整报告接口候选，但未发布部署或切换正式页面；开发 producer 保持 OFF。两个 RFC 保持 In Progress，下方并行会话输出完整保留。
