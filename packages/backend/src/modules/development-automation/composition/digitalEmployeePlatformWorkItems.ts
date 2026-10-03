@@ -585,9 +585,10 @@ export interface DevelopmentEmployeePlatformWorkItemsCompositionInput {
         }
       | { readonly ok: false; readonly code: string; readonly detail: string }
     >
-    checkpoint(request: { readonly workspacePath: string; readonly checkpointRoot: string }): {
-      readonly checkpointDigest: string
-    }
+    checkpoint(request: {
+      readonly workspacePath: string
+      readonly checkpointRoot: string
+    }): { readonly checkpointDigest: string } | Promise<{ readonly checkpointDigest: string }>
     restore(request: {
       readonly caseRoot: string
       readonly baselineRepoPath: string
@@ -1689,7 +1690,7 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
           'published',
           candidate.candidateRef,
         )
-        const checkpoint = workspaceOps.checkpoint({
+        const checkpoint = await workspaceOps.checkpoint({
           workspacePath: workspacePath(plan.caseRef.id),
           checkpointRoot: publishedCheckpoint,
         })

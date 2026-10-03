@@ -567,9 +567,10 @@ export interface DevelopmentEmployeeWorkspaceCompositionInput {
       readonly baselineRepoPath: string
       readonly baselineSha: string
     }): Promise<{ readonly workspacePath: string }>
-    checkpoint(request: { readonly workspacePath: string; readonly checkpointRoot: string }): {
-      readonly checkpointDigest: string
-    }
+    checkpoint(request: {
+      readonly workspacePath: string
+      readonly checkpointRoot: string
+    }): { readonly checkpointDigest: string } | Promise<{ readonly checkpointDigest: string }>
     restore(request: {
       readonly caseRoot: string
       readonly baselineRepoPath: string
@@ -867,7 +868,7 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
             join(canonicalWorkspace, PLATFORM_WORKSPACE_DIR, 'pipeline', platformCaseKey),
             pipelineRoot,
           )
-          const checkpoint = sourceControl.checkpoint({
+          const checkpoint = await sourceControl.checkpoint({
             workspacePath: prepared.workspacePath,
             checkpointRoot: checkpointRoot(plan.caseRef.id, `${plan.roundRef}-${attempt.ordinal}`),
           })
@@ -962,7 +963,7 @@ function composeDevelopmentEmployeeWorkspaceFromPersistence(
       const artifacts = hydrateArtifacts(workspacePath(plan.caseRef.id))
       let state = initialState
       if (state === null) {
-        const checkpoint = sourceControl.checkpoint({
+        const checkpoint = await sourceControl.checkpoint({
           workspacePath: workspacePath(plan.caseRef.id),
           checkpointRoot: checkpointRoot(plan.caseRef.id, plan.roundRef),
         })

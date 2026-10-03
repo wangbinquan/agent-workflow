@@ -44,6 +44,8 @@ import {
   resolveEmployeeWorkspaceBaseline,
   restoreEmployeeCaseWorkspace,
 } from './application/employeeCaseWorkspace'
+import type { EmployeeCaseWorkspaceEffectsFactory } from './application/ports/employeeCaseWorkspaceEffects'
+import { createFileEmployeeCaseWorkspaceEffectsFactory } from './infrastructure/local/fileEmployeeCaseWorkspaceEffects'
 import type { RepositoryWorkspaceStore } from './ports/repositoryWorkspaceStore'
 import { ensureCredentialsSealed } from '@/services/repoCredentials'
 
@@ -265,36 +267,49 @@ export function bindConflictMergeParticipant(): {
   }
 }
 
-/** RFC-310 OS path binder for a durable, single-writer employee Case scene. */
+type BoundEmployeeCaseOperation<F extends (...args: never[]) => unknown> = (
+  request: Parameters<F>[0],
+) => ReturnType<F>
+
+/** A complete effects factory for a durable, single-writer employee Case scene. */
 export function bindEmployeeCaseWorkspaceParticipant(
-  input: { readonly publicationTransport?: RepositoryPublicationTransport } = {},
+  input: {
+    readonly publicationTransport?: RepositoryPublicationTransport
+    readonly effects?: EmployeeCaseWorkspaceEffectsFactory
+  } = {},
 ): {
-  materialize: typeof materializeEmployeeCaseWorkspace
-  rematerialize: typeof rematerializeEmployeeCaseWorkspace
-  fetchRemoteHead: typeof fetchEmployeeWorkspaceRemoteHead
-  checkpoint: typeof checkpointEmployeeCaseWorkspace
-  restore: typeof restoreEmployeeCaseWorkspace
-  discard: typeof discardEmployeeCaseWorkspace
-  resolveBaseline: typeof resolveEmployeeWorkspaceBaseline
-  importCommit: typeof importEmployeeWorkspaceCommit
+  materialize: BoundEmployeeCaseOperation<typeof materializeEmployeeCaseWorkspace>
+  rematerialize: BoundEmployeeCaseOperation<typeof rematerializeEmployeeCaseWorkspace>
+  fetchRemoteHead: BoundEmployeeCaseOperation<typeof fetchEmployeeWorkspaceRemoteHead>
+  checkpoint: BoundEmployeeCaseOperation<typeof checkpointEmployeeCaseWorkspace>
+  restore: BoundEmployeeCaseOperation<typeof restoreEmployeeCaseWorkspace>
+  discard: BoundEmployeeCaseOperation<typeof discardEmployeeCaseWorkspace>
+  resolveBaseline: BoundEmployeeCaseOperation<typeof resolveEmployeeWorkspaceBaseline>
+  importCommit: BoundEmployeeCaseOperation<typeof importEmployeeWorkspaceCommit>
 } {
+  const effects = input.effects ?? createFileEmployeeCaseWorkspaceEffectsFactory()
   return {
-    materialize: materializeEmployeeCaseWorkspace,
-    rematerialize: rematerializeEmployeeCaseWorkspace,
+    materialize: (request) => materializeEmployeeCaseWorkspace(request, effects),
+    rematerialize: (request) => rematerializeEmployeeCaseWorkspace(request, effects),
     fetchRemoteHead: (request) =>
-      fetchEmployeeWorkspaceRemoteHead({
-        ...request,
-        ...(input.publicationTransport === undefined
-          ? {}
-          : { publicationTransport: input.publicationTransport }),
-      }),
-    checkpoint: checkpointEmployeeCaseWorkspace,
-    restore: restoreEmployeeCaseWorkspace,
-    discard: discardEmployeeCaseWorkspace,
-    resolveBaseline: resolveEmployeeWorkspaceBaseline,
-    importCommit: importEmployeeWorkspaceCommit,
+      fetchEmployeeWorkspaceRemoteHead(
+        {
+          ...request,
+          ...(input.publicationTransport === undefined
+            ? {}
+            : { publicationTransport: input.publicationTransport }),
+        },
+        effects,
+      ),
+    checkpoint: (request) => checkpointEmployeeCaseWorkspace(request, effects),
+    restore: (request) => restoreEmployeeCaseWorkspace(request, effects),
+    discard: (request) => discardEmployeeCaseWorkspace(request, effects),
+    resolveBaseline: (request) => resolveEmployeeWorkspaceBaseline(request, effects),
+    importCommit: (request) => importEmployeeWorkspaceCommit(request, effects),
   }
 }
+
+export type { EmployeeCaseWorkspaceEffectsFactory } from './application/ports/employeeCaseWorkspaceEffects'
 
 export { createWorkspaceContentScope } from './infrastructure/workspaceContent'
 export type {

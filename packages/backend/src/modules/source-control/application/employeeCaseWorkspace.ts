@@ -1,161 +1,178 @@
-import {
-  chmodSync,
-  copyFileSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from 'node:fs'
-import { dirname, isAbsolute, join } from 'node:path'
+import { isAbsolute } from 'node:path'
 import { ulid } from 'ulid'
 
 import { describeRepositoryRemote, PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
-import { runGit } from '@/util/git'
+import type { RepositoryCandidateGitOutcome } from './ports/repositoryCandidateEffects'
+import type {
+  EmployeeCaseGitOperand,
+  EmployeeCaseWorkspaceEffects,
+  EmployeeCaseWorkspaceEffectsFactory,
+} from './ports/employeeCaseWorkspaceEffects'
 import { createSha256DigestBuilder } from '@/util/hash'
 import { redactSensitiveString } from '@/util/redact'
 import { classifyRepositoryPushFailure } from '../domain/repositoryPushFailure'
 import type { CandidatePublicationSubject, CandidatePublicationTransport } from './deliverCandidate'
 
-function copyTree(
+async function copyTree(
+  scope: EmployeeCaseWorkspaceEffects,
   source: string,
   target: string,
   excludedTopLevel: ReadonlySet<string> = new Set(),
-): void {
-  const walk = (relative: string): void => {
-    const absolute = relative === '' ? source : join(source, relative)
-    const stat = lstatSync(absolute, { throwIfNoEntry: false })
-    if (stat === undefined) return
-    if (stat.isSymbolicLink()) throw new Error(`workspace checkpoint contains symlink: ${relative}`)
-    if (stat.isDirectory()) {
-      if (relative !== '') mkdirSync(join(target, relative), { recursive: true })
-      for (const name of readdirSync(absolute).sort()) {
+): Promise<void> {
+  const walk = async (relative: string): Promise<void> => {
+    const absolute = relative === '' ? source : scope.resolve(source, relative)
+    const stat = await scope.stat(absolute)
+    if (stat === null) return
+    if (stat.kind === 'symlink')
+      throw new Error(`workspace checkpoint contains symlink: ${relative}`)
+    if (stat.kind === 'directory') {
+      if (relative !== '') await scope.createDirectory(scope.resolve(target, relative))
+      for (const name of [...(await scope.list(absolute))].sort()) {
         if (relative === '' && excludedTopLevel.has(name)) continue
-        walk(relative === '' ? name : `${relative}/${name}`)
+        await walk(relative === '' ? name : `${relative}/${name}`)
       }
       return
     }
-    if (!stat.isFile()) throw new Error(`workspace checkpoint contains non-file: ${relative}`)
-    const destination = join(target, relative)
-    mkdirSync(dirname(destination), { recursive: true })
-    copyFileSync(absolute, destination)
-    chmodSync(destination, stat.mode & 0o777)
+    if (!(stat.kind === 'file'))
+      throw new Error(`workspace checkpoint contains non-file: ${relative}`)
+    const destination = scope.resolve(target, relative)
+    await scope.createDirectory(scope.resolve(destination, '..'))
+    await scope.copyFile(absolute, destination)
+    await scope.setMode(destination, stat.mode & 0o777)
   }
-  walk('')
+  await walk('')
 }
 
-function treeDigest(root: string): string {
+async function treeDigest(root: string, scope: EmployeeCaseWorkspaceEffects): Promise<string> {
   const hash = createSha256DigestBuilder()
-  const walk = (relative: string): void => {
-    const absolute = relative === '' ? root : join(root, relative)
-    const stat = lstatSync(absolute, { throwIfNoEntry: false })
-    if (stat === undefined) return
-    if (stat.isDirectory()) {
-      for (const name of readdirSync(absolute).sort()) {
-        walk(relative === '' ? name : `${relative}/${name}`)
+  const walk = async (relative: string): Promise<void> => {
+    const absolute = relative === '' ? root : scope.resolve(root, relative)
+    const stat = await scope.stat(absolute)
+    if (stat === null) return
+    if (stat.kind === 'directory') {
+      for (const name of [...(await scope.list(absolute))].sort()) {
+        await walk(relative === '' ? name : `${relative}/${name}`)
       }
       return
     }
-    if (!stat.isFile()) throw new Error(`workspace digest contains non-file: ${relative}`)
+    if (!(stat.kind === 'file')) throw new Error(`workspace digest contains non-file: ${relative}`)
     hash.update(`${relative}\u0000${stat.mode & 0o777}\u0000`)
-    hash.update(readFileSync(absolute))
+    hash.update(await scope.readBytes(absolute))
     hash.update('\u0000')
   }
-  walk('')
+  await walk('')
   return hash.digestHex()
 }
 
-async function cloneBaseline(input: {
-  readonly caseRoot: string
-  readonly baselineRepoPath: string
-  readonly baselineSha: string
-  readonly platformOverlayRoot?: string
-}): Promise<string> {
-  mkdirSync(dirname(input.caseRoot), { recursive: true })
-  const stagingRoot = `${input.caseRoot}.tmp-${ulid()}`
-  const workspacePath = join(stagingRoot, 'workspace')
-  mkdirSync(stagingRoot, { recursive: true })
+async function cloneBaseline(
+  scope: EmployeeCaseWorkspaceEffects,
+  input: {
+    readonly caseRoot: string
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly platformOverlayRoot?: string
+  },
+): Promise<string> {
+  await scope.createDirectory(scope.resolve(input.caseRoot, '..'))
+  const stagingRoot = scope.sibling(input.caseRoot, `.tmp-${ulid()}`)
+  const workspacePath = scope.resolve(stagingRoot, 'workspace')
+  await scope.createDirectory(stagingRoot)
   try {
-    const cloned = await runGit(stagingRoot, [
-      'clone',
-      '--no-hardlinks',
-      '--quiet',
-      input.baselineRepoPath,
-      workspacePath,
+    const cloned = await scope.runGit(stagingRoot, [
+      ...literalGitOperands(['clone', '--no-hardlinks', '--quiet']),
+      { kind: 'reference', reference: input.baselineRepoPath },
+      { kind: 'reference', reference: workspacePath },
     ])
     if (cloned.exitCode !== 0) throw new Error(cloned.stderr.slice(0, 500))
-    const checkout = await runGit(workspacePath, [
-      'checkout',
-      '--quiet',
-      '--detach',
-      input.baselineSha,
-    ])
+    const checkout = await scope.runGit(
+      workspacePath,
+      literalGitOperands(['checkout', '--quiet', '--detach', input.baselineSha]),
+    )
     if (checkout.exitCode !== 0) throw new Error(checkout.stderr.slice(0, 500))
-    const removed = await runGit(workspacePath, ['remote', 'remove', 'origin'])
+    const removed = await scope.runGit(
+      workspacePath,
+      literalGitOperands(['remote', 'remove', 'origin']),
+    )
     if (removed.exitCode !== 0) throw new Error(removed.stderr.slice(0, 500))
-    mkdirSync(join(workspacePath, '.git', 'info'), { recursive: true })
-    writeFileSync(join(workspacePath, '.git', 'info', 'exclude'), `${PLATFORM_WORKSPACE_DIR}/\n`)
-    if (input.platformOverlayRoot !== undefined && existsSync(input.platformOverlayRoot)) {
-      const overlayTarget = join(workspacePath, PLATFORM_WORKSPACE_DIR)
-      mkdirSync(overlayTarget, { recursive: true })
-      copyTree(input.platformOverlayRoot, overlayTarget)
+    await scope.createDirectory(scope.resolve(workspacePath, '.git', 'info'))
+    await scope.writeText(
+      scope.resolve(workspacePath, '.git', 'info', 'exclude'),
+      `${PLATFORM_WORKSPACE_DIR}/\n`,
+    )
+    if (
+      input.platformOverlayRoot !== undefined &&
+      (await scope.exists(input.platformOverlayRoot))
+    ) {
+      const overlayTarget = scope.resolve(workspacePath, PLATFORM_WORKSPACE_DIR)
+      await scope.createDirectory(overlayTarget)
+      await copyTree(scope, input.platformOverlayRoot, overlayTarget)
     }
-    rmSync(input.caseRoot, { recursive: true, force: true })
-    renameSync(stagingRoot, input.caseRoot)
-    return join(input.caseRoot, 'workspace')
+    await scope.remove(input.caseRoot)
+    await scope.move(stagingRoot, input.caseRoot)
+    return scope.resolve(input.caseRoot, 'workspace')
   } catch (error) {
-    rmSync(stagingRoot, { recursive: true, force: true })
+    await scope.remove(stagingRoot)
     throw new Error(
       `employee case workspace materialization failed: ${error instanceof Error ? error.message : String(error)}`,
     )
   }
 }
 
-export async function materializeEmployeeCaseWorkspace(input: {
-  readonly caseRoot: string
-  readonly baselineRepoPath: string
-  readonly baselineSha: string
-}): Promise<{ readonly workspacePath: string }> {
-  return { workspacePath: await cloneBaseline(input) }
+export async function materializeEmployeeCaseWorkspace(
+  input: {
+    readonly caseRoot: string
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+  },
+  effects: EmployeeCaseWorkspaceEffectsFactory,
+): Promise<{ readonly workspacePath: string }> {
+  return withEmployeeCaseEffects(effects, async (scope) => {
+    return { workspacePath: await cloneBaseline(scope, input) }
+  })
 }
 
-export async function rematerializeEmployeeCaseWorkspace(input: {
-  readonly caseRoot: string
-  readonly baselineRepoPath: string
-  readonly baselineSha: string
-  readonly currentWorkspacePath: string
-}): Promise<{ readonly workspacePath: string }> {
-  const preservationRoot = `${input.caseRoot}.platform-${ulid()}`
-  const currentPlatformRoot = join(input.currentWorkspacePath, PLATFORM_WORKSPACE_DIR)
-  try {
-    if (existsSync(currentPlatformRoot)) {
-      mkdirSync(preservationRoot, { recursive: true })
-      copyTree(currentPlatformRoot, preservationRoot)
+export async function rematerializeEmployeeCaseWorkspace(
+  input: {
+    readonly caseRoot: string
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly currentWorkspacePath: string
+  },
+  effects: EmployeeCaseWorkspaceEffectsFactory,
+): Promise<{ readonly workspacePath: string }> {
+  return withEmployeeCaseEffects(effects, async (scope) => {
+    const preservationRoot = scope.sibling(input.caseRoot, `.platform-${ulid()}`)
+    const currentPlatformRoot = scope.resolve(input.currentWorkspacePath, PLATFORM_WORKSPACE_DIR)
+    try {
+      if (await scope.exists(currentPlatformRoot)) {
+        await scope.createDirectory(preservationRoot)
+        await copyTree(scope, currentPlatformRoot, preservationRoot)
+      }
+      return {
+        workspacePath: await cloneBaseline(scope, {
+          caseRoot: input.caseRoot,
+          baselineRepoPath: input.baselineRepoPath,
+          baselineSha: input.baselineSha,
+          platformOverlayRoot: preservationRoot,
+        }),
+      }
+    } finally {
+      await scope.remove(preservationRoot)
     }
-    return {
-      workspacePath: await cloneBaseline({
-        caseRoot: input.caseRoot,
-        baselineRepoPath: input.baselineRepoPath,
-        baselineSha: input.baselineSha,
-        platformOverlayRoot: preservationRoot,
-      }),
-    }
-  } finally {
-    rmSync(preservationRoot, { recursive: true, force: true })
-  }
+  })
 }
 
-export async function fetchEmployeeWorkspaceRemoteHead(input: {
-  readonly baselineRepoPath: string
-  readonly remoteUrl: string
-  readonly branch: string
-  readonly expectedHeadSha: string
-  readonly publicationSubject?: CandidatePublicationSubject
-  readonly publicationTransport?: CandidatePublicationTransport
-}): Promise<
+export async function fetchEmployeeWorkspaceRemoteHead(
+  input: {
+    readonly baselineRepoPath: string
+    readonly remoteUrl: string
+    readonly branch: string
+    readonly expectedHeadSha: string
+    readonly publicationSubject?: CandidatePublicationSubject
+    readonly publicationTransport?: CandidatePublicationTransport
+  },
+  effects: EmployeeCaseWorkspaceEffectsFactory,
+): Promise<
   | { readonly ok: true; readonly headSha: string }
   | {
       readonly ok: false
@@ -164,122 +181,134 @@ export async function fetchEmployeeWorkspaceRemoteHead(input: {
       readonly actualHeadSha: string
     }
 > {
-  const described = describeRepositoryRemote(input.remoteUrl)
-  const localRemote =
-    (described.ok && described.value.transport === 'file') ||
-    isAbsolute(input.remoteUrl) ||
-    input.remoteUrl.startsWith('./') ||
-    input.remoteUrl.startsWith('../')
-  let fetched: Awaited<ReturnType<typeof runGit>>
-  if (input.publicationTransport !== undefined && input.publicationSubject !== undefined) {
-    const opened = await input.publicationTransport.open({
-      subject: input.publicationSubject,
-      remoteUrl: input.remoteUrl,
-    })
-    if (!opened.ok) {
-      throw new Error(`employee workspace publication transport failed: ${opened.code}`)
+  return withEmployeeCaseEffects(effects, async (scope) => {
+    const described = describeRepositoryRemote(input.remoteUrl)
+    const localRemote =
+      (described.ok && described.value.transport === 'file') ||
+      isAbsolute(input.remoteUrl) ||
+      input.remoteUrl.startsWith('./') ||
+      input.remoteUrl.startsWith('../')
+    let fetched: RepositoryCandidateGitOutcome
+    if (input.publicationTransport !== undefined && input.publicationSubject !== undefined) {
+      const opened = await input.publicationTransport.open({
+        subject: input.publicationSubject,
+        remoteUrl: input.remoteUrl,
+      })
+      if (!opened.ok) {
+        throw new Error(`employee workspace publication transport failed: ${opened.code}`)
+      }
+      try {
+        fetched = await opened.session.runNetwork(input.baselineRepoPath, [
+          'fetch',
+          '--quiet',
+          '--no-tags',
+          opened.session.endpointUrl,
+          `refs/heads/${input.branch}`,
+        ])
+      } finally {
+        opened.session.close()
+      }
+    } else {
+      if (!localRemote) {
+        throw new Error('employee workspace publication transport and owner are required')
+      }
+      fetched = await scope.runGit(
+        input.baselineRepoPath,
+        literalGitOperands([
+          'fetch',
+          '--quiet',
+          '--no-tags',
+          input.remoteUrl,
+          `refs/heads/${input.branch}`,
+        ]),
+      )
     }
-    try {
-      fetched = await opened.session.runNetwork(input.baselineRepoPath, [
-        'fetch',
-        '--quiet',
-        '--no-tags',
-        opened.session.endpointUrl,
-        `refs/heads/${input.branch}`,
-      ])
-    } finally {
-      opened.session.close()
+    if (fetched.exitCode !== 0) {
+      const detail = `${fetched.stderr}\n${fetched.stdout}`
+      throw new Error(
+        classifyRepositoryPushFailure(detail) ??
+          `employee workspace remote-head fetch failed: ${redactSensitiveString(detail).slice(0, 500)}`,
+      )
     }
-  } else {
-    if (!localRemote) {
-      throw new Error('employee workspace publication transport and owner are required')
-    }
-    fetched = await runGit(input.baselineRepoPath, [
-      'fetch',
-      '--quiet',
-      '--no-tags',
-      input.remoteUrl,
-      `refs/heads/${input.branch}`,
-    ])
-  }
-  if (fetched.exitCode !== 0) {
-    const detail = `${fetched.stderr}\n${fetched.stdout}`
-    throw new Error(
-      classifyRepositoryPushFailure(detail) ??
-        `employee workspace remote-head fetch failed: ${redactSensitiveString(detail).slice(0, 500)}`,
+    const actual = await scope.runGit(
+      input.baselineRepoPath,
+      literalGitOperands(['rev-parse', '--verify', 'FETCH_HEAD^{commit}']),
     )
-  }
-  const actual = await runGit(input.baselineRepoPath, [
-    'rev-parse',
-    '--verify',
-    'FETCH_HEAD^{commit}',
-  ])
-  if (actual.exitCode !== 0) {
-    throw new Error(`employee workspace fetched head is unreadable: ${actual.stderr.slice(0, 500)}`)
-  }
-  const actualHeadSha = actual.stdout.trim()
-  if (actualHeadSha !== input.expectedHeadSha) {
-    return {
-      ok: false,
-      code: 'remote-head-moved',
-      expectedHeadSha: input.expectedHeadSha,
-      actualHeadSha,
+    if (actual.exitCode !== 0) {
+      throw new Error(
+        `employee workspace fetched head is unreadable: ${actual.stderr.slice(0, 500)}`,
+      )
     }
-  }
-  return { ok: true, headSha: actualHeadSha }
+    const actualHeadSha = actual.stdout.trim()
+    if (actualHeadSha !== input.expectedHeadSha) {
+      return {
+        ok: false,
+        code: 'remote-head-moved',
+        expectedHeadSha: input.expectedHeadSha,
+        actualHeadSha,
+      }
+    }
+    return { ok: true, headSha: actualHeadSha }
+  })
 }
 
-export async function resolveEmployeeWorkspaceBaseline(input: {
-  readonly baselineRepoPath: string
-  readonly preferredBranch: string | null
-  readonly sourceBranch: string | null
-}): Promise<{
+export async function resolveEmployeeWorkspaceBaseline(
+  input: {
+    readonly baselineRepoPath: string
+    readonly preferredBranch: string | null
+    readonly sourceBranch: string | null
+  },
+  effects: EmployeeCaseWorkspaceEffectsFactory,
+): Promise<{
   readonly baselineSha: string
   readonly targetBranch: string
   readonly remoteHeadSha: string | null
 }> {
-  const targetBranch = input.preferredBranch ?? 'main'
-  if (input.sourceBranch !== null) {
-    const valid = await runGit(input.baselineRepoPath, [
-      'check-ref-format',
-      '--branch',
-      input.sourceBranch,
-    ])
-    if (valid.exitCode !== 0) {
-      throw new Error(`employee workspace source branch is invalid: ${input.sourceBranch}`)
-    }
-    const remoteSource = await runGit(input.baselineRepoPath, [
-      'rev-parse',
-      '--verify',
-      `refs/remotes/origin/${input.sourceBranch}^{commit}`,
-    ])
-    const remoteHeadSha = remoteSource.stdout.trim()
-    if (remoteSource.exitCode === 0 && /^[0-9a-f]{40}$/.test(remoteHeadSha)) {
-      return { baselineSha: remoteHeadSha, targetBranch, remoteHeadSha }
-    }
-  }
-  const candidates = [
-    ...(input.preferredBranch === null
-      ? []
-      : [
-          `refs/remotes/origin/${input.preferredBranch}`,
-          `refs/heads/${input.preferredBranch}`,
-          input.preferredBranch,
+  return withEmployeeCaseEffects(effects, async (scope) => {
+    const targetBranch = input.preferredBranch ?? 'main'
+    if (input.sourceBranch !== null) {
+      const valid = await scope.runGit(
+        input.baselineRepoPath,
+        literalGitOperands(['check-ref-format', '--branch', input.sourceBranch]),
+      )
+      if (valid.exitCode !== 0) {
+        throw new Error(`employee workspace source branch is invalid: ${input.sourceBranch}`)
+      }
+      const remoteSource = await scope.runGit(
+        input.baselineRepoPath,
+        literalGitOperands([
+          'rev-parse',
+          '--verify',
+          `refs/remotes/origin/${input.sourceBranch}^{commit}`,
         ]),
-    'HEAD',
-  ]
-  for (const candidate of candidates) {
-    const resolved = await runGit(input.baselineRepoPath, [
-      'rev-parse',
-      '--verify',
-      `${candidate}^{commit}`,
-    ])
-    const baselineSha = resolved.stdout.trim()
-    if (resolved.exitCode === 0 && /^[0-9a-f]{40}$/.test(baselineSha)) {
-      return { baselineSha, targetBranch, remoteHeadSha: null }
+      )
+      const remoteHeadSha = remoteSource.stdout.trim()
+      if (remoteSource.exitCode === 0 && /^[0-9a-f]{40}$/.test(remoteHeadSha)) {
+        return { baselineSha: remoteHeadSha, targetBranch, remoteHeadSha }
+      }
     }
-  }
-  throw new Error(`cannot resolve repository baseline for ${targetBranch}`)
+    const candidates = [
+      ...(input.preferredBranch === null
+        ? []
+        : [
+            `refs/remotes/origin/${input.preferredBranch}`,
+            `refs/heads/${input.preferredBranch}`,
+            input.preferredBranch,
+          ]),
+      'HEAD',
+    ]
+    for (const candidate of candidates) {
+      const resolved = await scope.runGit(
+        input.baselineRepoPath,
+        literalGitOperands(['rev-parse', '--verify', `${candidate}^{commit}`]),
+      )
+      const baselineSha = resolved.stdout.trim()
+      if (resolved.exitCode === 0 && /^[0-9a-f]{40}$/.test(baselineSha)) {
+        return { baselineSha, targetBranch, remoteHeadSha: null }
+      }
+    }
+    throw new Error(`cannot resolve repository baseline for ${targetBranch}`)
+  })
 }
 
 /**
@@ -287,67 +316,140 @@ export async function resolveEmployeeWorkspaceBaseline(input: {
  * without moving any branch. Conflict repair uses this before the ordinary CAS
  * publisher and future Case scenes consume its merge commit.
  */
-export async function importEmployeeWorkspaceCommit(input: {
-  readonly baselineRepoPath: string
-  readonly sourceRepoPath: string
-  readonly commitSha: string
-}): Promise<void> {
-  const fetched = await runGit(input.baselineRepoPath, [
-    'fetch',
-    '--quiet',
-    '--no-tags',
-    input.sourceRepoPath,
-    input.commitSha,
-  ])
-  if (fetched.exitCode !== 0) {
-    throw new Error(`employee workspace commit import failed: ${fetched.stderr.slice(0, 500)}`)
-  }
-  const verified = await runGit(input.baselineRepoPath, [
-    'rev-parse',
-    '--verify',
-    `${input.commitSha}^{commit}`,
-  ])
-  if (verified.exitCode !== 0 || verified.stdout.trim() !== input.commitSha) {
-    throw new Error('employee workspace imported commit identity mismatch')
-  }
+export async function importEmployeeWorkspaceCommit(
+  input: {
+    readonly baselineRepoPath: string
+    readonly sourceRepoPath: string
+    readonly commitSha: string
+  },
+  effects: EmployeeCaseWorkspaceEffectsFactory,
+): Promise<void> {
+  return withEmployeeCaseEffects(effects, async (scope) => {
+    const fetched = await scope.runGit(input.baselineRepoPath, [
+      ...literalGitOperands(['fetch', '--quiet', '--no-tags']),
+      { kind: 'reference', reference: input.sourceRepoPath },
+      ...literalGitOperands([input.commitSha]),
+    ])
+    if (fetched.exitCode !== 0) {
+      throw new Error(`employee workspace commit import failed: ${fetched.stderr.slice(0, 500)}`)
+    }
+    const verified = await scope.runGit(
+      input.baselineRepoPath,
+      literalGitOperands(['rev-parse', '--verify', `${input.commitSha}^{commit}`]),
+    )
+    if (verified.exitCode !== 0 || verified.stdout.trim() !== input.commitSha) {
+      throw new Error('employee workspace imported commit identity mismatch')
+    }
+  })
 }
 
-export function checkpointEmployeeCaseWorkspace(input: {
-  readonly workspacePath: string
-  readonly checkpointRoot: string
-}): { readonly checkpointDigest: string } {
-  const staging = `${input.checkpointRoot}.tmp-${ulid()}`
-  rmSync(staging, { recursive: true, force: true })
-  mkdirSync(staging, { recursive: true })
+export async function checkpointEmployeeCaseWorkspace(
+  input: {
+    readonly workspacePath: string
+    readonly checkpointRoot: string
+  },
+  effects: EmployeeCaseWorkspaceEffectsFactory,
+): Promise<{ readonly checkpointDigest: string }> {
+  return withEmployeeCaseEffects(effects, async (scope) => {
+    const staging = scope.sibling(input.checkpointRoot, `.tmp-${ulid()}`)
+    await scope.remove(staging)
+    await scope.createDirectory(staging)
+    try {
+      await copyTree(scope, input.workspacePath, staging, new Set(['.git']))
+      const checkpointDigest = await treeDigest(staging, scope)
+      await scope.remove(input.checkpointRoot)
+      await scope.move(staging, input.checkpointRoot)
+      return { checkpointDigest }
+    } catch (error) {
+      await scope.remove(staging)
+      throw error
+    }
+  })
+}
+
+export async function restoreEmployeeCaseWorkspace(
+  input: {
+    readonly caseRoot: string
+    readonly baselineRepoPath: string
+    readonly baselineSha: string
+    readonly checkpointRoot: string
+    readonly expectedCheckpointDigest: string
+  },
+  effects: EmployeeCaseWorkspaceEffectsFactory,
+): Promise<{ readonly workspacePath: string }> {
+  return withEmployeeCaseEffects(effects, async (scope) => {
+    if (!(await scope.exists(input.checkpointRoot)))
+      throw new Error('employee workspace checkpoint is missing')
+    const actualDigest = await treeDigest(input.checkpointRoot, scope)
+    if (actualDigest !== input.expectedCheckpointDigest) {
+      throw new Error('employee workspace checkpoint digest mismatch')
+    }
+    const materialized = { workspacePath: await cloneBaseline(scope, input) }
+    await copyTree(scope, input.checkpointRoot, materialized.workspacePath)
+    return materialized
+  })
+}
+
+export async function discardEmployeeCaseWorkspace(
+  caseRoot: string,
+  effects: EmployeeCaseWorkspaceEffectsFactory,
+): Promise<void> {
+  return withEmployeeCaseEffects(effects, async (scope) => {
+    await scope.remove(caseRoot)
+  })
+}
+
+function literalGitOperands(values: readonly string[]): readonly EmployeeCaseGitOperand[] {
+  return values.map((value) => ({ kind: 'literal', value }))
+}
+
+async function withEmployeeCaseEffects<T>(
+  effects: EmployeeCaseWorkspaceEffectsFactory,
+  operation: (scope: EmployeeCaseWorkspaceEffects) => Promise<T>,
+): Promise<T> {
+  const scope = await effects.acquire()
+  let outcome:
+    | { readonly ok: true; readonly value: T }
+    | { readonly ok: false; readonly error: unknown }
   try {
-    copyTree(input.workspacePath, staging, new Set(['.git']))
-    const checkpointDigest = treeDigest(staging)
-    rmSync(input.checkpointRoot, { recursive: true, force: true })
-    renameSync(staging, input.checkpointRoot)
-    return { checkpointDigest }
+    const methods = [
+      'resolve',
+      'sibling',
+      'exists',
+      'stat',
+      'list',
+      'createDirectory',
+      'copyFile',
+      'setMode',
+      'readBytes',
+      'writeText',
+      'remove',
+      'move',
+      'runGit',
+      'close',
+    ] as const
+    if (
+      scope === null ||
+      scope === undefined ||
+      methods.some((name) => typeof scope[name] !== 'function')
+    ) {
+      throw new Error('employee-case-workspace-effects-incomplete')
+    }
+    outcome = { ok: true, value: await operation(scope) }
   } catch (error) {
-    rmSync(staging, { recursive: true, force: true })
+    outcome = { ok: false, error }
+  }
+  try {
+    if (scope !== null && scope !== undefined && typeof scope.close === 'function')
+      await scope.close()
+  } catch (error) {
+    if (!outcome.ok)
+      throw new AggregateError(
+        [outcome.error, error],
+        'employee case workspace operation and close failed',
+      )
     throw error
   }
-}
-
-export async function restoreEmployeeCaseWorkspace(input: {
-  readonly caseRoot: string
-  readonly baselineRepoPath: string
-  readonly baselineSha: string
-  readonly checkpointRoot: string
-  readonly expectedCheckpointDigest: string
-}): Promise<{ readonly workspacePath: string }> {
-  if (!existsSync(input.checkpointRoot)) throw new Error('employee workspace checkpoint is missing')
-  const actualDigest = treeDigest(input.checkpointRoot)
-  if (actualDigest !== input.expectedCheckpointDigest) {
-    throw new Error('employee workspace checkpoint digest mismatch')
-  }
-  const materialized = await materializeEmployeeCaseWorkspace(input)
-  copyTree(input.checkpointRoot, materialized.workspacePath)
-  return materialized
-}
-
-export function discardEmployeeCaseWorkspace(caseRoot: string): void {
-  rmSync(caseRoot, { recursive: true, force: true })
+  if (!outcome.ok) throw outcome.error
+  return outcome.value
 }
