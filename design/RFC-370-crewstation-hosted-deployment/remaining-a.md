@@ -265,3 +265,16 @@ SOURCE17/SOURCE1 的独立功能检视均 PASS；真实双 provider held checkpo
 后续 DA 冻结产物读写与树快照仍有原生机制：原调用 census 已记录，下一切面需逐项保留原文件事实、读取形式、复制选项、顺序与 digest，并在内容/close 确认后再推进原持久化状态。Action/LaunchLane、其他 workspace/Git、执行与 Worker authority、A8 装配和完整 A-G 仍继续；CS adapter 和实际 M0 部署尚未开始。
 
 本批原 classifier 的实际投影为：mutation 1829→1830、observed imports 5814→5817、architecture exceptions 5171→5174、symbol owners 26021→26031；只登记对应的 4 个正常增长回执。background 352、public surfaces 1056、304 条原债务、40 个 required SPI 和 69 个 target edges 不变，新增边界为 0。原 13 个产物由原生成器生成一次；其余 6217 个非本批源文件读取真实已提交基线字节。
+
+
+## 2026-10-03 DA baseline 有限收口后的剩余范围
+
+DA RepositoryBaselineEffects 的有限 DESIGN 与 SOURCE16 均 PASS，SOURCE 指纹 `67e296f121682683c51ba5af88fe6525ab3900a9a492838773e7deb2b8c51ef5`。完整 acquire/readHead/bindFileReader/close 生命周期复用原 BaselineFileReader、BaselineStat 和 SC Git outcome；两个 head resolver、上传上下文及三个 owner 由八个真实装配点传入同一 selected factory。原 SHA、Git binary cat-file/Bun.file/stream hash/finally rm 正文与 DB mapper 保持；每次 stat 使用独立 scope 并等待 close ACK，未提供选择时才使用独立本机 adapter。完整 receiver、held ACK、失败和 body/close 聚合回归已写，尚须 hosted 运行。
+
+Worker cause 诊断的有限 DESIGN/SOURCE2 均 PASS，SOURCE 指纹 `1e854c0d42f7ca45121558c69c454ed2edfbc949a391f66453e7bfcb2e402b77`。生产改动只在实际 private errorMessage 中保留外层信息并依序附加 cause，循环有界；原查询、状态、ACK、provider 选择、close、重试和时间预算不变。这只让真实 PostgreSQL init 失败可见，根因仍未确认，不能称为修复完成。
+
+官方 scoped census 仅使用已提交 `68bc1ce54007de881d65bb271c4b6b4fe787a591` 加本批 18 个冻结 source/test 路径，6220 个非本批源码读精确 committed bytes。四个原生成规则、所有并行输出完整保留；边界新增为 0。实际 mutation 1830→1832、observed imports 5817→5821、原 exception 投影 5174→5177、public surfaces 1056→1057、symbol owners 26032→26041；三条 native value 边和原 SHA owner 完整迁移，三个 Worker timer 与十四项 ambient 仅变行号，background 352/ambient 501 保持。40 required SPI、304 debt、69 target edges 和空 implementation SCC 保持。五项实际增长只登记一次，匹配 canonical commit 后由正常后继提交退役；source digest `sha256:64db696518fea6ecb66262efa6197a64a7682598ff12acd1808f891325a41f6b`。
+
+前批 `12c82946bf43f5bd6ed82c3d086a4f2a8b662781` 主 CI `37098130275` 已 completed/failure（35 success、15 failure、50 jobs），Windows `37098130258` failure，maintenance `37098130248` success。三个纯测试修正另已推送 `68bc1ce5`；其主 CI `37101610276` 在本节冻结快照仍 in_progress，未取得全绿终态。全部旧失败、取消和首门修正保留。本批正式行为仍以发布后 exact-SHA hosted CI 为准；本机只作原 census、纯源码/AST/JSON证明及目标 format/lint，没有 AW test/typecheck/build/service。
+
+完整 A1–A8/AC00/A-G 尚未关闭。下一项继续 DA workspace 原 protected/business snapshot 与验证效果，随后完成其余内容、工作区/Git、执行、命令和执行权切面；CS 独立 adapters 与 B/M0 实际部署、M1–M4 仍按已批准顺序实施，尚无 AW-in-CS 部署，不关闭 RFC。

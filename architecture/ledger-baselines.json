@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1830,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1832,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 DA baseline: the unchanged classifier observes the original byte-preserved native Git reader under its real local name and the complete local effects factory. Existing owner entrypoints retain their policy."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5817,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5821,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 DA baseline: three actual CLI/HTTP roots consume the complete factory type and DA consumes the existing SC Git outcome through public/types. Three original native Git/helper edges relocate unchanged to the independent local adapter (seven added, three removed)."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +873,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5174,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5177,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 DA baseline: the original projection records the three real root type edges; all three native legacy edges relocate with their complete reasons and retirement fields preserved (six added, three removed). No boundary clause is added or widened."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -881,8 +890,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1056,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1057,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 DA baseline: re-export the existing RepositoryCandidateGitOutcome through the exact SC public/types boundary for its real DA consumer, preserving the original exitCode/stdout/stderr DTO."
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -902,12 +914,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26032,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26041,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 DA baseline: register ten actual owners for two new production files, the complete three-method effects scope/factory, selected lifetime helpers and original native reader/hash helpers; the original sha256OfFile owner relocates unchanged (ten added, one removed)."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:12c8417a6b5d53a3658c667a675109b2b5c49478952b4d94d087553b4f35e3cd",
+    "sourceDigest": "sha256:64db696518fea6ecb66262efa6197a64a7682598ff12acd1808f891325a41f6b",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +935,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "687ba3a907854a9140bedecdf2c9dfef0c56c434",
-    "contentDigest": "sha256:3c0ab3ceccd7671cdf65d985d68d77aeb27428d3ea202f934316c3f9c77358fa",
+    "currentSnapshotSha": "68bc1ce54007de881d65bb271c4b6b4fe787a591",
+    "contentDigest": "sha256:b9f23fa9780b95b70cb962ba9a20cb5c17ce1e525258aeebdb42e951570f26ea",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

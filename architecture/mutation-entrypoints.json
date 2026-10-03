@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1830,
+    "entries": 1832,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -7490,6 +7490,56 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileEvidenceDownloadQueries.ts#createFileEvidenceDownloadQueries",
       "symbol": "createFileEvidenceDownloadQueries",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts#createFileGitBaselineReader",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts#createFileGitBaselineReader",
+      "symbol": "createFileGitBaselineReader",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts#createFileRepositoryBaselineEffectsFactory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts#createFileRepositoryBaselineEffectsFactory",
+      "symbol": "createFileRepositoryBaselineEffectsFactory",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -43748,7 +43798,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:12c8417a6b5d53a3658c667a675109b2b5c49478952b4d94d087553b4f35e3cd",
+  "sourceDigest": "sha256:64db696518fea6ecb66262efa6197a64a7682598ff12acd1808f891325a41f6b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

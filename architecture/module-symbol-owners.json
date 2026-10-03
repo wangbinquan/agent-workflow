@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2053,
+    "backendFiles": 2055,
     "frontendFiles": 643,
     "legacyFiles": 565,
-    "moduleFiles": 1488,
-    "productionFiles": 2857,
+    "moduleFiles": 1490,
+    "productionFiles": 2859,
     "sharedFiles": 161,
-    "symbolsIncludingFileRoots": 26032
+    "symbolsIncludingFileRoots": 26041
   },
   "entries": [
     {
@@ -31676,6 +31676,54 @@
       "currentContext": "development-automation",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/development-automation/application/ports/repositoryBaselineEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/repositoryBaselineEffects.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/application/ports/repositoryBaselineEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/repositoryBaselineEffects.ts#Completion",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Completion",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/ports/repositoryBaselineEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/repositoryBaselineEffects.ts#RepositoryBaselineEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RepositoryBaselineEffects",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/application/ports/repositoryBaselineEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/application/ports/repositoryBaselineEffects.ts#RepositoryBaselineEffectsFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RepositoryBaselineEffectsFactory",
+      "targetContext": "development-automation",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/development-automation/application/ports/repositoryLocationRead.ts",
       "id": "owner:packages/backend/src/modules/development-automation/application/ports/repositoryLocationRead.ts#$file",
       "removeAfterWave": null,
@@ -41721,10 +41769,22 @@
       "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts",
-      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#sha256OfFile",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#selectedRepositoryBaselineEffects",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "sha256OfFile",
+      "symbol": "selectedRepositoryBaselineEffects",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#withRepositoryBaselineEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "withRepositoryBaselineEffects",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -41905,6 +41965,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "hashFileStreaming",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts#createFileGitBaselineReader",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileGitBaselineReader",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts#createFileRepositoryBaselineEffectsFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileRepositoryBaselineEffectsFactory",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "development-automation",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts",
+      "id": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts#sha256OfFile",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "sha256OfFile",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -313117,5 +313225,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:12c8417a6b5d53a3658c667a675109b2b5c49478952b4d94d087553b4f35e3cd"
+  "sourceDigest": "sha256:64db696518fea6ecb66262efa6197a64a7682598ff12acd1808f891325a41f6b"
 }

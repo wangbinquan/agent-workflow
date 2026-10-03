@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 972,
+    "consumers": 973,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
     "methods": 1158,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21770,
-    "symbols": 1056
+    "recursiveFields": 21773,
+    "symbols": 1057
   },
   "entries": [
     {
@@ -133418,6 +133418,61 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": [
+        "import:2d332d129aa59d17ef37"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "stdout",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:RepositoryCandidateGitOutcome",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "development-automation",
+          "edgeId": "import:2d332d129aa59d17ef37",
+          "file": "packages/backend/src/modules/development-automation/application/ports/repositoryBaselineEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/ports/repositoryBaselineEffects.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:dafc50a2b3c4e00ee2a83af0e8f959c492f0f7822ba2f4d0131ef25d661da501",
+      "status": "target-context-current-surface",
+      "symbol": "RepositoryCandidateGitOutcome",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": [],
       "context": "source-control",
       "dataClass": "confidential",
@@ -172687,7 +172742,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:12c8417a6b5d53a3658c667a675109b2b5c49478952b4d94d087553b4f35e3cd",
+  "sourceDigest": "sha256:64db696518fea6ecb66262efa6197a64a7682598ff12acd1808f891325a41f6b",
   "targetContexts": [
     "collaboration",
     "development-automation",

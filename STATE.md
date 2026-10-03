@@ -1,3 +1,15 @@
+## RFC-370：DA baseline 与 Worker 实际 cause 接续（2026-10-03）
+
+DA RepositoryBaselineEffects 的有限 DESIGN 与 SOURCE16 均 PASS，SOURCE 指纹 `67e296f121682683c51ba5af88fe6525ab3900a9a492838773e7deb2b8c51ef5`。完整 acquire/readHead/bindFileReader/close 生命周期复用原 BaselineFileReader、BaselineStat 和 SC Git outcome；两个 head resolver、上传上下文及三个 owner 由八个真实装配点传入同一 selected factory。原 SHA、Git binary cat-file/Bun.file/stream hash/finally rm 正文与 DB mapper 保持；每次 stat 使用独立 scope 并等待 close ACK，未提供选择时才使用独立本机 adapter。完整 receiver、held ACK、失败和 body/close 聚合回归已写，尚须 hosted 运行。
+
+Worker cause 诊断的有限 DESIGN/SOURCE2 均 PASS，SOURCE 指纹 `1e854c0d42f7ca45121558c69c454ed2edfbc949a391f66453e7bfcb2e402b77`。生产改动只在实际 private errorMessage 中保留外层信息并依序附加 cause，循环有界；原查询、状态、ACK、provider 选择、close、重试和时间预算不变。这只让真实 PostgreSQL init 失败可见，根因仍未确认，不能称为修复完成。
+
+官方 scoped census 仅使用已提交 `68bc1ce54007de881d65bb271c4b6b4fe787a591` 加本批 18 个冻结 source/test 路径，6220 个非本批源码读精确 committed bytes。四个原生成规则、所有并行输出完整保留；边界新增为 0。实际 mutation 1830→1832、observed imports 5817→5821、原 exception 投影 5174→5177、public surfaces 1056→1057、symbol owners 26032→26041；三条 native value 边和原 SHA owner 完整迁移，三个 Worker timer 与十四项 ambient 仅变行号，background 352/ambient 501 保持。40 required SPI、304 debt、69 target edges 和空 implementation SCC 保持。五项实际增长只登记一次，匹配 canonical commit 后由正常后继提交退役；source digest `sha256:64db696518fea6ecb66262efa6197a64a7682598ff12acd1808f891325a41f6b`。
+
+前批 `12c82946bf43f5bd6ed82c3d086a4f2a8b662781` 主 CI `37098130275` 已 completed/failure（35 success、15 failure、50 jobs），Windows `37098130258` failure，maintenance `37098130248` success。三个纯测试修正另已推送 `68bc1ce5`；其主 CI `37101610276` 在本节冻结快照仍 in_progress，未取得全绿终态。全部旧失败、取消和首门修正保留。本批正式行为仍以发布后 exact-SHA hosted CI 为准；本机只作原 census、纯源码/AST/JSON证明及目标 format/lint，没有 AW test/typecheck/build/service。
+
+完整 A1–A8/AC00/A-G 尚未关闭。下一项继续 DA workspace 原 protected/business snapshot 与验证效果，随后完成其余内容、工作区/Git、执行、命令和执行权切面；CS 独立 adapters 与 B/M0 实际部署、M1–M4 仍按已批准顺序实施，尚无 AW-in-CS 部署，不关闭 RFC。
+
 ## 2026-10-03 RFC-370 Employee case workspace effects 与 d3 CI 接续
 
 Employee case 工作区内容/Git 的 SOURCE18 候选已完成两份有限独立功能检视：SOURCE17 与 Worker 诊断 SOURCE1 均 PASS。完整 14 方法 scope、8 个原业务操作、38 个原机制调用、10 个 Git cwd/有序参数和 6 个实际装配点已作源码证明；DA 的三处 checkpoint 消费等待内容与 close ACK 后继续。新本机证据只包含纯 AST/JSON/字节证明和定向格式/静态 lint，没有运行 AW 本机测试、typecheck、build 或服务。
