@@ -151,7 +151,13 @@ export async function assertStoredCompleteReport(
   report: CompleteObservationStoredReport,
 ) {
   await assertCompleteReportActor(db, actor, report.request.taskId)
-  if (report.report.state !== 'ready') return
+  const content =
+    report.report.state === 'ready'
+      ? report.report
+      : report.report.state === 'not-ready'
+        ? report.report.facts
+        : undefined
+  if (!content) return
   await assertCompleteReportIntegrity(db, report)
   const count = await db
     .select({ total: observationReportCounts.total })
@@ -164,7 +170,7 @@ export async function assertStoredCompleteReport(
       ),
     )
     .get()
-  if ((count?.total ?? '0') !== report.report.summary.inventory.tasks)
+  if ((count?.total ?? '0') !== content.summary.inventory.tasks)
     throw new Error('Complete original Task report count changed')
-  await assertCompleteReportPopulation(db, actor, report.id, report.report.summary.inventory.tasks)
+  await assertCompleteReportPopulation(db, actor, report.id, content.summary.inventory.tasks)
 }

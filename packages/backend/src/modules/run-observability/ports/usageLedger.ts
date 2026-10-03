@@ -16,6 +16,12 @@ export interface UsageCaptureReceipt extends ObservationCaptureCommit {
   readonly resolutions: readonly NativeRevisionResolution[]
   readonly priorRevisionGap: boolean
 }
+/** Exact ownership over the entire original native index, reduced to one bounded batch. */
+export interface NativeUsageOwnership {
+  readonly owners: string
+  /** Present only when exactly one original owner remains after excluding this invocation. */
+  readonly candidate: UsageLedgerRecord | null
+}
 export interface UsageLedgerScope {
   cursor(): Promise<string | null>
   event(eventId: string): Promise<string | undefined>
@@ -42,14 +48,12 @@ export interface UsageLedgerScope {
     resolutions: readonly NativeRevisionResolution[],
   ): Promise<void>
   lockNativeRoot(nativeSource: string, root: string): Promise<void>
-  nativeRecords(
+  nativeOwners(
     nativeSource: string,
     root: string,
     recordIds: readonly string[],
-  ): Promise<{
-    readonly items: readonly UsageLedgerRecord[]
-    readonly truncated: boolean
-  }>
+    excludeInvocationId: string,
+  ): Promise<ReadonlyMap<string, NativeUsageOwnership>>
   nativeScope(sourceId: string): Promise<UsageLedgerScope>
 }
 export interface UsageLedgerStore {

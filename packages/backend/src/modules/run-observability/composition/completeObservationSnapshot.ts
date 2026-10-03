@@ -67,7 +67,11 @@ export async function composeCompleteObservationSnapshot(input: {
   })
   await value.flush()
   await names.flush()
-  if (build.summary.metrics.state === 'not-ready')
+  // Unknown selection membership cannot support an exact selected factual population.
+  if (
+    build.summary.metrics.state === 'not-ready' &&
+    build.summary.metrics.gaps.includes('dimension-unresolved')
+  )
     return { state: 'not-ready', gaps: build.summary.metrics.gaps }
   const sourceRevision = await completeObservationSourceRevision({
     rows: snapshot.workspace,
@@ -88,15 +92,15 @@ export async function composeCompleteObservationSnapshot(input: {
     filters: report.request.query,
     taskId: report.request.taskId ?? null,
   }
-  return {
-    state: 'ready',
-    manifest: await sealCompleteObservationReport({
-      report,
-      rows: snapshot.workspace,
-      build,
-      header,
-      spool: input.spool,
-      signal,
-    }),
-  }
+  const manifest = await sealCompleteObservationReport({
+    report,
+    rows: snapshot.workspace,
+    build,
+    header,
+    spool: input.spool,
+    signal,
+  })
+  return build.summary.metrics.state === 'not-ready'
+    ? { state: 'not-ready', gaps: build.summary.metrics.gaps, manifest }
+    : { state: 'ready', manifest }
 }

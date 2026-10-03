@@ -6,6 +6,7 @@ import type {
   CompleteObservationReport,
   CompleteObservationReportHeader,
   CompleteObservationReportSummary,
+  CompleteObservationFactSummary,
 } from '@agent-workflow/shared'
 import type { CompleteWorkingRows } from './completeWorkingRows'
 import type { CompleteObservationSources } from './completeObservationSources'
@@ -57,7 +58,7 @@ export interface CompleteObservationManifest {
   readonly receipts: string
   readonly digest: string
   readonly header: CompleteObservationReportHeader
-  readonly summary: CompleteObservationReportSummary
+  readonly summary: CompleteObservationReportSummary | CompleteObservationFactSummary
 }
 export interface CompleteObservationSpool {
   seal(input: {
@@ -65,7 +66,7 @@ export interface CompleteObservationSpool {
     readonly owner: string
     readonly requestKey: string
     readonly header: CompleteObservationReportHeader
-    readonly summary: CompleteObservationReportSummary
+    readonly summary: CompleteObservationReportSummary | CompleteObservationFactSummary
     readonly items: AsyncIterable<CompleteObservationTransferItem>
     readonly signal?: AbortSignal
   }): Promise<CompleteObservationManifest>
@@ -97,4 +98,8 @@ export interface CompleteObservationStoredReport {
 }
 export type CompleteObservationBuildResult =
   | { readonly state: 'ready'; readonly manifest: CompleteObservationManifest }
-  | { readonly state: 'not-ready'; readonly gaps: readonly string[] }
+  | {
+      readonly state: 'not-ready'
+      readonly gaps: readonly string[]
+      readonly manifest?: CompleteObservationManifest
+    }

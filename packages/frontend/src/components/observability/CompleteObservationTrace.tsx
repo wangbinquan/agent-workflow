@@ -7,7 +7,7 @@ import { EmptyState } from '@/components/EmptyState'
 import { ExecutionSwimlane } from '@/components/ExecutionSwimlane'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { CompleteObservationPage } from './CompleteObservationPager'
-import { useCompleteObservationPage, type ReadyObservationReport } from './completeReportClient'
+import { useCompleteObservationPage, type ReadableObservationReport } from './completeReportClient'
 import { formatObservationCny } from './formatObservations'
 import './ObservationTrace.css'
 
@@ -16,7 +16,7 @@ export function CompleteObservationTrace({
   report,
   nodeRunId,
 }: {
-  readonly report: ReadyObservationReport
+  readonly report: ReadableObservationReport
   readonly nodeRunId: string
 }) {
   const { t, i18n } = useTranslation(),

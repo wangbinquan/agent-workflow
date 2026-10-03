@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2131,
+    "backendFiles": 2132,
     "frontendFiles": 651,
     "legacyFiles": 579,
-    "moduleFiles": 1552,
-    "productionFiles": 2945,
+    "moduleFiles": 1553,
+    "productionFiles": 2946,
     "sharedFiles": 163,
-    "symbolsIncludingFileRoots": 26410
+    "symbolsIncludingFileRoots": 26419
   },
   "entries": [
     {
@@ -109915,6 +109915,42 @@
       "currentContext": "run-observability",
       "currentLayer": "domain",
       "exported": false,
+      "file": "packages/backend/src/modules/run-observability/domain/completeReportFacts.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/completeReportFacts.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/completeReportFacts.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/completeReportFacts.ts#completeReportFactRow",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "completeReportFactRow",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/domain/completeReportFacts.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/domain/completeReportFacts.ts#completeReportFactSummary",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "completeReportFactSummary",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "domain",
+      "exported": false,
       "file": "packages/backend/src/modules/run-observability/domain/completeSourceCursor.ts",
       "id": "owner:packages/backend/src/modules/run-observability/domain/completeSourceCursor.ts#$file",
       "removeAfterWave": null,
@@ -112824,6 +112860,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "NativeRevisionResolution",
+      "targetContext": "run-observability",
+      "targetLayer": "ports"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "ports",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/ports/usageLedger.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/ports/usageLedger.ts#NativeUsageOwnership",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NativeUsageOwnership",
       "targetContext": "run-observability",
       "targetLayer": "ports"
     },
@@ -233992,6 +234040,18 @@
       "currentLayer": "components",
       "exported": true,
       "file": "packages/frontend/src/components/observability/completeReportClient.ts",
+      "id": "owner:packages/frontend/src/components/observability/completeReportClient.ts#ReadableObservationReport",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "ReadableObservationReport",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": true,
+      "file": "packages/frontend/src/components/observability/completeReportClient.ts",
       "id": "owner:packages/frontend/src/components/observability/completeReportClient.ts#ReadyObservationReport",
       "removeAfterWave": null,
       "status": "cross-package-contract",
@@ -295624,6 +295684,18 @@
       "currentLayer": "contracts",
       "exported": true,
       "file": "packages/shared/src/schemas/observationReport.ts",
+      "id": "owner:packages/shared/src/schemas/observationReport.ts#COMPLETE_OBSERVATION_FACT_SECTIONS",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "COMPLETE_OBSERVATION_FACT_SECTIONS",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/schemas/observationReport.ts",
       "id": "owner:packages/shared/src/schemas/observationReport.ts#COMPLETE_OBSERVATION_SECTIONS",
       "removeAfterWave": null,
       "status": "cross-package-contract",
@@ -295652,6 +295724,18 @@
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "CompleteObservationDimensionTask",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/schemas/observationReport.ts",
+      "id": "owner:packages/shared/src/schemas/observationReport.ts#CompleteObservationFactSummary",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "CompleteObservationFactSummary",
       "targetContext": "shared-contracts",
       "targetLayer": "contracts"
     },
@@ -295700,6 +295784,30 @@
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "CompleteObservationReport",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/schemas/observationReport.ts",
+      "id": "owner:packages/shared/src/schemas/observationReport.ts#completeObservationReportContent",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "completeObservationReportContent",
+      "targetContext": "shared-contracts",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "shared",
+      "currentLayer": "contracts",
+      "exported": true,
+      "file": "packages/shared/src/schemas/observationReport.ts",
+      "id": "owner:packages/shared/src/schemas/observationReport.ts#CompleteObservationReportContent",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "CompleteObservationReportContent",
       "targetContext": "shared-contracts",
       "targetLayer": "contracts"
     },
@@ -317655,5 +317763,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8374c61a4f7114855af3604e243c664db5827232894f00bdfb6800e1ee913323"
+  "sourceDigest": "sha256:cce6e08058cf1f21df255f9688a98c100352cb0832cdc7d565dce2e4ddb41d37"
 }

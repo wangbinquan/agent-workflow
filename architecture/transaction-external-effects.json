@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "coLocatedCandidates": 28,
+    "coLocatedCandidates": 29,
     "transactionCallbacks": 267
   },
   "entries": [
@@ -2653,13 +2653,15 @@
       "transactionCallee": "withTransaction"
     },
     {
-      "effectTokens": [],
+      "effectTokens": [
+        "publish"
+      ],
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
-      "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#transaction:192",
-      "line": 192,
+      "finalCriterion": "commit-intent-then-effect",
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#transaction:193",
+      "line": 193,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#publishCompleteReport",
-      "status": "clear",
+      "status": "co-located-risk",
       "symbol": "publishCompleteReport",
       "targetContext": "run-observability",
       "transactionCallee": "transaction"
@@ -2670,8 +2672,8 @@
       ],
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#transaction:45",
-      "line": 45,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#transaction:46",
+      "line": 46,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPage",
       "status": "co-located-risk",
       "symbol": "stageCompleteReportPage",
@@ -2682,8 +2684,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#transaction:118",
-      "line": 118,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#transaction:122",
+      "line": 122,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#completeObservationReportCache",
       "status": "clear",
       "symbol": "completeObservationReportCache",
@@ -2694,8 +2696,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#transaction:175",
-      "line": 175,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#transaction:179",
+      "line": 179,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#completeObservationReportCache",
       "status": "clear",
       "symbol": "completeObservationReportCache",
@@ -2706,8 +2708,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#transaction:54",
-      "line": 54,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#transaction:58",
+      "line": 58,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#completeObservationReportCache",
       "status": "clear",
       "symbol": "completeObservationReportCache",
@@ -2718,8 +2720,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#transaction:86",
-      "line": 86,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#transaction:90",
+      "line": 90,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#completeObservationReportCache",
       "status": "clear",
       "symbol": "completeObservationReportCache",
@@ -2766,8 +2768,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts#transaction:200",
-      "line": 200,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts#transaction:221",
+      "line": 221,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/usageLedgerPersistence.ts#createUsageLedgerStore",
       "status": "clear",
       "symbol": "createUsageLedgerStore",
@@ -3270,7 +3272,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8374c61a4f7114855af3604e243c664db5827232894f00bdfb6800e1ee913323",
+  "sourceDigest": "sha256:cce6e08058cf1f21df255f9688a98c100352cb0832cdc7d565dce2e4ddb41d37",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

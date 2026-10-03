@@ -11,23 +11,25 @@ export function CompleteTokens({
   breakdown?: boolean
 }) {
   const { t, i18n } = useTranslation()
-  if (value.state !== 'ready')
-    return (
-      <span>
-        {t(
-          `runObservability.${value.state === 'not-applicable' ? 'notApplicable' : 'reportNotReady'}`,
-        )}
-      </span>
-    )
   return (
     <>
-      <strong>{BigInt(value.tokens.total).toLocaleString(i18n.language)}</strong>
+      <strong>
+        {value.state === 'ready'
+          ? BigInt(value.tokens.total).toLocaleString(i18n.language)
+          : t(
+              `runObservability.${value.state === 'not-applicable' ? 'notApplicable' : 'reportNotReady'}`,
+            )}
+      </strong>
       {breakdown && (
         <dl className="observation-token-buckets" data-token-buckets>
           {OBSERVATION_TOKEN_BUCKETS.map((bucket) => (
             <div key={bucket} data-token-bucket={bucket}>
               <dt>{t('runObservability.' + bucket)}</dt>
-              <dd>{BigInt(value.tokens[bucket]).toLocaleString(i18n.language)}</dd>
+              <dd>
+                {value.state === 'ready'
+                  ? BigInt(value.tokens[bucket]).toLocaleString(i18n.language)
+                  : t('runObservability.unknown')}
+              </dd>
             </div>
           ))}
         </dl>
@@ -37,7 +39,7 @@ export function CompleteTokens({
 }
 export function CompleteCost({ value }: { value: CompleteObservationMetrics }) {
   const { t } = useTranslation()
-  if (value.state !== 'ready') return <span>—</span>
+  if (value.state !== 'ready') return <span>{t('runObservability.unknown')}</span>
   return (
     <>
       <strong>{formatObservationCny(value.cost.amount, true)}</strong>
@@ -57,6 +59,10 @@ export function CompleteMetrics({ value }: { value: CompleteObservationMetrics }
       <NoticeBanner tone="warning">
         {t('runObservability.reportNotReady')}
         <p>{value.gaps.join(' · ')}</p>
+        <CompleteTokens value={value} />
+        <p>
+          {t('runObservability.cost')} · <CompleteCost value={value} />
+        </p>
       </NoticeBanner>
     )
   if (value.state === 'not-applicable')

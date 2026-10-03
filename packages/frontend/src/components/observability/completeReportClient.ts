@@ -2,13 +2,17 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useMemo, useRef } from 'react'
 import {
   CompleteObservationReportQuerySchema,
+  COMPLETE_OBSERVATION_FACT_SECTIONS,
+  completeObservationReportContent,
   type CompleteObservationReport,
   type CompleteObservationReportPage,
   type CompleteObservationSection,
+  type CompleteObservationReportContent,
   type ObservationOverviewQuery,
 } from '@agent-workflow/shared'
 import { api } from '@/api/client'
 
+export type ReadableObservationReport = CompleteObservationReportContent
 export type ReadyObservationReport = Extract<CompleteObservationReport, { state: 'ready' }>
 export function useCompleteObservationReport(
   filters: ObservationOverviewQuery,
@@ -42,10 +46,13 @@ export function useCompleteObservationReport(
             { filters, refreshKey, ...(taskId ? { taskId } : {}) },
             signal,
           )
+      const content = completeObservationReportContent(report)
       if (
-        report.state === 'ready' &&
-        (report.header.taskId !== (taskId ?? null) ||
-          JSON.stringify(CompleteObservationReportQuerySchema.parse(report.header.filters)) !==
+        content &&
+        (content.header.reportId !==
+          (report.state === 'ready' ? report.header.reportId : report.reportId) ||
+          content.header.taskId !== (taskId ?? null) ||
+          JSON.stringify(CompleteObservationReportQuerySchema.parse(content.header.filters)) !==
             JSON.stringify(CompleteObservationReportQuerySchema.parse(filters)))
       )
         throw new Error('Complete report scope changed')
@@ -61,7 +68,7 @@ export function useCompleteObservationReport(
 
 /** One display page is retained at a time; the server's sealed count covers the entire population. */
 export function useCompleteObservationPage<T>(
-  report: ReadyObservationReport | null,
+  report: ReadableObservationReport | null,
   section: CompleteObservationSection,
   parent: string | null = null,
   enabled = true,
@@ -81,7 +88,11 @@ export function useCompleteObservationPage<T>(
   const after = cursors.at(-1) ?? null
   const query = useQuery({
     queryKey: ['run-observability-complete-page', report?.header.reportId, section, parent, after],
-    enabled: !!report && enabled,
+    enabled:
+      !!report &&
+      enabled &&
+      (report.summary.metrics.state !== 'not-ready' ||
+        COMPLETE_OBSERVATION_FACT_SECTIONS.includes(section)),
     retry: false,
     gcTime: 0,
     queryFn: async ({ signal }) => {
@@ -114,7 +125,10 @@ export function useCompleteObservationPage<T>(
           }) => {
             if (query.queryKey[0] !== 'run-observability-complete') return false
             const value = query.state.data as CompleteObservationReport | undefined
-            return value?.state === 'ready' && value.header.reportId === report.header.reportId
+            return (
+              !!value &&
+              completeObservationReportContent(value)?.header.reportId === report.header.reportId
+            )
           }
           // A failed detail read must not leave the previous numeric summary visible.
           client.setQueriesData<CompleteObservationReport>(

@@ -7,6 +7,7 @@ import type {
   CompleteObservationTrend,
   ObservationOverviewQuery,
 } from '@agent-workflow/shared'
+import { completeObservationReportContent } from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
 import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
@@ -32,7 +33,7 @@ import {
 import {
   useCompleteObservationPage,
   useCompleteObservationReport,
-  type ReadyObservationReport,
+  type ReadableObservationReport,
 } from './completeReportClient'
 import { ObservationFilters } from './ObservationFilters'
 import type { ObservationSearch } from './RunObservability'
@@ -48,7 +49,7 @@ function DimensionCard({
   selectedKey,
   triggerRef,
 }: {
-  report: ReadyObservationReport
+  report: ReadableObservationReport
   section: 'agents' | 'runtimes' | 'models' | 'purposes' | 'sources'
   title: string
   onSelect: (value: CompleteObservationDimension, trigger: HTMLElement) => void
@@ -71,7 +72,7 @@ function DimensionCard({
     </Card>
   )
 }
-function Summary({ report }: { report: ReadyObservationReport }) {
+function Summary({ report }: { report: ReadableObservationReport }) {
   const { t, i18n } = useTranslation(),
     value = report.summary.metrics
   return (
@@ -115,7 +116,7 @@ export function CompleteRunObservability({
     ReadonlyMap<
       string,
       {
-        report: ReadyObservationReport
+        report: ReadableObservationReport
         row: CompleteObservationDimension
       } | null
     >
@@ -145,10 +146,15 @@ export function CompleteRunObservability({
     taskRevision,
     !!search.task,
   )
-  const mainReport = whole.data?.state === 'ready' ? whole.data : null
+  const mainReport =
+    whole.data && !whole.error && !whole.isFetching
+      ? completeObservationReportContent(whole.data)
+      : null
   const current = search.task ? task : whole,
     report =
-      current.data?.state === 'ready' && !current.error && !current.isFetching ? current.data : null
+      current.data && !current.error && !current.isFetching
+        ? completeObservationReportContent(current.data)
+        : null
   const dimensionVisible = !!report && dimension?.report.header.reportId === report.header.reportId
   const tasks = useCompleteObservationPage<CompleteObservationTask>(
     mainReport,
@@ -349,7 +355,9 @@ export function CompleteRunObservability({
                 selectedKey={dimension?.row.key}
                 triggerRef={dimensionTrigger}
               />
-              <CompleteObservationCaptures report={report} />
+              {report.summary.metrics.state !== 'not-ready' && (
+                <CompleteObservationCaptures report={report} />
+              )}
             </>
           ) : tab === 'tasks' ? (
             <Card title={t('runObservability.tasks')}>
@@ -387,7 +395,9 @@ export function CompleteRunObservability({
                   <CompleteObservationTiming report={report} />
                 </Card>
               </div>
-              <CompleteObservationCaptures report={report} />
+              {report.summary.metrics.state !== 'not-ready' && (
+                <CompleteObservationCaptures report={report} />
+              )}
               <CompleteObservationCapabilities />
             </>
           ) : tab === 'agents' ? (
@@ -445,9 +455,11 @@ export function CompleteRunObservability({
                   triggerRef={dimensionTrigger}
                 />
               </div>
-              <Card title={t('runObservability.usageRecords')}>
-                <CompleteObservationAllocations report={report} />
-              </Card>
+              {report.summary.metrics.state !== 'not-ready' && (
+                <Card title={t('runObservability.usageRecords')}>
+                  <CompleteObservationAllocations report={report} />
+                </Card>
+              )}
             </>
           ) : (
             <>

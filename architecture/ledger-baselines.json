@@ -902,12 +902,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26410,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26419,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371 sealed nonnumeric complete facts, exact native ownership EOF and original trace CI repair, original census 26410 -> 26419 from 34e49589e9bc26c6ea9f3da8a1f9f90f367a29c6. Actual fact summary/selector/nonnumeric projection and full ownership symbols; no original matcher, debt term or threshold changes. Consume in the matching canonical commit and retire in its normal non-growing successor."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:8374c61a4f7114855af3604e243c664db5827232894f00bdfb6800e1ee913323",
+    "sourceDigest": "sha256:cce6e08058cf1f21df255f9688a98c100352cb0832cdc7d565dce2e4ddb41d37",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +923,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "335cc5333ae3883bd8f9b457c3253add552809d9",
-    "contentDigest": "sha256:354a65ab2aa4949a8153ebe1e11107e98e6506f806c35fa45bc61b9ede29e3c4",
+    "currentSnapshotSha": "34e49589e9bc26c6ea9f3da8a1f9f90f367a29c6",
+    "contentDigest": "sha256:371da00794ae2f48dc8950a0a4ef1566d9142d314b131573bb5608baf2114a43",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

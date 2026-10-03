@@ -13,6 +13,7 @@ import type {
   CompleteObservationTransferItem,
   CompleteObservationTransferPage,
 } from '../ports/completeObservationReport'
+import { COMPLETE_OBSERVATION_FACT_SECTIONS } from '@agent-workflow/shared'
 
 /** Sealed derived transport on the original configured operations root, never an input database. */
 export function completeObservationFileSpool(appHome: string): CompleteObservationSpool {
@@ -24,8 +25,14 @@ export function completeObservationFileSpool(appHome: string): CompleteObservati
   }
   return {
     async seal(input) {
-      if (input.summary.metrics.state === 'not-ready' || input.header.reportId !== input.reportId)
-        throw new Error('Incomplete original statistics cannot be sealed')
+      if (input.header.reportId !== input.reportId)
+        throw new Error('Original report seal identity changed')
+      const factsOnly = input.summary.metrics.state === 'not-ready'
+      if (
+        factsOnly &&
+        ('numericRecords' in input.summary.inventory || 'nativeCaptures' in input.summary.inventory)
+      )
+        throw new Error('Incomplete original statistics cannot expose numeric subtotals')
       const directory = folder(input.reportId, input.owner)
       mkdirSync(directory, { recursive: true, mode: 0o700 })
       let pages = 0n,
@@ -53,6 +60,21 @@ export function completeObservationFileSpool(appHome: string): CompleteObservati
       }
       for await (const item of input.items) {
         input.signal?.throwIfAborted()
+        if (factsOnly && item.kind !== 'receipt') {
+          const section = item.kind === 'row' ? item.row.section : item.count.section
+          if (!COMPLETE_OBSERVATION_FACT_SECTIONS.includes(section))
+            throw new Error('Incomplete original statistics cannot seal numeric collections')
+          if (item.kind === 'row') {
+            const document = item.row.document as Record<string, unknown>
+            if (
+              'metrics' in document &&
+              (document.metrics as { state: string }).state !== 'not-ready'
+            )
+              throw new Error('Incomplete original statistics cannot expose child subtotals')
+            if (section === 'span-facts' && (document.usage !== null || document.cost !== null))
+              throw new Error('Incomplete original statistics cannot expose span subtotals')
+          }
+        }
         buffer.push(item)
         if (item.kind === 'row') rows++
         else if (item.kind === 'count') counts++

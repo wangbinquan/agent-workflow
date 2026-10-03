@@ -2,6 +2,8 @@ import type { Actor } from '@/auth/actor'
 import {
   CompleteObservationPageQuerySchema,
   CompleteObservationReportQuerySchema,
+  COMPLETE_OBSERVATION_FACT_SECTIONS,
+  completeObservationReportContent,
   type CompleteObservationReport,
   type CompleteObservationReportPage,
   type ObservationOverviewQuery,
@@ -79,16 +81,18 @@ export function completeObservationReportService(input: {
       if (timer !== undefined) clearTimeout(timer)
       await pulse
       job.signal.throwIfAborted()
-      if (result.state === 'not-ready') {
+      if (result.state === 'not-ready' && !result.manifest) {
         await input.store.unavailable(report.id, report.owner, result.gaps)
         return
       }
+      const manifest = result.manifest
+      if (!manifest) throw new Error('Original complete report manifest missing')
       // build has released the one original reader reservation before the first writer operation.
       await input.store.phase(report.id, report.owner, 'publishing')
-      for await (const page of input.spool.pages(result.manifest, job.signal))
+      for await (const page of input.spool.pages(manifest, job.signal))
         await input.store.stage(report.id, report.owner, page)
       await input.store.assertReadable(report.request.actor, report)
-      await input.store.publish(report.id, report.owner, result.manifest)
+      await input.store.publish(report.id, report.owner, manifest)
     } catch (error) {
       await input.store.fail(
         report.id,
@@ -176,12 +180,21 @@ export function completeObservationReportService(input: {
       raw: unknown,
     ): Promise<CompleteObservationReportPage<T>> {
       const report = await readable(actor, id)
-      if (report.report.state !== 'ready')
+      const content = completeObservationReportContent(report.report)
+      if (!content)
         throw new CompleteObservationError('not-ready', 'Complete original report is not ready')
       const query = CompleteObservationPageQuerySchema.parse(raw),
         parent = query.parent ?? null
+      if (
+        report.report.state === 'not-ready' &&
+        !COMPLETE_OBSERVATION_FACT_SECTIONS.includes(query.section)
+      )
+        throw new CompleteObservationError(
+          'not-ready',
+          'Original numeric evidence is incomplete; only sealed execution facts are available',
+        )
       const source = JSON.stringify([id, query.section, parent]),
-        header = report.report.header
+        header = content.header
       const after =
         completeSourcePosition(query.after ?? null, header.snapshotId, source, report.requestKey) ??
         null

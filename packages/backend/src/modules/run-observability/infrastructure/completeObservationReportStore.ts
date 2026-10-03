@@ -14,7 +14,11 @@ import {
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 import type { CompleteObservationReportCache } from '../ports/completeObservationReportCache'
-import type { CompleteObservationReportPage } from '@agent-workflow/shared'
+import {
+  COMPLETE_OBSERVATION_FACT_SECTIONS,
+  type CompleteObservationReportPage,
+} from '@agent-workflow/shared'
+import { CompleteObservationError } from '../domain/completeObservationError'
 import {
   decodeCompleteReport,
   encodeCompleteReportRequest,
@@ -200,6 +204,14 @@ export function completeObservationReportCache(
     ): Promise<CompleteObservationReportPage<T>> {
       return session.snapshotRead(async (tx) => {
         await assertStoredCompleteReport(tx, report.request.actor, report)
+        if (
+          report.report.state === 'not-ready' &&
+          !COMPLETE_OBSERVATION_FACT_SECTIONS.includes(query.section)
+        )
+          throw new CompleteObservationError(
+            'not-ready',
+            'Original numeric evidence is incomplete; only sealed execution facts are available',
+          )
         const scope = and(
           eq(observationReportRows.reportId, report.id),
           eq(observationReportRows.section, query.section),

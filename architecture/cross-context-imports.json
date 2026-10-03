@@ -187122,7 +187122,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8374c61a4f7114855af3604e243c664db5827232894f00bdfb6800e1ee913323",
+  "sourceDigest": "sha256:cce6e08058cf1f21df255f9688a98c100352cb0832cdc7d565dce2e4ddb41d37",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

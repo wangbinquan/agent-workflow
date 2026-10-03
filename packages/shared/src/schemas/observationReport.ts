@@ -25,6 +25,22 @@ export const COMPLETE_OBSERVATION_SECTIONS = [
   'span-statuses',
 ] as const
 export type CompleteObservationSection = (typeof COMPLETE_OBSERVATION_SECTIONS)[number]
+/** Execution facts remain available only after the same complete input and output seals. */
+export const COMPLETE_OBSERVATION_FACT_SECTIONS: readonly CompleteObservationSection[] = [
+  'tasks',
+  'agents',
+  'runtimes',
+  'models',
+  'purposes',
+  'sources',
+  'trends',
+  'quality',
+  'attempts',
+  'invocations',
+  'dimension-tasks',
+  'span-facts',
+  'span-statuses',
+]
 export const CompleteObservationReportQuerySchema = ObservationOverviewQuerySchema
 export const CompleteObservationReportRequestSchema = z
   .object({
@@ -73,9 +89,40 @@ export interface CompleteObservationReportSummary {
   /** A requested Task and all its descendants; physical Task rows retain their own disjoint usage. */
   readonly rootTask: CompleteObservationTask | null
 }
+export interface CompleteObservationFactSummary {
+  readonly metrics: Extract<CompleteObservationMetrics, { state: 'not-ready' }>
+  readonly inventory: {
+    readonly tasks: string
+    readonly attempts: string
+    readonly invocations: string
+  }
+  readonly statuses: Readonly<Record<string, string>>
+  readonly timing: {
+    readonly p50Ms: string | null
+    readonly p95Ms: string | null
+    readonly wallMs: string
+    readonly runningMs: string
+    readonly unknown: string
+  }
+  readonly rootTask: CompleteObservationTask | null
+}
+export interface CompleteObservationReportContent {
+  readonly header: CompleteObservationReportHeader
+  readonly summary: CompleteObservationReportSummary | CompleteObservationFactSummary
+  readonly counts: Readonly<Partial<Record<CompleteObservationSection, string>>>
+}
 export type CompleteObservationReport =
   | { readonly state: 'building'; readonly reportId: string; readonly phase: string }
-  | { readonly state: 'not-ready'; readonly reportId: string; readonly gaps: readonly string[] }
+  | {
+      readonly state: 'not-ready'
+      readonly reportId: string
+      readonly gaps: readonly string[]
+      readonly facts?: {
+        readonly header: CompleteObservationReportHeader
+        readonly summary: CompleteObservationFactSummary
+        readonly counts: Readonly<Partial<Record<CompleteObservationSection, string>>>
+      }
+    }
   | {
       readonly state: 'failed'
       readonly reportId: string
@@ -88,6 +135,16 @@ export type CompleteObservationReport =
       readonly summary: CompleteObservationReportSummary
       readonly counts: Readonly<Partial<Record<CompleteObservationSection, string>>>
     }
+/** No state is rewritten: this selects sealed content without claiming numeric readiness. */
+export function completeObservationReportContent(
+  report: CompleteObservationReport,
+): CompleteObservationReportContent | null {
+  return report.state === 'ready'
+    ? report
+    : report.state === 'not-ready'
+      ? (report.facts ?? null)
+      : null
+}
 export interface CompleteObservationReportPage<T> {
   readonly reportId: string
   readonly section: CompleteObservationSection

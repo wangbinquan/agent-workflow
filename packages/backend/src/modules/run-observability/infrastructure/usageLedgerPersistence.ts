@@ -14,7 +14,7 @@ import {
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 import type { UsageLedgerRecord } from '../domain/usageLedger'
-import type { UsageLedgerScope, UsageLedgerStore } from '../ports/usageLedger'
+import type { NativeUsageOwnership, UsageLedgerScope, UsageLedgerStore } from '../ports/usageLedger'
 import {
   commitUsageCapture,
   readUsageCapture,
@@ -42,28 +42,49 @@ function scope(tx: DatabaseTransaction, sourceId: string): UsageLedgerScope {
         id,
       )
     },
-    nativeRecords: async (nativeSource, root, recordIds) => {
+    nativeOwners: async (nativeSource, root, recordIds, excludeInvocationId) => {
       if (recordIds.length > 400) throw new RangeError('Native record lookup exceeds batch budget')
-      if (!recordIds.length) return { items: [], truncated: false }
-      const rows = await tx
-        .select({ document: observationUsageCurrent.document })
-        .from(observationUsageCurrent)
-        .innerJoin(
-          observationUsageNativeRecords,
-          eq(observationUsageCurrent.id, observationUsageNativeRecords.id),
-        )
-        .where(
-          and(
-            eq(observationUsageNativeRecords.nativeSource, nativeSource),
-            eq(observationUsageNativeRecords.nativeRoot, root),
-            inArray(observationUsageNativeRecords.recordId, [...recordIds]),
-          ),
-        )
-        .limit(801)
-        .all()
-      return {
-        items: rows.slice(0, 800).map((row) => decode(row.document)),
-        truncated: rows.length > 800,
+      const owners = new Map<string, NativeUsageOwnership>(
+        recordIds.map((recordId) => [recordId, { owners: '0', candidate: null }]),
+      )
+      if (!recordIds.length) return owners
+      let after: string | undefined
+      // 500 bounds each transfer, not the owner population. Only the actual empty query is EOF.
+      while (true) {
+        const rows = await tx
+          .select({ id: observationUsageCurrent.id, document: observationUsageCurrent.document })
+          .from(observationUsageCurrent)
+          .innerJoin(
+            observationUsageNativeRecords,
+            eq(observationUsageCurrent.id, observationUsageNativeRecords.id),
+          )
+          .where(
+            and(
+              eq(observationUsageNativeRecords.nativeSource, nativeSource),
+              eq(observationUsageNativeRecords.nativeRoot, root),
+              inArray(observationUsageNativeRecords.recordId, [...recordIds]),
+              after === undefined ? undefined : gt(observationUsageCurrent.id, after),
+            ),
+          )
+          .orderBy(asc(observationUsageCurrent.id))
+          .limit(500)
+          .all()
+        if (!rows.length) return owners
+        for (const row of rows) {
+          const candidate = decode(row.document)
+          if (candidate.measurement.invocationId === excludeInvocationId) continue
+          const recordId = candidate.measurement.recordId,
+            prior = owners.get(recordId)
+          if (!prior) throw new Error('Original native record binding changed')
+          const count = BigInt(prior.owners) + 1n
+          owners.set(recordId, {
+            owners: count.toString(),
+            candidate: count === 1n ? candidate : null,
+          })
+        }
+        const next = rows.at(-1)!.id
+        if (next === after) throw new Error('Original native owner cursor did not advance')
+        after = next
       }
     },
     nativeScope: async (otherSource) => {

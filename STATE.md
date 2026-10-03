@@ -9776,3 +9776,13 @@ SOURCE7首次FAIL发现JSON布尔值被SQLite转成0/1，原失败保留；只�
 原 scoped census 使用已提交57f6及冻结28路径，排除并保留全部并行 WIP；13原产物/129库存/provenance原规则核对通过。只有 actual public1071→1075、symbol26359→26376 和原硬编码库存320→321 三项增长，匹配提交消费后由正常后继退役。source digest sha256:007e7d3b11f6341ddbba23230e3dc0de1d555d73b5a28f9715f438717ceaaa57。第一次遗漏原 --write 的 report-only 调用不产生清单，失败记录保留，正式写产物只用随后的同候选原 generator；初版META库存未同步实际新增记录导致FAIL，修正版沿原321计数修正，保留原规则、条目及预算。
 
 原生 reader 仍未接到正式 producer。AW/CS 的 session/step/part/ancestor、baseline、历史 owner 总量上限与持久 v2 baseline/emission/source ACK 继续；不得称完整统计。正式 E2E、定时 CI、100K Task/10M usage、真实模型四桶/CNY、浏览器与 CS 最终本机部署仍待，CS 开发 producer保持OFF，两个RFC保持InProgress。完整共享 STATE 其余输出原字节保留。
+
+### 2026-10-04 RFC-371：完整事实与数值就绪分离、原生 ownership EOF
+
+完整源 EOF、原 spool seal／digest／hidden staging／owner CAS 继续保留。缺用量的报告现在可以保留已经完整读取的 Task、attempt、调用、维度和执行泳道事实；状态仍是 not-ready，全部四桶和人民币未知，数字证据页不可读，缺 retained fact 或页读取失败撤下事实。dimension-unresolved 仍不发布不精确 selected population。SOURCE22 与共享 schema 单文件等价展开修订分别独立 PASS；原 scanner opaque／depth FAIL 保留，未改 scanner、allowlist 或深度。
+
+原 native ownership 的 800／801 条截断改为原索引 strict keyset 到实际 EOF，按原 root/source/current invocation 判定全部唯一或歧义 owner；只保留单批身份结果，400 ID／500 行是单批参数。新增真实双 provider 1401 行，包括第1001个 crowded owner尾记录；SOURCE5 PASS。原 alias HTTP 类型与 overlay AST 一处真实 trace Dialog 登记修复通过 SOURCE3 v2，v1 证据归属 P2／FAIL 保留；现有 trace UT 只证明宽度／分页／EOF，关闭与焦点仍待页面验收。
+
+匹配34e49589原提交树与冻结30候选的官方原 AST 生成13完整产物，129原库存检查无违规；sourceDigest sha256:cce6e08058cf1f21df255f9688a98c100352cb0832cdc7d565dce2e4ddb41d37。只登记实际 symbol owner26410→26419增长及正常后继退役，规则／阈值／target／旧 debt均保持。本机仅自有格式、lint、原 AST/JSON/库存投影；没有 AW本地test/types/build/service。
+
+335cc533自身CI37156345771的前端／类型／若干页面与required终态失败仍保留；本批尚待精确发布及新的完整hosted与定时作业。原生v2持久before基线／emission与源ACK／正式采集接线仍待，旧producer总量限制尚未全部解除；两个RFC保持In Progress，CS开发producer OFF，不能以本片SOURCE或库存证明完整统计已验收。

@@ -1,4 +1,4 @@
-import { and, eq, ne, or, sql } from 'drizzle-orm'
+import { and, eq, ne, notInArray, or, sql } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   observationReports,
@@ -11,6 +11,7 @@ import { databaseSessionFor, affectedRows } from '@/platform/persistence/databas
 import { sha256Hex } from '@/util/hash'
 import {
   COMPLETE_OBSERVATION_SECTIONS,
+  COMPLETE_OBSERVATION_FACT_SECTIONS,
   type CompleteObservationReport,
 } from '@agent-workflow/shared'
 import type {
@@ -199,8 +200,7 @@ export async function publishCompleteReport(
       row.generation !== generation ||
       manifest.header.generation !== generation ||
       manifest.header.reportId !== id ||
-      manifest.header.actorScope !== row.actorScope ||
-      manifest.summary.metrics.state === 'not-ready'
+      manifest.header.actorScope !== row.actorScope
     )
       throw new Error('Complete original report seal or authority changed')
     await assertCompleteReportActor(tx, report.request.actor, report.request.taskId)
@@ -252,6 +252,27 @@ export async function publishCompleteReport(
       .where(and(eq(observationReportCounts.reportId, id), eq(observationReportCounts.parent, '')))
       .all()
     const summaryCounts = Object.fromEntries(counts.map((count) => [count.section, count.total]))
+    if (manifest.summary.metrics.state === 'not-ready') {
+      const unexpected = await tx
+        .select({ section: observationReportCounts.section })
+        .from(observationReportCounts)
+        .where(
+          and(
+            eq(observationReportCounts.reportId, id),
+            notInArray(observationReportCounts.section, [...COMPLETE_OBSERVATION_FACT_SECTIONS]),
+          ),
+        )
+        .limit(1)
+        .get()
+      if (
+        unexpected ||
+        'numericRecords' in manifest.summary.inventory ||
+        'nativeCaptures' in manifest.summary.inventory
+      )
+        throw new Error(
+          'Incomplete original report cannot publish numeric collections or subtotals',
+        )
+    }
     if ((summaryCounts['tasks'] ?? '0') !== manifest.summary.inventory.tasks)
       throw new Error('Complete original Task EOF count changed')
     await assertCompleteReportPopulation(
@@ -260,19 +281,45 @@ export async function publishCompleteReport(
       id,
       manifest.summary.inventory.tasks,
     )
-    const ready: CompleteObservationReport = {
-      state: 'ready',
-      header: manifest.header,
-      summary: manifest.summary,
-      counts: summaryCounts,
+    const summary = manifest.summary
+    let published: CompleteObservationReport
+    if (summary.metrics.state === 'not-ready') {
+      published = {
+        state: 'not-ready',
+        reportId: id,
+        gaps: summary.metrics.gaps,
+        facts: {
+          header: manifest.header,
+          summary: { ...summary, metrics: summary.metrics },
+          counts: summaryCounts,
+        },
+      }
+    } else {
+      if (!('numericRecords' in summary.inventory) || !('nativeCaptures' in summary.inventory))
+        throw new Error('Original numeric report inventory is missing')
+      published = {
+        state: 'ready',
+        header: manifest.header,
+        summary: {
+          ...summary,
+          inventory: {
+            tasks: summary.inventory.tasks,
+            attempts: summary.inventory.attempts,
+            invocations: summary.inventory.invocations,
+            numericRecords: summary.inventory.numericRecords,
+            nativeCaptures: summary.inventory.nativeCaptures,
+          },
+        },
+        counts: summaryCounts,
+      }
     }
     if (
       affectedRows(
         await tx
           .update(observationReports)
           .set({
-            state: 'ready',
-            report: JSON.stringify(ready),
+            state: published.state,
+            report: JSON.stringify(published),
             manifest: JSON.stringify(manifest),
             updatedAt: now(),
           })

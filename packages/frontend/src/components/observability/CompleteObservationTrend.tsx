@@ -43,7 +43,9 @@ export function CompleteObservationTrend({
                     }),
                     row.metrics.state === 'ready'
                       ? value.toLocaleString(i18n.language) + ' Token'
-                      : t('runObservability.notApplicable'),
+                      : t(
+                          `runObservability.${row.metrics.state === 'not-ready' ? 'reportNotReady' : 'notApplicable'}`,
+                        ),
                     ...OBSERVATION_TOKEN_BUCKETS.map(
                       (bucket) =>
                         t('runObservability.' + bucket) +
@@ -67,7 +69,9 @@ export function CompleteObservationTrend({
                     <strong>
                       {row.metrics.state === 'ready'
                         ? value.toLocaleString(i18n.language) + ' Token'
-                        : t('runObservability.notApplicable')}
+                        : t(
+                            `runObservability.${row.metrics.state === 'not-ready' ? 'reportNotReady' : 'notApplicable'}`,
+                          )}
                     </strong>
                   </span>
                   <span className="observation-trend__track" aria-hidden="true">

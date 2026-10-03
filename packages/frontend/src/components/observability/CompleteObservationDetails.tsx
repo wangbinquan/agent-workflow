@@ -17,7 +17,7 @@ import { TableViewport } from '@/components/TableViewport'
 import { CompleteMetrics } from './CompleteObservationMetrics'
 import { CompleteObservationPage } from './CompleteObservationPager'
 import { CompleteInvocationRows, CompleteAllocationRows } from './CompleteObservationTables'
-import { useCompleteObservationPage, type ReadyObservationReport } from './completeReportClient'
+import { useCompleteObservationPage, type ReadableObservationReport } from './completeReportClient'
 import { ObservationNativeCapture } from './ObservationNativeCapture'
 import { ObservationPlatformCapture } from './ObservationPlatformCapture'
 import { CompleteObservationTrace } from './CompleteObservationTrace'
@@ -31,7 +31,7 @@ export function CompleteObservationCalls({
   report,
   parent = null,
 }: {
-  report: ReadyObservationReport
+  report: ReadableObservationReport
   parent?: string | null
 }) {
   const { t } = useTranslation(),
@@ -77,12 +77,14 @@ export function CompleteObservationCalls({
               <dt>{t('runObservability.purpose')}</dt>
               <dd>{t('runObservability.purpose_' + chosen.call.purpose)}</dd>
             </dl>
-            <Card title={t('runObservability.usageRecords')}>
-              <CompleteObservationAllocations
-                report={report}
-                parent={JSON.stringify(['invocation', chosen.call.invocationId])}
-              />
-            </Card>
+            {report.summary.metrics.state !== 'not-ready' && (
+              <Card title={t('runObservability.usageRecords')}>
+                <CompleteObservationAllocations
+                  report={report}
+                  parent={JSON.stringify(['invocation', chosen.call.invocationId])}
+                />
+              </Card>
+            )}
           </div>
         </Dialog>
       )}
@@ -93,7 +95,7 @@ export function CompleteObservationAllocations({
   report,
   parent = null,
 }: {
-  report: ReadyObservationReport
+  report: ReadableObservationReport
   parent?: string | null
 }) {
   const query = useCompleteObservationPage<CompleteObservationAllocation>(
@@ -111,7 +113,7 @@ export function CompleteObservationTimeline({
   report,
   parent = null,
 }: {
-  report: ReadyObservationReport
+  report: ReadableObservationReport
   parent?: string | null
 }) {
   const { t, i18n } = useTranslation(),
@@ -191,7 +193,7 @@ export function CompleteObservationTimeline({
     </div>
   )
 }
-export function CompleteObservationCaptures({ report }: { report: ReadyObservationReport }) {
+export function CompleteObservationCaptures({ report }: { report: ReadableObservationReport }) {
   const { t } = useTranslation(),
     native = useCompleteObservationPage<NativeCapture>(report, 'native-captures')
   const platform = useCompleteObservationPage<
@@ -233,7 +235,7 @@ export function CompleteObservationCaptures({ report }: { report: ReadyObservati
     </div>
   )
 }
-export function CompleteObservationTiming({ report }: { report: ReadyObservationReport }) {
+export function CompleteObservationTiming({ report }: { report: ReadableObservationReport }) {
   const { t, i18n } = useTranslation(),
     root = report.summary.rootTask
   const timing = root?.timing
@@ -270,7 +272,7 @@ export function CompleteObservationTiming({ report }: { report: ReadyObservation
     </dl>
   )
 }
-export function CompleteObservationStatuses({ report }: { report: ReadyObservationReport }) {
+export function CompleteObservationStatuses({ report }: { report: ReadableObservationReport }) {
   const { t, i18n } = useTranslation()
   return (
     <TableViewport label={t('runObservability.states')}>
@@ -288,7 +290,7 @@ export function CompleteObservationStatuses({ report }: { report: ReadyObservati
   )
 }
 
-export function CompleteObservationQuality({ report }: { report: ReadyObservationReport }) {
+export function CompleteObservationQuality({ report }: { report: ReadableObservationReport }) {
   const { t, i18n } = useTranslation(),
     query = useCompleteObservationPage<Quality>(report, 'quality')
   return (

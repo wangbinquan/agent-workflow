@@ -8008,7 +8008,7 @@
       ],
       "file": "packages/backend/src/modules/run-observability/application/completeObservationReportService.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/run-observability/application/completeObservationReportService.ts#$setTimeout:59",
+      "id": "background:packages/backend/src/modules/run-observability/application/completeObservationReportService.ts#$setTimeout:61",
       "kind": "periodic",
       "lifecycle": {
         "health": true,
@@ -8022,7 +8022,7 @@
       "managed": false,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/completeObservationReportService.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:59",
+      "symbol": "$setTimeout:61",
       "targetContext": "run-observability"
     },
     {
@@ -13462,5 +13462,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8374c61a4f7114855af3604e243c664db5827232894f00bdfb6800e1ee913323"
+  "sourceDigest": "sha256:cce6e08058cf1f21df255f9688a98c100352cb0832cdc7d565dce2e4ddb41d37"
 }

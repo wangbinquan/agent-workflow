@@ -59,10 +59,11 @@ export async function reconcileNativeUsageRevisions(input: {
   await scope.lockNativeRoot(proof.nativeSource, proof.rootSessionId)
   for (let start = 0; start < references.length; start += 400) {
     const page = references.slice(start, start + 400)
-    const candidates = await scope.nativeRecords(
+    const candidates = await scope.nativeOwners(
       proof.nativeSource,
       proof.rootSessionId,
       page.map((row) => 'opencode:step:' + row.stepId),
+      value.invocationId,
     )
     for (const reference of page) {
       if (reference.afterObserved === false) continue
@@ -82,24 +83,16 @@ export async function reconcileNativeUsageRevisions(input: {
         unresolved('native-step-removed')
         continue
       }
-      if (candidates.truncated) {
-        unresolved('native-owner-budget')
-        continue
-      }
-      const matches = candidates.items.filter(
-        (row) =>
-          row.measurement.recordId === 'opencode:step:' + reference.stepId &&
-          row.measurement.invocationId !== value.invocationId,
-      )
-      if (matches.length !== 1) {
+      const ownership = candidates.get('opencode:step:' + reference.stepId)
+      if (!ownership || ownership.owners !== '1' || !ownership.candidate) {
         unresolved(
-          matches.length === 0 && same(reference.before, reference.after)
+          (!ownership || ownership.owners === '0') && same(reference.before, reference.after)
             ? 'native-owner-unseen'
             : 'native-owner-unproven',
         )
         continue
       }
-      const candidate = matches[0]!,
+      const candidate = ownership.candidate,
         original = await scope.nativeScope(candidate.sourceId)
       // A live source may still have durable final revisions waiting to project. Never allocate
       // corrections in its sequence until its completion marker proves those frames committed.

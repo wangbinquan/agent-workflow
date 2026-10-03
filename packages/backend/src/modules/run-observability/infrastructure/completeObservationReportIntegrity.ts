@@ -8,13 +8,15 @@ import {
 } from '@/db/schema'
 import type { CompleteObservationStoredReport } from '../ports/completeObservationReport'
 import { CompleteObservationError } from '../domain/completeObservationError'
+import { completeObservationReportContent } from '@agent-workflow/shared'
 
 /** Damaged derived output cannot keep exposing the original sealed total. */
 export async function assertCompleteReportIntegrity(
   db: ProviderNeutralDatabase,
   report: CompleteObservationStoredReport,
 ) {
-  if (report.report.state !== 'ready') return
+  const content = completeObservationReportContent(report.report)
+  if (!content) return
   const manifest = report.manifest
   const invalid = () =>
     new CompleteObservationError(
@@ -26,8 +28,8 @@ export async function assertCompleteReportIntegrity(
     manifest.reportId !== report.id ||
     manifest.owner !== report.owner ||
     manifest.requestKey !== report.requestKey ||
-    JSON.stringify(manifest.header) !== JSON.stringify(report.report.header) ||
-    JSON.stringify(manifest.summary) !== JSON.stringify(report.report.summary)
+    JSON.stringify(manifest.header) !== JSON.stringify(content.header) ||
+    JSON.stringify(manifest.summary) !== JSON.stringify(content.summary)
   )
     throw invalid()
   for (const [key, table] of [

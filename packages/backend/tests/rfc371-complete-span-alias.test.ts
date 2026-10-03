@@ -1,11 +1,11 @@
 // RFC-371: the formal span alias must preserve the requested original invocation scope.
 import { expect, test } from 'bun:test'
-import { Hono } from 'hono'
+import { Hono, type MiddlewareHandler } from 'hono'
 import type {
   CompleteObservationReport,
   CompleteObservationReportPage,
 } from '@agent-workflow/shared'
-import { buildActor } from '@/auth/actor'
+import { buildActor, type Actor } from '@/auth/actor'
 import { errorHandler } from '@/util/errors'
 import { mountObservationRoutes } from '@/modules/run-observability/composition/observationRoutes'
 import type { CompleteObservationReportQueries } from '@/modules/run-observability/public/queries'
@@ -55,7 +55,11 @@ function fixture() {
   const queries: CompleteObservationReportQueries = {
     request: async () => report,
     status: async () => report,
-    async page<T>(_actor, reportId, query): Promise<CompleteObservationReportPage<T>> {
+    async page<T>(
+      _actor: Actor,
+      reportId: string,
+      query: unknown,
+    ): Promise<CompleteObservationReportPage<T>> {
       const page = query as (typeof reads)[number]
       reads.push(page)
       const attempt = JSON.stringify(['attempt', 'run']),
@@ -87,10 +91,11 @@ function fixture() {
     throw new Error('Legacy capped path used')
   }
   const app = new Hono()
-  app.use('*', async (c, next) => {
+  const injectActor: MiddlewareHandler = async (c, next) => {
     c.set('actor', actor)
     await next()
-  })
+  }
+  app.use('*', injectActor)
   app.onError(errorHandler)
   mountObservationRoutes(app, {
     reports: queries,

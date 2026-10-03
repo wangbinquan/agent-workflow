@@ -213,7 +213,11 @@ export function CompleteAllocationRows({
                     : BigInt(row.contribution[key]!).toLocaleString(i18n.language)}
                 </td>
               ))}
-              <td>{formatObservationCny(row.cost.amount, true)}</td>
+              <td>
+                {row.cost.complete && !row.cost.hidden
+                  ? formatObservationCny(row.cost.amount, true)
+                  : t('runObservability.' + (row.cost.hidden ? 'hiddenCost' : 'unpriced'))}
+              </td>
             </tr>
           ))}
         </tbody>

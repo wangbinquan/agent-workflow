@@ -7,8 +7,12 @@ import type {
   CompleteObservationReportCount,
 } from '../ports/completeObservationReport'
 import type { CompleteWorkingRows } from '../ports/completeWorkingRows'
-import type { CompleteObservationReportHeader } from '@agent-workflow/shared'
+import {
+  COMPLETE_OBSERVATION_FACT_SECTIONS,
+  type CompleteObservationReportHeader,
+} from '@agent-workflow/shared'
 import { completeWorkingTraversal } from './completeWorkingTraversal'
+import { completeReportFactRow, completeReportFactSummary } from '../domain/completeReportFacts'
 
 /** The same original TEMP remains open until every output row and receipt is sealed. */
 export async function sealCompleteObservationReport(input: {
@@ -19,19 +23,27 @@ export async function sealCompleteObservationReport(input: {
   readonly spool: CompleteObservationSpool
   readonly signal?: AbortSignal
 }) {
+  const summary =
+    input.build.summary.metrics.state === 'not-ready'
+      ? completeReportFactSummary(input.build.summary)
+      : input.build.summary
+  const gaps = summary.metrics.state === 'not-ready' ? summary.metrics.gaps : null
   async function* items(): AsyncIterable<CompleteObservationTransferItem> {
     for await (const row of completeWorkingTraversal<CompleteObservationReportRow>(
       input.rows,
       input.build.rowsNamespace,
       input.signal,
-    ))
-      yield { kind: 'row', row: row.document }
+    )) {
+      const value = gaps === null ? row.document : completeReportFactRow(row.document, gaps)
+      if (value) yield { kind: 'row', row: value }
+    }
     for await (const row of completeWorkingTraversal<CompleteObservationReportCount>(
       input.rows,
       input.build.countsNamespace,
       input.signal,
     ))
-      yield { kind: 'count', count: row.document }
+      if (gaps === null || COMPLETE_OBSERVATION_FACT_SECTIONS.includes(row.document.section))
+        yield { kind: 'count', count: row.document }
     yield { kind: 'receipt', key: 'task-source', document: input.build.taskSource }
     for await (const row of completeWorkingTraversal(
       input.rows,
@@ -45,7 +57,7 @@ export async function sealCompleteObservationReport(input: {
     owner: input.report.owner,
     requestKey: input.report.requestKey,
     header: input.header,
-    summary: input.build.summary,
+    summary,
     items: items(),
     signal: input.signal,
   })
