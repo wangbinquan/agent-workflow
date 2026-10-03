@@ -27,6 +27,7 @@ import { isRuntimeMcpTestEligible } from '@/modules/runtime-management/public/qu
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import {
   createWorkspaceContentScope,
+  type EmployeeCaseWorkspaceEffectsFactory,
   type WorkspaceContentEffectsFactory,
 } from '@/modules/source-control/composition'
 import { createExecutionContractProgramFixtureAdapter } from '@/modules/task-execution/composition/executionContractFixture'
@@ -423,6 +424,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
   readonly resourcePackageSkillContent?: SkillPackageContentReader
   readonly workspaceContent?: WorkspaceContentEffectsFactory
+  readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -1521,6 +1523,7 @@ export async function composePostgresqlApplication(
     }),
     sourceControl: bindEmployeeCaseWorkspaceParticipant({
       publicationTransport: repositoryPublicationTransport,
+      effects: input.employeeCaseWorkspaceEffects,
     }),
     conflictMerge: bindConflictMergeParticipant(),
   })
@@ -1540,6 +1543,7 @@ export async function composePostgresqlApplication(
       }),
       ...bindEmployeeCaseWorkspaceParticipant({
         publicationTransport: repositoryPublicationTransport,
+        effects: input.employeeCaseWorkspaceEffects,
       }),
     },
   })

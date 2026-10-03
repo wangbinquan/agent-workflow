@@ -79,35 +79,31 @@ describeEachProviderHttpApplication(
       const id = randomUUID()
       const snapshot = '{"$schema_version":4,"inputs":[],"nodes":[],"edges":[],"outputs":[]}'
       const reference = `logical:workspace:${id}`
-      await scope.harness.db
-        .insert(workflows)
-        .values({
-          id,
-          name: id,
-          description: '',
-          definition: snapshot,
-          version: 1,
-          schemaVersion: 4,
-        })
-      await scope.harness.db
-        .insert(tasks)
-        .values({
-          id,
-          name: id,
-          workflowId: id,
-          workflowSnapshot: snapshot,
-          repoPath: reference,
-          worktreePath: reference,
-          baseBranch: 'main',
-          branch: `agent-workflow/${id}`,
-          status: 'done',
-          inputs: '{}',
-          startedAt: 1,
-          executionLineageId: id,
-          lineageSlotPathJson: JSON.stringify([
-            { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
-          ]),
-        })
+      await scope.harness.db.insert(workflows).values({
+        id,
+        name: id,
+        description: '',
+        definition: snapshot,
+        version: 1,
+        schemaVersion: 4,
+      })
+      await scope.harness.db.insert(tasks).values({
+        id,
+        name: id,
+        workflowId: id,
+        workflowSnapshot: snapshot,
+        repoPath: reference,
+        worktreePath: reference,
+        baseBranch: 'main',
+        branch: `agent-workflow/${id}`,
+        status: 'done',
+        inputs: '{}',
+        startedAt: 1,
+        executionLineageId: id,
+        lineageSlotPathJson: JSON.stringify([
+          { stableNodeKey: 'task-root', frozenOccurrenceKey: id, workflowRevision: null },
+        ]),
+      })
       expect(existsSync(reference)).toBe(false)
       const request = (suffix: string) =>
         app.request(`/api/tasks/${id}/${suffix}`, { headers: { Authorization: `Bearer ${token}` } })

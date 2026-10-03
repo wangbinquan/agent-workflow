@@ -58,6 +58,7 @@ const fields = {
   resourcePackagePluginArtifacts: 'ResourcePackagePluginArtifactOwner',
   resourcePackageSkillContent: 'SkillPackageContentReader',
   workspaceContent: 'WorkspaceContentEffectsFactory',
+  employeeCaseWorkspaceEffects: 'EmployeeCaseWorkspaceEffectsFactory',
 } as const
 function forwarded(value: ts.ObjectLiteralExpression, source: ts.SourceFile, receiver: string) {
   for (const key of Object.keys(fields))
@@ -109,9 +110,9 @@ test('CLI initial and replacement sessions forward the same selected storage obj
 })
 
 test('both actual HTTP composers select complete workspace and package owners with lazy native defaults', () => {
-  for (const [path, receiver] of [
-    ['cli/postgresqlDaemonApplication.ts', 'input'],
-    ['server.ts', 'effectiveDeps'],
+  for (const [path, receiver, workspaceReceiver] of [
+    ['cli/postgresqlDaemonApplication.ts', 'input', 'input'],
+    ['server.ts', 'effectiveDeps', 'deps'],
   ] as const) {
     const source = load(path)
     const workspace = oneRoot(source, 'composeTaskWorkspaceQueries')
@@ -123,8 +124,15 @@ test('both actual HTTP composers select complete workspace and package owners wi
     expect(scopes).toHaveLength(1)
     expect(scopes[0]!.arguments.map((node) => compact(node, source))).toEqual([
       'workspaceRef',
-      `${receiver}.workspaceContent`,
+      `${workspaceReceiver}.workspaceContent`,
     ])
+    let owner: ts.Node | undefined = scopes[0]!.parent
+    while (owner !== undefined && !ts.isFunctionDeclaration(owner)) owner = owner.parent
+    if (owner === undefined || !ts.isFunctionDeclaration(owner))
+      throw new Error('workspace binding must have an actual composition owner')
+    expect(owner.parameters.map((parameter) => compact(parameter.name, source))).toContain(
+      workspaceReceiver,
+    )
 
     const packages = oneRoot(source, 'composePostgresqlResourcePackageProvider')
     expect(compact(property(packages, source, 'skillArtifacts'), source)).toBe(
@@ -159,6 +167,57 @@ test('both actual HTTP composers select complete workspace and package owners wi
     expect(
       namedCalls(choice.whenFalse, source, 'createResourcePackagePluginInstaller'),
     ).toHaveLength(0)
+  }
+})
+
+test('all six actual EmployeeCase binders receive the factory declared by their composition owner', () => {
+  for (const [path, receiver, ownerName] of [
+    ['cli/start.ts', 'input', 'composeSqliteProviderSession'],
+    ['cli/postgresqlDaemonApplication.ts', 'input', 'composePostgresqlApplication'],
+    ['server.ts', 'deps', 'composeSqliteApiRouteMounts'],
+  ] as const) {
+    const source = load(path)
+    const calls = namedCalls(source, source, 'bindEmployeeCaseWorkspaceParticipant')
+    expect(calls).toHaveLength(2)
+    for (const call of calls) {
+      expect(compact(property(objectArgument(call), source, 'effects'), source)).toBe(
+        `${receiver}.employeeCaseWorkspaceEffects`,
+      )
+      let owner: ts.Node | undefined = call.parent
+      while (owner !== undefined && !ts.isFunctionDeclaration(owner)) owner = owner.parent
+      if (owner === undefined || !ts.isFunctionDeclaration(owner))
+        throw new Error('EmployeeCase binder must have an actual composition owner')
+      expect(owner.name?.text).toBe(ownerName)
+      expect(owner.parameters.map((parameter) => compact(parameter.name, source))).toContain(
+        receiver,
+      )
+    }
+  }
+})
+
+test('all three original checkpoint consumers await the selected receipt before their next owner statement', () => {
+  for (const [path, expression, count] of [
+    [
+      'modules/development-automation/composition/digitalEmployeeWorkspace.ts',
+      'sourceControl.checkpoint',
+      2,
+    ],
+    [
+      'modules/development-automation/composition/digitalEmployeePlatformWorkItems.ts',
+      'workspaceOps.checkpoint',
+      1,
+    ],
+  ] as const) {
+    const source = load(path)
+    const calls = namedCalls(source, source, expression)
+    expect(calls).toHaveLength(count)
+    for (const call of calls) {
+      expect(ts.isAwaitExpression(call.parent)).toBe(true)
+      expect(ts.isVariableDeclaration(call.parent.parent)).toBe(true)
+      expect(compact((call.parent.parent as ts.VariableDeclaration).name, source)).toBe(
+        'checkpoint',
+      )
+    }
   }
 })
 

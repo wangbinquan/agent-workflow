@@ -364,7 +364,10 @@ import {
 import { createMaintenanceRunStore } from '@/platform/persistence/maintenanceRunStore'
 import { startMaintenanceWorkerSupervisor } from '@/platform/background/maintenanceWorkerSupervisor'
 import type { MaintenanceWorkerEffectsDescriptor } from '@/platform/background/maintenanceWorkerEffects'
-import type { WorkspaceContentEffectsFactory } from '@/modules/source-control/composition'
+import type {
+  EmployeeCaseWorkspaceEffectsFactory,
+  WorkspaceContentEffectsFactory,
+} from '@/modules/source-control/composition'
 import type {
   ResourcePackageSkillArtifactOwner,
   ResourcePackagePluginArtifactOwner,
@@ -424,6 +427,7 @@ export interface StartOptions {
   resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
   resourcePackageSkillContent?: SkillPackageContentReader
   workspaceContent?: WorkspaceContentEffectsFactory
+  employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -600,6 +604,7 @@ async function composePostgresqlProviderSession(
     resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
     resourcePackageSkillContent: input.resourcePackageSkillContent,
     workspaceContent: input.workspaceContent,
+    employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -1133,6 +1138,7 @@ interface DaemonProviderSessionComposeInput {
   readonly resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
   readonly resourcePackageSkillContent?: SkillPackageContentReader
   readonly workspaceContent?: WorkspaceContentEffectsFactory
+  readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -1590,6 +1596,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       resourcePackagePluginArtifacts: opts.resourcePackagePluginArtifacts,
       resourcePackageSkillContent: opts.resourcePackageSkillContent,
       workspaceContent: opts.workspaceContent,
+      employeeCaseWorkspaceEffects: opts.employeeCaseWorkspaceEffects,
       maintenanceEffectsBootstrap: opts.maintenanceEffectsBootstrap,
       evidenceRead: opts.evidenceRead,
       evidenceDocumentCommands: opts.evidenceDocumentCommands,
@@ -3078,6 +3085,7 @@ async function composeSqliteProviderSession(
     resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
     resourcePackageSkillContent: input.resourcePackageSkillContent,
     workspaceContent: input.workspaceContent,
+    employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -3372,6 +3380,7 @@ async function composeSqliteProviderSession(
     ),
     sourceControl: bindEmployeeCaseWorkspaceParticipant({
       publicationTransport: repositoryPublicationTransport,
+      effects: input.employeeCaseWorkspaceEffects,
     }),
     conflictMerge: bindConflictMergeParticipant(),
   })
@@ -3452,6 +3461,7 @@ async function composeSqliteProviderSession(
           }),
           ...bindEmployeeCaseWorkspaceParticipant({
             publicationTransport: repositoryPublicationTransport,
+            effects: input.employeeCaseWorkspaceEffects,
           }),
         },
       }),

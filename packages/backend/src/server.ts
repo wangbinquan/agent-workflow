@@ -217,6 +217,7 @@ import { createTaskRouteOperations } from '@/modules/task-execution/infrastructu
 import { composeTaskWorkspaceQueries } from '@/modules/task-execution/composition'
 import {
   createWorkspaceContentScope,
+  type EmployeeCaseWorkspaceEffectsFactory,
   type WorkspaceContentEffectsFactory,
 } from '@/modules/source-control/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
@@ -799,6 +800,7 @@ export interface AppDeps {
   resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
   resourcePackageSkillContent?: SkillPackageContentReader
   workspaceContent?: WorkspaceContentEffectsFactory
+  employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -2868,7 +2870,7 @@ function composeSqliteApiRouteMounts(
     workspaceQueries: composeTaskWorkspaceQueries({
       load: taskRouteOperations.get,
       contentScope: (workspaceRef) =>
-        createWorkspaceContentScope(workspaceRef, effectiveDeps.workspaceContent),
+        createWorkspaceContentScope(workspaceRef, deps.workspaceContent),
     }),
     taskExecutionReadModels: deps.taskExecutionReadModels,
     taskRecoveryOperations: taskExecutionPersistence.recoveryAdministration,
@@ -2913,6 +2915,7 @@ function composeSqliteApiRouteMounts(
     }),
     sourceControl: bindEmployeeCaseWorkspaceParticipant({
       publicationTransport: repositoryPublicationTransport,
+      effects: deps.employeeCaseWorkspaceEffects,
     }),
     conflictMerge: bindConflictMergeParticipant(),
   })
@@ -3066,6 +3069,7 @@ function composeSqliteApiRouteMounts(
           }),
           ...bindEmployeeCaseWorkspaceParticipant({
             publicationTransport: repositoryPublicationTransport,
+            effects: deps.employeeCaseWorkspaceEffects,
           }),
         },
       }),

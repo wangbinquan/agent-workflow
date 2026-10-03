@@ -573,15 +573,15 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
   test('RFC-363 workspace readers reuse each root Task loader and the SC scope without starting effects', () => {
     // The reviewed a5312d065 delta adds one property to each existing route
     // binding. Keep the whole-body locks and the cold lifecycle tests below.
-    for (const [source, owner, loader] of [
-      [pg, 'composePostgresqlApplication', 'taskExecutionProvider.routes.tasks.get'],
-      [server, 'composeSqliteApiRouteMounts', 'taskRouteOperations.get'],
+    for (const [source, owner, loader, receiver] of [
+      [pg, 'composePostgresqlApplication', 'taskExecutionProvider.routes.tasks.get', 'input'],
+      [server, 'composeSqliteApiRouteMounts', 'taskRouteOperations.get', 'deps'],
     ] as const) {
       const calls = namedCalls(functionBody(source, owner), source, 'composeTaskWorkspaceQueries')
       expect(calls).toHaveLength(1)
       const call = calls[0]!
       expect(compact(call, source)).toBe(
-        `composeTaskWorkspaceQueries({load:${loader},contentScope:createWorkspaceContentScope,})`,
+        `composeTaskWorkspaceQueries({load:${loader},contentScope:(workspaceRef)=>createWorkspaceContentScope(workspaceRef,${receiver}.workspaceContent),})`,
       )
       expect(ts.isPropertyAssignment(call.parent)).toBe(true)
       expect(compact(call.parent, source)).toBe(`workspaceQueries:${compact(call, source)}`)
@@ -835,7 +835,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // only the runtime method parameter and configSnapshot reference changed.
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
-      '695b951f5c2f162ba0ed863a94c26f0a898497e827cf5a5c4c9df9c90494935e',
+      '55125379fc8f5e53c38de4c329dddb6060c5795271e9cc55a7dce651cb40f77e',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -1049,7 +1049,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
-      'f8fb696a217fd539fef0b1a62bd09b9669d08bdc7d3da516c141d1c29573ff7c',
+      '483344828af4aae84b546a5711105ae2c7c772cb46116228d58515b9387375ef',
     )
     expect(
       namedCalls(

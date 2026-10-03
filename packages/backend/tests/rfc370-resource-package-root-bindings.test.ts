@@ -52,7 +52,7 @@ danglingCallRefs: []
           bundleVersion: 1,
           ops: [
             {
-              opId: 'selected-root-create',
+              opId: 'op-1',
               kind: `${kind}-create`,
               slug,
               payload:
