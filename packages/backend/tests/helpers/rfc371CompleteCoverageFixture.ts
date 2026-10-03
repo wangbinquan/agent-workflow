@@ -161,6 +161,7 @@ export async function seedCompleteCoveredUsage(
   }))
   const value = {
     kind: 'valuation',
+    valuationId: 'original-platform-valuation',
     identity: nativeFixture.identity,
     sourceId: 'runner',
     recordId: parent.measurement.recordId,

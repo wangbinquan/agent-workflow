@@ -247,10 +247,12 @@ export async function seedCompleteTask(harness: ProviderHarness, attempts = 1001
 }
 
 export async function buildOriginalCompleteTask(harness: ProviderHarness, records = 10001) {
-  const session = originalReportSnapshotSession({
-    ...harness.applicationBinding,
-    generationId: 'complete-task-original-generation',
-  })
+  const binding = harness.applicationBinding
+  const session = originalReportSnapshotSession(
+    binding.provider === 'sqlite'
+      ? { ...binding, generationId: 'complete-task-original-generation' }
+      : { provider: 'postgresql', runtime: binding.runtime },
+  )
   return session.run(async ({ executor, workspace, snapshotId }) => {
     const owner = createTaskObservationFacts(executor),
       task = await owner.get(actor, 'complete-original-task')
@@ -288,7 +290,7 @@ export async function buildOriginalCompleteTask(harness: ProviderHarness, record
       result.allocationsNamespace,
     ))
       allocations.push(row.document)
-    const originals = await executor.all(
+    const originals = await executor.all<{ records: number | string }>(
       sql`SELECT count(*) AS records FROM observation_usage_current WHERE task_id='complete-original-task'`,
     )
     return { ...result, attempts, allocations, originals }
