@@ -646,3 +646,18 @@ SOURCE39 原 FAIL f0a7f541c39b52ad1f18ca8ee824d0a343d6b1bafb1d35d1bfbbf7f03246ac
 有限 SOURCE1 独立功能门 PASS，指纹 `247568754fcdefe55e0eca6eb0627f4a1e8badff160d005b31d69c00e20168fe`，1 owned/4 controls/4 evidence 首末稳定；两段逆变换恢复完整旧测试，目标format/lint及纯AST证明通过。生产及canonical不变，不重复生成；无本机AW test/typecheck/build/service。保留旧失败及六个观测 E2E job 的完整日志，其归属由原并行会话接续；新正式行为仍待修复提交 exact-SHA hosted CI。
 
 归档内容候选在单独有限功能门中发现 fanout 两处所选效果遗漏、任意 Error.message 转换、新 Agent.outputKinds 夹具及 Windows 原路径 oracle 四项，首 FAIL 将保留并另行修复，不纳入此次提交。完整RFC370/A1–A8/AC00/A-G、CS独立adapters及B/M0–M4继续；尚无AW-in-CS实际部署，不关闭RFC。
+
+
+## 2026-10-04 端口归档内容切面的有限接线
+
+SOURCE36 首次四项 P2 FAIL 原样保留；有限 SOURCE4 修复了 fanout 两处所选 operations 漏传、任意 Error.message 转换、真实 Agent.outputKinds 夹具和 Windows 原路径 oracle，独立复核 PASS。随后原 canonical 首次生成在任何清单写入前发现 Buffer 与 extends:Omit 两项 opaque 不匹配，17 份元数据保持；中间 inline import 类型的 lint FAIL 同样保留。原规则和 opaque 名单不改。
+
+独立 DESIGN-R3 与 SOURCE8 PASS 后，readInsideRoot/existsInsideRoot 两项完整 native 函数移到 platform/content/local/rootFileQueries.ts，旧 service 继续准确转出口并保留 Buffer|null API；中立 public 只保留 reader、DTO 和纯 helper。NativeReadPortArtifactOptions 显式保留原八字段。原函数 AST、所有旧断言/名称/预算及其它控制文件保持。SOURCE37 最终组合指纹为 658707166cb805a6f25d1fc5ddafdad689cf56e3c9f90459c7befb44f8a1b1dd；这是有限源码组合，不是完整 A-G。
+
+归档与读取由 TE application/domain/composition 拥有，完整 11 方法 content factory 与 operations/reader 只在 undefined 时选 native 默认，保留 frozen/prototype/private receiver；constructor 零 IO。同步 native 兼容和异步路径共用一套 policy；2MiB、8192 字节 NUL 样本、truncation notice、archive v1/meta/only、legacy 与原覆盖行为保持。writer ACK 后才推进 runner 的 maps/outputs/roster/数据库写入，任意拒绝原因保留原诊断与回退。所有五处 runNode 消费点、ordinary/repair review 和 SQLite initial/replacement、PG、独立 HTTP 根共享所选实例；原 mutation lock 与原数据库 AST 不变。
+
+R2 原生成器基于已提交 335cc5333ae3883bd8f9b457c3253add552809d9、冻结 37 个 owned 源码及四份 exact committed 原规则执行一次；非 owned 源码均来自该提交，三个并行观测源码 WIP 与一个新观测测试被保留并排除。实际 sourceDigest 为 sha256:8374c61a4f7114855af3604e243c664db5827232894f00bdfb6800e1ee913323。新增 6 个生产文件（5 TE、1 platform），只按实际五项投影增长登记：mutation 1852→1857、observed imports 5944→5983、exception projection 5289→5323、public surfaces 1075→1101、owners 26376→26410；匹配 canonical 发布后的后继提交再正常退役回执。原 129 项有序手写库存/why 保持，不新增库存或债务条款。原规则仅销账 service portArtifacts→private taskArtifactPathQueries 的一条消失 type R1，其余 302 条记录全文保持；40 required SPI、69 target edges、空 implementation SCC 保持。原 guard 仅随 owned canonical 测试总行数 893→894 更新，业务写点与 transaction/effect 记录仅实际 id/line 投影。
+
+前次 prompt 夹具提交 eef2874b53a073dd19faac654d890a41397a6d88 的 exact 主 CI37151693012 已 completed/cancelled（4 success、1 aggregate failure、42 cancelled），不记为通过。包含修复的后继 57f6c29303a17a2a6b28db5966da1f9bc69b1548 主 CI37151884308 completed/failure（37 success、12 failure、1 cancelled）；其 Ubuntu6 job111287352004 内本批 15 个 prompt binding 用例全 PASS。其余原生观测/W5/R1/超时失败按完整日志归属交由并行 owner 接续，整套 CI 未通过。当前归档批次尚待发布后的 exact-SHA hosted CI；本机无 AW test/typecheck/build/service，只有限 format/lint 和纯 AST/JSON/字节/census 证明。
+
+完整 RFC-370/A1–A8/AC00/A-G 仍开放。A2 runtime 物化、A3 workspace/upload/restore、A4 node/wrapper Git/commit/delivery/conflict/repair、A5 logical materials 与 submit/inspect/events/message/cancel/收据先于激活/reap、A6 purpose commands、A7 authority/recovery 和 A8 全根装配继续；随后独立 CS adapters，先 B/M0 实际部署，再 M1–M4 逐步收编。当前没有 AW-in-CS 部署或验收，不能用有限 PASS 关闭阶段 A 或 RFC。

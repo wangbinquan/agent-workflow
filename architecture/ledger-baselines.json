@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1852,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1857,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 port artifact content: the unchanged syntactic classifier adds seven policy/contract/composition/native-factory entries and removes the two old service entries, net five. This projection adds no business/database write; the original database AST and write order are retained."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5944,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5983,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 port artifact content: actual complete content/operations/reader contracts, all five runNode calls, review isolation, routes and the SQLite/PG/HTTP roots add 45 symbol-level import edges and remove six old direct imports, net 39. No import classifier or public boundary rule changes."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +873,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5289,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5323,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 port artifact content: the unchanged canonical classifier follows the actual archive-content import graph and projects 40 added and six removed legacy geometry records, net 34. No new registered debt clause or exception rule is introduced; the original rule retires one disappeared service-to-private-type R1."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -881,8 +890,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1075,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1101,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 port artifact content: 26 actual public symbols expose archive/read commands, complete selected content/operations/reader contracts, retained pure archive helpers and neutral DTOs. Existing public entries and all required SPI remain unchanged. Buffer-returning physical queries retain their complete native API in platform/content/local and the legacy facade; they are not neutral public contracts."
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -902,12 +914,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26376,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26410,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 port artifact content: five TE port/domain/application/composition/local files and one platform native-query file add 54 actual top-level owners; the existing runner adds one portArchiveFailureMessage owner. Together they add 55 and remove 21 old service owners, net 34. The two physical native query bodies move with identical complete AST; archive business policy and IO stay in their respective layers."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:007e7d3b11f6341ddbba23230e3dc0de1d555d73b5a28f9715f438717ceaaa57",
+    "sourceDigest": "sha256:8374c61a4f7114855af3604e243c664db5827232894f00bdfb6800e1ee913323",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +935,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "87424fa0b0dcc7049fd5be43d5ee71b12ed84e4e",
-    "contentDigest": "sha256:08e825f71a93312a6d11b7faa5b71debcfdf045492adb3bc35e179204c63c535",
+    "currentSnapshotSha": "335cc5333ae3883bd8f9b457c3253add552809d9",
+    "contentDigest": "sha256:be193c3eea5e2b0226c96ea31d51a7b6fb976ff03477d40f426939931dd504e5",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

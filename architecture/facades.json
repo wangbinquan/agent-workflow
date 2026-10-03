@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 298,
-    "thinFacades": 52
+    "thinFacades": 53
   },
   "entries": [
     {
@@ -1942,6 +1942,7 @@
         "import:98184d2db8234ad6a232",
         "import:cc416c0bc12db151708e",
         "import:d06ec7cfd05407a047cb",
+        "import:db39e1296ec2e3fdfb39",
         "import:e9fc3b9fae25c6a15def"
       ],
       "exportedSymbols": [
@@ -2294,6 +2295,7 @@
         "import:a002f594de8bd04927da",
         "import:a1c45b85348209ab1b7e",
         "import:b310eac7455e6a398ccd",
+        "import:b91a71d1670ec6593643",
         "import:bc9c83d4447de5b4cd7f",
         "import:c60f083cae677598aa75",
         "import:cbefb72a6c305a93b27d",
@@ -2748,38 +2750,29 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:15bf3b2a26000f8d046c",
-        "import:22e7ecb03088176f205e",
-        "import:5bb90ea16f5c4e98fc50",
-        "import:60b0a330db182265df8e",
-        "import:8303f4df4e211ab55aab",
-        "import:e8a3a3b86bd2e67722b8"
+        "import:05dd2d05087e8dced4af",
+        "import:06f328142e4b49d514cb",
+        "import:2c41e4986f3b22967eac",
+        "import:54ac5084faacc695a762",
+        "import:6a9382cc4848630e2a13",
+        "import:7d59b8cbc910fff8619e",
+        "import:84c0bc88d85134afd1aa",
+        "import:881aec1f2f164aaefc16",
+        "import:9a38caaaa399f6a75752",
+        "import:a6791bfb23ee664701da",
+        "import:b5cc401f840b5bb46db3",
+        "import:bfcf881ae1c0d7990f78",
+        "import:d8260d5e24c50d0009a1",
+        "import:e2577ab340aa0d2cb6b2",
+        "import:f4cc1b749c0e03c94e71",
+        "import:fa81430d4106135896b5"
       ],
-      "exportedSymbols": [
-        "ArchivePortArtifactsResult",
-        "PortArchive",
-        "PortArchiveItem",
-        "PortArtifactReadItem",
-        "archivePortArtifacts",
-        "encodePortSegment",
-        "existsInsideRoot",
-        "forcedPortPathsForTask",
-        "isPathishKindString",
-        "missingArtifactPlaceholder",
-        "parseArchiveJson",
-        "portArchiveRootRel",
-        "readInsideRoot",
-        "readPortArtifact",
-        "repoRelForcedPaths",
-        "subsetArchiveJson",
-        "toContainerRelative",
-        "truncationNotice"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/portArtifacts.ts",
       "id": "facade:packages/backend/src/services/portArtifacts.ts",
       "ownerEntryId": "owner:packages/backend/src/services/portArtifacts.ts#$file",
       "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -3505,8 +3498,10 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:02c2ddc6c0165da4b087",
         "import:2077adb281ac6413cafe",
         "import:647d2f3472f9ceefca7f",
+        "import:66f9229180690fd14710",
         "import:67576bc58043c5f2d0af",
         "import:6c106e47305a3b3ebdc5",
         "import:a0be50c8c5f99fc17814",
@@ -3516,8 +3511,10 @@
         "import:c6c1a3eab289cb08185f",
         "import:c6d83040f9bf48f345f9",
         "import:c74b0ad40adb1d4f2de1",
+        "import:c8ad6a199fcae1b2ac22",
         "import:cb91aa44b71df5165d3c",
         "import:d3b53e3b0101dae3dc04",
+        "import:d3d3a14e1388ded283d9",
         "import:dba082fcaa3501c2d332",
         "import:ddb1a9cb8d5a6063f9cf",
         "import:de51dddefd44d47d947e",
@@ -6383,5 +6380,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:007e7d3b11f6341ddbba23230e3dc0de1d555d73b5a28f9715f438717ceaaa57"
+  "sourceDigest": "sha256:8374c61a4f7114855af3604e243c664db5827232894f00bdfb6800e1ee913323"
 }

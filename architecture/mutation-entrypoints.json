@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1852,
+    "entries": 1857,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -26734,6 +26734,81 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/portArtifacts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/portArtifacts.ts#archivePortArtifactPolicy",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/portArtifacts.ts#archivePortArtifactPolicy",
+      "symbol": "archivePortArtifactPolicy",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/portArtifacts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/portArtifacts.ts#runNativePortArtifactPolicy",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/portArtifacts.ts#runNativePortArtifactPolicy",
+      "symbol": "runNativePortArtifactPolicy",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/portArtifacts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/portArtifacts.ts#runPortArtifactPolicy",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/portArtifacts.ts#runPortArtifactPolicy",
+      "symbol": "runPortArtifactPolicy",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "internal-family",
         "authorization": false,
         "event": false,
@@ -26776,6 +26851,56 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nodeRunPromptContent.ts#SynchronousNodeRunPromptContentEffects",
       "symbol": "SynchronousNodeRunPromptContentEffects",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/ports/portArtifactContent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/ports/portArtifactContent.ts#ArchivePortArtifactsResult",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/portArtifactContent.ts#ArchivePortArtifactsResult",
+      "symbol": "ArchivePortArtifactsResult",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/ports/portArtifactContent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/ports/portArtifactContent.ts#SynchronousPortArtifactContentEffects",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/portArtifactContent.ts#SynchronousPortArtifactContentEffects",
+      "symbol": "SynchronousPortArtifactContentEffects",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -28037,6 +28162,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeRunRuntime.ts#RuntimeSelectionBinding",
       "symbol": "RuntimeSelectionBinding",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/portArtifacts.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/portArtifacts.ts#archivePortArtifacts",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/portArtifacts.ts#archivePortArtifacts",
+      "symbol": "archivePortArtifacts",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -29847,6 +29997,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/fileNodeRunPromptContent.ts#createFileNodeRunPromptContent",
       "symbol": "createFileNodeRunPromptContent",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/filePortArtifactContent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/local/filePortArtifactContent.ts#createFilePortArtifactContent",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/filePortArtifactContent.ts#createFilePortArtifactContent",
+      "symbol": "createFilePortArtifactContent",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -39348,56 +39523,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/services/portArtifacts.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/portArtifacts.ts#archivePortArtifacts",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/portArtifacts.ts#archivePortArtifacts",
-      "symbol": "archivePortArtifacts",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/portArtifacts.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/portArtifacts.ts#ArchivePortArtifactsResult",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/portArtifacts.ts#ArchivePortArtifactsResult",
-      "symbol": "ArchivePortArtifactsResult",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/services/ref/runtimeRef.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/services/ref/runtimeRef.ts#RuntimeAgentLookup",
@@ -44283,7 +44408,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:007e7d3b11f6341ddbba23230e3dc0de1d555d73b5a28f9715f438717ceaaa57",
+  "sourceDigest": "sha256:8374c61a4f7114855af3604e243c664db5827232894f00bdfb6800e1ee913323",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -44521,8 +44646,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1005:nodeRunOutputs",
-        "line": 1005,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1011:nodeRunOutputs",
+        "line": 1011,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -44537,8 +44662,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1018:nodeRunOutputs",
-        "line": 1018,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1024:nodeRunOutputs",
+        "line": 1024,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -44553,8 +44678,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1043:nodeRunEvents",
-        "line": 1043,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1049:nodeRunEvents",
+        "line": 1049,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -44569,8 +44694,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1167:nodeRuns",
-        "line": 1167,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1173:nodeRuns",
+        "line": 1173,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -44585,8 +44710,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1307:nodeRunOutputs",
-        "line": 1307,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1313:nodeRunOutputs",
+        "line": 1313,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -44601,8 +44726,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1320:nodeRunOutputs",
-        "line": 1320,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1326:nodeRunOutputs",
+        "line": 1326,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -44617,8 +44742,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunEvents",
         "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1340:nodeRunEvents",
-        "line": 1340,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#1346:nodeRunEvents",
+        "line": 1346,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -44633,8 +44758,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRunOutputs",
         "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#3722:nodeRunOutputs",
-        "line": 3722,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#3728:nodeRunOutputs",
+        "line": 3728,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#submitReviewDecisionUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
@@ -44649,8 +44774,8 @@
         "controlSubtype": "gate-control",
         "dataClass": "nodeRuns",
         "file": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
-        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#980:nodeRuns",
-        "line": 980,
+        "id": "task-authority:packages/backend/src/modules/collaboration/infrastructure/review.ts#986:nodeRuns",
+        "line": 986,
         "ownerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#dispatchReviewNodeUnlocked",
         "requiredBrandedProof": "GateDecisionTransaction+NodeRunLifecycleParticipantInTx",
         "revisionPredicate": "task-scoped-gate-state-and-node-lifecycle-cas",
