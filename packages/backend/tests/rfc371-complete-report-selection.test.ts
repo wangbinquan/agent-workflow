@@ -296,6 +296,7 @@ describeEachProvider('RFC-371 complete dimension selection on original source', 
     const document = AcceptedObservationInvocationSchema.parse({
       ...JSON.parse(old.document),
       authority: { kind: 'local', runtime: null },
+      priceBookRevision: null,
     })
     await harness.db
       .update(observationInvocations)

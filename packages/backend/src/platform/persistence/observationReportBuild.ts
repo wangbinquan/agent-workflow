@@ -2,10 +2,10 @@ import type {
   CompleteObservationBuildResult,
   CompleteObservationStoredReport,
 } from '@/modules/run-observability/public/participants'
-import type { OriginalReportDatabaseBinding } from '../persistence/reportSnapshot'
-import { originalReportSnapshotSession } from '../persistence/reportSnapshot'
-import { unhandledDatabaseProvider } from '../persistence/databaseProviders'
-import { runObservationReportWorker } from './observationReportWorkerHost'
+import type { OriginalReportDatabaseBinding } from './reportSnapshot'
+import { originalReportSnapshotSession } from './reportSnapshot'
+import { unhandledDatabaseProvider } from './databaseProviders'
+import { runObservationReportWorker } from '../background/observationReportWorkerHost'
 
 /** Provider choices are made at platform bootstrap, without a Worker fallback on the serving thread. */
 export function observationReportBuild(

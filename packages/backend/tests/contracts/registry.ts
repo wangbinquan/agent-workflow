@@ -934,6 +934,9 @@ export const ENDPOINTS: EndpointSpec[] = [
   },
   { method: 'GET', path: '/api/observability/tasks/:id' },
   { method: 'GET', path: '/api/observability/tasks/:id/spans' },
+  { method: 'POST', path: '/api/observability/reports' },
+  { method: 'GET', path: '/api/observability/reports/:id' },
+  { method: 'GET', path: '/api/observability/reports/:id/pages' },
   {
     method: 'GET',
     path: '/api/observability/pricing/runtimes',

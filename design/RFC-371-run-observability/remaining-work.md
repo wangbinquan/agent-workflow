@@ -347,3 +347,12 @@ UI 保留完整报告身份和各节分页位置，任务贡献与原始调用/�
 原官方 scoped AST 只扫描 committed 47773 加这十二个冻结路径，排除并保留 prompt/memory 的未提交输出；原生成结果复用于四份 provenance 投影，不重新扫描。13 产物、129 库存静态核对通过，所有库存数值保持，无新增增长许可；sourceDigest 为 sha256:ef43059cd7a0c4a8934cf65c09265c35531432b34258794898ce7d8107ff668e。首次私有无 write 调用只输出 report、未形成完整产物，原记录保留；首次 provenance 静态失败四项也保留。没有本机 AW test/typecheck/build/service，正式行为仍待新 exact-SHA CI。
 
 其余实际 CI 缺陷继续逐项修复：新增报告表的迁移/归档/schema 投影、原生数值映射及原生产事实接线和 E2E，不能据本批称主 CI 全绿。CS 目录权限修正 d2ab5f349d20a3d24fe564b27024b5ec4dec90e7 已发布；该提交的真实 module 10001 行用例有 65002ms hook 超时，另五作业不能代签失败，新八组件部署仍未执行。完整 native v2、追踪 EOF、100K Task/10M usage、真正任务四桶/人民币及正式浏览器验收继续，所有人口上限尚未清零，两个 RFC 均保持 In Progress。
+
+
+### 2026-10-04 完整报告 CI 第二批修复与剩余上限
+
+已发布 0b8910ab8d88fff0df68dad416169895d6fc1165 的主 CI 37139017700 已 completed/failure，26 success、24 failure；完整原失败日志和第一批失败回执保持。第二批 SOURCE25 v2 独立功能审阅通过：原始报告计数保持十进制字符串，实际写入量使用原计数行 CAS；原 visibility 前缀改用精确前缀比较，报告身份继续绑定实际有效权限与 accessRevision；Worker 异常拒绝和完整 drain 保持。真实 PostgreSQL 夹具使用原 native driver，只在三项明确 cleanup ACK 故障中注入失败，不伪造 SQL 行。五张真实派生缓存表使原 roster 变为 208 source / 202 active，六张 archive-only 名单不变；迁移头、路由、hash builder 与实际 provider 分支登记相应更新，原断言与预算保持。
+
+首次 META v1 发现 provider-aware 构建入口目录不符原规则，原 FAIL 保留。后继实际把入口移入既有 platform/persistence，两个正式根和两个测试只改对应 import，完整保留 489919 已提交的并行 Task 输出；没有放宽 relocation matcher 或增加债务。原官方 scoped census 在 committed 489919 加冻结 SOURCE25 上生成 13 产物，四项 provenance 使用原函数派生，129 个原库存静态核对通过，零新增长许可。schema 格式化后的原机器语义和完整有序人类 ledger 通过原静态比较；私有原字节差异诊断保持，不把格式差异写成逻辑失败。没有运行本机 AW tests/typecheck/build/services，新行为仍待本次发布后 exact-SHA hosted CI。
+
+本批修复不是“所有限制已移除”：原生 Token v1 的 session/step/part 上限、完整 durable baseline/EOF 和原 owner 高水修订协议、追踪尝试与调用页数上限、原任务/算力明细交互恢复、100K Task/10M usage 实际性能、默认及定时 CI、真实任务四桶/人民币和正式浏览器验收均继续。完整数据未能证明时必须不返回数值小计，不能以传输分页冒充人口截断。CS 9b287d488916a6029fc2a433ca3522f03fdb3aa4 的精确 CI 37139454921 六项成功；本机约定八组件部署已完成并验证实际 OCI、236 migrations 和 spool 写入，但原 10001 行测试的性能余量、新真实任务与页面验收仍待。CS 开发 producer 保持 OFF，两个 RFC 保持 In Progress。

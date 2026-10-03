@@ -9716,3 +9716,12 @@ PG 摘要 `23e198e5a2d9bfb4bfbb53f6b7e9f6e51318159258db7293fa21bded160f88fc`→`
 两测试独立 DESIGN2 PASS `998e7dd582a3feaa791972749352a36d22ccd1d0affb0bafad1be4bedb93078b`、SOURCE2 PASS `272d550cf15340b96bb404b809656a96d6edf2d84edaedb52dadd11e45e9101d`。原两项前滚调用断言映射到同一恢复体的await effects.move/await effects.swapStaged，再增3项锁完整awaited scope与local adapter原native调用；所有其它原断言/测试名/预算保持。原64项断言→67项；孪生体测试15项保持，仅该消费者名单2→1实际localadapter，定义点/homonyms/forkedFrom和全部引用/陈旧名单校验不变。两份旧全文按四段逆向恢复，45 controls稳定；不修改生产代码，两测试均在原sourceDigest生产语料之外，复用一次成功census。
 
 本次发布分为Task源码17路径、这两项RC测试精确补正、canonical/docs17路径及匹配5项增长回执的正常后继退役，合计36个独立允许路径。Task17组合指纹 `2ba0bcf17579d97c758fce16161ff36295d521f4c6a6516f4f63b4a2e33526b1` 保持，完整A-G/CS adapters/真实部署仍开放。canonical另有6项原Task写点位置投影：恢复238→249与256→267、路由1855→1857与2181→2183、TaskDelete328→325与364→361；除实际id/line外各字段和原31个DB调用子树保持，不改业务写入规则，不新增条款或预算。
+
+
+### 2026-10-04 完整报告 CI 第二批修复与剩余上限
+
+已发布 0b8910ab8d88fff0df68dad416169895d6fc1165 的主 CI 37139017700 已 completed/failure，26 success、24 failure；完整原失败日志和第一批失败回执保持。第二批 SOURCE25 v2 独立功能审阅通过：原始报告计数保持十进制字符串，实际写入量使用原计数行 CAS；原 visibility 前缀改用精确前缀比较，报告身份继续绑定实际有效权限与 accessRevision；Worker 异常拒绝和完整 drain 保持。真实 PostgreSQL 夹具使用原 native driver，只在三项明确 cleanup ACK 故障中注入失败，不伪造 SQL 行。五张真实派生缓存表使原 roster 变为 208 source / 202 active，六张 archive-only 名单不变；迁移头、路由、hash builder 与实际 provider 分支登记相应更新，原断言与预算保持。
+
+首次 META v1 发现 provider-aware 构建入口目录不符原规则，原 FAIL 保留。后继实际把入口移入既有 platform/persistence，两个正式根和两个测试只改对应 import，完整保留 489919 已提交的并行 Task 输出；没有放宽 relocation matcher 或增加债务。原官方 scoped census 在 committed 489919 加冻结 SOURCE25 上生成 13 产物，四项 provenance 使用原函数派生，129 个原库存静态核对通过，零新增长许可。schema 格式化后的原机器语义和完整有序人类 ledger 通过原静态比较；私有原字节差异诊断保持，不把格式差异写成逻辑失败。没有运行本机 AW tests/typecheck/build/services，新行为仍待本次发布后 exact-SHA hosted CI。
+
+本批修复不是“所有限制已移除”：原生 Token v1 的 session/step/part 上限、完整 durable baseline/EOF 和原 owner 高水修订协议、追踪尝试与调用页数上限、原任务/算力明细交互恢复、100K Task/10M usage 实际性能、默认及定时 CI、真实任务四桶/人民币和正式浏览器验收均继续。完整数据未能证明时必须不返回数值小计，不能以传输分页冒充人口截断。CS 9b287d488916a6029fc2a433ca3522f03fdb3aa4 的精确 CI 37139454921 六项成功；本机约定八组件部署已完成并验证实际 OCI、236 migrations 和 spool 写入，但原 10001 行测试的性能余量、新真实任务与页面验收仍待。CS 开发 producer 保持 OFF，两个 RFC 保持 In Progress。

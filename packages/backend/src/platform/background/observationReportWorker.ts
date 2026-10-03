@@ -69,7 +69,18 @@ scope.onmessage = (event) => {
       return
     }
     started = true
-    void run(input)
+    void run(input).catch((error) => {
+      stop.abort(error)
+      try {
+        scope.postMessage({
+          kind: 'failed',
+          error: error instanceof Error ? error.message : String(error),
+        })
+        scope.close()
+      } catch {
+        // If the channel already closed, the host's close handler rejects the pending build.
+      }
+    })
   } catch (error) {
     stop.abort(error)
   }

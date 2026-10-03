@@ -44212,7 +44212,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:437b8d973bcf09e78b47eadf1dfb59c43556bcb3541a93ea063421f136c38289",
+  "sourceDigest": "sha256:1b864ff81c564eaa331cf345e6533cff28f1c9246c7b0d867f5754e275253d74",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

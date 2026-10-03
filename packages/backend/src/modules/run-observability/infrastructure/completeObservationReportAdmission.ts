@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, inArray, like, sql } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray, sql } from 'drizzle-orm'
 import type { Actor } from '@/auth/actor'
 import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
 import {
@@ -42,16 +42,11 @@ export async function assertCompleteReportActor(
     throw new CompleteObservationError('scope-changed', 'Original observation permission changed')
   if (actor.source !== 'daemon') {
     const user = await db
-      .select({ status: users.status, role: users.role, revision: users.accessRevision })
+      .select({ status: users.status, revision: users.accessRevision })
       .from(users)
       .where(eq(users.id, actor.user.id))
       .get()
-    if (
-      !user ||
-      user.status !== 'active' ||
-      user.role !== actor.user.role ||
-      user.revision !== (actor.authorityRevision ?? 0)
-    )
+    if (!user || user.status !== 'active' || user.revision !== (actor.authorityRevision ?? 0))
       throw new CompleteObservationError('scope-changed', 'Original observation actor changed')
   }
   if (taskId !== undefined) {
@@ -79,7 +74,7 @@ export async function assertCompleteReportPopulation(
   expectedTasks: string,
 ) {
   const row = await db
-    .select({ total: sql<string>`cast(count(*) as text)` })
+    .select({ total: sql<string>`cast(count(*) as text)`.mapWith(String) })
     .from(observationReportRows)
     .innerJoin(tasks, eq(tasks.id, observationReportRows.key))
     .where(
@@ -107,7 +102,7 @@ export async function assertCompleteReportPopulation(
       .where(
         and(
           eq(observationReportReceipts.reportId, id),
-          like(observationReportReceipts.key, 'visibility/%'),
+          eq(sql<string>`substr(${observationReportReceipts.key}, 1, 11)`, 'visibility/'),
           after === undefined ? undefined : gt(observationReportReceipts.key, after),
         ),
       )

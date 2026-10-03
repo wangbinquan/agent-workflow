@@ -37,14 +37,14 @@ export async function assertCompleteReportIntegrity(
     ['receipts', observationReportReceipts],
   ] as const) {
     const actual = await db
-      .select({ total: sql<string>`cast(count(*) as text)` })
+      .select({ total: sql<string>`cast(count(*) as text)`.mapWith(String) })
       .from(table)
       .where(eq(table.reportId, report.id))
       .get()
     if ((actual?.total ?? '0') !== manifest[key]) throw invalid()
   }
   const physical = db
-    .select({ total: sql<string>`cast(count(*) as text)` })
+    .select({ total: sql<string>`cast(count(*) as text)`.mapWith(String) })
     .from(observationReportRows)
     .where(
       and(

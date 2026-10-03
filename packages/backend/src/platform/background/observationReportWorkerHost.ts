@@ -47,11 +47,13 @@ export async function runObservationReportWorker(
         if (completed) return
         accepting = false
         completed = true
-        void Promise.allSettled([...pending]).then(() => {
-          if (signal.aborted) reject(signal.reason)
-          else if (result instanceof Error) reject(result)
-          else resolve(result)
-        })
+        void Promise.allSettled([...pending])
+          .then(() => {
+            if (signal.aborted) reject(signal.reason)
+            else if (result instanceof Error) reject(result)
+            else resolve(result)
+          })
+          .catch(reject)
       }
       worker.onmessage = (event: MessageEvent<ObservationReportWorkerEvent>) => {
         const message = event.data

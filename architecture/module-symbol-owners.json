@@ -157071,30 +157071,6 @@
       "currentContext": "legacy",
       "currentLayer": "platform",
       "exported": false,
-      "file": "packages/backend/src/platform/background/observationReportBuild.ts",
-      "id": "owner:packages/backend/src/platform/background/observationReportBuild.ts#$file",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "$file",
-      "targetContext": "platform",
-      "targetLayer": "background"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/background/observationReportBuild.ts",
-      "id": "owner:packages/backend/src/platform/background/observationReportBuild.ts#observationReportBuild",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "observationReportBuild",
-      "targetContext": "platform",
-      "targetLayer": "background"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": false,
       "file": "packages/backend/src/platform/background/observationReportChannel.ts",
       "id": "owner:packages/backend/src/platform/background/observationReportChannel.ts#$file",
       "removeAfterWave": "W9",
@@ -163052,6 +163028,30 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "SOURCE_TERMINATION_BLOCKED_NODE_STATUSES",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+      "id": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+      "id": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#observationReportBuild",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "observationReportBuild",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -316683,5 +316683,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:437b8d973bcf09e78b47eadf1dfb59c43556bcb3541a93ea063421f136c38289"
+  "sourceDigest": "sha256:1b864ff81c564eaa331cf345e6533cff28f1c9246c7b0d867f5754e275253d74"
 }

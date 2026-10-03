@@ -12,7 +12,6 @@ export const completeObservationActorScope = (actor: Actor) =>
   sha256Hex(
     JSON.stringify([
       actor.user.id,
-      actor.user.role,
       actor.user.status,
       actor.source,
       actor.purpose ?? null,

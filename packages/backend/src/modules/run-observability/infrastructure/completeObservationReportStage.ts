@@ -135,13 +135,20 @@ export async function stageCompleteReportPage(
         .from(observationReportCounts)
         .where(countScope(id, group.section, group.parent))
         .get()
-      if (current)
-        await tx
+      if (current) {
+        const changed = await tx
           .update(observationReportCounts)
           .set({ actual: String(BigInt(current.actual) + group.size) })
-          .where(countScope(id, group.section, group.parent))
+          .where(
+            and(
+              countScope(id, group.section, group.parent),
+              eq(observationReportCounts.actual, current.actual),
+            ),
+          )
           .run()
-      else
+        if (affectedRows(changed) !== 1)
+          throw new Error('Original report row count changed during transfer')
+      } else
         await tx
           .insert(observationReportCounts)
           .values({
@@ -210,7 +217,7 @@ export async function publishCompleteReport(
     ) =>
       (
         await tx
-          .select({ total: sql<string>`cast(count(*) as text)` })
+          .select({ total: sql<string>`cast(count(*) as text)`.mapWith(String) })
           .from(table)
           .where(eq(table.reportId, id))
           .get()

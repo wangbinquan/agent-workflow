@@ -8,7 +8,7 @@ import type { RepositoryBaselineEffectsFactory } from '@/modules/development-aut
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
-import { observationReportBuild } from '@/platform/background/observationReportBuild'
+import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,

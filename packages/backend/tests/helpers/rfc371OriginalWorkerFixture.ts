@@ -6,14 +6,61 @@ import { openDb } from '@/db/client'
 import { createPostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import {
   createPostgresqlDatabaseRuntime,
-  type PostgresqlDatabaseRuntime,
   type PostgresqlPool,
+  type PostgresqlReservedConnection,
 } from '@/platform/persistence/postgresqlRuntime'
 import type { OriginalReportDatabaseBinding } from '@/platform/persistence/reportSnapshot'
 import type { ProviderHarness } from './eachProvider'
 import { seedCompleteTask } from './rfc371CompleteTaskFixture'
 
 export type ReportCleanupFault = 'ROLLBACK' | 'DROP TABLE' | 'pg_advisory_unlock'
+
+/** All statements reach the real reserved driver; only the named cleanup acknowledgement fails. */
+class OriginalCleanupConnection implements PostgresqlReservedConnection {
+  private reader = false
+  constructor(
+    private readonly original: PostgresqlReservedConnection,
+    private readonly events: string[],
+    private readonly fault: { value: ReportCleanupFault | undefined },
+  ) {}
+  unsafe(statement: string, parameters?: readonly unknown[]) {
+    if (statement.includes('CREATE TEMP TABLE aw_report_workspace')) this.reader = true
+    if (this.reader && this.fault.value && statement.includes(this.fault.value)) {
+      this.events.push('cleanup-fault:' + this.fault.value)
+      this.fault.value = undefined
+      throw new Error('Injected original channel cleanup acknowledgement failure')
+    }
+    return this.original.unsafe(statement, parameters)
+  }
+  release() {
+    this.events.push(this.reader ? 'reader-released' : 'writer-released')
+    this.original.release()
+  }
+  async close(options?: { readonly timeout?: number }) {
+    this.events.push(this.reader ? 'reader-physical-close' : 'writer-physical-close')
+    if (!this.original.close) throw new Error('Native original reserved close unavailable')
+    await this.original.close(options)
+  }
+}
+
+class OriginalCleanupPool implements PostgresqlPool {
+  constructor(
+    private readonly original: PostgresqlPool,
+    private readonly events: string[],
+    private readonly fault: { value: ReportCleanupFault | undefined },
+  ) {}
+  unsafe(statement: string, parameters?: readonly unknown[]) {
+    return this.original.unsafe(statement, parameters)
+  }
+  close(options?: { readonly timeout?: number }) {
+    return this.original.close(options)
+  }
+  async reserve(options?: { readonly signal?: AbortSignal }) {
+    const original = await this.original.reserve(options)
+    this.events.push('reserved')
+    return new OriginalCleanupConnection(original, this.events, this.fault)
+  }
+}
 export async function originalWorkerFixture(
   harness: ProviderHarness,
   options: { attempts?: number; records?: number; cleanupFault?: ReportCleanupFault } = {},
@@ -54,40 +101,11 @@ export async function originalWorkerFixture(
   })
   const pool = native.providerPool(),
     events: string[] = []
-  let fault = options.cleanupFault
-  const selected: PostgresqlDatabaseRuntime = {
-    ...native,
-    providerPool: () =>
-      ({
-        unsafe: (statement, parameters) => pool.unsafe(statement, parameters),
-        close: (options) => pool.close(options),
-        async reserve(options) {
-          const connection = await pool.reserve(options)
-          events.push('reserved')
-          let reader = false
-          return {
-            unsafe(statement, parameters) {
-              if (statement.includes('CREATE TEMP TABLE aw_report_workspace')) reader = true
-              if (reader && fault && statement.includes(fault)) {
-                events.push('cleanup-fault:' + fault)
-                fault = undefined
-                throw new Error('Injected original channel cleanup acknowledgement failure')
-              }
-              return connection.unsafe(statement, parameters)
-            },
-            release() {
-              events.push(reader ? 'reader-released' : 'writer-released')
-              connection.release()
-            },
-            async close(options) {
-              events.push(reader ? 'reader-physical-close' : 'writer-physical-close')
-              if (!connection.close) throw new Error('Native original reserved close unavailable')
-              await connection.close(options)
-            },
-          }
-        },
-      }) satisfies PostgresqlPool,
-  }
+  const selected = createPostgresqlDatabaseRuntime({
+    config: { ...original.databaseConfig, poolMax: 1 },
+    generationId: original.runtime.generationId,
+    poolFactory: () => new OriginalCleanupPool(pool, events, { value: options.cleanupFault }),
+  })
   const db = createPostgresqlDatabaseClient(selected)
   return {
     appHome,
@@ -98,6 +116,7 @@ export async function originalWorkerFixture(
       runtime: selected,
     } satisfies OriginalReportDatabaseBinding,
     async close() {
+      await selected.close()
       await native.close()
       rmSync(appHome, { recursive: true, force: true })
     },

@@ -118930,8 +118930,8 @@
         "maxUnionVariants": 42
       },
       "consumerEdgeIds": [
-        "import:57772e9eedd5a95a847d",
         "import:82f0eb9d4b569c581f9a",
+        "import:88b7c3ce18fcfc3ef6cb",
         "import:a2c926cd534a976ddb29"
       ],
       "context": "run-observability",
@@ -118956,8 +118956,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:57772e9eedd5a95a847d",
-            "import:82f0eb9d4b569c581f9a"
+            "import:82f0eb9d4b569c581f9a",
+            "import:88b7c3ce18fcfc3ef6cb"
           ],
           "fieldPath": "$variant:0.manifest.header.asOf",
           "type": "number"
@@ -118974,7 +118974,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:57772e9eedd5a95a847d"
+            "import:88b7c3ce18fcfc3ef6cb"
           ],
           "fieldPath": "$variant:0.manifest.header.generation",
           "type": "string"
@@ -118991,8 +118991,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:57772e9eedd5a95a847d",
-            "import:82f0eb9d4b569c581f9a"
+            "import:82f0eb9d4b569c581f9a",
+            "import:88b7c3ce18fcfc3ef6cb"
           ],
           "fieldPath": "$variant:0.manifest.header.snapshotId",
           "type": "string"
@@ -119014,7 +119014,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:57772e9eedd5a95a847d"
+            "import:88b7c3ce18fcfc3ef6cb"
           ],
           "fieldPath": "$variant:0.manifest.owner",
           "type": "string"
@@ -119249,8 +119249,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:57772e9eedd5a95a847d",
             "import:82f0eb9d4b569c581f9a",
+            "import:88b7c3ce18fcfc3ef6cb",
             "import:a2c926cd534a976ddb29"
           ],
           "fieldPath": "$variant:0.manifest.summary.rootTask.$variant:0.task.id",
@@ -119332,8 +119332,8 @@
         },
         {
           "consumerEdgeIds": [
-            "import:57772e9eedd5a95a847d",
             "import:82f0eb9d4b569c581f9a",
+            "import:88b7c3ce18fcfc3ef6cb",
             "import:a2c926cd534a976ddb29"
           ],
           "fieldPath": "$variant:0.manifest.summary.rootTask.$variant:0.timing.range.$variant:0.from",
@@ -119440,15 +119440,15 @@
       "productionConsumers": [
         {
           "context": "legacy",
-          "edgeId": "import:57772e9eedd5a95a847d",
-          "file": "packages/backend/src/platform/background/observationReportBuild.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportBuild.ts#$file"
-        },
-        {
-          "context": "legacy",
           "edgeId": "import:82f0eb9d4b569c581f9a",
           "file": "packages/backend/src/platform/background/observationReportProtocol.ts",
           "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportProtocol.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:88b7c3ce18fcfc3ef6cb",
+          "file": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file"
         },
         {
           "context": "legacy",
@@ -119480,7 +119480,7 @@
       },
       "consumerEdgeIds": [
         "import:0abc99eac23c4c14732e",
-        "import:bbb68978d43b569c1ee5"
+        "import:0b2bd6dc5be6097b70e0"
       ],
       "context": "run-observability",
       "dataClass": "metadata",
@@ -119494,7 +119494,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "generation",
           "type": "string"
@@ -119502,7 +119502,7 @@
         {
           "consumerEdgeIds": [
             "import:0abc99eac23c4c14732e",
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "id",
           "type": "string"
@@ -119525,7 +119525,7 @@
         {
           "consumerEdgeIds": [
             "import:0abc99eac23c4c14732e",
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "manifest.$variant:0.header.asOf",
           "type": "number"
@@ -119542,7 +119542,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "manifest.$variant:0.header.generation",
           "type": "string"
@@ -119560,7 +119560,7 @@
         {
           "consumerEdgeIds": [
             "import:0abc99eac23c4c14732e",
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "manifest.$variant:0.header.snapshotId",
           "type": "string"
@@ -119582,7 +119582,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "manifest.$variant:0.owner",
           "type": "string"
@@ -119817,7 +119817,7 @@
         {
           "consumerEdgeIds": [
             "import:0abc99eac23c4c14732e",
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "manifest.$variant:0.summary.rootTask.$variant:0.task.id",
           "type": "string"
@@ -119899,7 +119899,7 @@
         {
           "consumerEdgeIds": [
             "import:0abc99eac23c4c14732e",
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "manifest.$variant:0.summary.rootTask.$variant:0.timing.range.$variant:0.from",
           "type": "number"
@@ -119988,7 +119988,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "owner",
           "type": "string"
@@ -120058,7 +120058,7 @@
         {
           "consumerEdgeIds": [
             "import:0abc99eac23c4c14732e",
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "report.$variant:3.header.asOf",
           "type": "number"
@@ -120075,7 +120075,7 @@
         },
         {
           "consumerEdgeIds": [
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "report.$variant:3.header.generation",
           "type": "string"
@@ -120093,7 +120093,7 @@
         {
           "consumerEdgeIds": [
             "import:0abc99eac23c4c14732e",
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "report.$variant:3.header.snapshotId",
           "type": "string"
@@ -120321,7 +120321,7 @@
         {
           "consumerEdgeIds": [
             "import:0abc99eac23c4c14732e",
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.task.id",
           "type": "string"
@@ -120403,7 +120403,7 @@
         {
           "consumerEdgeIds": [
             "import:0abc99eac23c4c14732e",
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.timing.range.$variant:0.from",
           "type": "number"
@@ -120528,7 +120528,7 @@
         {
           "consumerEdgeIds": [
             "import:0abc99eac23c4c14732e",
-            "import:bbb68978d43b569c1ee5"
+            "import:0b2bd6dc5be6097b70e0"
           ],
           "fieldPath": "request.actor.user.id",
           "type": "string"
@@ -120608,9 +120608,9 @@
         },
         {
           "context": "legacy",
-          "edgeId": "import:bbb68978d43b569c1ee5",
-          "file": "packages/backend/src/platform/background/observationReportBuild.ts",
-          "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportBuild.ts#$file"
+          "edgeId": "import:0b2bd6dc5be6097b70e0",
+          "file": "packages/backend/src/platform/persistence/observationReportBuild.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/observationReportBuild.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -177345,7 +177345,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:437b8d973bcf09e78b47eadf1dfb59c43556bcb3541a93ea063421f136c38289",
+  "sourceDigest": "sha256:1b864ff81c564eaa331cf345e6533cff28f1c9246c7b0d867f5754e275253d74",
   "targetContexts": [
     "collaboration",
     "development-automation",

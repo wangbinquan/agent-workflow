@@ -16,7 +16,7 @@ import { composeLocalInvocationObservations } from '@/modules/run-observability/
 import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-management/public/commands'
 import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
 import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
-import { observationReportBuild } from '@/platform/background/observationReportBuild'
+import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
 import { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
