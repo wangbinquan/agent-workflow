@@ -2,13 +2,17 @@ import { join } from 'node:path'
 
 import { openDb } from '@/db/client'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import type { MaintenanceWorkerDatabaseInit } from '@/platform/background/maintenanceWorkerSupervisor'
+import type {
+  MaintenanceWorkerDatabaseInit,
+  MaintenanceWorkerSupervisorOptions,
+} from '@/platform/background/maintenanceWorkerSupervisor'
 import type { ProviderDatabaseHarness } from './eachProvider'
 import { MIGRATIONS } from '../migration-freeze'
 
 export interface ProviderMaintenanceWorkerDatabase {
   readonly db: ProviderNeutralDatabase
   readonly databaseInit: MaintenanceWorkerDatabaseInit
+  readonly workerFactory?: MaintenanceWorkerSupervisorOptions['workerFactory']
   dispose(): Promise<void>
 }
 
@@ -26,6 +30,17 @@ export function openProviderMaintenanceWorkerDatabase(
         generationId: binding.runtime.generationId,
         database: binding.databaseConfig,
       }),
+      // The real thread uses the current per-file database environment at creation.
+      workerFactory() {
+        const env: Record<string, string> = {}
+        for (const [key, value] of Object.entries(process.env)) {
+          if (value !== undefined) env[key] = value
+        }
+        return new Worker(
+          new URL('../../src/platform/background/maintenanceWorker.ts', import.meta.url).href,
+          { env },
+        )
+      },
       async dispose() {},
     })
   }

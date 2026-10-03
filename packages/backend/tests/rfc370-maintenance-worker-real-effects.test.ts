@@ -1,3 +1,4 @@
+// RFC-370 CI: explicitly bind the real Worker to the current per-file PG environment.
 import { expect, test } from 'bun:test'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -95,6 +96,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
       supervisor = startMaintenanceWorkerSupervisor({
         appHome,
         databaseInit: database.databaseInit,
+        workerFactory: database.workerFactory,
         effectsBootstrap: {
           moduleSpecifier: effectsModule,
           exportName: 'createEffects',
@@ -159,6 +161,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
         supervisor = startMaintenanceWorkerSupervisor({
           appHome,
           databaseInit: database.databaseInit,
+          workerFactory: database.workerFactory,
           effectsBootstrap: {
             moduleSpecifier: effectsModule,
             exportName: 'createEffects',
@@ -244,6 +247,7 @@ describeEachProvider('RFC-370 actual selected maintenance Worker', (harness) => 
       supervisor = startMaintenanceWorkerSupervisor({
         appHome,
         databaseInit: database.databaseInit,
+        workerFactory: database.workerFactory,
         effectsBootstrap: {
           moduleSpecifier: effectsModule,
           exportName: 'createEffects',
