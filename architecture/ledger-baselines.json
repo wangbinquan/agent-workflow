@@ -903,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 26032,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371 original EOF completeness verification adds the actual verifiedRecords helper: original scoped census symbol owners 26031 to 26032, with original provider dispatch and call-time schema fix. Exact source 687ba3a907854a9140bedecdf2c9dfef0c56c434; no count, direction, source, assertion, or prior debt rule relaxed."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
