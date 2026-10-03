@@ -1,3 +1,13 @@
+## RFC-370：694 DA workspace CI 精确修正（2026-10-03）
+
+精确 `6942511731dcaaf501756671e5dc99cc9d28efbd` 主 CI `37109647129` 已 completed/failure（44 success、6 failure、50 jobs）；四个 backend 分片的两个失败各在 Linux/macOS 复现，typecheck 与 required 聚合另计。Windows `37109837274` completed/failure，maintenance `37109647139` completed/success。失败证据保留，未把旧成功或重跑当成本批通过。前次 `dcdc249ff50bac893edbf8c19b6ad12cd264e0b6` 的主 CI `37107720458` 已 completed/success（50/50），四个原真实 PostgreSQL Worker 用例及 compiled Worker 加载均通过；这是 Worker fixture 修复自己的证据。
+
+本次仅三个文件：原 guarded exists 的两项非空断言只恢复闭包类型；新 DA launch 夹具提供完整 adopt，并 stashing 与原 launchDirect 冻结一致的 Add feature/do the thing 内容；旧 EvidenceStore default 断言精确映射到 selected factory.resolve，并额外断言真实完整 factory binding。原 guard、内容/持久化顺序、所有既有断言和时间预算保留。有限 DESIGN PASS `a7c672dd90607d764261f912d6f03be79668251f78d1100a3471fbaffdba4e9d`，SOURCE PASS `8192ee83b0afe0d3ff280ae0c18ae256a5bdc755751d57eab9588e25e24297f3`；三份全文件原字节逆向证明、11控制稳定、原预算/断言保留已完成。本批行为仍须新 exact-SHA hosted CI，无本机 AW 测试、类型、构建或服务。
+
+原官方 scoped census 只读已提交 `6942511731dcaaf501756671e5dc99cc9d28efbd` 加本批3冻结路径，所有非本批源码精确读取 committed bytes，排除并保留并行 WIP。12 JSON 与 status 使用四个原规则；全部 inventory 行、账本、原债务、required SPI、target edges 与 metrics 完整保持，不新增 growth 回执。只更新原精确源码投影及 provenance，source digest `sha256:4028cc01a4a986f8b89b20d8a6613b927bff01ea0122b763031999b4248efc1d`。四份手写文档以增量保留全文，status 仅原 renderer生成。
+
+完整 A1–A8/AC00/A-G 仍开放。下一组继续资源包恢复的存储效果；CS 独立 adapters、B/M0 真实部署、M1–M4 按已批准顺序实施。尚无 AW-in-CS 部署，不关闭 RFC。
+
 ## RFC-370：DA workspace 完整效果切面与 Worker CI 修复接续（2026-10-03）
 
 DA workspace 完整效果切面的有限 DESIGN PASS 指纹 `5171146df940948a8cc2e265a08f1358b9cef9708c1c0e486067b39b940fda06`。原 SOURCE19 指纹 `aa3f369a5df7d1d1c738052e872850bacbb6f80b07bbdac7e22a2872a94cad24` 的首次 FAIL/P2 完整保留：真实 Case 成功夹具缺少 ReactionRound 外键父行。只在新增测试补齐合法 round，并明确 native 字节值比较；单路径 SOURCE-R2 PASS 指纹 `6cc20311c3076d90c0e60dbf7b60d0283ea7df4f707d81d3e55cb1639202f37d`，其余18路径、9控制、5原证据未变。合成19路径 SOURCE 完整通过指纹 `1595b66a6ff5b103f9536c87834dd0e439859e0310749e6ac4bd7746e42cd70d`，不把首次 FAIL 改写为 PASS。

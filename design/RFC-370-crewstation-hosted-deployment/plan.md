@@ -704,3 +704,14 @@ DA workspace 完整效果切面的有限 DESIGN PASS 指纹 `5171146df940948a8cc
 前批 `13e72ad8326a85add6f5c73532a33848458288ac` 主 CI `37103290740` 已 completed/failure（47 success、3 failure、50 jobs），Windows `37103290747` 与 maintenance `37103290722` 均 completed/success。两个真实失败分片为 macOS 原报表数据库文件判据和 Ubuntu 的四个真实 PG Worker用例；聚合失败另计。真实 Worker cause 已显示查询 `agent_workflow.maintenance_runs` relation不存在，原时间预算未改。并行原报表文件修正 `c5cba4ee` 与配套 `c01f1dec` 完整保留；本会话两个 Worker fixture 文件另已精确发布 `dcdc249f`，通过完整 DESIGN/SOURCE-R2（原 env 类型 FAIL保留），从调用时的已定义环境值启动实际 source Worker；生产 Worker/runtime/协议/DDL未变。该 SHA 主 CI `37107720458` 已启动，创建回执状态为 pending，尚未取得全绿终态；不能称 Worker 修复已验收。本批正式行为仍交发布后 exact-SHA hosted CI。本机只做原 census、纯源码/AST/JSON证明和目标 format/lint，无 AW test/typecheck/build/service。
 
 完整 A1–A8/AC00/A-G 继续：内容与恢复、其余工作区/Git、完整 Agent 材料/执行/清理、专用命令和执行权仍须逐组接线与完整功能复核。CS 独立 adapters 与 B/M0真实部署、M1–M4按批准顺序实施，尚无 AW-in-CS部署，不关闭RFC。
+
+
+## 2026-10-03 DA workspace CI 修正接续
+
+精确 `6942511731dcaaf501756671e5dc99cc9d28efbd` 主 CI `37109647129` 已 completed/failure（44 success、6 failure、50 jobs）；四个 backend 分片的两个失败各在 Linux/macOS 复现，typecheck 与 required 聚合另计。Windows `37109837274` completed/failure，maintenance `37109647139` completed/success。失败证据保留，未把旧成功或重跑当成本批通过。前次 `dcdc249ff50bac893edbf8c19b6ad12cd264e0b6` 的主 CI `37107720458` 已 completed/success（50/50），四个原真实 PostgreSQL Worker 用例及 compiled Worker 加载均通过；这是 Worker fixture 修复自己的证据。
+
+本次仅三个文件：原 guarded exists 的两项非空断言只恢复闭包类型；新 DA launch 夹具提供完整 adopt，并 stashing 与原 launchDirect 冻结一致的 Add feature/do the thing 内容；旧 EvidenceStore default 断言精确映射到 selected factory.resolve，并额外断言真实完整 factory binding。原 guard、内容/持久化顺序、所有既有断言和时间预算保留。有限 DESIGN PASS `a7c672dd90607d764261f912d6f03be79668251f78d1100a3471fbaffdba4e9d`，SOURCE PASS `8192ee83b0afe0d3ff280ae0c18ae256a5bdc755751d57eab9588e25e24297f3`；三份全文件原字节逆向证明、11控制稳定、原预算/断言保留已完成。本批行为仍须新 exact-SHA hosted CI，无本机 AW 测试、类型、构建或服务。
+
+原官方 scoped census 只读已提交 `6942511731dcaaf501756671e5dc99cc9d28efbd` 加本批3冻结路径，所有非本批源码精确读取 committed bytes，排除并保留并行 WIP。12 JSON 与 status 使用四个原规则；全部 inventory 行、账本、原债务、required SPI、target edges 与 metrics 完整保持，不新增 growth 回执。只更新原精确源码投影及 provenance，source digest `sha256:4028cc01a4a986f8b89b20d8a6613b927bff01ea0122b763031999b4248efc1d`。四份手写文档以增量保留全文，status 仅原 renderer生成。
+
+完整 A1–A8/AC00/A-G 仍开放。下一组继续资源包恢复的存储效果；CS 独立 adapters、B/M0 真实部署、M1–M4 按已批准顺序实施。尚无 AW-in-CS 部署，不关闭 RFC。
