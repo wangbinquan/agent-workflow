@@ -293,12 +293,12 @@ describeEachProviderHttpApplication(
               const row = (await scope.harness.db.select().from(skills)).find(
                 (item) => item.id === receipt.root!.resourceId,
               )
-              expect(row).toMatchObject({ managedPath: 'logical:skill-live', contentHash })
+              expect(row).toMatchObject({ managedPath: 'logical:skill-live' })
               expect(
                 (await scope.harness.db.select().from(skillVersions)).find(
                   (item) => item.skillId === row!.id,
                 ),
-              ).toMatchObject({ filesPath: 'logical:skill-version' })
+              ).toMatchObject({ filesPath: 'logical:skill-version', contentHash })
               let exported = false
               const exporting = Promise.resolve(
                 app.request(`/api/skills/${row!.id}/export-package`, {

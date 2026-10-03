@@ -22,7 +22,6 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { userRepositoryTransportCredentials } from '../src/db/schema'
 import { missionPublicationSubject } from '../src/modules/development-automation/application/missionDeliveryChain'
 import type { RepositoryGit } from '../src/modules/source-control/application/repositoryCommit'
-import { fetchEmployeeWorkspaceRemoteHead } from '../src/modules/source-control/application/employeeCaseWorkspace'
 import type { CandidatePublicationTransport } from '../src/modules/source-control/application/deliverCandidate'
 import {
   createRepositoryEndpointDiscovery,
@@ -31,6 +30,7 @@ import {
 } from '../src/modules/integration/application/repositoryEndpointDiscovery'
 import {
   composeRepositoryTransportCredentials,
+  bindEmployeeCaseWorkspaceParticipant,
   classifyRepositoryPushFailure,
   createRepositoryPublicationTransport,
   type RepositoryPublicationSession,
@@ -646,7 +646,7 @@ describeEachProvider('RFC-321 repository publication transport', (harness) => {
     const networkCalls: string[][] = []
     const openedInputs: Parameters<CandidatePublicationTransport['open']>[0][] = []
     let closes = 0
-    const result = await fetchEmployeeWorkspaceRemoteHead({
+    const result = await bindEmployeeCaseWorkspaceParticipant().fetchRemoteHead({
       baselineRepoPath,
       remoteUrl: originalRemoteUrl,
       branch: 'main',

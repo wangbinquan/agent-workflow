@@ -288,7 +288,7 @@ describe('RFC-321 repository publication architecture ratchet', () => {
     expect(employeeRuntime).toContain('ownedCase.ownerUserId === null')
     expect(platformWorkItems).not.toContain('caseOwnerUserId')
     expect(platformWorkItems.match(/publicationSubject: publicationSubject\(\)/g)?.length).toBe(4)
-    expect(composition).toContain('fetchEmployeeWorkspaceRemoteHead({')
+    expect(composition).toMatch(/fetchEmployeeWorkspaceRemoteHead\(\s*\{/)
     expect(composition).toContain('{ publicationTransport: input.publicationTransport }')
     expect(
       cli.match(/publicationTransport: repositoryPublicationTransport/g)?.length,
