@@ -274,7 +274,9 @@ export interface ActionWorkspacePort {
   adopt(input: {
     readonly workspacePath: string
     readonly bundles: readonly { readonly bundleId: string; readonly mountPath: string }[]
-  }): { readonly workspacePath: string; readonly businessTreeDigest: string }
+  }):
+    | { readonly workspacePath: string; readonly businessTreeDigest: string }
+    | Promise<{ readonly workspacePath: string; readonly businessTreeDigest: string }>
   discard(workspacePath: string): void
 }
 

@@ -33,7 +33,7 @@ test('mission upload capture is selected lazily and forwarded through every real
   const selection = defaults[0]!.parent
   expect(ts.isBinaryExpression(selection)).toBe(true)
   if (!ts.isBinaryExpression(selection)) throw new Error('selected capture is missing')
-  expect(selection.left.getText(composition)).toBe('input.blobs')
+  expect(selection.left.getText(composition)).toBe('input.blobs ?? input.artifacts')
   expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
   for (const [path, receiver] of [
     ['cli/postgresqlDaemonApplication.ts', 'input'],

@@ -10,7 +10,6 @@
 import { createHash } from 'node:crypto'
 import {
   chmodSync,
-  copyFileSync,
   existsSync,
   lstatSync,
   mkdirSync,
@@ -19,13 +18,14 @@ import {
   renameSync,
   rmSync,
 } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { ulid } from 'ulid'
+import { KeyedSerialQueue } from '@/util/keyedSerialQueue'
 
 import { repoRelativePathSchema } from '../domain/requirementManifest'
 import type { UploadPlacementPort } from '../application/ports/reconcilerPorts'
 import type { UploadPlacementPersistence } from '../application/ports/uploadPlacementStore'
-import type { EvidenceStore } from './evidenceStore'
+import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
 
 /** seed 树的稳定内容 digest（相对路径排序 + 文件模式 + 每文件 sha256）。 */
 export function seedTreeDigestOf(root: string): string {
@@ -55,7 +55,7 @@ export function seedTreeDigestOf(root: string): string {
 
 export interface PlacementDeps {
   readonly persistence: UploadPlacementPersistence
-  readonly evidence: EvidenceStore
+  readonly evidence: EvidenceArtifactPort
   readonly seedsRoot: string
   readonly now: () => number
 }
@@ -69,99 +69,107 @@ export interface PlacementResult {
   }[]
 }
 
+const seedPublications = new KeyedSerialQueue<string>()
+
 export async function placeUploadSeed(
   deps: PlacementDeps,
   input: { readonly planId: string },
 ): Promise<PlacementResult> {
   const plan = await deps.persistence.load(input.planId)
   if (plan === null) throw new Error(`upload plan not found: ${input.planId}`)
-  const entries = [...plan.entries].sort((a, b) => a.ordinal - b.ordinal)
+  return await seedPublications.run(join(deps.seedsRoot, plan.planDigest), async () => {
+    const entries = [...plan.entries].sort((a, b) => a.ordinal - b.ordinal)
 
-  const active = entries.filter((e) => e.expectedTargetKind !== 'already-present')
-  const dispositions = entries.map((e) => ({
-    fileId: e.fileId,
-    disposition:
-      e.expectedTargetKind === 'already-present'
-        ? ('already-present' as const)
-        : e.expectedTargetKind === 'absent'
-          ? ('created' as const)
-          : ('replaced' as const),
-  }))
+    const active = entries.filter((e) => e.expectedTargetKind !== 'already-present')
+    const dispositions = entries.map((e) => ({
+      fileId: e.fileId,
+      disposition:
+        e.expectedTargetKind === 'already-present'
+          ? ('already-present' as const)
+          : e.expectedTargetKind === 'absent'
+            ? ('created' as const)
+            : ('replaced' as const),
+    }))
 
-  // 全 already-present：null seed + baseline-observed fulfillment（幂等 upsert）。
-  if (active.length === 0) {
-    const emptyDigest = seedTreeDigestOf(join(deps.seedsRoot, '__nonexistent__'))
-    await deps.persistence.record({
-      id: ulid(),
-      planId: input.planId,
-      baselineSnapshotRef: plan.baselineSnapshotRef,
-      seedChangeRef: null,
-      seedTreeDigest: emptyDigest,
-      fulfillmentKind: 'baseline-observed',
-      commitSha: plan.baselineSha,
-      entriesJson: JSON.stringify(dispositions),
-      createdAt: deps.now(),
-    })
-    return { seedChangeRef: null, seedTreeDigest: emptyDigest, dispositions }
-  }
-
-  const seedRoot = join(deps.seedsRoot, plan.planDigest)
-  const rebuild = (): void => {
-    if (existsSync(seedRoot)) rmSync(seedRoot, { recursive: true, force: true })
-    const staging = `${seedRoot}.tmp-${ulid()}`
-    mkdirSync(staging, { recursive: true })
-    for (const entry of active) {
-      // 深防：plan 行必经 schema 才能落库，但 placement 是文件系统写入点，
-      // 独立复验一次（手改 DB 行/未来新写入路径都拦在这）。
-      if (!repoRelativePathSchema.safeParse(entry.repositoryTargetPath).success) {
-        rmSync(staging, { recursive: true, force: true })
-        throw new Error(`unsafe repository target path: ${entry.repositoryTargetPath}`)
-      }
-      const src = deps.evidence.blobPath(entry.uploadBlobRef)
-      if (!existsSync(src)) {
-        rmSync(staging, { recursive: true, force: true })
-        throw new Error(
-          `upload blob missing: ${entry.uploadBlobRef} (${entry.repositoryTargetPath})`,
-        )
-      }
-      const dest = join(staging, entry.repositoryTargetPath)
-      mkdirSync(dirname(dest), { recursive: true })
-      copyFileSync(src, dest)
-      chmodSync(dest, entry.targetFileMode === 'executable' ? 0o755 : 0o644)
+    // 全 already-present：null seed + baseline-observed fulfillment（幂等 upsert）。
+    if (active.length === 0) {
+      const emptyDigest = seedTreeDigestOf(join(deps.seedsRoot, '__nonexistent__'))
+      await deps.persistence.record({
+        id: ulid(),
+        planId: input.planId,
+        baselineSnapshotRef: plan.baselineSnapshotRef,
+        seedChangeRef: null,
+        seedTreeDigest: emptyDigest,
+        fulfillmentKind: 'baseline-observed',
+        commitSha: plan.baselineSha,
+        entriesJson: JSON.stringify(dispositions),
+        createdAt: deps.now(),
+      })
+      return { seedChangeRef: null, seedTreeDigest: emptyDigest, dispositions }
     }
-    renameSync(staging, seedRoot)
-  }
 
-  // 幂等：已有 seed 且树 digest 与内容一致 ⇒ 复用；否则废弃重建（byte-identical）。
-  const expectedReceipt = plan.placementReceipt ?? undefined
-  if (!existsSync(seedRoot)) {
-    rebuild()
-  } else if (
-    expectedReceipt !== undefined &&
-    expectedReceipt.seedTreeDigest !== seedTreeDigestOf(seedRoot)
-  ) {
-    rebuild()
-  }
-  const digest = seedTreeDigestOf(seedRoot)
-  if (expectedReceipt !== undefined && expectedReceipt.seedTreeDigest !== null) {
-    if (expectedReceipt.seedTreeDigest !== digest) {
-      // receipt 在而内容对不上且重建后仍不一致 ⇒ blob 池损坏，显式抛出。
-      throw new Error(`seed digest mismatch for plan ${input.planId}`)
+    const seedRoot = join(deps.seedsRoot, plan.planDigest)
+    const rebuild = async (): Promise<void> => {
+      if (existsSync(seedRoot)) rmSync(seedRoot, { recursive: true, force: true })
+      const staging = `${seedRoot}.tmp-${ulid()}`
+      mkdirSync(staging, { recursive: true })
+      for (const entry of active) {
+        // 深防：plan 行必经 schema 才能落库，但 placement 是文件系统写入点，
+        // 独立复验一次（手改 DB 行/未来新写入路径都拦在这）。
+        if (!repoRelativePathSchema.safeParse(entry.repositoryTargetPath).success) {
+          rmSync(staging, { recursive: true, force: true })
+          throw new Error(`unsafe repository target path: ${entry.repositoryTargetPath}`)
+        }
+        const dest = join(staging, entry.repositoryTargetPath)
+        let materialized: boolean
+        try {
+          materialized = await deps.evidence.materializeBlob(entry.uploadBlobRef, dest)
+        } catch (error) {
+          rmSync(staging, { recursive: true, force: true })
+          throw error
+        }
+        if (!materialized) {
+          rmSync(staging, { recursive: true, force: true })
+          throw new Error(
+            `upload blob missing: ${entry.uploadBlobRef} (${entry.repositoryTargetPath})`,
+          )
+        }
+        chmodSync(dest, entry.targetFileMode === 'executable' ? 0o755 : 0o644)
+      }
+      renameSync(staging, seedRoot)
     }
-  } else {
-    await deps.persistence.record({
-      id: ulid(),
-      planId: input.planId,
-      baselineSnapshotRef: plan.baselineSnapshotRef,
-      seedChangeRef: plan.planDigest,
-      seedTreeDigest: digest,
-      fulfillmentKind: null,
-      commitSha: null,
-      entriesJson: JSON.stringify(dispositions),
-      createdAt: deps.now(),
-    })
-  }
-  return { seedChangeRef: plan.planDigest, seedTreeDigest: digest, dispositions }
+
+    // 幂等：已有 seed 且树 digest 与内容一致 ⇒ 复用；否则废弃重建（byte-identical）。
+    const expectedReceipt = plan.placementReceipt ?? undefined
+    if (!existsSync(seedRoot)) {
+      await rebuild()
+    } else if (
+      expectedReceipt !== undefined &&
+      expectedReceipt.seedTreeDigest !== seedTreeDigestOf(seedRoot)
+    ) {
+      await rebuild()
+    }
+    const digest = seedTreeDigestOf(seedRoot)
+    if (expectedReceipt !== undefined && expectedReceipt.seedTreeDigest !== null) {
+      if (expectedReceipt.seedTreeDigest !== digest) {
+        // receipt 在而内容对不上且重建后仍不一致 ⇒ blob 池损坏，显式抛出。
+        throw new Error(`seed digest mismatch for plan ${input.planId}`)
+      }
+    } else {
+      await deps.persistence.record({
+        id: ulid(),
+        planId: input.planId,
+        baselineSnapshotRef: plan.baselineSnapshotRef,
+        seedChangeRef: plan.planDigest,
+        seedTreeDigest: digest,
+        fulfillmentKind: null,
+        commitSha: null,
+        entriesJson: JSON.stringify(dispositions),
+        createdAt: deps.now(),
+      })
+    }
+    return { seedChangeRef: plan.planDigest, seedTreeDigest: digest, dispositions }
+  })
 }
 
 /** reconciler 的 UploadPlacementPort provider（composition 注入；不改 reconciler）。 */

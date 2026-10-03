@@ -427,7 +427,7 @@ export async function launchAgentAttempt(
     conflictPaths = prepared.conflictPaths
     conflictPin = conflict
     seedRef = null
-    workspace = ports.actionWorkspace!.adopt({
+    workspace = await ports.actionWorkspace!.adopt({
       workspacePath: prepared.workspacePath,
       bundles,
     })

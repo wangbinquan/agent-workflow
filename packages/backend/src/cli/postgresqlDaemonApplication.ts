@@ -191,6 +191,7 @@ import {
   composeDevelopmentAdmissionLookup,
   composeDevelopmentAutomation,
   type EvidenceDocumentCommands,
+  type EvidenceArtifactPort,
   type AttemptContextStorePort,
 } from '@/modules/development-automation/composition'
 import {
@@ -411,6 +412,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly employeeInputArtifacts?: EmployeeInputArtifactPort
   readonly missionInputBlobs?: MissionInputBlobPersistence
   readonly pluginInstaller?: PluginInstallerPort
+  readonly evidenceArtifacts?: EvidenceArtifactPort
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -1507,6 +1509,7 @@ export async function composePostgresqlApplication(
   })
   const employeeDelivery = buildDevelopmentDeliveryDeps(developmentDeliveryProvider)
   const employeePlatformWorkItems = composeDevelopmentEmployeePlatformWorkItems({
+    evidenceArtifacts: input.evidenceArtifacts,
     db: input.db,
     appHome: input.appHome,
     reactionRounds: employeeReactionRounds,
@@ -1707,6 +1710,7 @@ export async function composePostgresqlApplication(
   const developmentAutomation = composeDevelopmentAutomation({
     db: input.db,
     appHome: input.appHome,
+    evidenceArtifacts: input.evidenceArtifacts,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -1840,6 +1844,7 @@ export async function composePostgresqlApplication(
         db: input.db,
         appHome: input.appHome,
         blobs: input.missionInputBlobs,
+        artifacts: input.evidenceArtifacts,
       }),
     })
 

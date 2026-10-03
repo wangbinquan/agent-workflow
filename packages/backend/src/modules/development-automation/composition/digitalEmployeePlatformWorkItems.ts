@@ -31,6 +31,7 @@ import {
   businessTreeSnapshotDigest,
 } from '../infrastructure/workspaceValidator'
 import { EvidenceStore } from '../infrastructure/evidenceStore'
+import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
 import { createPipelineImportAdapter } from '../infrastructure/pipelineEvidenceImport'
 import { gateCountsAsPass, pipelineEvidenceManifestV1Schema } from '../domain/pipelineManifest'
 
@@ -395,6 +396,7 @@ function reviewMarkerToken(marker: string): string {
 export interface DevelopmentEmployeePlatformWorkItemsCompositionInput {
   readonly persistence: EmployeePlatformWorkItemPersistence
   readonly appHome: string
+  readonly evidenceArtifacts?: EvidenceArtifactPort
   /** Direct fixture calls may bind a subject; runtime calls pass the frozen Case owner. */
   readonly directPublicationSubject?:
     | { readonly kind: 'user'; readonly userId: string }
@@ -667,7 +669,8 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
   // its constructor, so resolve it only when a pipeline snapshot is actually
   // imported or materialized.
   let pipelineEvidenceStore: EvidenceStore | undefined
-  const evidenceStore = (): EvidenceStore =>
+  const evidenceStore = (): EvidenceArtifactPort =>
+    input.evidenceArtifacts ??
     (pipelineEvidenceStore ??= new EvidenceStore(join(input.appHome, 'evidence')))
   const caseDirectory = (caseId: string) =>
     join(input.appHome, 'workspaces', 'employee-cases', stableIdentityComponent(caseId))
@@ -856,7 +859,7 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
           // failed attempt. A later green/pending snapshot must not erase that
           // audit material; materialize only the current immutable bundle and
           // leave unrelated prior files in the platform-owned directory.
-          store.materializeBundle(manifest.bundleId, destination)
+          await store.materializeBundle(manifest.bundleId, destination)
           const fileById = new Map(manifest.files.map((file) => [file.fileId, file] as const))
           const checks = required.map((gate) => {
             const status =

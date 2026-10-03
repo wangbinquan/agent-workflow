@@ -470,6 +470,7 @@ import { composeDevelopmentEmployeeCaseDetailProjection } from '@/modules/develo
 import {
   composeDevelopmentAutomation,
   type EvidenceDocumentCommands,
+  type EvidenceArtifactPort,
   type AttemptContextStorePort,
   composeDevelopmentAdmissionLookup,
   createDevelopmentMissionExecutionTerminalObserver,
@@ -787,6 +788,7 @@ export interface AppDeps {
   employeeInputArtifacts?: EmployeeInputArtifactPort
   missionInputBlobs?: MissionInputBlobPersistence
   pluginInstaller?: PluginInstallerPort
+  evidenceArtifacts?: EvidenceArtifactPort
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -1995,6 +1997,7 @@ function composeFallbackDevelopmentAutomation(
   const automation = composeDevelopmentAutomation({
     db: deps.db,
     appHome,
+    evidenceArtifacts: deps.evidenceArtifacts,
     evidenceRead: deps.evidenceRead,
     evidenceDocumentCommands: deps.evidenceDocumentCommands,
     attemptContext: deps.attemptContext,
@@ -3034,6 +3037,7 @@ function composeSqliteApiRouteMounts(
         executionContracts,
       }),
       platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
+        evidenceArtifacts: deps.evidenceArtifacts,
         reactionRounds: createEmployeeReactionRoundQueries(deps.db),
         db: deps.db,
         appHome,
@@ -3454,6 +3458,7 @@ function composeSqliteApiRouteMounts(
     db: deps.db,
     appHome,
     blobs: deps.missionInputBlobs,
+    artifacts: deps.evidenceArtifacts,
   })
   const collaborationRouteOperations = composeCollaborationRouteOperations({
     db: deps.db,

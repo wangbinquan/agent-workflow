@@ -63,7 +63,6 @@ import type { UploadPlacementPersistence } from './application/ports/uploadPlace
 import type { RecoveryReaders } from './application/missionRecovery'
 import type { WakeSweepReaders } from './application/missionWakeSweep'
 import { createWorkspaceValidationAdapter } from './infrastructure/attemptSupport'
-import { createAttemptContextStore } from './infrastructure/local/fileAttemptContextStore'
 import {
   adoptActionWorkspace,
   discardWorkspace,
@@ -75,10 +74,10 @@ import type { EvidenceDownloadQueries } from './application/evidenceDownloads'
 import type { EvidenceReadBinding } from './composition/evidenceReadBinding'
 import type { EvidenceDocumentCommands } from './application/evidenceDocumentCommands'
 export type { EvidenceDocumentCommands }
+import type { EvidenceArtifactPort } from './application/ports/evidenceArtifacts'
+export type { EvidenceArtifactPort }
 import type { AttemptContextStorePort } from './application/ports/attemptContextStore'
 export type { AttemptContextStorePort }
-import { createFileEvidenceDownloadQueries } from './infrastructure/local/fileEvidenceDownloadQueries'
-import { createFileEvidenceContentQueries } from './infrastructure/local/fileEvidenceContentQueries'
 import {
   createActionBaselineResolver,
   createRepositoryLocationRead,
@@ -165,7 +164,7 @@ export function composeDevelopmentAutomationMaintenanceCommands(
 
 export interface DevelopmentAutomationModule {
   readonly materializer: RequirementMaterializer
-  readonly evidence: EvidenceStore
+  readonly evidence: EvidenceArtifactPort
   readonly evidenceContents: EvidenceContentQueries
   readonly evidenceDownloads: EvidenceDownloadQueries
   /** Business-safe child/approval receipts for Mission detail and journey projection. */
@@ -215,6 +214,7 @@ export interface DevelopmentAutomationModule {
 export interface DevelopmentAutomationCompositionOptions {
   readonly appHome: string
   readonly evidenceContents?: EvidenceContentQueries
+  readonly evidenceArtifacts?: EvidenceArtifactPort
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -271,16 +271,9 @@ function composeDevelopmentAutomationFromPersistence(
   const store = persistence.store
   const lookup = deps.admissionLookup ?? persistence.admissionLookup
   const snapshots = persistence.snapshots
-  const evidence = new EvidenceStore(join(deps.appHome, 'evidence'))
-  const evidenceContents =
-    deps.evidenceRead?.contents ??
-    deps.evidenceContents ??
-    createFileEvidenceContentQueries({
-      blobPath: (ref) => evidence.blobPath(ref),
-    })
-  const evidenceDownloads =
-    deps.evidenceRead?.downloads ??
-    createFileEvidenceDownloadQueries({ blobPath: (ref) => evidence.blobPath(ref) })
+  const evidence = deps.evidenceArtifacts ?? new EvidenceStore(join(deps.appHome, 'evidence'))
+  const evidenceContents = deps.evidenceRead?.contents ?? deps.evidenceContents ?? evidence.contents
+  const evidenceDownloads = deps.evidenceRead?.downloads ?? evidence.downloads
   const materializer = createRequirementMaterializer({
     documents: deps.evidenceRead?.documents,
     documentCommands: deps.evidenceDocumentCommands,
@@ -331,7 +324,7 @@ function composeDevelopmentAutomationFromPersistence(
       discard: discardWorkspace,
     },
     uploadPlanReader: persistence.uploadPlanReader,
-    attemptContext: deps.attemptContext ?? createAttemptContextStore(evidence),
+    attemptContext: deps.attemptContext ?? evidence.contexts,
     actionTemplates: {
       content: async (id, revision) => {
         const row = await templates.getRevision(id, revision)

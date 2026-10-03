@@ -3,7 +3,7 @@
 // 分工（design §5.2/§5.3）：外部程序只把文件落进 one-shot sink 并转述
 // envelope 事实（integration 的 RequirementSourceExecution，经**结构同形**
 // 依赖注入——本模块不得 import integration 内部，见 rfc294 preflight）；
-// 平台侧在这里做全部可信工作：EvidenceStore safe-walk import（byte 事实以
+// 平台侧在这里做全部可信工作：EvidenceArtifactPort safe-walk import（byte 事实以
 // 我们重扫为准，adapter 自报不作数）、RequirementBundleManifestV1 生成与
 // canonical digest、developmentBundleRefs 台账（purpose：requirement-bundle /
 // requirement-manifest / direct-submission / question-set / answer-set）。
@@ -17,7 +17,6 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import type { EvidenceDocumentQueries } from '../application/evidenceDocuments'
 import type { EvidenceDocumentCommands } from '../application/evidenceDocumentCommands'
-import { createFileEvidenceDocumentQueries } from './local/fileEvidenceDocumentQueries'
 import { createFileEvidenceDocumentCommands } from './local/fileEvidenceDocumentCommands'
 import { join } from 'node:path'
 import { ulid } from 'ulid'
@@ -47,7 +46,8 @@ import type {
   PortOutcome,
   RequirementMaterializePort,
 } from '../application/ports/reconcilerPorts'
-import type { EvidenceBudget, EvidenceStore } from './evidenceStore'
+import type { EvidenceBudget } from '../domain/evidence'
+import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
 
 /** direct 提交 / 问答文档的平台预算（外部取件用 adapter 声明的 outputBudget）。 */
 export const DIRECT_SUBMISSION_BUDGET: EvidenceBudget = {
@@ -136,7 +136,7 @@ export interface RequirementMaterializerDeps {
   readonly bundleRefs: RequirementBundleRefPersistence
   readonly store: MissionPersistence
   readonly snapshots: FactSnapshotReader
-  readonly evidence: EvidenceStore
+  readonly evidence: EvidenceArtifactPort
   readonly documents?: EvidenceDocumentQueries
   readonly documentCommands?: EvidenceDocumentCommands
   /** one-shot sink 的宿主根（每次操作一个 ulid 子目录，用完即删）。 */
@@ -204,12 +204,7 @@ export function createRequirementMaterializer(
   const { bundleRefs, store, snapshots, evidence, stagingRoot } = deps
   const documentCommands =
     deps.documentCommands ?? createFileEvidenceDocumentCommands({ evidence, stagingRoot })
-  const documents =
-    deps.documents ??
-    createFileEvidenceDocumentQueries({
-      getBundle: (ref) => evidence.getBundle(ref),
-      blobPath: (ref) => evidence.blobPath(ref),
-    })
+  const documents = deps.documents ?? evidence.documents
 
   const insertBundleRef = async (input: {
     missionId: string

@@ -2,7 +2,7 @@
 //
 // adapter 只产 staged sink（文件树）+ 小 envelope（gate facts + 文件描述引用）；
 // 本模块把 sink 收编成平台事实：真实文件集以 safe-walk 为准（symlink/逃逸/NUL/
-// 预算拒收——EvidenceStore.importStagedTree 单点），digest 全部平台重算，adapter
+// 预算拒收——EvidenceArtifactPort.importStagedTree 单点），digest 全部平台重算，adapter
 // 自报的一律不作数（§3.3「平台重新 walk 输出目录并计算真实 digest」）。产出
 // PipelineEvidenceManifestV1（schema 自检 + canonical manifestDigest）并把
 // manifest JSON 本体存进内容寻址 blob 池——DB/prompt 永远只持 ref/digest，
@@ -19,7 +19,8 @@ import {
   type GateStatus,
   type PipelineEvidenceManifestV1,
 } from '../domain/pipelineManifest'
-import type { EvidenceBudget, EvidenceStore } from './evidenceStore'
+import type { EvidenceBudget } from '../domain/evidence'
+import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
 
 /** adapter collect envelope 的结构同形输入（integration 侧词表各自持有）。 */
 export interface PipelineCollectEnvelopeLike {
@@ -78,7 +79,7 @@ function mediaTypeOf(relativePath: string): string {
  */
 /** composition 注入用的端口工厂（分支逻辑留在 infrastructure，composition 纯装配）。 */
 export function createPipelineImportAdapter(
-  evidence: EvidenceStore,
+  evidence: EvidenceArtifactPort,
   budget: EvidenceBudget,
 ): {
   import(input: {
@@ -105,7 +106,7 @@ export function createPipelineImportAdapter(
 }
 
 export async function importPipelineEvidence(
-  deps: { readonly evidence: EvidenceStore },
+  deps: { readonly evidence: EvidenceArtifactPort },
   input: {
     readonly stagedRoot: string
     readonly envelope: PipelineCollectEnvelopeLike

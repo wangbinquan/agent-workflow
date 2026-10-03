@@ -35,16 +35,26 @@ function binding(source: ts.SourceFile, call: ts.CallExpression, receiver: strin
 
 test('the actual DA composition selects one context receiver and invokes its native default lazily', () => {
   const composition = load('modules/development-automation/composition.ts')
-  const native = calls(composition, 'createAttemptContextStore')
+  const local = load('modules/development-automation/infrastructure/local/fileEvidenceStore.ts')
+  const native = calls(local, 'createAttemptContextStore')
   expect(native).toHaveLength(1)
-  const selection = native[0]!.parent
-  expect(ts.isBinaryExpression(selection)).toBe(true)
-  if (!ts.isBinaryExpression(selection)) throw new Error('context selection is missing')
-  expect(selection.left.getText(composition)).toBe('deps.attemptContext')
-  expect(selection.operatorToken.kind).toBe(ts.SyntaxKind.QuestionQuestionToken)
-  expect(ts.isPropertyAssignment(selection.parent)).toBe(true)
-  if (!ts.isPropertyAssignment(selection.parent)) throw new Error('port binding is missing')
-  expect(selection.parent.name.getText(composition)).toBe('attemptContext')
+  expect(native[0]!.arguments[0]!.getText(local)).toBe('this')
+  const selections: ts.BinaryExpression[] = []
+  const visit = (node: ts.Node) => {
+    if (
+      ts.isBinaryExpression(node) &&
+      node.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken &&
+      node.left.getText(composition) === 'deps.attemptContext'
+    )
+      selections.push(node)
+    ts.forEachChild(node, visit)
+  }
+  visit(composition)
+  expect(selections).toHaveLength(1)
+  expect(selections[0]!.right.getText(composition)).toBe('evidence.contexts')
+  expect(ts.isPropertyAssignment(selections[0]!.parent)).toBe(true)
+  if (!ts.isPropertyAssignment(selections[0]!.parent)) throw new Error('port binding is missing')
+  expect(selections[0]!.parent.name.getText(composition)).toBe('attemptContext')
 })
 
 test('all real startup and HTTP roots forward the same selected context through provider recomposition', () => {

@@ -24,10 +24,10 @@ import { dirname, join } from 'node:path'
 
 import { runGit } from '@/util/git'
 import { PLATFORM_WORKSPACE_DIR } from '@agent-workflow/shared'
-import type { EvidenceStore } from './evidenceStore'
+import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
 
 export interface WorkspaceDeps {
-  readonly evidence: EvidenceStore
+  readonly evidence: EvidenceArtifactPort
   readonly seedsRoot: string
   /**
    * workspace 宿主根。生产必须落 appHome 之下（RFC-308 exclude participant
@@ -142,7 +142,7 @@ export async function materializeActionWorkspace(
     copyTree(join(deps.seedsRoot, input.seedRef), ws)
   }
   for (const bundle of input.bundles) {
-    deps.evidence.materializeBundle(bundle.bundleId, join(ws, bundle.mountPath))
+    await deps.evidence.materializeBundle(bundle.bundleId, join(ws, bundle.mountPath))
   }
   return { workspacePath: ws, businessTreeDigest: businessTreeDigestOf(ws) }
 }
@@ -153,15 +153,18 @@ export async function materializeActionWorkspace(
  * evidence bundle 挂载与 businessTreeDigest；业务树原样保留——冲突现场的
  * marker 就是 Agent 要解的输入。
  */
-export function adoptActionWorkspace(
+export async function adoptActionWorkspace(
   deps: Pick<WorkspaceDeps, 'evidence'>,
   input: {
     readonly workspacePath: string
     readonly bundles: readonly { readonly bundleId: string; readonly mountPath: string }[]
   },
-): MaterializedWorkspace {
+): Promise<MaterializedWorkspace> {
   for (const bundle of input.bundles) {
-    deps.evidence.materializeBundle(bundle.bundleId, join(input.workspacePath, bundle.mountPath))
+    await deps.evidence.materializeBundle(
+      bundle.bundleId,
+      join(input.workspacePath, bundle.mountPath),
+    )
   }
   return {
     workspacePath: input.workspacePath,

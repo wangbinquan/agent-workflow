@@ -42,6 +42,7 @@ import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
 import {
   composeDevelopmentAutomation,
   type EvidenceDocumentCommands,
+  type EvidenceArtifactPort,
   type AttemptContextStorePort,
   composeDevelopmentAdmissionLookup,
   createDevelopmentDeliveryProvider,
@@ -411,6 +412,7 @@ export interface StartOptions {
   employeeInputArtifacts?: EmployeeInputArtifactPort
   missionInputBlobs?: MissionInputBlobPersistence
   pluginInstaller?: PluginInstallerPort
+  evidenceArtifacts?: EvidenceArtifactPort
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -581,6 +583,7 @@ async function composePostgresqlProviderSession(
     employeeInputArtifacts: input.employeeInputArtifacts,
     missionInputBlobs: input.missionInputBlobs,
     pluginInstaller: input.pluginInstaller,
+    evidenceArtifacts: input.evidenceArtifacts,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -1108,6 +1111,7 @@ interface DaemonProviderSessionComposeInput {
   readonly employeeInputArtifacts?: EmployeeInputArtifactPort
   readonly missionInputBlobs?: MissionInputBlobPersistence
   readonly pluginInstaller?: PluginInstallerPort
+  readonly evidenceArtifacts?: EvidenceArtifactPort
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -1559,6 +1563,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       employeeInputArtifacts: opts.employeeInputArtifacts,
       missionInputBlobs: opts.missionInputBlobs,
       pluginInstaller: opts.pluginInstaller,
+      evidenceArtifacts: opts.evidenceArtifacts,
       evidenceRead: opts.evidenceRead,
       evidenceDocumentCommands: opts.evidenceDocumentCommands,
       attemptContext: opts.attemptContext,
@@ -2654,6 +2659,7 @@ async function composeSqliteProviderSession(
   const developmentAutomation = composeDevelopmentAutomation({
     db,
     appHome: Paths.root,
+    evidenceArtifacts: input.evidenceArtifacts,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -3039,6 +3045,7 @@ async function composeSqliteProviderSession(
     employeeInputArtifacts: input.employeeInputArtifacts,
     missionInputBlobs: input.missionInputBlobs,
     pluginInstaller: input.pluginInstaller,
+    evidenceArtifacts: input.evidenceArtifacts,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -3399,6 +3406,7 @@ async function composeSqliteProviderSession(
         executionContracts: employeeExecutionContracts,
       }),
       platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
+        evidenceArtifacts: input.evidenceArtifacts,
         reactionRounds: createEmployeeReactionRoundQueries(db),
         db,
         appHome: Paths.root,

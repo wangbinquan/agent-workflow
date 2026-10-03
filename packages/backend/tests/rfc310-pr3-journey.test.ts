@@ -85,6 +85,7 @@ let fx: ProviderPr3Fixture
 let app: Hono
 let token: string
 let automation: DevelopmentAutomationModule
+let nativeBlobPath: (sha256: string) => string
 /** answers 用例专用 policy：规则只读 requirement facts（见该用例注释）。 */
 let requirementOnlyPolicyId = ''
 
@@ -244,6 +245,7 @@ async function seedFixture(scope: ProviderHttpApplicationScope): Promise<void> {
   })
   const opened = await scope.open()
   app = opened.app
+  nativeBlobPath = (sha) => resolve(opened.appHome, 'evidence', 'blobs', sha.slice(0, 2), sha)
   const admin = await createUser(db, {
     username: 'admin-journey',
     displayName: 'Admin',
@@ -375,7 +377,7 @@ describeEachProviderHttpApplication(
         expect(((await foreign.json()) as { code: string }).code).toBe('requirement-file-not-found')
 
         // 盘上 blob 丢失（备份还原不完整等）→ 诚实 404，不 500。放在最后：破坏性。
-        unlinkSync(automation.evidence.blobPath(sha))
+        unlinkSync(nativeBlobPath(sha))
         const gone = await reqAs(base)
         expect(gone.status).toBe(404)
         expect(((await gone.json()) as { code: string }).code).toBe('evidence-blob-missing')

@@ -2,7 +2,7 @@
 //
 // 在 candidate 的一次性 disposable workspace 里逐 step 跑受管程序：exit code
 // ∈ successExitCodes 才算过，**stdout 里的 "passed" 不是事实**；平台自己收
-// evidence（file-glob 命中的产物 + stdout tail），大字节全部进 EvidenceStore
+// evidence（file-glob 命中的产物 + stdout tail），大字节全部进 EvidenceArtifactPort
 // （内容寻址 blob），receipt 只持 ref/digest。timeout 到点 TERM→KILL；输出
 // bounded（尾部 64KB 环形保留，防 runaway 日志撑爆内存——Bun 管道无背压的
 // 教训面）。networkProfileRef 首版不解释（2026-08-18 裁决：不做网络动作）。
@@ -21,7 +21,7 @@ import { sha256Hex } from '@/util/hash'
 import type { VerificationProfileContent } from '../domain/verificationProfile'
 
 type VerificationStep = VerificationProfileContent['steps'][number]
-import type { EvidenceStore } from './evidenceStore'
+import type { EvidenceArtifactPort } from '../application/ports/evidenceArtifacts'
 
 export interface ResolvedVerificationProgram {
   /** argv[0] 是可执行体；`repo:` 形态解析为 workspace 内绝对路径。 */
@@ -93,7 +93,7 @@ const OUTPUT_TAIL_CAP = 64 * 1024
 async function collectGlob(
   workspacePath: string,
   pattern: string,
-  evidence: EvidenceStore,
+  evidence: EvidenceArtifactPort,
 ): Promise<VerificationStepResult['evidenceFiles']> {
   const out: { selector: string; path: string; sha256: string; bytes: number }[] = []
   const glob = new Bun.Glob(pattern)
@@ -113,7 +113,7 @@ async function collectGlob(
 }
 
 async function runStep(
-  deps: { readonly evidence: EvidenceStore; readonly resolver: VerificationProgramResolver },
+  deps: { readonly evidence: EvidenceArtifactPort; readonly resolver: VerificationProgramResolver },
   workspacePath: string,
   step: VerificationStep,
 ): Promise<VerificationStepResult> {
@@ -222,7 +222,7 @@ async function runStep(
  * 并行化随后续批次）；stopPolicy=first-failure 时首个失败即停。
  */
 export async function runVerificationProfile(
-  deps: { readonly evidence: EvidenceStore; readonly resolver: VerificationProgramResolver },
+  deps: { readonly evidence: EvidenceArtifactPort; readonly resolver: VerificationProgramResolver },
   input: { readonly workspacePath: string; readonly profile: VerificationProfileContent },
 ): Promise<VerificationRunReceipt> {
   const steps: VerificationStepResult[] = []
