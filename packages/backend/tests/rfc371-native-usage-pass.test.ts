@@ -157,7 +157,7 @@ test('one frozen page requires owner ACK, retries exact bytes, and keeps the ori
   expect(reader.next(reader.initialCursor)).toEqual(first)
   expect(() => reader.next(first.nextCursor!)).toThrow('awaits original owner ACK')
   expect(() => reader.acknowledge(first.ordinal, 'wrong')).toThrow('changed frozen page')
-  const changed = structuredClone(first) as { sessions: Array<{ id: string }> }
+  const changed = structuredClone(first) as unknown as { sessions: Array<{ id: string }> }
   changed.sessions[0]!.id = 'changed'
   expect(reader.next(reader.initialCursor)).toEqual(first)
   f.part('later', 'root', 'step-finish', 9000)
