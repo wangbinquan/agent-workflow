@@ -5531,11 +5531,11 @@
   "denominator": {
     "ambientWiring": 501,
     "disabled": 9,
-    "entries": 352,
+    "entries": 353,
     "executionLocal": 41,
     "longRunning": 91,
     "managed": 11,
-    "periodic": 211
+    "periodic": 212
   },
   "entries": [
     {
@@ -7905,6 +7905,27 @@
       "phase": "unknown",
       "symbol": "resourceCatalogCursorBrand",
       "targetContext": "resource-catalog"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/modules/run-observability/application/completeWorkingCache.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/modules/run-observability/application/completeWorkingCache.ts#completeWorkingCache",
+      "kind": "periodic",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/application/completeWorkingCache.ts#completeWorkingCache",
+      "phase": "unknown",
+      "symbol": "completeWorkingCache",
+      "targetContext": "run-observability"
     },
     {
       "dependencies": [],
@@ -13280,5 +13301,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4028cc01a4a986f8b89b20d8a6613b927bff01ea0122b763031999b4248efc1d"
+  "sourceDigest": "sha256:37b29c54a9d1d5f61a0fde8521926856a63af8fc517de9162b26902563a97883"
 }

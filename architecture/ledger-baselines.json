@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1833,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1834,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original Task SOURCE25: 1833 -> 1834. The unchanged AST classifier inventories the new exact pure four-bucket accumulator addCompleteObservationAllocation in domain/completeObservationMetrics.ts; this registration does not assert a business mutation. Source a22d631fca47263e0205c36bf8fab6690be2725a."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -832,8 +835,11 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 352,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 353,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original Task SOURCE25: 352 -> 353. The unchanged AST classifier inventories completeWorkingCache in application/completeWorkingCache.ts (its bounded Map cache delete is classified periodic); no new real timer or daemon job is asserted. Source a22d631fca47263e0205c36bf8fab6690be2725a."
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -846,8 +852,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5824,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5829,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original Task SOURCE25: 5824 -> 5829. Five exact type/value observations for execution-owner complete facts and snapshot valuation, with original boundaries retained. Source a22d631fca47263e0205c36bf8fab6690be2725a."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +876,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5180,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5184,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original Task SOURCE25: 5180 -> 5184. Four exact projections of the five new observations under unchanged original classification rules. Source a22d631fca47263e0205c36bf8fab6690be2725a."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -902,12 +914,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26057,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26113,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371 complete original Task SOURCE25: 26057 -> 26113. Fifty-six exact symbols from fourteen exact production paths (thirteen backend paths and shared observationComplete.ts); no rule or debt change. Source a22d631fca47263e0205c36bf8fab6690be2725a."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:4028cc01a4a986f8b89b20d8a6613b927bff01ea0122b763031999b4248efc1d",
+    "sourceDigest": "sha256:37b29c54a9d1d5f61a0fde8521926856a63af8fc517de9162b26902563a97883",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +935,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "6942511731dcaaf501756671e5dc99cc9d28efbd",
-    "contentDigest": "sha256:d46e2b19e53f7eef75cae718bc1424bd59e05d2f16e2eaf76c23831730bcc1be",
+    "currentSnapshotSha": "a22d631fca47263e0205c36bf8fab6690be2725a",
+    "contentDigest": "sha256:1e57276e7c4ea80412fea4ca6e0f504083798a18ff8c690d0611ec9f82bdad25",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -1,3 +1,11 @@
+## 2026-10-03 RFC-371 完整原始任务证据 SOURCE25
+
+任务统计基础源码已提交 a22d631fca47263e0205c36bf8fab6690be2725a：同一原数据库快照内，所有 attempt、accepted invocation、local numeric row、CrewStation usage/valuation/capture 沿各 owner 游标至真正 EOF，再作四桶覆盖与原定价汇总。发现原证据缺失时不提供数字小计，已修订的不可变历史凭原 owner resolution 解除旧缺口，完整父覆盖排除坏子后保留规范汇总。三次有限独立 SOURCE 检视的两个旧 FAIL 保留；v3 组合 PASS 9bb558b601d2e8bd8e2c25957440b3692f23af68aed924c3bc6dbe1439fd42b1。新增原始双 provider 1001 attempt / 10001 usage、101 完整 baseline/resolution、真实 A/B 修订和 local/platform 覆盖回归；尚未运行新 hosted 行为验收，未运行本机 AW test/typecheck/build/service。
+
+原官方 census 只扫描该已提交源码，排除且保留所有未提交并行工作，复用唯一 AST 结果生成完整13产物。生产文件2876，source digest sha256:37b29c54a9d1d5f61a0fde8521926856a63af8fc517de9162b26902563a97883；129原库存静态核对通过。五项实际增长登记为 mutation 1833→1834、background 352→353、observed import 5824→5829、exception 5180→5184、symbol owner 26057→26113，未改原规则、required SPI、target edges、断言或预算。前两项是原 AST 对纯 accumulator 和 bounded Map cache 的库存分类，不声称新增业务写入或真实定时器。一次性 growth 按原规则在后继非增长提交退役。
+
+c01f1dec 的精确 CI 37107601240 为 completed/cancelled，不能算通过；包含它的 dcdc249f CI 37107720458 completed/success 50/50 是后继证据。共享基线7d127009 的主 CI37113530050 completed/success 50/50、Windows37113592469 completed/success。本批新发布精确SHA的远端 CI 仍待。正式全量 report/缓存/接口/页面切换、native v2 原始持续遍历、100K Task/10M usage、真实任务四桶/人民币、CS新源码发布及本机部署仍开放，两个RFC不关闭。
+
 ## RFC-370：694 DA workspace CI 精确修正（2026-10-03）
 
 精确 `6942511731dcaaf501756671e5dc99cc9d28efbd` 主 CI `37109647129` 已 completed/failure（44 success、6 failure、50 jobs）；四个 backend 分片的两个失败各在 Linux/macOS 复现，typecheck 与 required 聚合另计。Windows `37109837274` completed/failure，maintenance `37109647139` completed/success。失败证据保留，未把旧成功或重跑当成本批通过。前次 `dcdc249ff50bac893edbf8c19b6ad12cd264e0b6` 的主 CI `37107720458` 已 completed/success（50/50），四个原真实 PostgreSQL Worker 用例及 compiled Worker 加载均通过；这是 Worker fixture 修复自己的证据。

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1833,
+    "entries": 1834,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -21309,6 +21309,30 @@
       "symbol": "createUsageSourceProjection",
       "targetContext": "run-observability",
       "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/run-observability/domain/completeObservationMetrics.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/run-observability/domain/completeObservationMetrics.ts#addCompleteObservationAllocation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/domain/completeObservationMetrics.ts#addCompleteObservationAllocation",
+      "symbol": "addCompleteObservationAllocation",
+      "targetContext": "run-observability",
+      "targetLayer": "domain"
     },
     {
       "controls": {
@@ -43823,7 +43847,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4028cc01a4a986f8b89b20d8a6613b927bff01ea0122b763031999b4248efc1d",
+  "sourceDigest": "sha256:37b29c54a9d1d5f61a0fde8521926856a63af8fc517de9162b26902563a97883",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
