@@ -36,6 +36,65 @@ export async function readUsageCapture(db: ProviderNeutralDatabase, invocationId
   return row ? decode(row) : undefined
 }
 
+/** Every retained capture header is traversed; compact explanation text is not an EOF proof. */
+export async function readUsageCapturePage(
+  db: ProviderNeutralDatabase,
+  taskId: string,
+  page: { readonly limit: number; readonly after?: string },
+) {
+  if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 500)
+    throw new RangeError('Capture page size must be 1 through 500')
+  const rows = await db
+    .select({
+      invocationId: observationUsageCaptures.invocationId,
+      document: observationUsageCaptures.summary,
+      sourceId: observationUsageCaptures.sourceId,
+      sourceCursor: observationUsageCaptures.sourceCursor,
+      nativeRootKey: observationUsageCaptures.nativeRootKey,
+      priorRevisionGap: observationUsageCaptures.priorRevisionGap,
+    })
+    .from(observationUsageCaptures)
+    .where(
+      and(
+        eq(observationUsageCaptures.taskId, taskId),
+        page.after === undefined
+          ? undefined
+          : gt(observationUsageCaptures.invocationId, page.after),
+      ),
+    )
+    .orderBy(asc(observationUsageCaptures.invocationId))
+    .limit(page.limit + 1)
+    .all()
+  const selected = rows.slice(0, page.limit)
+  const roots = [
+    ...new Set(selected.flatMap((row) => (row.nativeRootKey === null ? [] : [row.nativeRootKey]))),
+  ]
+  const gaps =
+    roots.length === 0
+      ? []
+      : await db
+          .select({ root: observationUsageCaptures.nativeRootKey })
+          .from(observationUsageCaptures)
+          .where(
+            and(
+              inArray(observationUsageCaptures.nativeRootKey, roots),
+              eq(observationUsageCaptures.priorRevisionGap, 1),
+            ),
+          )
+          .groupBy(observationUsageCaptures.nativeRootKey)
+          .all()
+  const affected = new Set(gaps.map((row) => row.root))
+  return {
+    items: selected.map((row) => ({
+      ...decode(row),
+      priorRevisionGap:
+        row.priorRevisionGap === 1 ||
+        (row.nativeRootKey !== null && affected.has(row.nativeRootKey)),
+    })),
+    nextCursor: rows.length > page.limit ? selected.at(-1)!.invocationId : null,
+  }
+}
+
 /** Immutable native evidence and its recoverable projection are distinct. */
 export async function commitUsageCapture(
   db: ProviderNeutralDatabase,

@@ -22,6 +22,14 @@ export interface ObservationTaskSource {
   }>
   get(actor: Actor, taskId: string): Promise<ObservationTaskFacts | null>
   sourceBacklog(taskIds: readonly string[]): Promise<readonly ObservationSourceBacklog[]>
+  /** Original owner keyset pages; consume every continuation to null in the same snapshot. */
+  attemptPage?(
+    taskId: string,
+    page: { readonly limit: number; readonly after?: string },
+  ): Promise<{
+    readonly items: readonly ObservationAttemptFacts[]
+    readonly nextCursor: string | null
+  }>
   attempts(
     taskId: string,
     limit: number,

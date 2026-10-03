@@ -30,6 +30,14 @@ export interface TaskObservationFactsQuery {
   /** Only task IDs supplied by get/list in this same visible snapshot. */
   sourceBacklog(taskIds: readonly string[]): Promise<readonly ObservationSourceBacklog[]>
   /** Called only after get/list supplied this visible task, inside the same read snapshot. */
+  /** Original owner keyset pages; consume every continuation to null in the same snapshot. */
+  attemptPage?(
+    taskId: string,
+    page: { readonly limit: number; readonly after?: string },
+  ): Promise<{
+    readonly items: readonly ObservationAttemptFacts[]
+    readonly nextCursor: string | null
+  }>
   attempts(
     taskId: string,
     limit: number,

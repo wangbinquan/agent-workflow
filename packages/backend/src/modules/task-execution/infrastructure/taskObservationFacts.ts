@@ -1,4 +1,18 @@
-import { and, asc, count, desc, eq, exists, gte, inArray, isNull, lt, or, sql } from 'drizzle-orm'
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  exists,
+  gt,
+  gte,
+  inArray,
+  isNull,
+  lt,
+  or,
+  sql,
+} from 'drizzle-orm'
 import type { ObservationTaskPageQuery } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
 import { taskVisibilityCondition, type ProviderNeutralDatabase } from '@/db/query'
@@ -38,6 +52,37 @@ function continuation(query: ObservationTaskPageQuery): [number, string] | null 
   )
     throw new RangeError('Task observation cursor changed window')
   return [parsed[2] as number, parsed[3]]
+}
+
+function attemptContinuation(taskId: string, cursor: string | undefined): string | undefined {
+  if (cursor === undefined) return undefined
+  let value: unknown
+  try {
+    value = JSON.parse(cursor)
+  } catch {
+    throw new RangeError('Invalid observation attempt cursor')
+  }
+  if (
+    !Array.isArray(value) ||
+    value.length !== 3 ||
+    value[0] !== 1 ||
+    value[1] !== taskId ||
+    typeof value[2] !== 'string' ||
+    !value[2]
+  )
+    throw new RangeError('Observation attempt cursor changed task')
+  return value[2]
+}
+const attemptFields = {
+  id: nodeRuns.id,
+  nodeId: nodeRuns.nodeId,
+  status: nodeRuns.status,
+  startedAt: nodeRuns.startedAt,
+  finishedAt: nodeRuns.finishedAt,
+  retryIndex: nodeRuns.retryIndex,
+  iteration: nodeRuns.iteration,
+  wgRound: nodeRuns.wgRound,
+  reviewIteration: nodeRuns.reviewIteration,
 }
 
 /** Bind to the snapshot handle supplied by bootstrap; do not open another transaction. */
@@ -171,21 +216,34 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
           .get()) ?? null
       )
     },
+    async attemptPage(taskId, page) {
+      if (!Number.isInteger(page.limit) || page.limit < 1 || page.limit > 1000)
+        throw new RangeError('Attempt page size must be 1 through 1000')
+      const after = attemptContinuation(taskId, page.after)
+      const rows = await db
+        .select(attemptFields)
+        .from(nodeRuns)
+        .where(
+          and(
+            eq(nodeRuns.taskId, taskId),
+            after === undefined ? undefined : gt(nodeRuns.id, after),
+          ),
+        )
+        .orderBy(asc(nodeRuns.id))
+        .limit(page.limit + 1)
+        .all()
+      const items = rows.slice(0, page.limit),
+        last = items.at(-1)
+      return {
+        items,
+        nextCursor: rows.length > page.limit && last ? JSON.stringify([1, taskId, last.id]) : null,
+      }
+    },
     async attempts(taskId, limit) {
       if (!Number.isInteger(limit) || limit < 1 || limit > 1000)
         throw new RangeError('Attempt limit must be 1 through 1000')
       const rows = await db
-        .select({
-          id: nodeRuns.id,
-          nodeId: nodeRuns.nodeId,
-          status: nodeRuns.status,
-          startedAt: nodeRuns.startedAt,
-          finishedAt: nodeRuns.finishedAt,
-          retryIndex: nodeRuns.retryIndex,
-          iteration: nodeRuns.iteration,
-          wgRound: nodeRuns.wgRound,
-          reviewIteration: nodeRuns.reviewIteration,
-        })
+        .select(attemptFields)
         .from(nodeRuns)
         .where(eq(nodeRuns.taskId, taskId))
         .orderBy(asc(nodeRuns.id))
