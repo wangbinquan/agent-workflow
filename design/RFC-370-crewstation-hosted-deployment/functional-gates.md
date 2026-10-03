@@ -628,3 +628,12 @@ SOURCE39 原 FAIL f0a7f541c39b52ad1f18ca8ee824d0a343d6b1bafb1d35d1bfbbf7f03246ac
 本批四个测试路径修正 W8 共用输入漏传/重复 prompt factory、runner 新夹具展开真实 provider class 丢失原型方法、canonical 薄 facade 真实清单漏列 nodeRunPrompt，以及 tasks 插入点 AST 地址2472→2473。runner 夹具用原 receiver 上的 Proxy 委托，仍拦截原 patch/transition 验证 held ACK 顺序；生产代码不变。原断言/名称/预算、scanner/normalizer 保留，只有一条实际薄 facade 期望和一个实际地址改变。有限 SOURCE4 独立功能门 PASS，指纹7dcf0f6a7e7bd1da1480afc4ca2af69d12d71cda10665b4a9b4d3b0ee4dd5e31；4 owned/5 controls/13 evidence 首末稳定。原纯证明失败保留，最终 AST/字节证明及目标 format/lint 通过；无本机 AW test/typecheck/build/service。正式行为等待修复后新的确切 SHA CI。
 
 观测相关源/schema/worker/provider/E2E 失败由并行会话接续，全部 WIP 保留。完整 A1–A8/AC00/A-G、CS 独立 adapters 和 B/M0–M4 继续；port-artifact 内容切面另行设计，不夹带本批提交。尚无 AW-in-CS 实际部署，不关闭 RFC。
+
+
+## 2026-10-04 Prompt 用户模板 CI 补正
+
+确切 SHA `9bdc8323a99c0de2ca955ca0945ba063ef927382` 的主 CI37146579007 已 completed/failure，41 success/9 failure；两后端分片唯一失败是原 prompt ACK-order 夹具，六个 E2E 失败属于并行观测页面，原完整日志保留并已最小必要协调。原 prototype/receiver 补正已到达 store，但夹具只设置 Agent 系统 bodyMd，用户模板为空，故长正文断言报错。只在实际 runNode 对象新增 `promptTemplate` 长正文参数；原176个expect AST、10测试名称/预算及其余全部字节保持，原 store→patch→mark-running 与双 held ACK 断言不变。
+
+单路径有限 SOURCE1 PASS，指纹 `f488acc0df17e6e0f530f45c7274bd2a8def8605acdd88d23a740591732c2f8e`，1 owned/8 evidence 首末稳定；目标format/lint及精确单参数逆变换通过，生产代码和 canonical 不变，不重复生成。未运行本机 AW tests/typecheck/build/services；新正式结果仍须看修复提交 exact-SHA CI。前批 SOURCE4 PASS 与两轮正式 FAIL 原样保留，不能以有限门宣称全仓通过。
+
+完整 RFC370/A1–A8/AC00/A-G、CS adapters 及 B/M0–M4 继续；A2 portArtifacts 实现在制，排除本次测试补正发布，尚无 AW-in-CS 实际部署。

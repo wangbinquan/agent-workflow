@@ -443,6 +443,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       nodeRunId,
       nodeId: DESIGNER,
       agent,
+      promptTemplate: 'selected long body '.repeat(500),
       inputs: {},
       worktreePath,
       templateMeta: { repoPath: '/tmp/repo', baseBranch: 'main', taskId },
