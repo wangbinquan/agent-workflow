@@ -385,29 +385,41 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
     })
     const persistence = {
       ...original,
-      nodeExecution: {
-        ...original.nodeExecution,
-        async patch(input: Parameters<typeof original.nodeExecution.patch>[0]) {
-          if ('promptPath' in input.values) {
-            expect(input.values).toEqual({ promptText: null, promptPath: 'object:runner' })
-            trace.push('patch')
-            patchEntered.resolve(undefined)
-            await patchAck.promise
-            trace.push('patch-ack')
+      // Preserve the real provider participants' prototype methods and receivers.
+      // Spreading the class instance loses loadEnvelopeNonce before prompt storage.
+      nodeExecution: new Proxy(original.nodeExecution, {
+        get(target, key) {
+          if (key !== 'patch') {
+            const value = Reflect.get(target, key, target)
+            return typeof value === 'function' ? value.bind(target) : value
           }
-          return await original.nodeExecution.patch(input)
-        },
-      },
-      nodeRuns: {
-        ...original.nodeRuns,
-        async transition(input: Parameters<typeof original.nodeRuns.transition>[0]) {
-          if (input.event.kind === 'mark-running') {
-            trace.push('mark-running')
-            throw stop
+          return async (input: Parameters<typeof original.nodeExecution.patch>[0]) => {
+            if ('promptPath' in input.values) {
+              expect(input.values).toEqual({ promptText: null, promptPath: 'object:runner' })
+              trace.push('patch')
+              patchEntered.resolve(undefined)
+              await patchAck.promise
+              trace.push('patch-ack')
+            }
+            return await target.patch(input)
           }
-          return await original.nodeRuns.transition(input)
         },
-      },
+      }),
+      nodeRuns: new Proxy(original.nodeRuns, {
+        get(target, key) {
+          if (key !== 'transition') {
+            const value = Reflect.get(target, key, target)
+            return typeof value === 'function' ? value.bind(target) : value
+          }
+          return async (input: Parameters<typeof original.nodeRuns.transition>[0]) => {
+            if (input.event.kind === 'mark-running') {
+              trace.push('mark-running')
+              throw stop
+            }
+            return await target.transition(input)
+          }
+        },
+      }),
     }
     const agent = {
       id: ulid(),

@@ -782,3 +782,8 @@ PG 摘要 `23e198e5a2d9bfb4bfbb53f6b7e9f6e51318159258db7293fa21bded160f88fc`→`
 六条新增 R1 的原失败记录保留；PUBLIC-CONTRACTS-DESIGN10 与 SOURCE10 80687f0f61ac2016eb6289bdc08182cf76fb58b68c89c3559ab22255e62cb0ca 通过后，三份同步 helper 原函数 AST 原样迁入 composition，旧服务改走 exact public/commands、queries、types，三个旧消费者只改 selector 的 public/participants import。构造器不公开，三个根与 ACK 顺序不变。unit 原54断言/11名称预算和全原AST保留，新增公开合同函数身份及完整receiver/heldACK回归；修正后纯 committed-rule 边界复查新增为0，无新债务条款。
 
 原生成规则只销账一条已消失的 memory 蒸馏→旧 prompt service 的 R2；原304条完整记录留在 before 证据，其余303条全文、理由与退役条件保持。registered findings、40 required SPI、69 target edges 和空 implementation SCC 均不变。
+
+
+## Prompt 批次 CI 接续（2026-10-04）
+
+三个 prompt 提交已发布，末 SHA489919498495eefe26a172b1423f89c3cf4a8d56 的主 CI37142743857/Windows37142743879 均失败，maintenance37142743868成功；旧终态不改记。四个本批测试回归已按原功能规则修正并通过有限独立 SOURCE4：共用 factory、真实类 receiver 委托、实际薄 facade 和 AST 行地址。目标 format/lint及纯 AST/字节证明通过，无本机 AW 执行检查，正式结果以修复提交确切 SHA CI 为准。并行观测失败已按归属协调，不改动或提交对方 WIP。完整 RFC、A-G 与实际 CS 部署持续；下一项 port-artifact 内容切面独立设计。

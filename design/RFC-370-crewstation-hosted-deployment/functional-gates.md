@@ -619,3 +619,12 @@ SOURCE39 原 FAIL f0a7f541c39b52ad1f18ca8ee824d0a343d6b1bafb1d35d1bfbbf7f03246ac
 六条新增 R1 的原失败记录保留；PUBLIC-CONTRACTS-DESIGN10 与 SOURCE10 80687f0f61ac2016eb6289bdc08182cf76fb58b68c89c3559ab22255e62cb0ca 通过后，三份同步 helper 原函数 AST 原样迁入 composition，旧服务改走 exact public/commands、queries、types，三个旧消费者只改 selector 的 public/participants import。构造器不公开，三个根与 ACK 顺序不变。unit 原54断言/11名称预算和全原AST保留，新增公开合同函数身份及完整receiver/heldACK回归；修正后纯 committed-rule 边界复查新增为0，无新债务条款。
 
 原生成规则只销账一条已消失的 memory 蒸馏→旧 prompt service 的 R2；原304条完整记录留在 before 证据，其余303条全文、理由与退役条件保持。registered findings、40 required SPI、69 target edges 和空 implementation SCC 均不变。
+
+
+## RFC-370 Prompt 批次确切 SHA CI 修复（2026-10-04）
+
+前批三个提交 58112c0817e24bcf8a7dc52a68a7cb65645f919f、043e43733a0cc08e02b3cc59d7d923a9c32509e6、489919498495eefe26a172b1423f89c3cf4a8d56 已远端发布；最后 SHA 的主 CI37142743857 completed/failure、Windows37142743879 completed/failure、maintenance37142743868 completed/success，OpenCode37142743881 与 Git protocols37142743859 completed/success。全部旧失败保留，不能将有限 SOURCE/META PASS 写成正式 CI 全绿。
+
+本批四个测试路径修正 W8 共用输入漏传/重复 prompt factory、runner 新夹具展开真实 provider class 丢失原型方法、canonical 薄 facade 真实清单漏列 nodeRunPrompt，以及 tasks 插入点 AST 地址2472→2473。runner 夹具用原 receiver 上的 Proxy 委托，仍拦截原 patch/transition 验证 held ACK 顺序；生产代码不变。原断言/名称/预算、scanner/normalizer 保留，只有一条实际薄 facade 期望和一个实际地址改变。有限 SOURCE4 独立功能门 PASS，指纹7dcf0f6a7e7bd1da1480afc4ca2af69d12d71cda10665b4a9b4d3b0ee4dd5e31；4 owned/5 controls/13 evidence 首末稳定。原纯证明失败保留，最终 AST/字节证明及目标 format/lint 通过；无本机 AW test/typecheck/build/service。正式行为等待修复后新的确切 SHA CI。
+
+观测相关源/schema/worker/provider/E2E 失败由并行会话接续，全部 WIP 保留。完整 A1–A8/AC00/A-G、CS 独立 adapters 和 B/M0–M4 继续；port-artifact 内容切面另行设计，不夹带本批提交。尚无 AW-in-CS 实际部署，不关闭 RFC。

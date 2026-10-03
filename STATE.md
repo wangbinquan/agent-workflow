@@ -1,3 +1,9 @@
+## 2026-10-04 Prompt 确切 SHA CI 四项修复
+
+前批末 SHA489919498495eefe26a172b1423f89c3cf4a8d56 的主 CI37142743857/Windows37142743879均completed/failure，maintenance37142743868成功，旧失败保留。本批仅修正四测试：W8共用prompt factory、runner夹具原型方法和receiver、canonical实际薄facade清单、tasks插入AST地址2472→2473；生产代码/原判据/预算不变。有限独立SOURCE4 PASS，指纹7dcf0f6a7e7bd1da1480afc4ca2af69d12d71cda10665b4a9b4d3b0ee4dd5e31，4 owned/5 controls/13 evidence首末稳定；目标format/lint和最终纯AST/字节证明通过，无本机AW执行检查。新正式CI须看修复提交确切SHA，不据有限PASS宣称绿。并行观测修复9b0ea034805001ef910d3a13464dca9a3e9b620a已发布并保留；本提交在其后精确同步发布，不纳入其后续native-pass WIP。
+
+完整RFC-370/A1–A8/AC00/A-G、独立CS adapters及B/M0–M4继续；下一项端口产物内容切面单独设计。尚无AW-in-CS实际部署，不关闭RFC。
+
 ## 2026-10-04 Node-run prompt 内容与真实启动根接线
 
 RFC-370 的 prompt 存储切面归 task-execution application/composition，文件写读只留独立 local adapter。完整 effects/operations 只由 undefined 选本机默认；显式 null/不完整选择不逐方法回落，冻结 prototype/private receiver 保持身份。UTF-8 4096 字节阈值、完整列 fallback、空文本优先、旧相对引用和复合本机写读保持。runner 在 content ACK 后才 patch，patch ACK 后才 mark-running；detail、session sibling、agent/clarify 蒸馏及真实定时循环等待同一选定 reader。三实际根在 session 初建和重装配时各选择一次服务，PG 的现有 tasks.operations 原样进入 HTTP；SQLite preselected 优先并保留外部 memoryOperations。

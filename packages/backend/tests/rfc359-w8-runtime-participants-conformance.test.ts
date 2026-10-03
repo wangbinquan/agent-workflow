@@ -146,6 +146,8 @@ function sharedInput(
 > {
   return {
     db,
+    nodeRunPromptsFor: (appHome) =>
+      composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
     workspacePresence: createFileWorkspacePresenceQueries(),
     persistence: createTaskExecutionPersistence(db),
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),
@@ -169,8 +171,6 @@ function sharedInput(
 function sqliteParticipants(db: ProviderNeutralDatabase): TaskExecutionRuntimeParticipants {
   const client = db as unknown as DbClient
   return createTaskExecutionRuntimeParticipants({
-    nodeRunPromptsFor: (appHome) =>
-      composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
     ...sharedInput(db),
     ...singleProcessDeploymentPorts(client),
   })
@@ -201,8 +201,6 @@ function postgresqlParticipants(db: ProviderNeutralDatabase): TaskExecutionRunti
     stop: executionModule.runtimeRegistry,
   }
   return createTaskExecutionRuntimeParticipants({
-    nodeRunPromptsFor: (appHome) =>
-      composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
     ...input,
     taskDagCollaboration: createTaskDagCollaborationOperations(db),
     processConcurrencyScope: {},
