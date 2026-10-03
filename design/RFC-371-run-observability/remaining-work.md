@@ -331,3 +331,10 @@ UI 保留完整报告身份和各节分页位置，任务贡献与原始调用/�
 原官方 AST 在已发布 15b31c26aff56d2a8dd3dff2afd73620b4457654 加 84 个精确候选路径上生成 13 产物，排除并保留他人的未提交来源。此次候选已修复首轮检测出的 Stage/Store 值循环，没有新增 SCC 许可。实际九项库存增长为 mutation 1837→1847、transaction callbacks 261→267、background 356→358、ambient 501→504、observed imports 5837→5915、exceptions 5191→5263、public 1060→1063、symbol owners 26136→26308、真实 Tab 调用点 20→21；原扫描规则、40 个 required SPI、304 条债务、target 69、273 inbound/31 outbound 和既有字段预算保留。sourceDigest 为 sha256:e905c2396180e79ff9021144da18caaba6ada859029e579054b9c1e2fabe3585。增长理由仅登记实际新条目，匹配 canonical 提交后的正常后继提交需退役这些一次性回执。
 
 这批候选仍待正式发布和新 exact-SHA hosted CI，不能据源码审阅宣称线上已全量。现存原生用量 v1 的会话/步骤/parts 上限、完整基线及 durable v2 完成证明、追踪的调用/尝试和页数上限仍须落地消除；100K Task/10M usage 的实际性能、真实任务四桶/人民币与浏览器验收继续，AW 默认定时 WebKit 功能失败仍需修复。CS 786489b859062dd77a0c4278eb937882d4839f69 的 CI 37130953072 六项已全部成功，包括实机 e2e；新的 emptyDir 写入权限修复和约定八组件本机部署由必要部署依赖会话继续，实际运行版本与新任务验收待交接。两个 RFC 保持 In Progress，CS 开发 producer 保持 OFF，不把历史任务证据当作新全量验收。
+
+
+### 2026-10-04 全量报告已发布，继续消除原生与追踪上限
+
+上述 SOURCE/META 候选已通过精确共享主干发布进入 0294e8de8a8660a3170a2600f60c7876506ddf81，98 个文件的暂存和提交内容逐一匹配，推后 main 与 origin/main 为 0/0，共享 index 为空，无关在制改动保持。对应主 CI 37135042998、Windows 37135043001 和默认触发的 visual/maintenance 定时作业已启动，尚不能据启动状态宣称通过。原正式统计别名和新正式页面已进入远端源代码，实际服务版本和行为还待新 CI 与真实运行验收。
+
+按原 RFC-317 高水守卫，在正常后继候选中仅退役匹配的九条一次性 allowGrowth，129 个库存的数值、全部规则、SPI、债务和分类判据不变；使用原 provenance 函数记录实际已发布祖先。本次退役复用原 AST 结果，无新扫描或本机 AW 测试。原生采集 durable v2、完整基线和 EOF 完成证明、执行追踪无总页数上限、真实规模及真实任务验收继续；不声明所有限制已去掉，不开启 CS 开发 producer，不关闭任何 RFC。
