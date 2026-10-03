@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1835,
+    "entries": 1837,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -24049,6 +24049,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts#createGitTaskDeletionRepositoryEffects",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts#createGitTaskDeletionRepositoryEffects",
+      "symbol": "createGitTaskDeletionRepositoryEffects",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
@@ -29728,6 +29753,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/fileTaskBackgroundConfiguration.ts#createFileTaskBackgroundConfigurationQuery",
       "symbol": "createFileTaskBackgroundConfigurationQuery",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/fileTaskDeletionContentEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/local/fileTaskDeletionContentEffects.ts#createFileTaskDeletionContentEffects",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/fileTaskDeletionContentEffects.ts#createFileTaskDeletionContentEffects",
+      "symbol": "createFileTaskDeletionContentEffects",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -43870,7 +43920,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef",
+  "sourceDigest": "sha256:683e591d4e6b7e563e33f46e915a06f296bbc92116b5339e20af5d607c8e8516",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -45292,8 +45342,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#238:tasks",
-        "line": 238,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#249:tasks",
+        "line": 249,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#finalizeDeleteRowsTx",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -45308,8 +45358,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#256:tasks",
-        "line": 256,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#267:tasks",
+        "line": 267,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#finalizeDeleteRowsTx",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -45900,8 +45950,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#1855:tasks",
-        "line": 1855,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#1857:tasks",
+        "line": 1857,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#syncWorkflow",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -45916,8 +45966,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#2181:tasks",
-        "line": 2181,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#2183:tasks",
+        "line": 2183,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#retryNodeProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -46428,8 +46478,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/taskDelete.ts",
-        "id": "task-authority:packages/backend/src/services/taskDelete.ts#328:tasks",
-        "line": 328,
+        "id": "task-authority:packages/backend/src/services/taskDelete.ts#325:tasks",
+        "line": 325,
         "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#deleteTask",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",
@@ -46444,8 +46494,8 @@
         "controlSubtype": null,
         "dataClass": "tasks",
         "file": "packages/backend/src/services/taskDelete.ts",
-        "id": "task-authority:packages/backend/src/services/taskDelete.ts#364:tasks",
-        "line": 364,
+        "id": "task-authority:packages/backend/src/services/taskDelete.ts#361:tasks",
+        "line": 361,
         "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#deleteTask",
         "requiredBrandedProof": "TerminalMaintenanceClaim",
         "revisionPredicate": "exact-claim-revision-and-member-set-digest",

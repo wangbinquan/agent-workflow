@@ -3046,6 +3046,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:07a13909518496c5b5e8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W5",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#deleteSnapshotRefs",
+      "toPath": "packages/backend/src/util/git.ts",
+      "toSymbol": "deleteSnapshotRefs",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/application/workgroups/workgroupTurnsDriver.ts",
       "fromSymbol": "$file",
@@ -22460,6 +22477,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
+      "fromPath": "packages/backend/src/services/taskDelete.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:3f68a7fef9492fb65648",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/public/types.ts",
+      "toSymbol": "TaskDeletionEffects",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeActivationSnapshotReader.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/infrastructure/nodeActivationSnapshotReader.ts",
       "fromSymbol": "$file",
@@ -23765,23 +23799,6 @@
       "toPath": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
       "toSymbol": "SelectedSqliteTaskExecutionProviderRuntime",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:43a44e621188c0341f17",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W5",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#deleteSnapshotRefs",
-      "toPath": "packages/backend/src/util/git.ts",
-      "toSymbol": "deleteSnapshotRefs",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -26759,6 +26776,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/fileTaskDeletionContentEffects.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/local/fileTaskDeletionContentEffects.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4c96fe843d81d8d3cfd2",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/paths.ts#Paths",
+      "toPath": "packages/backend/src/util/paths.ts",
+      "toSymbol": "Paths",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts#$file",
@@ -27505,6 +27539,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "workgroupTaskState",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:4f11179f73975f82c2a1",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "temporary-internal-debt",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition.ts#$file",
+      "toPath": "packages/backend/src/modules/source-control/composition.ts",
+      "toSymbol": "createGitTaskDeletionRepositoryEffects",
+      "why": "Current module edge reaches a non-public internal entrypoint and must not become precedent."
     },
     {
       "edgeKind": "type",
@@ -35681,6 +35732,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError",
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "NotFoundError",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:684c9b0ff169e21c03eb",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W5",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#removeWorktree",
+      "toPath": "packages/backend/src/util/git.ts",
+      "toSymbol": "removeWorktree",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -58107,21 +58175,21 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
+      "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
       "fromSymbol": "$file",
-      "id": "exception:import:aba1bdc5689cc7525b5e",
+      "id": "exception:import:abac638bffd476816a42",
       "introducedByRFC": "pre-RFC-294-current-debt",
       "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
+      "owner": "bootstrap",
       "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/paths.ts#Paths",
-      "toPath": "packages/backend/src/util/paths.ts",
-      "toSymbol": "Paths",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/public/types.ts",
+      "toSymbol": "TaskDeletionEffects",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -68579,6 +68647,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c9f1407f2e0bcf170011",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/public/types.ts",
+      "toSymbol": "TaskDeletionEffects",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$file",
@@ -71811,6 +71896,23 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d30315eebb5d1e107ffb",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/public/types.ts",
+      "toSymbol": "TaskDeletionEffects",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
       "fromPath": "packages/backend/src/services/resourceAcl.ts",
       "fromSymbol": "$file",
@@ -73200,23 +73302,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#eventSubscriptions",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "eventSubscriptions",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#$file",
-      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:d6bd3add0b9a8f045cfc",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "task-execution",
-      "removeAfterWave": "W5",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#removeWorktree",
-      "toPath": "packages/backend/src/util/git.ts",
-      "toSymbol": "removeWorktree",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -76193,6 +76278,23 @@
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "skillVersions",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
+      "fromPath": "packages/backend/src/services/taskDelete.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:de291a4779108a362065",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#$file",
+      "toPath": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "toSymbol": "selectedTaskDeletionEffects",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "type",
@@ -88147,9 +88249,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5185,
+    "architectureExceptions": 5191,
     "implementationSccs": 0,
-    "observedEdges": 5830,
+    "observedEdges": 5837,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -91084,6 +91186,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#DomainError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts#$file",
+      "id": "import:07a13909518496c5b5e8",
+      "owner": "source-control",
+      "removeAfterWave": "W5",
+      "role": "legacy-outbound",
+      "specifier": "@/util/git",
+      "syntax": "static-import",
+      "targetSymbol": "deleteSnapshotRefs",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/git.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#deleteSnapshotRefs"
     },
     {
       "edgeKind": "value",
@@ -111583,6 +111701,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/taskDelete.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
+      "id": "import:3f68a7fef9492fb65648",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "TaskDeletionEffects",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nodeActivationSnapshotReader.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nodeActivationSnapshotReader.ts#$file",
@@ -113020,22 +113154,6 @@
       "toContext": "digital-employee",
       "toFile": "packages/backend/src/modules/digital-employee/composition/required-ports.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/digital-employee/composition/required-ports.ts#ReactionExecutionAdmissionReceiptV1"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#$file",
-      "id": "import:43a44e621188c0341f17",
-      "owner": "task-execution",
-      "removeAfterWave": "W5",
-      "role": "legacy-outbound",
-      "specifier": "@/util/git",
-      "syntax": "static-import",
-      "targetSymbol": "deleteSnapshotRefs",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/git.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#deleteSnapshotRefs"
     },
     {
       "edgeKind": "type",
@@ -116174,6 +116292,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#developmentAdapterDefinitionRevisions"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/local/fileTaskDeletionContentEffects.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/fileTaskDeletionContentEffects.ts#$file",
+      "id": "import:4c96fe843d81d8d3cfd2",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/paths",
+      "syntax": "static-import",
+      "targetSymbol": "Paths",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/paths.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/paths.ts#Paths"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/workgroupTurnsOperations.ts",
@@ -116988,6 +117122,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#workgroupTaskState"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts#$file",
+      "id": "import:4f11179f73975f82c2a1",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "temporary-internal-debt",
+      "specifier": "@/modules/source-control/composition",
+      "syntax": "static-import",
+      "targetSymbol": "createGitTaskDeletionRepositoryEffects",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/composition.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -125966,6 +126116,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts#$file",
+      "id": "import:684c9b0ff169e21c03eb",
+      "owner": "source-control",
+      "removeAfterWave": "W5",
+      "role": "legacy-outbound",
+      "specifier": "@/util/git",
+      "syntax": "static-import",
+      "targetSymbol": "removeWorktree",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/git.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#removeWorktree"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/workgroups.ts",
@@ -128460,6 +128626,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#ForbiddenError"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/ports/taskDeletionContentEffects.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskDeletionContentEffects.ts#$file",
+      "id": "import:6e7068dacfdc540e7db4",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/source-control/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "TaskDeletionRepositoryParticipant",
+      "toContext": "source-control",
+      "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#TaskDeletionRepositoryParticipant"
     },
     {
       "edgeKind": "value",
@@ -149966,20 +150148,20 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskQuestions.ts#$file"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#$file",
-      "id": "import:aba1bdc5689cc7525b5e",
-      "owner": "task-execution",
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:abac638bffd476816a42",
+      "owner": "bootstrap",
       "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/paths",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/types",
       "syntax": "static-import",
-      "targetSymbol": "Paths",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/paths.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/paths.ts#Paths"
+      "targetSymbol": "TaskDeletionEffects",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -160846,6 +161028,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/composition.ts#$file"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:c9f1407f2e0bcf170011",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "TaskDeletionEffects",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
@@ -164240,6 +164438,22 @@
     {
       "edgeKind": "type",
       "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:d30315eebb5d1e107ffb",
+      "owner": "bootstrap",
+      "removeAfterWave": "W9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/public/types",
+      "syntax": "static-import",
+      "targetSymbol": "TaskDeletionEffects",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/public/types.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/resourceAcl.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/services/resourceAcl.ts#$file",
       "id": "import:d3068c88753231fb992a",
@@ -165692,22 +165906,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#eventSubscriptions"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "task-execution",
-      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#$file",
-      "id": "import:d6bd3add0b9a8f045cfc",
-      "owner": "task-execution",
-      "removeAfterWave": "W5",
-      "role": "legacy-outbound",
-      "specifier": "@/util/git",
-      "syntax": "static-import",
-      "targetSymbol": "removeWorktree",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/git.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#removeWorktree"
     },
     {
       "edgeKind": "type",
@@ -168892,6 +169090,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#skillVersions"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/taskDelete.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file",
+      "id": "import:de291a4779108a362065",
+      "owner": "task-execution",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/infrastructure/taskDeleteRecovery",
+      "syntax": "static-import",
+      "targetSymbol": "selectedTaskDeletionEffects",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -182328,7 +182542,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef",
+  "sourceDigest": "sha256:683e591d4e6b7e563e33f46e915a06f296bbc92116b5339e20af5d607c8e8516",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

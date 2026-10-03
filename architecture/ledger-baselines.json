@@ -811,8 +811,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1835,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1837,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 Task deletion: the unchanged original classifier adds exactly the independent TE native content factory and SC native repository factory. The original 31 AW/database call subtrees and delete/recovery claims remain in their existing owners."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -846,8 +849,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 5830,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 5837,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 Task deletion: relocate the three original native Git/Paths imports into owner-local adapters and record the complete effects contract, SC factory composition outlet, actual four public root consumers and the existing registered recovery facade selection. Original classification is unchanged."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +873,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5185,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5191,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 Task deletion: unchanged canonical projection follows three relocated native imports and six net actual contract/composition/legacy-adaptation edges. Boundary scanner adds no R1/R2 clauses; one pre-existing debt clause only updates its two computed canonical reference arrays. Reasons, retirement conditions and original rules stay unchanged."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -881,8 +890,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1058,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1060,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 Task deletion: publish only the actually consumed complete TaskDeletionEffects type for four roots/owner consumers and the SC TaskDeletionRepositoryParticipant consumed by TE. Both have production consumers; no unused alias, required SPI or zero-consumer debt is added."
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -902,12 +914,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26124,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26136,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 Task deletion: twelve actual symbols in four new owner-owned contract/composition/native source files and the existing SC exact public participant file. The TE content and SC Git effects remain independent; original business/database functions and budgets are preserved."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef",
+    "sourceDigest": "sha256:683e591d4e6b7e563e33f46e915a06f296bbc92116b5339e20af5d607c8e8516",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +935,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "72cf84cc915d77216ec5d18f0f4da9d9642f93cc",
-    "contentDigest": "sha256:77b8cbcab3c7c81706ef94b74ac43908ac57fd8014bc0c1fa5c7c6765f8d7ab8",
+    "currentSnapshotSha": "2d9e660936f25d5147bfbb5b0118f110e90947e1",
+    "contentDigest": "sha256:4f4293e3e77194f2f31a88aab856c883a045846c6d495359bd12eb70251b20bd",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

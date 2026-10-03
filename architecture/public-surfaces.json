@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 974,
+    "consumers": 979,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1168,
+    "methods": 1174,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21797,
-    "symbols": 1058
+    "recursiveFields": 21820,
+    "symbols": 1060
   },
   "entries": [
     {
@@ -132597,6 +132597,107 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:6e7068dacfdc540e7db4"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:deleteSnapshotRefs.$parameter:repoPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:deleteSnapshotRefs.$parameter:taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:deleteSnapshotRefs.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:deleteSnapshotRefs.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:removeWorktree.$parameter:input.force",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:removeWorktree.$parameter:input.repoPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:removeWorktree.$parameter:input.worktreePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:removeWorktree.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:removeWorktree.$return.$variant:1",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:TaskDeletionRepositoryParticipant",
+      "members": [
+        "deleteSnapshotRefs",
+        "removeWorktree"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "deleteSnapshotRefs",
+          "signatureDigest": "sha256:b76361ce4dbe45122b503934b29f3d482e253e61caa06ba6a001ead6c4b9e886"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "removeWorktree",
+          "signatureDigest": "sha256:1de3a63d489853acfc32d2632c3e4ecedb7d4bb3fd0a829e09b2406eb721ae17"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#TaskDeletionRepositoryParticipant",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:6e7068dacfdc540e7db4",
+          "file": "packages/backend/src/modules/task-execution/application/ports/taskDeletionContentEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskDeletionContentEffects.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:types:TaskDeletionEffects"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:535264ad860875e76fd49afaf999ad069a30f0477aff8ec27cba2e05e41b4b92",
+      "status": "target-context-current-surface",
+      "symbol": "TaskDeletionRepositoryParticipant",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:717ddfff7448255ac005"
       ],
       "context": "source-control",
@@ -168649,6 +168750,168 @@
       "authority": "none",
       "budget": {
         "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:3f68a7fef9492fb65648",
+        "import:abac638bffd476816a42",
+        "import:c9f1407f2e0bcf170011",
+        "import:d30315eebb5d1e107ffb"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:directories.$parameter:taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:directories.$return",
+          "type": "readonly [string, string, string]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:removeIfPresent.$parameter:reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:removeIfPresent.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:removeIfPresent.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositories.$method:deleteSnapshotRefs.$parameter:repoPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositories.$method:deleteSnapshotRefs.$parameter:taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositories.$method:deleteSnapshotRefs.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositories.$method:deleteSnapshotRefs.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c9f1407f2e0bcf170011"
+          ],
+          "fieldPath": "repositories.$method:removeWorktree.$parameter:input.force",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3f68a7fef9492fb65648"
+          ],
+          "fieldPath": "repositories.$method:removeWorktree.$parameter:input.repoPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3f68a7fef9492fb65648",
+            "import:c9f1407f2e0bcf170011",
+            "import:d30315eebb5d1e107ffb"
+          ],
+          "fieldPath": "repositories.$method:removeWorktree.$parameter:input.worktreePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositories.$method:removeWorktree.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositories.$method:removeWorktree.$return.$variant:1",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:TaskDeletionEffects",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "deleteSnapshotRefs",
+          "signatureDigest": "sha256:b76361ce4dbe45122b503934b29f3d482e253e61caa06ba6a001ead6c4b9e886"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3f68a7fef9492fb65648"
+          ],
+          "name": "directories",
+          "signatureDigest": "sha256:1faccef5ae19413900a9fed80b1249dc306215a245f5f75d0e30173df219b727"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "removeIfPresent",
+          "signatureDigest": "sha256:ad2a90692dee5bbd74921c3a10fee2b4482de2f0fe50dc9cdc53c33437def874"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "removeWorktree",
+          "signatureDigest": "sha256:1de3a63d489853acfc32d2632c3e4ecedb7d4bb3fd0a829e09b2406eb721ae17"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:3f68a7fef9492fb65648",
+          "file": "packages/backend/src/services/taskDelete.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:abac638bffd476816a42",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:c9f1407f2e0bcf170011",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:d30315eebb5d1e107ffb",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:04c459d55bf7af882fa8b1f2453bcbfb13e31247d6a63ff05248cb5b076fcc32",
+      "status": "target-context-current-surface",
+      "symbol": "TaskDeletionEffects",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
         "maxTopLevelFields": 27,
         "maxTransitiveLeafFields": 41,
         "maxUnionVariants": 28
@@ -172973,7 +173236,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef",
+  "sourceDigest": "sha256:683e591d4e6b7e563e33f46e915a06f296bbc92116b5339e20af5d607c8e8516",
   "targetContexts": [
     "collaboration",
     "development-automation",

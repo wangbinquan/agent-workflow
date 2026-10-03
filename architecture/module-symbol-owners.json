@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2074,
+    "backendFiles": 2078,
     "frontendFiles": 643,
     "legacyFiles": 565,
-    "moduleFiles": 1509,
-    "productionFiles": 2879,
+    "moduleFiles": 1513,
+    "productionFiles": 2883,
     "sharedFiles": 162,
-    "symbolsIncludingFileRoots": 26124
+    "symbolsIncludingFileRoots": 26136
   },
   "entries": [
     {
@@ -117678,6 +117678,30 @@
       "currentContext": "source-control",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/local/gitTaskDeletionRepositoryEffects.ts#createGitTaskDeletionRepositoryEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createGitTaskDeletionRepositoryEffects",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/source-control/infrastructure/nodeWorkspaceMaintenanceFilesystem.ts",
       "id": "owner:packages/backend/src/modules/source-control/infrastructure/nodeWorkspaceMaintenanceFilesystem.ts#$file",
       "removeAfterWave": null,
@@ -119592,6 +119616,19 @@
       "signatureDigest": "sha256:8c52bffeb9c4066c9dabc014d153886d7ae3bdfb4b0dc320a4086225061b2de0",
       "status": "current-module",
       "symbol": "RepositoryTransportCredentialSelectionParticipant",
+      "targetContext": "source-control",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/source-control/public/participants.ts#TaskDeletionRepositoryParticipant",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:535264ad860875e76fd49afaf999ad069a30f0477aff8ec27cba2e05e41b4b92",
+      "status": "current-module",
+      "symbol": "TaskDeletionRepositoryParticipant",
       "targetContext": "source-control",
       "targetLayer": "public"
     },
@@ -129288,6 +129325,54 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskDeletionContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskDeletionContentEffects.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskDeletionContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskDeletionContentEffects.ts#Completion",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Completion",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskDeletionContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskDeletionContentEffects.ts#TaskDeletionContentEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskDeletionContentEffects",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/taskDeletionContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskDeletionContentEffects.ts#TaskDeletionEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskDeletionEffects",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/ports/taskEngine.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/ports/taskEngine.ts#$file",
       "removeAfterWave": null,
@@ -135413,6 +135498,42 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "runScope",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts#requireTaskDeletionContentEffects",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "requireTaskDeletionContentEffects",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/taskDeletionEffects.ts#selectedTaskDeletionEffects",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "selectedTaskDeletionEffects",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -143549,6 +143670,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createFileTaskBackgroundConfigurationQuery",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/fileTaskDeletionContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/fileTaskDeletionContentEffects.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/fileTaskDeletionContentEffects.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/fileTaskDeletionContentEffects.ts#createFileTaskDeletionContentEffects",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileTaskDeletionContentEffects",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -314221,5 +314366,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef"
+  "sourceDigest": "sha256:683e591d4e6b7e563e33f46e915a06f296bbc92116b5339e20af5d607c8e8516"
 }

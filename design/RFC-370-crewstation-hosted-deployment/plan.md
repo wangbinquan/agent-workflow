@@ -739,3 +739,36 @@ SQLite／PG 两个 owner 保留原 receipt、代际、快照、DB query／transa
 因本批源码内容变化，按原规则只为这个新候选执行一次 scoped census，原首次成功生成器和证明均不重跑。基准仍为 `6cd43bd7728f3b1c150a2c2783d515ce6f7c26e2`，排除所有未发布并行源码；最终库存为 entries 1834→1835；entries 353→356；ambientWiringEntries 501→501；entries 26113→26124；entries 1057→1058；observedEdges 5829→5830；architectureExceptions 5184→5185；requiredPorts 40→40。公共面1057→1058只新增已消费的完整Factory，不新增零consumer债。六项实际正增长按原 allowGrowth协议登记；已匹配观测SOURCE25/canonical的五条旧回执保留理由并消费，本批matching canonical正常提交后再退役六条。修正后的source digest `sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef`。前次未发布growth及文档也保留为首轮历史，四份完整原手写文档和首次增量均保留，本段只作追加。40 required SPI、304 commons debt、69 target edges、原四个生成规则均保持，不新增边界债。
 
 7d主CI37113530050 completed/success 50/50、Windows37113592469 completed/success是前批精确SHA证据；本批行为仍待发布后新的exact-SHA hosted CI。未运行本机AW test/typecheck/build/service。完整A1–A8/AC00/A-G、CS独立adapters、B/M0真实部署及M1–M4按已批准顺序继续，RFC不关闭。
+
+
+## RFC-370 Task 删除与恢复效果切面（2026-10-03）
+
+Task 删除/恢复完整效果切面的有限功能 SOURCE16 组合通过，指纹 `0f2325263014b661b93050fd6e0bd98ca41328d19205dda6724469de280cd1d1`。原首轮 SOURCE16 `9008a6df3cf8b324e009ff000979806ffef00365a6c04190811fdb51da649e8b` FAIL 完整保留：一项 P2 是新增根测试把派生 PG 接口当作字段直接声明者，另有并行 Worker 对 census.ts 单一控制的首末漂移。独立 DESIGN1-R2 PASS `cb86a3c82efb468e3f8187566fa0556f43e398f84ff768b3e9441163e1d1c4d2` 后，只修这一测试的实际基接口定位，并增加严格 Omit 继承检查；原36个断言保留、新增10个，所有测试名/预算不变。SOURCE1-R2 PASS `769caf5413b53f109c87e5f4e3d1f9544a89012561d0a53f2bf051c131905fd4`，其他15源码和28控制共43项稳定；不重审已完成部分，不重写首门为成功，不声称29个原live控制未变。
+
+TE 拥有目录引用/复合存在并删除内容合同和完整效果选择；SC 在独立 local 包实现 worktree 删除与 snapshot refs 清理，由自己的 composition 提供 factory。相同完整 receiver 经 StartOptions/frozen provider session/重装配、实际 SQLite/PG boot 与 HTTP/standalone 根传递。undefined 才选择完整 native 默认，显式不完整选择不逐方法回落；复合 exists+rm 不拆开，所有清理 ACK 之后才结算原 done/cleanup-pending。v1 按耐久成员重新派生目录、v2 保留冻结引用；原 worktree fallback、首失败 sticky、snapshot/目录继续清理及原日志判据保留。12处原native参数、31个原数据库调用子树、两份完整DB函数、45段逆变换恢复10份旧全文；单测试补正两段逆变换另恢复首次测试全文。全部新行为和双provider/native Git回归只由hosted CI运行，没有本机AW tests/typecheck/build/service。
+
+原 scoped census/boundary 各只执行一次，输入仅已提交 `2d9e660936f25d5147bfbb5b0118f110e90947e1` 加本批16源码。所有非本批源码及四条原规则均从该基准精确 committed blobs 读取，按并行 owner 明确协调排除/完整保留其未审 Worker 与 census WIP，不提交该规则。当前source digest `sha256:683e591d4e6b7e563e33f46e915a06f296bbc92116b5339e20af5d607c8e8516`；实际库存 entries 1835→1837；entries 356→356；ambientWiringEntries 501→501；entries 26124→26136；entries 1058→1060；observedEdges 5830→5837；architectureExceptions 5185→5191；requiredPorts 40→40。五项真实正增长按原allowGrowth协议登记，在matching canonical的正常后继提交退役。14项ambient只有实际源码行号移动，background数量356保持；两处transaction只随真实位置166→177、267→264移动。两公共合同分别有实际1和4个生产消费者，未增零consumer债；40 required SPI、69 target edges和空implementation SCC保持。304条原债务的条款、reason、退役条件、bootstrap列表保持；只有TaskDelete既有同一registered恢复facade条目的两项canonical引用数组新增实际selector消费，不把投影变化宣称全文不变，不新增R1/R2条款或豁免。四份手写文档完整旧文保留，status仍用原renderer。
+
+资源恢复发布SHA `87356a1f072d92b373d301fcd34c6ab58ae9b4dd` 的主CI37120118172 completed/cancelled（16 success、2 failure、32 cancelled），Windows37120183529 completed/failure，maintenance37120118245 completed/success。主/Windows实际两项类型错误均在并行观测fixture，owner已精确发布两份fixture修正 `2d9e660936f25d5147bfbb5b0118f110e90947e1`；其主37120550528和Windows37120910643在保留初始快照时尚非终态，不冒称整套绿。本批Task实际行为仍待发布后新的exact-SHA hosted CI；更早全套成功和所有FAIL/cancelled历史保持。
+
+完整A1–A8/AC00/A-G仍开放，继续其它内容/工作区/Git、Agent材料与执行、所有purpose命令、执行权/恢复/实际roots。独立CS adapters仍在完整A-G之后；B/M0先真实部署，再逐项M1–M4。尚无AW-in-CS实际部署，不关闭RFC。
+
+
+### Task W29 摘要补正与最终 SOURCE17（2026-10-03）
+
+在已通过的有限 SOURCE16 基础上，只新增原 W29 unstarted application 测试的一项两字符串补正。独立 DESIGN1-W29 PASS `f07e8b30e06f5be4db1cedf9108238dc635944734a746ad3501a06ba1c7dd119`，SOURCE1-W29 PASS `0ec568ebec71fa09d7e7a5d5ce85431a1e1e7283a969155c4c0ffbb82dac4391`；最终有限 SOURCE17 组合 `2ba0bcf17579d97c758fce16161ff36295d521f4c6a6516f4f63b4a2e33526b1` 保留原 SOURCE16 FAIL、根测试 SOURCE1-R2 PASS 和本次 SOURCE1-W29 PASS，不重复完整源码门或将首次 FAIL 改写为通过。
+
+PG 摘要 `23e198e5a2d9bfb4bfbb53f6b7e9f6e51318159258db7293fa21bded160f88fc`→`06d482d3e3d8af1133f15d02f53242fc86d708e20da494fd169b04e55bafd284`、HTTP mount 摘要 `d3807fcbfcc458c3a8e1312f9e294b52a689d2776de82e3d37a95869c77bb851`→`bfcc15d74b7f6e582aefb88a8611a9ae0cca09ce4f15ee840ecf0e6b5144f8ac`；原 normalizer 只读投影已执行一次，实际测试完整逆变换仅两处字面量可恢复旧全文。PG168/SQLite49/HTTP65语句和8个PG phase保持，SQLite/Event摘要、所有原断言/名称/预算/其余字节保持；44项控制稳定。本机只做该文件格式/lint与纯字节证明，真实应用行为仍以新的exact-SHA hosted CI为准。
+
+新增 W29 路径位于 tests，不属于原 canonical 的 backend/shared/frontend src 和两项额外 sourceDigest 输入。13个生产源码和 `.dependency-cruiser.cjs`/`scripts/depcheck.ts` 及原 committed 四规则保持；因此复用输入指纹 `0f2325263014b661b93050fd6e0bd98ca41328d19205dda6724469de280cd1d1` 的一次成功 scoped census，不重复生成、增长登记或完整SOURCE。五项增长与304条原债务条款保持；已有TaskDelete facade只有两项实际新boundaryEdgeIds投影增长，旧恢复债条目只有两项canonical引用数组更新，均不改变条款或豁免。
+
+并行两份观测夹具修正 SHA `2d9e660936f25d5147bfbb5b0118f110e90947e1` 的Windows37120910643已取得 completed/success（1/1）；此前资源恢复 SHA87356a1f 的失败/取消终态与实际日志仍保留，不据后继Windows单项成功声称旧SHA或整套CI通过。完整A1–A8/A-G、后续独立CS适配器和AW在CS的真实部署仍未完成，继续实施。
+
+
+### 已发布资源恢复 CI 源码断言补正（2026-10-03）
+
+观测夹具修正 SHA `2d9e660936f25d5147bfbb5b0118f110e90947e1` 的主CI37120550528已取得 completed/failure：45 success，4个backend分片及required失败；Windows37120910643 completed/success。四个backend失败对应两项已发布RC迁移遗漏的旧源码定位：P1-5 committed重放仍查旧renameSync/swapInStaged位置，RFC359孪生体消费名单仍查两个旧provider位置。完整原失败日志与终态快照保持，不重跑或改写失败结论。
+
+两测试独立 DESIGN2 PASS `998e7dd582a3feaa791972749352a36d22ccd1d0affb0bafad1be4bedb93078b`、SOURCE2 PASS `272d550cf15340b96bb404b809656a96d6edf2d84edaedb52dadd11e45e9101d`。原两项前滚调用断言映射到同一恢复体的await effects.move/await effects.swapStaged，再增3项锁完整awaited scope与local adapter原native调用；所有其它原断言/测试名/预算保持。原64项断言→67项；孪生体测试15项保持，仅该消费者名单2→1实际localadapter，定义点/homonyms/forkedFrom和全部引用/陈旧名单校验不变。两份旧全文按四段逆向恢复，45 controls稳定；不修改生产代码，两测试均在原sourceDigest生产语料之外，复用一次成功census。
+
+本次发布分为Task源码17路径、这两项RC测试精确补正、canonical/docs17路径及匹配5项增长回执的正常后继退役，合计36个独立允许路径。Task17组合指纹 `2ba0bcf17579d97c758fce16161ff36295d521f4c6a6516f4f63b4a2e33526b1` 保持，完整A-G/CS adapters/真实部署仍开放。canonical另有6项原Task写点位置投影：恢复238→249与256→267、路由1855→1857与2181→2183、TaskDelete328→325与364→361；除实际id/line外各字段和原31个DB调用子树保持，不改业务写入规则，不新增条款或预算。

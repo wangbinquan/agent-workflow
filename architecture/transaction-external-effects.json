@@ -2942,8 +2942,8 @@
       ],
       "file": "packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#transaction:166",
-      "line": 166,
+      "id": "tx:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#transaction:177",
+      "line": 177,
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDeleteRecovery.ts#finalizeDeleteRowsTx",
       "status": "co-located-risk",
       "symbol": "finalizeDeleteRowsTx",
@@ -3184,8 +3184,8 @@
       "effectTokens": [],
       "file": "packages/backend/src/services/taskDelete.ts",
       "finalCriterion": "no-external-effect-observed",
-      "id": "tx:packages/backend/src/services/taskDelete.ts#transaction:267",
-      "line": 267,
+      "id": "tx:packages/backend/src/services/taskDelete.ts#transaction:264",
+      "line": 264,
       "ownerEntryId": "owner:packages/backend/src/services/taskDelete.ts#deleteTask",
       "status": "clear",
       "symbol": "deleteTask",
@@ -3196,7 +3196,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e78235a810adcc5be2aa47b23441bc31605121d73ca37d7127bf0ea8f2a4e3ef",
+  "sourceDigest": "sha256:683e591d4e6b7e563e33f46e915a06f296bbc92116b5339e20af5d607c8e8516",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
