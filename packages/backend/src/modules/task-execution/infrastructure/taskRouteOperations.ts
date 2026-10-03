@@ -9,6 +9,7 @@
 //   · `sqliteTaskRouteOperations.ts`     —— SQLite 绑定
 // 本文件只放实现，不放任何一侧的装配。
 //
+import type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 import {
   CommitPushMetaSchema,
   NodeRunSchema,
@@ -210,6 +211,7 @@ export interface TaskRouteOperationsDependencies {
   readonly persistence: TaskExecutionPersistence
   readonly children: ChildTaskLifecycleParticipant
   readonly activity: ActiveTaskExecutionParticipant
+  readonly effects?: TaskDeletionEffects
   readonly topology: SchedulerRuntimeTopology
   readonly resumeRuntimeFor: (actor: Actor, taskId: string) => ChildResumeRuntime
   readonly repositoryPreparationRetry: RepositoryPreparationRetryCommand
@@ -2451,7 +2453,11 @@ export function createTaskRouteOperations(
       if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
       return task
     },
-    delete: (taskId) => deleteTask(dependencies.db, taskId, { activity: dependencies.activity }),
+    delete: (taskId) =>
+      deleteTask(dependencies.db, taskId, {
+        activity: dependencies.activity,
+        effects: dependencies.effects,
+      }),
     async resume({ actor, taskId }) {
       await resumeTaskAs(actor, taskId)
       const task = await loadTask(dependencies.db, taskId)

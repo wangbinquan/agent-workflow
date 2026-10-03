@@ -1,3 +1,4 @@
+import type { TaskDeletionEffects } from '@/modules/task-execution/public/types'
 import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/composition'
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import {
@@ -429,6 +430,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
+  readonly taskDeletionEffects?: TaskDeletionEffects
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -1107,6 +1109,7 @@ export async function composePostgresqlApplication(
       workgroup: workgroupLaunchResources,
     },
     routes: () => ({
+      effects: input.taskDeletionEffects,
       collaboration: boundCollaborationContext,
       users: identityAccess.userDirectory,
       owners: composeOwnerIdentityQueries(input.db),
@@ -2326,7 +2329,11 @@ export async function composePostgresqlApplication(
     // 任何自动续跑打开之前续做完（成员任务在此之前一直被占位）。一份 provider 中立实现，与
     // cli/start.ts 同一段；其余三步 boot 恢复（owner / archive / workspace-gc）随 W3 统一启动序列接入。
     try {
-      const deleteRecovery = await recoverInterruptedTaskDeletes(input.db)
+      const deleteRecovery = await recoverInterruptedTaskDeletes(
+        input.db,
+        undefined,
+        input.taskDeletionEffects,
+      )
       if (
         deleteRecovery.completed.length > 0 ||
         deleteRecovery.cleanupPending.length > 0 ||

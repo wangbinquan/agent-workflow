@@ -338,3 +338,5 @@ export {
   type PlannedSpaceLayout,
   materializeSpaceWithProvider,
 } from './infrastructure/workspaceMaterializer'
+
+export { createGitTaskDeletionRepositoryEffects } from './infrastructure/local/gitTaskDeletionRepositoryEffects'

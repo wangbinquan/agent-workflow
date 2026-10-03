@@ -1,3 +1,4 @@
+import type { TaskDeletionEffects } from '@/modules/task-execution/public/types'
 import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/composition'
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
@@ -432,6 +433,7 @@ export interface StartOptions {
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
+  taskDeletionEffects?: TaskDeletionEffects
   maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -592,6 +594,7 @@ async function composePostgresqlProviderSession(
   })
 
   const application = await composePostgresqlDaemonApplication({
+    taskDeletionEffects: input.taskDeletionEffects,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
     provider: input.provider,
     db,
@@ -1147,6 +1150,7 @@ interface DaemonProviderSessionComposeInput {
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
+  readonly taskDeletionEffects?: TaskDeletionEffects
   readonly maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -1589,6 +1593,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       generationId: databaseProvider.generation.payload.generationId,
     })
     const sessionInput = Object.freeze({
+      taskDeletionEffects: opts.taskDeletionEffects,
       automationWorkspaceEffects: opts.automationWorkspaceEffects,
       config,
       configuration,
@@ -2011,6 +2016,7 @@ async function composeSqliteProviderSession(
             clarifyDecisions: createClarifyDecisionCommand(db, memoryOperations.distillCommands),
           })
         return {
+          effects: input.taskDeletionEffects,
           collaboration: routeCollaborationContext,
           // RFC-359 AC-1（第 13 刀下）：`startDepsFor` 整格消失——`syncWorkflow` 是这条路上
           // 最后一个要 legacy `StartTaskDeps` 的路由动词，合一之后路由层不再持有它。
@@ -2242,7 +2248,11 @@ async function composeSqliteProviderSession(
   // RFC-328 terminal maintenance is durable and outlives task-row deletion.
   // Resume exact delete claims before any automatic continuation is opened.
   try {
-    const deleteRecovery = await recoverInterruptedTaskDeletes(db)
+    const deleteRecovery = await recoverInterruptedTaskDeletes(
+      db,
+      undefined,
+      input.taskDeletionEffects,
+    )
     if (
       deleteRecovery.completed.length > 0 ||
       deleteRecovery.cleanupPending.length > 0 ||
@@ -3060,6 +3070,7 @@ async function composeSqliteProviderSession(
     ],
   })
   const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
+    taskDeletionEffects: input.taskDeletionEffects,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
     providerCore,
     token,

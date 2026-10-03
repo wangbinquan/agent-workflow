@@ -43,6 +43,7 @@
 // their next poll / reconnect. The workflow-style audience-context fast-path
 // for cold connections is a documented follow-up.
 
+import type { TaskDeletionEffects } from '@/modules/task-execution/public/types'
 import {
   eq,
   inArray,
@@ -53,13 +54,11 @@ import {
   tasks,
   type LegacyProviderNeutralDatabase,
 } from '@/modules/task-execution/infrastructure/legacySqliteTransportMechanisms'
-import { join } from 'node:path'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { ActiveTaskExecutionParticipant } from '@/modules/task-execution/public/participants'
 import { ConflictError, NotFoundError } from '@/util/errors'
-import { Paths } from '@/util/paths'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   assertTerminalMaintenanceClaimTx,
@@ -69,6 +68,7 @@ import {
 import {
   cleanupDeletedTaskResources,
   recoverInterruptedTaskDeletes,
+  selectedTaskDeletionEffects,
   type DeleteCleanupPlanV2,
   type DeleteRecoveryResult,
   type DeleteWorktreeTarget as WorktreeTarget,
@@ -95,8 +95,9 @@ export interface DeleteTaskResult {
 export async function deleteTask(
   db: LegacyProviderNeutralDatabase,
   taskId: string,
-  options: Readonly<{ activity: ActiveTaskExecutionParticipant }>,
+  options: Readonly<{ activity: ActiveTaskExecutionParticipant; effects?: TaskDeletionEffects }>,
 ): Promise<DeleteTaskResult> {
+  const effects = selectedTaskDeletionEffects(options.effects)
   const rows = await db
     .select({
       id: tasks.id,
@@ -233,11 +234,7 @@ export async function deleteTask(
     taskId,
     parentTaskId: row.parentTaskId,
     worktrees,
-    directories: maintenanceTaskIds.flatMap((id) => [
-      join(Paths.runsDir, id),
-      join(Paths.logsDir, id),
-      join(Paths.root, 'scratch', id),
-    ]),
+    directories: maintenanceTaskIds.flatMap((id) => effects.content.directories(id)),
   }
   let maintenanceClaim = await terminalMaintenance.claim({
     rootTaskId: taskId,
@@ -380,7 +377,7 @@ export async function deleteTask(
 
   // Best-effort disk cleanup (GC orphan-scan is the backstop). The exact plan
   // survives task-row deletion and is reused by boot recovery.
-  const cleanup = await cleanupDeletedTaskResources(cleanupPlan)
+  const cleanup = await cleanupDeletedTaskResources(cleanupPlan, effects)
   for (const audience of deletedAudiences) {
     tasksListBroadcaster.broadcast(
       TASKS_LIST_CHANNEL,

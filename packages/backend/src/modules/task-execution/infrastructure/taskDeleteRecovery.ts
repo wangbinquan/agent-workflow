@@ -7,8 +7,15 @@
 // `TerminalMaintenanceStore` 端口重写一次；级联树用 parent_task_id 的 BFS（与 snapshotTree 同形），
 // 事务开头锁认领行（PG `FOR UPDATE`，SQLite no-op）。清理计划的解析与磁盘清理是纯 I/O，随之搬入。
 
-import { existsSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
+import type {
+  TaskDeletionContentEffects,
+  TaskDeletionEffects,
+} from '../application/ports/taskDeletionContentEffects'
+import {
+  requireTaskDeletionContentEffects,
+  selectedTaskDeletionEffects,
+} from '../composition/taskDeletionEffects'
+export { selectedTaskDeletionEffects } from '../composition/taskDeletionEffects'
 import { isTerminalTaskStatus, type TaskStatus } from '@agent-workflow/shared'
 import { asc, eq, inArray, sql } from 'drizzle-orm'
 
@@ -17,9 +24,7 @@ import { taskCollaborators, taskExecutionMaintenanceClaims, taskFeedback, tasks 
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import { getTaskWriteSem } from '@/services/taskWriteLocks'
 import { ConflictError } from '@/util/errors'
-import { deleteSnapshotRefs, removeWorktree } from '@/util/git'
 import { createLogger } from '@/util/log'
-import { Paths } from '@/util/paths'
 import { TASKS_LIST_CHANNEL, tasksListBroadcaster } from '@/ws/broadcaster'
 import type { TerminalMaintenanceStore } from '../application/ports/terminalMaintenanceStore'
 import type { TerminalMaintenanceClaim } from '../domain/ownership'
@@ -56,7 +61,11 @@ export interface DeleteRecoveryResult {
 export function parseDeleteCleanupPlan(
   value: string,
   members: readonly MaintenanceMemberSnapshot[],
+  contentEffects?: TaskDeletionContentEffects,
 ): DeleteCleanupPlanV2 | null {
+  const content =
+    contentEffects === undefined ? selectedTaskDeletionEffects().content : contentEffects
+  requireTaskDeletionContentEffects(content)
   try {
     const parsed = JSON.parse(value) as {
       v?: number
@@ -89,11 +98,7 @@ export function parseDeleteCleanupPlan(
     const directories =
       parsed.v === 2
         ? (parsed.directories as string[])
-        : members.flatMap((member) => [
-            join(Paths.runsDir, member.taskId),
-            join(Paths.logsDir, member.taskId),
-            join(Paths.root, 'scratch', member.taskId),
-          ])
+        : members.flatMap((member) => content.directories(member.taskId))
     return {
       v: 2,
       taskId: parsed.taskId,
@@ -109,7 +114,9 @@ export function parseDeleteCleanupPlan(
 /** Best-effort disk cleanup after the row is gone: worktrees + snapshot refs + scratch dirs. */
 export async function cleanupDeletedTaskResources(
   plan: DeleteCleanupPlanV2,
+  selected?: TaskDeletionEffects,
 ): Promise<'done' | 'pending'> {
+  const effects = selectedTaskDeletionEffects(selected)
   let cleanup: 'done' | 'pending' = 'done'
   const fail = (what: string, err: unknown): void => {
     cleanup = 'pending'
@@ -121,24 +128,28 @@ export async function cleanupDeletedTaskResources(
   }
   for (const wt of plan.worktrees) {
     try {
-      await removeWorktree({ repoPath: wt.repoPath, worktreePath: wt.worktreePath, force: true })
+      await effects.repositories.removeWorktree({
+        repoPath: wt.repoPath,
+        worktreePath: wt.worktreePath,
+        force: true,
+      })
     } catch (err) {
       fail('removeWorktree', err)
       try {
-        if (existsSync(wt.worktreePath)) rmSync(wt.worktreePath, { recursive: true, force: true })
+        await effects.content.removeIfPresent(wt.worktreePath)
       } catch (fallbackError) {
         fail('rmSync-worktree', fallbackError)
       }
     }
     try {
-      await deleteSnapshotRefs(wt.repoPath, plan.taskId)
+      await effects.repositories.deleteSnapshotRefs(wt.repoPath, plan.taskId)
     } catch (err) {
       fail('deleteSnapshotRefs', err)
     }
   }
   for (const dir of plan.directories) {
     try {
-      if (existsSync(dir)) rmSync(dir, { recursive: true, force: true })
+      await effects.content.removeIfPresent(dir)
     } catch (err) {
       fail('rmSync-dir', err)
     }
@@ -275,12 +286,14 @@ export async function recoverInterruptedTaskDeletes(
   db: ProviderNeutralDatabase,
   terminalMaintenance: TerminalMaintenanceStore = createTaskExecutionPersistence(db)
     .terminalMaintenance,
+  selected?: TaskDeletionEffects,
 ): Promise<DeleteRecoveryResult> {
+  const effects = selectedTaskDeletionEffects(selected)
   const completed: string[] = []
   const cleanupPending: string[] = []
   const recoveryRequired: string[] = []
   for (const item of await terminalMaintenance.listRecoverable({ operation: 'delete' })) {
-    const plan = parseDeleteCleanupPlan(item.cleanupPlanJson, item.members)
+    const plan = parseDeleteCleanupPlan(item.cleanupPlanJson, item.members, effects.content)
     let claim: TerminalMaintenanceClaim = item.claim
     let state = item.state
     if (plan === null) {
@@ -334,7 +347,7 @@ export async function recoverInterruptedTaskDeletes(
     }
 
     if (state === 'db-finalized' || state === 'cleanup-pending') {
-      const cleanup = await cleanupDeletedTaskResources(plan)
+      const cleanup = await cleanupDeletedTaskResources(plan, effects)
       if (cleanup === 'done') {
         await terminalMaintenance.complete({ claim })
         completed.push(item.rootTaskId)

@@ -1,3 +1,4 @@
+export type { TaskDeletionEffects } from '../application/ports/taskDeletionContentEffects'
 export type { TaskArchiveContentBinding } from '../composition/taskArchiveMaintenance'
 
 // RFC-303 exact public vocabulary. Cross-context callers may depend on these

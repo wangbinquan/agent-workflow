@@ -154,3 +154,13 @@ export type {
   RepositoryPreparationParticipant,
   WorkspaceContentParticipant,
 } from '../application/ports/repositoryLaunch'
+
+/** Complete repository cleanup acknowledgement after AW finalizes a task deletion. */
+export interface TaskDeletionRepositoryParticipant {
+  removeWorktree(input: {
+    readonly repoPath: string
+    readonly worktreePath: string
+    readonly force: true
+  }): void | Promise<void>
+  deleteSnapshotRefs(repoPath: string, taskId: string): void | Promise<void>
+}

@@ -207,7 +207,11 @@ test('源码锁：PG daemon 在可用性闸之后、HTTP 之前续做 delete 认
   const src = resolve(import.meta.dir, '..', 'src')
   const daemon = readFileSync(resolve(src, 'cli', 'postgresqlDaemonApplication.ts'), 'utf8')
   const gate = daemon.indexOf('skillCatalogBoot.activateAvailabilityGate()')
-  const recovery = daemon.indexOf('await recoverInterruptedTaskDeletes(input.db)', gate)
+  const recoveryCall =
+    /await recoverInterruptedTaskDeletes\(\s*input\.db,\s*undefined,\s*input\.taskDeletionEffects,?\s*\)/.exec(
+      daemon.slice(gate),
+    )
+  const recovery = recoveryCall === null ? -1 : gate + recoveryCall.index
   const httpCreate = daemon.indexOf('const app = createComposedApp', recovery)
   expect(gate).toBeGreaterThan(-1)
   expect(recovery).toBeGreaterThan(gate)

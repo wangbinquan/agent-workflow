@@ -427,7 +427,10 @@ import {
   requireSchedulerDriver,
   type SchedulerDriverPort,
 } from '@/modules/task-execution/public/commands'
-import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
+import type {
+  TaskDeletionEffects,
+  TaskExecutionReadModels,
+} from '@/modules/task-execution/public/types'
 import {
   createCollaborationCommandContext,
   createSqliteCollaborationTaskAccessPort,
@@ -805,6 +808,7 @@ export interface AppDeps {
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
+  taskDeletionEffects?: TaskDeletionEffects
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -2775,6 +2779,7 @@ function composeSqliteApiRouteMounts(
   const schedulerDriver = deps.schedulerDriver
   const codeWorkspace = composeLegacyCodeReadProviders(deps.db).workspace
   const taskRouteOperations = createTaskRouteOperations({
+    effects: deps.taskDeletionEffects,
     db: deps.db,
     collaboration: deps.collaborationContext,
     // RFC-359 AC-1（第 3 刀）：列表行的 owner 身份投影由组合根装配，与 PostgreSQL 同形。
