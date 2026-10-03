@@ -297,6 +297,10 @@ export function bindEmployeeCaseWorkspaceParticipant(
 }
 
 export { createWorkspaceContentScope } from './infrastructure/workspaceContent'
+export type {
+  WorkspaceContentEffects,
+  WorkspaceContentEffectsFactory,
+} from './application/ports/workspaceContentEffects'
 // RFC-363 T4/T7 compatibility binding; launch adapters retire this path after durable cutover.
 export {
   type WorkspaceMaterializationDependencies,
