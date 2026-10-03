@@ -903,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 26419,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-371 sealed nonnumeric complete facts, exact native ownership EOF and original trace CI repair, original census 26410 -> 26419 from 34e49589e9bc26c6ea9f3da8a1f9f90f367a29c6. Actual fact summary/selector/nonnumeric projection and full ownership symbols; no original matcher, debt term or threshold changes. Consume in the matching canonical commit and retire in its normal non-growing successor."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -923,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "34e49589e9bc26c6ea9f3da8a1f9f90f367a29c6",
-    "contentDigest": "sha256:371da00794ae2f48dc8950a0a4ef1566d9142d314b131573bb5608baf2114a43",
+    "currentSnapshotSha": "1628e7aacd976775aa7e73562af2358edc6c2ea5",
+    "contentDigest": "sha256:1e2dd7885b5a20b0c3aab5734a00b28e85ebbc809807c99702119f8c923504b0",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
