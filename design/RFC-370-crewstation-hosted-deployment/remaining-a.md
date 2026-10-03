@@ -241,3 +241,17 @@ SOURCE24 首轮 `d11853a87eb2650d6cff3daeedfade4dd888d5bb538b28845b00bebfe9f6067
 此前 f3eedc6aa9cd380dbcc6b32b83be1f58da591752 的主 [CI37074418502](https://github.com/wangbinquan/agent-workflow/actions/runs/37074418502) completed/failure，50 项为 33 success/17 failure；[Windows37074493098](https://github.com/wangbinquan/agent-workflow/actions/runs/37074493098) completed/success，1/1。已保留原失败功能日志和归属，不能据部分 green 关闭。并行观测 owner 的源码1873e606、canonical cf83e1c5、正常退役655d1e8b已发布并交接共享窗口；同步0/0后复用完全未变的24+8 source 门，以655d1e8b原分类生成本批登记。owner追踪其 exact-SHA CI，本批运行行为等发布后的新 exact-SHA hosted CI；没有运行 AW 本机 tests/typecheck/build/service，已做定点 format/lint、纯源码/AST/JSON/字节证明与原 scoped 生成。
 
 原 A 余项及全部功能门历史继续有效，详见 [功能门](./functional-gates.md) 的本批有限记录。
+
+## SOURCE28 后的实际状态（2026-10-03）
+
+本批完成两个 provider 的 workspace tree/file 内容选择、资源包 skill/plugin/export 完整 owner 接线，以及 maintenance Worker 内重建的三类完整效果（archive、包恢复、plugin GC）。所选对象的原 receiver、逻辑引用、ACK 与失败语义贯穿实际装配入口；CLI 初始和替换 session 传递同一完整选择。重复 drain 共用包含 heartbeat、效果 dispose 和 provider close 的完整关闭 Promise，不能提前发出 drained。
+
+Worker 有限 DESIGN v2 PASS；SOURCE26 首轮 FAIL 的 `SOURCE26-P2-1`（重复 drain 可能早于 PostgreSQL pool close）由 R2 SOURCE4 PASS 修复。原始 boundary collector 随后发现三条新 helper 到 module-internal composition 的类型引用；保留第一次生成和失败，未改 `BOOTSTRAP_FILES`、规则或债务条款。R3 经有限 DESIGN/SOURCE3 审查，将同一完整类型经现有 exact `public/types` 入口重导出；三个改动文件生成的 runtime JavaScript 与前版完全相同。组合 SOURCE28 指纹 `bdee22293f4fa32d75e1bb7728ada62cf18be3d64ca1498b6790a84df7996452`。
+
+workspace content 完整读取和三类 Worker 效果已有中性选择入口，资源包已有完整 owner 的真实根接线；其余 A1/A2/A3/A4/A5/A6/A7/A8 项仍按本清单执行。EmployeeCase 的 8 操作/6 binder/3 checkpoint 已有有限 DESIGN v2 PASS，尚未实施，不以设计通过代替能力完成。
+
+原始 scoped census 为实际 SOURCE28 候选执行一次，排除并保留 RFC-371 的 4 个 tracked 和 15 个 untracked 源码 WIP。实际投影：mutation 1823→1826、background 345→352、observed imports 5794→5809、exceptions 5152→5167、public surfaces 1053→1056、symbol owners 25907→25932。6 个 native content helper owner 完整迁移，4 个既有 timer 仅变更行号，15 个 ambient 条目仅变更行号（501 总数和语义不变）；supervisor 的 phase 字段由原 collector 对 `effectsBootstrap` 文本重新投影，原生命周期不变。原 40 required SPI、69 target edges、304 债务条款和 273 inbound / 31 outbound 保持，新增 boundary 违规为 0。新增生产文件 4 个，source-control 文件净增 2 个；值循环及未解析 first-party 依赖未增加。仅登记这 6 项实际数量增长的一次性回执，并在 canonical commit 后按原语义退役。Source digest `sha256:d7cd21a663d5fde3d45b5bf92bbc204ab35a92f4e365a18ff552d9b4c72f542f`。
+
+CI 修复提交 `3ff61d9eba0b129953d09d966235d7a2b3ca633c` 的主 CI `37087805975` 为 50/50 success，Windows `37087878452` 的第二次 attempt 为 1/1 success。保留第一次 attempt 的三个既有 code-intel 5000 ms timeout；未放宽断言或时间预算。该 CI 仅证明修复提交，本批 SOURCE28 的正式 whole-repository 结论待发布后的 exact-SHA CI。
+
+完整 A1–A8/A-G 仍开放。本批不等于其他 Worker 效果、execution authority、workspace/Git、物化快照、执行流和全部装配入口的闭合。后续先实施已通过有限 DESIGN v2 的 EmployeeCase 完整效果范围，再继续剩余中性切面；CS adapter、B/M0 实际部署和 M1–M4 验收尚未实施。

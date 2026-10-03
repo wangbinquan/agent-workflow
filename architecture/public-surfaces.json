@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 969,
+    "consumers": 972,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1144,
+    "methods": 1157,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 21702,
-    "symbols": 1053
+    "recursiveFields": 21764,
+    "symbols": 1056
   },
   "entries": [
     {
@@ -113468,6 +113468,96 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": [
+        "import:b34bfb60326f6782fecd"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:collect.$parameter:input.graceMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:collect.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:collect.$parameter:input.referencedCachedPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:collect.$return",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:hasCandidates.$parameter:input.graceMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:hasCandidates.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:hasCandidates.$return",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:PluginGenerationFilesystemGcPort",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:b34bfb60326f6782fecd"
+          ],
+          "name": "collect",
+          "signatureDigest": "sha256:f9d32e79377aac8b4ddbddef0a2bd8d2df04c21bea8d665721a30b82c06f9ced"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b34bfb60326f6782fecd"
+          ],
+          "name": "hasCandidates",
+          "signatureDigest": "sha256:1bea59bfafcb4fd866edaf432b5501f872af1833f6fa09abbd1cfe776b7e60be"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:b34bfb60326f6782fecd",
+          "file": "packages/backend/src/platform/background/maintenanceWorkerEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorkerEffects.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:0f62bcf3dd5f5c6e484fd11258d5c1987469948d056b301b7cb1471f023fb437",
+      "status": "target-context-current-surface",
+      "symbol": "PluginGenerationFilesystemGcPort",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": [],
       "context": "resource-catalog",
       "dataClass": "metadata",
@@ -114490,6 +114580,161 @@
       "signatureDigest": "sha256:9055988308d5321aae668609c16bafda5ec01fc70a42556d0309e715f2745c4d",
       "status": "target-context-current-surface",
       "symbol": "ResourceMemoryScopeRef",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:dee914e501d3350628a6"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:compensate.$parameter:journal.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:compensate.$parameter:journal.preparedArtifactsJson",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:compensate.$parameter:journal.receiptJson.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:compensate.$parameter:journal.receiptJson.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:compensate.$parameter:journal.state.$variant:0",
+          "type": "'prepared'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:compensate.$parameter:journal.state.$variant:1",
+          "type": "'applying'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:compensate.$parameter:journal.state.$variant:2",
+          "type": "'committed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:compensate.$parameter:journal.state.$variant:3",
+          "type": "'failed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:compensate.$parameter:journal.updatedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:compensate.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rollForward.$parameter:journal.id",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rollForward.$parameter:journal.preparedArtifactsJson",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rollForward.$parameter:journal.receiptJson.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rollForward.$parameter:journal.receiptJson.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rollForward.$parameter:journal.state.$variant:0",
+          "type": "'prepared'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rollForward.$parameter:journal.state.$variant:1",
+          "type": "'applying'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rollForward.$parameter:journal.state.$variant:2",
+          "type": "'committed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rollForward.$parameter:journal.state.$variant:3",
+          "type": "'failed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rollForward.$parameter:journal.updatedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:rollForward.$return",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/types.ts",
+      "id": "public:resource-catalog:types:ResourcePackageApplyArtifactRecoveryPort",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:dee914e501d3350628a6"
+          ],
+          "name": "compensate",
+          "signatureDigest": "sha256:ebe300e6a744dfc56df0c26dc66ed5bc5f8e7c81d221d246e22b06d0f9377832"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:dee914e501d3350628a6"
+          ],
+          "name": "rollForward",
+          "signatureDigest": "sha256:1bdcaeec44314e7425f70d9b33b17a024ae70f09c9a8459e44de77e172457c7a"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:dee914e501d3350628a6",
+          "file": "packages/backend/src/platform/background/maintenanceWorkerEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorkerEffects.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:a5e25e09f5250faa5d95acca547982c3238d9909b71b93de280c5851d7d0046d",
+      "status": "target-context-current-surface",
+      "symbol": "ResourcePackageApplyArtifactRecoveryPort",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -167425,6 +167670,289 @@
     {
       "authority": "none",
       "budget": {
+        "maxMethods": 9,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 35,
+        "maxUnionVariants": 18
+      },
+      "consumerEdgeIds": [
+        "import:711a9a633376eb1a438a"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:appendText.$parameter:reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:appendText.$parameter:text",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:appendText.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:appendText.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:createDirectory.$parameter:reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:createDirectory.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:createDirectory.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:exists.$parameter:reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:exists.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:exists.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:list.$parameter:reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:list.$return.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:list.$return.$variant:1",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:move.$parameter:from",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:move.$parameter:to",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:move.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:move.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:remove.$parameter:recursive",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:remove.$parameter:reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:remove.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:remove.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:resolve.$parameter:reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:resolve.$parameter:segments",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:resolve.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:restoreMovedDirectories.$parameter:kind.$variant:0",
+          "type": "'runs'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:restoreMovedDirectories.$parameter:kind.$variant:1",
+          "type": "'logs'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:restoreMovedDirectories.$parameter:root",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:restoreMovedDirectories.$parameter:temporary",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:restoreMovedDirectories.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:restoreMovedDirectories.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:writeText.$parameter:reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:writeText.$parameter:text",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:writeText.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "content.$method:writeText.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:711a9a633376eb1a438a"
+          ],
+          "fieldPath": "locations",
+          "type": "Pick<TaskArchiveMaintenanceOptions, 'archiveDir' | 'runsDir' | 'logsDir'>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:TaskArchiveContentBinding",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:711a9a633376eb1a438a"
+          ],
+          "name": "appendText",
+          "signatureDigest": "sha256:33652d7df0b4f894e4a2354e9aa2e4908cf6adbd020cfe781982646640e6a356"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:711a9a633376eb1a438a"
+          ],
+          "name": "createDirectory",
+          "signatureDigest": "sha256:7985db15181af8438354de6d3c575daf23351e7e758539f110c2f7c2356aacde"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:711a9a633376eb1a438a"
+          ],
+          "name": "exists",
+          "signatureDigest": "sha256:2bfdc4325d9a2ba84ba63e255f551ff87a5aa21eb90ad60863c35e36b613d55a"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:711a9a633376eb1a438a"
+          ],
+          "name": "list",
+          "signatureDigest": "sha256:16fd5a8fa871457703497e356a382ab528b5fd63bb26ce835498368d999887b7"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:711a9a633376eb1a438a"
+          ],
+          "name": "move",
+          "signatureDigest": "sha256:ebba9ab079b1db8a4d0e1e7b8e8c0a13157453e27c8c0406800087c6286ac174"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:711a9a633376eb1a438a"
+          ],
+          "name": "remove",
+          "signatureDigest": "sha256:20e5425e49031bef30eb2e162532c1b5c3d3c22b73d899b76ebb8c3bb4167fdd"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:711a9a633376eb1a438a"
+          ],
+          "name": "resolve",
+          "signatureDigest": "sha256:a06b2a7e16aee1fc747ab4d50b15d2fe0b40f277469db2ac828e439dd3cb9644"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:711a9a633376eb1a438a"
+          ],
+          "name": "restoreMovedDirectories",
+          "signatureDigest": "sha256:266896561f097c05e31c2a248b91e3af3e6bf5d4bf9828ef6518c3fa2ba5f69b"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:711a9a633376eb1a438a"
+          ],
+          "name": "writeText",
+          "signatureDigest": "sha256:1dd158a86ce62266a4e20a1b3387c27b3675b9194cf962895e47aef2949dd005"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:711a9a633376eb1a438a",
+          "file": "packages/backend/src/platform/background/maintenanceWorkerEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorkerEffects.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:ce6914b09d52056b92f34daddf57cdc9d74970094c9506f15ba2c18f5a6bb21d",
+      "status": "target-context-current-surface",
+      "symbol": "TaskArchiveContentBinding",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Pick"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
@@ -172120,7 +172648,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:954ca22d88be78bbb544504040a5d39d052e84e7558288fdc19b74e468f04bcf",
+  "sourceDigest": "sha256:d7cd21a663d5fde3d45b5bf92bbc204ab35a92f4e365a18ff552d9b4c72f542f",
   "targetContexts": [
     "collaboration",
     "development-automation",

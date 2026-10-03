@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1823,
+    "entries": 1826,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -23809,6 +23809,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileWorkspaceContentEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/fileWorkspaceContentEffects.ts#createFileWorkspaceContentEffects",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileWorkspaceContentEffects.ts#createFileWorkspaceContentEffects",
+      "symbol": "createFileWorkspaceContentEffects",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/source-control/infrastructure/local/fileWorkspacePresence.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/fileWorkspacePresence.ts#createFileWorkspacePresenceQueries",
@@ -32748,6 +32773,56 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorker.ts#settleWithBusyBackoff",
       "symbol": "settleWithBusyBackoff",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/maintenanceWorkerEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/maintenanceWorkerEffects.ts#openMaintenanceWorkerEffectsScope",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorkerEffects.ts#openMaintenanceWorkerEffectsScope",
+      "symbol": "openMaintenanceWorkerEffectsScope",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/maintenanceWorkerEffectsProtocol.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/maintenanceWorkerEffectsProtocol.ts#createMaintenanceWorkerEffectsInit",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/maintenanceWorkerEffectsProtocol.ts#createMaintenanceWorkerEffectsInit",
+      "symbol": "createMaintenanceWorkerEffectsInit",
       "targetContext": "platform",
       "targetLayer": "background"
     },
@@ -43575,7 +43650,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:954ca22d88be78bbb544504040a5d39d052e84e7558288fdc19b74e468f04bcf",
+  "sourceDigest": "sha256:d7cd21a663d5fde3d45b5bf92bbc204ab35a92f4e365a18ff552d9b4c72f542f",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
