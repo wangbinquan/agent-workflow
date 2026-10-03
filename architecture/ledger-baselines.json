@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1830,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 Employee case: the original classifier adds the one real complete native effect factory constructor; the eight original business operations retain policy and call order."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -850,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 5817,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 Employee case: three actual CLI/HTTP roots import the complete EmployeeCaseWorkspaceEffectsFactory type through the existing SC composition boundary. The one runGit value edge relocates unchanged from the application owner to its independent local adapter (four added, one removed)."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -874,10 +868,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5174,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 Employee case: register that same real four-added/one-relocated edge projection under the original classifier. Preserve all 304 existing clauses, all 40 required SPI and 69 target edges; no boundary clause is added or widened."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -912,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 26031,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 Employee case: ten actual owners describe the two new production files, complete effect scope/factory/reference-operand types, the exact original literal-argv projection, the owned lifetime helper and the bound operation type. All retained owner rows remain identical."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -932,8 +920,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "38d5c895f7ecb7eca54b6a1308c38e6f3f8854f8",
-    "contentDigest": "sha256:b3a234388962d45bed2d2de8295cd5f9f8d4b0302fbd38ca060175b46387218b",
+    "currentSnapshotSha": "c46cc3ae5ed5dcf082f2bb039f3db6547349d6aa",
+    "contentDigest": "sha256:1594e813361ff0770e48e9917cfe7eec9aa6c7194564a784c3c52b8d6ec80876",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
