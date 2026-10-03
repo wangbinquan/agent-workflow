@@ -228,3 +228,6 @@ export interface BoundedWorkspaceContent {
   readonly nextOffset: number | null
   readonly oversized: boolean
 }
+
+/** The existing Git outcome, reused by neutral baseline effects. */
+export type { RepositoryCandidateGitOutcome } from '../application/ports/repositoryCandidateEffects'

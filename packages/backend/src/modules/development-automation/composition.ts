@@ -1,3 +1,4 @@
+import type { RepositoryBaselineEffectsFactory } from './application/ports/repositoryBaselineEffects'
 // development-automation 装配入口（RFC-310）。
 //
 // 仅装配点可 import 本文件；它只做实例化与注入——不查 DB、无业务 if/switch、
@@ -212,6 +213,7 @@ export interface DevelopmentAutomationModule {
 }
 
 export interface DevelopmentAutomationCompositionOptions {
+  readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly appHome: string
   readonly evidenceContents?: EvidenceContentQueries
   readonly evidenceArtifacts?: EvidenceArtifactPort
@@ -313,7 +315,12 @@ function composeDevelopmentAutomationFromPersistence(
     playbookSaga,
     childMissions,
     ...(deps.changeCandidate === undefined ? {} : { changeCandidate: deps.changeCandidate }),
-    actionBaseline: { resolve: createActionBaselineResolver(persistence.repositoryLocations) },
+    actionBaseline: {
+      resolve: createActionBaselineResolver(
+        persistence.repositoryLocations,
+        deps.repositoryBaselines,
+      ),
+    },
     actionWorkspace: {
       materialize: (input) =>
         materializeActionWorkspace(
@@ -456,3 +463,5 @@ export function composeDevelopmentAutomation(
       ),
   })
 }
+
+export type { RepositoryBaselineEffectsFactory } from './application/ports/repositoryBaselineEffects'

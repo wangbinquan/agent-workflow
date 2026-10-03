@@ -1,3 +1,4 @@
+import type { RepositoryBaselineEffectsFactory } from '../application/ports/repositoryBaselineEffects'
 import { lstatSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
@@ -124,6 +125,7 @@ const employeeUploadPlanSchema = z
 type EmployeeUploadPlan = z.infer<typeof employeeUploadPlanSchema>
 
 async function resolveEmployeeUploadPlan(input: {
+  readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly uploads: readonly z.infer<typeof issueSchema>['request']['uploads'][number][]
   readonly baselineRepoPath: string
   readonly baselineSha: string
@@ -134,7 +136,11 @@ async function resolveEmployeeUploadPlan(input: {
 > {
   const repositoryUploads = input.uploads.filter((upload) => upload.placement === 'repository')
   if (repositoryUploads.length === 0) return { ok: true, plan: null }
-  const baseline = createGitBaselineReader(input.baselineRepoPath, input.baselineSha)
+  const baseline = createGitBaselineReader(
+    input.baselineRepoPath,
+    input.baselineSha,
+    input.repositoryBaselines,
+  )
   const entries: EmployeeUploadPlan['entries'][number][] = []
   for (const upload of repositoryUploads) {
     const uploadSha256 = upload.artifactRef.slice('employee-input:'.length)
@@ -394,6 +400,7 @@ function reviewMarkerToken(marker: string): string {
 }
 
 export interface DevelopmentEmployeePlatformWorkItemsCompositionInput {
+  readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly persistence: EmployeePlatformWorkItemPersistence
   readonly appHome: string
   readonly evidenceArtifacts?: EvidenceArtifactPort
@@ -1497,6 +1504,7 @@ function composeDevelopmentEmployeePlatformWorkItemsFromPersistence(
         }
         const summarySource = issue.state.deliveryContent.commitMessage
         const resolvedUploadPlan = await resolveEmployeeUploadPlan({
+          repositoryBaselines: input.repositoryBaselines,
           uploads: issue.state.request.uploads,
           baselineRepoPath: repository.localPath,
           baselineSha: row.baselineSha,

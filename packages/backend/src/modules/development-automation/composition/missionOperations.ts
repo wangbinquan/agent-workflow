@@ -1,3 +1,4 @@
+import type { RepositoryBaselineEffectsFactory } from '../application/ports/repositoryBaselineEffects'
 // RFC-344 — bootstrap composition for DevelopmentMission inbound operations.
 
 import { ulid } from 'ulid'
@@ -100,6 +101,7 @@ function decodeMissionCursor(raw: string): MissionPageCursor | null {
 }
 
 export interface DevelopmentMissionOperationCompositionOptions {
+  readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly deliveryProvider: DevelopmentDeliveryProvider
   readonly admissionLookup: AdmissionLookup
   /** Bootstrap-owned daemon participant shared by REST, MCP and recovery. */
@@ -140,7 +142,10 @@ function composeDevelopmentMissionOperationsFromPersistence(
     now: () => Date.now(),
     uploadAdmission: {
       uploads: uploadSessions,
-      resolveBaseline: createRepositoryBaselineResolverFromLocations(persistence.repositories),
+      resolveBaseline: createRepositoryBaselineResolverFromLocations(
+        persistence.repositories,
+        deps.repositoryBaselines,
+      ),
     },
   }
 

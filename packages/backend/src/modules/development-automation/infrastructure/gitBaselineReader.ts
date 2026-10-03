@@ -1,34 +1,69 @@
-// RFC-310 PR-3 T36a —— BaselineFileReader 的真实 Git 实现。
-//
-// `git ls-tree <head> -- <path>` 读 entry（mode 100644/100755=文件、040000=
-// 目录、120000/160000=symlink/submodule ⇒ 'unsupported'）；内容 sha256 用
-// `git cat-file blob <gitsha>` 的 stdout **流式落盘再 hash**——经 utf8 string
-// 会损坏二进制字节，所以这里是 Bun.spawn 直连（rfc284 spawn allowlist 已
-// 登记本文件），临时文件用后即删。
+import type {
+  RepositoryBaselineEffects,
+  RepositoryBaselineEffectsFactory,
+} from '../application/ports/repositoryBaselineEffects'
+import { createFileRepositoryBaselineEffectsFactory } from './local/fileRepositoryBaselineEffects'
+// RFC-310 / RFC-370: baseline selection and reader lifetime stay with this owner.
+// The complete binary Git reader and stream hash live in the DA local adapter.
 
-import { createHash } from 'node:crypto'
-import { createReadStream, mkdtempSync, rmSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { cachedRepos } from '@/db/schema'
-import { runGit, nonInteractiveGitEnv } from '@/util/git'
-import { platformSpawnOptionsForHost } from '@/util/platformExec'
 import type { BaselineFileReader, BaselineStat } from '../application/uploadPlan'
 import type { UploadBaselineContext } from '../application/commands/launchMission'
 import type { RepositoryLocationRead } from '../application/ports/repositoryLocationRead'
 
-async function sha256OfFile(absPath: string): Promise<string> {
-  const hash = createHash('sha256')
-  await new Promise<void>((resolve, reject) => {
-    const stream = createReadStream(absPath, { highWaterMark: 64 * 1024 })
-    stream.on('data', (chunk) => hash.update(chunk as Buffer))
-    stream.on('end', resolve)
-    stream.on('error', reject)
-  })
-  return hash.digest('hex')
+function selectedRepositoryBaselineEffects(
+  effects?: RepositoryBaselineEffectsFactory,
+): RepositoryBaselineEffectsFactory {
+  return effects === undefined ? createFileRepositoryBaselineEffectsFactory() : effects
+}
+
+async function withRepositoryBaselineEffects<T>(
+  effects: RepositoryBaselineEffectsFactory,
+  body: (scope: RepositoryBaselineEffects) => T | Promise<T>,
+): Promise<T> {
+  if (effects == null || typeof effects.acquire !== 'function') {
+    throw new Error('repository-baseline-effects-factory-incomplete')
+  }
+  const scope = await effects.acquire()
+  let value!: T
+  let bodyFailed = false
+  let bodyError: unknown
+  try {
+    if (
+      scope == null ||
+      ['readHead', 'bindFileReader', 'close'].some(
+        (method) => typeof scope[method as keyof RepositoryBaselineEffects] !== 'function',
+      )
+    ) {
+      throw new Error('repository-baseline-effects-scope-incomplete')
+    }
+    value = await body(scope)
+  } catch (error) {
+    bodyFailed = true
+    bodyError = error
+  }
+  let closeFailed = false
+  let closeError: unknown
+  if (scope != null && typeof scope.close === 'function') {
+    try {
+      await scope.close()
+    } catch (error) {
+      closeFailed = true
+      closeError = error
+    }
+  }
+  if (bodyFailed && closeFailed) {
+    throw new AggregateError(
+      [bodyError, closeError],
+      'repository-baseline-effects-body-and-close-failed',
+    )
+  }
+  if (bodyFailed) throw bodyError
+  if (closeFailed) throw closeError
+  return value
 }
 
 /**
@@ -39,34 +74,42 @@ async function sha256OfFile(absPath: string): Promise<string> {
 /** PR-4 —— attempt 编排的 baseline 定位（repoPath + exact head；无 reader）。 */
 export function createActionBaselineResolver(
   repositories: RepositoryLocationRead,
+  factory?: RepositoryBaselineEffectsFactory,
 ): (repositoryId: string) => Promise<{ repoPath: string; headSha: string } | null> {
+  const effects = selectedRepositoryBaselineEffects(factory)
   return async (repositoryId) => {
     const localPath = await repositories.localPath(repositoryId)
     if (localPath === null) return null
-    const head = await runGit(localPath, ['rev-parse', 'HEAD'])
-    if (head.exitCode !== 0) return null
-    const sha = head.stdout.trim()
-    if (!/^[0-9a-f]{40}$/.test(sha)) return null
-    return { repoPath: localPath, headSha: sha }
+    return withRepositoryBaselineEffects(effects, async (scope) => {
+      const head = await scope.readHead(localPath)
+      if (head.exitCode !== 0) return null
+      const sha = head.stdout.trim()
+      if (!/^[0-9a-f]{40}$/.test(sha)) return null
+      return { repoPath: localPath, headSha: sha }
+    })
   }
 }
 
 export function createRepositoryBaselineResolverFromLocations(
   repositories: RepositoryLocationRead,
+  factory?: RepositoryBaselineEffectsFactory,
 ): (repositoryId: string) => Promise<UploadBaselineContext | null> {
+  const effects = selectedRepositoryBaselineEffects(factory)
   return async (repositoryId) => {
     const localPath = await repositories.localPath(repositoryId)
     if (localPath === null) return null
-    const head = await runGit(localPath, ['rev-parse', 'HEAD'])
-    if (head.exitCode !== 0) return null
-    const sha = head.stdout.trim()
-    if (!/^[0-9a-f]{40}$/.test(sha)) return null
-    return {
-      repositoryRef: repositoryId,
-      baselineSnapshotRef: `git:${sha}`,
-      baselineSha: sha,
-      reader: createGitBaselineReader(localPath, sha),
-    }
+    return withRepositoryBaselineEffects(effects, async (scope) => {
+      const head = await scope.readHead(localPath)
+      if (head.exitCode !== 0) return null
+      const sha = head.stdout.trim()
+      if (!/^[0-9a-f]{40}$/.test(sha)) return null
+      return {
+        repositoryRef: repositoryId,
+        baselineSnapshotRef: `git:${sha}`,
+        baselineSha: sha,
+        reader: createGitBaselineReader(localPath, sha, effects),
+      }
+    })
   }
 }
 
@@ -87,47 +130,35 @@ export function createRepositoryLocationRead(db: ProviderNeutralDatabase): Repos
 }
 
 /** 直接吃数据库句柄的便捷工厂（focused 调用方 / 测试用）。 */
-export function resolveActionBaseline(db: ProviderNeutralDatabase) {
-  return createActionBaselineResolver(createRepositoryLocationRead(db))
+export function resolveActionBaseline(
+  db: ProviderNeutralDatabase,
+  factory?: RepositoryBaselineEffectsFactory,
+) {
+  return createActionBaselineResolver(createRepositoryLocationRead(db), factory)
 }
 
-export function createRepositoryBaselineResolver(db: ProviderNeutralDatabase) {
-  return createRepositoryBaselineResolverFromLocations(createRepositoryLocationRead(db))
+export function createRepositoryBaselineResolver(
+  db: ProviderNeutralDatabase,
+  factory?: RepositoryBaselineEffectsFactory,
+) {
+  return createRepositoryBaselineResolverFromLocations(createRepositoryLocationRead(db), factory)
 }
 
-export function createGitBaselineReader(repoPath: string, headSha: string): BaselineFileReader {
+export function createGitBaselineReader(
+  repoPath: string,
+  headSha: string,
+  factory?: RepositoryBaselineEffectsFactory,
+): BaselineFileReader {
+  const effects = selectedRepositoryBaselineEffects(factory)
   return {
     async stat(path: string): Promise<BaselineStat> {
-      const lsTree = await runGit(repoPath, ['ls-tree', headSha, '--', path])
-      if (lsTree.exitCode !== 0 || lsTree.stdout.trim().length === 0) return 'missing'
-      const line = lsTree.stdout.split('\n')[0]!
-      const match = /^(\d{6})\s+(\w+)\s+([0-9a-f]{40})\t/.exec(line)
-      if (match === null) return 'missing'
-      const [, mode, type, gitSha] = match
-      if (type === 'tree' || mode === '040000') return 'directory'
-      if (mode === '120000' || mode === '160000' || type !== 'blob') return 'unsupported'
-
-      const staging = mkdtempSync(join(tmpdir(), 'aw-baseline-'))
-      try {
-        const outFile = join(staging, 'blob')
-        const proc = Bun.spawn({
-          ...platformSpawnOptionsForHost(),
-          cmd: ['git', 'cat-file', 'blob', gitSha!],
-          cwd: repoPath,
-          env: { ...process.env, ...nonInteractiveGitEnv() } as Record<string, string>,
-          stdout: Bun.file(outFile),
-          stderr: 'pipe',
-        })
-        const exitCode = await proc.exited
-        if (exitCode !== 0) return 'missing'
-        return {
-          kind: 'file',
-          sha256: await sha256OfFile(outFile),
-          mode: mode === '100755' ? 'executable' : 'regular',
+      return withRepositoryBaselineEffects(effects, async (scope) => {
+        const reader = await scope.bindFileReader(repoPath, headSha)
+        if (reader == null || typeof reader.stat !== 'function') {
+          throw new Error('repository-baseline-file-reader-incomplete')
         }
-      } finally {
-        rmSync(staging, { recursive: true, force: true })
-      }
+        return await reader.stat(path)
+      })
     },
   }
 }
