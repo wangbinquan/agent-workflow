@@ -45,7 +45,7 @@ test('the independent file adapter preserves complete binary capture, read and m
     })
     expect(native.materializeBlob('0'.repeat(64), join(root, 'missing'))).toBe(false)
     const dest = join(root, 'materialized')
-    expect(native.materializeBundle(bundle.bundleId, dest)).toEqual(bundle.entries)
+    expect(native.materializeBundle(bundle.bundleId, dest)).toEqual([...bundle.entries])
     expect([...readFileSync(join(dest, 'input.bin'))]).toEqual([...bytes])
     const ref = await native.contexts.save('{"context":true}')
     expect(await native.contexts.load(ref)).toBe('{"context":true}')
