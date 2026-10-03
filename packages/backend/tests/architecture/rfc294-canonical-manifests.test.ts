@@ -366,6 +366,7 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       'packages/backend/src/services/nodeRunPrompt.ts',
       'packages/backend/src/services/pendingRestore.ts',
       'packages/backend/src/services/pluginInstaller.ts',
+      'packages/backend/src/services/portArtifacts.ts',
       'packages/backend/src/services/protocol.ts',
       'packages/backend/src/services/questionDispatchComposition.ts',
       'packages/backend/src/services/resourceRefs.ts',

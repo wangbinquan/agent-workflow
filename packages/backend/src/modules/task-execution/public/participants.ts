@@ -1,3 +1,7 @@
+export {
+  selectPortArtifactOperations,
+  selectPortArtifactReader,
+} from '../composition/portArtifacts'
 export { selectNodeRunPromptOperations } from '../composition/nodeRunPrompts'
 // RFC-303 — the only cross-context task-control surface.
 // It deliberately accepts a source binding, never caller-selected task ids.

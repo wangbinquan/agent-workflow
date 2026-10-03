@@ -38,7 +38,7 @@ import {
   parseConflictManifest,
   type ResolvedPathState,
 } from '@/services/mergeAgent'
-import { repoRelForcedPaths } from '@/services/portArtifacts'
+import { repoRelForcedPaths } from '@/modules/task-execution/public/queries'
 import {
   createLocalEffectAttemptObserver,
   currentTaskExecutionContext,

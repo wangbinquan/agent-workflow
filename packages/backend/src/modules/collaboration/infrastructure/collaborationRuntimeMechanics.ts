@@ -1,3 +1,4 @@
+import type { PortArtifactReader } from '@/modules/task-execution/public/queries'
 // RFC-359 W7 —— collaboration 的运行期机制（`CollaborationRuntimeMechanics`）：
 // **一份实现，两个 provider 共用**。
 //
@@ -25,11 +26,18 @@ import {
 
 export function createCollaborationRuntimeMechanics(
   db: ProviderNeutralDatabase,
+  dependencies: Readonly<{ portArtifactReaderFor?: (appHome: string) => PortArtifactReader }> = {},
 ): CollaborationRuntimeMechanics {
   return Object.freeze({
     async dispatchReviewNode(input) {
       const { dispatchReviewNode } = await import('./review')
-      return dispatchReviewNode({ db, ...input })
+      return dispatchReviewNode({
+        db,
+        ...input,
+        ...(dependencies.portArtifactReaderFor === undefined
+          ? {}
+          : { portArtifactReader: dependencies.portArtifactReaderFor(input.appHome) }),
+      })
     },
     async inspectCrossClarify(input) {
       const { dispatchCrossClarifyNode } = await import('./clarify/service')

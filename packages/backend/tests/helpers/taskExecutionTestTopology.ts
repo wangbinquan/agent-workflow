@@ -1,5 +1,9 @@
 import { join } from 'node:path'
 import {
+  composePortArtifactOperations,
+  selectPortArtifactOperations,
+} from '@/modules/task-execution/composition/portArtifacts'
+import {
   composeNodeRunPromptOperations,
   selectNodeRunPromptOperations,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
@@ -135,6 +139,7 @@ export function composeTaskExecutionTestRuntime(
     participants: createTaskExecutionRuntimeParticipants({
       nodeRunPromptsFor: (appHome) =>
         composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
+      portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
       db,
       ...singleProcessDeploymentPorts(db),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(db),
@@ -270,6 +275,7 @@ export function runTaskWithRealTestTopology(
     options.nodeRunPrompts,
     join(options.appHome, 'runs'),
   )
+  const portArtifacts = selectPortArtifactOperations(options.portArtifacts, options.appHome)
   const nodeRunRuntime = options.nodeRunRuntime ?? composeNodeRunRuntimePersistence(options.db)
   const runtimeRegistry = options.runtimeRegistry ?? composeRuntimeRegistryOperations(options.db)
   const repositoryPublicationTransport =
@@ -284,13 +290,16 @@ export function runTaskWithRealTestTopology(
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
       nodeRunPromptsFor: () => nodeRunPrompts,
+      portArtifactsFor: () => portArtifacts,
       db: options.db,
       ...singleProcessDeploymentPorts(options.db),
       childLaunchWorkgroup: composeTestChildLaunchWorkgroup(options.db),
       identityAccess,
       memoryInjectionQueries,
       observationInvocations,
-      collaborationRuntime: createCollaborationRuntimeMechanics(options.db),
+      collaborationRuntime: createCollaborationRuntimeMechanics(options.db, {
+        portArtifactReaderFor: () => portArtifacts,
+      }),
       persistence,
       workgroupTurns: composeWorkgroupTurnsOperations(
         options.db,
@@ -310,6 +319,7 @@ export function runTaskWithRealTestTopology(
     {
       ...options,
       nodeRunPrompts,
+      portArtifacts,
       identityAccess,
       memoryInjectionQueries,
       observationInvocations,
@@ -320,7 +330,10 @@ export function runTaskWithRealTestTopology(
       taskDagCollaboration:
         options.taskDagCollaboration ?? createTaskDagCollaborationOperations(options.db),
       collaborationRuntime:
-        options.collaborationRuntime ?? createCollaborationRuntimeMechanics(options.db),
+        options.collaborationRuntime ??
+        createCollaborationRuntimeMechanics(options.db, {
+          portArtifactReaderFor: () => portArtifacts,
+        }),
       workgroupTurns:
         options.workgroupTurns ??
         composeWorkgroupTurnsOperations(

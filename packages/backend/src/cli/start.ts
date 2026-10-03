@@ -1,3 +1,5 @@
+import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
+import type { PortArtifactContentEffects } from '@/modules/task-execution/public/types'
 import type {
   NodeRunPromptContentEffects,
   TaskDeletionEffects,
@@ -441,6 +443,7 @@ export interface StartOptions {
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   taskDeletionEffects?: TaskDeletionEffects
   nodeRunPromptContentEffects?: NodeRunPromptContentEffects
+  portArtifactContentEffects?: PortArtifactContentEffects
   maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -603,6 +606,7 @@ async function composePostgresqlProviderSession(
   const application = await composePostgresqlDaemonApplication({
     taskDeletionEffects: input.taskDeletionEffects,
     nodeRunPromptContentEffects: input.nodeRunPromptContentEffects,
+    portArtifactContentEffects: input.portArtifactContentEffects,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
     provider: input.provider,
     db,
@@ -1171,6 +1175,7 @@ interface DaemonProviderSessionComposeInput {
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly taskDeletionEffects?: TaskDeletionEffects
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
+  portArtifactContentEffects?: PortArtifactContentEffects
   readonly maintenanceEffectsBootstrap?: MaintenanceWorkerEffectsDescriptor
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
@@ -1615,6 +1620,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
     const sessionInput = Object.freeze({
       taskDeletionEffects: opts.taskDeletionEffects,
       nodeRunPromptContentEffects: opts.nodeRunPromptContentEffects,
+      portArtifactContentEffects: opts.portArtifactContentEffects,
       automationWorkspaceEffects: opts.automationWorkspaceEffects,
       config,
       configuration,
@@ -1724,6 +1730,7 @@ async function composeSqliteProviderSession(
     input.nodeRunPromptContentEffects,
     Paths.runsDir,
   )
+  const portArtifacts = composePortArtifactOperations(input.portArtifactContentEffects, Paths.root)
   const {
     config,
     configuration,
@@ -1959,13 +1966,16 @@ async function composeSqliteProviderSession(
       archive: input.taskArchive,
       runtime: {
         nodeRunPromptsFor: () => nodeRunPrompts,
+        portArtifactsFor: () => portArtifacts,
         workspacePresence,
         observationInvocations: composeLocalInvocationObservations(
           db,
           composeObservationUsageSource(db),
         ),
         memoryInjectionQueries,
-        collaborationRuntime: createCollaborationRuntimeMechanics(db),
+        collaborationRuntime: createCollaborationRuntimeMechanics(db, {
+          portArtifactReaderFor: () => portArtifacts,
+        }),
         workgroupTurns: composeWorkgroupTurnsOperations(
           db,
           composeWorkgroupHostLedgerParticipantFactory({
@@ -3120,6 +3130,7 @@ async function composeSqliteProviderSession(
   const appComposition: SqliteAppComposition<typeof providerCore> = composeSqliteAppDeps({
     completeObservationReports: observationReports.queries,
     nodeRunPrompts,
+    portArtifacts,
     taskDeletionEffects: input.taskDeletionEffects,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
     providerCore,

@@ -27,7 +27,7 @@ import {
   pickFreshestRun,
   pickReusableShardRun,
 } from '@/services/freshness'
-import { toContainerRelative } from '@/services/portArtifacts'
+import { toContainerRelative } from '@/modules/task-execution/public/queries'
 import { runNode, type RunResult } from '@/services/runner'
 import { encodeWrapperProgress } from '@/modules/task-execution/domain/wrapperProgress'
 import type { Logger } from '@/util/log'
@@ -853,6 +853,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
           appHome: opts.appHome,
           memoryInjectionQueries: opts.memoryInjectionQueries,
           runtimeSessionLeases: opts.runtimeSessionLeases,
+          portArtifacts: opts.portArtifacts,
           runtimeRegistry: opts.runtimeRegistry,
           persistence: opts.persistence,
           ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
@@ -1353,6 +1354,7 @@ async function dispatchFanoutAggregatorAttempt(
           appHome: opts.appHome,
           memoryInjectionQueries: opts.memoryInjectionQueries,
           runtimeSessionLeases: opts.runtimeSessionLeases,
+          portArtifacts: opts.portArtifacts,
           runtimeRegistry: opts.runtimeRegistry,
           persistence: opts.persistence,
           ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),

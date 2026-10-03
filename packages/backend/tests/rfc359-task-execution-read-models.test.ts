@@ -1,3 +1,4 @@
+import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
@@ -214,6 +215,7 @@ describe('RFC-359 任务执行读模型的装配身份（SQLite 组合根）', (
       participants: createTaskExecutionRuntimeParticipants({
         nodeRunPromptsFor: (appHome) =>
           composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
+        portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
         db: sqlite,
         ...singleProcessDeploymentPorts(sqlite),
         childLaunchWorkgroup: composeTestChildLaunchWorkgroup(sqlite),

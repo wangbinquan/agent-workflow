@@ -1,3 +1,19 @@
+export { readPortArtifact } from '../composition/portArtifacts'
+export type { PortArtifactReader } from '../application/ports/portArtifactContent'
+export {
+  encodePortSegment,
+  repoRelForcedPaths,
+  parseArchiveJson,
+  truncationNotice,
+  isPathishKindString,
+  missingArtifactPlaceholder,
+  subsetArchiveJson,
+} from '../domain/portArtifacts'
+export {
+  forcedPortPathsForTask,
+  portArchiveRootRel,
+  toContainerRelative,
+} from '../application/portArtifacts'
 export { readNodeRunPrompt } from '../composition/nodeRunPrompts'
 export type { NodeRunPromptReader } from '../application/ports/nodeRunPromptContent'
 import { decodeWrapperProgress } from '../domain/wrapperProgress'

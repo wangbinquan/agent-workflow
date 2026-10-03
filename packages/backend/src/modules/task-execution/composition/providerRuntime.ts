@@ -1,3 +1,4 @@
+import { composePortArtifactOperations } from './portArtifacts'
 import { join } from 'node:path'
 import { composeNodeRunPromptOperations } from './nodeRunPrompts'
 import type { DbClient } from '@/db/client'
@@ -229,6 +230,7 @@ type SqliteRuntimeParticipantsAssembled =
   | 'activity'
   | 'stop'
   | 'nodeRunPromptsFor'
+  | 'portArtifactsFor'
 
 export interface SqliteTaskExecutionProviderRuntimeDependencies<
   C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
@@ -241,7 +243,7 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
     SqliteRuntimeParticipantsAssembled
   > &
     Required<Pick<TaskExecutionRuntimeParticipantsInput, 'codeHostConnections'>> &
-    Partial<Pick<TaskExecutionRuntimeParticipantsInput, 'nodeRunPromptsFor'>>
+    Partial<Pick<TaskExecutionRuntimeParticipantsInput, 'nodeRunPromptsFor' | 'portArtifactsFor'>>
   readonly routeLaunch: Omit<SqliteTaskRouteLaunchDependencies, 'db'>
   readonly routes: (context: TaskExecutionProviderRouteContext) => Omit<
     TaskRouteOperationsDependencies,
@@ -279,6 +281,10 @@ export function composeSqliteTaskExecutionProviderRuntime<
       dependencies.runtime.nodeRunPromptsFor === undefined
         ? (appHome) => composeNodeRunPromptOperations(undefined, join(appHome, 'runs'))
         : dependencies.runtime.nodeRunPromptsFor,
+    portArtifactsFor:
+      dependencies.runtime.portArtifactsFor === undefined
+        ? (appHome) => composePortArtifactOperations(undefined, appHome)
+        : dependencies.runtime.portArtifactsFor,
     childLaunchWorkgroup: dependencies.routeLaunch.workgroup,
     taskDagCollaboration: createTaskDagCollaborationOperations(db),
     processConcurrencyScope: db,
@@ -417,8 +423,10 @@ export interface PostgresqlTaskExecutionRuntimeDependencies extends Omit<
   | 'memoryInjectionQueries'
   | 'childLaunchWorkgroup'
   | 'nodeRunPromptsFor'
+  | 'portArtifactsFor'
 > {
   readonly nodeRunPromptsFor?: TaskExecutionRuntimeParticipantsInput['nodeRunPromptsFor']
+  readonly portArtifactsFor?: TaskExecutionRuntimeParticipantsInput['portArtifactsFor']
   readonly childLaunchWorkgroup: TaskExecutionRuntimeParticipantsInput['childLaunchWorkgroup']
   /** 装配方选定的凭据读取面；PostgreSQL 执行绝不回头开一条 SQLite 兜底。 */
   readonly codeHostConnections: CodeHostConnectionsService
@@ -482,6 +490,10 @@ export function composePostgresqlTaskExecutionProviderRuntime(
       dependencies.runtime.nodeRunPromptsFor === undefined
         ? (appHome) => composeNodeRunPromptOperations(undefined, join(appHome, 'runs'))
         : dependencies.runtime.nodeRunPromptsFor,
+    portArtifactsFor:
+      dependencies.runtime.portArtifactsFor === undefined
+        ? (appHome) => composePortArtifactOperations(undefined, appHome)
+        : dependencies.runtime.portArtifactsFor,
     db,
     persistence,
     runtimeSessionLeases:

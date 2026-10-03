@@ -1,3 +1,4 @@
+import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
 import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import type { ObservationInvocationParticipant } from '@/modules/run-observability/public/participants'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -74,6 +75,7 @@ export interface TaskExecutionRuntimeParticipantsInput {
   readonly runtimeRegistry: RuntimeExecutionQueries
   readonly nodeRunRuntime: NodeRunRuntimePersistence
   readonly nodeRunPromptsFor: (appHome: string) => NodeRunPromptOperations
+  readonly portArtifactsFor: (appHome: string) => PortArtifactOperations
   readonly operationConfiguration?: TaskOperationConfigurationQueries
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics
@@ -133,6 +135,7 @@ export function createTaskExecutionRuntimeParticipants(
           runtimeRegistry: input.runtimeRegistry,
           nodeRunRuntime: input.nodeRunRuntime,
           nodeRunPrompts: input.nodeRunPromptsFor(request.appHome),
+          portArtifacts: input.portArtifactsFor(request.appHome),
           ...(input.operationConfiguration === undefined
             ? {}
             : { operationConfiguration: input.operationConfiguration }),

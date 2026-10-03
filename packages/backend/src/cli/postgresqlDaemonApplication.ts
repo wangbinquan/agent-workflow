@@ -1,3 +1,5 @@
+import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
+import type { PortArtifactContentEffects } from '@/modules/task-execution/public/types'
 import type {
   NodeRunPromptContentEffects,
   TaskDeletionEffects,
@@ -438,6 +440,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly taskDeletionEffects?: TaskDeletionEffects
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
+  readonly portArtifactContentEffects?: PortArtifactContentEffects
   readonly evidenceRead?: EvidenceReadBinding
   readonly evidenceDocumentCommands?: EvidenceDocumentCommands
   readonly attemptContext?: AttemptContextStorePort
@@ -587,6 +590,10 @@ export async function composePostgresqlApplication(
       join(input.appHome, 'runs'),
     ),
     workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
+  const portArtifacts = composePortArtifactOperations(
+    input.portArtifactContentEffects,
+    input.appHome,
+  )
   const applicationConfiguration =
     input.applicationConfiguration ??
     composeApplicationConfigurationBinding({
@@ -971,7 +978,9 @@ export async function composePostgresqlApplication(
   const taskExecutionPersistence = createTaskExecutionPersistence(input.db, { workspacePresence })
   // RFC-359 W7：运行期机制与 SQLite 是同一份实现（评审门开启 / 澄清轮开启 / 自治遣散全部跑在
   // 两引擎共用的写事务上），停靠原子与 node-run CAS 由那份实现自己经中立参与者取。
-  const collaborationRuntime = createCollaborationRuntimeMechanics(input.db)
+  const collaborationRuntime = createCollaborationRuntimeMechanics(input.db, {
+    portArtifactReaderFor: () => portArtifacts,
+  })
   const boundCollaborationContext: CollaborationRouteContext = createCollaborationCommandContext({
     db: input.db,
     appHome: input.appHome,
@@ -1065,6 +1074,7 @@ export async function composePostgresqlApplication(
     archive: input.taskArchive,
     runtime: {
       nodeRunPromptsFor: () => nodeRunPrompts,
+      portArtifactsFor: () => portArtifacts,
       workspacePresence,
       observationInvocations: composeLocalInvocationObservations(
         input.db,
@@ -2189,6 +2199,7 @@ export async function composePostgresqlApplication(
     }),
     portArtifacts: Object.freeze({
       taskExecutionReadModels: taskExecutionProvider.readModels,
+      portArtifacts,
     }),
     clarifyDirective: Object.freeze({
       operations: taskExecutionProvider.routes.clarifyDirective,

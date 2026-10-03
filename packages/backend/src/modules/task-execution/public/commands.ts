@@ -1,3 +1,4 @@
+export { archivePortArtifacts } from '../composition/portArtifacts'
 export { nodeRunPromptRelPath, storeNodeRunPrompt } from '../composition/nodeRunPrompts'
 import type {
   Agent,

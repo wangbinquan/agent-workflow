@@ -1,3 +1,4 @@
+import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
 import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import type { ObservationInvocationParticipant } from '@/modules/run-observability/public/participants'
 import type { AgentRunSettledObserver } from '@/modules/task-execution/application/ports/agentRunSettledObserver'
@@ -41,6 +42,8 @@ export interface RunTaskOptions {
   nodeRunRuntime?: NodeRunRuntimePersistence
   /** Live prompt content selection, bound again for every child drive. */
   nodeRunPrompts?: NodeRunPromptOperations
+  /** Selected again by each child drive; never serialized as inherited configuration. */
+  portArtifacts?: PortArtifactOperations
   /** Collaboration-owned DAG scheduling projection selected by bootstrap. */
   taskDagCollaboration?: TaskDagCollaborationOperations
   /** Collaboration-owned node/review/clarify mechanics selected by bootstrap. */
@@ -212,6 +215,7 @@ export type BoundRunTaskOptions = RunTaskOptions & {
   readonly runtimeRegistry: RuntimeExecutionQueries
   readonly nodeRunRuntime: NodeRunRuntimePersistence
   readonly nodeRunPrompts: NodeRunPromptOperations
+  readonly portArtifacts: PortArtifactOperations
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics
   readonly workgroupTurns: WorkgroupTurnsOperations

@@ -156,7 +156,7 @@ describe('RFC-284 T6 — 双查骨架唯一性文本锁', () => {
     const safePath = src('util/safePath.ts')
     expect(safePath.match(/export function checkLexicalThenRealpath\(/g)?.length).toBe(1)
     expect(src('services/envelope.ts').includes('checkLexicalThenRealpath(')).toBe(true)
-    const pa = src('services/portArtifacts.ts')
+    const pa = src('platform/content/local/rootFileQueries.ts')
     expect((pa.match(/checkLexicalThenRealpath\(/g) ?? []).length).toBeGreaterThanOrEqual(2)
   })
 
@@ -166,7 +166,7 @@ describe('RFC-284 T6 — 双查骨架唯一性文本锁', () => {
 
   test('portArtifacts.ts 仅存归档 symlink warn 段的单查（非双查族，warn 不拒）', () => {
     // import 行 1 处 + :228-229 的 warn 段 2 处 = 恰 3 行；双查副本若回潮此数必涨。
-    const lines = src('services/portArtifacts.ts')
+    const lines = src('modules/task-execution/infrastructure/local/filePortArtifactContent.ts')
       .split('\n')
       .filter((l: string) => l.includes('realpathSync'))
     expect(lines.length).toBe(3)

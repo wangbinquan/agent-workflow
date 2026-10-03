@@ -73,7 +73,12 @@ import {
   serializePortValidationFailures,
   type PortValidationFailure,
 } from './envelope'
-import { archivePortArtifacts, isPathishKindString } from './portArtifacts'
+import { isPathishKindString } from '@/modules/task-execution/public/queries'
+import { selectPortArtifactOperations } from '@/modules/task-execution/public/participants'
+import type {
+  PortArtifactOperations,
+  PortArtifactWorkspaceFile,
+} from '@/modules/task-execution/public/types'
 import { renderUserPrompt } from './protocol'
 // RFC-111 PR-A/B + RFC-143 PR-4: agent runtime behind the driver seam. The
 // stdout pump uses `getRuntimeDriver(runtime).parseEvent` and the spawn goes
@@ -197,6 +202,7 @@ function changedGitControlFields(before: GitControlSnapshot, after: GitControlSn
 
 export interface RunNodeOptions {
   nodeRunPrompts?: NodeRunPromptOperations
+  portArtifacts?: PortArtifactOperations
   taskId: string
   /** ULID of a pre-existing node_runs row in 'pending' state. */
   nodeRunId: string
@@ -574,11 +580,21 @@ export interface RunResult {
 // their argv head there); re-exported for the runtime-spawn-head contract lock.
 export { pickRuntimeHead } from './runtime/head'
 
+/** Archive transport can reject an arbitrary value; diagnostics must keep its failure path. */
+function portArchiveFailureMessage(error: unknown): string {
+  try {
+    return String(error instanceof Error ? error.message : error)
+  } catch {
+    return 'unavailable error description'
+  }
+}
+
 export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   const nodeRunPrompts = selectNodeRunPromptOperations(
     opts.nodeRunPrompts,
     join(opts.appHome, 'runs'),
   )
+  const portArtifacts = selectPortArtifactOperations(opts.portArtifacts, opts.appHome)
   const log = opts.log ?? createLogger('runner')
   // A resumed/follow-up process is a new invocation even when nodeRunId is reused.
   const invocationId = ulid()
@@ -2401,7 +2417,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           // 阶段二统一归档 + content 规范化 + INSERT。
           const pathishArchives = new Map<
             string,
-            { items: Array<{ sourceAbs: string; sourcePath: string }> }
+            { items: Array<{ source: PortArtifactWorkspaceFile; sourcePath: string }> }
           >()
           // Registered handlers own the downstream content shape as well as
           // validation. Scalars are normally byte-preserving, list<T>
@@ -2440,7 +2456,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
                     items: its
                       .filter((it) => it.sourcePath !== undefined)
                       .map((it) => ({
-                        sourceAbs: join(opts.worktreePath, it.sourcePath!),
+                        source: { workspaceRef: opts.worktreePath, relativePath: it.sourcePath! },
                         sourcePath: it.sourcePath!,
                       })),
                   })
@@ -2477,21 +2493,19 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           ) {
             try {
               for (const [name, arch] of pathishArchives) {
-                const res = archivePortArtifacts({
-                  appHome: opts.appHome,
+                const res = await portArtifacts.archive({
                   taskId: opts.taskId,
                   nodeRunId: opts.nodeRunId,
                   portName: name,
                   items: arch.items,
                   worktreeDirName,
-                  worktreeRootAbs: opts.worktreePath,
                 })
                 archiveJsonByPort.set(name, res.archiveJson)
                 normalizedContent.set(name, arch.items.map((it) => it.sourcePath).join('\n'))
                 portFilePaths.push(...res.portFilePaths)
               }
             } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err)
+              const msg = portArchiveFailureMessage(err)
               log.warn('port artifact archival failed', { nodeRunId: opts.nodeRunId, error: msg })
               // Environment-level failure (appHome full / permissions), NOT an
               // agent output defect — deliberately no failureCode, so

@@ -221,7 +221,16 @@ describe('RFC-254 — repo-relative paths in port data are portable, not host-fl
       'toPortableRelativePath(relative(v.realpath.realRoot, v.realpath.realTarget))',
     )
     const artifacts = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'portArtifacts.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'local',
+        'filePortArtifactContent.ts',
+      ),
       'utf8',
     )
     expect(artifacts).toContain('toPortableRelativePath(relative(realRoot, realTarget))')

@@ -1,3 +1,4 @@
+import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
@@ -148,6 +149,7 @@ function sharedInput(
     db,
     nodeRunPromptsFor: (appHome) =>
       composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
+    portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
     workspacePresence: createFileWorkspacePresenceQueries(),
     persistence: createTaskExecutionPersistence(db),
     runtimeSessionLeases: createRuntimeSessionLeaseOperations(db),

@@ -1,4 +1,17 @@
 export type {
+  PortArchiveItem,
+  PortArchive,
+  ArchivePortArtifactsResult,
+  PortArtifactReadItem,
+  PortArtifactWorkspaceFile,
+  PortArtifactArchiveNamespace,
+  PortArtifactLinkTarget,
+  PortArtifactArchiveRequest,
+  PortArtifactReadRequest,
+  PortArtifactOperations,
+  PortArtifactContentEffects,
+} from '../application/ports/portArtifactContent'
+export type {
   NodeRunPromptContentEffects,
   NodeRunPromptOperations,
   PromptStorage,

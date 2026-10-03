@@ -84,7 +84,7 @@ import {
   isClarifyRerunCause,
   resolveFrozenRuntimeWith,
 } from '@/services/nodeRunMint'
-import { toContainerRelative } from '@/services/portArtifacts'
+import { toContainerRelative } from '@/modules/task-execution/public/queries'
 import { agentRefOfNode } from '@/services/ref/runtimeRef'
 import { runNode, type RunResult } from '@/services/runner'
 import { getRuntimeDriver, runRootFor } from '@/services/runtime'
@@ -498,6 +498,7 @@ export async function executeWorkgroupHostMechanics(
           plugins: injection.spec.plugins,
           appHome: opts.appHome,
           nodeRunPrompts: opts.nodeRunPrompts,
+          portArtifacts: opts.portArtifacts,
           memoryInjectionQueries: opts.memoryInjectionQueries,
           runtimeSessionLeases: opts.runtimeSessionLeases,
           runtimeRegistry: opts.runtimeRegistry,
@@ -1169,6 +1170,7 @@ export async function resolveMergeConflicts(
       plugins: mergeInjection.spec.plugins,
       appHome: state.opts.appHome,
       nodeRunPrompts: state.opts.nodeRunPrompts,
+      portArtifacts: state.opts.portArtifacts,
       memoryInjectionQueries: state.opts.memoryInjectionQueries,
       runtimeSessionLeases: state.opts.runtimeSessionLeases,
       runtimeRegistry: state.opts.runtimeRegistry,
@@ -4616,6 +4618,7 @@ export async function runAgentSingleNode(
         plugins,
         appHome: opts.appHome,
         nodeRunPrompts: opts.nodeRunPrompts,
+        portArtifacts: opts.portArtifacts,
         memoryInjectionQueries: opts.memoryInjectionQueries,
         runtimeSessionLeases: opts.runtimeSessionLeases,
         runtimeRegistry: opts.runtimeRegistry,

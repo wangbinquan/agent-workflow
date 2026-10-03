@@ -1,3 +1,12 @@
+import {
+  composePortArtifactOperations,
+  selectPortArtifactOperations,
+  selectPortArtifactReader,
+} from '@/modules/task-execution/composition/portArtifacts'
+import type {
+  PortArtifactContentEffects,
+  PortArtifactOperations,
+} from '@/modules/task-execution/public/types'
 import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/composition'
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import type {
@@ -820,6 +829,8 @@ export interface AppDeps {
   taskDeletionEffects?: TaskDeletionEffects
   nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   nodeRunPrompts?: NodeRunPromptOperations
+  portArtifactContentEffects?: PortArtifactContentEffects
+  portArtifacts?: PortArtifactOperations
   evidenceRead?: EvidenceReadBinding
   evidenceDocumentCommands?: EvidenceDocumentCommands
   attemptContext?: AttemptContextStorePort
@@ -2084,6 +2095,10 @@ export function composeSqliteApplicationDeps(
     deps.nodeRunPrompts === undefined
       ? composeNodeRunPromptOperations(deps.nodeRunPromptContentEffects, join(appHome, 'runs'))
       : selectNodeRunPromptOperations(deps.nodeRunPrompts)
+  const portArtifacts =
+    deps.portArtifacts === undefined
+      ? composePortArtifactOperations(deps.portArtifactContentEffects, appHome)
+      : selectPortArtifactOperations(deps.portArtifacts, appHome)
   const applicationConfiguration =
     deps.applicationConfiguration ??
     composeApplicationConfigurationBinding({
@@ -2133,6 +2148,7 @@ export function composeSqliteApplicationDeps(
           participants: createTaskExecutionRuntimeParticipants({
             db: deps.db,
             nodeRunPromptsFor: () => nodeRunPrompts,
+            portArtifactsFor: () => portArtifacts,
             workspacePresence,
             observationInvocations: composeLocalInvocationObservations(
               deps.db,
@@ -2146,7 +2162,9 @@ export function composeSqliteApplicationDeps(
               createWorkgroupClarifyAskGate(deps.db),
             ),
             memoryInjectionQueries,
-            collaborationRuntime: createCollaborationRuntimeMechanics(deps.db),
+            collaborationRuntime: createCollaborationRuntimeMechanics(deps.db, {
+              portArtifactReaderFor: () => portArtifacts,
+            }),
             persistence: taskExecutionPersistence,
             runtimeSessionLeases: createRuntimeSessionLeaseOperations(deps.db),
             runtimeRegistry,
@@ -2362,6 +2380,7 @@ export function composeSqliteApplicationDeps(
   const effectiveDeps: SqliteComposedAppDeps = {
     ...runtimeDeps,
     nodeRunPrompts,
+    portArtifacts,
     workspacePresence,
     ...repositoryBootstrap,
     // RFC-317 T54：装配落在 bootstrap。HTTP 与 MCP operation adapter
@@ -2887,7 +2906,9 @@ function composeSqliteApiRouteMounts(
         sqliteTaskExecutionLaunches.launch(request),
     }),
     repair: {
-      collaborationRuntime: createCollaborationRuntimeMechanics(deps.db),
+      collaborationRuntime: createCollaborationRuntimeMechanics(deps.db, {
+        portArtifactReaderFor: () => selectPortArtifactReader(deps.portArtifacts, appHome),
+      }),
       clarify: createClarifyRepairParticipant(deps.db),
       review: createReviewRepairParticipant(deps.db),
     },

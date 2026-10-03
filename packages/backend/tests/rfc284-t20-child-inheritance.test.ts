@@ -54,6 +54,7 @@ const DISPOSITION = {
   nodeRunRuntime: 'dropped-registered',
   // RFC-370: the live content service is re-bound by every child drive.
   nodeRunPrompts: 'dropped-registered',
+  portArtifacts: 'dropped-registered',
   // RFC-370: the selected driver binds current settings for every child drive.
   operationConfiguration: 'dropped-registered',
   taskDagCollaboration: 'dropped-registered',
@@ -130,6 +131,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'runtimeRegistry',
         'nodeRunRuntime',
         'nodeRunPrompts',
+        'portArtifacts',
         'operationConfiguration',
         'taskDagCollaboration',
         'collaborationRuntime',

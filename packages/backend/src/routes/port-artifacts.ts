@@ -17,7 +17,8 @@ import { extname } from 'node:path'
 import { actorOf } from '@/auth/actor'
 import type { TaskExecutionReadModels } from '@/modules/task-execution/public/types'
 import { registerRoute } from '@/routes/registry'
-import { readPortArtifact } from '@/services/portArtifacts'
+import type { PortArtifactReader } from '@/modules/task-execution/public/queries'
+import { selectPortArtifactReader } from '@/modules/task-execution/public/participants'
 import { NotFoundError, ValidationError } from '@/util/errors'
 import { Paths } from '@/util/paths'
 
@@ -39,7 +40,10 @@ const MIME_BY_EXT: Record<string, string> = {
 
 export function mountPortArtifactRoutes(
   app: Hono,
-  deps: { readonly taskExecutionReadModels: TaskExecutionReadModels },
+  deps: {
+    readonly taskExecutionReadModels: TaskExecutionReadModels
+    readonly portArtifacts?: PortArtifactReader
+  },
 ): void {
   registerRoute(
     app,
@@ -91,13 +95,12 @@ export function mountPortArtifactRoutes(
       // RFC-005 同款：归档路径锚在 daemon app home（Paths.root getter，惰性读
       // AGENT_WORKFLOW_HOME）——AppDeps 不携带 appHome（对齐 reviews.ts appHomeFor）。
       // 选择性读取（Codex 实现门 P2）：元数据请求零字节读，item 请求只读该下标。
-      const read = readPortArtifact({
-        appHome: Paths.root,
+      const read = await selectPortArtifactReader(deps.portArtifacts, Paths.root).read({
         taskId,
         archiveJson: artifact.archiveJson,
         content: artifact.content,
         kind: artifact.kind,
-        fallbackWorktreeRoot: artifact.worktreePath,
+        fallbackWorkspaceRef: artifact.worktreePath,
         legacyRepoDirName: artifact.legacyRepoDirName,
         only: idx === undefined ? 'meta' : idx,
       })

@@ -140,7 +140,12 @@ import {
   tasks,
   workflows,
 } from '@/db/schema'
-import { isPathishKindString, readPortArtifact, subsetArchiveJson } from '@/services/portArtifacts'
+import {
+  isPathishKindString,
+  subsetArchiveJson,
+  type PortArtifactReader,
+} from '@/modules/task-execution/public/queries'
+import { selectPortArtifactReader } from '@/modules/task-execution/public/participants'
 import { chunkedAll } from '@/util/sqlChunk'
 import { pickFreshestRun, pickLatestRunInFrame } from '@/services/freshness'
 import { loadFrameChain, resolveSourceFrame } from '@/modules/task-execution/public/queries'
@@ -539,6 +544,8 @@ async function upstreamPortArchiveJson(
 }
 
 export interface DispatchReviewArgs {
+  /** Selected by the collaboration factory, outside the public dispatch business input. */
+  portArtifactReader?: PortArtifactReader
   db: ProviderNeutralDatabase
   taskId: string
   appHome: string
@@ -747,13 +754,12 @@ async function dispatchReviewNodeUnlocked(args: DispatchReviewArgs): Promise<Dis
   // worktree GC), then the SCOPE root as the legacy fallback (pre-RFC-193
   // rows), then missing. Never resolve against a worktree here directly —
   // that re-creates the wrapper-review deadlock this RFC exists to kill.
-  const artifactRead = readPortArtifact({
-    appHome,
+  const artifactRead = await selectPortArtifactReader(args.portArtifactReader, appHome).read({
     taskId,
     archiveJson: portRow.archiveJson ?? null,
     content: portRow.content,
     kind: upstreamKind ?? null,
-    fallbackWorktreeRoot: scopeRoot,
+    fallbackWorkspaceRef: scopeRoot,
     legacyRepoDirName: repoDirName ?? '',
   })
   // RFC-081: list<markdown> items are inline document bodies framed by
