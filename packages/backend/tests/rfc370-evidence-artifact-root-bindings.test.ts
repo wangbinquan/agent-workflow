@@ -69,7 +69,7 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
   expect(start.text).toContain('...sessionInput,')
   const composition = load('modules/development-automation/composition.ts')
   expect(composition.text).toContain(
-    "deps.evidenceArtifacts ?? new EvidenceStore(factory.resolve(deps.appHome, 'evidence'))",
+    "deps.evidenceArtifacts ?? new EvidenceStore(join(deps.appHome, 'evidence'))",
   )
   expect(composition.text).toContain(
     'const factory = selectedAutomationWorkspaceEffects(\n    deps.automationWorkspaceEffects === undefined\n      ? actionWorkspaceEffects.contents\n      : deps.automationWorkspaceEffects,\n  )',

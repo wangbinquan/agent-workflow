@@ -262,10 +262,9 @@ describeEachProvider(
         expect(store.workspacesCreated).toBe(0)
         const waiting = (await fx.store.getMission(missionId))!
         const waitingCells = await fx.snapshots.getCells(waiting.requirementBundleRef!)
-        expect(waitingCells?.['__action.candidateState']).not.toMatchObject({
-          state: 'known',
-          value: 'derived',
-        })
+        expect(waitingCells?.['__action.candidateState']).not.toEqual(
+          expect.objectContaining({ state: 'known', value: 'derived' }),
+        )
         barrier.release()
         expect(await pending).toMatchObject({
           kind: 'action-collect',
