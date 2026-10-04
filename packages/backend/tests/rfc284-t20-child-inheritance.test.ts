@@ -57,6 +57,8 @@ const DISPOSITION = {
   portArtifacts: 'dropped-registered',
   // The complete factory is re-supplied; a parent canonical scene is never inherited.
   isolationWorkspaces: 'dropped-registered',
+  // Each child reuses its selected factory and binds its own repository workspaces.
+  repositoryGitWorkspaces: 'dropped-registered',
   // RFC-370: the selected driver binds current settings for every child drive.
   operationConfiguration: 'dropped-registered',
   taskDagCollaboration: 'dropped-registered',
@@ -135,6 +137,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'nodeRunPrompts',
         'portArtifacts',
         'isolationWorkspaces',
+        'repositoryGitWorkspaces',
         'operationConfiguration',
         'taskDagCollaboration',
         'collaborationRuntime',

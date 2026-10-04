@@ -1,10 +1,12 @@
 import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
+  RepositoryGitWorkspaceFactory,
 } from '@/modules/source-control/public/types'
 import {
   selectWorkspaceUploadContentFactory,
   selectIsolationWorkspaceFactory,
+  selectRepositoryGitWorkspaceFactory,
 } from '@/modules/source-control/public/participants'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import type { PortArtifactContentEffects } from '@/modules/task-execution/public/types'
@@ -445,6 +447,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly workspaceContent?: WorkspaceContentEffectsFactory
   readonly workspaceUploads?: WorkspaceUploadContentFactory
   readonly isolationWorkspaces?: IsolationWorkspaceFactory
+  readonly repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -602,6 +605,7 @@ export async function composePostgresqlApplication(
     workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
   const workspaceUploads = selectWorkspaceUploadContentFactory(input.workspaceUploads)
   const isolationWorkspaces = selectIsolationWorkspaceFactory(input.isolationWorkspaces)
+  const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(input.repositoryGitWorkspaces)
   const portArtifacts = composePortArtifactOperations(
     input.portArtifactContentEffects,
     input.appHome,
@@ -1088,6 +1092,7 @@ export async function composePostgresqlApplication(
       nodeRunPromptsFor: () => nodeRunPrompts,
       portArtifactsFor: () => portArtifacts,
       isolationWorkspaces,
+      repositoryGitWorkspaces,
       workspacePresence,
       observationInvocations: composeLocalInvocationObservations(
         input.db,

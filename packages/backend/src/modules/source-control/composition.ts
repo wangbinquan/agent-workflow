@@ -18,6 +18,8 @@ import {
 import { ensurePlatformWorkspaceDirectory } from './infrastructure/platformWorkspaceDirectory'
 import { createFileRepositoryPreviewIndexPort } from './infrastructure/local/fileRepositoryPreviewIndex'
 import type { RepositoryPreviewIndexPort } from './application/ports/repositoryPreviewIndex'
+import type { RepositoryGitWorkspaceScope } from './application/ports/repositoryGitWorkspace'
+import { requireRepositoryGitWorkspaceScope } from './composition/repositoryGitWorkspaces'
 import {
   discardConflictMergeWorkspace,
   finishConflictMerge,
@@ -189,14 +191,25 @@ export function bindRepositoryCommitParticipant(input: {
   runGit?: RepositoryGit
   gitOptions?: Parameters<RepositoryGit>[2]
   previewIndex?: RepositoryPreviewIndexPort
+  gitWorkspace?: RepositoryGitWorkspaceScope
+  runNetworkGit?: RepositoryGit
 }): RepositoryCommitCandidateParticipant & RepositoryCommitPublicationParticipant {
+  const workspace = input.gitWorkspace
+  if (workspace !== undefined) requireRepositoryGitWorkspaceScope(workspace)
+  const runGit: RepositoryGit | undefined =
+    workspace === undefined
+      ? input.runGit
+      : (_repoPath, args, options) => workspace.run(args, options)
   const common = {
     repoPath: input.repoPath,
     configuredPatterns: input.configuredPatterns ?? [],
-    ...(input.runGit !== undefined ? { runGit: input.runGit } : {}),
+    ...(runGit !== undefined ? { runGit } : {}),
     ...(input.gitOptions !== undefined ? { gitOptions: input.gitOptions } : {}),
   }
-  const previewIndex = input.previewIndex ?? createFileRepositoryPreviewIndexPort(common)
+  const previewIndex: RepositoryPreviewIndexPort =
+    workspace === undefined
+      ? (input.previewIndex ?? createFileRepositoryPreviewIndexPort(common))
+      : { withIndex: (operation) => workspace.withPreviewIndex(operation, common.gitOptions) }
   return {
     prepare: () => prepareRepositoryCommit(common),
     commitPrepared: (request: {
@@ -207,12 +220,20 @@ export function bindRepositoryCommitParticipant(input: {
     }) => commitPreparedRepository({ ...common, ...request }),
     preview: () => readRepositoryCommitPreview({ ...common, previewIndex }),
     publish: (request: { baseSha: string; tipSha: string; mode: RepositoryPublishMode }) =>
-      publishRepositoryCommit({ ...common, ...request }),
+      publishRepositoryCommit({
+        ...common,
+        ...request,
+        ...(input.runNetworkGit === undefined ? {} : { runNetworkGit: input.runNetworkGit }),
+      }),
     resolvePushBase: (request: { remote: string; branch: string; fallbackRef: string }) =>
       resolvePushBase({
         repoPath: input.repoPath,
         ...request,
-        ...(input.runGit !== undefined ? { runGit: input.runGit } : {}),
+        ...(workspace === undefined
+          ? input.runGit !== undefined
+            ? { runGit: input.runGit }
+            : {}
+          : { runGit }),
       }),
     classifyPath: (request: { path: string; directory?: boolean }) =>
       classifyRepositoryCommitPath({ ...common, ...request }),
@@ -220,7 +241,11 @@ export function bindRepositoryCommitParticipant(input: {
       updateRepositoryRef({
         repoPath: input.repoPath,
         ...request,
-        ...(input.runGit !== undefined ? { runGit: input.runGit } : {}),
+        ...(workspace === undefined
+          ? input.runGit !== undefined
+            ? { runGit: input.runGit }
+            : {}
+          : { runGit }),
         ...(input.gitOptions !== undefined ? { gitOptions: input.gitOptions } : {}),
       }),
   }

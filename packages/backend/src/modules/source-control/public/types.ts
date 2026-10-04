@@ -248,6 +248,15 @@ export type {
 } from '../application/ports/isolationWorkspace'
 
 export type {
+  RepositoryGitOptions,
+  RepositoryGitOutcome,
+  RepositoryGitWorkspaceBinding,
+  RepositoryGitWorkspaceFactory,
+  RepositoryGitWorkspaceScope,
+  SubmoduleEntry,
+} from '../application/ports/repositoryGitWorkspace'
+
+export type {
   MergeConflictType,
   MergeConflictEntry,
   MergeConflictManifest,

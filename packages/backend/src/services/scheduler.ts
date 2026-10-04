@@ -41,7 +41,10 @@ import {
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
 // shardSource instead of slicing a string diff.
-import { runGit } from '@/util/git'
+import {
+  selectRepositoryGitWorkspaceFactory,
+  bindRepositoryGitWorkspace,
+} from '@/modules/source-control/public/participants'
 // RFC-188: the shared assembly for isolated agent runs — iso lock-window,
 // iso-column persistence and the merge-back/settle block (formerly five
 // hand-copies in this file).
@@ -88,9 +91,17 @@ export { isFresherNodeRun } from '@/services/freshness'
 // moved with RFC-339; the remaining W3/W5 helpers receive only the admitted
 // task state required by their current lifecycle/commit-push responsibilities.
 export async function inspectReadonlyRepos(state: SchedulerState, log: Logger): Promise<void> {
+  const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(
+    state.opts.repositoryGitWorkspaces,
+  )
   for (const repo of state.repos) {
     if (!repo.readonly) continue
-    const status = await runGit(repo.worktreePath, ['status', '--porcelain'])
+    const workspace = bindRepositoryGitWorkspace(repositoryGitWorkspaces, {
+      taskId: state.task.id,
+      workspaceRef: repo.worktreePath,
+      repositoryRef: repo.repoPath,
+    })
+    const status = await workspace.run(['status', '--porcelain'])
     const changed = status.stdout.trim() === '' ? [] : status.stdout.trim().split('\n')
     await state.opts.persistence.scheduler.recordReadonlyDirty({
       taskId: state.task.id,
@@ -131,6 +142,9 @@ export async function maybeRunCommitPush(
   log: Logger,
 ): Promise<{ processUnreaped?: true }> {
   const { task } = state
+  const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(
+    state.opts.repositoryGitWorkspaces,
+  )
   // The triggering node's latest done run at this iteration → parent of the
   // commit row, so the detail page can group it under the agent.
   // RFC-096: freshest-by-id pick (was desc(startedAt) — a S-13 ordering fork;
@@ -156,7 +170,12 @@ export async function maybeRunCommitPush(
     // RFC-098 B1: a cancel that lands mid-commit&push stops at the next repo
     // boundary (the in-repo opencode session already holds the shared signal).
     if (state.opts.signal?.aborted === true) return {}
-    const status = await runGit(repo.worktreePath, ['status', '--porcelain'])
+    const workspace = bindRepositoryGitWorkspace(repositoryGitWorkspaces, {
+      taskId: state.task.id,
+      workspaceRef: repo.worktreePath,
+      repositoryRef: repo.repoPath,
+    })
+    const status = await workspace.run(['status', '--porcelain'])
     // RFC-248 D11: 只读成员不参与自动提交推送。它被改动了不是「无事发生」——
     // 框架不在文件系统层面阻止写入，所以 agent 确实可能改了它。静默丢弃最难
     // 排查，故落一条任务级告警（不改任务状态：一个误建的临时文件不该搞垮整任务）。
@@ -352,6 +371,7 @@ export async function maybeRunCommitPush(
         effects: state.opts.persistence.effects,
         log: log.child('commit'),
         publicationTransport,
+        repositoryGitWorkspaces,
       },
     )
     if (commitResult.processUnreaped === true) return { processUnreaped: true }

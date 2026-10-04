@@ -171,6 +171,12 @@ export {
 } from '../composition/workspaceUploads'
 
 export {
+  selectRepositoryGitWorkspaceFactory,
+  bindRepositoryGitWorkspace,
+  bindRepositoryGitSubworkspace,
+} from '../composition/repositoryGitWorkspaces'
+
+export {
   selectIsolationWorkspaceFactory,
   requireIsolationWorkspaceScope,
 } from '../composition/isolationWorkspaces'

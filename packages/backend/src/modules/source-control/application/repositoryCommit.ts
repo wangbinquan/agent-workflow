@@ -511,6 +511,7 @@ export async function publishRepositoryCommit(input: {
   mode: RepositoryPublishMode
   configuredPatterns?: readonly string[]
   runGit?: RepositoryGit
+  runNetworkGit?: RepositoryGit
   gitOptions?: Parameters<RepositoryGit>[2]
 }): Promise<RepositoryPublishResult> {
   const runGit = input.runGit ?? defaultRunGit
@@ -540,7 +541,7 @@ export async function publishRepositoryCommit(input: {
             `${input.tipSha}:refs/heads/${input.mode.branch}`,
           ]
         : ['push', input.mode.remote, `${input.tipSha}:refs/heads/${input.mode.branch}`]
-  const pushed = await runGit(input.repoPath, args, input.gitOptions)
+  const pushed = await (input.runNetworkGit ?? runGit)(input.repoPath, args, input.gitOptions)
   return pushed.exitCode === 0
     ? { ok: true, policyDigest: history.policyDigest }
     : {

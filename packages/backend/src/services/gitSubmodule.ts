@@ -13,6 +13,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { AW_INTERNAL_GIT_IDENTITY, runGit, snapshotFullState } from '@/util/git'
 import { sha1Hex } from '@/util/hash'
+import type { SubmoduleEntry } from '@/modules/source-control/public/types'
 
 export type SubmoduleMode = 'auto' | 'always' | 'never'
 
@@ -171,30 +172,7 @@ export async function syncSubmodules(
 // primitive that needs more than raw argv belongs on this side of the edge.
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** One submodule as reported by `git submodule status --recursive`. */
-export interface SubmoduleEntry {
-  /**
-   * Path relative to the superproject root, nested levels joined with '/'
-   * (e.g. 'vendor/inner'). MAY CONTAIN SPACES — never interpolate it into a
-   * git refname (see `subSlug`).
-   */
-  path: string
-  /**
-   * The submodule's WORKING-TREE HEAD — NOT the gitlink recorded in the
-   * superproject index. The two diverge the moment a node commits inside the
-   * submodule, which is precisely RFC-210's main scenario.
-   */
-  headSha: string
-  /** ' ' in sync · '+' differs from index · '-' not initialized · 'U' conflicted. */
-  flag: ' ' | '+' | '-' | 'U'
-  /**
-   * Number of '/'-separated segments. ONLY meaningful for bottom-up ordering
-   * (a containing path is always strictly shorter than what it contains).
-   * NOT a nesting level: 'vendor/libs/foo' can be a first-level submodule.
-   */
-  pathDepth: number
-}
-
+export type { SubmoduleEntry } from '@/modules/source-control/public/types'
 const STATUS_LINE_RE = /^(.)([0-9a-f]{40,64}) (.*)$/
 
 /**

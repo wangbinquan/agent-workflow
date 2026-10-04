@@ -23,6 +23,7 @@ import { runCommitPush } from '@/services/commitPushRunner'
 import { runGit } from '@/util/git'
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'
 import { describeEachProvider } from './helpers/eachProvider'
+import { GitWorkspaceStore, MappedGitWorkspaceFactory } from './helpers/repositoryGitWorkspace'
 
 const created: string[] = []
 let prevGitGlobal: string | undefined
@@ -233,4 +234,91 @@ describeEachProvider('RFC-210 嵌套子仓预提交推送（双引擎）', (harn
       }
     }, 120_000)
   })
+})
+
+describeEachProvider('RFC-370 selected opaque recursive Git workspace', (harness) => {
+  test('actual nested publication resolves direct parents through the selected factory and preserves every gitlink', async () => {
+    const { parent, vendorSrc, innerSrc } = await fixture()
+    const inner = join(parent, 'vendor', 'inner')
+    writeFileSync(join(inner, 'i.txt'), 'selected nested content\n')
+    await runGit(inner, ['add', '-A'])
+    await runGit(inner, [
+      '-c',
+      'user.email=t@e.com',
+      '-c',
+      'user.name=T',
+      'commit',
+      '-q',
+      '-m',
+      'selected inner commit',
+    ])
+    const innerSha = (await runGit(inner, ['rev-parse', 'HEAD'])).stdout.trim()
+    await seedTask(harness.db, parent)
+    const store = new GitWorkspaceStore(),
+      ref = 'opaque:nested-root'
+    store.locations.set(ref, parent)
+    const factory = Object.freeze(new MappedGitWorkspaceFactory(store))
+    const native = composeSqliteCommitPushDeps(harness.db)
+    let fallback = 0
+    const result = await runCommitPush(
+      { ...baseParams, worktreePath: ref, repositoryIdentity: 'opaque:nested-repository' },
+      {
+        ...native,
+        repositoryGitWorkspaces: factory,
+        publicationTransport: store.transport(native.publicationTransport),
+        runGit: async () => {
+          fallback += 1
+          throw new Error('legacy child hook used')
+        },
+      },
+    )
+    expect(result.meta.pushOutcome).toBe('pushed')
+    expect((result.meta.subrepos ?? []).map((entry) => entry.path)).toEqual([
+      'vendor/inner',
+      'vendor',
+    ])
+    expect(result.meta.subrepos?.every((entry) => entry.pushed && entry.error === null)).toBe(true)
+    expect(
+      (await runGit(innerSrc, ['rev-parse', 'refs/heads/agent-workflow/t1'])).stdout.trim(),
+    ).toBe(innerSha)
+    expect(
+      (await runGit(vendorSrc, ['rev-parse', 'refs/heads/agent-workflow/t1:inner'])).stdout.trim(),
+    ).toBe(innerSha)
+    const vendorSha = (
+      await runGit(vendorSrc, ['rev-parse', 'refs/heads/agent-workflow/t1'])
+    ).stdout.trim()
+    expect(
+      (
+        await runGit(parent, ['rev-parse', 'refs/remotes/origin/agent-workflow/t1:vendor'])
+      ).stdout.trim(),
+    ).toBe(vendorSha)
+    const parentProbe = store.calls.find(
+      (call) =>
+        call.method === 'run' && call.args?.[0] === 'rev-parse' && call.args[1] === 'HEAD:inner',
+    )!
+    expect(store.physical(parentProbe.workspaceRef)).toBe(join(parent, 'vendor'))
+    expect(parentProbe.workspaceRef).not.toBe(join(ref, 'vendor'))
+    expect(
+      store.calls.some((call) => call.method === 'run' && call.args?.[1] === 'HEAD:vendor/inner'),
+    ).toBe(false)
+    expect(store.calls.filter((call) => call.method === 'hasSubmodules')).toHaveLength(1)
+    expect(store.calls.filter((call) => call.method === 'effectiveSubmodules')).toHaveLength(1)
+    expect(
+      store.calls.filter((call) => call.method === 'subrepository').map((call) => call.args![0]),
+    ).toEqual(['vendor/inner', 'vendor', 'vendor'])
+    expect(store.opened).toBe(3)
+    expect(store.closed).toBe(3)
+    expect(
+      store.networkCalls.every(
+        (call) => call.args.includes('push') || call.args.includes('ls-remote'),
+      ),
+    ).toBe(true)
+    expect(new Set(store.networkCalls.map((call) => store.physical(call.workspaceRef)))).toEqual(
+      new Set([parent, join(parent, 'vendor'), inner]),
+    )
+    expect(store.bindings).toEqual([
+      { taskId: 't1', workspaceRef: ref, repositoryRef: 'opaque:nested-repository' },
+    ])
+    expect(fallback).toBe(0)
+  }, 120_000)
 })

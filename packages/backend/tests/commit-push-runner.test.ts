@@ -17,6 +17,8 @@ import { runCommitPush, type CommitPushParams } from '../src/services/commitPush
 import type { CommitPushMeta } from '@agent-workflow/shared'
 import type { RepositoryPublicationTransport } from '../src/modules/source-control/composition'
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'
+import { GitWorkspaceStore, MappedGitWorkspaceFactory } from './helpers/repositoryGitWorkspace'
+import { held } from './helpers/portArtifactContent'
 
 interface Fixture {
   repo: string
@@ -540,4 +542,120 @@ describeEachProvider('提交并推送执行器（双引擎）', (harness) => {
       expect(released).toBe(true)
     })
   })
+})
+
+// RFC-370: the real provider lifecycle/receipt and real Git use opaque selected references.
+describeEachProvider('RFC-370 selected Git in actual commit-push', (harness) => {
+  test('capture waits for selected command ACK; root history stays local and one session publishes/verifies', async () => {
+    const f = await build(harness)
+    try {
+      const store = new GitWorkspaceStore(),
+        ref = 'opaque:commit-root'
+      store.locations.set(ref, f.repo)
+      const factory = Object.freeze(new MappedGitWorkspaceFactory(store))
+      const entered = held<void>(),
+        release = held<void>()
+      store.before = async (call) => {
+        if (call.method === 'run' && call.args?.join(' ') === 'diff --cached --numstat') {
+          entered.resolve()
+          await release.promise
+        }
+      }
+      writeFileSync(join(f.repo, 'b.txt'), 'selected content\n')
+      writeFileSync(join(f.repo, 'trace.tmp'), 'excluded content\n')
+      const locks: string[] = []
+      let generated = 0,
+        fallbackCalls = 0
+      const native = composeSqliteCommitPushDeps(f.db)
+      const pending = runCommitPush(
+        baseParams(f, {
+          worktreePath: ref,
+          repositoryIdentity: 'opaque:repository',
+          excludePatterns: ['*.tmp'],
+          acquireWrite: async () => {
+            locks.push('acquire')
+            return () => {
+              locks.push('release')
+            }
+          },
+          generateMessage: async () => {
+            generated += 1
+            return { message: 'selected root commit' }
+          },
+        }),
+        {
+          ...native,
+          repositoryGitWorkspaces: factory,
+          publicationTransport: store.transport(native.publicationTransport),
+          runGit: async () => {
+            fallbackCalls += 1
+            throw new Error('legacy hook used')
+          },
+        },
+      )
+      try {
+        await entered.promise
+        expect(generated).toBe(0)
+        expect(locks).toEqual(['acquire'])
+        const running = (
+          await f.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, f.taskId))
+        ).filter((row) => row.cause === 'commit-push')
+        expect(running).toHaveLength(1)
+        expect(running[0]!.status).toBe('running')
+        expect(store.opened).toBe(0)
+      } finally {
+        release.resolve()
+      }
+      const result = await pending
+      expect(result.meta.pushOutcome).toBe('pushed')
+      expect(result.meta.repoPath).toBe(ref)
+      expect(result.meta.filesChanged).toBe(1)
+      expect(result.meta.exclusions?.paths).toEqual(['trace.tmp'])
+      expect(generated).toBe(1)
+      expect(fallbackCalls).toBe(0)
+      expect(locks).toEqual(['acquire', 'release', 'acquire', 'release'])
+      expect(store.bindings).toEqual([
+        { taskId: f.taskId, workspaceRef: ref, repositoryRef: 'opaque:repository' },
+      ])
+      expect(
+        store.calls
+          .filter(
+            (call) =>
+              call.method === 'run' &&
+              ['diff --cached --numstat', 'diff --cached --stat', 'diff --cached'].includes(
+                call.args!.join(' '),
+              ),
+          )
+          .map((call) => call.args),
+      ).toEqual([
+        ['diff', '--cached', '--numstat'],
+        ['diff', '--cached', '--stat'],
+        ['diff', '--cached'],
+      ])
+      expect(
+        store.calls.some((call) => call.method === 'run' && call.args?.[0] === 'rev-list'),
+      ).toBe(true)
+      expect(store.networkCalls).toHaveLength(2)
+      expect(
+        store.networkCalls.every(
+          (call) =>
+            call.workspaceRef === ref &&
+            (call.args.includes('push') || call.args.includes('ls-remote')),
+        ),
+      ).toBe(true)
+      expect(store.opened).toBe(1)
+      expect(store.closed).toBe(1)
+      expect((await runGit(f.remote, ['rev-parse', 'refs/heads/feature/x'])).stdout.trim()).toBe(
+        result.meta.commitSha!,
+      )
+      const persisted = await readMeta(f, result.nodeRunId)
+      expect(persisted.status).toBe('done')
+      expect(persisted.meta).toEqual(result.meta)
+      expect((await runGit(f.repo, ['log', '-1', '--format=%an <%ae>'])).stdout.trim()).toBe(
+        'AW Bot <bot@aw.local>',
+      )
+    } finally {
+      f.cleanup()
+    }
+  }, 60_000)
 })

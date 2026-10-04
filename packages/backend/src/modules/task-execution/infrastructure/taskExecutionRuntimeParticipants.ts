@@ -1,6 +1,12 @@
 import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
-import type { IsolationWorkspaceFactory } from '@/modules/source-control/public/types'
-import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
+import type {
+  IsolationWorkspaceFactory,
+  RepositoryGitWorkspaceFactory,
+} from '@/modules/source-control/public/types'
+import {
+  selectIsolationWorkspaceFactory,
+  selectRepositoryGitWorkspaceFactory,
+} from '@/modules/source-control/public/participants'
 import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import type { ObservationInvocationParticipant } from '@/modules/run-observability/public/participants'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -79,6 +85,7 @@ export interface TaskExecutionRuntimeParticipantsInput {
   readonly nodeRunPromptsFor: (appHome: string) => NodeRunPromptOperations
   readonly portArtifactsFor: (appHome: string) => PortArtifactOperations
   readonly isolationWorkspaces?: IsolationWorkspaceFactory
+  readonly repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
   readonly operationConfiguration?: TaskOperationConfigurationQueries
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics
@@ -112,6 +119,7 @@ export function createTaskExecutionRuntimeParticipants(
   input: TaskExecutionRuntimeParticipantsInput & ChildTaskLifecycleRuntimePorts,
 ): TaskExecutionRuntimeParticipants {
   const isolationWorkspaces = selectIsolationWorkspaceFactory(input.isolationWorkspaces)
+  const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(input.repositoryGitWorkspaces)
   const runtimeComponents = Object.freeze({
     wrapperRuntimeFactory: composeWrapperRuntime,
     mergeRecoveryFactory: composeExecutionMergeRecovery,
@@ -141,6 +149,7 @@ export function createTaskExecutionRuntimeParticipants(
           nodeRunPrompts: input.nodeRunPromptsFor(request.appHome),
           portArtifacts: input.portArtifactsFor(request.appHome),
           isolationWorkspaces,
+          repositoryGitWorkspaces,
           ...(input.operationConfiguration === undefined
             ? {}
             : { operationConfiguration: input.operationConfiguration }),

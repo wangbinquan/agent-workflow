@@ -24,15 +24,9 @@ import type { TaskExecutionEffectPersistence } from '@/modules/task-execution/ap
 import type { NodeRunLifecyclePersistence } from '@/modules/task-execution/application/ports/nodeRunLifecyclePersistence'
 import type { NodeExecutionPersistence } from '@/modules/task-execution/application/ports/nodeExecutionPersistence'
 import { createLogger, type Logger } from '@/util/log'
-import { AW_INTERNAL_GIT_IDENTITY, runGit as realRunGit } from '@/util/git'
-import { join } from 'node:path'
+import { AW_INTERNAL_GIT_IDENTITY, type runGit as realRunGit } from '@/util/git'
 // RFC-210: recursive submodule commit&push.
-import {
-  bottomUp,
-  detectSubmodules,
-  listEffectiveSubmodules,
-  usableSubmodules,
-} from '@/services/gitSubmodule'
+import { bottomUp, usableSubmodules } from '@/services/gitSubmodule'
 import {
   buildFallbackMessage,
   classifyPushFailure,
@@ -48,8 +42,15 @@ import {
 import type {
   RepositoryPublicationSubject,
   RepositoryPublicationTransport,
+  RepositoryGitWorkspaceFactory,
+  RepositoryGitWorkspaceScope,
 } from '@/modules/source-control/public/types'
 import { sha256Hex } from '@/util/hash'
+import {
+  selectRepositoryGitWorkspaceFactory,
+  bindRepositoryGitWorkspace,
+  bindRepositoryGitSubworkspace,
+} from '@/modules/source-control/public/participants'
 
 type RunGit = typeof realRunGit
 
@@ -135,6 +136,7 @@ export interface CommitPushDeps {
   effects: TaskExecutionEffectPersistence
   /** Injectable for tests; defaults to the real git CLI. */
   runGit?: RunGit
+  repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
   log?: Logger
   /** RFC-321 exact publication transport selected by bootstrap. */
   publicationTransport: RepositoryPublicationTransport
@@ -152,9 +154,18 @@ export async function runCommitPush(
   params: CommitPushParams,
   deps: CommitPushDeps,
 ): Promise<{ nodeRunId: string; meta: CommitPushMeta; processUnreaped?: true }> {
-  const runGit = deps.runGit ?? realRunGit
+  const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(
+    deps.repositoryGitWorkspaces,
+    deps.runGit,
+  )
+  const workspace = bindRepositoryGitWorkspace(repositoryGitWorkspaces, {
+    taskId: params.taskId,
+    workspaceRef: params.worktreePath,
+    repositoryRef: params.repositoryIdentity ?? params.worktreePath,
+  })
+  const runGit: RunGit = (_repoPath, args, options) => workspace.run(args, options)
   const log = deps.log ?? createLogger('commit-push')
-  const W = params.worktreePath
+  const W = workspace.workspaceRef
   const remote = params.pushRemote ?? 'origin'
   const publicationTransport = deps.publicationTransport
   const publicationSubject: RepositoryPublicationSubject =
@@ -317,7 +328,8 @@ export async function runCommitPush(
       if (receipt.historyBlocked === true) exclusionHistoryBlocked = true
     },
     acquireWrite: params.acquireWrite,
-    runGit,
+    workspace,
+    bindPoliciesToWorkspace: deps.repositoryGitWorkspaces !== undefined,
     publicationTransport,
     publicationSubject,
   })
@@ -345,6 +357,7 @@ export async function runCommitPush(
   try {
     const prepared = await bindRepositoryCommitParticipant({
       repoPath: W,
+      gitWorkspace: workspace,
       configuredPatterns: params.excludePatterns ?? [],
       runGit,
     }).prepare()
@@ -442,6 +455,7 @@ export async function runCommitPush(
     try {
       return await bindRepositoryCommitParticipant({
         repoPath: W,
+        gitWorkspace: workspace,
         configuredPatterns: params.excludePatterns ?? [],
         runGit,
       }).commitPrepared({
@@ -510,6 +524,7 @@ export async function runCommitPush(
       const tipSha = tipResult.stdout.trim()
       const publisher = bindRepositoryCommitParticipant({
         repoPath: W,
+        gitWorkspace: workspace,
         configuredPatterns: params.excludePatterns ?? [],
         runGit,
       })
@@ -531,8 +546,9 @@ export async function runCommitPush(
       }
       const publication = await bindRepositoryCommitParticipant({
         repoPath: W,
+        gitWorkspace: workspace,
         configuredPatterns: params.excludePatterns ?? [],
-        runGit: sessionRunGit,
+        runNetworkGit: sessionRunGit,
       }).publish({
         baseSha: pushBase,
         tipSha,
@@ -788,24 +804,26 @@ async function commitPushSubmodules(args: {
     historyBlocked?: true
   }) => void
   acquireWrite?: (() => Promise<() => void>) | undefined
-  runGit: RunGit
+  workspace: RepositoryGitWorkspaceScope
+  bindPoliciesToWorkspace: boolean
   publicationTransport: RepositoryPublicationTransport
   publicationSubject: RepositoryPublicationSubject
   log?: Logger
 }): Promise<SubrepoPushResult[]> {
-  const { worktreePath, branch, remote, idEnv } = args
-  if (!detectSubmodules(worktreePath)) return []
+  const { branch, remote, idEnv } = args
+  if (!(await args.workspace.hasSubmodules())) return []
   // Effective list: a submodule the task ADDED exists only as an unstaged
   // delta with no index entry, which `git submodule status` cannot see
   // (measured) — plain listing would push the parent with a gitlink whose
   // target repository was never published anywhere.
-  const subs = bottomUp(usableSubmodules(await listEffectiveSubmodules(worktreePath)))
+  const subs = bottomUp(usableSubmodules(await args.workspace.effectiveSubmodules()))
   if (subs.length === 0) return []
 
   const out: SubrepoPushResult[] = []
   for (const s of subs) {
-    const dir = join(worktreePath, s.path)
-    const sg = (a: string[]) => args.runGit(dir, a)
+    const workspace = bindRepositoryGitSubworkspace(args.workspace, s.path)
+    const dir = workspace.workspaceRef
+    const sg = (a: string[]) => workspace.run(a)
     const entry: SubrepoPushResult = {
       path: s.path,
       fromSha: s.headSha,
@@ -838,10 +856,13 @@ async function commitPushSubmodules(args: {
     // from the parent's HEAD — a newly added submodule) means the sha is NOT
     // on record anywhere, i.e. it must be pushed, not skipped.
     const parent = directParentOf(s.path, subs)
-    const parentDir = parent === null ? worktreePath : join(worktreePath, parent.path)
+    const parentWorkspace =
+      parent === null ? args.workspace : bindRepositoryGitSubworkspace(args.workspace, parent.path)
+    const parentDir = parentWorkspace.workspaceRef
     const relInParent = parent === null ? s.path : s.path.slice(parent.path.length + 1)
     const parentPolicy = bindRepositoryCommitParticipant({
       repoPath: parentDir,
+      ...(args.bindPoliciesToWorkspace ? { gitWorkspace: parentWorkspace } : {}),
       configuredPatterns: args.excludePatterns,
     })
     const parentPathPolicy = await parentPolicy.classifyPath({
@@ -855,7 +876,7 @@ async function commitPushSubmodules(args: {
       })
       continue
     }
-    const recorded = await args.runGit(parentDir, ['rev-parse', `HEAD:${relInParent}`])
+    const recorded = await parentWorkspace.run(['rev-parse', `HEAD:${relInParent}`])
     const dirty = await sg(['status', '--porcelain', '--untracked-files=all'])
     const isDirty = dirty.exitCode === 0 && dirty.stdout.trim() !== ''
     const movedAhead = recorded.exitCode !== 0 || recorded.stdout.trim() !== s.headSha
@@ -874,6 +895,7 @@ async function commitPushSubmodules(args: {
         }
         const prepared = await bindRepositoryCommitParticipant({
           repoPath: dir,
+          ...(args.bindPoliciesToWorkspace ? { gitWorkspace: workspace } : {}),
           configuredPatterns: args.excludePatterns,
         }).prepare()
         if (!prepared.ok) {
@@ -889,6 +911,7 @@ async function commitPushSubmodules(args: {
         if (stagedDirty.exitCode === 0) continue
         const committed = await bindRepositoryCommitParticipant({
           repoPath: dir,
+          ...(args.bindPoliciesToWorkspace ? { gitWorkspace: workspace } : {}),
           configuredPatterns: args.excludePatterns,
         }).commitPrepared({
           message: `aw: submodule changes (${branch})`,
@@ -960,8 +983,9 @@ async function commitPushSubmodules(args: {
     try {
       publication = await bindRepositoryCommitParticipant({
         repoPath: dir,
+        ...(args.bindPoliciesToWorkspace ? { gitWorkspace: workspace } : { runGit: sessionRunGit }),
         configuredPatterns: args.excludePatterns,
-        runGit: sessionRunGit,
+        runNetworkGit: sessionRunGit,
       }).publish({
         baseSha: historyBase,
         tipSha: entry.toSha,

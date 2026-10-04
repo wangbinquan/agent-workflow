@@ -1,5 +1,8 @@
 import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
-import type { IsolationWorkspaceFactory } from '@/modules/source-control/public/types'
+import type {
+  IsolationWorkspaceFactory,
+  RepositoryGitWorkspaceFactory,
+} from '@/modules/source-control/public/types'
 import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import type { ObservationInvocationParticipant } from '@/modules/run-observability/public/participants'
 import type { AgentRunSettledObserver } from '@/modules/task-execution/application/ports/agentRunSettledObserver'
@@ -47,6 +50,7 @@ export interface RunTaskOptions {
   portArtifacts?: PortArtifactOperations
   /** Bootstrap selects a complete factory; each effective canonical scene binds its own scope. */
   isolationWorkspaces?: IsolationWorkspaceFactory
+  repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
   /** Collaboration-owned DAG scheduling projection selected by bootstrap. */
   taskDagCollaboration?: TaskDagCollaborationOperations
   /** Collaboration-owned node/review/clarify mechanics selected by bootstrap. */
@@ -220,6 +224,7 @@ export type BoundRunTaskOptions = RunTaskOptions & {
   readonly nodeRunPrompts: NodeRunPromptOperations
   readonly portArtifacts: PortArtifactOperations
   readonly isolationWorkspaces: IsolationWorkspaceFactory
+  readonly repositoryGitWorkspaces: RepositoryGitWorkspaceFactory
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics
   readonly workgroupTurns: WorkgroupTurnsOperations

@@ -1,10 +1,12 @@
 import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
+  RepositoryGitWorkspaceFactory,
 } from '@/modules/source-control/public/types'
 import {
   selectWorkspaceUploadContentFactory,
   selectIsolationWorkspaceFactory,
+  selectRepositoryGitWorkspaceFactory,
 } from '@/modules/source-control/public/participants'
 import {
   composePortArtifactOperations,
@@ -833,6 +835,7 @@ export interface AppDeps {
   workspaceContent?: WorkspaceContentEffectsFactory
   workspaceUploads?: WorkspaceUploadContentFactory
   isolationWorkspaces?: IsolationWorkspaceFactory
+  repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -2103,6 +2106,7 @@ export function composeSqliteApplicationDeps(
   const appHome = deps.appHome ?? Paths.root
   const workspaceUploads = selectWorkspaceUploadContentFactory(deps.workspaceUploads)
   const isolationWorkspaces = selectIsolationWorkspaceFactory(deps.isolationWorkspaces)
+  const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(deps.repositoryGitWorkspaces)
   const nodeRunPrompts =
     deps.nodeRunPrompts === undefined
       ? composeNodeRunPromptOperations(deps.nodeRunPromptContentEffects, join(appHome, 'runs'))
@@ -2162,6 +2166,7 @@ export function composeSqliteApplicationDeps(
             nodeRunPromptsFor: () => nodeRunPrompts,
             portArtifactsFor: () => portArtifacts,
             isolationWorkspaces,
+            repositoryGitWorkspaces,
             workspacePresence,
             observationInvocations: composeLocalInvocationObservations(
               deps.db,
@@ -2394,6 +2399,7 @@ export function composeSqliteApplicationDeps(
     ...runtimeDeps,
     workspaceUploads,
     isolationWorkspaces,
+    repositoryGitWorkspaces,
     nodeRunPrompts,
     portArtifacts,
     workspacePresence,
