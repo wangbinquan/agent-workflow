@@ -847,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6023,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 read snapshot and native isolation ownership: original generation projects nine added and one removed symbol import, net eight; twenty-one existing import records follow the actual source/consumer ownership. The original classifier and boundary rules remain unchanged."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -871,10 +868,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5354,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 read snapshot and native isolation ownership: the original geometry classifier projects eight added and one removed exception record, net seven, from the actual native/Task/domain import graph. No handwritten debt, expiry, boundary rule or exemption is added or expanded."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -888,10 +882,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1118,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-370 native isolation ownership: the unchanged relative-path mapper and legacy Task cleanup are offered through their exact owner public contracts. Both actual new public entries have two production consumers; old compatibility types, method budgets and required SPI remain unchanged."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -912,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 26461,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 native isolation ownership: original generation adds forty-three and removes thirty-nine top-level owner entries, net four. Thirty-seven complete native declarations, the physical cleanup loop, original Task observer shell and pure relative-path mapper retain their approved AST/byte equivalence. The preceding RFC-371 26449 to 26457 growth was consumed by committed 2f7c3b672 and is retired here; this new four-entry permit is retired in the matching normal successor."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -933,7 +921,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "2f7c3b672dd8007849348bffe05a95fef7703457",
-    "contentDigest": "sha256:9d47cc368aeb5f886f8e011e2414fc02701679fb87b978ec56b3da3a109c1939",
+    "contentDigest": "sha256:1bfd5b2340791500adfb9893289b2981f273329490d48a369ef9d1632ed4346f",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
