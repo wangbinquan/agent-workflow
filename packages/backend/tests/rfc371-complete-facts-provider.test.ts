@@ -10,6 +10,7 @@ import {
   observationUsageCaptures,
   observationUsageCurrent,
   observationReportRows,
+  nodeRuns,
   tasks,
   taskExecutionObservationSources,
 } from '@/db/schema'
@@ -50,7 +51,207 @@ const reportId = (report: CompleteObservationReport) =>
   report.state === 'ready' ? report.header.reportId : report.reportId
 
 describeEachProvider('RFC-371 complete execution facts without numeric subtotals', (harness) => {
-  test('202 original Tasks and every invocation survive incomplete usage; all child numbers are redacted and damaged facts are rejected', async () => {
+  test('one missing native capture cannot hide another Task whose complete four buckets and CNY match its own lifecycle report', async () => {
+    await seedCompleteTask(harness, 1, 2)
+    const original = await harness.db
+      .select()
+      .from(tasks)
+      .where(eq(tasks.id, 'complete-original-task'))
+      .get()
+    const accepted = await harness.db
+      .select()
+      .from(observationInvocations)
+      .where(eq(observationInvocations.id, completeFixtureId('invocation', 0)))
+      .get()
+    const attempt = await harness.db
+      .select()
+      .from(nodeRuns)
+      .where(eq(nodeRuns.id, completeFixtureId('run', 0)))
+      .get()
+    if (!original || !accepted || !attempt) throw new Error('Original complete Task inputs missing')
+    const missingTaskId = 'original-missing-capture-task',
+      missingRunId = 'original-missing-capture-run'
+    await harness.db
+      .insert(tasks)
+      .values({
+        ...original,
+        id: missingTaskId,
+        rootTaskId: missingTaskId,
+        name: 'Original Task with missing native capture',
+      })
+      .run()
+    await harness.db
+      .insert(nodeRuns)
+      .values({ ...attempt, id: missingRunId, taskId: missingTaskId })
+      .run()
+    const missingInvocation = {
+      ...JSON.parse(accepted.document),
+      invocationId: 'original-missing-capture-invocation',
+      taskId: missingTaskId,
+      nodeRunId: missingRunId,
+    }
+    await harness.db
+      .insert(observationInvocations)
+      .values({
+        ...accepted,
+        id: missingInvocation.invocationId,
+        taskId: missingTaskId,
+        canonicalExecution: sha256Hex(JSON.stringify(['local', missingInvocation.invocationId])),
+        document: JSON.stringify(missingInvocation),
+        fingerprint: JSON.stringify(missingInvocation),
+      })
+      .run()
+    const binding = harness.applicationBinding
+    const source =
+      binding.provider === 'sqlite'
+        ? { ...binding, generationId: 'original-independent-task-scope' }
+        : { provider: 'postgresql' as const, runtime: binding.runtime }
+    const cache = completeObservationReportCache(
+      harness.db,
+      source.provider === 'sqlite' ? source.generationId : source.runtime.generationId,
+    )
+    const folder = mkdtempSync(join(tmpdir(), 'aw-independent-task-scope-')),
+      spool = completeObservationFileSpool(folder)
+    const service = completeObservationReportService({
+      store: cache,
+      spool,
+      owner: randomUUID(),
+      heartbeatDuringRead: false,
+      scopeOf: completeObservationActorScope,
+      keyOf: sha256Hex,
+      newId: randomUUID,
+      build: (report, signal) =>
+        originalReportSnapshotSession(source).run(
+          (snapshot) =>
+            composeCompleteObservationSnapshot({
+              snapshot,
+              tasks: createCompleteTaskObservationFacts(snapshot.executor, report.request.taskId),
+              report,
+              spool,
+              signal,
+            }),
+          signal,
+        ),
+    })
+    try {
+      const refreshKey = 'independent-complete-task-scope'
+      // The exact historical request key must stay immutable after the rendering qualification changes.
+      const oldKey = sha256Hex(
+        JSON.stringify([
+          2,
+          cache.generation,
+          completeObservationActorScope(actor),
+          query,
+          null,
+          refreshKey,
+        ]),
+      )
+      const old = await cache.ensure(
+        { actor, query, refreshKey },
+        oldKey,
+        completeObservationActorScope(actor),
+        'historical-original-owner',
+        randomUUID(),
+      )
+      await cache.unavailable(old.id, old.owner, ['historical-whole-scope-redaction'])
+      const oldReport = (await cache.get(old.id))!.report
+      const id = reportId(await service.request(actor, query, refreshKey))
+      expect(id).not.toBe(old.id)
+      await service.worker.drain()
+      expect((await cache.get(old.id))!.report).toEqual(oldReport)
+      const report = await service.status(actor, id)
+      if (report.state !== 'not-ready' || !report.facts)
+        throw new Error('Complete mixed population missing')
+      expect(report.facts.summary.inventory).toEqual({
+        tasks: '2',
+        attempts: '2',
+        invocations: '2',
+      })
+      expect(report.facts.summary.metrics).toEqual({
+        state: 'not-ready',
+        gaps: ['native-capture-unobserved', 'usage-unobserved'],
+      })
+      expect(report.facts.summary.metrics).not.toHaveProperty('tokens')
+      expect(report.facts.summary.metrics).not.toHaveProperty('cost')
+      const page = await service.page<CompleteObservationTask>(actor, id, {
+        section: 'tasks',
+        limit: 1,
+      })
+      expect(page.total).toBe('2')
+      expect(page.items).toHaveLength(1)
+      expect(page.nextCursor).not.toBeNull()
+      const last = await service.page<CompleteObservationTask>(actor, id, {
+        section: 'tasks',
+        limit: 1,
+        after: page.nextCursor!,
+      })
+      expect(last.total).toBe('2')
+      expect(last.items).toHaveLength(1)
+      expect(last.nextCursor).toBeNull()
+      const rows = [...page.items, ...last.items]
+      expect(new Set(rows.map((row) => row.task.id))).toEqual(new Set([original.id, missingTaskId]))
+      const complete = rows.find((row) => row.task.id === original.id)!,
+        missing = rows.find((row) => row.task.id === missingTaskId)!
+      expect(complete.metrics).toEqual({
+        state: 'ready',
+        invocations: '1',
+        observedInvocations: '1',
+        records: '2',
+        tokens: { input: '3', cacheRead: '9', cacheWrite: '15', output: '21', total: '48' },
+        cost: { currency: 'CNY', state: 'complete', amount: '0.00015' },
+      })
+      expect(missing.metrics).toEqual(report.facts.summary.metrics)
+      expect(missing.metrics).not.toHaveProperty('tokens')
+      expect(missing.metrics).not.toHaveProperty('cost')
+      const lifecycleId = reportId(
+        await service.request(actor, query, 'same-complete-task-lifecycle', original.id),
+      )
+      await service.worker.drain()
+      const lifecycle = await service.status(actor, lifecycleId)
+      if (lifecycle.state !== 'ready')
+        throw new Error('Original complete Task lifecycle lost its numeric qualification')
+      expect(complete.metrics).toEqual(lifecycle.summary.metrics)
+      expect(lifecycle.summary.inventory.tasks).toBe('1')
+      for (const section of [
+        'agents',
+        'runtimes',
+        'models',
+        'purposes',
+        'sources',
+        'trends',
+        'attempts',
+        'invocations',
+      ] as const) {
+        const group = await service.page<{ metrics: unknown }>(actor, id, { section, limit: 100 })
+        for (const row of group.items) expect(row.metrics).toEqual(report.facts.summary.metrics)
+      }
+      const retained = await harness.db
+        .select()
+        .from(observationReportRows)
+        .where(
+          and(eq(observationReportRows.reportId, id), eq(observationReportRows.section, 'tasks')),
+        )
+        .get()
+      if (!retained) throw new Error('Original retained Task scope missing')
+      await harness.db
+        .delete(observationReportRows)
+        .where(
+          and(
+            eq(observationReportRows.reportId, id),
+            eq(observationReportRows.ordinal, retained.ordinal),
+          ),
+        )
+        .run()
+      await expect(service.status(actor, id)).rejects.toThrow('retained output differs')
+      await expect(service.page(actor, id, { section: 'tasks' })).rejects.toThrow(
+        'retained output differs',
+      )
+    } finally {
+      await service.worker.stop()
+      rmSync(folder, { recursive: true, force: true })
+    }
+  }, 120000)
+  test('202 original Tasks and every invocation survive incomplete usage; non-task numeric layers are redacted and damaged facts are rejected', async () => {
     await seedCompleteTask(harness, 3, 3)
     await harness.db
       .delete(observationUsageCaptures)
@@ -215,7 +416,8 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
         expect(page.total).toBe('202')
         for (const row of page.items) {
           seen.push(row.task.id)
-          expect(row.metrics).toEqual(report.facts.summary.metrics)
+          if (row.task.id === original.id) expect(row.metrics).toEqual(report.facts.summary.metrics)
+          else expect(row.metrics).toEqual({ state: 'not-applicable' })
           expect(row.metrics).not.toHaveProperty('tokens')
           expect(row.metrics).not.toHaveProperty('cost')
         }

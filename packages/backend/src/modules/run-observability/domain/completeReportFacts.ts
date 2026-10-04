@@ -6,7 +6,7 @@ import {
 } from '@agent-workflow/shared'
 import type { CompleteObservationReportRow } from '../ports/completeObservationReport'
 
-/** Redact every numeric layer, including an otherwise complete child of an incomplete cohort. */
+/** Whole-range aggregates remain unknown; a physical Task retains its own complete qualification. */
 export function completeReportFactSummary(
   summary: CompleteObservationReportSummary,
 ): CompleteObservationFactSummary {
@@ -25,6 +25,8 @@ export function completeReportFactRow(
   gaps: readonly string[],
 ): CompleteObservationReportRow | null {
   if (!COMPLETE_OBSERVATION_FACT_SECTIONS.includes(row.section)) return null
+  // This row comes from the original complete Task fold, never from a known allocation subset.
+  if (row.section === 'tasks') return row
   const document = row.document as Record<string, unknown>
   if (row.section === 'span-facts') {
     const span = row.document as ObservationSpanDetail

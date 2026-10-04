@@ -66,7 +66,9 @@ export function completeObservationFileSpool(appHome: string): CompleteObservati
             throw new Error('Incomplete original statistics cannot seal numeric collections')
           if (item.kind === 'row') {
             const document = item.row.document as Record<string, unknown>
+            // Ordinary Task rows retain their own complete fold even when the cohort has gaps.
             if (
+              section !== 'tasks' &&
               'metrics' in document &&
               (document.metrics as { state: string }).state !== 'not-ready'
             )

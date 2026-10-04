@@ -546,3 +546,11 @@ DESIGN1 与 SOURCE18 v2 独立功能门 PASS，SOURCE16 三个 P2/FAIL 保留：
 原官方 census 固定 b6195a0cdc1b1c626483aef489e9e00eb6b917a3 加本片18路径，只生成一次13产物，排除并保留 native-page 和并行 snapshot 在制品。production2958（backend2141/frontend654/shared163）、owner/root26449→26457，九新增条目减一旧位置，净增8；只登记这一实际增长，匹配 canonical 发布后正常退役。原129库存按同一 AST 全部核对、原 canonical validator 与 provenance 摘要通过；原规则、40 required SPI、69 target edges、302债务全文/分类、公开面与 mutation 控制保持。sourceDigest sha256:0977466754d7afd6b5ec3eb3ab718bd68596d60b1c9e1439a0a35d1c8869e977。
 
 此段记录冻结候选与本地静态层级，尚不证明新提交 CI、正式页面/真实模型/人民币或完整原生采集。AW 普通/Windows/定时 CI、旧 E2E 与 doctor 超时、原 native owner 持久 ACK 装配/历史 caps、100K Task/10M usage 和 CS 部署继续，两个 RFC 保持 In Progress。
+
+## 2026-10-04 RFC-371 恢复独立完整任务的实际用量
+
+同一本机原数据库、原 daemon 和七天范围实际有8个任务、28次尝试、14次受理调用。旧全范围缺口遮罩误把7个独立完整任务的指标一并隐藏；本批只恢复普通Task的原完整fold资格，保留一个历史Task的真实缺口和全范围未知。四页到EOF的8个Task身份与原人口一致，7个Task的四桶Token及人民币估值逐字等于各自独立生命周期报告，没有把已知7个的和冒充完整总量。
+
+实际服务首次报告因原文件spool的旧child指标条件失败；此回执保留。生产spool增加相同的普通Task例外，cache资格升级task-scope-metrics/2，原immutable缓存及失败报告不改。双provider新增回归使用真实文件spool，含混合完整/缺采集Task、全范围未知、原四桶/CNY、分页EOF、独立生命周期对拍和损坏存储拒绝；原测试及预算保持。中英文提示准确描述各范围资格。源码功能检视与hosted CI、实际页面验收分别记录，不能相互替代。
+
+官方纯静态census基线fc688a54加本批7候选，保留并排除其他会话及native owner在制品，13原产物/129原库存验证通过，无新增增长许可，原规则与完整封印/publish/读取核验保持。未在本机运行AW测试、类型检查、构建或启动/替换服务；实际API由原已运行daemon验证。浏览器工具尚不能读取AW实际页，本批新确切SHA CI待发布；旧CI失败与未完成native采集/历史caps/真实任务和规模验收仍保留，RFC保持In Progress。

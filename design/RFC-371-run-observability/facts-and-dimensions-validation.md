@@ -19,3 +19,11 @@
 三处实际失败只涉及本批测试：ByRoleOptions不支持exact字段（字符串name原默认精确匹配保持）；本仓未装配toBeDisabled Chai扩展（改核原HTMLButtonElement.disabled===true，分页/前页/首页原断言和预算保持）；RFC-198原双向严格AST清单漏列新增dimension及迁出的quality Dialog，同时旧root Dialog已迁出。只将旧CompleteRunObservability一项移到真实Quality并登记真实Dimension，原95调用文件变96，其它原登记与3个scanner函数字节保持。
 
 原scanner/相同完整frontend/src语料的纯AST对拍与实际96登记完全相等，两测试完整原文逆向核对只包含上述精确编辑；没有导入/执行任何Vitest或Bun用例，没有本机AW test/typecheck/build/service。目标format/lint已通过，production18源码及原13canonical未因这些测试修正重开或重跑census。新精确SHA hosted验证仍待，旧四job失败和原所有FAIL/cancelled保留。真实浏览器、E2E旧运输合同迁移、native实际owner/ACK/历史caps、Token/CNY真实任务、CS部署和规模验收继续，两RFC In Progress。
+
+## 2026-10-04 RFC-371 恢复独立完整任务的实际用量
+
+同一本机原数据库、原 daemon 和七天范围实际有8个任务、28次尝试、14次受理调用。旧全范围缺口遮罩误把7个独立完整任务的指标一并隐藏；本批只恢复普通Task的原完整fold资格，保留一个历史Task的真实缺口和全范围未知。四页到EOF的8个Task身份与原人口一致，7个Task的四桶Token及人民币估值逐字等于各自独立生命周期报告，没有把已知7个的和冒充完整总量。
+
+实际服务首次报告因原文件spool的旧child指标条件失败；此回执保留。生产spool增加相同的普通Task例外，cache资格升级task-scope-metrics/2，原immutable缓存及失败报告不改。双provider新增回归使用真实文件spool，含混合完整/缺采集Task、全范围未知、原四桶/CNY、分页EOF、独立生命周期对拍和损坏存储拒绝；原测试及预算保持。中英文提示准确描述各范围资格。源码功能检视与hosted CI、实际页面验收分别记录，不能相互替代。
+
+官方纯静态census基线fc688a54加本批7候选，保留并排除其他会话及native owner在制品，13原产物/129原库存验证通过，无新增增长许可，原规则与完整封印/publish/读取核验保持。未在本机运行AW测试、类型检查、构建或启动/替换服务；实际API由原已运行daemon验证。浏览器工具尚不能读取AW实际页，本批新确切SHA CI待发布；旧CI失败与未完成native采集/历史caps/真实任务和规模验收仍保留，RFC保持In Progress。

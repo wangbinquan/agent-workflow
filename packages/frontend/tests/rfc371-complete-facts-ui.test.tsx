@@ -43,7 +43,11 @@ const row = (id: string): CompleteObservationTask => ({
 type Facts = Extract<CompleteObservationReport, { state: 'not-ready' }> & {
   facts: NonNullable<Extract<CompleteObservationReport, { state: 'not-ready' }>['facts']>
 }
-function fixture(indexed = true, reason = metrics.gaps[0]!) {
+function fixture(
+  indexed = true,
+  reason = metrics.gaps[0]!,
+  completeTaskMetrics?: CompleteObservationTask['metrics'],
+) {
   const valueMetrics = { state: 'not-ready' as const, gaps: [reason] }
   const reports = new Map<string, Facts>(),
     requests: string[] = [],
@@ -123,7 +127,9 @@ function fixture(indexed = true, reason = metrics.gaps[0]!) {
       throw new Error('Incomplete numeric collection requested')
     const total =
       section === 'quality-tasks'
-        ? value.facts.summary.inventory.tasks
+        ? completeTaskMetrics
+          ? '201'
+          : value.facts.summary.inventory.tasks
         : (value.facts.counts[section as keyof typeof value.facts.counts] ?? '0')
     let items: unknown[] = [],
       nextCursor: string | null = null
@@ -131,14 +137,21 @@ function fixture(indexed = true, reason = metrics.gaps[0]!) {
       items = [
         {
           key: reason,
-          taskCount: value.facts.summary.inventory.tasks,
+          taskCount: completeTaskMetrics ? '201' : value.facts.summary.inventory.tasks,
           ...(indexed ? { taskIndexVersion: 1 } : {}),
         },
       ]
     if (section === 'tasks' || section === 'quality-tasks') {
-      items = Array.from({ length: Math.min(100, Number(total) - offset) }, (_, i) =>
-        row(String(offset + i).padStart(4, '0')),
-      )
+      items = Array.from({ length: Math.min(100, Number(total) - offset) }, (_, i) => {
+        const original = row(
+          String(
+            offset + i + (section === 'quality-tasks' && completeTaskMetrics ? 1 : 0),
+          ).padStart(4, '0'),
+        )
+        return section === 'tasks' && original.task.id === '0000' && completeTaskMetrics
+          ? { ...original, metrics: completeTaskMetrics }
+          : original
+      })
       if (offset + items.length < Number(total)) nextCursor = String(offset + items.length)
     }
     if (section === 'attempts')
@@ -210,6 +223,46 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
 })
+
+test.each(['zh', 'en'])(
+  'a verified Task keeps its four bins and CNY while the complete population and whole-scope gaps remain visible in %s',
+  async (language) => {
+    await i18n.changeLanguage(language)
+    fixture(true, metrics.gaps[0]!, {
+      state: 'ready',
+      invocations: '1',
+      observedInvocations: '1',
+      records: '2',
+      tokens: { input: '3', cacheRead: '9', cacheWrite: '15', output: '21', total: '48' },
+      cost: { currency: 'CNY', state: 'complete', amount: '0.00015' },
+    })
+    const trigger = await screen.findByRole('button', { name: '执行事实 0000' })
+    const complete = trigger.closest('tr')!
+    for (const [bucket, value] of Object.entries({
+      input: '3',
+      cacheRead: '9',
+      cacheWrite: '15',
+      output: '21',
+    }))
+      expect(complete.querySelector(`[data-token-bucket="${bucket}"] dd`)?.textContent).toBe(value)
+    expect(complete.textContent).toContain('48')
+    expect(complete.textContent).toContain('¥')
+    const unknown = (await screen.findByRole('button', { name: '执行事实 0001' })).closest('tr')!
+    expect(unknown.textContent).not.toContain('¥')
+    expect(unknown.textContent).toContain(i18n.t('runObservability.reportNotReady'))
+    const summary = document.querySelector('.observation-summary')!
+    expect(summary.textContent).toContain('202')
+    expect(summary.textContent).not.toContain('¥')
+    expect(summary.textContent).not.toContain('48')
+    expect(summary.textContent).toContain(i18n.t('runObservability.reportNotReady'))
+    expect(screen.getByText(i18n.t('runObservability.factsAvailable'))).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.next') }))
+    await screen.findByRole('button', { name: '执行事实 0100' })
+    fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.next') }))
+    await screen.findByRole('button', { name: '执行事实 0201' })
+    expect(document.querySelector('.observation-summary')?.textContent).toContain('202')
+  },
+)
 
 test('not-ready keeps every fact page and Task/attempt/call entry, four unknown buckets, and no numeric collection request', async () => {
   const f = fixture()

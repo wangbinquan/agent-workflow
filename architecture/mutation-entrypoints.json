@@ -44533,7 +44533,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:66842743a7d98d3224d4858c5bf0772f5cc0480a2bc5b8498f525a21f01aa607",
+  "sourceDigest": "sha256:40b97e4cfcf743aded390890da1cfba04e86f631f3767744aa629916bfa9d9fe",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

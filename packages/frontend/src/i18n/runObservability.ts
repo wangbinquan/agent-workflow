@@ -1,7 +1,7 @@
 export const runObservabilityZh = {
   usageGapTitle: 'Token 用量存在缺口',
   factsAvailable:
-    '任务数量、执行明细与耗时已完整核对，仍可查看。原用量缺失，继续等待不会自动补齐；Token 和费用保持未知，不能按零计入。',
+    '任务数量、执行明细与耗时已完整核对。任务列表保留每个已完整核对任务的 Token 与费用；有缺口的任务和全范围汇总保持未知，不能按零计入。继续等待不会自动补齐原用量。',
   gapReason: '缺口原因',
   affectedTasks: '受影响任务',
   viewGapTasks: '查看受影响任务：{{reason}}',
@@ -322,7 +322,7 @@ export type RunObservabilityMessages = { [K in keyof typeof runObservabilityZh]:
 export const runObservabilityEn: RunObservabilityMessages = {
   usageGapTitle: 'Token usage has gaps',
   factsAvailable:
-    'All task, execution and duration records are reconciled and remain available. Waiting will not restore missing usage; tokens and costs remain unknown, never zero.',
+    'All task, execution and duration records are reconciled. The task list retains tokens and costs for each fully verified task. Tasks with gaps and whole-range totals remain unknown, never zero. Waiting will not restore missing usage.',
   gapReason: 'Missing evidence',
   affectedTasks: 'Affected tasks',
   viewGapTasks: 'View affected tasks: {{reason}}',
