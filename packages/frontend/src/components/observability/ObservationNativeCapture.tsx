@@ -34,8 +34,10 @@ function revisions(row: CaptureRow) {
 
 export function ObservationNativeCapture({
   rows,
+  embedded = false,
 }: {
   rows: NonNullable<ObservationTaskDetail['nativeCaptures']>
+  embedded?: boolean
 }) {
   const { t, i18n } = useTranslation(),
     [selected, select] = useState<string | null>(null)
@@ -43,69 +45,66 @@ export function ObservationNativeCapture({
   if (!rows.length) return null
   const count = (value: string | null | undefined) =>
     value == null ? t('runObservability.unknown') : BigInt(value).toLocaleString(i18n.language)
+  const content = (
+    <div className="stack--sm">
+      <p className="muted">{t('runObservability.nativeCaptureHint')}</p>
+      <TableViewport label={t('runObservability.nativeCaptureTitle')}>
+        <table className="data-table data-table--compact">
+          <thead>
+            <tr>
+              {['attempt', 'state', 'nativeScanSize', 'lastObserved', 'sourceGaps'].map((key) => (
+                <th key={key} scope="col">
+                  {t('runObservability.' + key)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row.invocationId}>
+                <th scope="row">
+                  {row.nodeRunId ?? row.invocationId}
+                  <div className="muted">{row.invocationId}</div>
+                </th>
+                <td>{t('runObservability.nativeState_' + row.state)}</td>
+                <td>
+                  {row.proof ? `${row.proof.scannedSessions} / ${row.proof.scannedSteps}` : '—'}
+                </td>
+                <td>
+                  {row.proof
+                    ? new Date(row.proof.observedAt).toLocaleString(i18n.language)
+                    : t('runObservability.unknown')}
+                </td>
+                <td>
+                  {[
+                    ...new Set(
+                      (row.issues ?? row.proof?.issues ?? []).map((issue) =>
+                        t('runObservability.' + observationReasonKey(issue)),
+                      ),
+                    ),
+                  ].join(' · ')}
+                  {row.priorRevisionGap && <div>{t('runObservability.nativePriorRevision')}</div>}
+                  {revisions(row).length > 0 && (
+                    <button
+                      type="button"
+                      className="btn btn--sm"
+                      onClick={() => select(row.invocationId)}
+                    >
+                      {t('runObservability.nativeRevisionDetails')}
+                    </button>
+                  )}
+                  {row.state === 'complete' && t('runObservability.gapsAbsent')}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableViewport>
+    </div>
+  )
   return (
     <>
-      <Card title={t('runObservability.nativeCaptureTitle')}>
-        <div className="stack--sm">
-          <p className="muted">{t('runObservability.nativeCaptureHint')}</p>
-          <TableViewport label={t('runObservability.nativeCaptureTitle')}>
-            <table className="data-table data-table--compact">
-              <thead>
-                <tr>
-                  {['attempt', 'state', 'nativeScanSize', 'lastObserved', 'sourceGaps'].map(
-                    (key) => (
-                      <th key={key} scope="col">
-                        {t('runObservability.' + key)}
-                      </th>
-                    ),
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={row.invocationId}>
-                    <th scope="row">
-                      {row.nodeRunId ?? row.invocationId}
-                      <div className="muted">{row.invocationId}</div>
-                    </th>
-                    <td>{t('runObservability.nativeState_' + row.state)}</td>
-                    <td>
-                      {row.proof ? `${row.proof.scannedSessions} / ${row.proof.scannedSteps}` : '—'}
-                    </td>
-                    <td>
-                      {row.proof
-                        ? new Date(row.proof.observedAt).toLocaleString(i18n.language)
-                        : t('runObservability.unknown')}
-                    </td>
-                    <td>
-                      {[
-                        ...new Set(
-                          (row.issues ?? row.proof?.issues ?? []).map((issue) =>
-                            t('runObservability.' + observationReasonKey(issue)),
-                          ),
-                        ),
-                      ].join(' · ')}
-                      {row.priorRevisionGap && (
-                        <div>{t('runObservability.nativePriorRevision')}</div>
-                      )}
-                      {revisions(row).length > 0 && (
-                        <button
-                          type="button"
-                          className="btn btn--sm"
-                          onClick={() => select(row.invocationId)}
-                        >
-                          {t('runObservability.nativeRevisionDetails')}
-                        </button>
-                      )}
-                      {row.state === 'complete' && t('runObservability.gapsAbsent')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableViewport>
-        </div>
-      </Card>
+      {embedded ? content : <Card title={t('runObservability.nativeCaptureTitle')}>{content}</Card>}
       <Dialog
         open={chosen !== undefined}
         onClose={() => select(null)}

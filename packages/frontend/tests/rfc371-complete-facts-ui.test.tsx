@@ -7,9 +7,11 @@ import type {
   CompleteObservationFactSummary,
   CompleteObservationReport,
   CompleteObservationTask,
+  CompleteObservationTrend,
   ObservationOverviewQuery,
 } from '@agent-workflow/shared'
 import { CompleteRunObservability } from '../src/components/observability/CompleteRunObservability'
+import { CompleteCost } from '../src/components/observability/CompleteObservationMetrics'
 import {
   CompleteObservationPage,
   type CompletePageState,
@@ -49,6 +51,9 @@ function fixture(
   completeTaskMetrics?: CompleteObservationTask['metrics'],
   legacyCache = false,
   initialSearch?: ObservationSearch,
+  trend?: CompleteObservationTrend,
+  recordedUsage?: CompleteObservationFactSummary['recordedUsage'],
+  summaryMetrics?: CompleteObservationFactSummary['metrics'],
 ) {
   const valueMetrics = { state: 'not-ready' as const, gaps: [reason] }
   const legacyReport: CompleteObservationReport = {
@@ -71,7 +76,8 @@ function fixture(
         id = crypto.randomUUID()
       reportRequests.push(body.filters)
       const summary: CompleteObservationFactSummary = {
-        metrics: valueMetrics,
+        metrics: summaryMetrics ?? valueMetrics,
+        ...(recordedUsage ? { recordedUsage } : {}),
         ...(indexed
           ? {
               usageCoverage: {
@@ -81,7 +87,11 @@ function fixture(
               },
             }
           : {}),
-        inventory: { tasks: body.taskId ? '1' : '202', attempts: '1', invocations: '1' },
+        inventory: {
+          tasks: body.taskId ? '1' : '202',
+          attempts: '1',
+          invocations: recordedUsage?.invocations ?? '1',
+        },
         statuses: { done: body.taskId ? '1' : '202' },
         timing: { wallMs: '10', runningMs: '10', p50Ms: '10', p95Ms: '10', unknown: '0' },
         rootTask: body.taskId ? row(body.taskId) : null,
@@ -108,12 +118,13 @@ function fixture(
             tasks: summary.inventory.tasks,
             quality: '1',
             attempts: '1',
-            invocations: '1',
+            invocations: summary.inventory.invocations,
             agents: completeTaskMetrics ? '1' : '0',
             runtimes: completeTaskMetrics ? '1' : '0',
             models: initialSearch ? '1' : '0',
             'span-facts': '0',
             'span-statuses': '0',
+            trends: trend ? '1' : '0',
           },
         },
       }
@@ -162,6 +173,7 @@ function fixture(
           ...(indexed ? { taskIndexVersion: 1 } : {}),
         },
       ]
+    if (section === 'trends' && trend) items = [trend]
     if (section === 'tasks' || section === 'quality-tasks' || section === 'dimension-tasks') {
       items = Array.from({ length: Math.min(100, Number(total) - offset) }, (_, i) => {
         const original = row(
@@ -427,22 +439,8 @@ test.each(['zh', 'en'])(
         notApplicable: '0',
       }),
     )
-    expect(screen.getByText(i18n.t('runObservability.factsAvailable'))).toBeTruthy()
-    const chart = document.querySelector('[data-observation-task-token-chart]')!
-    expect(chart.querySelectorAll('.observation-trend__segment')).toHaveLength(4)
-    expect(chart.textContent).toContain('48 Token')
-    expect(chart.querySelectorAll('.complete-observation-unknown-bar').length).toBeGreaterThan(0)
-    const point = chart.querySelector<HTMLButtonElement>('[data-observation-task="0000"]')!
-    point.focus()
-    fireEvent.click(point)
-    await screen.findByRole('heading', { level: 1, name: '执行事实 0000' })
-    fireEvent.click(
-      screen.getByRole('button', { name: '← ' + i18n.t('runObservability.backAnalysis') }),
-    )
-    await screen.findByRole('heading', { name: i18n.t('runObservability.taskTokenTrend') })
-    await waitFor(() =>
-      expect(document.activeElement?.getAttribute('data-observation-task')).toBe('0000'),
-    )
+    expect(screen.queryByText(i18n.t('runObservability.factsAvailable'))).toBeNull()
+    expect(document.querySelector('[data-observation-task-token-chart]')).toBeNull()
     fireEvent.click(screen.getByRole('tab', { name: i18n.t('runObservability.tab_tasks') }))
     fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.next') }))
     await screen.findByRole('button', { name: '执行事实 0100' })
@@ -494,6 +492,175 @@ test.each(['zh', 'en'])(
   },
 )
 
+test.each(['zh', 'en'])('global quality appears only on overview in %s', async (language) => {
+  await i18n.changeLanguage(language)
+  fixture()
+  const quality = i18n.t('runObservability.dataQuality')
+  await screen.findByRole('button', { name: '执行事实 0000' })
+  expect(screen.queryByRole('heading', { name: quality })).toBeNull()
+  for (const tab of ['overview', 'agents', 'usage', 'performance', 'tasks']) {
+    fireEvent.click(screen.getByRole('tab', { name: i18n.t('runObservability.tab_' + tab) }))
+    await screen.findByRole('tabpanel')
+    expect(screen.queryByText(i18n.t('runObservability.usageGapTitle'))).toBeNull()
+    if (tab === 'overview') {
+      expect(await screen.findByRole('heading', { name: quality })).toBeDefined()
+      expect(document.querySelector('.observation-summary')?.children).toHaveLength(3)
+    } else {
+      expect(screen.queryByRole('heading', { name: quality })).toBeNull()
+      expect(document.querySelector('.observation-summary')).toBeNull()
+    }
+  }
+  fireEvent.click(await screen.findByRole('button', { name: '执行事实 0000' }))
+  await screen.findByRole('heading', { level: 1, name: '执行事实 0000' })
+  expect(screen.queryByRole('heading', { name: quality })).toBeNull()
+  expect(document.querySelector('[data-observation-task-token-chart]')).toBeNull()
+})
+
+test.each(['zh', 'en'])(
+  'original daily trend shows every received token category while the full total remains unknown in %s',
+  async (language) => {
+    await i18n.changeLanguage(language)
+    const trend: CompleteObservationTrend = {
+      key: '2026-10-04',
+      from: NOW,
+      to: NOW + 60000,
+      tasks: '202',
+      metrics: {
+        ...metrics,
+        costCoverage: { records: '3', pricedRecords: '1', visibility: 'visible' },
+        recordedCost: { currency: 'CNY', amount: '0.000123', records: '3', pricedRecords: '1' },
+      },
+      recordedUsage: {
+        invocations: '3',
+        observedInvocations: '2',
+        records: '3',
+        tokens: { input: '6', cacheRead: '18', cacheWrite: '30', output: '42', total: '96' },
+      },
+    }
+    const f = fixture(
+      true,
+      metrics.gaps[0]!,
+      undefined,
+      false,
+      { tab: 'overview' },
+      trend,
+      trend.recordedUsage,
+      trend.metrics as CompleteObservationFactSummary['metrics'],
+    )
+    const chart = await waitFor(() => {
+      const element = document.querySelector('[data-observation-trend]')
+      expect(element).toBeTruthy()
+      return element!
+    })
+    const button = within(chart as HTMLElement).getByRole('button')
+    expect(button.textContent).toContain(i18n.t('runObservability.recordedTokens') + ' 96 Token')
+    expect(button.getAttribute('aria-label')).toContain(i18n.t('runObservability.reportNotReady'))
+    expect(chart.querySelector('.complete-observation-unknown-bar')).toBeNull()
+    expect(chart.querySelector('.complete-observation-task-bar')).toBeNull()
+    expect(button.textContent).toContain(
+      i18n.t('runObservability.exactTaskCount', { tasks: '202' }),
+    )
+    expect(chart.querySelectorAll('[data-token-color]')).toHaveLength(4)
+    expect(chart.querySelector('.observation-trend__bar')?.getAttribute('data-partial')).toBe(
+      'true',
+    )
+    const detail = screen.getByRole('group', { name: i18n.t('runObservability.trendInterval') })
+    for (const [bucket, count] of Object.entries(trend.recordedUsage!.tokens)) {
+      if (bucket === 'total') continue
+      expect(detail.querySelector(`[data-token-bucket="${bucket}"] dd`)?.textContent).toBe(count)
+      expect(button.getAttribute('aria-label')).toContain(
+        i18n.t('runObservability.' + bucket) + ' ' + count,
+      )
+    }
+    expect(detail.textContent).toContain(
+      i18n.t('runObservability.recordedUsageCoverage', { records: '3', observed: '2', calls: '3' }),
+    )
+    expect(detail.textContent).toContain(i18n.t('runObservability.recordedUsageWarning'))
+    const summary = document.querySelector('.observation-summary')!
+    expect(summary.children).toHaveLength(3)
+    const taskCard = within(summary as HTMLElement)
+      .getByRole('heading', { name: i18n.t('runObservability.fullTasks') })
+      .closest('.card')!
+    expect(taskCard.querySelector('.observation-summary__value')?.textContent).toBe('202')
+    const executions = taskCard.querySelector(
+      '[title="' + i18n.t('runObservability.runtimeExecutionCountHint') + '"]',
+    )!
+    expect(executions.textContent).toBe(i18n.t('runObservability.calls') + ' · 3')
+    expect(
+      within(summary as HTMLElement).queryByRole('heading', {
+        name: i18n.t('runObservability.calls'),
+      }),
+    ).toBeNull()
+    expect(summary.textContent).toContain('96')
+    expect(summary.textContent).toContain('¥0.000123')
+    expect(summary.textContent).toContain(i18n.t('runObservability.recordedCost'))
+    expect(summary.textContent).toContain(
+      i18n.t('runObservability.recordedCostCoverage', { priced: '1', records: '3' }),
+    )
+    expect(detail.textContent).toContain('¥0.000123')
+    expect(detail.textContent).toContain(i18n.t('runObservability.incompleteEstimate'))
+    expect(summary.textContent).toContain(i18n.t('runObservability.recordedTokenUsage'))
+    expect(summary.textContent).toContain(
+      i18n.t('runObservability.recordedUsageCompact', { observed: '2', calls: '3' }),
+    )
+    expect(summary.textContent).not.toContain(i18n.t('runObservability.recordedUsageWarning'))
+    expect(summary.textContent).not.toContain(
+      i18n.t('runObservability.recordedUsageCoverage', {
+        records: '3',
+        observed: '2',
+        calls: '3',
+      }),
+    )
+    for (const [bucket, count] of Object.entries(trend.recordedUsage!.tokens))
+      if (bucket !== 'total')
+        expect(summary.querySelector(`[data-token-bucket="${bucket}"] dd`)?.textContent).toBe(count)
+    expect(document.querySelector('[data-observation-task-token-chart]')).toBeNull()
+    fireEvent.click(button)
+    await screen.findByRole('button', { name: '执行事实 0000' })
+    expect(f.reportRequests.at(-1)?.from).toBe(trend.from)
+    expect(f.reportRequests.at(-1)?.to).toBe(trend.to)
+    expect(document.querySelector('.observation-summary')).toBeNull()
+    expect(
+      screen.queryByRole('heading', { name: i18n.t('runObservability.dataQuality') }),
+    ).toBeNull()
+  },
+)
+
+test.each(['zh', 'en'])(
+  'received CNY zero, missing quotes and hidden cost remain distinct in %s',
+  async (language) => {
+    await i18n.changeLanguage(language)
+    const zero: CompleteObservationFactSummary['metrics'] = {
+      ...metrics,
+      costCoverage: { records: '1', pricedRecords: '1', visibility: 'visible' },
+      recordedCost: { currency: 'CNY', amount: '0', records: '1', pricedRecords: '1' },
+    }
+    const view = render(<CompleteCost value={zero} />)
+    expect(view.container.textContent).toContain('¥0')
+    expect(view.container.textContent).toContain(i18n.t('runObservability.incompleteEstimate'))
+    view.rerender(
+      <CompleteCost
+        value={{
+          ...metrics,
+          costCoverage: { records: '1', pricedRecords: '0', visibility: 'visible' },
+        }}
+      />,
+    )
+    expect(view.container.textContent).toBe(i18n.t('runObservability.unpriced'))
+    expect(view.container.textContent).not.toContain('¥')
+    view.rerender(
+      <CompleteCost
+        value={{
+          ...metrics,
+          costCoverage: { records: '1', pricedRecords: '0', visibility: 'hidden' },
+        }}
+      />,
+    )
+    expect(view.container.textContent).toBe(i18n.t('runObservability.hiddenCost'))
+    expect(view.container.textContent).not.toContain('¥')
+  },
+)
+
 test('not-ready keeps every fact page and Task/attempt/call entry, four unknown buckets, and no numeric collection request', async () => {
   const f = fixture()
   await screen.findByRole('button', { name: '执行事实 0000' })
@@ -537,11 +704,12 @@ test.each(['zh', 'en'])(
   async (language) => {
     await i18n.changeLanguage(language)
     const f = fixture()
+    fireEvent.click(screen.getByRole('tab', { name: i18n.t('runObservability.tab_overview') }))
     const reason = i18n.t('runObservability.gap_native-capture-unobserved')
     const trigger = await screen.findByRole('button', {
       name: i18n.t('runObservability.viewGapTasks', { reason }),
     })
-    expect(screen.getByText(i18n.t('runObservability.factsAvailable'))).toBeTruthy()
+    expect(screen.queryByText(i18n.t('runObservability.factsAvailable'))).toBeNull()
     trigger.focus()
     fireEvent.click(trigger)
     let dialog = await screen.findByRole('dialog')
@@ -576,6 +744,8 @@ test.each(['zh', 'en'])(
 test('an older report has no fabricated affected-Task index and unknown original reasons stay readable', async () => {
   fixture(false, 'original-new-runtime-gap')
   await screen.findByRole('button', { name: '执行事实 0000' })
+  fireEvent.click(screen.getByRole('tab', { name: i18n.t('runObservability.tab_overview') }))
+  await screen.findByRole('heading', { name: i18n.t('runObservability.dataQuality') })
   expect(screen.getAllByText('original-new-runtime-gap').length).toBeGreaterThan(0)
   expect(screen.getByText(i18n.t('runObservability.gapIndexUnavailable'))).toBeTruthy()
   expect(
@@ -587,6 +757,7 @@ test('an older report has no fabricated affected-Task index and unknown original
 
 test('mouse-opened quality disclosure closes back to its actual reason button', async () => {
   fixture()
+  fireEvent.click(screen.getByRole('tab', { name: i18n.t('runObservability.tab_overview') }))
   const reason = i18n.t('runObservability.gap_native-capture-unobserved')
   const trigger = await screen.findByRole('button', {
     name: i18n.t('runObservability.viewGapTasks', { reason }),

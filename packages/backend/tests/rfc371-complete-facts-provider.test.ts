@@ -15,6 +15,7 @@ import {
   taskExecutionObservationSources,
 } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
+import { sumCnyAmounts } from '@/modules/run-observability/domain/cnyPricing'
 import { originalReportSnapshotSession } from '@/platform/persistence/reportSnapshot'
 import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeCompleteObservationSnapshot } from '@/modules/run-observability/composition/completeObservationSnapshot'
@@ -22,7 +23,18 @@ import { completeObservationFileSpool } from '@/modules/run-observability/infras
 import { completeObservationReportCache } from '@/modules/run-observability/infrastructure/completeObservationReportStore'
 import { completeObservationActorScope } from '@/modules/run-observability/infrastructure/completeObservationReportDocuments'
 import { completeObservationReportService } from '@/modules/run-observability/application/completeObservationReportService'
-import { completeReportFactRow } from '@/modules/run-observability/domain/completeReportFacts'
+import {
+  completeReportFactRow,
+  completeReportFactSummary,
+} from '@/modules/run-observability/domain/completeReportFacts'
+import {
+  addCompleteObservationAllocation,
+  completeObservationGap,
+  completeObservationMetrics,
+  emptyCompleteObservationFold,
+  mergeCompleteObservationFold,
+} from '@/modules/run-observability/domain/completeObservationMetrics'
+import { completeMetricsFold } from '@/modules/run-observability/domain/completeMetricsFold'
 import {
   COMPLETE_OBSERVATION_FACT_SECTIONS,
   type CompleteObservationTask,
@@ -30,12 +42,15 @@ import {
   type CompleteObservationReportPage,
   type CompleteObservationMetrics,
   type CompleteObservationDimension,
+  type CompleteObservationTrend,
+  type CompleteObservationReportSummary,
   type ObservationSpanDetail,
 } from '@agent-workflow/shared'
 import {
   COMPLETE_NOW,
   completeFixtureId,
   seedCompleteTask,
+  buildOriginalCompleteTask,
 } from './helpers/rfc371CompleteTaskFixture'
 import { describeEachProvider } from './helpers/eachProvider'
 
@@ -188,6 +203,8 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
       expect(report.facts.summary.metrics).toEqual({
         state: 'not-ready',
         gaps: ['native-capture-unobserved', 'usage-unobserved'],
+        costCoverage: { records: '2', pricedRecords: '2', visibility: 'visible' },
+        recordedCost: { currency: 'CNY', amount: '0.00015', records: '2', pricedRecords: '2' },
       })
       expect(report.facts.summary.metrics).not.toHaveProperty('tokens')
       expect(report.facts.summary.metrics).not.toHaveProperty('cost')
@@ -218,7 +235,10 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
         tokens: { input: '3', cacheRead: '9', cacheWrite: '15', output: '21', total: '48' },
         cost: { currency: 'CNY', state: 'complete', amount: '0.00015' },
       })
-      expect(missing.metrics).toEqual(report.facts.summary.metrics)
+      expect(missing.metrics).toEqual({
+        state: 'not-ready',
+        gaps: report.facts.summary.metrics.gaps,
+      })
       expect(missing.metrics).not.toHaveProperty('tokens')
       expect(missing.metrics).not.toHaveProperty('cost')
       const lifecycleId = reportId(
@@ -237,6 +257,7 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
       const missingLifecycle = await service.status(actor, missingLifecycleId)
       if (missingLifecycle.state !== 'not-ready' || !missingLifecycle.facts)
         throw new Error('Original missing Task lifecycle evidence lost')
+      expect(missing.metrics).toEqual(missingLifecycle.facts.summary.metrics)
       for (const section of [
         'agents',
         'runtimes',
@@ -264,7 +285,12 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
           const ready = own.items.find((candidate) => key(candidate) === key(row)),
             gap = other.items.find((candidate) => key(candidate) === key(row))
           expect(ready ?? gap).toBeDefined()
-          expect(row.metrics).toEqual(gap ? gap.metrics : ready!.metrics)
+          if (ready && gap) {
+            const expected = emptyCompleteObservationFold()
+            mergeCompleteObservationFold(expected, completeMetricsFold(ready.metrics))
+            mergeCompleteObservationFold(expected, completeMetricsFold(gap.metrics))
+            expect(row.metrics).toEqual(completeObservationMetrics(expected))
+          } else expect(row.metrics).toEqual(gap ? gap.metrics : ready!.metrics)
         }
         if (['agents', 'runtimes', 'purposes', 'attempts', 'invocations'].includes(section)) {
           expect(group.items.some((row) => row.metrics.state === 'ready')).toBe(true)
@@ -527,6 +553,68 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
         notApplicableTasks: '201',
       })
       expect(report.facts.summary.metrics.state).toBe('not-ready')
+      const independent = await buildOriginalCompleteTask(harness, 3)
+      expect(independent.summary.metrics.state).toBe('not-ready')
+      expect(independent.allocations).toHaveLength(3)
+      const tokens = {
+        input: '0',
+        cacheRead: '0',
+        cacheWrite: '0',
+        output: '0',
+        total: '0',
+      }
+      for (const allocation of independent.allocations)
+        for (const bucket of ['input', 'cacheRead', 'cacheWrite', 'output'] as const) {
+          expect(allocation.contribution[bucket]).not.toBeNull()
+          tokens[bucket] = String(
+            BigInt(tokens[bucket]) + BigInt(String(allocation.contribution[bucket])),
+          )
+        }
+      tokens.total = String(
+        BigInt(tokens.input) +
+          BigInt(tokens.cacheRead) +
+          BigInt(tokens.cacheWrite) +
+          BigInt(tokens.output),
+      )
+      const trend = await service.page<CompleteObservationTrend>(actor, id, {
+        section: 'trends',
+        limit: 1,
+      })
+      expect(trend.total).toBe('1')
+      expect(trend.nextCursor).toBeNull()
+      expect(trend.items[0]!.metrics.state).toBe('not-ready')
+      expect(trend.items[0]!.recordedUsage).toEqual({
+        invocations: '3',
+        observedInvocations: '3',
+        records: '3',
+        tokens,
+      })
+      expect(report.facts.summary.recordedUsage).toEqual(trend.items[0]!.recordedUsage)
+      expect(report.facts.summary.recordedUsage!.tokens.total).not.toBe('48')
+      const pricedAllocations = independent.allocations.filter(
+        (allocation) =>
+          allocation.cost.complete && !allocation.cost.hidden && allocation.cost.amount !== null,
+      )
+      expect(pricedAllocations.length).toBeGreaterThan(0)
+      expect(report.facts.summary.metrics.recordedCost).toEqual({
+        currency: 'CNY',
+        amount: sumCnyAmounts(pricedAllocations.map((allocation) => allocation.cost.amount!)),
+        records: String(independent.allocations.length),
+        pricedRecords: String(pricedAllocations.length),
+      })
+      expect(trend.items[0]!.metrics).toEqual(report.facts.summary.metrics)
+      expect(tokens).toEqual({
+        input: '6',
+        cacheRead: '18',
+        cacheWrite: '30',
+        output: '42',
+        total: '96',
+      })
+      // Even the Task and its third invocation are not ready: all their received records count.
+      expect(report.facts.summary.usageCoverage!.readyTasks).toBe('0')
+      expect(trend.items[0]!.recordedUsage!.tokens.total).not.toBe('48')
+      expect(report.facts.summary.metrics).not.toHaveProperty('tokens')
+      expect(report.facts.summary.metrics).not.toHaveProperty('cost')
       expect(
         Object.keys(report.facts.counts).every((key) =>
           COMPLETE_OBSERVATION_FACT_SECTIONS.includes(
@@ -636,6 +724,24 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
       expect(spans.items[0]?.fact.label).toBe('Actual retained model step')
       expect(spans.items[0]?.usage).toBeNull()
       expect(spans.items[0]?.cost).toBeNull()
+      const originalSpan = {
+        section: 'span-facts' as const,
+        parent: JSON.stringify(['attempt', completeFixtureId('run', 0)]),
+        key: 'retained-model-step',
+        document: spans.items[0]!,
+      }
+      expect(completeReportFactRow(originalSpan, report.facts.summary.metrics.gaps)).toEqual(
+        originalSpan,
+      )
+      expect(() =>
+        completeReportFactRow(
+          {
+            ...originalSpan,
+            document: { ...originalSpan.document, recordedUsage: trend.items[0]!.recordedUsage },
+          },
+          report.facts.summary.metrics.gaps,
+        ),
+      ).toThrow('recorded trend usage is not qualified')
       await expect(
         cache.page((await cache.get(id))!, {
           section: 'allocations',
@@ -644,6 +750,38 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
           limit: 100,
         }),
       ).rejects.toThrow('numeric evidence is incomplete')
+      // A received record with an unknown bucket cannot turn that bucket into zero.
+      const partialDocument = JSON.parse(JSON.stringify(unknownDocument))
+      partialDocument.measurement.usage.output = null
+      partialDocument.measurement.coverage = 'partial'
+      partialDocument.contribution.output = null
+      partialDocument.complete = false
+      await harness.db
+        .update(observationUsageCurrent)
+        .set({ document: JSON.stringify(partialDocument) })
+        .where(eq(observationUsageCurrent.id, unknownModel.id))
+        .run()
+      const partialId = reportId(
+        await service.request(actor, query, 'received-unknown-output-bucket'),
+      )
+      await service.worker.drain()
+      const partial = await service.status(actor, partialId)
+      if (partial.state !== 'not-ready' || !partial.facts)
+        throw new Error('Original partial record facts missing')
+      expect(partial.facts.summary.inventory).toEqual(report.facts.summary.inventory)
+      const partialTrend = await service.page<CompleteObservationTrend>(actor, partialId, {
+        section: 'trends',
+        limit: 1,
+      })
+      expect(partialTrend.total).toBe('1')
+      expect(partialTrend.nextCursor).toBeNull()
+      expect(partialTrend.items[0]!.metrics.state).toBe('not-ready')
+      if (partialTrend.items[0]!.metrics.state === 'not-ready')
+        expect(partialTrend.items[0]!.metrics.gaps).toContain('usage-incomplete')
+      expect(partialTrend.items[0]).not.toHaveProperty('recordedUsage')
+      expect(partial.facts.summary).not.toHaveProperty('recordedUsage')
+      expect(partial.facts.summary.metrics).not.toHaveProperty('tokens')
+      expect(partial.facts.summary.metrics).not.toHaveProperty('cost')
       const retained = await harness.db
         .select()
         .from(observationReportRows)
@@ -670,4 +808,105 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
       rmSync(folder, { recursive: true, force: true })
     }
   }, 120000)
+})
+
+test('recorded trend qualification keeps unknown buckets unknown and rejects fabricated coverage or totals', () => {
+  const fold = emptyCompleteObservationFold('2')
+  addCompleteObservationAllocation(
+    fold,
+    { input: '1', cacheRead: '3', cacheWrite: '5', output: '7' },
+    { amount: null, complete: false, hidden: false },
+  )
+  fold.observedInvocations = '1'
+  completeObservationGap(fold, 'usage-unobserved')
+  const recorded = {
+    invocations: '2',
+    observedInvocations: '1',
+    records: '1',
+    tokens: { input: '1', cacheRead: '3', cacheWrite: '5', output: '7', total: '16' },
+  }
+  const row = {
+    section: 'trends' as const,
+    parent: null,
+    key: 'original-day',
+    document: {
+      key: 'original-day',
+      from: 0,
+      to: 1,
+      tasks: '2',
+      metrics: completeObservationMetrics(fold),
+      recordedUsage: recorded,
+    },
+  }
+  expect(completeReportFactRow(row, fold.gaps)).toEqual(row)
+  const summary: CompleteObservationReportSummary = {
+    metrics: row.document.metrics,
+    recordedUsage: recorded,
+    inventory: {
+      tasks: '2',
+      attempts: '2',
+      invocations: '2',
+      numericRecords: '1',
+      nativeCaptures: '1',
+    },
+    statuses: { done: '2' },
+    timing: { wallMs: '1', runningMs: '1', p50Ms: null, p95Ms: null, unknown: '0' },
+    rootTask: null,
+  }
+  const qualifiedSummary = completeReportFactSummary(summary)
+  expect(qualifiedSummary.recordedUsage).toEqual(recorded)
+  expect(qualifiedSummary.inventory).toEqual({ tasks: '2', attempts: '2', invocations: '2' })
+  expect(qualifiedSummary.metrics).not.toHaveProperty('tokens')
+  expect(qualifiedSummary.metrics).not.toHaveProperty('cost')
+  expect(completeReportFactSummary(qualifiedSummary)).toEqual(qualifiedSummary)
+  const { recordedUsage: _recordedUsage, ...legacySummary } = summary
+  expect(_recordedUsage).toEqual(recorded)
+  expect(completeReportFactSummary(legacySummary)).not.toHaveProperty('recordedUsage')
+  for (const inventory of [
+    { ...summary.inventory, invocations: '3' },
+    { ...summary.inventory, numericRecords: '2' },
+  ])
+    expect(() => completeReportFactSummary({ ...summary, inventory })).toThrow(
+      'recorded summary usage is not qualified',
+    )
+  const partial = emptyCompleteObservationFold('1')
+  addCompleteObservationAllocation(
+    partial,
+    { input: '10', cacheRead: '0', cacheWrite: '0', output: null },
+    { amount: null, complete: false, hidden: false },
+  )
+  partial.observedInvocations = '1'
+  expect(partial.gaps).toContain('usage-incomplete')
+  for (const invalid of [
+    { ...row, section: 'agents' as const },
+    { ...row, document: { ...row.document, metrics: completeObservationMetrics(partial) } },
+    {
+      ...row,
+      document: {
+        ...row.document,
+        metrics: completeObservationMetrics({ ...fold, invocations: '1', gaps: [] }),
+      },
+    },
+    ...[
+      { ...recorded, records: '0' },
+      { ...recorded, observedInvocations: '0' },
+      { ...recorded, observedInvocations: '3' },
+      { ...recorded, invocations: '02' },
+      { ...recorded, cost: { currency: 'CNY', amount: '0' } },
+      { ...recorded, tokens: { ...recorded.tokens, output: null } },
+      { ...recorded, tokens: { ...recorded.tokens, total: '15' } },
+    ].map((recordedUsage) => ({ ...row, document: { ...row.document, recordedUsage } })),
+  ]) {
+    expect(() => completeReportFactRow(invalid, fold.gaps)).toThrow(
+      'recorded trend usage is not qualified',
+    )
+    if (invalid.section === 'trends')
+      expect(() =>
+        completeReportFactSummary({
+          ...summary,
+          metrics: invalid.document.metrics,
+          recordedUsage: invalid.document.recordedUsage,
+        } as CompleteObservationReportSummary),
+      ).toThrow()
+  }
 })

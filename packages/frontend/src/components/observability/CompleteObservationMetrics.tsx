@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next'
-import type { CompleteObservationMetrics } from '@agent-workflow/shared'
+import type { CompleteObservationMetrics, CompleteObservationTrend } from '@agent-workflow/shared'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { OBSERVATION_TOKEN_BUCKETS, formatObservationCny } from './formatObservations'
 import { observationGapLabel } from './observationGapLabel'
@@ -7,16 +7,25 @@ import { observationGapLabel } from './observationGapLabel'
 export function CompleteTokens({
   value,
   breakdown = true,
+  recordedUsage,
+  compact = false,
 }: {
   value: CompleteObservationMetrics
   breakdown?: boolean
+  recordedUsage?: CompleteObservationTrend['recordedUsage']
+  compact?: boolean
 }) {
   const { t, i18n } = useTranslation()
+  const recorded = value.state === 'not-ready' ? recordedUsage : undefined
+  const tokens = value.state === 'ready' ? value.tokens : recorded?.tokens
   return (
     <>
+      {recorded && !compact && (
+        <span className="muted">{t('runObservability.recordedTokens')} · </span>
+      )}
       <strong>
-        {value.state === 'ready'
-          ? BigInt(value.tokens.total).toLocaleString(i18n.language)
+        {tokens
+          ? BigInt(tokens.total).toLocaleString(i18n.language)
           : t(
               `runObservability.${value.state === 'not-applicable' ? 'notApplicable' : 'reportNotReady'}`,
             )}
@@ -27,19 +36,71 @@ export function CompleteTokens({
             <div key={bucket} data-token-bucket={bucket}>
               <dt>{t('runObservability.' + bucket)}</dt>
               <dd>
-                {value.state === 'ready'
-                  ? BigInt(value.tokens[bucket]).toLocaleString(i18n.language)
+                {tokens
+                  ? BigInt(tokens[bucket]).toLocaleString(i18n.language)
                   : t('runObservability.unknown')}
               </dd>
             </div>
           ))}
         </dl>
       )}
+      {recorded && compact && (
+        <p className="muted">
+          {t('runObservability.recordedUsageCompact', {
+            observed: BigInt(recorded.observedInvocations).toLocaleString(i18n.language),
+            calls: BigInt(recorded.invocations).toLocaleString(i18n.language),
+          })}
+        </p>
+      )}
+      {recorded && !compact && (
+        <>
+          <p className="muted">
+            {t('runObservability.recordedUsageCoverage', {
+              observed: BigInt(recorded.observedInvocations).toLocaleString(i18n.language),
+              calls: BigInt(recorded.invocations).toLocaleString(i18n.language),
+              records: BigInt(recorded.records).toLocaleString(i18n.language),
+            })}
+          </p>
+          <p className="muted">{t('runObservability.recordedUsageWarning')}</p>
+        </>
+      )}
     </>
   )
 }
-export function CompleteCost({ value }: { value: CompleteObservationMetrics }) {
-  const { t } = useTranslation()
+export function CompleteCost({
+  value,
+  compact = false,
+}: {
+  value: CompleteObservationMetrics
+  compact?: boolean
+}) {
+  const { t, i18n } = useTranslation()
+  const recorded = value.state === 'not-applicable' ? undefined : value.recordedCost
+  if (recorded)
+    return (
+      <>
+        <strong>{formatObservationCny(recorded.amount, true)}</strong>
+        {compact ? (
+          <p className="muted">
+            {t('runObservability.recordedCostCoverage', {
+              priced: BigInt(recorded.pricedRecords).toLocaleString(i18n.language),
+              records: BigInt(recorded.records).toLocaleString(i18n.language),
+            })}
+          </p>
+        ) : (
+          <span className="muted"> · {t('runObservability.incompleteEstimate')}</span>
+        )}
+      </>
+    )
+  if (value.state === 'not-ready' && value.costCoverage)
+    return (
+      <span>
+        {t(
+          'runObservability.' +
+            (value.costCoverage.visibility === 'hidden' ? 'hiddenCost' : 'unpriced'),
+        )}
+      </span>
+    )
   if (value.state !== 'ready') return <span>{t('runObservability.unknown')}</span>
   return (
     <>

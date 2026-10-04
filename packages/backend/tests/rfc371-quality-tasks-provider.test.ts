@@ -25,6 +25,7 @@ import type {
   CompleteObservationQuality,
   CompleteObservationTask,
   CompleteObservationReportPage,
+  CompleteObservationMetrics,
 } from '@agent-workflow/shared'
 import {
   COMPLETE_NOW,
@@ -135,6 +136,29 @@ describeEachProvider('RFC-371 original gap Task index', (harness) => {
       expect(counts.get('invocation-unobserved')).toBe('201')
       expect(counts.get('native-capture-unobserved')).toBe('1')
       expect(counts.get('usage-unobserved')).toBe('1')
+      const independentMetrics = new Map<string, CompleteObservationMetrics>()
+      for (const task of [original.id, expected[0]!]) {
+        const accepted = await service.request(
+          actor,
+          { from: COMPLETE_NOW, to: COMPLETE_NOW + 60000, timezone: 'UTC', task },
+          'original-gap-tasks',
+        )
+        const independentId =
+          accepted.state === 'ready' ? accepted.header.reportId : accepted.reportId
+        await service.worker.drain()
+        const independent = await service.status(actor, independentId)
+        if (independent.state !== 'not-ready' || !independent.facts)
+          throw new Error('Original independent gap Task facts missing')
+        expect(independent.facts.summary.inventory.tasks).toBe('1')
+        expect(independent.facts.summary.metrics).toEqual({
+          state: 'not-ready',
+          gaps:
+            task === original.id
+              ? ['native-capture-unobserved', 'usage-unobserved']
+              : ['invocation-unobserved'],
+        })
+        independentMetrics.set(task, independent.facts.summary.metrics)
+      }
       for (const reason of quality.items) {
         expect(reason.taskIndexVersion).toBe(1)
         const seen: string[] = []
@@ -153,7 +177,9 @@ describeEachProvider('RFC-371 original gap Task index', (harness) => {
           expect(page.total).toBe(reason.taskCount)
           for (const row of page.items) {
             seen.push(row.task.id)
-            expect(row.metrics).toEqual(report.facts.summary.metrics)
+            expect(row.metrics).toEqual(
+              independentMetrics.get(row.task.id === original.id ? original.id : expected[0]!),
+            )
             expect(row.metrics).not.toHaveProperty('tokens')
             expect(row.metrics).not.toHaveProperty('cost')
           }

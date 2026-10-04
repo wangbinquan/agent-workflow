@@ -73,6 +73,8 @@ export interface CompleteObservationReportHeader {
 }
 export interface CompleteObservationReportSummary {
   readonly metrics: CompleteObservationMetrics
+  /** Every received record in the sealed scope; full usage may still be unknown. */
+  readonly recordedUsage?: CompleteObservationTrend['recordedUsage']
   /** Exact Task states counted during the original full traversal; absent in older reports. */
   readonly usageCoverage?: {
     readonly readyTasks: string
@@ -99,6 +101,7 @@ export interface CompleteObservationReportSummary {
 }
 export interface CompleteObservationFactSummary {
   readonly metrics: Extract<CompleteObservationMetrics, { state: 'not-ready' }>
+  readonly recordedUsage?: CompleteObservationReportSummary['recordedUsage']
   readonly usageCoverage?: CompleteObservationReportSummary['usageCoverage']
   readonly inventory: {
     readonly tasks: string
@@ -176,6 +179,13 @@ export interface CompleteObservationTrend {
   readonly to: number
   readonly tasks: string
   readonly metrics: CompleteObservationMetrics
+  /** All received ledger records in this sealed day; never the unknown full usage total. */
+  readonly recordedUsage?: {
+    readonly invocations: string
+    readonly observedInvocations: string
+    readonly records: string
+    readonly tokens: Extract<CompleteObservationMetrics, { state: 'ready' }>['tokens']
+  }
 }
 export interface CompleteObservationQuality {
   readonly key: string

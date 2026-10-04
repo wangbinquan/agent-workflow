@@ -9,7 +9,13 @@ import { observationReasonKey } from './ObservationMetrics'
 type Row = NonNullable<ObservationTaskDetail['platformCaptures']>[number]
 const rowKey = (row: Row) => JSON.stringify([row.invocationId, row.sourceId, row.capture?.id])
 
-export function ObservationPlatformCapture({ rows }: { rows: readonly Row[] }) {
+export function ObservationPlatformCapture({
+  rows,
+  embedded = false,
+}: {
+  rows: readonly Row[]
+  embedded?: boolean
+}) {
   const { t, i18n } = useTranslation()
   const [selected, select] = useState<string | null>(null)
   const trigger = useRef<HTMLButtonElement | null>(null)
@@ -17,65 +23,68 @@ export function ObservationPlatformCapture({ rows }: { rows: readonly Row[] }) {
   if (!rows.length) return null
   const count = (value: number | undefined) =>
     value === undefined ? '—' : value.toLocaleString(i18n.language)
+  const content = (
+    <div className="stack--sm">
+      <p className="muted">{t('runObservability.platformCaptureHint')}</p>
+      <TableViewport label={t('runObservability.platformCaptureTitle')}>
+        <table className="data-table data-table--compact">
+          <thead>
+            <tr>
+              {[
+                'attempt',
+                'nativeTurn',
+                'state',
+                'nativeReceived',
+                'lastObserved',
+                'captureActions',
+              ].map((key) => (
+                <th key={key} scope="col">
+                  {t('runObservability.' + key)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={rowKey(row)}>
+                <th scope="row">
+                  {row.nodeRunId ?? row.invocationId}
+                  <div className="muted">{row.invocationId}</div>
+                </th>
+                <td>{row.capture?.proof.turn ?? '—'}</td>
+                <td>{t('runObservability.nativeState_' + (row.capture?.state ?? 'unobserved'))}</td>
+                <td>{count(row.capture?.receivedSteps)}</td>
+                <td>
+                  {row.capture
+                    ? new Date(row.capture.proof.observedAt).toLocaleString(i18n.language)
+                    : t('runObservability.unknown')}
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="btn btn--sm"
+                    onClick={(event) => {
+                      trigger.current = event.currentTarget
+                      select(rowKey(row))
+                    }}
+                  >
+                    {t('runObservability.nativeCaptureDetails')}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableViewport>
+    </div>
+  )
   return (
     <>
-      <Card title={t('runObservability.platformCaptureTitle')}>
-        <div className="stack--sm">
-          <p className="muted">{t('runObservability.platformCaptureHint')}</p>
-          <TableViewport label={t('runObservability.platformCaptureTitle')}>
-            <table className="data-table data-table--compact">
-              <thead>
-                <tr>
-                  {[
-                    'attempt',
-                    'nativeTurn',
-                    'state',
-                    'nativeReceived',
-                    'lastObserved',
-                    'captureActions',
-                  ].map((key) => (
-                    <th key={key} scope="col">
-                      {t('runObservability.' + key)}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr key={rowKey(row)}>
-                    <th scope="row">
-                      {row.nodeRunId ?? row.invocationId}
-                      <div className="muted">{row.invocationId}</div>
-                    </th>
-                    <td>{row.capture?.proof.turn ?? '—'}</td>
-                    <td>
-                      {t('runObservability.nativeState_' + (row.capture?.state ?? 'unobserved'))}
-                    </td>
-                    <td>{count(row.capture?.receivedSteps)}</td>
-                    <td>
-                      {row.capture
-                        ? new Date(row.capture.proof.observedAt).toLocaleString(i18n.language)
-                        : t('runObservability.unknown')}
-                    </td>
-                    <td>
-                      <button
-                        type="button"
-                        className="btn btn--sm"
-                        onClick={(event) => {
-                          trigger.current = event.currentTarget
-                          select(rowKey(row))
-                        }}
-                      >
-                        {t('runObservability.nativeCaptureDetails')}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </TableViewport>
-        </div>
-      </Card>
+      {embedded ? (
+        content
+      ) : (
+        <Card title={t('runObservability.platformCaptureTitle')}>{content}</Card>
+      )}
       <Dialog
         open={chosen !== undefined}
         triggerRef={trigger}

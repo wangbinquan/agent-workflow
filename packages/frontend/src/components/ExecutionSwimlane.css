@@ -1,13 +1,23 @@
+.execution-swimlane {
+  width: 100%;
+  table-layout: fixed;
+}
 .execution-swimlane th:first-child {
   width: 30%;
+  white-space: normal;
   overflow-wrap: anywhere;
 }
-.execution-swimlane__select {
+.execution-swimlane tbody th {
+  text-transform: none;
+  letter-spacing: normal;
+}
+.execution-swimlane .execution-swimlane__select {
   width: 100%;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: var(--space-1);
+  padding: var(--space-2) 0;
   text-align: start;
   white-space: normal;
 }
@@ -15,9 +25,37 @@
   position: relative;
   overflow: hidden;
   display: block;
-  height: var(--space-3);
-  background: var(--bg);
+  width: 100%;
+  height: var(--space-5);
+  background-color: var(--bg);
+  background-image: linear-gradient(to right, var(--border) 1px, transparent 1px);
+  background-size: 25% 100%;
   border-inline: 1px solid var(--border);
+}
+.execution-swimlane__axis {
+  position: relative;
+  height: 1.75rem;
+  margin-inline: 1px;
+  padding-top: var(--space-2);
+  color: var(--muted);
+  font-weight: normal;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+.execution-swimlane__axis span {
+  position: absolute;
+  transform: translateX(-50%);
+}
+.execution-swimlane__axis span:first-child {
+  transform: none;
+}
+.execution-swimlane__axis span:last-child {
+  transform: translateX(-100%);
+}
+.execution-swimlane__detail {
+  color: var(--muted);
+  font-size: var(--font-xs);
 }
 .execution-swimlane__bar {
   position: absolute;
@@ -27,6 +65,10 @@
   max-width: 100%;
   background: var(--accent);
   border-radius: var(--radius-sm);
+}
+.execution-swimlane__bar[data-open='true'] {
+  border: 1px dashed var(--accent);
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
 }
 .execution-swimlane__point,
 .execution-swimlane__open {

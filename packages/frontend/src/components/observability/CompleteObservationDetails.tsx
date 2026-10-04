@@ -200,37 +200,38 @@ export function CompleteObservationCaptures({ report }: { report: ReadableObserv
   >(report, 'platform-captures')
   return (
     <div className="stack--md">
-      <CompleteObservationPage query={native}>
-        {(rows) =>
-          rows.length ? (
-            <ObservationNativeCapture
-              rows={rows.map((row) => ({
-                invocationId: row.invocationId,
-                nodeRunId: null,
-                state: row.capture.state,
-                priorRevisionGap: row.priorRevisionGap,
-                proof: row.capture,
-                revisions: row.resolutions,
-              }))}
-            />
-          ) : (
-            <Card title={t('runObservability.nativeCaptureTitle')}>
+      <Card title={t('runObservability.nativeCaptureTitle')}>
+        <CompleteObservationPage query={native}>
+          {(rows) =>
+            rows.length ? (
+              <ObservationNativeCapture
+                embedded
+                rows={rows.map((row) => ({
+                  invocationId: row.invocationId,
+                  nodeRunId: null,
+                  state: row.capture.state,
+                  priorRevisionGap: row.priorRevisionGap,
+                  proof: row.capture,
+                  revisions: row.resolutions,
+                }))}
+              />
+            ) : (
               <EmptyState title={t('runObservability.emptyCaptures')} size="compact" />
-            </Card>
-          )
-        }
-      </CompleteObservationPage>
-      <CompleteObservationPage query={platform}>
-        {(rows) =>
-          rows.length ? (
-            <ObservationPlatformCapture rows={rows} />
-          ) : (
-            <Card title={t('runObservability.platformCaptureTitle')}>
+            )
+          }
+        </CompleteObservationPage>
+      </Card>
+      <Card title={t('runObservability.platformCaptureTitle')}>
+        <CompleteObservationPage query={platform}>
+          {(rows) =>
+            rows.length ? (
+              <ObservationPlatformCapture embedded rows={rows} />
+            ) : (
               <EmptyState title={t('runObservability.emptyCaptures')} size="compact" />
-            </Card>
-          )
-        }
-      </CompleteObservationPage>
+            )
+          }
+        </CompleteObservationPage>
+      </Card>
     </div>
   )
 }

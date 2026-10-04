@@ -2,9 +2,24 @@ import type { ObservationTaskFacts, ObservationAttemptFacts } from './observatio
 import type { ObservationTokenUsage } from './observationUsage'
 import type { AcceptedObservationInvocation } from './observationInvocation'
 
+interface RecordedObservationCost {
+  readonly currency: 'CNY'
+  readonly amount: string
+  readonly records: string
+  readonly pricedRecords: string
+}
 /** Decimal strings preserve exact cardinalities and every original token bucket. */
 export type CompleteObservationMetrics =
-  | { readonly state: 'not-ready'; readonly gaps: readonly string[] }
+  | {
+      readonly state: 'not-ready'
+      readonly gaps: readonly string[]
+      readonly costCoverage?: {
+        readonly records: string
+        readonly pricedRecords: string
+        readonly visibility: 'visible' | 'hidden'
+      }
+      readonly recordedCost?: RecordedObservationCost
+    }
   | { readonly state: 'not-applicable' }
   | {
       readonly state: 'ready'
@@ -19,6 +34,7 @@ export type CompleteObservationMetrics =
         readonly state: 'complete' | 'unpriced' | 'hidden'
         readonly amount: string | null
       }
+      readonly recordedCost?: RecordedObservationCost
     }
 export interface CompleteObservationAllocation {
   readonly invocation: AcceptedObservationInvocation

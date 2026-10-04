@@ -5,12 +5,10 @@
   justify-content: space-between;
   gap: var(--space-3);
 }
-.complete-observation-task-bar {
-  width: 0.65rem;
-  background: var(--muted);
-  opacity: 0.65;
-  align-self: end;
-  flex-shrink: 0;
+@media (min-width: 901px) {
+  .observation-summary--complete {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
 }
 .complete-observation-unknown-bar {
   width: 3rem;
@@ -26,18 +24,23 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.observation-trend[data-observation-task-token-chart] {
+.complete-observation-trend {
   grid-auto-columns: minmax(7rem, 1fr);
 }
-.observation-trend[data-observation-task-token-chart] .observation-trend__scale {
+.complete-observation-trend .observation-trend__button {
+  height: 100%;
+}
+.complete-observation-trend .observation-trend__scale {
+  flex: 1;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
   min-height: 4.5rem;
   gap: var(--space-1);
   text-align: center;
+  white-space: normal;
 }
-.observation-trend[data-observation-task-token-chart] .observation-trend__label {
+.complete-observation-trend .observation-trend__label {
   max-width: 100%;
 }
 .complete-observation-pager .action-row {

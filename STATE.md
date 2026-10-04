@@ -1,3 +1,17 @@
+## 2026-10-04 RFC-371 已记录 Token／人民币与正式泳道呈现修复
+
+正式总览仅保留任务、Token、人民币估值三张公共Card，运行时执行次数并入任务Card并说明原受理执行口径；全局数据质量也仅总览。缺记录范围显示独立标记的全部已收到四桶与实际CNY，保留原完整总量未知、未定价及不可见状态，不把缺口按零计或用完整Task子集冒充总量。原全cohort/allocation与全部分页到EOF、原fact/spool/seal/retained-count/digest资格保持；同scope独立费用人口costCoverage保留无报价记录，即使没有recordedCost金额也不能丢掉。
+
+本机原API及正式页面8Task／14次运行时执行／28attempt／13记录：四桶96095／21120／0／6023，总123238，包含缺口Task收到的10737；不能替换为完整Task子集112501。原8条已定价记录逐条CNY之和0.16583，13条收到记录中5条未定价，另1次调用仍无用量原记录；缺口Task已收到CNY0.026424及各Agent／runtime／purpose／source完整分页均对拍。Card只用短13／14调用与8／13定价标记。桌面三列和390px一列原space-4间距16px、四Token桶、Task页无全局Card均实测。
+
+共用ExecutionSwimlane曾被通用btn居中规则压成2px绘图区，正式页面只剩框和文字。容器限定布局恢复650px实际轨道，复用ghost按钮并加统一五刻度与网格，保留原真实时间比例、未知结束、分页和详情。真实串行两段前后衔接、并行两段重叠、零耗时节点时间点、390px图内920px滚动而页面390px、Enter／Escape返回原尝试焦点均验收；原E2E全字节前缀保持，只追加实际daemon绘图区几何回归。
+
+R5有限SOURCE v2唯一P2/FAIL保留：完整零步骤平台调用可有knownZero Token而costsReady=false，与一条有价调用合并时合法ready/unpriced的pricedRecords可等于records。后继仅删除多余等计数拒绝，完整费用仍unpriced／amount=null；新增2调用、1／1记录、实际CNY0.02与严格往返回归，原超额拒绝保留。独立有限后继SOURCE与matching canonical／metadata和新确切SHA hosted CI另行留证；不把浏览器或纯静态证据当全仓测试通过。
+
+本机仅owned format/lint、原纯AST/JSON规则及原daemon正常页面/API验收，没有AW本机tests/typecheck/build或新服务。CS 8db68361精确6项CI成功和本机八组件部署、实际8275／16148分类及人民币验收保持。完整native owner生产接线与其持久baseline/emission/ACK、历史总量上限移除、100K Task／10M usage规模及剩余正式/定时CI继续，两个RFC保持In Progress。所有旧FAIL/cancelled历史、原正文和并行在制品保留。
+
+独立 SOURCE v3 唯一新增泳道 P2/FAIL 原回执保留：全部时间未知时不得显示布局占位的 +0～+0.001 秒。有限后继只按原区间／点／开放起点证据决定是否显示刻度，新增全未知负例及开放起点正例，原实际时间比例、旧断言／预算和全部并行正文保持；费用 P2 已闭合的结论继承。
+
 
 ## 2026-10-04 Task workspace reader CI 修复投影
 

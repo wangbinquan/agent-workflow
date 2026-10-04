@@ -344,9 +344,30 @@ export async function buildCompleteObservationCohort(
     input.signal,
   )) {
     const { fold: value, ...trend } = row.document
+    const metrics = completeObservationMetrics(value)
     await output.append('trends', null, row.key, {
       ...trend,
-      metrics: completeObservationMetrics(value),
+      metrics,
+      ...(metrics.state === 'not-ready' &&
+      !value.gaps.includes('usage-incomplete') &&
+      BigInt(value.records) > 0n
+        ? {
+            recordedUsage: {
+              invocations: value.invocations,
+              observedInvocations: value.observedInvocations,
+              records: value.records,
+              tokens: {
+                ...value.tokens,
+                total: String(
+                  BigInt(value.tokens.input) +
+                    BigInt(value.tokens.cacheRead) +
+                    BigInt(value.tokens.cacheWrite) +
+                    BigInt(value.tokens.output),
+                ),
+              },
+            },
+          }
+        : {}),
     } satisfies CompleteObservationTrend)
   }
   for await (const row of completeWorkingTraversal<string>(
@@ -396,6 +417,28 @@ export async function buildCompleteObservationCohort(
   }
   const summary = {
     metrics,
+    ...(metrics.state === 'not-ready' &&
+    !fold.gaps.includes('usage-incomplete') &&
+    BigInt(fold.records) > 0n &&
+    fold.records === String(inventory.numericRecords) &&
+    fold.invocations === String(inventory.invocations)
+      ? {
+          recordedUsage: {
+            invocations: fold.invocations,
+            observedInvocations: fold.observedInvocations,
+            records: fold.records,
+            tokens: {
+              ...fold.tokens,
+              total: String(
+                BigInt(fold.tokens.input) +
+                  BigInt(fold.tokens.cacheRead) +
+                  BigInt(fold.tokens.cacheWrite) +
+                  BigInt(fold.tokens.output),
+              ),
+            },
+          },
+        }
+      : {}),
     usageCoverage: {
       readyTasks: String(usageCoverage.readyTasks),
       missingTasks: String(usageCoverage.missingTasks),

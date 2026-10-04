@@ -4,48 +4,42 @@ import type { CompleteObservationTrend as Trend } from '@agent-workflow/shared'
 import { OBSERVATION_TOKEN_BUCKETS } from './formatObservations'
 import { TableViewport } from '@/components/TableViewport'
 import { EmptyState } from '@/components/EmptyState'
-import { CompleteTokens } from './CompleteObservationMetrics'
+import { CompleteCost, CompleteTokens } from './CompleteObservationMetrics'
 
 export function CompleteObservationTrend({
   rows,
   onRange,
-  labels,
-  onPoint,
 }: {
   rows: readonly Trend[]
   onRange: (from: number, to: number) => void
-  labels?: ReadonlyMap<string, string>
-  onPoint?: (key: string, trigger: HTMLElement) => void
 }) {
   const { t, i18n } = useTranslation()
   const [activeKey, setActiveKey] = useState<string | null>(null)
   if (!rows.length) return <EmptyState title={t('runObservability.empty')} size="compact" />
   const active = rows.find((row) => row.key === activeKey) ?? rows[0]!
-  const values = rows.map((row) =>
-    row.metrics.state === 'ready' ? BigInt(row.metrics.tokens.total) : 0n,
+  const usages = rows.map((row) =>
+    row.metrics.state === 'ready'
+      ? row.metrics.tokens
+      : row.metrics.state === 'not-ready'
+        ? row.recordedUsage?.tokens
+        : undefined,
   )
+  const values = usages.map((tokens) => BigInt(tokens?.total ?? '0'))
   const maximum = values.reduce((left, right) => (left > right ? left : right), 1n)
-  const taskMaximum = rows.reduce(
-    (left, row) => (left > BigInt(row.tasks) ? left : BigInt(row.tasks)),
-    1n,
-  )
   const height = (value: bigint, max: bigint) => Number((value * 10000n) / max) / 100
   return (
     <div className="stack--sm">
       <TableViewport label={t('runObservability.trend')}>
-        <ul
-          className="observation-trend"
-          data-observation-trend={labels ? undefined : true}
-          data-observation-task-token-chart={labels ? true : undefined}
-        >
+        <ul className="observation-trend complete-observation-trend" data-observation-trend>
           {rows.map((row, index) => {
             const value = values[index]!
+            const tokens = usages[index]
+            const recorded = row.metrics.state === 'not-ready' && !!row.recordedUsage
             return (
               <li key={row.key}>
                 <button
                   type="button"
                   className="btn btn--ghost observation-trend__button"
-                  data-observation-task={labels ? row.key : undefined}
                   aria-label={[
                     t('runObservability.exactTaskCount', {
                       tasks: BigInt(row.tasks).toLocaleString(i18n.language),
@@ -59,17 +53,20 @@ export function CompleteObservationTrend({
                       (bucket) =>
                         t('runObservability.' + bucket) +
                         ' ' +
-                        (row.metrics.state === 'ready'
-                          ? BigInt(row.metrics.tokens[bucket]).toLocaleString(i18n.language)
-                          : '—'),
+                        (tokens ? BigInt(tokens[bucket]).toLocaleString(i18n.language) : '—'),
                     ),
-                    labels?.get(row.key) ?? row.key,
+                    ...(recorded
+                      ? [
+                          t('runObservability.recordedTokens') +
+                            ' ' +
+                            value.toLocaleString(i18n.language),
+                        ]
+                      : []),
+                    row.key,
                   ].join(' · ')}
                   onFocus={() => setActiveKey(row.key)}
                   onMouseEnter={() => setActiveKey(row.key)}
-                  onClick={(event) =>
-                    onPoint ? onPoint(row.key, event.currentTarget) : onRange(row.from, row.to)
-                  }
+                  onClick={() => onRange(row.from, row.to)}
                 >
                   <span className="observation-trend__scale">
                     <span>
@@ -78,28 +75,23 @@ export function CompleteObservationTrend({
                       })}
                     </span>
                     <strong>
-                      {row.metrics.state === 'ready'
-                        ? value.toLocaleString(i18n.language) + ' Token'
-                        : labels
-                          ? row.metrics.state === 'not-ready'
-                            ? '?'
-                            : '—'
-                          : t(
-                              `runObservability.${row.metrics.state === 'not-ready' ? 'reportNotReady' : 'notApplicable'}`,
-                            )}
+                      {tokens
+                        ? (recorded ? t('runObservability.recordedTokens') + ' ' : '') +
+                          value.toLocaleString(i18n.language) +
+                          ' Token'
+                        : t(
+                            `runObservability.${row.metrics.state === 'not-ready' ? 'reportNotReady' : 'notApplicable'}`,
+                          )}
                     </strong>
                   </span>
                   <span className="observation-trend__track" aria-hidden="true">
                     <span
-                      className="complete-observation-task-bar"
-                      style={{ height: height(BigInt(row.tasks), taskMaximum) + '%' }}
-                    />
-                    <span
                       className="observation-trend__bar"
                       data-positive={value > 0n}
+                      data-partial={recorded}
                       style={{ height: height(value, maximum) + '%' }}
                     >
-                      {row.metrics.state === 'ready' &&
+                      {tokens &&
                         OBSERVATION_TOKEN_BUCKETS.map((bucket) => (
                           <span
                             key={bucket}
@@ -107,29 +99,17 @@ export function CompleteObservationTrend({
                             data-token-color={bucket}
                             style={{
                               height:
-                                value === 0n
-                                  ? 0
-                                  : height(
-                                      BigInt(
-                                        row.metrics.state === 'ready'
-                                          ? row.metrics.tokens[bucket]
-                                          : '0',
-                                      ),
-                                      value,
-                                    ) + '%',
+                                value === 0n ? 0 : height(BigInt(tokens[bucket]), value) + '%',
                             }}
                           />
                         ))}
                     </span>
-                    {row.metrics.state === 'not-ready' && (
+                    {row.metrics.state === 'not-ready' && !tokens && (
                       <span className="complete-observation-unknown-bar">?</span>
                     )}
                   </span>
-                  <span
-                    className="observation-trend__label"
-                    title={labels?.get(row.key) ?? row.key}
-                  >
-                    {labels?.get(row.key) ?? row.key}
+                  <span className="observation-trend__label" title={row.key}>
+                    {row.key}
                   </span>
                 </button>
               </li>
@@ -139,16 +119,17 @@ export function CompleteObservationTrend({
       </TableViewport>
       <div
         role="group"
-        aria-label={t(
-          labels ? 'runObservability.taskTokenTrend' : 'runObservability.trendInterval',
-        )}
+        aria-label={t('runObservability.trendInterval')}
         className="observation-trend__detail"
       >
         <p className="muted">
           {new Date(active.from).toLocaleString(i18n.language)} —{' '}
           {new Date(active.to).toLocaleString(i18n.language)}
         </p>
-        <CompleteTokens value={active.metrics} />
+        <CompleteTokens value={active.metrics} recordedUsage={active.recordedUsage} />
+        <p className="muted">
+          {t('runObservability.cost')} · <CompleteCost value={active.metrics} />
+        </p>
       </div>
     </div>
   )

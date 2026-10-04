@@ -15,7 +15,11 @@ import type {
   CompleteObservationTransferPage,
 } from '../ports/completeObservationReport'
 import { COMPLETE_OBSERVATION_FACT_SECTIONS } from '@agent-workflow/shared'
-import { completeReportFactRow } from '../domain/completeReportFacts'
+import {
+  completeReportFactRow,
+  completeReportFactSummary,
+  qualifiedCostEvidence,
+} from '../domain/completeReportFacts'
 
 /** Sealed derived transport on the original configured operations root, never an input database. */
 export function completeObservationFileSpool(appHome: string): CompleteObservationSpool {
@@ -30,6 +34,12 @@ export function completeObservationFileSpool(appHome: string): CompleteObservati
       if (input.header.reportId !== input.reportId)
         throw new Error('Original report seal identity changed')
       const factsOnly = input.summary.metrics.state === 'not-ready'
+      const hasCostEvidence =
+        'recordedCost' in input.summary.metrics || 'costCoverage' in input.summary.metrics
+      if (hasCostEvidence && !qualifiedCostEvidence(input.summary.metrics))
+        throw new Error('Original recorded summary cost is not qualified')
+      if ('recordedUsage' in input.summary || (factsOnly && hasCostEvidence))
+        completeReportFactSummary(input.summary)
       if (
         factsOnly &&
         ('numericRecords' in input.summary.inventory || 'nativeCaptures' in input.summary.inventory)

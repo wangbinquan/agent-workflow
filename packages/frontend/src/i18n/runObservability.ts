@@ -3,9 +3,6 @@ export const runObservabilityZh = {
   factsAvailable:
     '全部任务、调用与耗时已完整核对。各任务、Agent、运行时与执行尝试显示各自已核实的分类 Token 和人民币费用；包含缺记录的范围标为未知，不能按零计入。',
   taskUsageCoverage: '用量完整 {{ready}} · 有缺口 {{missing}} · 无模型调用 {{notApplicable}}',
-  taskTokenTrend: '各任务分类 Token 消耗',
-  taskTokenTrendHint:
-    '按每个任务的独立完整记录展示四类 Token。问号表示该任务有缺口；点击柱子查看任务明细。全部任务均可翻页查看，不把完整任务的小计当作全范围总量。',
   gapReason: '缺口原因',
   affectedTasks: '受影响任务',
   viewGapTasks: '查看受影响任务：{{reason}}',
@@ -22,6 +19,16 @@ export const runObservabilityZh = {
   fullTasks: '全部任务',
   exactTaskCount: '{{tasks}} 个任务',
   totalTokens: '完整 Token 消耗',
+  recordedTokenUsage: '已记录 Token 消耗',
+  recordedUsageCompact: '记录不完整 · {{observed}} / {{calls}} 次调用',
+  recordedCost: '已记录人民币估值',
+  incompleteEstimate: '估值不完整',
+  recordedCostCoverage: '估值不完整 · {{priced}} / {{records}} 条记录已定价',
+  recordedTokens: '已记录',
+  recordedUsageCoverage:
+    '已收到 {{records}} 条用量记录，{{observed}} / {{calls}} 次调用已有用量或零消耗证明。',
+  recordedUsageWarning:
+    '柱状图包含这个日期全部已收到记录的分类 Token；仍有原始记录缺失，完整总量未知，不能把缺口按零计入。',
   numericRecords: '用量记录',
   notApplicable: '无模型调用',
   reportNotReady: '该范围用量记录不完整',
@@ -34,7 +41,8 @@ export const runObservabilityZh = {
   contributions: '任务贡献明细',
   group: '归属',
   relatedTaskCount: '关联任务',
-  calls: '原生调用',
+  calls: '运行时执行次数',
+  runtimeExecutionCountHint: '每次受理执行计一次，含多 Agent、重试和再次执行。',
   started: '受理时间',
   usageRecords: 'Token 与费用明细',
   observedTime: '用量观测时间',
@@ -329,9 +337,6 @@ export const runObservabilityEn: RunObservabilityMessages = {
     'All tasks, invocations and durations are reconciled. Tasks, agents, runtimes and attempts show their own verified token categories and CNY costs. Scopes with missing records remain unknown, never zero.',
   taskUsageCoverage:
     'Complete usage {{ready}} · Gaps {{missing}} · No model calls {{notApplicable}}',
-  taskTokenTrend: 'Token categories by task',
-  taskTokenTrendHint:
-    'Each bar uses that task’s independently verified token records. A question mark means missing usage. Select a bar to open the task. Every task is reachable through pagination; verified tasks are never summed into a whole-range total.',
   gapReason: 'Missing evidence',
   affectedTasks: 'Affected tasks',
   viewGapTasks: 'View affected tasks: {{reason}}',
@@ -348,6 +353,16 @@ export const runObservabilityEn: RunObservabilityMessages = {
   fullTasks: 'All tasks',
   exactTaskCount: '{{tasks}} tasks',
   totalTokens: 'Complete token usage',
+  recordedTokenUsage: 'Recorded token usage',
+  recordedUsageCompact: 'Incomplete records · {{observed}} / {{calls}} calls',
+  recordedCost: 'Recorded CNY estimate',
+  incompleteEstimate: 'Incomplete estimate',
+  recordedCostCoverage: 'Incomplete estimate · {{priced}} / {{records}} records priced',
+  recordedTokens: 'Recorded',
+  recordedUsageCoverage:
+    '{{records}} usage records received; {{observed}} / {{calls}} calls have usage or proven zero usage.',
+  recordedUsageWarning:
+    'The columns include classified Tokens from every received record for this date. Original records are still missing, so full usage remains unknown; gaps are never counted as zero.',
   numericRecords: 'Usage records',
   notApplicable: 'No model calls',
   reportNotReady: 'Usage records are incomplete for this scope',
@@ -361,7 +376,9 @@ export const runObservabilityEn: RunObservabilityMessages = {
   contributions: 'Contributions by task',
   group: 'Attribution',
   relatedTaskCount: 'Related tasks',
-  calls: 'Native invocations',
+  calls: 'Runtime executions',
+  runtimeExecutionCountHint:
+    'Counts accepted runtime executions, including multiple Agents, retries and reruns.',
   started: 'Accepted at',
   usageRecords: 'Token and cost records',
   observedTime: 'Usage observed at',

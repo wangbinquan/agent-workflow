@@ -2658,8 +2658,8 @@
       ],
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#transaction:193",
-      "line": 193,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#transaction:194",
+      "line": 194,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#publishCompleteReport",
       "status": "co-located-risk",
       "symbol": "publishCompleteReport",
@@ -2672,8 +2672,8 @@
       ],
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
       "finalCriterion": "commit-intent-then-effect",
-      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#transaction:46",
-      "line": 46,
+      "id": "tx:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#transaction:47",
+      "line": 47,
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#stageCompleteReportPage",
       "status": "co-located-risk",
       "symbol": "stageCompleteReportPage",
@@ -3272,7 +3272,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0b89825f380acb270867144f623daf295a41a725abec08e6979ddd60bdc1e1ed",
+  "sourceDigest": "sha256:de58ac6a25dcc0544c067c3cfcea7666050ea30ea91e4a4fd7aed7430a88ed5b",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {

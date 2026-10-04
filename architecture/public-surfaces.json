@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1345,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 24509,
+    "recursiveFields": 24737,
     "symbols": 1148
   },
   "entries": [
@@ -118926,8 +118926,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 301,
-        "maxUnionVariants": 146
+        "maxTransitiveLeafFields": 377,
+        "maxUnionVariants": 158
       },
       "consumerEdgeIds": [
         "import:82f0eb9d4b569c581f9a",
@@ -119074,8 +119074,48 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -119129,6 +119169,26 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:2.recordedCost.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:2.records",
           "type": "string"
         },
@@ -119149,13 +119209,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.recordedUsage",
+          "type": "CompleteObservationTrend['recordedUsage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.attemptCount",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -119205,6 +119310,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.recordedCost.records",
           "type": "string"
         },
         {
@@ -119453,13 +119578,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.recordedUsage",
+          "type": "CompleteObservationReportSummary['recordedUsage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.attemptCount",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -119509,6 +119679,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.recordedCost.records",
           "type": "string"
         },
         {
@@ -119870,8 +120060,48 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -119925,6 +120155,26 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:2.recordedCost.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:2.records",
           "type": "string"
         },
@@ -119945,13 +120195,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.recordedUsage",
+          "type": "CompleteObservationTrend['recordedUsage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.attemptCount",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -120001,6 +120296,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.recordedCost.records",
           "type": "string"
         },
         {
@@ -120249,13 +120564,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.recordedUsage",
+          "type": "CompleteObservationReportSummary['recordedUsage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.attemptCount",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -120305,6 +120665,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.recordedCost.records",
           "type": "string"
         },
         {
@@ -120571,8 +120951,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 340,
-        "maxUnionVariants": 160
+        "maxTransitiveLeafFields": 416,
+        "maxUnionVariants": 172
       },
       "consumerEdgeIds": [
         "import:0abc99eac23c4c14732e",
@@ -120737,8 +121117,48 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -120792,6 +121212,26 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:2.recordedCost.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:2.records",
           "type": "string"
         },
@@ -120812,13 +121252,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.recordedUsage",
+          "type": "CompleteObservationTrend['recordedUsage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.attemptCount",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -120868,6 +121353,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:2.recordedCost.records",
           "type": "string"
         },
         {
@@ -121114,13 +121619,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.recordedUsage",
+          "type": "CompleteObservationReportSummary['recordedUsage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.attemptCount",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -121170,6 +121720,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:2.recordedCost.records",
           "type": "string"
         },
         {
@@ -121501,13 +122071,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.recordedUsage",
+          "type": "CompleteObservationReportSummary['recordedUsage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.attemptCount",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -121557,6 +122172,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.records",
           "type": "string"
         },
         {
@@ -121908,8 +122543,48 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -121963,6 +122638,26 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:2.recordedCost.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.metrics.$variant:2.records",
           "type": "string"
         },
@@ -121983,13 +122678,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.recordedUsage",
+          "type": "CompleteObservationTrend['recordedUsage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.attemptCount",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -122039,6 +122779,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.records",
           "type": "string"
         },
         {
@@ -122801,8 +123561,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 395,
-        "maxUnionVariants": 186
+        "maxTransitiveLeafFields": 471,
+        "maxUnionVariants": 198
       },
       "consumerEdgeIds": [
         "import:254fc232664722e36ed6"
@@ -123160,13 +123920,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.recordedUsage",
+          "type": "CompleteObservationReportSummary['recordedUsage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.attemptCount",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -123220,6 +124025,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.records",
           "type": "string"
         },
         {
@@ -123585,8 +124410,48 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -123644,6 +124509,26 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:2.recordedCost.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:2.records",
           "type": "string"
         },
@@ -123668,13 +124553,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.recordedUsage",
+          "type": "CompleteObservationTrend['recordedUsage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.attemptCount",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -123728,6 +124658,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.records",
           "type": "string"
         },
         {
@@ -124163,13 +125113,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.recordedUsage",
+          "type": "CompleteObservationReportSummary['recordedUsage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.attemptCount",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -124223,6 +125218,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.records",
           "type": "string"
         },
         {
@@ -124588,8 +125603,48 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -124647,6 +125702,26 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:2.recordedCost.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:2.records",
           "type": "string"
         },
@@ -124671,13 +125746,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.recordedUsage",
+          "type": "CompleteObservationTrend['recordedUsage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.attemptCount",
           "type": "string"
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:0",
+          "type": "'visible'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.costCoverage.visibility.$variant:1",
+          "type": "'hidden'"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.gaps",
           "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedCost.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -124731,6 +125851,26 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.amount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.currency",
+          "type": "'CNY'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.pricedRecords",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:2.recordedCost.records",
           "type": "string"
         },
         {
@@ -193606,7 +194746,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0b89825f380acb270867144f623daf295a41a725abec08e6979ddd60bdc1e1ed",
+  "sourceDigest": "sha256:de58ac6a25dcc0544c067c3cfcea7666050ea30ea91e4a4fd7aed7430a88ed5b",
   "targetContexts": [
     "collaboration",
     "development-automation",

@@ -82,13 +82,18 @@ function DimensionCard({
 }
 function Summary({ report }: { report: ReadableObservationReport }) {
   const { t, i18n } = useTranslation(),
-    value = report.summary.metrics
+    value = report.summary.metrics,
+    recorded = value.state === 'not-ready' ? report.summary.recordedUsage : undefined
   return (
-    <div className="observation-summary">
+    <div className="observation-summary observation-summary--complete">
       <Card title={t('runObservability.fullTasks')}>
         <strong className="observation-summary__value">
           {BigInt(report.summary.inventory.tasks).toLocaleString(i18n.language)}
         </strong>
+        <p className="muted" title={t('runObservability.runtimeExecutionCountHint')}>
+          {t('runObservability.calls')} ·{' '}
+          {BigInt(report.summary.inventory.invocations).toLocaleString(i18n.language)}
+        </p>
         {report.summary.usageCoverage && (
           <p className="muted">
             {t('runObservability.taskUsageCoverage', {
@@ -103,20 +108,20 @@ function Summary({ report }: { report: ReadableObservationReport }) {
           </p>
         )}
       </Card>
-      <Card title={t('runObservability.totalTokens')}>
+      <Card title={t('runObservability.' + (recorded ? 'recordedTokenUsage' : 'totalTokens'))}>
         <div className="observation-summary__value">
-          <CompleteTokens value={value} />
+          <CompleteTokens value={value} recordedUsage={recorded} compact />
         </div>
       </Card>
-      <Card title={t('runObservability.cost')}>
+      <Card
+        title={t(
+          'runObservability.' +
+            (value.state !== 'not-applicable' && value.recordedCost ? 'recordedCost' : 'cost'),
+        )}
+      >
         <div className="observation-summary__value">
-          <CompleteCost value={value} />
+          <CompleteCost value={value} compact />
         </div>
-      </Card>
-      <Card title={t('runObservability.calls')}>
-        <strong className="observation-summary__value">
-          {BigInt(report.summary.inventory.invocations).toLocaleString(i18n.language)}
-        </strong>
       </Card>
     </div>
   )
@@ -319,17 +324,9 @@ export function CompleteRunObservability({
             <p className="muted">{t('runObservability.reportBuilding')}</p>
           </>
         )}
-      {!current.error && current.data?.state === 'not-ready' && (
-        <NoticeBanner
-          tone="warning"
-          title={t(
-            current.data.facts
-              ? 'runObservability.usageGapTitle'
-              : 'runObservability.reportNotReady',
-          )}
-        >
+      {!current.error && current.data?.state === 'not-ready' && !current.data.facts && (
+        <NoticeBanner tone="warning" title={t('runObservability.reportNotReady')}>
           <p>{t('runObservability.noIncompleteTotals')}</p>
-          {current.data.facts && <p>{t('runObservability.factsAvailable')}</p>}
           <ul>
             {current.data.gaps.map((gap) => (
               <li key={gap}>{observationGapLabel(gap, t)}</li>
@@ -359,7 +356,7 @@ export function CompleteRunObservability({
             })}
           </p>
           {!search.task && tab === 'overview' && <Summary report={report} />}
-          {report.summary.metrics.state === 'not-ready' && (
+          {!search.task && tab === 'overview' && (
             <QualityCard
               report={report}
               onSelect={selectQuality}
@@ -417,25 +414,6 @@ export function CompleteRunObservability({
             </Card>
           ) : tab === 'overview' ? (
             <>
-              <Card title={t('runObservability.taskTokenTrend')}>
-                <p className="muted">{t('runObservability.taskTokenTrendHint')}</p>
-                <CompleteObservationPage query={tasks}>
-                  {(rows) => (
-                    <Trend
-                      rows={rows.map((row) => ({
-                        key: row.task.id,
-                        from: row.task.startedAt,
-                        to: row.task.startedAt + 1,
-                        tasks: '1',
-                        metrics: row.metrics,
-                      }))}
-                      labels={new Map(rows.map((row) => [row.task.id, row.task.name]))}
-                      onPoint={onTask}
-                      onRange={() => {}}
-                    />
-                  )}
-                </CompleteObservationPage>
-              </Card>
               <Card title={t('runObservability.trend')}>
                 <CompleteObservationPage query={trends}>
                   {(rows) => (
@@ -538,14 +516,6 @@ export function CompleteRunObservability({
               <Card title={t('runObservability.timeline')}>
                 <CompleteObservationTimeline report={report} />
               </Card>
-              {report.summary.metrics.state !== 'not-ready' && (
-                <QualityCard
-                  report={report}
-                  onSelect={selectQuality}
-                  selectedKey={selectedQualityKey}
-                  triggerRef={dimensionTrigger}
-                />
-              )}
               <CompleteObservationCapabilities />
             </>
           )}

@@ -322,6 +322,32 @@ test('overview renders exact Token data as bars and opens the matching complete 
   expect(f.changes.at(-1)).toMatchObject({ tab: 'tasks', period: 'custom', from: 0, to: NOW + 1 })
 })
 
+test('capture page controls belong to their shared Card without adding another card boundary', async () => {
+  fixture({ ...initial, task: 'parent' })
+  await screen.findByRole('heading', { name: '父任务' })
+  for (const key of ['nativeCaptureTitle', 'platformCaptureTitle']) {
+    const heading = await screen.findByRole('heading', {
+      name: i18n.t('runObservability.' + key),
+    })
+    const card = heading.closest('.card')!
+    await waitFor(() =>
+      expect(within(card as HTMLElement).getByRole('button', { name: '下一页' })).toBeDefined(),
+    )
+    const body = card.querySelector('.card__body')!
+    expect(body.querySelectorAll('.card')).toHaveLength(0)
+    expect(body.querySelectorAll('.complete-observation-pager')).toHaveLength(1)
+    for (const key of ['first', 'previous', 'next']) {
+      expect(
+        (
+          within(body as HTMLElement).getByRole('button', {
+            name: i18n.t('runObservability.' + key),
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(true)
+    }
+  }
+})
+
 test('a child refresh and another descendant retain both ancestor reports and restore real dimension triggers', async () => {
   const f = fixture({ ...initial, task: 'parent' })
   await screen.findByRole('heading', { name: '父任务' })

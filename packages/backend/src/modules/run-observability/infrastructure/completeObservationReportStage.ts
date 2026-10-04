@@ -20,6 +20,7 @@ import type {
 } from '../ports/completeObservationReport'
 import { completeOrdinalKey } from '../domain/completeOrdinal'
 import { assertCompleteReportTransferPage } from '../domain/completeReportEnvelope'
+import { completeReportFactSummary, qualifiedCostEvidence } from '../domain/completeReportFacts'
 import {
   decodeCompleteReport,
   type CompleteReportProgress,
@@ -252,6 +253,15 @@ export async function publishCompleteReport(
       .where(and(eq(observationReportCounts.reportId, id), eq(observationReportCounts.parent, '')))
       .all()
     const summaryCounts = Object.fromEntries(counts.map((count) => [count.section, count.total]))
+    const hasCostEvidence =
+      'recordedCost' in manifest.summary.metrics || 'costCoverage' in manifest.summary.metrics
+    if (hasCostEvidence && !qualifiedCostEvidence(manifest.summary.metrics))
+      throw new Error('Original recorded summary cost is not qualified')
+    if (
+      'recordedUsage' in manifest.summary ||
+      (manifest.summary.metrics.state === 'not-ready' && hasCostEvidence)
+    )
+      completeReportFactSummary(manifest.summary)
     if (manifest.summary.metrics.state === 'not-ready') {
       const unexpected = await tx
         .select({ section: observationReportCounts.section })

@@ -1307,3 +1307,38 @@ test('platform capture dialog keeps last-row focus and shared spacing at wide an
     await expect(page.getByRole('button', { name: /CSV|Export|More filters/ })).toHaveCount(0)
   }
 })
+
+test('actual attempt swimlanes fill aligned tracks on one ruler at desktop and narrow widths', async ({
+  page,
+}, testInfo) => {
+  const { task } = await seedTask()
+  const original = await originalReport(task.id)
+  const attempts = await originalRows<CompleteObservationAttempt>(original, 'attempts')
+  expect(attempts.length).toBeGreaterThan(0)
+  await prime(page)
+  await page.goto(`${daemon.baseUrl}/observability?task=${task.id}`)
+  const lanes = page.locator('.execution-swimlane').first()
+  await expect(lanes.locator('tbody tr')).toHaveCount(attempts.length)
+  await expect(lanes.locator('.execution-swimlane__axis span')).toHaveCount(5)
+  for (const width of [1280, 390]) {
+    await page.setViewportSize({ width, height: 844 })
+    const geometry = await lanes.locator('.execution-swimlane__track').evaluateAll((elements) =>
+      elements.map((element) => {
+        const box = element.getBoundingClientRect()
+        return { x: box.x, width: box.width }
+      }),
+    )
+    expect(geometry).toHaveLength(attempts.length)
+    for (const track of geometry) {
+      // The real regression collapsed every track to 2px under the common btn alignment.
+      expect(track.width).toBeGreaterThan(400)
+      expect(track.x).toBeCloseTo(geometry[0]!.x, 0)
+      expect(track.width).toBeCloseTo(geometry[0]!.width, 0)
+    }
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(width)
+    await page.screenshot({
+      path: testInfo.outputPath(`attempt-swimlanes-${width}.png`),
+      fullPage: true,
+    })
+  }
+})
