@@ -48,6 +48,12 @@ import {
 } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { ProviderNeutralDatabase } from '../src/db/query'
+import {
+  CandidatePublicationStore,
+  MappedCandidateFactory,
+  completionBarrier,
+  enteredBeforeOutcome as enteredBeforeCandidateOutcome,
+} from './helpers/repositoryCandidatePublication'
 
 setDefaultTimeout(120_000)
 
@@ -223,6 +229,64 @@ describeEachProvider(
     })
     beforeEach(async () => {
       await seedLaneDatabase(harness.db, repoPath)
+    }, 120_000)
+
+    test('RFC-370 real Mission waits for the complete selected candidate factory before storing its derived facts', async () => {
+      const store = new CandidatePublicationStore(),
+        barrier = completionBarrier()
+      store.locations.set(repoPath, repoPath)
+      const candidateEffects = Object.freeze(new MappedCandidateFactory(store))
+      automation = composeDevelopmentAutomation({
+        db: fx.db,
+        appHome: HOME,
+        agentLauncher: scripted,
+        changeCandidate: bindChangeCandidateParticipant({ candidateEffects }),
+      })
+      const { missionId, actionRunId, workspacePath, prompt } =
+        await launchMissionToAction('j4-selected-candidate')
+      store.locations.set(workspacePath, workspacePath)
+      writeFileSync(join(workspacePath, 'selected.txt'), 'selected native candidate\n')
+      const executionRef = launches.at(-1)!.executionRef
+      outcomes.set(
+        executionRef,
+        exited(executionRef, await envelopeFor(prompt, missionId, 'changed')),
+      )
+      store.hooks.set('candidate:acquire', barrier.before)
+      const pending = automation.reconcile(missionId)
+      void pending.catch(() => undefined)
+      try {
+        await enteredBeforeCandidateOutcome(barrier.entered, pending)
+        expect(store.acquisitions).toEqual([
+          { baselineReference: repoPath, overlayReference: workspacePath },
+        ])
+        expect(store.workspacesCreated).toBe(0)
+        const waiting = (await fx.store.getMission(missionId))!
+        const waitingCells = await fx.snapshots.getCells(waiting.requirementBundleRef!)
+        expect(waitingCells?.['__action.candidateState']).not.toMatchObject({
+          state: 'known',
+          value: 'derived',
+        })
+        barrier.release()
+        expect(await pending).toMatchObject({
+          kind: 'action-collect',
+          result: { kind: 'action-collected', disposition: 'validated-changed' },
+        })
+        const attempt = (await fx.store.listAttempts(actionRunId))[0]!
+        expect(attempt.status).toBe('validated')
+        const mission = (await fx.store.getMission(missionId))!
+        const cells = (await fx.snapshots.getCells(mission.requirementBundleRef!))!
+        expect(cells['__action.candidateState']).toMatchObject({ state: 'known', value: 'derived' })
+        expect(cells['__action.candidateTreeOid']).toMatchObject({
+          state: 'known',
+          value: expect.stringMatching(/^[a-f0-9]{40}$/),
+        })
+        expect(store.workspacesCreated).toBe(1)
+        expect(store.baselineCloses).toBe(1)
+        expect(store.legacyReads).toBe(0)
+      } finally {
+        barrier.release()
+        await pending.catch(() => undefined)
+      }
     }, 120_000)
 
     test('RFC-370 restored ordinary canceled action awaits DA discard and never invokes the SC conflict owner', async () => {

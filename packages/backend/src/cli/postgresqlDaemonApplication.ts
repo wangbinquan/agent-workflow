@@ -2,6 +2,7 @@ import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
   RepositoryGitWorkspaceFactory,
+  RepositoryCandidateEffectsFactory,
 } from '@/modules/source-control/public/types'
 import {
   selectWorkspaceUploadContentFactory,
@@ -457,6 +458,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly workspaceUploads?: WorkspaceUploadContentFactory
   readonly isolationWorkspaces?: IsolationWorkspaceFactory
   readonly repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
+  readonly repositoryCandidateEffects?: RepositoryCandidateEffectsFactory
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -1610,8 +1612,9 @@ export async function composePostgresqlApplication(
     ...employeeDelivery,
     conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
     sourceControl: {
-      ...bindChangeCandidateParticipant(),
+      ...bindChangeCandidateParticipant({ candidateEffects: input.repositoryCandidateEffects }),
       ...bindCandidateDeliveryParticipant({
+        candidateEffects: input.repositoryCandidateEffects,
         publicationTransport: repositoryPublicationTransport,
       }),
       ...bindEmployeeCaseWorkspaceParticipant({
@@ -1813,8 +1816,11 @@ export async function composePostgresqlApplication(
     attemptContext: input.attemptContext,
     admissionLookup: developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunnerFor(input.db),
-    changeCandidate: bindChangeCandidateParticipant(),
+    changeCandidate: bindChangeCandidateParticipant({
+      candidateEffects: input.repositoryCandidateEffects,
+    }),
     candidateDelivery: bindCandidateDeliveryParticipant({
+      candidateEffects: input.repositoryCandidateEffects,
       publicationTransport: repositoryPublicationTransport,
     }),
     conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),

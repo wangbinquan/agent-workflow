@@ -28,6 +28,12 @@ import { runCommitPush } from '@/services/commitPushRunner'
 import { runGit } from '@/util/git'
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
+import {
+  CandidatePublicationStore,
+  MappedCandidatePublicationTransport,
+  completionBarrier,
+  enteredBeforeOutcome,
+} from './helpers/repositoryCandidatePublication'
 
 const created: string[] = []
 let db: ProviderNeutralDatabase
@@ -166,6 +172,72 @@ const baseParams = {
   generateMessage: async () => ({ message: 'chore: submodule bump' }),
   generateRepair: async () => ({ message: null }),
 }
+
+// RFC-370: the real recursive consumer must finish the child session before parent work.
+describeEachProvider('RFC-370 recursive publication close completion', (harness) => {
+  for (const rejectClose of [false, true]) {
+    test(
+      rejectClose
+        ? 'child close rejection preserves identity and prevents parent publication'
+        : 'held child close ACK prevents opening the parent publication',
+      async () => {
+        db = harness.db
+        const { parent, subOrigin } = await fixture(true)
+        await seedTask(parent)
+        writeFileSync(join(parent, 'vendor', 'a.txt'), 'publication close boundary\n')
+        const barrier = completionBarrier()
+        const store = new CandidatePublicationStore()
+        const failure = new Error('recursive child publication close rejected')
+        store.locations.set(parent, parent)
+        store.locations.set(join(parent, 'vendor'), join(parent, 'vendor'))
+        store.hooks.set('publication:close', async () => {
+          if (store.publicationCloses !== 1) return
+          await barrier.before()
+          if (rejectClose) throw failure
+        })
+        const pending = runCommitPush(
+          { ...baseParams, worktreePath: parent },
+          composeSqliteCommitPushDeps(db, {
+            publicationTransport: Object.freeze(new MappedCandidatePublicationTransport(store)),
+          }),
+        )
+        try {
+          await enteredBeforeOutcome(barrier.entered, pending)
+          expect(store.publicationOpens).toBe(1)
+          expect(store.publicationCloses).toBe(1)
+          const childHead = await runGit(subOrigin, ['rev-parse', 'refs/heads/agent-workflow/t1'])
+          expect(childHead.exitCode).toBe(0)
+          const parentUrl = (await runGit(parent, ['remote', 'get-url', 'origin'])).stdout.trim()
+          expect(
+            (await runGit(parentUrl, ['rev-parse', '--verify', 'refs/heads/agent-workflow/t1']))
+              .exitCode,
+          ).not.toBe(0)
+          barrier.release()
+          if (rejectClose) {
+            expect<unknown>(await pending.catch((error) => error)).toBe(failure)
+            expect(store.publicationOpens).toBe(1)
+            expect(
+              (await runGit(parentUrl, ['rev-parse', '--verify', 'refs/heads/agent-workflow/t1']))
+                .exitCode,
+            ).not.toBe(0)
+          } else {
+            expect((await pending).meta.pushOutcome).toBe('pushed')
+            expect(store.publicationOpens).toBe(2)
+            expect(store.publicationCloses).toBe(2)
+            expect(
+              (await runGit(parentUrl, ['rev-parse', '--verify', 'refs/heads/agent-workflow/t1']))
+                .exitCode,
+            ).toBe(0)
+          }
+        } finally {
+          barrier.release()
+          await pending.catch(() => undefined)
+        }
+      },
+      120_000,
+    )
+  }
+})
 
 describeEachProvider('RFC-210 子仓递归 commit-push（双引擎）', (harness: ProviderHarness) => {
   beforeEach(() => {

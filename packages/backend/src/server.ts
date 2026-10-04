@@ -2,6 +2,7 @@ import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
   RepositoryGitWorkspaceFactory,
+  RepositoryCandidateEffectsFactory,
 } from '@/modules/source-control/public/types'
 import {
   selectWorkspaceUploadContentFactory,
@@ -845,6 +846,7 @@ export interface AppDeps {
   workspaceUploads?: WorkspaceUploadContentFactory
   isolationWorkspaces?: IsolationWorkspaceFactory
   repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
+  repositoryCandidateEffects?: RepositoryCandidateEffectsFactory
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -2075,8 +2077,11 @@ function composeFallbackDevelopmentAutomation(
     attemptContext: deps.attemptContext,
     admissionLookup: deps.developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunnerFor(deps.db),
-    changeCandidate: bindChangeCandidateParticipant(),
+    changeCandidate: bindChangeCandidateParticipant({
+      candidateEffects: deps.repositoryCandidateEffects,
+    }),
     candidateDelivery: bindCandidateDeliveryParticipant({
+      candidateEffects: deps.repositoryCandidateEffects,
       publicationTransport: deps.repositoryPublicationTransport,
     }),
     conflictMerge: bindConflictMergeParticipant({ effects: deps.conflictMergeWorkspaceEffects }),
@@ -3164,8 +3169,9 @@ function composeSqliteApiRouteMounts(
           effects: deps.conflictMergeWorkspaceEffects,
         }),
         sourceControl: {
-          ...bindChangeCandidateParticipant(),
+          ...bindChangeCandidateParticipant({ candidateEffects: deps.repositoryCandidateEffects }),
           ...bindCandidateDeliveryParticipant({
+            candidateEffects: deps.repositoryCandidateEffects,
             publicationTransport: repositoryPublicationTransport,
           }),
           ...bindEmployeeCaseWorkspaceParticipant({

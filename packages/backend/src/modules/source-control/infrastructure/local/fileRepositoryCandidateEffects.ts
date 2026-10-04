@@ -45,6 +45,9 @@ export function createFileRepositoryCandidateEffectsFactory(
           return runGit(baselineReference, [...args], options)
         },
         createWorkspace() {
+          if (overlayReference === undefined) {
+            throw new Error('candidate-overlay-reference-required')
+          }
           const parent = mkdtempSync(join(tmpdir(), 'aw-candidate-'))
           const ws = join(parent, 'ws')
           return {

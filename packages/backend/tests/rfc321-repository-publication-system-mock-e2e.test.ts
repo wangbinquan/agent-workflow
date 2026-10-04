@@ -37,9 +37,11 @@ import {
   createRepositoryPublicationTransport,
 } from '../src/modules/source-control/composition'
 import { DrizzleRepositoryTransportCredentialRepository } from '../src/modules/source-control/infrastructure/repositoryTransportCredentialRepository'
-import { pushCandidate } from '../src/modules/source-control/application/deliverCandidate'
+import { bindCandidateDeliveryParticipant } from '../src/modules/source-control/composition/repositoryCandidate'
 import { createUser } from '../src/services/users'
 import { runGit } from '../src/util/git'
+
+const { push: pushCandidate } = bindCandidateDeliveryParticipant()
 
 const ENDPOINT_BINDING_DIGEST = '3'.repeat(64)
 const INVALID_PERSONAL_TOKEN = 'system-mock-invalid-personal-token' // gitleaks:allow

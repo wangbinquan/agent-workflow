@@ -106,7 +106,7 @@ class CandidateFixture {
 
 class SelectedFactory implements RepositoryCandidateEffectsFactory {
   constructor(readonly fixture: CandidateFixture) {}
-  async acquire(input: { readonly baselineReference: string; readonly overlayReference: string }) {
+  async acquire(input: { readonly baselineReference: string; readonly overlayReference?: string }) {
     expect<SelectedFactory>(this).toBe(this.fixture.factory)
     expect(input).toEqual({
       baselineReference: BASE.baselineRepoPath,

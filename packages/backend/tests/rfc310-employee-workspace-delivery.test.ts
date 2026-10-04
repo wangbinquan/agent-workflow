@@ -32,6 +32,14 @@ import type { ReactionExecutionPlan as EmployeeReactionExecutionPlan } from '@/m
 import { canonicalDigest } from '@/modules/development-automation/domain/canonicalJson'
 import { staticCachedRepositoryPreparation } from './helpers/staticCachedRepositoryPreparation'
 import { createHeldEmployeeCaseFactory } from './fixtures/rfc370-employee-case-held-effects'
+import { stableIdentityComponent } from '@/util/gitRef'
+import {
+  CandidatePublicationStore,
+  MappedCandidateFactory,
+  MappedCandidatePublicationTransport,
+  completionBarrier,
+  enteredBeforeOutcome,
+} from './helpers/repositoryCandidatePublication'
 
 setDefaultTimeout(120_000)
 
@@ -113,6 +121,263 @@ describeEachProvider('RFC-310 数字员工共享工作区与平台交付（双�
   beforeEach(() => {
     seedFixture(harness)
   })
+
+  test('RFC-370 DE prepare and publish share the complete selected factory and wait before durable publication', async () => {
+    const baseline = join(scene, 'selected-baseline'),
+      remote = join(scene, 'selected-remote'),
+      appHome = join(scene, 'selected-home')
+    mkdirSync(baseline)
+    mkdirSync(remote)
+    git(baseline, 'init', '-q', '-b', 'main')
+    writeFileSync(join(baseline, 'base.txt'), 'baseline\n')
+    git(baseline, 'add', '.')
+    git(
+      baseline,
+      '-c',
+      'user.name=Selected DE',
+      '-c',
+      'user.email=selected@test',
+      'commit',
+      '-q',
+      '-m',
+      'baseline',
+    )
+    const baselineSha = git(baseline, 'rev-parse', 'HEAD')
+    git(remote, 'init', '-q', '--bare')
+    await db.insert(cachedRepos).values({
+      id: 'repo-1',
+      urlHash: 'selected-de',
+      localPath: baseline,
+      defaultBranch: 'main',
+      lastFetchedAt: 1,
+      createdAt: 1,
+    })
+    await db.insert(employeeCases).values({
+      id: 'case-selected',
+      employeeId: 'employee-1',
+      employeeRevision: 1,
+      typeId: 'development',
+      typeRevision: 1,
+      primaryContextId: 'selected-issue',
+      executionPolicyRevision: 1,
+      state: 'active',
+      currentWorkItemRef: 'prepare-change',
+      activeRoundId: 'selected-prepare',
+      revision: 1,
+      writerGeneration: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const sourceControl = bindEmployeeCaseWorkspaceParticipant()
+    const workspace = await sourceControl.materialize({
+      caseRoot: join(
+        appHome,
+        'workspaces',
+        'employee-cases',
+        stableIdentityComponent('case-selected'),
+        'scene',
+      ),
+      baselineRepoPath: baseline,
+      baselineSha,
+    })
+    writeFileSync(join(workspace.workspacePath, 'selected.txt'), 'selected DE candidate\n')
+    await db.insert(employeeCaseWorkspaces).values({
+      caseId: 'case-selected',
+      repositoryId: 'repo-1',
+      cachedRepoId: 'repo-1',
+      baselineSha,
+      targetBranch: 'main',
+      sourceBranch: 'selected',
+      remoteHeadSha: null,
+      state: 'active',
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const issue = {
+      id: 'selected-issue',
+      revision: 1,
+      typeId: 'development.issue-handling',
+      lifecycleState: 'active',
+      artifactRefs: [],
+      stateJson: JSON.stringify({
+        status: 'active',
+        subjectRef: 'selected-request',
+        repositoryRef: 'repo-1',
+        request: {
+          kind: 'body-and-files',
+          body: 'implement selected change',
+          externalId: null,
+          uploads: [],
+        },
+        materialArtifactRefs: [],
+        deliveryContent: {
+          commitMessage: 'selected DE change',
+          mergeRequestTitle: 'Selected DE change',
+          mergeRequestDescription: 'Publish the selected native candidate.',
+        },
+      }),
+    }
+    const preparePlan = plan({
+      roundRef: 'selected-prepare',
+      caseRef: 'case-selected',
+      workItemRef: 'prepare-change',
+      contexts: [issue],
+      allowedEffectKinds: ['source-control.candidate'],
+    })
+    await db.insert(employeeReactionRounds).values({
+      id: preparePlan.roundRef,
+      caseId: 'case-selected',
+      caseRevision: 1,
+      employeeId: 'employee-1',
+      employeeRevision: 1,
+      ruleId: 'selected-prepare',
+      workItemRef: 'prepare-change',
+      workContractId: 'development.prepare-change',
+      workContractVersion: 1,
+      executionPolicyRevision: 1,
+      inputContextRefsJson: '[]',
+      planJson: JSON.stringify(preparePlan),
+      state: 'planned',
+      attemptOrdinal: 0,
+      createdAt: 1,
+      updatedAt: 1,
+    })
+    const store = new CandidatePublicationStore()
+    store.locations.set(baseline, baseline)
+    store.locations.set(workspace.workspacePath, workspace.workspacePath)
+    const remoteRef = store.reference(remote),
+      factory = Object.freeze(new MappedCandidateFactory(store))
+    const transport = Object.freeze(new MappedCandidatePublicationTransport(store))
+    let ensures = 0
+    const platform = composeDevelopmentEmployeePlatformWorkItems({
+      db,
+      appHome,
+      reactionRounds: createEmployeeReactionRoundQueries(db),
+      directPublicationSubject: { kind: 'system' },
+      conflictMerge: bindConflictMergeParticipant(),
+      sourceControl: {
+        ...bindChangeCandidateParticipant({ candidateEffects: factory }),
+        ...bindCandidateDeliveryParticipant({
+          candidateEffects: factory,
+          publicationTransport: transport,
+        }),
+        ...sourceControl,
+      },
+      repoRemote: { resolve: () => ({ remoteUrl: remoteRef, defaultBranch: 'main' }) },
+      mrEffects: {
+        async reply() {
+          throw new Error('no selected DE reply expected')
+        },
+        async observe() {
+          throw new Error('no selected DE observe expected')
+        },
+        async ensure() {
+          ensures += 1
+          return {
+            ok: true as const,
+            mr: {
+              mrRef: 'selected-mr',
+              webUrl: null,
+              state: 'opened' as const,
+              sourceSha: git(remote, 'rev-parse', 'refs/heads/selected'),
+              created: true,
+            },
+          }
+        },
+      },
+    })
+    const prepared = JSON.parse(await platform.execute(preparePlan)) as {
+      status: string
+      contextPatches: Array<{ stateJson: string }>
+    }
+    expect(prepared.status).toBe('ok')
+    const candidateState = JSON.parse(prepared.contextPatches[0]!.stateJson) as {
+      candidateRef: string
+      treeOid: string
+    }
+    const candidateContext = {
+      id: 'selected-candidate',
+      revision: 1,
+      typeId: 'development.change-candidate',
+      stateJson: prepared.contextPatches[0]!.stateJson,
+      artifactRefs: [],
+    }
+    const publishPlan = plan({
+      roundRef: 'selected-prepare',
+      caseRef: 'case-selected',
+      workItemRef: 'publish-mr',
+      contexts: [issue, candidateContext],
+      allowedEffectKinds: ['source-control.push', 'source-control.merge-request'],
+    })
+    const publicationClose = completionBarrier(),
+      baselineClose = completionBarrier()
+    store.hooks.set('publication:close', publicationClose.before)
+    store.hooks.set('candidate:close', async () => {
+      if (store.publicationOpens > 0) await baselineClose.before()
+    })
+    const pending = platform.execute(publishPlan)
+    void pending.catch(() => undefined)
+    try {
+      await enteredBeforeOutcome(publicationClose.entered, pending)
+      const committed = (
+        await db
+          .select()
+          .from(employeeChangeCandidates)
+          .where(eq(employeeChangeCandidates.candidateRef, candidateState.candidateRef))
+      )[0]!
+      expect(committed.state).toBe('committed')
+      expect(committed.commitSha).toBe(git(remote, 'rev-parse', 'refs/heads/selected'))
+      expect(committed.pushReceiptJson).toBeNull()
+      expect(ensures).toBe(0)
+      publicationClose.release()
+      await enteredBeforeOutcome(baselineClose.entered, pending)
+      expect(
+        (
+          await db
+            .select()
+            .from(employeeChangeCandidates)
+            .where(eq(employeeChangeCandidates.candidateRef, candidateState.candidateRef))
+        )[0]!.state,
+      ).toBe('committed')
+      expect(ensures).toBe(0)
+      baselineClose.release()
+      expect(JSON.parse(await pending)).toMatchObject({ status: 'ok' })
+      const published = (
+        await db
+          .select()
+          .from(employeeChangeCandidates)
+          .where(eq(employeeChangeCandidates.candidateRef, candidateState.candidateRef))
+      )[0]!
+      expect(published.state).toBe('published')
+      expect(JSON.parse(published.pushReceiptJson!)).toMatchObject({
+        newSha: committed.commitSha,
+        reused: false,
+      })
+      expect(
+        (
+          await db
+            .select()
+            .from(employeeCaseWorkspaces)
+            .where(eq(employeeCaseWorkspaces.caseId, 'case-selected'))
+        )[0],
+      ).toMatchObject({ state: 'published', remoteHeadSha: committed.commitSha })
+      expect(store.acquisitions).toEqual([
+        { baselineReference: baseline, overlayReference: workspace.workspacePath },
+        { baselineReference: baseline, overlayReference: workspace.workspacePath },
+        { baselineReference: baseline },
+      ])
+      expect(store.workspacesCreated).toBe(2)
+      expect(ensures).toBe(1)
+      expect(git(baseline, 'rev-parse', `${published.commitSha}^{tree}`)).toBe(
+        candidateState.treeOid,
+      )
+      expect(store.legacyReads).toBe(0)
+    } finally {
+      publicationClose.release()
+      baselineClose.release()
+      await pending.catch(() => undefined)
+    }
+  }, 120_000)
 
   test('explicit employee source branches reuse an exact remote head or start from target head', async () => {
     const baselineRepo = join(scene, 'rfc336-branch-baseline')

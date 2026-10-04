@@ -2,6 +2,7 @@ import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
   RepositoryGitWorkspaceFactory,
+  RepositoryCandidateEffectsFactory,
 } from '@/modules/source-control/public/types'
 import {
   selectWorkspaceUploadContentFactory,
@@ -461,6 +462,7 @@ export interface StartOptions {
   workspaceUploads?: WorkspaceUploadContentFactory
   isolationWorkspaces?: IsolationWorkspaceFactory
   repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
+  repositoryCandidateEffects?: RepositoryCandidateEffectsFactory
   workspaceReads?: RepositoryWorkspaceReadQueries
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
@@ -655,6 +657,7 @@ async function composePostgresqlProviderSession(
     workspaceUploads: input.workspaceUploads,
     isolationWorkspaces: input.isolationWorkspaces,
     repositoryGitWorkspaces: input.repositoryGitWorkspaces,
+    repositoryCandidateEffects: input.repositoryCandidateEffects,
     workspaceReads: input.workspaceReads,
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
@@ -1205,6 +1208,7 @@ interface DaemonProviderSessionComposeInput {
   readonly workspaceUploads: WorkspaceUploadContentFactory
   readonly isolationWorkspaces: IsolationWorkspaceFactory
   readonly repositoryGitWorkspaces: RepositoryGitWorkspaceFactory
+  readonly repositoryCandidateEffects?: RepositoryCandidateEffectsFactory
   readonly workspaceReads: RepositoryWorkspaceReadQueries
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
@@ -1680,6 +1684,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       workspaceUploads: selectWorkspaceUploadContentFactory(opts.workspaceUploads),
       isolationWorkspaces: selectIsolationWorkspaceFactory(opts.isolationWorkspaces),
       repositoryGitWorkspaces: selectRepositoryGitWorkspaceFactory(opts.repositoryGitWorkspaces),
+      repositoryCandidateEffects: opts.repositoryCandidateEffects,
       workspaceReads: selectRepositoryWorkspaceReadQueries(opts.workspaceReads),
       employeeCaseWorkspaceEffects: opts.employeeCaseWorkspaceEffects,
       repositoryBaselines: opts.repositoryBaselines,
@@ -2813,8 +2818,11 @@ async function composeSqliteProviderSession(
     attemptContext: input.attemptContext,
     admissionLookup: developmentAdmissionLookup,
     requirementSource: composeRequirementSourceRunnerFor(db),
-    changeCandidate: bindChangeCandidateParticipant(),
+    changeCandidate: bindChangeCandidateParticipant({
+      candidateEffects: input.repositoryCandidateEffects,
+    }),
     candidateDelivery: bindCandidateDeliveryParticipant({
+      candidateEffects: input.repositoryCandidateEffects,
       publicationTransport: repositoryPublicationTransport,
     }),
     conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
@@ -3229,6 +3237,7 @@ async function composeSqliteProviderSession(
     workspaceUploads: input.workspaceUploads,
     isolationWorkspaces: input.isolationWorkspaces,
     repositoryGitWorkspaces: input.repositoryGitWorkspaces,
+    repositoryCandidateEffects: input.repositoryCandidateEffects,
     workspaceReads: input.workspaceReads,
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
@@ -3606,8 +3615,9 @@ async function composeSqliteProviderSession(
           effects: input.conflictMergeWorkspaceEffects,
         }),
         sourceControl: {
-          ...bindChangeCandidateParticipant(),
+          ...bindChangeCandidateParticipant({ candidateEffects: input.repositoryCandidateEffects }),
           ...bindCandidateDeliveryParticipant({
+            candidateEffects: input.repositoryCandidateEffects,
             publicationTransport: repositoryPublicationTransport,
           }),
           ...bindEmployeeCaseWorkspaceParticipant({

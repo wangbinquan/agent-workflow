@@ -206,7 +206,7 @@ export async function fetchEmployeeWorkspaceRemoteHead(
           `refs/heads/${input.branch}`,
         ])
       } finally {
-        opened.session.close()
+        await opened.session.close()
       }
     } else {
       if (!localRemote) {

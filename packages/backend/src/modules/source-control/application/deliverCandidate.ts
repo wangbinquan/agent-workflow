@@ -13,9 +13,8 @@
 // 幂等：同 candidate 重放不重复 commit——commit 前先看目标位（expected/内部
 // ref/远端）上是否已有 tree==treeOid 且 parent==baseline 的 commit，有则复用。
 
-import { runGit as defaultRunGit, AW_INTERNAL_GIT_IDENTITY } from '@/util/git'
-import { describeRepositoryRemote, type RepositoryPublicationReceipt } from '@agent-workflow/shared'
-import { isAbsolute } from 'node:path'
+import { AW_INTERNAL_GIT_IDENTITY } from '@/util/git'
+import type { RepositoryPublicationReceipt } from '@agent-workflow/shared'
 import {
   candidateCommitMessage,
   missionGitRefComponent,
@@ -51,14 +50,6 @@ async function readCommitTreeIdentity(
     tree: tree.stdout.trim(),
     parent: parent.exitCode === 0 ? parent.stdout.trim() : null,
   }
-}
-
-async function commitTreeIdentityOf(
-  runGit: RepositoryGit,
-  repoPath: string,
-  sha: string,
-): Promise<{ tree: string; parent: string | null } | null> {
-  return readCommitTreeIdentity((args) => runGit(repoPath, [...args]), sha)
 }
 
 export interface CommitCandidateInput {
@@ -249,39 +240,20 @@ async function remoteHeadOf(
   }
 }
 
-function localFixtureSession(
-  remoteUrl: string,
-  runGit: RepositoryGit,
-): CandidatePublicationSession | null {
-  const described = describeRepositoryRemote(remoteUrl)
-  const local =
-    (described.ok && described.value.transport === 'file') ||
-    isAbsolute(remoteUrl) ||
-    remoteUrl.startsWith('./') ||
-    remoteUrl.startsWith('../') ||
-    /^[A-Za-z]:[\\/]/.test(remoteUrl)
-  if (!local) return null
-  return {
-    endpointUrl: remoteUrl,
-    receipt: {
-      credentialSource: 'legacy',
-      credentialRevision: null,
-      endpointSource: 'local-fixture',
-      endpointBindingDigest: null,
-    },
-    runNetwork(repoPath, args, options) {
-      return runGit(repoPath, [...args], options)
-    },
-    close() {},
-  }
-}
-
-export async function pushCandidate(input: PushCandidateInput): Promise<PushCandidateResult> {
-  const runGit = input.runGit ?? defaultRunGit
+export async function pushCandidate(
+  input: PushCandidateInput,
+  factory: RepositoryCandidateEffectsFactory,
+  publication: {
+    readonly transport?: CandidatePublicationTransport
+    readonly localFixtureSession?: (remoteUrl: string) => CandidatePublicationSession | null
+  } = {},
+): Promise<PushCandidateResult> {
+  const transport =
+    publication.transport === undefined ? input.publicationTransport : publication.transport
   const remoteRef = `refs/heads/${input.branch}`
   let session: CandidatePublicationSession
-  if (input.publicationTransport !== undefined && input.publicationSubject !== undefined) {
-    const opened = await input.publicationTransport.open({
+  if (transport !== undefined && input.publicationSubject !== undefined) {
+    const opened = await transport.open({
       subject: input.publicationSubject,
       remoteUrl: input.remoteUrl,
     })
@@ -294,7 +266,7 @@ export async function pushCandidate(input: PushCandidateInput): Promise<PushCand
     }
     session = opened.session
   } else {
-    const local = localFixtureSession(input.remoteUrl, runGit)
+    const local = publication.localFixtureSession?.(input.remoteUrl) ?? null
     if (local === null) {
       return {
         ok: false,
@@ -307,7 +279,10 @@ export async function pushCandidate(input: PushCandidateInput): Promise<PushCand
   const networkRunGit: RepositoryGit = (repoPath, args, options) =>
     session.runNetwork(repoPath, args, options)
 
+  let baselineSession: RepositoryCandidateSession | undefined
   try {
+    const baseline = await factory.acquire({ baselineReference: input.baselineRepoPath })
+    baselineSession = baseline
     const actualResult = await remoteHeadOf(
       networkRunGit,
       input.baselineRepoPath,
@@ -330,7 +305,7 @@ export async function pushCandidate(input: PushCandidateInput): Promise<PushCand
       if (fetched.exitCode !== 0) {
         return failedPublicationResult(`${fetched.stderr}\n${fetched.stdout}`)
       }
-      const identity = await commitTreeIdentityOf(runGit, input.baselineRepoPath, actual)
+      const identity = await readCommitTreeIdentity((args) => baseline.runBaseline(args), actual)
       if (
         identity !== null &&
         identity.tree === input.expectedTreeOid &&
@@ -395,6 +370,10 @@ export async function pushCandidate(input: PushCandidateInput): Promise<PushCand
       },
     }
   } finally {
-    session.close()
+    try {
+      await session.close()
+    } finally {
+      await baselineSession?.close()
+    }
   }
 }

@@ -11,7 +11,13 @@ import { join } from 'node:path'
 import { eq } from 'drizzle-orm'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider, type ProviderHarness } from './helpers/eachProvider'
-import { nodeRuns, tasks, workflows } from '../src/db/schema'
+import {
+  nodeRuns,
+  tasks,
+  workflows,
+  taskExecutionEffects,
+  taskExecutionEffectAttempts,
+} from '../src/db/schema'
 import { runGit } from '../src/util/git'
 import { runCommitPush, type CommitPushParams } from '../src/services/commitPushRunner'
 import type { CommitPushMeta } from '@agent-workflow/shared'
@@ -19,6 +25,18 @@ import type { RepositoryPublicationTransport } from '../src/modules/source-contr
 import { composeSqliteCommitPushDeps } from './helpers/commitPush'
 import { GitWorkspaceStore, MappedGitWorkspaceFactory } from './helpers/repositoryGitWorkspace'
 import { held } from './helpers/portArtifactContent'
+import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
+import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import {
+  createTaskExecutionContext,
+  runWithTaskExecutionContext,
+} from '@/modules/task-execution/application/taskExecutionContext'
+import {
+  CandidatePublicationStore,
+  MappedCandidatePublicationTransport,
+  completionBarrier,
+  enteredBeforeOutcome,
+} from './helpers/repositoryCandidatePublication'
 
 interface Fixture {
   repo: string
@@ -658,4 +676,145 @@ describeEachProvider('RFC-370 selected Git in actual commit-push', (harness) => 
       f.cleanup()
     }
   }, 60_000)
+})
+
+// DESIGN-R2: a return Promise is insufficient; actual durable success must wait.
+describeEachProvider('RFC-370 publication close precedes Task and effect success', (harness) => {
+  for (const rejectClose of [false, true]) {
+    test(
+      rejectClose
+        ? 'raw close rejection leaves real node/effect unfinalized after the actual push'
+        : 'close ACK precedes actual persisted node and repository-effect receipts',
+      async () => {
+        const f = await build(harness)
+        const persistence = createTaskExecutionPersistence(f.db)
+        const module = createProviderTaskExecutionModule({
+          daemonGeneration: 'rfc370-publication-close',
+          persistence,
+        })
+        const intentId = 'rfc370-publication-close-intent'
+        const barrier = completionBarrier()
+        const failure = new Error('selected Task publication close rejected')
+        const store = new CandidatePublicationStore()
+        store.locations.set(f.repo, f.repo)
+        store.locations.set(f.remote, f.remote)
+        store.hooks.set('publication:close', async () => {
+          await barrier.before()
+          if (rejectClose) throw failure
+        })
+        let pending: ReturnType<typeof runCommitPush> | undefined
+        try {
+          await persistence.intents.submit({
+            intentId,
+            request: {
+              taskId: f.taskId,
+              kind: 'launch',
+              source: 'rest',
+              actorUserId: null,
+              expectedTaskRevision: 1,
+              scope: {
+                executionLineageId: f.taskId,
+                continuationSlotKey: f.taskId + ':root',
+                slotPath: [
+                  {
+                    stableNodeKey: 'task-root',
+                    frozenOccurrenceKey: f.taskId,
+                    workflowRevision: null,
+                  },
+                ],
+                operationGeneration: 0,
+              },
+              payload: { v: 1 },
+            },
+          })
+          const claimed = await module.claimPersisted({ intentId, leaseMs: 120_000 })
+          module.claimGate.leave(claimed.permit)
+          const context = createTaskExecutionContext({
+            intentId,
+            token: claimed.token,
+            persistence,
+          })
+          writeFileSync(join(f.repo, 'close-ack.txt'), 'real durable publication\n')
+          pending = runWithTaskExecutionContext(context, () =>
+            runCommitPush(
+              baseParams(f),
+              composeSqliteCommitPushDeps(f.db, {
+                publicationTransport: Object.freeze(new MappedCandidatePublicationTransport(store)),
+              }),
+            ),
+          )
+          await enteredBeforeOutcome(barrier.entered, pending)
+          const running = (
+            await f.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, f.taskId))
+          ).filter((row) => row.rerunCause === 'commit-push')
+          const effects = await f.db
+            .select()
+            .from(taskExecutionEffects)
+            .where(eq(taskExecutionEffects.taskId, f.taskId))
+          const attempts = await f.db
+            .select()
+            .from(taskExecutionEffectAttempts)
+            .where(eq(taskExecutionEffectAttempts.effectId, effects[0]!.id))
+          expect(running).toHaveLength(1)
+          expect(running[0]!.status).toBe('running')
+          expect(running[0]!.commitPushJson).toBeNull()
+          expect(effects).toHaveLength(1)
+          expect(effects[0]!.kind).toBe('repository')
+          expect(effects[0]!.state).toBe('open')
+          expect(effects[0]!.receiptJson).toBeNull()
+          expect(attempts).toHaveLength(1)
+          expect(attempts[0]!.state).toBe('acting')
+          const remote = await runGit(f.remote, ['rev-parse', 'refs/heads/feature/x'])
+          expect(remote.exitCode).toBe(0)
+          expect(remote.stdout.trim()).toBe(
+            (await runGit(f.repo, ['rev-parse', 'HEAD'])).stdout.trim(),
+          )
+          barrier.release()
+          if (rejectClose) {
+            const result = await pending.catch((error) => error)
+            expect<unknown>(result).toBe(failure)
+            const row = (
+              await f.db.select().from(nodeRuns).where(eq(nodeRuns.id, running[0]!.id))
+            )[0]!
+            const effect = (
+              await f.db
+                .select()
+                .from(taskExecutionEffects)
+                .where(eq(taskExecutionEffects.id, effects[0]!.id))
+            )[0]!
+            expect(row.status).toBe('running')
+            expect(row.commitPushJson).toBeNull()
+            expect(effect.state).toBe('open')
+            expect(effect.receiptJson).toBeNull()
+            expect(
+              (await runGit(f.remote, ['rev-parse', 'refs/heads/feature/x'])).stdout.trim(),
+            ).toBe(remote.stdout.trim())
+          } else {
+            const result = await pending
+            expect(result.meta.pushOutcome).toBe('pushed')
+            expect((await readMeta(f, result.nodeRunId)).status).toBe('done')
+            const effect = (
+              await f.db
+                .select()
+                .from(taskExecutionEffects)
+                .where(eq(taskExecutionEffects.id, effects[0]!.id))
+            )[0]!
+            expect(effect.state).toBe('succeeded')
+            expect(JSON.parse(effect.receiptJson!)).toMatchObject({
+              outcome: 'pushed',
+              commitSha: result.meta.commitSha,
+            })
+          }
+          expect(store.publicationOpens).toBe(1)
+          expect(store.publicationCloses).toBe(1)
+        } finally {
+          barrier.release()
+          await pending?.catch(() => undefined)
+          module.resetForTesting()
+          f.cleanup()
+        }
+      },
+      120_000,
+    )
+  }
 })

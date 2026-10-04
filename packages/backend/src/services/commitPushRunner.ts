@@ -518,213 +518,224 @@ export async function runCommitPush(
     session.runNetwork(repoPath, args, options)
   const remoteOverride = ['-c', `remote.${remote}.url=${session.endpointUrl}`]
   let attempts = 0
-  try {
-    while (true) {
-      const tipResult = await g(['rev-parse', '--verify', 'HEAD^{commit}'])
-      const tipSha = tipResult.stdout.trim()
-      const publisher = bindRepositoryCommitParticipant({
-        repoPath: W,
-        gitWorkspace: workspace,
-        configuredPatterns: params.excludePatterns ?? [],
-        runGit,
-      })
-      const pushBase = await publisher.resolvePushBase({
-        remote,
-        branch: params.repoBranch,
-        fallbackRef: params.baseRef,
-      })
-      if (tipResult.exitCode !== 0 || tipSha === '' || pushBase === null) {
-        return finalize('commit-local-failed', {
-          commitSha,
-          filesChanged,
-          insertions,
-          deletions,
-          messageSource,
-          repairAttempts: attempts,
-          pushError: 'cannot resolve outgoing history range; push refused',
+  const collectFinalization = (...args: Parameters<typeof finalize>): Parameters<typeof finalize> =>
+    args
+  const completedPublication = await (async (): Promise<Parameters<typeof finalize>> => {
+    try {
+      while (true) {
+        const tipResult = await g(['rev-parse', '--verify', 'HEAD^{commit}'])
+        const tipSha = tipResult.stdout.trim()
+        const publisher = bindRepositoryCommitParticipant({
+          repoPath: W,
+          gitWorkspace: workspace,
+          configuredPatterns: params.excludePatterns ?? [],
+          runGit,
         })
-      }
-      const publication = await bindRepositoryCommitParticipant({
-        repoPath: W,
-        gitWorkspace: workspace,
-        configuredPatterns: params.excludePatterns ?? [],
-        runNetworkGit: sessionRunGit,
-      }).publish({
-        baseSha: pushBase,
-        tipSha,
-        mode: {
-          kind: 'normal',
+        const pushBase = await publisher.resolvePushBase({
           remote,
           branch: params.repoBranch,
-          leadingArgs: remoteOverride,
-        },
-      })
-      if (publication.ok) {
-        exclusionPolicyDigest = publication.policyDigest
-        const verified = await session.runNetwork(W, [
-          ...remoteOverride,
-          'ls-remote',
-          '--heads',
-          remote,
-          params.repoBranch,
-        ])
-        const remoteSha = verified.stdout
-          .split('\n')
-          .find((line) => line.trim() !== '')
-          ?.split(/\s+/)[0]
-        const remoteContainsTip =
-          verified.exitCode === 0 && remoteSha !== undefined && remoteSha !== tipSha
-            ? await g(['merge-base', '--is-ancestor', tipSha, remoteSha])
-            : null
-        if (
-          verified.exitCode !== 0 ||
-          remoteSha === undefined ||
-          (remoteSha !== tipSha && remoteContainsTip?.exitCode !== 0)
-        ) {
-          const managedFailure =
-            verified.exitCode === 0
-              ? null
-              : classifyRepositoryPushFailure(`${verified.stderr}\n${verified.stdout}`)
-          return finalize(managedFailure === null ? 'commit-local-failed' : 'commit-local-auth', {
+          fallbackRef: params.baseRef,
+        })
+        if (tipResult.exitCode !== 0 || tipSha === '' || pushBase === null) {
+          return collectFinalization('commit-local-failed', {
             commitSha,
             filesChanged,
             insertions,
             deletions,
             messageSource,
             repairAttempts: attempts,
-            pushError: managedFailure ?? 'repository-push-remote-changed',
+            pushError: 'cannot resolve outgoing history range; push refused',
           })
         }
-        return finalize('pushed', {
-          commitSha,
-          filesChanged,
-          insertions,
-          deletions,
-          messageSource,
-          repairAttempts: attempts,
+        const publication = await bindRepositoryCommitParticipant({
+          repoPath: W,
+          gitWorkspace: workspace,
+          configuredPatterns: params.excludePatterns ?? [],
+          runNetworkGit: sessionRunGit,
+        }).publish({
+          baseSha: pushBase,
+          tipSha,
+          mode: {
+            kind: 'normal',
+            remote,
+            branch: params.repoBranch,
+            leadingArgs: remoteOverride,
+          },
         })
-      }
-      if (publication.reason === 'excluded-history') {
-        exclusionPolicyDigest = publication.policyDigest
-        exclusionHistoryBlocked = true
-        for (const path of publication.excludedPaths) excludedPaths.add(path)
-        return finalize('commit-local-excluded-history', {
-          commitSha,
-          filesChanged,
-          insertions,
-          deletions,
-          messageSource,
-          repairAttempts: attempts,
-          pushError: `push blocked: outgoing history contains ${publication.excludedPaths.length} excluded path(s)`,
-        })
-      }
-      const stderr = publication.error
-      const cls = classifyPushFailure(stderr)
-      const managedFailure = classifyRepositoryPushFailure(stderr)
-      if (managedFailure !== null || cls === 'auth') {
-        log.warn('push rejected (auth); committed locally only', {
-          nodeRunId,
-          branch: params.repoBranch,
-          credentialSource: session.receipt.credentialSource,
-        })
-        return finalize('commit-local-auth', {
-          commitSha,
-          filesChanged,
-          insertions,
-          deletions,
-          messageSource,
-          repairAttempts: attempts,
-          pushError: managedFailure ?? 'repository-push-authentication-failed',
-        })
-      }
-      if (attempts >= params.maxRepairRetries) {
-        return finalize('commit-local-failed', {
-          commitSha,
-          filesChanged,
-          insertions,
-          deletions,
-          messageSource,
-          repairAttempts: attempts,
-          pushError: redactPushError(stderr),
-        })
-      }
-      attempts += 1
+        if (publication.ok) {
+          exclusionPolicyDigest = publication.policyDigest
+          const verified = await session.runNetwork(W, [
+            ...remoteOverride,
+            'ls-remote',
+            '--heads',
+            remote,
+            params.repoBranch,
+          ])
+          const remoteSha = verified.stdout
+            .split('\n')
+            .find((line) => line.trim() !== '')
+            ?.split(/\s+/)[0]
+          const remoteContainsTip =
+            verified.exitCode === 0 && remoteSha !== undefined && remoteSha !== tipSha
+              ? await g(['merge-base', '--is-ancestor', tipSha, remoteSha])
+              : null
+          if (
+            verified.exitCode !== 0 ||
+            remoteSha === undefined ||
+            (remoteSha !== tipSha && remoteContainsTip?.exitCode !== 0)
+          ) {
+            const managedFailure =
+              verified.exitCode === 0
+                ? null
+                : classifyRepositoryPushFailure(`${verified.stderr}\n${verified.stdout}`)
+            return collectFinalization(
+              managedFailure === null ? 'commit-local-failed' : 'commit-local-auth',
+              {
+                commitSha,
+                filesChanged,
+                insertions,
+                deletions,
+                messageSource,
+                repairAttempts: attempts,
+                pushError: managedFailure ?? 'repository-push-remote-changed',
+              },
+            )
+          }
+          return collectFinalization('pushed', {
+            commitSha,
+            filesChanged,
+            insertions,
+            deletions,
+            messageSource,
+            repairAttempts: attempts,
+          })
+        }
+        if (publication.reason === 'excluded-history') {
+          exclusionPolicyDigest = publication.policyDigest
+          exclusionHistoryBlocked = true
+          for (const path of publication.excludedPaths) excludedPaths.add(path)
+          return collectFinalization('commit-local-excluded-history', {
+            commitSha,
+            filesChanged,
+            insertions,
+            deletions,
+            messageSource,
+            repairAttempts: attempts,
+            pushError: `push blocked: outgoing history contains ${publication.excludedPaths.length} excluded path(s)`,
+          })
+        }
+        const stderr = publication.error
+        const cls = classifyPushFailure(stderr)
+        const managedFailure = classifyRepositoryPushFailure(stderr)
+        if (managedFailure !== null || cls === 'auth') {
+          log.warn('push rejected (auth); committed locally only', {
+            nodeRunId,
+            branch: params.repoBranch,
+            credentialSource: session.receipt.credentialSource,
+          })
+          return collectFinalization('commit-local-auth', {
+            commitSha,
+            filesChanged,
+            insertions,
+            deletions,
+            messageSource,
+            repairAttempts: attempts,
+            pushError: managedFailure ?? 'repository-push-authentication-failed',
+          })
+        }
+        if (attempts >= params.maxRepairRetries) {
+          return collectFinalization('commit-local-failed', {
+            commitSha,
+            filesChanged,
+            insertions,
+            deletions,
+            messageSource,
+            repairAttempts: attempts,
+            pushError: redactPushError(stderr),
+          })
+        }
+        attempts += 1
 
-      if (cls === 'non-fast-forward') {
-        const fetch = await session.runNetwork(W, [
-          ...remoteOverride,
-          'fetch',
-          remote,
-          params.repoBranch,
-        ])
-        if (fetch.exitCode !== 0) {
-          const managedFailure = classifyRepositoryPushFailure(`${fetch.stderr}\n${fetch.stdout}`)
-          return finalize(managedFailure === null ? 'commit-local-failed' : 'commit-local-auth', {
-            commitSha,
-            filesChanged,
-            insertions,
-            deletions,
-            messageSource,
-            repairAttempts: attempts,
-            pushError: managedFailure ?? redactPushError(fetch.stderr),
-          })
+        if (cls === 'non-fast-forward') {
+          const fetch = await session.runNetwork(W, [
+            ...remoteOverride,
+            'fetch',
+            remote,
+            params.repoBranch,
+          ])
+          if (fetch.exitCode !== 0) {
+            const managedFailure = classifyRepositoryPushFailure(`${fetch.stderr}\n${fetch.stdout}`)
+            return collectFinalization(
+              managedFailure === null ? 'commit-local-failed' : 'commit-local-auth',
+              {
+                commitSha,
+                filesChanged,
+                insertions,
+                deletions,
+                messageSource,
+                repairAttempts: attempts,
+                pushError: managedFailure ?? redactPushError(fetch.stderr),
+              },
+            )
+          }
+          const merge = await gc(['merge', '--no-edit', 'FETCH_HEAD'])
+          if (merge.exitCode !== 0) {
+            await g(['merge', '--abort'])
+            return collectFinalization('commit-local-failed', {
+              commitSha,
+              filesChanged,
+              insertions,
+              deletions,
+              messageSource,
+              repairAttempts: attempts,
+              pushError: redactPushError(merge.stderr),
+            })
+          }
+          continue
         }
-        const merge = await gc(['merge', '--no-edit', 'FETCH_HEAD'])
-        if (merge.exitCode !== 0) {
-          await g(['merge', '--abort'])
-          return finalize('commit-local-failed', {
-            commitSha,
-            filesChanged,
-            insertions,
-            deletions,
-            messageSource,
-            repairAttempts: attempts,
-            pushError: redactPushError(merge.stderr),
-          })
-        }
-        continue
-      }
 
-      try {
-        const rep = await params.generateRepair({
-          nodeRunId,
-          branch: params.repoBranch,
-          stat,
-          pushStderr: redactPushError(stderr),
-          currentMessage: message,
-          priorAttempts: attempts - 1,
-        })
-        if (rep.processUnreaped === true) {
-          processUnreaped = true
-          throw new CommitAgentUnreapedError()
-        }
-        if (rep.sessionId != null) sessionId = rep.sessionId
-        if (rep.message != null && rep.message.trim() !== '') {
-          message = rep.message.trim()
-          messageSource = 'llm-repair'
-          await gc(['commit', '--amend', '-m', message])
-        }
-      } catch (err) {
-        if (err instanceof CommitAgentUnreapedError) {
-          return finalize('commit-local-failed', {
-            commitSha,
-            filesChanged,
-            insertions,
-            deletions,
-            messageSource,
-            repairAttempts: attempts,
-            pushError: err.message,
+        try {
+          const rep = await params.generateRepair({
+            nodeRunId,
+            branch: params.repoBranch,
+            stat,
+            pushStderr: redactPushError(stderr),
+            currentMessage: message,
+            priorAttempts: attempts - 1,
+          })
+          if (rep.processUnreaped === true) {
+            processUnreaped = true
+            throw new CommitAgentUnreapedError()
+          }
+          if (rep.sessionId != null) sessionId = rep.sessionId
+          if (rep.message != null && rep.message.trim() !== '') {
+            message = rep.message.trim()
+            messageSource = 'llm-repair'
+            await gc(['commit', '--amend', '-m', message])
+          }
+        } catch (err) {
+          if (err instanceof CommitAgentUnreapedError) {
+            return collectFinalization('commit-local-failed', {
+              commitSha,
+              filesChanged,
+              insertions,
+              deletions,
+              messageSource,
+              repairAttempts: attempts,
+              pushError: err.message,
+            })
+          }
+          log.warn('push repair generation failed', {
+            nodeRunId,
+            error: err instanceof Error ? err.message : String(err),
           })
         }
-        log.warn('push repair generation failed', {
-          nodeRunId,
-          error: err instanceof Error ? err.message : String(err),
-        })
       }
+    } finally {
+      await session.close()
     }
-  } finally {
-    session.close()
-  }
+  })()
+  return finalize(...completedPublication)
 }
 
 function identityEnv(name: string | null, email: string | null): Record<string, string> {
@@ -992,7 +1003,7 @@ async function commitPushSubmodules(args: {
         mode: { kind: 'normal', remote, branch, leadingArgs: remoteOverride },
       })
     } finally {
-      session.close()
+      await session.close()
     }
     if (!publication.ok) {
       entry.error =

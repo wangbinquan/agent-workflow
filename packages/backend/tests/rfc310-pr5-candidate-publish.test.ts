@@ -18,14 +18,11 @@ import {
   bindChangeCandidateParticipant,
   bindCandidateDeliveryParticipant,
 } from '../src/modules/source-control/composition/repositoryCandidate'
-import {
-  missionCandidateRef,
-  pushCandidate,
-} from '../src/modules/source-control/application/deliverCandidate'
+import { missionCandidateRef } from '../src/modules/source-control/application/deliverCandidate'
 import { missionSourceBranch } from '../src/modules/source-control/domain/deliveryPolicy'
 
 const { derive: deriveChangeCandidate } = bindChangeCandidateParticipant()
-const { commit: commitCandidate } = bindCandidateDeliveryParticipant()
+const { commit: commitCandidate, push: pushCandidate } = bindCandidateDeliveryParticipant()
 
 setDefaultTimeout(120_000)
 

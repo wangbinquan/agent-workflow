@@ -839,7 +839,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
       // RFC-371: the complete report service shares the selected source generation and numeric owner.
-      '8af75d5f0fa8c0a0ca88acd68c7667b300e7a9bd165a328b96ce85efb925437b',
+      '16a2141b9385ec49ba4a48854c807df8d5fe658994346ee53c2bef2912dc086e',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -1054,7 +1054,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
       // RFC-371: the mounted task queries now use the same complete report service and source generation.
-      '7e2f7d9da48e005b05356551a2cb126206e37387d603187fc1934213f513643c',
+      'b03484e283ed230b7a1df205cd3d5034da8aef31abdb0fcebba45d1aae4cd61c',
     )
     expect(
       namedCalls(

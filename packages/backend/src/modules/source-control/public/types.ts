@@ -120,7 +120,7 @@ export interface RepositoryPublicationSession {
     args: readonly string[],
     options?: RepositoryPublicationGitOptions,
   ): Promise<RepositoryPublicationGitResult>
-  close(): void
+  close(): void | Promise<void>
 }
 
 export interface RepositoryPublicationTransport {
@@ -230,7 +230,10 @@ export interface BoundedWorkspaceContent {
 }
 
 /** The existing Git outcome, reused by neutral baseline effects. */
-export type { RepositoryCandidateGitOutcome } from '../application/ports/repositoryCandidateEffects'
+export type {
+  RepositoryCandidateEffectsFactory,
+  RepositoryCandidateGitOutcome,
+} from '../application/ports/repositoryCandidateEffects'
 
 export type {
   WorkspaceUploadBinding,

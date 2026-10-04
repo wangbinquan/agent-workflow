@@ -56,6 +56,6 @@ export interface RepositoryCandidateSession {
 export interface RepositoryCandidateEffectsFactory {
   acquire(input: {
     readonly baselineReference: string
-    readonly overlayReference: string
+    readonly overlayReference?: string
   }): Completion<RepositoryCandidateSession>
 }
