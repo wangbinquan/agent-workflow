@@ -413,3 +413,15 @@ R2 原生成器基于已提交 335cc5333ae3883bd8f9b457c3253add552809d9、冻结
 SOURCE24 有限 PASS，SC 六方法完整 content factory 与 TE 一份上传 policy 已贯穿实际 CLI/SQLite/PG/HTTP，placement/write/rollback ACK、完整恢复字节和旧同步可变结果保持；原 scoped 清单及五项真实增长见 [功能门](./functional-gates.md)。前次端口归档 CI 修复的四后端、Lint/Typecheck/Format 和 Windows 正式通过；主 CI37162165195 的43成功/7失败及完整浏览器错误仍保留，新上传批次正式验证待发布后的 exact-SHA CI。
 
 本批只收口 upload 内容与真实根，不据此关闭 A3 全部 workspace 或 A2/A4。继续 runtime/resource 内容物化、两 LaunchLane 与工作区/Git 全消费者、A5 材料/提交/收据/流/消息/取消/捕获/清理、A6 purpose commands、A7 authority/recovery 和 A8 全根/AC00，再独立完整 A-G。随后独立 CS adapters，B/M0先实际部署，逐项M1–M4；尚无 AW-in-CS 实际部署，不关闭 RFC。
+
+## 2026-10-04 上传测试类型补正
+
+工作区上传 source24 `e3a3f82ab9fd5559d0efba6f9cd1d0a505857865`、canonical18 `65612a232c6c62b3197905c3242fb2040c0d7d6e` 和匹配五项增长回执退役 `2c474db9a50f98b6d16614e81122b38bdfc9228b` 已正常发布。42 个独立路径，post-fetch main/origin 精确 0/0、index empty；其它会话 20 个 WIP 路径保留且未 stage/commit，窗口已交回。SOURCE24、META18 与 META-RETIRE1 均为有限 PASS，不关闭完整 RFC。
+
+2c474 主 CI37168434612 的 Typecheck job111336216504 已 completed/failure，完整原日志保留在 `/tmp/aw-rfc370-workspace-upload-content-ci-lint-job-111336216504.log`。唯一实际 TS2739 是新增 `rfc370-workspace-upload-bindings.test.ts:266` 将 ReadonlyMap 赋给真实 launch uploads.definitions 的 mutable Map。首次采样时 workflow 为 queued，并非终态；该采样的 real PostgreSQL、Ubuntu2/3/13 和 macOS2 四个 backend 分片 success 只作已完成作业事实，不代表主 CI 全绿。其余作业及 Windows 的正式终态由后续回执记录，旧失败不改写。
+
+本次只把该测试的 `definitions: plan().defs` 改为 `definitions: new Map(plan().defs)`，沿同一 defs iterable 创建 mutable Map，键值及次序保持；原 plan() 每次调用本来也新建 Map。逆变换一个表达式逐字恢复已提交完整测试，所有原断言、名称、预算及其它文本保持，未改任何生产实现或旧 API。SOURCE1 独立有限 PASS 指纹 `05892b6e79c480d03e07a954bc7a8d47481a65b16199ae9dff40f9de8b9a6b6b`；1 owned、10 controls、5 evidence 首末稳定。
+
+原 canonical 只扫描三个 package 的 src，加 `.dependency-cruiser.cjs`／`scripts/depcheck.ts` 两输入；本测试不在该语料。故不重跑已成功 census、不改 sourceDigest／数量／库存／规则或增长回执。目标 format/lint 及纯 byte 逆变换通过，无本机 AW test/typecheck/build/service；修复的正式验证仍等新 exact-SHA hosted CI。
+
+完整 A1～A8／AC00／A-G、各层独立 CS adapters 与 B/M0～M4 继续。隔离 workspace 设计正在有限修订，原失败历史保留；源码未实施。尚无 AW-in-CS 实际部署，不关闭 RFC。并行观测 WIP、旧文档与所有 gate/CI 历史保持。

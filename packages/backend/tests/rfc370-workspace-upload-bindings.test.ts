@@ -263,7 +263,7 @@ describeEachProvider('RFC-370 selected upload journal and launch bindings', (har
               blob: new Blob([Uint8Array.of(65)]),
             },
           ],
-          definitions: plan().defs,
+          definitions: new Map(plan().defs),
           limits: plan().limits,
         },
       })
