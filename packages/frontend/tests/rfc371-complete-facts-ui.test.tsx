@@ -575,7 +575,8 @@ test.each(['zh', 'en'])(
     expect(detail.textContent).toContain(
       i18n.t('runObservability.recordedUsageCoverage', { records: '3', observed: '2', calls: '3' }),
     )
-    expect(detail.textContent).toContain(i18n.t('runObservability.recordedUsageWarning'))
+    expect(detail.textContent).toContain(i18n.t('runObservability.reportNotReady'))
+    expect(detail.textContent).not.toContain(i18n.t('runObservability.recordedUsageWarning'))
     const summary = document.querySelector('.observation-summary')!
     expect(summary.children).toHaveLength(3)
     const taskCard = within(summary as HTMLElement)

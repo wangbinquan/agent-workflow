@@ -157,7 +157,14 @@ describeEachProvider('RFC-371 original gap Task index', (harness) => {
             task === original.id
               ? ['native-capture-unobserved', 'usage-unobserved']
               : ['invocation-unobserved'],
+          tokenCoverage: {
+            invocations: task === original.id ? '1' : '0',
+            observedInvocations: '0',
+            records: '0',
+            bucketRecords: { input: '0', cacheRead: '0', cacheWrite: '0', output: '0' },
+          },
         })
+        expect(independent.facts.summary.metrics).not.toHaveProperty('recordedUsage')
         independentMetrics.set(task, independent.facts.summary.metrics)
       }
       for (const reason of quality.items) {

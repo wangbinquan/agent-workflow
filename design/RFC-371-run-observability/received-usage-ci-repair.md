@@ -21,3 +21,11 @@
 同 trace 的设置卡片间距用例第一次得到负间距、原重试通过：两次独立 boundingBox 之间原运行时／费率卡片完成异步加载，读到两个不同时刻的高度。后继在同一 DOM evaluate 同时读两个真实矩形与原 --space-4；保持1280／390两个宽度、可见性与非空、同一标准间距和原所有超时预算，不通过增加等待或放宽精度掩盖实际布局错误。此片只有原 E2E 与本文，两 RFC 的 native／规模剩余工作保持。
 
 960ff33566298ec9fa20df9413b05e886b1c4ab6 的 visual37218905824与Windows37218909187正式成功，主CI37218451883 cancelled；full37218912081与webkit37218914986在同一原断言正式失败，定位Usage by actual model。实际生产Card一贯使用runObservability.actualModel，其英文是Actual model／中文实际模型；runObservability.models的旧文案不是该Card标题。后继仅按实际Card标题补正这一可见性断言，保留模型卡片存在性、所有原钻取／返回／Escape、四桶／CNY、1280／390、标准间距、15秒等待与全部原预算；原失败和取消不改记通过，继续新确切SHA的正式与定时CI。
+
+# 2026-10-05 scope-metrics/7 的 hosted 回归对齐
+
+`8f294c0c357a5e621b680a712d73025138a55801` 主 CI `37225194883` 为 failure，保留原结果。生产 lint/typecheck/format 已通过；本批定位到四份观测测试的旧 oracle：普通趋势明细仍断言长段提示、零记录 Task 未断言新增原覆盖分母、用量人口损坏被更早的 usage guard 拒绝但旧测试期待 cost 错误、E2E 误把 tabpanel 下另一层当共享 stack 并仍使用旧 P50 标题。
+
+修复仅在原测试中对齐既有正式合同：短提示必须存在且长提示必须不存在；两个零记录 Task 的全部四桶已知记录数均为 0，原调用人数分别 1/0，不能生成 recordedUsage；两个损坏人口仍必须由准确 usage guard 抛错；E2E 先确认 tabpanel 自身使用 stack--md，再在同一快照测其全部直接子块，P50 使用已结束任务的既有标题。原分类数字、人民币、201/202 人口、完整 EOF、每条身份、回退焦点、主题、窄屏与全部时间预算保留。没有生产、i18n、静态规则或 canonical 变化，不重新运行已通过的生产 census。
+
+原主 CI 失败与定时工作流结论分别保留；新确切 SHA 的主 CI 与四个定时工作流继续。没有本机 AW tests/typecheck/build/service；有限源码检视和目标 format/lint 单独留证。原 native owner 生产接线、100K Task/10M usage、两个 RFC 的完成判据不由此关闭。

@@ -377,13 +377,12 @@ async function expectCardSpacing(page: Page) {
 }
 
 async function expectAnalysisSpacing(page: Page) {
+  await expect(page.getByRole('tabpanel')).toHaveClass(/(?:^|\s)stack--md(?:\s|$)/)
   const geometry = await page.getByRole('tabpanel').evaluate((panel) => {
     const gap = Number.parseFloat(
       getComputedStyle(document.documentElement).getPropertyValue('--space-4'),
     )
-    const blocks = Array.from(panel.querySelector('.stack--md')!.children).map((el) =>
-      el.getBoundingClientRect(),
-    )
+    const blocks = Array.from(panel.children).map((el) => el.getBoundingClientRect())
     const grids = Array.from(
       panel.querySelectorAll('.observation-summary, .observation-columns'),
     ).map((grid) => ({
@@ -555,7 +554,7 @@ test('task, agents and attempt drill-down use real observations and standard car
   await expect(page.getByRole('heading', { name: 'Actual model', exact: true })).toBeVisible()
   await expectAnalysisSpacing(page)
   await page.getByRole('tab', { name: 'Performance and data quality', exact: true }).click()
-  await expect(page.getByText('Task wall time P50', { exact: true })).toBeVisible()
+  await expect(page.getByText('Completed task wall time P50', { exact: true })).toBeVisible()
   await expectAnalysisSpacing(page)
   await page.getByRole('tab', { name: 'Task traces', exact: true }).click()
   await page.getByRole('button', { name: 'Observed parallel task', exact: true }).click()
