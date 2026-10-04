@@ -275,6 +275,18 @@ export async function publishCompleteReport(
     }
     if ((summaryCounts['tasks'] ?? '0') !== manifest.summary.inventory.tasks)
       throw new Error('Complete original Task EOF count changed')
+    const coverage = manifest.summary.usageCoverage
+    if (
+      coverage &&
+      (!Object.values(coverage).every(
+        (value) => typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value),
+      ) ||
+        BigInt(coverage.readyTasks) +
+          BigInt(coverage.missingTasks) +
+          BigInt(coverage.notApplicableTasks) !==
+          BigInt(manifest.summary.inventory.tasks))
+    )
+      throw new Error('Original Task usage coverage differs from the complete Task population')
     await assertCompleteReportPopulation(
       tx,
       report.request.actor,

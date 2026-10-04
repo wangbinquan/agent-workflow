@@ -9,9 +9,13 @@ import { CompleteTokens } from './CompleteObservationMetrics'
 export function CompleteObservationTrend({
   rows,
   onRange,
+  labels,
+  onPoint,
 }: {
   rows: readonly Trend[]
   onRange: (from: number, to: number) => void
+  labels?: ReadonlyMap<string, string>
+  onPoint?: (key: string, trigger: HTMLElement) => void
 }) {
   const { t, i18n } = useTranslation()
   const [activeKey, setActiveKey] = useState<string | null>(null)
@@ -29,7 +33,11 @@ export function CompleteObservationTrend({
   return (
     <div className="stack--sm">
       <TableViewport label={t('runObservability.trend')}>
-        <ul className="observation-trend" data-observation-trend>
+        <ul
+          className="observation-trend"
+          data-observation-trend={labels ? undefined : true}
+          data-observation-task-token-chart={labels ? true : undefined}
+        >
           {rows.map((row, index) => {
             const value = values[index]!
             return (
@@ -37,6 +45,7 @@ export function CompleteObservationTrend({
                 <button
                   type="button"
                   className="btn btn--ghost observation-trend__button"
+                  data-observation-task={labels ? row.key : undefined}
                   aria-label={[
                     t('runObservability.exactTaskCount', {
                       tasks: BigInt(row.tasks).toLocaleString(i18n.language),
@@ -54,11 +63,13 @@ export function CompleteObservationTrend({
                           ? BigInt(row.metrics.tokens[bucket]).toLocaleString(i18n.language)
                           : '—'),
                     ),
-                    row.key,
+                    labels?.get(row.key) ?? row.key,
                   ].join(' · ')}
                   onFocus={() => setActiveKey(row.key)}
                   onMouseEnter={() => setActiveKey(row.key)}
-                  onClick={() => onRange(row.from, row.to)}
+                  onClick={(event) =>
+                    onPoint ? onPoint(row.key, event.currentTarget) : onRange(row.from, row.to)
+                  }
                 >
                   <span className="observation-trend__scale">
                     <span>
@@ -69,9 +80,13 @@ export function CompleteObservationTrend({
                     <strong>
                       {row.metrics.state === 'ready'
                         ? value.toLocaleString(i18n.language) + ' Token'
-                        : t(
-                            `runObservability.${row.metrics.state === 'not-ready' ? 'reportNotReady' : 'notApplicable'}`,
-                          )}
+                        : labels
+                          ? row.metrics.state === 'not-ready'
+                            ? '?'
+                            : '—'
+                          : t(
+                              `runObservability.${row.metrics.state === 'not-ready' ? 'reportNotReady' : 'notApplicable'}`,
+                            )}
                     </strong>
                   </span>
                   <span className="observation-trend__track" aria-hidden="true">
@@ -106,8 +121,16 @@ export function CompleteObservationTrend({
                           />
                         ))}
                     </span>
+                    {row.metrics.state === 'not-ready' && (
+                      <span className="complete-observation-unknown-bar">?</span>
+                    )}
                   </span>
-                  <span className="observation-trend__label">{row.key}</span>
+                  <span
+                    className="observation-trend__label"
+                    title={labels?.get(row.key) ?? row.key}
+                  >
+                    {labels?.get(row.key) ?? row.key}
+                  </span>
                 </button>
               </li>
             )
@@ -116,7 +139,9 @@ export function CompleteObservationTrend({
       </TableViewport>
       <div
         role="group"
-        aria-label={t('runObservability.trendInterval')}
+        aria-label={t(
+          labels ? 'runObservability.taskTokenTrend' : 'runObservability.trendInterval',
+        )}
         className="observation-trend__detail"
       >
         <p className="muted">

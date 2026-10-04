@@ -73,6 +73,12 @@ export interface CompleteObservationReportHeader {
 }
 export interface CompleteObservationReportSummary {
   readonly metrics: CompleteObservationMetrics
+  /** Exact Task states counted during the original full traversal; absent in older reports. */
+  readonly usageCoverage?: {
+    readonly readyTasks: string
+    readonly missingTasks: string
+    readonly notApplicableTasks: string
+  }
   readonly inventory: {
     readonly tasks: string
     readonly attempts: string
@@ -93,6 +99,7 @@ export interface CompleteObservationReportSummary {
 }
 export interface CompleteObservationFactSummary {
   readonly metrics: Extract<CompleteObservationMetrics, { state: 'not-ready' }>
+  readonly usageCoverage?: CompleteObservationReportSummary['usageCoverage']
   readonly inventory: {
     readonly tasks: string
     readonly attempts: string

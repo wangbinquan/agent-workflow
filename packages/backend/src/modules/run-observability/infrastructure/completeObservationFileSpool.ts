@@ -1,5 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync, rmSync } from 'node:fs'
 import { isAbsolute, resolve } from 'node:path'
+import { isDeepStrictEqual } from 'node:util'
 import { sha256Hex } from '@/util/hash'
 import {
   completeReportInitialDigest,
@@ -14,6 +15,7 @@ import type {
   CompleteObservationTransferPage,
 } from '../ports/completeObservationReport'
 import { COMPLETE_OBSERVATION_FACT_SECTIONS } from '@agent-workflow/shared'
+import { completeReportFactRow } from '../domain/completeReportFacts'
 
 /** Sealed derived transport on the original configured operations root, never an input database. */
 export function completeObservationFileSpool(appHome: string): CompleteObservationSpool {
@@ -65,16 +67,12 @@ export function completeObservationFileSpool(appHome: string): CompleteObservati
           if (!COMPLETE_OBSERVATION_FACT_SECTIONS.includes(section))
             throw new Error('Incomplete original statistics cannot seal numeric collections')
           if (item.kind === 'row') {
-            const document = item.row.document as Record<string, unknown>
-            // Ordinary Task rows retain their own complete fold even when the cohort has gaps.
-            if (
-              section !== 'tasks' &&
-              'metrics' in document &&
-              (document.metrics as { state: string }).state !== 'not-ready'
+            const qualified = completeReportFactRow(
+              item.row,
+              input.summary.metrics.state === 'not-ready' ? input.summary.metrics.gaps : [],
             )
-              throw new Error('Incomplete original statistics cannot expose child subtotals')
-            if (section === 'span-facts' && (document.usage !== null || document.cost !== null))
-              throw new Error('Incomplete original statistics cannot expose span subtotals')
+            if (!qualified || !isDeepStrictEqual(qualified, item.row))
+              throw new Error('Incomplete original statistics cannot seal unqualified facts')
           }
         }
         buffer.push(item)

@@ -509,7 +509,7 @@ test('task, agents and attempt drill-down use real observations and standard car
   }
   const observedBucket = page
     .locator('[data-observation-trend]')
-    .getByRole('button', { name: /1 tasks.*Complete statistics not ready/ })
+    .getByRole('button', { name: /1 tasks.*Usage records are incomplete for this scope/ })
   await observedBucket.focus()
   await expect(page.getByRole('group', { name: 'Current trend interval' })).toContainText(
     'Not observed',
@@ -1093,7 +1093,7 @@ test('overview omits attention, labels every token column and aligns collection 
   await page.unroute('**/api/observability/reports**')
   await page.getByRole('button', { name: 'Refresh', exact: true }).click()
   await expect(chart.locator('.observation-trend__scale strong')).toHaveText([
-    'Complete statistics not ready',
+    'Usage records are incomplete for this scope',
   ])
   await expect(chart.locator('.observation-trend__segment')).toHaveCount(0)
   await chart.getByRole('button').first().focus()

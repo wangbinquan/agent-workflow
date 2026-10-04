@@ -22,11 +22,14 @@ import { completeObservationFileSpool } from '@/modules/run-observability/infras
 import { completeObservationReportCache } from '@/modules/run-observability/infrastructure/completeObservationReportStore'
 import { completeObservationActorScope } from '@/modules/run-observability/infrastructure/completeObservationReportDocuments'
 import { completeObservationReportService } from '@/modules/run-observability/application/completeObservationReportService'
+import { completeReportFactRow } from '@/modules/run-observability/domain/completeReportFacts'
 import {
   COMPLETE_OBSERVATION_FACT_SECTIONS,
   type CompleteObservationTask,
   type CompleteObservationReport,
   type CompleteObservationReportPage,
+  type CompleteObservationMetrics,
+  type CompleteObservationDimension,
   type ObservationSpanDetail,
 } from '@agent-workflow/shared'
 import {
@@ -89,6 +92,16 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
       invocationId: 'original-missing-capture-invocation',
       taskId: missingTaskId,
       nodeRunId: missingRunId,
+      agentId: 'missing-capture-agent',
+      purpose: 'system',
+    }
+    missingInvocation.authority = {
+      ...missingInvocation.authority,
+      runtime: {
+        ...missingInvocation.authority.runtime,
+        registrationId: 'missing-capture-runtime',
+        acceptedName: 'Missing capture runtime',
+      },
     }
     await harness.db
       .insert(observationInvocations)
@@ -167,6 +180,11 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
         attempts: '2',
         invocations: '2',
       })
+      expect(report.facts.summary.usageCoverage).toEqual({
+        readyTasks: '1',
+        missingTasks: '1',
+        notApplicableTasks: '0',
+      })
       expect(report.facts.summary.metrics).toEqual({
         state: 'not-ready',
         gaps: ['native-capture-unobserved', 'usage-unobserved'],
@@ -212,6 +230,13 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
         throw new Error('Original complete Task lifecycle lost its numeric qualification')
       expect(complete.metrics).toEqual(lifecycle.summary.metrics)
       expect(lifecycle.summary.inventory.tasks).toBe('1')
+      const missingLifecycleId = reportId(
+        await service.request(actor, query, 'same-missing-task-lifecycle', missingTaskId),
+      )
+      await service.worker.drain()
+      const missingLifecycle = await service.status(actor, missingLifecycleId)
+      if (missingLifecycle.state !== 'not-ready' || !missingLifecycle.facts)
+        throw new Error('Original missing Task lifecycle evidence lost')
       for (const section of [
         'agents',
         'runtimes',
@@ -222,9 +247,108 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
         'attempts',
         'invocations',
       ] as const) {
-        const group = await service.page<{ metrics: unknown }>(actor, id, { section, limit: 100 })
-        for (const row of group.items) expect(row.metrics).toEqual(report.facts.summary.metrics)
+        type Scope = {
+          key?: string
+          id?: string
+          invocationId?: string
+          metrics: CompleteObservationMetrics
+        }
+        const group = await service.page<Scope>(actor, id, { section, limit: 100 }),
+          own = await service.page<Scope>(actor, lifecycleId, { section, limit: 100 }),
+          other = await service.page<Scope>(actor, missingLifecycleId, { section, limit: 100 })
+        expect(group.nextCursor).toBeNull()
+        expect(own.nextCursor).toBeNull()
+        expect(other.nextCursor).toBeNull()
+        const key = (row: Scope) => row.key ?? row.id ?? row.invocationId
+        for (const row of group.items) {
+          const ready = own.items.find((candidate) => key(candidate) === key(row)),
+            gap = other.items.find((candidate) => key(candidate) === key(row))
+          expect(ready ?? gap).toBeDefined()
+          expect(row.metrics).toEqual(gap ? gap.metrics : ready!.metrics)
+        }
+        if (['agents', 'runtimes', 'purposes', 'attempts', 'invocations'].includes(section)) {
+          expect(group.items.some((row) => row.metrics.state === 'ready')).toBe(true)
+          expect(group.items.some((row) => row.metrics.state === 'not-ready')).toBe(true)
+        }
       }
+      for (const section of ['agents', 'runtimes', 'models', 'purposes', 'sources'] as const) {
+        const dimensions = await service.page<CompleteObservationDimension>(actor, id, {
+          section,
+          limit: 100,
+        })
+        for (const dimension of dimensions.items) {
+          const members = await service.page<CompleteObservationTask>(actor, id, {
+            section: 'dimension-tasks',
+            parent: dimension.key,
+            limit: 100,
+          })
+          expect(members.nextCursor).toBeNull()
+          expect(members.total).toBe(dimension.taskCount)
+          for (const member of members.items)
+            expect(member.metrics).toEqual(
+              member.task.id === original.id ? lifecycle.summary.metrics : missing.metrics,
+            )
+        }
+      }
+      for (const invalid of [
+        {
+          ...complete.metrics,
+          tokens: { input: '3', cacheRead: '9', cacheWrite: '15', output: '21', total: '47' },
+        },
+        { ...missing.metrics, tokens: { input: '0' } },
+        { state: 'not-applicable', tokens: { total: '0' } },
+      ])
+        expect(() =>
+          completeReportFactRow(
+            {
+              section: 'tasks',
+              parent: null,
+              key: original.id,
+              document: { ...complete, metrics: invalid },
+            },
+            report.facts!.summary.metrics.gaps,
+          ),
+        ).toThrow('metrics are not qualified')
+      const readyStored = await harness.db
+        .select()
+        .from(observationReportRows)
+        .where(
+          and(
+            eq(observationReportRows.reportId, id),
+            eq(observationReportRows.section, 'tasks'),
+            eq(observationReportRows.key, original.id),
+          ),
+        )
+        .get()
+      if (!readyStored) throw new Error('Original ready retained Task missing')
+      await harness.db
+        .update(observationReportRows)
+        .set({
+          document: JSON.stringify({
+            ...complete,
+            metrics: { ...missing.metrics, tokens: { total: '48' } },
+          }),
+        })
+        .where(
+          and(
+            eq(observationReportRows.reportId, id),
+            eq(observationReportRows.ordinal, readyStored.ordinal),
+          ),
+        )
+        .run()
+      await expect(service.page(actor, id, { section: 'tasks' })).rejects.toThrow(
+        'metrics are not qualified',
+      )
+      await harness.db
+        .update(observationReportRows)
+        .set({ document: readyStored.document })
+        .where(
+          and(
+            eq(observationReportRows.reportId, id),
+            eq(observationReportRows.ordinal, readyStored.ordinal),
+          ),
+        )
+        .run()
       const retained = await harness.db
         .select()
         .from(observationReportRows)
@@ -251,7 +375,7 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
       rmSync(folder, { recursive: true, force: true })
     }
   }, 120000)
-  test('202 original Tasks and every invocation survive incomplete usage; non-task numeric layers are redacted and damaged facts are rejected', async () => {
+  test('202 original Tasks and every invocation survive incomplete usage; only qualified scope metrics are retained and damaged facts are rejected', async () => {
     await seedCompleteTask(harness, 3, 3)
     await harness.db
       .delete(observationUsageCaptures)
@@ -397,6 +521,11 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
         attempts: '3',
         invocations: '3',
       })
+      expect(report.facts.summary.usageCoverage).toEqual({
+        readyTasks: '0',
+        missingTasks: '1',
+        notApplicableTasks: '201',
+      })
       expect(report.facts.summary.metrics.state).toBe('not-ready')
       expect(
         Object.keys(report.facts.counts).every((key) =>
@@ -435,9 +564,36 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
         'sources',
         'trends',
       ] as const) {
-        const page = await service.page<{ metrics: unknown }>(actor, id, { section, limit: 100 })
+        const page = await service.page<{
+          id?: string
+          invocationId?: string
+          selection?: CompleteObservationDimension['selection']
+          metrics: CompleteObservationMetrics
+        }>(actor, id, { section, limit: 100 })
         expect(page.items.length).toBeGreaterThan(0)
-        for (const row of page.items) expect(row.metrics).toEqual(report.facts.summary.metrics)
+        for (const row of page.items) {
+          if (section === 'invocations' || section === 'attempts') {
+            const missing =
+              (row.invocationId ?? row.id) ===
+              completeFixtureId(section === 'invocations' ? 'invocation' : 'run', 2)
+            expect(row.metrics.state).toBe(missing ? 'not-ready' : 'ready')
+            if (!missing && row.metrics.state === 'ready') {
+              expect(row.metrics.invocations).toBe('1')
+              expect(row.metrics.observedInvocations).toBe('1')
+              expect(row.metrics.tokens.total).toBe(
+                (row.invocationId ?? row.id) ===
+                  completeFixtureId(section === 'invocations' ? 'invocation' : 'run', 0)
+                  ? '16'
+                  : '32',
+              )
+            }
+          } else if (section === 'models') {
+            expect(row.metrics.state).toBe(
+              row.selection?.model?.model === 'actual' ? 'ready' : 'not-ready',
+            )
+            if (row.metrics.state === 'ready') expect(row.metrics.tokens.total).toBe('48')
+          } else expect(row.metrics.state).toBe('not-ready')
+        }
       }
       for (const section of [
         'allocations',

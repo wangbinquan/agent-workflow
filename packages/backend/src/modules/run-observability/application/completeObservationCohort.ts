@@ -61,6 +61,7 @@ export async function buildCompleteObservationCohort(
     numericRecords: 0n,
     nativeCaptures: 0n,
   }
+  const usageCoverage = { readyTasks: 0n, missingTasks: 0n, notApplicableTasks: 0n }
   const trends = completeWorkingCache<TrendWorking>(input.rows, space('trends'), input.signal)
   const quality = completeWorkingCache<string>(input.rows, space('quality'), input.signal)
   const date = new Intl.DateTimeFormat('en-CA', {
@@ -135,6 +136,9 @@ export async function buildCompleteObservationCohort(
     const build = await selectCompleteObservationTask(taskInput, original, selection)
     if (build === null) continue
     inventory.tasks++
+    if (build.summary.metrics.state === 'ready') usageCoverage.readyTasks++
+    else if (build.summary.metrics.state === 'not-ready') usageCoverage.missingTasks++
+    else usageCoverage.notApplicableTasks++
     inventory.attempts += BigInt(build.summary.attemptCount)
     inventory.invocations += BigInt(build.fold.invocations)
     inventory.numericRecords += BigInt(build.originalNumericRecords)
@@ -392,6 +396,11 @@ export async function buildCompleteObservationCohort(
   }
   const summary = {
     metrics,
+    usageCoverage: {
+      readyTasks: String(usageCoverage.readyTasks),
+      missingTasks: String(usageCoverage.missingTasks),
+      notApplicableTasks: String(usageCoverage.notApplicableTasks),
+    },
     inventory: {
       tasks: String(inventory.tasks),
       attempts: String(inventory.attempts),

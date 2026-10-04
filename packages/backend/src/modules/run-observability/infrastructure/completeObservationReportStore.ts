@@ -1,4 +1,5 @@
 import { and, eq, gt, asc } from 'drizzle-orm'
+import { isDeepStrictEqual } from 'node:util'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   observationReports,
@@ -20,6 +21,7 @@ import {
   type CompleteObservationQuality,
 } from '@agent-workflow/shared'
 import { CompleteObservationError } from '../domain/completeObservationError'
+import { completeReportFactRow } from '../domain/completeReportFacts'
 import {
   decodeCompleteReport,
   encodeCompleteReportRequest,
@@ -265,6 +267,7 @@ export function completeObservationReportCache(
         const rows = await tx
           .select({
             ordinal: observationReportRows.ordinal,
+            key: observationReportRows.key,
             document: observationReportRows.document,
           })
           .from(observationReportRows)
@@ -294,7 +297,21 @@ export function completeObservationReportCache(
           reportId: report.id,
           section: query.section,
           parent: query.parent,
-          items: items.map((row) => JSON.parse(row.document) as T),
+          items: items.map((row) => {
+            const document = JSON.parse(row.document) as T
+            if (report.report.state === 'not-ready') {
+              const original = {
+                section: query.section,
+                parent: query.parent,
+                key: row.key,
+                document,
+              }
+              const qualified = completeReportFactRow(original, report.report.gaps)
+              if (!qualified || !isDeepStrictEqual(qualified, original))
+                throw new Error('Original retained scope metrics are not qualified')
+            }
+            return document
+          }),
           total: count?.total ?? '0',
           nextCursor: rows.length > query.limit && last ? last.ordinal : null,
         }

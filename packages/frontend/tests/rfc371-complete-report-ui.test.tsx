@@ -229,9 +229,9 @@ test('formal route uses the complete report surface and keeps the legacy regress
   expect(route).not.toContain('<RunObservability')
 })
 test('all 1001 Tasks remain reachable with frozen exact totals, four buckets and CNY', async () => {
-  const f = fixture()
+  const f = fixture({ ...initial, tab: 'overview' })
   const total = BigInt(metrics.tokens.total).toLocaleString('zh')
-  await screen.findByRole('button', { name: '任务 0' })
+  await screen.findByRole('heading', { name: '完整 Token 消耗' })
   const activeTab = screen.getByRole('tab', { selected: true })
   const activePanel = screen.getByRole('tabpanel')
   expect(activeTab.getAttribute('aria-controls')).toBe(activePanel.id)
@@ -248,12 +248,15 @@ test('all 1001 Tasks remain reachable with frozen exact totals, four buckets and
   expect(
     screen.getByRole('heading', { name: '人民币估值' }).closest('.card')?.textContent,
   ).toContain('¥2500.75005')
+  fireEvent.click(screen.getByRole('tab', { name: '任务追踪' }))
+  expect(document.querySelector('.observation-summary')).toBeNull()
   const visited = new Set<string>()
   for (let page = 0; page < 11; page++) {
     await screen.findByRole('button', { name: '任务 ' + page * 100 })
     for (const node of document.querySelectorAll<HTMLElement>('[data-observation-task]'))
       visited.add(node.dataset.observationTask!)
     expect(summary.textContent).toContain(total)
+    expect(document.querySelector('.observation-summary')).toBeNull()
     const next = screen.getByRole('button', { name: '下一页' })
     if (page < 10) fireEvent.click(next)
     else expect((next as HTMLButtonElement).disabled).toBe(true)
@@ -267,7 +270,7 @@ test('losing one retained record hides old totals while the original report is c
   await screen.findByRole('button', { name: '任务 0' })
   f.state.missing = true
   fireEvent.click(screen.getByRole('button', { name: '下一页' }))
-  await screen.findByText('存在未核实或缺失的记录，因此不显示数字小计。')
+  await screen.findByText(i18n.t('runObservability.noIncompleteTotals'))
   expect(screen.queryByRole('heading', { name: '完整 Token 消耗' })).toBeNull()
   expect(screen.queryByText(BigInt(metrics.tokens.total).toLocaleString('zh'))).toBeNull()
 })

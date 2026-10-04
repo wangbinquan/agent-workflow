@@ -1,7 +1,11 @@
 export const runObservabilityZh = {
   usageGapTitle: 'Token 用量存在缺口',
   factsAvailable:
-    '任务数量、执行明细与耗时已完整核对。任务列表保留每个已完整核对任务的 Token 与费用；有缺口的任务和全范围汇总保持未知，不能按零计入。继续等待不会自动补齐原用量。',
+    '全部任务、调用与耗时已完整核对。各任务、Agent、运行时与执行尝试显示各自已核实的分类 Token 和人民币费用；包含缺记录的范围标为未知，不能按零计入。',
+  taskUsageCoverage: '用量完整 {{ready}} · 有缺口 {{missing}} · 无模型调用 {{notApplicable}}',
+  taskTokenTrend: '各任务分类 Token 消耗',
+  taskTokenTrendHint:
+    '按每个任务的独立完整记录展示四类 Token。问号表示该任务有缺口；点击柱子查看任务明细。全部任务均可翻页查看，不把完整任务的小计当作全范围总量。',
   gapReason: '缺口原因',
   affectedTasks: '受影响任务',
   viewGapTasks: '查看受影响任务：{{reason}}',
@@ -20,9 +24,9 @@ export const runObservabilityZh = {
   totalTokens: '完整 Token 消耗',
   numericRecords: '用量记录',
   notApplicable: '无模型调用',
-  reportNotReady: '完整统计尚未就绪',
+  reportNotReady: '该范围用量记录不完整',
   reportBuilding: '正在读取全部原始记录并核对完整性',
-  noIncompleteTotals: '存在未核实或缺失的记录，因此不显示数字小计。',
+  noIncompleteTotals: '该范围存在缺失或未核实的用量，无法给出准确总量；各完整范围的明细仍可查看。',
   reportFailed: '完整报告生成失败',
   completeAsOf: '完整统计截至 {{time}}；刷新可纳入后续记录。',
   fullPage: '完整记录 {{total}} 条 · 第 {{page}} 页',
@@ -322,7 +326,12 @@ export type RunObservabilityMessages = { [K in keyof typeof runObservabilityZh]:
 export const runObservabilityEn: RunObservabilityMessages = {
   usageGapTitle: 'Token usage has gaps',
   factsAvailable:
-    'All task, execution and duration records are reconciled. The task list retains tokens and costs for each fully verified task. Tasks with gaps and whole-range totals remain unknown, never zero. Waiting will not restore missing usage.',
+    'All tasks, invocations and durations are reconciled. Tasks, agents, runtimes and attempts show their own verified token categories and CNY costs. Scopes with missing records remain unknown, never zero.',
+  taskUsageCoverage:
+    'Complete usage {{ready}} · Gaps {{missing}} · No model calls {{notApplicable}}',
+  taskTokenTrend: 'Token categories by task',
+  taskTokenTrendHint:
+    'Each bar uses that task’s independently verified token records. A question mark means missing usage. Select a bar to open the task. Every task is reachable through pagination; verified tasks are never summed into a whole-range total.',
   gapReason: 'Missing evidence',
   affectedTasks: 'Affected tasks',
   viewGapTasks: 'View affected tasks: {{reason}}',
@@ -341,9 +350,10 @@ export const runObservabilityEn: RunObservabilityMessages = {
   totalTokens: 'Complete token usage',
   numericRecords: 'Usage records',
   notApplicable: 'No model calls',
-  reportNotReady: 'Complete statistics not ready',
+  reportNotReady: 'Usage records are incomplete for this scope',
   reportBuilding: 'Reading every original record and verifying completeness',
-  noIncompleteTotals: 'Some records are missing or unverified. Numeric subtotals are withheld.',
+  noIncompleteTotals:
+    'This scope has missing or unverified usage, so an accurate total is unavailable. Complete scopes retain their own details.',
   reportFailed: 'Complete report failed',
   completeAsOf: 'Complete statistics as of {{time}}. Refresh to include later records.',
   fullPage: '{{total}} complete records · page {{page}}',

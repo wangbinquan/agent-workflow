@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1334,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 24425,
+    "recursiveFields": 24449,
     "symbols": 1146
   },
   "entries": [
@@ -118926,7 +118926,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 293,
+        "maxTransitiveLeafFields": 301,
         "maxUnionVariants": 146
       },
       "consumerEdgeIds": [
@@ -119418,6 +119418,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.usageCoverage.missingTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.usageCoverage.notApplicableTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.usageCoverage.readyTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:1.inventory.attempts",
           "type": "string"
         },
@@ -119704,6 +119719,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:1.timing.wallMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.usageCoverage",
+          "type": "CompleteObservationReportSummary['usageCoverage']"
         },
         {
           "consumerEdgeIds": [],
@@ -120194,6 +120214,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.usageCoverage.missingTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.usageCoverage.notApplicableTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.usageCoverage.readyTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:1.inventory.attempts",
           "type": "string"
         },
@@ -120483,6 +120518,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.usageCoverage",
+          "type": "CompleteObservationReportSummary['usageCoverage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.state",
           "type": "'not-ready'"
         }
@@ -120531,7 +120571,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 332,
+        "maxTransitiveLeafFields": 340,
         "maxUnionVariants": 160
       },
       "consumerEdgeIds": [
@@ -121039,6 +121079,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.usageCoverage.missingTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.usageCoverage.notApplicableTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.usageCoverage.readyTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:1.inventory.attempts",
           "type": "string"
         },
@@ -121323,6 +121378,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:1.timing.wallMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.usageCoverage",
+          "type": "CompleteObservationReportSummary['usageCoverage']"
         },
         {
           "consumerEdgeIds": [],
@@ -121705,6 +121765,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "report.$variant:1.facts.summary.timing.wallMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.usageCoverage",
+          "type": "CompleteObservationReportSummary['usageCoverage']"
         },
         {
           "consumerEdgeIds": [],
@@ -122181,6 +122246,21 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.timing.wallMs",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.usageCoverage.missingTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.usageCoverage.notApplicableTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.usageCoverage.readyTasks",
           "type": "string"
         },
         {
@@ -122721,7 +122801,7 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 387,
+        "maxTransitiveLeafFields": 395,
         "maxUnionVariants": 186
       },
       "consumerEdgeIds": [
@@ -123365,6 +123445,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.usageCoverage",
+          "type": "CompleteObservationReportSummary['usageCoverage']"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:request.$return.$variant:1.gaps",
           "type": "readonly string[]"
         },
@@ -123868,6 +123953,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.usageCoverage.missingTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.usageCoverage.notApplicableTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.usageCoverage.readyTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:status.$parameter:actor.authorityRevision",
           "type": "number"
         },
@@ -124345,6 +124445,11 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:1.facts.summary.timing.wallMs",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.usageCoverage",
+          "type": "CompleteObservationReportSummary['usageCoverage']"
         },
         {
           "consumerEdgeIds": [],
@@ -124847,6 +124952,21 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:status.$return.$variant:3.summary.timing.wallMs",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.usageCoverage.missingTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.usageCoverage.notApplicableTasks",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.usageCoverage.readyTasks",
           "type": "string"
         }
       ],
@@ -192898,7 +193018,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:b24f35e5ddd5b479b6f1a6aa1c44791b1d0f388c2949f99e2e6482357b71c376",
+  "sourceDigest": "sha256:eac2cd19db5b87278b05ff2643cb0639a5b6009f0b10653f7227b25820684f84",
   "targetContexts": [
     "collaboration",
     "development-automation",

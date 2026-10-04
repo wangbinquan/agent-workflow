@@ -1,7 +1,7 @@
 // Display contract only; original SQLite/PostgreSQL source completeness is verified separately.
 import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import type {
   CompleteObservationFactSummary,
@@ -72,6 +72,15 @@ function fixture(
       reportRequests.push(body.filters)
       const summary: CompleteObservationFactSummary = {
         metrics: valueMetrics,
+        ...(indexed
+          ? {
+              usageCoverage: {
+                readyTasks: body.taskId ? '0' : completeTaskMetrics ? '1' : '0',
+                missingTasks: body.taskId ? '1' : completeTaskMetrics ? '201' : '202',
+                notApplicableTasks: '0',
+              },
+            }
+          : {}),
         inventory: { tasks: body.taskId ? '1' : '202', attempts: '1', invocations: '1' },
         statuses: { done: body.taskId ? '1' : '202' },
         timing: { wallMs: '10', runningMs: '10', p50Ms: '10', p95Ms: '10', unknown: '0' },
@@ -100,8 +109,8 @@ function fixture(
             quality: '1',
             attempts: '1',
             invocations: '1',
-            agents: '0',
-            runtimes: '0',
+            agents: completeTaskMetrics ? '1' : '0',
+            runtimes: completeTaskMetrics ? '1' : '0',
             models: initialSearch ? '1' : '0',
             'span-facts': '0',
             'span-statuses': '0',
@@ -179,6 +188,27 @@ function fixture(
           metrics: valueMetrics,
         },
       ]
+    if ((section === 'agents' || section === 'runtimes') && completeTaskMetrics)
+      items = [
+        {
+          key: section + '-verified-original',
+          kind: section === 'agents' ? 'agent' : 'runtime',
+          label: section === 'agents' ? '已核实 Agent' : '已核实算力',
+          selection:
+            section === 'agents'
+              ? { agent: { id: 'verified-agent', revision: 1 } }
+              : {
+                  runtime: {
+                    authority: 'local',
+                    registrationId: 'validation-runtime',
+                    configurationRevision: 1,
+                    protocol: 'opencode',
+                  },
+                },
+          taskCount: '1',
+          metrics: completeTaskMetrics,
+        },
+      ]
     if (section === 'attempts')
       items = [
         {
@@ -192,7 +222,7 @@ function fixture(
           finishedAt: NOW,
           durationMs: '10',
           open: false,
-          metrics,
+          metrics: completeTaskMetrics ?? metrics,
         },
       ]
     if (section === 'invocations')
@@ -217,7 +247,7 @@ function fixture(
               protocol: 'opencode',
             },
           },
-          metrics,
+          metrics: completeTaskMetrics ?? metrics,
         },
       ]
     return Response.json({ reportId: value.reportId, section, parent, total, items, nextCursor })
@@ -236,6 +266,15 @@ function fixture(
   if (legacyCache) {
     client.setQueryDefaults(legacyKey, { gcTime: Infinity })
     client.setQueryData(legacyKey, legacyReport)
+    const oldScopeKey = [
+      'run-observability-complete',
+      'task-scope-metrics/2',
+      legacyKey[1],
+      null,
+      0,
+    ]
+    client.setQueryDefaults(oldScopeKey, { gcTime: Infinity })
+    client.setQueryData(oldScopeKey, legacyReport)
   }
   function Page() {
     const [search, setSearch] = useState<ObservationSearch>({
@@ -312,7 +351,13 @@ test.each(['zh', 'en'])(
     )
     for (const key of ['from', 'to', 'q', 'status', 'repository', 'workflow'] as const)
       expect(selected[key]).toEqual(initial[key])
-    expect(document.querySelector('.observation-summary')?.textContent).not.toContain('¥')
+    expect(document.querySelector('.observation-summary')).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: i18n.t('runObservability.tab_overview') }))
+    expect(
+      (await screen.findByRole('heading', { name: i18n.t('runObservability.fullTasks') })).closest(
+        '.observation-summary',
+      )?.textContent,
+    ).not.toContain('¥')
     expect(
       document.querySelector('.observation-summary')?.querySelectorAll('[data-token-bucket] dd'),
     ).toHaveLength(4)
@@ -367,17 +412,85 @@ test.each(['zh', 'en'])(
     const unknown = (await screen.findByRole('button', { name: '执行事实 0001' })).closest('tr')!
     expect(unknown.textContent).not.toContain('¥')
     expect(unknown.textContent).toContain(i18n.t('runObservability.reportNotReady'))
+    expect(document.querySelector('.observation-summary')).toBeNull()
+    fireEvent.click(screen.getByRole('tab', { name: i18n.t('runObservability.tab_overview') }))
+    await screen.findByRole('heading', { name: i18n.t('runObservability.fullTasks') })
     const summary = document.querySelector('.observation-summary')!
     expect(summary.textContent).toContain('202')
     expect(summary.textContent).not.toContain('¥')
     expect(summary.textContent).not.toContain('48')
     expect(summary.textContent).toContain(i18n.t('runObservability.reportNotReady'))
+    expect(summary.textContent).toContain(
+      i18n.t('runObservability.taskUsageCoverage', {
+        ready: '1',
+        missing: '201',
+        notApplicable: '0',
+      }),
+    )
     expect(screen.getByText(i18n.t('runObservability.factsAvailable'))).toBeTruthy()
+    const chart = document.querySelector('[data-observation-task-token-chart]')!
+    expect(chart.querySelectorAll('.observation-trend__segment')).toHaveLength(4)
+    expect(chart.textContent).toContain('48 Token')
+    expect(chart.querySelectorAll('.complete-observation-unknown-bar').length).toBeGreaterThan(0)
+    const point = chart.querySelector<HTMLButtonElement>('[data-observation-task="0000"]')!
+    point.focus()
+    fireEvent.click(point)
+    await screen.findByRole('heading', { level: 1, name: '执行事实 0000' })
+    fireEvent.click(
+      screen.getByRole('button', { name: '← ' + i18n.t('runObservability.backAnalysis') }),
+    )
+    await screen.findByRole('heading', { name: i18n.t('runObservability.taskTokenTrend') })
+    await waitFor(() =>
+      expect(document.activeElement?.getAttribute('data-observation-task')).toBe('0000'),
+    )
+    fireEvent.click(screen.getByRole('tab', { name: i18n.t('runObservability.tab_tasks') }))
     fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.next') }))
     await screen.findByRole('button', { name: '执行事实 0100' })
     fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.next') }))
     await screen.findByRole('button', { name: '执行事实 0201' })
-    expect(document.querySelector('.observation-summary')?.textContent).toContain('202')
+    expect(document.querySelector('.observation-summary')).toBeNull()
+    expect(
+      screen.getByText(i18n.t('runObservability.fullPage', { total: '202', page: 3 })),
+    ).toBeTruthy()
+  },
+)
+
+test.each(['zh', 'en'])(
+  'independently verified Agent and runtime bins remain visible under a whole-range gap in %s',
+  async (language) => {
+    await i18n.changeLanguage(language)
+    const f = fixture(true, metrics.gaps[0]!, {
+      state: 'ready',
+      invocations: '1',
+      observedInvocations: '1',
+      records: '2',
+      tokens: { input: '3', cacheRead: '9', cacheWrite: '15', output: '21', total: '48' },
+      cost: { currency: 'CNY', state: 'complete', amount: '0.00015' },
+    })
+    await screen.findByRole('button', { name: '执行事实 0000' })
+    fireEvent.click(screen.getByRole('tab', { name: i18n.t('runObservability.tab_agents') }))
+    const agent = await screen.findByRole('button', { name: '已核实 Agent' })
+    const agentRow = agent.closest('tr')!
+    for (const [bucket, count] of Object.entries({
+      input: '3',
+      cacheRead: '9',
+      cacheWrite: '15',
+      output: '21',
+    }))
+      expect(agentRow.querySelector(`[data-token-bucket="${bucket}"] dd`)?.textContent).toBe(count)
+    expect(agentRow.textContent).toContain('¥')
+    fireEvent.click(screen.getByRole('tab', { name: i18n.t('runObservability.tab_usage') }))
+    const runtime = await screen.findByRole('button', {
+      name: i18n.t('runObservability.runtimeView', { name: '已核实算力' }),
+    })
+    expect(runtime.closest('tr')?.textContent).toContain('48')
+    expect(runtime.closest('tr')?.textContent).toContain('¥')
+    expect(document.querySelector('.observation-summary')).toBeNull()
+    expect(
+      f.requests.some((path) =>
+        /section=(allocations|native-captures|platform-captures)/.test(path),
+      ),
+    ).toBe(false)
   },
 )
 
