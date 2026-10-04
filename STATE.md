@@ -1,3 +1,9 @@
+## 2026-10-04 RFC-371 hosted Playwright 源码导入修复
+
+adc59f98 的 full-tier37185331328 与 WebKit37185338947 均在加载原观测 spec 时报告 Cannot find package @agent-workflow/shared，尚未执行该批用例。只将三个实际运行时 schema 值改到现有 shared 源码入口，根包类型仍为 erased import type；其余52670字节用例正文、原标题、断言、四桶／人民币／EOF／焦点／主题和120s／60s预算保持。原失败保留，有限 SOURCE1 与新确切SHA hosted CI继续，不做本机AW tests/typecheck/build/service，不重开生产census。
+
+457589 的视觉 success，普通CI与Windows被后继main取消，均保留取消事实；adc原普通CI cancelled、Windows Typecheck failure、full／WebKit failure不记为通过。原维护soak、证据soak、git协议、OpenCode集成及视觉success仅各自候选证据，PostgreSQL full-scale仍运行。新普通／Windows和受影响的full／WebKit将检视实际新候选；native原owner／completion、规模、真模型和CS部署仍开放，两RFC In Progress。下方全文与并行在制品保持。
+
 ## 2026-10-04 RFC-371 hosted Windows 断言类型修复
 
 观测浏览器恢复已精确发布为 adc59f98a453fa54806e7d89646b06c32a785380（21路径；SOURCE/META有限功能PASS，129原库存零增长）。该SHA视觉、证据soak、git协议与OpenCode集成已绿；Windows原类型检查在新增双语测试的toHaveAttribute报TS2339。只改同一实际tab的getAttribute与标准toBe，保持aria-selected=true、中英名称、全部原断言和等待预算；原失败保留，后继SOURCE1与新SHA CI继续，不以已绿子集关闭全仓/定时/规模/原native owner或CS部署。其余会话及下方历史全文保持。
@@ -9881,7 +9887,6 @@ SOURCE7首次FAIL发现JSON布尔值被SQLite转成0/1，原失败保留；只�
 
 1628e7aacd976775aa7e73562af2358edc6c2ea5 的 [visual-regression-nightly37160496294](https://github.com/wangbinquan/agent-workflow/actions/runs/37160496294) 终态 success，主 CI37160496067 cancelled，不当作通过。de5f90ae 的主 CI37162165195、Windows37162413399 在此前观测时尚无终态；2026-10-04 00:00:03 UTC 冻结原运行响应时，主 CI 为 in_progress，Windows 已于 2026-10-03 23:47:50 UTC 终态 success。旧 FAIL／cancelled 保留。当前仍只是未接线的完整 reader 基础；原 owner 持久 before、肯定 ACK、同事务 emission／revision／source、producer切换、旧采集总量限制移除、100K Task／10M usage、真实模型四桶／人民币与正式页面／剩余 CI 验收继续，两个RFC不关闭。
 
-
 ### 2026-10-04 RFC-370：只读快照与隔离原生所有权拆分
 
 Resource Catalog 的 Workgroup load 改为既有 DatabaseSession.snapshotRead：PG 使用 REPEATABLE READ READ ONLY，SQLite 与嵌套事务仍走原实现；commit、SQL/CAS、原十次 SERIALIZABLE 写入重试和 full jitter 保持。新六用例使用 branded PG 协议夹具核真实生产调用、同一 transaction、held completion ACK、嵌套 frame 和原拒绝；不把此夹具当作本机真实 PG。SOURCE2 首轮 Bun matcher 泛型 P2/FAIL 保留，只补 expect<unknown> 后 R2 有限 PASS 96d12b4cb1e9d070488dfbe4658a36efcaa323e67c8188d8e329138a704f538c。
@@ -9895,7 +9900,6 @@ mutation 总数 1862 保持，仅两项原 native owner/file 和原 classifier �
 旧上传 SHA 2c474db9 的主 CI37168434612 completed/failure（35 success/14 failure/1 cancelled），Windows37168434657 failure、maintenance37168434632 success；类型补正 a7522bbe 主 CI37170055509 cancelled（37 success/11 failure/2 cancelled），精确手动 Windows37170515895 success 1/1。架构 oracle 补正 b6195a0c 主 CI37171176047 已 completed/failure（43 success/7 failure），后端全部分片及类型/lint 通过，六项页面 E2E 与 required 失败。Ubuntu1 job111344566543 和 Windows3 job111345229706 的原日志核到 RFC-371 观测页面/下钻/捕获断言；其余四份页面日志未逐字核对，不宣称旧整套 CI 通过。并行 owner 已提交其 2f7 修复；本批新源码和原 Git 回归仍交本次发布的 exact-SHA hosted CI。
 
 本机只做 owned format/lint、纯 AST/byte/JSON/原库存投影与一次原 scoped 生成，没有 AW 本机 tests/typecheck/build/service。新行为尚待托管 CI；完整 A1–A8/AC00/A-G 持续，随后各层独立 CS adapters，B/M0 先实际部署再 M1–M4。当前仍无 AW-in-CS 部署，不关闭 RFC。全部旧文档、并行输出、失败与取消历史完整保留。
-
 
 ### 2026-10-04 RFC-370：完整隔离 scope 接线与两项 CI 修复
 

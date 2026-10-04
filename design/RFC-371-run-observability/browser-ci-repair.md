@@ -66,3 +66,9 @@ CS 最终部署继续，不以这些呈现夹具或有限页面核对宣称全�
 等待预算不变。无生产源码和原 canonical payload 改动，不重复 AST census。有限 SOURCE1-v4
 复核及后继确切 SHA hosted CI 单独核对；当前已绿的视觉、证据 soak、git 协议与 OpenCode
 工作流不能代替剩余常规/Windows/定时或真实模型用量验收。
+
+## Hosted Playwright runtime import delta
+
+The exact adc59f98 full-tier run37185331328 and WebKit run37185338947 failed during spec loading with `Cannot find package '@agent-workflow/shared'`. The original assertions had not executed. Three runtime schema imports now use their existing relative shared-source entrypoints, matching the spec's existing platform-schema import; the root package import is type-only and erased. The remaining52670 bytes of spec body, all original test titles, fixture semantics, assertions and120s/60s budgets are unchanged. No production or canonical content changed, so the successful census remains valid. Scoped formatting/lint and a finite SOURCE1 review are separate from the new hosted verdict.
+
+The457589 ordinary and Windows runs were cancelled by subsequent main publication; its visual run succeeded. These cancellations and the original adc full/WebKit failures remain recorded, not rewritten as green. The affected full/WebKit candidates must rerun after this import correction. Unchanged independent scheduled candidates keep their own exact SHA and original evidence; no unrelated long soak is duplicated only because main advanced. Native original-owner wiring, complete-scale/native-model validation and CS deployment remain open.

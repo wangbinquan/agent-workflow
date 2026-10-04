@@ -2,28 +2,30 @@
 import { expect, test, type Page } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import {
-  COMPLETE_OBSERVATION_SECTIONS,
-  ObservationDimensionSelectionSchema,
-  completeObservationReportContent,
-  type CompleteObservationMetrics,
-  type CompleteObservationReport,
-  type CompleteObservationReportContent,
-  type CompleteObservationReportPage,
-  type CompleteObservationSection,
-  type CompleteObservationTask,
-  type CompleteObservationDimension,
-  type CompleteObservationDimensionTask,
-  type CompleteObservationInvocation,
-  type CompleteObservationAttempt,
-  type CompleteObservationTrend,
-  type ObservationOverviewQuery,
-  type ObservationPriceHistory,
-  type ObservationPriceVersion,
-  type ObservationPricingRuntime,
+import type {
+  CompleteObservationMetrics,
+  CompleteObservationReport,
+  CompleteObservationReportContent,
+  CompleteObservationReportPage,
+  CompleteObservationSection,
+  CompleteObservationTask,
+  CompleteObservationDimension,
+  CompleteObservationDimensionTask,
+  CompleteObservationInvocation,
+  CompleteObservationAttempt,
+  CompleteObservationTrend,
+  ObservationOverviewQuery,
+  ObservationPriceHistory,
+  ObservationPriceVersion,
+  ObservationPricingRuntime,
 } from '@agent-workflow/shared'
 import { startDaemon, type DaemonHandle } from './harness'
 import { ObservationPlatformNativeCaptureSchema } from '../packages/shared/src/schemas/observationPlatform'
+import {
+  COMPLETE_OBSERVATION_SECTIONS,
+  completeObservationReportContent,
+} from '../packages/shared/src/schemas/observationReport'
+import { ObservationDimensionSelectionSchema } from '../packages/shared/src/schemas/observationTasks'
 
 const nativeCapture = JSON.parse(
   readFileSync(
