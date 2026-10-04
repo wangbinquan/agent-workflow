@@ -39,8 +39,9 @@ const generatedPath = join(backendSrc, 'embed.generated.ts')
 const mainEntry = join(backendSrc, 'main.ts')
 const managedProcessLauncherEntry = join(
   backendSrc,
-  'services',
+  'platform',
   'execution',
+  'local',
   'managedProcessLauncher.ts',
 )
 const gitCredentialHelperEntry = join(backendSrc, 'util', 'gitCredentialHelper.ts')

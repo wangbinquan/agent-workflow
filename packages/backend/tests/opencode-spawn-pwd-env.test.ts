@@ -44,7 +44,7 @@ const SPAWN_CWD_SITES = [
   // executor, whose managedProcess core is the ONE spawn site keeping cwd/env
   // in lock-step. The runner's own PWD contract is verified below (it passes
   // opts.worktreePath + the driver env straight into runAgentProcess).
-  ['src/services/execution/managedProcess.ts', 'req.cwd', 'req.env'],
+  ['src/platform/execution/local/managedProcess.ts', 'req.cwd', 'req.env'],
 ] as const
 
 describe('opencode spawn sites set PWD = cwd in env', () => {

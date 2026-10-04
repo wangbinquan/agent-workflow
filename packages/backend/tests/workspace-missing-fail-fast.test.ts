@@ -126,7 +126,7 @@ describe('spawn catches route through explainSpawnEnoent (source-level wiring lo
     // RFC-280 T7: the business child spawns through the unified executor, whose
     // managedProcess core owns the ENOENT translation; the runner turns the
     // returned spawnError into its runtime-spawn-failed message.
-    expect(src('services/execution/managedProcess.ts')).toContain('explainSpawnEnoent(')
+    expect(src('platform/execution/local/managedProcess.ts')).toContain('explainSpawnEnoent(')
     expect(src('services/runner.ts')).toContain('runResult.spawnError')
   })
 
@@ -134,7 +134,7 @@ describe('spawn catches route through explainSpawnEnoent (source-level wiring lo
     // RFC-280 T4: the probe spawns through the unified executor, whose
     // managedProcess core owns the ENOENT translation; the smoke result must
     // still carry it (spawnError → detail), so lock both halves of the wiring.
-    expect(src('services/execution/managedProcess.ts')).toContain('explainSpawnEnoent(')
+    expect(src('platform/execution/local/managedProcess.ts')).toContain('explainSpawnEnoent(')
     expect(src('services/runtimeSmoke.ts')).toContain('run.spawnError')
   })
 
@@ -144,7 +144,7 @@ describe('spawn catches route through explainSpawnEnoent (source-level wiring lo
     // spawnError → 'binary failed to start: …' (locked behaviorally by
     // rfc234-system-agent-run 'spawn failure (missing binary) reports masked
     // diagnostics').
-    expect(src('services/execution/managedProcess.ts')).toContain('explainSpawnEnoent(')
+    expect(src('platform/execution/local/managedProcess.ts')).toContain('explainSpawnEnoent(')
     expect(src('services/systemAgentRun.ts')).toContain('run.spawnError')
   })
 })

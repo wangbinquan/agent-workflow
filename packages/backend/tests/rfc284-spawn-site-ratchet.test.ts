@@ -68,12 +68,12 @@ const ALLOWLIST: Record<string, { governance: SpawnGovernance; count: number; wh
       '故照实登记而非改名绕开棘轮。三处 = 接口方法声明 + 模式 A 的首次调用 + ' +
       'T5b 模式 B 重试循环里的再次调用（跨 attempt 窗口内由 retryPolicy 驱动）。',
   },
-  'services/execution/managedProcess.ts': {
+  'platform/execution/local/managedProcess.ts': {
     governance: 'kernel',
     count: 1,
     why: 'THE agent spawn point（RFC-280）；全部 agent 类进程唯一入口。',
   },
-  'services/execution/managedProcessLauncher.ts': {
+  'platform/execution/local/managedProcessLauncher.ts': {
     governance: 'kernel',
     count: 1,
     why:
