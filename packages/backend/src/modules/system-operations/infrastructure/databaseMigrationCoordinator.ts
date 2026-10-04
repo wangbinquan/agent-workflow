@@ -384,27 +384,37 @@ export function createDatabaseMigrationCoordinator(
       return live.schemaDigest
     })()
     const target = manifest.payload.target
-    const source: SqliteLogicalSource = requireSourcePreflight
-      ? await openSqliteLogicalSourceWorker({
-          path: options.sqlitePath,
-          contract: version.contract,
-        })
-      : {
-          provider: 'sqlite',
-          path: options.sqlitePath,
-          preflight() {
-            throw new Error('SQLite source preflight is unavailable in status-only mode')
-          },
-          assertUnchanged() {
-            throw new Error('SQLite source mutation checks are unavailable in status-only mode')
-          },
-          readChunk() {
-            throw new Error('SQLite source reads are unavailable in status-only mode')
-          },
-          async close() {},
-        }
+    const runtime = createPostgresqlDatabaseRuntime({
+      config: targetConfig(target),
+      generationId: `dbg_pg_${operationId.slice(4)}`,
+      env: options.env,
+    })
+    let source: SqliteLogicalSource
+    try {
+      source = requireSourcePreflight
+        ? await openSqliteLogicalSourceWorker({
+            path: options.sqlitePath,
+            contract: version.contract,
+          })
+        : {
+            provider: 'sqlite',
+            path: options.sqlitePath,
+            preflight() {
+              throw new Error('SQLite source preflight is unavailable in status-only mode')
+            },
+            assertUnchanged() {
+              throw new Error('SQLite source mutation checks are unavailable in status-only mode')
+            },
+            readChunk() {
+              throw new Error('SQLite source reads are unavailable in status-only mode')
+            },
+            async close() {},
+          }
+    } catch (error) {
+      await runtime.close()
+      throw error
+    }
     let sourceSnapshot: SqliteLogicalSourceSnapshot
-    let runtime: ReturnType<typeof createPostgresqlDatabaseRuntime>
     try {
       sourceSnapshot = requireSourcePreflight
         ? await source.preflight()
@@ -417,13 +427,12 @@ export function createDatabaseMigrationCoordinator(
             totalRows: 0,
             tableRows: Object.freeze({}),
           }
-      runtime = createPostgresqlDatabaseRuntime({
-        config: targetConfig(target),
-        generationId: `dbg_pg_${operationId.slice(4)}`,
-        env: options.env,
-      })
     } catch (error) {
-      await source.close()
+      try {
+        await source.close()
+      } finally {
+        await runtime.close()
+      }
       throw error
     }
     // Opening the logical target reserves one PostgreSQL session for the

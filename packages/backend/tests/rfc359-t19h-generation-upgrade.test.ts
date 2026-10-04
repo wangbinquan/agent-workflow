@@ -983,3 +983,89 @@ describe('RFC-359 T19h interrupted copy pointer discovery', () => {
     },
   )
 })
+
+describe('RFC-370 invalid migration target avoids Source Worker startup', () => {
+  test.each([
+    ['missing', 'missing-env'],
+    ['corrupt', 'invalid-url'],
+    ['corrupt', 'throw-env'],
+  ] as const)(
+    'target %s/%s fails before reading the retained SQLite source',
+    async (source, target) => {
+      const { paths, store, manifest, operationId } = interruptedPointerFixture('head')
+      const failed = failDatabaseMigration(manifest, {
+        expectedRevision: manifest.payload.revision,
+        ownerId: manifest.payload.owner.id,
+        ownerFence: manifest.payload.owner.fence,
+        category: 'health-failed',
+        detailCode: 'retained-failure',
+        retryable: true,
+        retryCount: 0,
+        nextRetryAt: null,
+        now: manifest.payload.updatedAt + 1,
+      })
+      store.compareAndSwap(
+        { operationId, revision: manifest.payload.revision, digest: manifest.digest },
+        failed,
+      )
+      if (source === 'missing') rmSync(paths.sqlitePath)
+      else writeFileSync(paths.sqlitePath, 'invalid source header')
+      const oldPointer = readFileSync(paths.generationPointerPath, 'utf8')
+      const raw = Object.freeze({
+        toString: () => {
+          throw new Error('unprintable configuration error')
+        },
+      })
+      let reads = 0
+      const env: Record<string, string | undefined> = {}
+      Object.defineProperty(env, manifest.payload.target.urlEnv, {
+        get() {
+          reads += 1
+          if (target === 'throw-env') throw raw
+          return target === 'missing-env' ? undefined : 'not-a-postgresql-url'
+        },
+      })
+      Object.freeze(env)
+      let admissionCalls = 0
+      const coordinator = createDatabaseMigrationCoordinator({
+        ...paths,
+        contract: history.head.contract,
+        env,
+        admission: {
+          async freezeAndDrain() {
+            admissionCalls += 1
+          },
+          async reopenSqlite() {
+            admissionCalls += 1
+          },
+          async activatePostgresql() {
+            admissionCalls += 1
+          },
+          async openPostgresqlAdmission() {
+            admissionCalls += 1
+          },
+        },
+        activateTargetConfig() {
+          admissionCalls += 1
+        },
+        activateSourceConfig() {
+          admissionCalls += 1
+        },
+      })
+      const error: unknown = await coordinator
+        .resume({ operationId })
+        .catch((rejected: unknown) => rejected)
+      if (target === 'throw-env') expect<unknown>(error).toBe(raw)
+      else
+        expect<unknown>(error).toMatchObject({
+          code: target === 'missing-env' ? 'postgresql-url-env-missing' : 'postgresql-url-invalid',
+        })
+      expect(reads).toBe(1)
+      expect(admissionCalls).toBe(0)
+      expect(store.read(operationId)).toEqual(failed)
+      expect(readFileSync(paths.generationPointerPath, 'utf8')).toBe(oldPointer)
+      if (source === 'missing') expect(existsSync(paths.sqlitePath)).toBe(false)
+      else expect(readFileSync(paths.sqlitePath, 'utf8')).toBe('invalid source header')
+    },
+  )
+})
