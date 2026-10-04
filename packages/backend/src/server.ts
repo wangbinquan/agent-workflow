@@ -1,5 +1,11 @@
-import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
-import { selectWorkspaceUploadContentFactory } from '@/modules/source-control/public/participants'
+import type {
+  WorkspaceUploadContentFactory,
+  IsolationWorkspaceFactory,
+} from '@/modules/source-control/public/types'
+import {
+  selectWorkspaceUploadContentFactory,
+  selectIsolationWorkspaceFactory,
+} from '@/modules/source-control/public/participants'
 import {
   composePortArtifactOperations,
   selectPortArtifactOperations,
@@ -826,6 +832,7 @@ export interface AppDeps {
   resourcePackageSkillContent?: SkillPackageContentReader
   workspaceContent?: WorkspaceContentEffectsFactory
   workspaceUploads?: WorkspaceUploadContentFactory
+  isolationWorkspaces?: IsolationWorkspaceFactory
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -2095,6 +2102,7 @@ export function composeSqliteApplicationDeps(
 ): SqliteAppComposition {
   const appHome = deps.appHome ?? Paths.root
   const workspaceUploads = selectWorkspaceUploadContentFactory(deps.workspaceUploads)
+  const isolationWorkspaces = selectIsolationWorkspaceFactory(deps.isolationWorkspaces)
   const nodeRunPrompts =
     deps.nodeRunPrompts === undefined
       ? composeNodeRunPromptOperations(deps.nodeRunPromptContentEffects, join(appHome, 'runs'))
@@ -2153,6 +2161,7 @@ export function composeSqliteApplicationDeps(
             db: deps.db,
             nodeRunPromptsFor: () => nodeRunPrompts,
             portArtifactsFor: () => portArtifacts,
+            isolationWorkspaces,
             workspacePresence,
             observationInvocations: composeLocalInvocationObservations(
               deps.db,
@@ -2384,6 +2393,7 @@ export function composeSqliteApplicationDeps(
   const effectiveDeps: SqliteComposedAppDeps = {
     ...runtimeDeps,
     workspaceUploads,
+    isolationWorkspaces,
     nodeRunPrompts,
     portArtifacts,
     workspacePresence,

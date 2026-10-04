@@ -355,3 +355,17 @@ export type { ActiveTaskExecutionParticipant } from '../application/ports/taskEx
 
 // Exact existing native cleanup compatibility; selected scene state stays private.
 export { discardNodeIso } from '../infrastructure/isolationCleanup'
+
+// Exact existing isolated-run assembly; factory and workspace views stay private.
+export {
+  createIsoUnderLock,
+  persistIsoBase,
+  persistIsoNodeTree,
+  mergeBackAndSettle,
+  markMergeFailed,
+} from '../infrastructure/isolatedAgentRun'
+export type {
+  IsolatedAgentRunBinding,
+  WriteSemLike,
+  MergeSettleOutcome,
+} from '../infrastructure/isolatedAgentRun'

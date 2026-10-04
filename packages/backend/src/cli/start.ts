@@ -1,5 +1,11 @@
-import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
-import { selectWorkspaceUploadContentFactory } from '@/modules/source-control/public/participants'
+import type {
+  WorkspaceUploadContentFactory,
+  IsolationWorkspaceFactory,
+} from '@/modules/source-control/public/types'
+import {
+  selectWorkspaceUploadContentFactory,
+  selectIsolationWorkspaceFactory,
+} from '@/modules/source-control/public/participants'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import type { PortArtifactContentEffects } from '@/modules/task-execution/public/types'
 import type {
@@ -441,6 +447,7 @@ export interface StartOptions {
   resourcePackageSkillContent?: SkillPackageContentReader
   workspaceContent?: WorkspaceContentEffectsFactory
   workspaceUploads?: WorkspaceUploadContentFactory
+  isolationWorkspaces?: IsolationWorkspaceFactory
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -628,6 +635,7 @@ async function composePostgresqlProviderSession(
     resourcePackageSkillContent: input.resourcePackageSkillContent,
     workspaceContent: input.workspaceContent,
     workspaceUploads: input.workspaceUploads,
+    isolationWorkspaces: input.isolationWorkspaces,
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     evidenceRead: input.evidenceRead,
@@ -1175,6 +1183,7 @@ interface DaemonProviderSessionComposeInput {
   readonly resourcePackageSkillContent?: SkillPackageContentReader
   readonly workspaceContent?: WorkspaceContentEffectsFactory
   readonly workspaceUploads: WorkspaceUploadContentFactory
+  readonly isolationWorkspaces: IsolationWorkspaceFactory
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -1643,6 +1652,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       resourcePackageSkillContent: opts.resourcePackageSkillContent,
       workspaceContent: opts.workspaceContent,
       workspaceUploads: selectWorkspaceUploadContentFactory(opts.workspaceUploads),
+      isolationWorkspaces: selectIsolationWorkspaceFactory(opts.isolationWorkspaces),
       employeeCaseWorkspaceEffects: opts.employeeCaseWorkspaceEffects,
       repositoryBaselines: opts.repositoryBaselines,
       maintenanceEffectsBootstrap: opts.maintenanceEffectsBootstrap,
@@ -1973,6 +1983,7 @@ async function composeSqliteProviderSession(
       runtime: {
         nodeRunPromptsFor: () => nodeRunPrompts,
         portArtifactsFor: () => portArtifacts,
+        isolationWorkspaces: input.isolationWorkspaces,
         workspacePresence,
         observationInvocations: composeLocalInvocationObservations(
           db,
@@ -3178,6 +3189,7 @@ async function composeSqliteProviderSession(
     resourcePackageSkillContent: input.resourcePackageSkillContent,
     workspaceContent: input.workspaceContent,
     workspaceUploads: input.workspaceUploads,
+    isolationWorkspaces: input.isolationWorkspaces,
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     evidenceRead: input.evidenceRead,

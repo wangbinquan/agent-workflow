@@ -20,7 +20,10 @@ const WORKER_MUTATION_FILES = new Set([
   'packages/backend/src/services/scriptRun.ts',
 ])
 const WORKER_MUTATION_CALLABLES = new Map<string, ReadonlySet<string>>([
-  ['packages/backend/src/services/isolatedAgentRun.ts', new Set(['persistPendingSubResolves'])],
+  [
+    'packages/backend/src/modules/task-execution/infrastructure/isolatedAgentRun.ts',
+    new Set(['persistPendingSubResolves']),
+  ],
   ['packages/backend/src/services/commitPushRunner.ts', new Set(['persistMeta'])],
   ['packages/backend/src/services/review.ts', new Set(['dispatchReviewNodeUnlocked'])],
   [
@@ -71,16 +74,16 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     ],
   ],
   [
-    'packages/backend/src/services/isolatedAgentRun.ts',
+    'packages/backend/src/modules/task-execution/infrastructure/isolatedAgentRun.ts',
     [
       {
         callable: 'createIsoUnderLock',
-        actCallees: new Set(['createNodeIso']),
+        actCallees: new Set(['create']),
         observerCallees: new Set(['createLocalEffectAttemptObserver']),
       },
       {
         callable: 'mergeBackAndSettle',
-        actCallees: new Set(['mergeBackNodeIso', 'snapshotNodeIsoFinal']),
+        actCallees: new Set(['mergeIsolatedWorkspace', 'snapshotIsolatedWorkspace']),
         observerCallees: new Set(['createLocalEffectAttemptObserver']),
       },
     ],
@@ -95,7 +98,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
         // 不变——**这个真实外部副作用必须被 effect observer 括起来**——只是 act
         // 原语换了名字。RFC-328 的 act 清单按名字匹配，所以改实现必须同步改这里，
         // 否则守卫会报「act boundary 不见了」（本 RFC 实撞，CI run 33840839902）。
-        actCallees: new Set(['discardIsolationWorkspace']),
+        actCallees: new Set(['discardIsolatedWorkspace']),
         observerCallees: new Set(['createLocalEffectAttemptObserver']),
       },
     ],

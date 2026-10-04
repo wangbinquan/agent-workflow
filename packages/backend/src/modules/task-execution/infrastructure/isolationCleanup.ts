@@ -1,11 +1,8 @@
 // Task-owned cleanup receipt; physical Git/worktree/ref operations remain native.
 import { createLocalEffectAttemptObserver } from '../application/localEffectObserver'
 import { currentTaskExecutionContext } from '../composition/sqliteTaskExecutionContext'
-import {
-  discardIsolationWorkspace,
-  type DiscardLock,
-  type IsoHandle,
-} from '@/platform/workspace/local/isolation'
+import { type DiscardLock, type IsoHandle } from '@/platform/workspace/local/isolation'
+import { discardIsolatedWorkspace } from './isolationWorkspaceView'
 import { sha256Hex } from '@/util/hash'
 import type { Logger } from '@/util/log'
 
@@ -47,7 +44,7 @@ export async function discardNodeIso(
   await effect?.beforeAct()
   let partialFailures = 0
   try {
-    await discardIsolationWorkspace(handle, log, writeSem, (count) => {
+    await discardIsolatedWorkspace(handle, log, writeSem, (count) => {
       partialFailures = count
     })
     await effect?.succeed({ repoCount: handle.repos.length, partialFailures })

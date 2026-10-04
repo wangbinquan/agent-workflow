@@ -5,16 +5,19 @@ import { type Logger } from '@/util/log'
 // agent-multi fan-out path (now deleted). wrapper-fanout consumes a `list<T>`
 // shardSource instead of slicing a string diff.
 import {
-  completeHumanResolvedConflict,
   // snapshotNodeIsoFinal / mergeBackNodeIso remain imported for the WRAPPER
   // merge path only (mergeBackWrapperIso — outside RFC-188's agent-site
   // scope). Wrapper CREATE shares createIsoUnderLock with every AGENT site so
   // sibling `git worktree add` mutations cannot race in the common repository.
   discardNodeIso,
-  isoKeyOf,
-  rebuildIsoHandle,
 } from '@/services/nodeIsolation'
-import { runGit } from '@/util/git'
+import type { IsolationWorkspaceScope } from '@/modules/source-control/public/types'
+import { completeIsolatedHumanConflict } from '../infrastructure/isolationWorkspaceView'
+import {
+  isolationScopeFor,
+  restoreTaskIsolation,
+  restoredSubmodules,
+} from './isolationWorkspaceScene'
 // RFC-188: the shared assembly for isolated agent runs — iso lock-window,
 // iso-column persistence and the merge-back/settle block (formerly five
 // hand-copies in this file).
@@ -27,16 +30,15 @@ import {
   resolveMergeConflicts,
   type SchedulerState,
 } from '@/modules/task-execution/composition/nodeMechanics'
-import { existsSync } from 'node:fs'
-import { join as pathJoin } from 'node:path'
 import type { ExecutionMergeRecovery } from '../application/recovery/executionMergeRecovery'
 
-function replaySubmodulesMissing(
+async function replaySubmodulesMissing(
+  scope: IsolationWorkspaceScope,
   repos: ReadonlyArray<{ worktreePath: string; worktreeDirName: string }>,
   persisted: Record<string, { subBases: Record<string, string> }>,
-): string | null {
+): Promise<string | null> {
   for (const repo of repos) {
-    if (!existsSync(pathJoin(repo.worktreePath, '.gitmodules'))) continue
+    if (!(await scope.submodulePresence(repo.worktreePath))) continue
     const entry = persisted[repo.worktreeDirName]
     if (entry === undefined || Object.keys(entry.subBases).length === 0) {
       return repo.worktreeDirName || 'repo'
@@ -107,9 +109,10 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
     excludeSuperseded: true,
   })
   if (rows.length === 0) return
+  const scope = await isolationScopeFor(state)
   const taskBaseHeads: Record<string, string> = {}
   for (const repo of state.repos) {
-    const h = await runGit(repo.worktreePath, ['rev-parse', 'HEAD'])
+    const h = await scope.head(repo.worktreePath)
     taskBaseHeads[repo.worktreeDirName] = h.stdout.trim()
   }
   for (const r of rows) {
@@ -126,24 +129,23 @@ async function replayPendingMerges(state: SchedulerState, log: Logger): Promise<
       throw new Error(`pending-merge replay: node_tree missing for run ${r.id}`)
     }
     const submodules = parseIsoSubmodules(r, task.repoCount)
-    const missingSub = replaySubmodulesMissing(state.repos, submodules)
+    const missingSub = await replaySubmodulesMissing(scope, state.repos, submodules)
     if (missingSub !== null) {
       throw new Error(
         `pending-merge replay: submodule topology missing for repo '${missingSub}' of run ${r.id}`,
       )
     }
-    const handle = rebuildIsoHandle({
-      appHome: state.opts.appHome,
-      taskId,
+    const handle = await restoreTaskIsolation(state, {
       // Round 6 P2: the PHYSICAL iso identity — a process-retry keeps the
       // worktree + ref namespace keyed by the ORIGINAL row id (D17) while
       // pending-merge lands on the retry row; rebuild from the persisted
       // path so discard/refs address what actually exists.
-      nodeRunId: isoKeyOf(r.isoWorktreePath, r.id),
-      canonRepos: state.repos,
+      key: await scope.recoverKey(r.isoWorktreePath, r.id),
+      dbNodeRunId: r.id,
+      workspaceRef: r.isoWorktreePath,
       baseSnapshots,
       taskBaseHeads,
-      submodules,
+      submodules: restoredSubmodules(submodules),
       // RFC-193 K1: the replay's merge-back re-snapshots canonical (ours) —
       // it must keep force-including the task's gitignored port files.
       forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
@@ -204,9 +206,10 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
     excludeSuperseded: true,
   })
   if (rows.length === 0) return
+  const scope = await isolationScopeFor(state)
   const taskBaseHeads: Record<string, string> = {}
   for (const repo of state.repos) {
-    const h = await runGit(repo.worktreePath, ['rev-parse', 'HEAD'])
+    const h = await scope.head(repo.worktreePath)
     taskBaseHeads[repo.worktreeDirName] = h.stdout.trim()
   }
   for (const r of rows) {
@@ -219,24 +222,23 @@ async function replayConflictHumanResolutions(state: SchedulerState, log: Logger
       Object.assign(baseSnapshots, parseIsoJsonMap(r.isoBaseSnapshotReposJson))
       Object.assign(nodeTrees, parseIsoJsonMap(r.isoNodeTreeReposJson))
     }
-    const handle = rebuildIsoHandle({
-      appHome: state.opts.appHome,
-      taskId,
+    const handle = await restoreTaskIsolation(state, {
       // Round 6 P2 (same as replayPendingMerges): rebuild the PHYSICAL iso
       // identity from the persisted path — this is also what makes the
       // resolve-iso lookup inside completeHumanResolvedConflict hit the
       // container a process-retry actually used.
-      nodeRunId: isoKeyOf(r.isoWorktreePath, r.id),
-      canonRepos: state.repos,
+      key: await scope.recoverKey(r.isoWorktreePath, r.id),
+      dbNodeRunId: r.id,
+      workspaceRef: r.isoWorktreePath,
       baseSnapshots,
       taskBaseHeads,
       forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
       // RFC-210: the human-resolve completion re-merges, so it needs the same
       // per-submodule bases the original merge-back had.
-      submodules: parseIsoSubmodules(r, task.repoCount),
+      submodules: restoredSubmodules(parseIsoSubmodules(r, task.repoCount)),
     })
     const outcome = await state.writeSem.run(() =>
-      completeHumanResolvedConflict(handle, nodeTrees, log),
+      completeIsolatedHumanConflict(handle, nodeTrees, log),
     )
     if (outcome.allResolved) {
       await state.opts.persistence.mergeStates.transition({

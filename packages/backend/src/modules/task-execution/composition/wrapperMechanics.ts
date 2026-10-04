@@ -40,14 +40,20 @@ import {
   // scope). Wrapper CREATE shares createIsoUnderLock with every AGENT site so
   // sibling `git worktree add` mutations cannot race in the common repository.
   discardNodeIso,
-  isoKeyOf,
-  mergeBackNodeIso,
-  rebuildIsoHandle,
-  snapshotNodeIsoFinal,
-  undoPriorShardDeltaInIso,
   type IsoHandle,
 } from '@/services/nodeIsolation'
-import { gitBlobHashes, gitChangedFiles, runGit } from '@/util/git'
+import type { IsolationWorkspaceScope } from '@/modules/source-control/public/types'
+import {
+  workspaceRecord,
+  snapshotIsolatedWorkspace,
+  mergeIsolatedWorkspace,
+} from '../infrastructure/isolationWorkspaceView'
+import {
+  isolationScopeFor,
+  restoreTaskIsolation,
+  restoredSubmodules,
+} from './isolationWorkspaceScene'
+import { describeEffectError } from '../domain/effectErrorDescription'
 // RFC-188: the shared assembly for isolated agent runs — iso lock-window,
 // iso-column persistence and the merge-back/settle block (formerly five
 // hand-copies in this file).
@@ -259,6 +265,7 @@ export function createWrapperMechanicsPorts(
       return Object.freeze({ key, kind: generation.kind, passthrough: handle.passthrough })
     },
     async captureGitEntry(scene, capturePreDirty) {
+      const scope = workspaceRecord(sceneRecord(scene).handle).scope
       const repos = diffableRepos(scene)
       const primaryMount = repos.some((repo) => repo.mountPath === '')
         ? ''
@@ -267,10 +274,10 @@ export function createWrapperMechanicsPorts(
         const baselines: Record<string, string> = {}
         const preDirtyByRepo: Record<string, Record<string, string>> = {}
         for (const repo of repos) {
-          const baseline = await captureHead(repo.path)
+          const baseline = await captureHead(scope, repo.path)
           baselines[repo.mountPath] = baseline
           preDirtyByRepo[repo.mountPath] = capturePreDirty
-            ? await captureGitPreDirty(repo.path, baseline, executionLog)
+            ? await captureGitPreDirty(scope, repo.path, baseline, executionLog)
             : {}
         }
         return { baselines, preDirtyByRepo }
@@ -278,18 +285,19 @@ export function createWrapperMechanicsPorts(
       return { ...entry, primaryMount }
     },
     changedFiles(scene, baselines, preDirtyByRepo) {
+      const scope = workspaceRecord(sceneRecord(scene).handle).scope
       return state.writeSem.run(async () => {
         const output: string[] = []
         for (const repo of diffableRepos(scene)) {
           const baseline = baselines[repo.mountPath] ?? ''
           const preDirty = preDirtyByRepo[repo.mountPath] ?? {}
-          const all = await gitChangedFiles(repo.path, baseline || 'HEAD')
+          const all = await scope.changedFiles(repo.path, baseline || 'HEAD')
           const candidates = all.filter((path) => preDirty[path] !== undefined)
           const kept =
             candidates.length === 0
               ? all
               : await (async () => {
-                  const post = await gitBlobHashes(repo.path, candidates)
+                  const post = await scope.blobHashes(repo.path, candidates)
                   return all.filter(
                     (path) => preDirty[path] === undefined || post[path] !== preDirty[path],
                   )
@@ -767,13 +775,13 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
         if (priorShardUndo !== null && !iso.passthrough) {
           for (const r of iso.repos) {
             try {
-              await undoPriorShardDeltaInIso(
-                r.isoWorktreePath,
-                priorShardUndo.node[r.worktreeDirName],
-                priorShardUndo.base[r.worktreeDirName],
+              await workspaceRecord(iso).scope.undoShard({
+                workspaceRef: r.isoWorktreePath,
+                priorNodeCommit: priorShardUndo.node[r.worktreeDirName],
+                priorBaseCommit: priorShardUndo.base[r.worktreeDirName],
                 log,
-                r.forcedRepoRelPaths,
-              )
+                forcedRelativePaths: r.forcedRepoRelPaths,
+              })
             } catch (err) {
               log.warn('T14 iso-undo failed — superimposition fallback', {
                 shardKey,
@@ -781,7 +789,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
                 mountPath: r.worktreeDirName,
                 subdir: '',
                 readonly: false,
-                error: err instanceof Error ? err.message : String(err),
+                error: describeEffectError(err),
               })
             }
           }
@@ -790,7 +798,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
       onIsoSetupFailure: (err) => {
         log.warn('fanout shard iso setup failed', {
           shardKey,
-          error: err instanceof Error ? err.message : String(err),
+          error: describeEffectError(err),
         })
         return { kind: 'failed', shardKey, outputs: {}, message: 'iso-setup-failed' }
       },
@@ -957,7 +965,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
             keep: true,
             then: {
               produce: async () => {
-                const msg = err instanceof Error ? err.message : String(err)
+                const msg = describeEffectError(err)
                 await markMergeFailed(isolatedRunBinding(state), shardRunId, msg, log)
                 return {
                   kind: 'failed' as const,
@@ -971,7 +979,7 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
         },
       },
       onUnhandledThrow: (err) => {
-        const msg = err instanceof Error ? err.message : String(err)
+        const msg = describeEffectError(err)
         broadcastNodeStatus(taskId, shardRunId, innerNode.id, 'failed')
         return {
           kind: 'failed',
@@ -1453,7 +1461,7 @@ async function dispatchFanoutAggregatorAttempt(
             keep: true,
             then: {
               produce: async () => {
-                const msg = err instanceof Error ? err.message : String(err)
+                const msg = describeEffectError(err)
                 await markMergeFailed(isolatedRunBinding(state), aggRunId, msg, log)
                 return {
                   kind: 'failed' as const,
@@ -1467,7 +1475,7 @@ async function dispatchFanoutAggregatorAttempt(
         },
       },
       onUnhandledThrow: (err) => {
-        const msg = err instanceof Error ? err.message : String(err)
+        const msg = describeEffectError(err)
         broadcastNodeStatus(taskId, aggRunId, aggNode.id, 'failed')
         return {
           kind: 'failed',
@@ -1507,9 +1515,9 @@ async function dispatchFanoutAggregatorAttempt(
 // not pre-resume.
 // -----------------------------------------------------------------------------
 
-async function captureHead(worktreePath: string): Promise<string> {
+async function captureHead(scope: IsolationWorkspaceScope, worktreePath: string): Promise<string> {
   try {
-    const r = await runGit(worktreePath, ['rev-parse', 'HEAD'])
+    const r = await scope.head(worktreePath)
     if (r.exitCode === 0) return r.stdout.trim()
   } catch {
     /* empty fixture in tests */
@@ -1539,12 +1547,13 @@ const GIT_PRE_DIRTY_MAX_JSON_BYTES = 256 * 1024
  * worse than today).
  */
 async function captureGitPreDirty(
+  scope: IsolationWorkspaceScope,
   worktreePath: string,
   baseline: string,
   log: Logger,
 ): Promise<Record<string, string>> {
   try {
-    const paths = await gitChangedFiles(worktreePath, baseline || 'HEAD')
+    const paths = await scope.changedFiles(worktreePath, baseline || 'HEAD')
     if (paths.length === 0) return {}
     if (paths.length > GIT_PRE_DIRTY_MAX_ENTRIES) {
       log.warn('git wrapper preDirty over entry cap — degrading to empty set (over-report)', {
@@ -1554,7 +1563,7 @@ async function captureGitPreDirty(
       })
       return {}
     }
-    const hashes = await gitBlobHashes(worktreePath, paths)
+    const hashes = await scope.blobHashes(worktreePath, paths)
     const bytes = new TextEncoder().encode(JSON.stringify(hashes)).byteLength
     if (bytes > GIT_PRE_DIRTY_MAX_JSON_BYTES) {
       log.warn('git wrapper preDirty over JSON-size cap — degrading to empty set (over-report)', {
@@ -1568,7 +1577,7 @@ async function captureGitPreDirty(
   } catch (err) {
     log.warn('git wrapper preDirty capture failed — degrading to empty set (over-report)', {
       worktreePath,
-      error: err instanceof Error ? err.message : String(err),
+      error: describeEffectError(err),
     })
     return {}
   }
@@ -1612,7 +1621,8 @@ export async function createOrRebuildWrapperIso(
   // ⚠️ **顺序约束**：必须用 CAS **之前**读到的 `cur`。下面 `merged` 再入分支的
   // reenter CAS 会显式把 `isoWorktreePath` 写成 null，之后再读就只剩 wrapperRunId
   // 可派生——那恰好是代际自愈已经放弃的那个阻塞目录。挪动这个读取点会静默失效。
-  const wrapperIsoKey = isoKeyOf(cur?.isoWorktreePath ?? null, wrapperRunId)
+  const scope = await isolationScopeFor(state)
+  const wrapperIsoKey = await scope.recoverKey(cur?.isoWorktreePath ?? null, wrapperRunId)
   let effectiveExisting = existing
   if (cur !== null && (cur.mergeState === 'merged' || cur.mergeState === 'conflict-human')) {
     if (cur.mergeState === 'merged') {
@@ -1669,30 +1679,28 @@ export async function createOrRebuildWrapperIso(
     if (Object.keys(baseSnapshots).length > 0) {
       const taskBaseHeads: Record<string, string> = {}
       for (const repo of state.repos) {
-        taskBaseHeads[repo.worktreeDirName] = (
-          await runGit(repo.worktreePath, ['rev-parse', 'HEAD'])
-        ).stdout.trim()
+        taskBaseHeads[repo.worktreeDirName] = (await scope.head(repo.worktreePath)).stdout.trim()
       }
-      return rebuildIsoHandle({
-        appHome: state.opts.appHome,
-        taskId,
+      return await restoreTaskIsolation(state, {
         // 这个 handle **要拿去 merge-back**：指错路径不是少清一个目录，
         // 而是把不存在的树当成节点产物去合并，属硬故障。
-        nodeRunId: wrapperIsoKey,
+        key: wrapperIsoKey,
         dbNodeRunId: wrapperRunId,
-        canonRepos: state.repos,
+        workspaceRef: cur?.isoWorktreePath ?? null,
         baseSnapshots,
         taskBaseHeads,
         forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
         // RFC-210: a rebuilt wrapper iso merges back like any other, so it
         // carries the same submodule topology. (The discard-only rebuild below
         // deliberately does not — it needs paths and refs, nothing else.)
-        submodules: parseIsoSubmodules(
-          {
-            isoSubmodulesJson: effectiveExisting.isoSubmodulesJson ?? null,
-            isoSubmodulesReposJson: effectiveExisting.isoSubmodulesReposJson ?? null,
-          },
-          task.repoCount,
+        submodules: restoredSubmodules(
+          parseIsoSubmodules(
+            {
+              isoSubmodulesJson: effectiveExisting.isoSubmodulesJson ?? null,
+              isoSubmodulesReposJson: effectiveExisting.isoSubmodulesReposJson ?? null,
+            },
+            task.repoCount,
+          ),
         ),
       })
     }
@@ -1708,13 +1716,11 @@ export async function createOrRebuildWrapperIso(
     // rebuilt with empty snapshot maps cleans up regardless of what the crash
     // left behind. Tolerant: nothing there → warn-and-continue.
     await discardNodeIso(
-      rebuildIsoHandle({
-        appHome: state.opts.appHome,
-        taskId,
+      await restoreTaskIsolation(state, {
         // 只做 discard，路径缺失可容忍（比 :1662 那处低一档风险）。
-        nodeRunId: wrapperIsoKey,
+        key: wrapperIsoKey,
         dbNodeRunId: wrapperRunId,
-        canonRepos: state.repos,
+        workspaceRef: cur?.isoWorktreePath ?? null,
         baseSnapshots: {},
         taskBaseHeads: {},
       }),
@@ -1772,7 +1778,7 @@ async function mergeBackWrapperIso(
     // RFC-193 K1: re-aggregate at wrapper-final time — the wrapper handle is
     // the one LONG-LIVED handle (inner nodes archived new port files during
     // its lifetime; the create-time roster predates them, design §4.5).
-    const nodeTrees = await snapshotNodeIsoFinal(wrapperIso, log, [
+    const nodeTrees = await snapshotIsolatedWorkspace(wrapperIso, log, [
       ...(await state.opts.persistence.artifactPaths.forcedPaths(taskId)),
     ])
     // RFC-210 impl-gate: the handle rides along so a topology the snapshot
@@ -1785,7 +1791,7 @@ async function mergeBackWrapperIso(
       wrapperIso,
     )
     const merge = await state.writeSem.run(async () => {
-      const mr = await mergeBackNodeIso(wrapperIso, nodeTrees, log)
+      const mr = await mergeIsolatedWorkspace(wrapperIso, nodeTrees, log)
       if (mr.clean) return { kind: 'merged' as const }
       const res = await resolveMergeConflicts(state, {
         conflicts: mr.conflicts,
@@ -1821,7 +1827,7 @@ async function mergeBackWrapperIso(
     await discardNodeIso(wrapperIso, log, state.writeSem)
     return { kind: 'merged' }
   } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err)
+    const msg = describeEffectError(err)
     const flipped = await state.opts.persistence.mergeStates.tryTransition({
       nodeRunId: wrapperRunId,
       event: { kind: 'mark-merge-failed', reason: msg },

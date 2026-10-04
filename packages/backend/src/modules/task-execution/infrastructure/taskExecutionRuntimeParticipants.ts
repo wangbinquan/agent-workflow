@@ -1,4 +1,6 @@
 import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
+import type { IsolationWorkspaceFactory } from '@/modules/source-control/public/types'
+import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
 import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import type { ObservationInvocationParticipant } from '@/modules/run-observability/public/participants'
 import type { ProviderNeutralDatabase } from '@/db/query'
@@ -76,6 +78,7 @@ export interface TaskExecutionRuntimeParticipantsInput {
   readonly nodeRunRuntime: NodeRunRuntimePersistence
   readonly nodeRunPromptsFor: (appHome: string) => NodeRunPromptOperations
   readonly portArtifactsFor: (appHome: string) => PortArtifactOperations
+  readonly isolationWorkspaces?: IsolationWorkspaceFactory
   readonly operationConfiguration?: TaskOperationConfigurationQueries
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics
@@ -108,6 +111,7 @@ export interface TaskExecutionRuntimeParticipantsInput {
 export function createTaskExecutionRuntimeParticipants(
   input: TaskExecutionRuntimeParticipantsInput & ChildTaskLifecycleRuntimePorts,
 ): TaskExecutionRuntimeParticipants {
+  const isolationWorkspaces = selectIsolationWorkspaceFactory(input.isolationWorkspaces)
   const runtimeComponents = Object.freeze({
     wrapperRuntimeFactory: composeWrapperRuntime,
     mergeRecoveryFactory: composeExecutionMergeRecovery,
@@ -136,6 +140,7 @@ export function createTaskExecutionRuntimeParticipants(
           nodeRunRuntime: input.nodeRunRuntime,
           nodeRunPrompts: input.nodeRunPromptsFor(request.appHome),
           portArtifacts: input.portArtifactsFor(request.appHome),
+          isolationWorkspaces,
           ...(input.operationConfiguration === undefined
             ? {}
             : { operationConfiguration: input.operationConfiguration }),

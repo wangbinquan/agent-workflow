@@ -326,8 +326,8 @@ describe('RFC-188 D — 装配单源锁（表级 allowlist）', () => {
     // `git worktree add` 会竞争同一 `.git/worktrees` 注册表。wrapper merge
     // 生命周期仍在 RFC-188 agent-site 范围外；任何第 2 处裸 merge = 手抄装配。
     expect(count('createNodeIso(')).toBe(0)
-    expect(count('mergeBackNodeIso(')).toBe(1)
-    expect(count('snapshotNodeIsoFinal(')).toBe(1)
+    expect(count('mergeIsolatedWorkspace(')).toBe(1)
+    expect(count('snapshotIsolatedWorkspace(')).toBe(1)
   })
 
   test('装配站点走共享锁：createIsoUnderLock×7 + mergeBackAndSettle×7 + markMergeFailed×6', () => {

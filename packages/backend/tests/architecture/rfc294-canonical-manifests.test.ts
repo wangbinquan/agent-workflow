@@ -359,6 +359,7 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       'packages/backend/src/services/execution/resolveInjection.ts',
       'packages/backend/src/services/execution/taskEngineRuntimeOptions.ts',
       'packages/backend/src/services/gc.ts',
+      'packages/backend/src/services/isolatedAgentRun.ts',
       'packages/backend/src/services/lifecycle.ts',
       'packages/backend/src/services/maintenanceDisk.ts',
       'packages/backend/src/services/maintenanceRetention.ts',

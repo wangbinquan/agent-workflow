@@ -1,5 +1,6 @@
 // RFC-349 — provider-neutral local filesystem/Git effect coordinator.
 
+import { describeEffectError } from '../domain/effectErrorDescription'
 import { sha256Hex } from '../domain/digest'
 import { operationFamilyKey, requestHash } from '../domain/executionEffect'
 import {
@@ -161,7 +162,7 @@ export function createLocalEffectAttemptObserver(input: {
         retryAuthority: authority,
         failureCode: 'local-effect-retry-authorized',
         receipt: {
-          error: (error instanceof Error ? error.message : String(error)).slice(0, 2_000),
+          error: describeEffectError(error).slice(0, 2_000),
         },
       })
       prepared = null
@@ -187,7 +188,7 @@ export function createLocalEffectAttemptObserver(input: {
         failureCode: 'local-effect-threw',
         receipt: {
           ...receipt,
-          error: (error instanceof Error ? error.message : String(error)).slice(0, 2_000),
+          error: describeEffectError(error).slice(0, 2_000),
         },
       })
     },

@@ -69,11 +69,8 @@ import {
 } from '@/services/mergeAgent'
 import {
   discardNodeIso,
-  isoKeyOf,
   IsoWorkspaceBlockedError,
   MergeAgentChildUnreapedError,
-  rebuildIsoHandle,
-  resolveConflictWithAgent,
   type IsoHandle,
   type MergeBackConflict,
 } from '@/services/nodeIsolation'
@@ -121,7 +118,17 @@ import type {
   WorkgroupTurnHostResult,
 } from '../application/ports/workgroupTurnsOperations'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
-import { runGit, worktreeFilesChanged } from '@/util/git'
+import { worktreeFilesChanged } from '@/util/git'
+import {
+  bindIsolatedRunWorkspace,
+  resolveIsolatedConflict,
+} from '../infrastructure/isolationWorkspaceView'
+import {
+  isolationScopeFor,
+  restoreTaskIsolation,
+  restoredSubmodules,
+} from './isolationWorkspaceScene'
+import { describeEffectError } from '../domain/effectErrorDescription'
 import { sha256Hex } from '@/util/hash'
 import { type Logger } from '@/util/log'
 import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
@@ -201,10 +208,13 @@ function executionContextInput(state: SchedulerState) {
 }
 
 export function isolatedRunBinding(state: SchedulerState): IsolatedAgentRunBinding {
-  return {
-    persistence: state.opts.persistence,
-    ...executionContextInput(state),
-  }
+  return bindIsolatedRunWorkspace(
+    {
+      persistence: state.opts.persistence,
+      ...executionContextInput(state),
+    },
+    () => isolationScopeFor(state),
+  )
 }
 
 async function setRunStatus(
@@ -348,7 +358,7 @@ export async function executeWorkgroupHostMechanics(
         },
       },
       onIsoSetupFailure: (err) => {
-        const message = err instanceof Error ? err.message : String(err)
+        const message = describeEffectError(err)
         log.warn('workgroup host-node iso setup failed', { nodeRunId: req.nodeRunId, message })
         return { status: 'failed', outputs: {}, errorMessage: `iso-setup-failed: ${message}` }
       },
@@ -760,7 +770,7 @@ export async function executeWorkgroupHostMechanics(
         },
       },
       onUnhandledThrow: (err) => {
-        const msg = err instanceof Error ? err.message : String(err)
+        const msg = describeEffectError(err)
         log.error('workgroup host-node run failed', { nodeRunId: req.nodeRunId, error: msg })
         return { status: 'failed', outputs: {}, errorMessage: msg }
       },
@@ -980,13 +990,18 @@ export function parseIsoJsonMap(s: string | null): Record<string, string> {
  */
 export function describeIsoFailure(code: string, error: unknown): string {
   const lines = [code]
-  if (error instanceof IsoWorkspaceBlockedError) {
-    const d = error.detail
-    lines.push(`  无法回收残留的隔离工作树（已尝试 ${d.generationsTried} 代）`)
-    lines.push(`  残留: ${d.residualPath}`)
-    lines.push(`  最后错误: ${d.lastError}`)
-  } else {
-    lines.push(`  ${error instanceof Error ? error.message : String(error)}`)
+  try {
+    if (error instanceof IsoWorkspaceBlockedError) {
+      const d = error.detail
+      lines.push(`  无法回收残留的隔离工作树（已尝试 ${d.generationsTried} 代）`)
+      lines.push(`  残留: ${d.residualPath}`)
+      lines.push(`  最后错误: ${d.lastError}`)
+    } else {
+      lines.push(`  ${describeEffectError(error)}`)
+    }
+  } catch {
+    lines.length = 1
+    lines.push('  unavailable error description')
   }
   const ownership = processTreeOwnershipStatus()
   lines.push(
@@ -1196,7 +1211,7 @@ export async function resolveMergeConflicts(
   let allResolved = true
   const parts: string[] = []
   for (const conflict of opts.conflicts) {
-    const outcome = await resolveConflictWithAgent(conflict, {
+    const outcome = await resolveIsolatedConflict(conflict, {
       containerPath: opts.containerPath,
       runAgent,
       log,
@@ -1458,7 +1473,7 @@ export async function runCallWorkflowNode(
       })
     } catch (err) {
       hold.release()
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = describeEffectError(err)
       await failCallRow(
         state,
         nodeRunId,
@@ -1527,7 +1542,7 @@ export async function runCallWorkflowNode(
         err instanceof ValidationError || err instanceof DomainError || err instanceof NotFoundError
           ? err.code
           : 'child-launch-failed'
-      const msg = err instanceof Error ? err.message : String(err)
+      const msg = describeEffectError(err)
       await failCallRow(state, nodeRunId, node.id, code, `child launch failed: ${msg}`)
       return { kind: 'failed', summary: `child launch failed: ${msg}`, message: code }
     }
@@ -1862,20 +1877,20 @@ export async function runCallWorkflowNode(
           message: 'merge-back-failed',
         }
       }
+      const scope = await isolationScopeFor(state)
       const taskBaseHeads: Record<string, string> = {}
       for (const repo of state.repos) {
-        const h = await runGit(repo.worktreePath, ['rev-parse', 'HEAD'])
+        const h = await scope.head(repo.worktreePath)
         taskBaseHeads[repo.worktreeDirName] = h.stdout.trim()
       }
       const submodules = currentRow !== null ? parseIsoSubmodules(currentRow, task.repoCount) : {}
-      handle = rebuildIsoHandle({
-        appHome: state.opts.appHome,
-        taskId,
-        nodeRunId: isoKeyOf(currentRow?.isoWorktreePath ?? null, nodeRunId),
-        canonRepos: state.repos,
+      handle = await restoreTaskIsolation(state, {
+        key: await scope.recoverKey(currentRow?.isoWorktreePath ?? null, nodeRunId),
+        dbNodeRunId: nodeRunId,
+        workspaceRef: currentRow?.isoWorktreePath ?? null,
         baseSnapshots,
         taskBaseHeads,
-        submodules,
+        submodules: restoredSubmodules(submodules),
         forcedContainerPaths: [...(await state.opts.persistence.artifactPaths.forcedPaths(taskId))],
       })
     }
@@ -1910,7 +1925,7 @@ export async function runCallWorkflowNode(
           }
         }
       } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err)
+        const msg = describeEffectError(err)
         log.warn('call merge-back failed', { nodeId: node.id, error: msg })
         await markMergeFailed(isolatedRunBinding(state), nodeRunId, msg, log)
         return {
@@ -2746,7 +2761,7 @@ export async function runScriptNode(
       onIsoSetupFailure: (err) => {
         log.warn('script iso worktree setup failed', {
           nodeId: node.id,
-          error: err instanceof Error ? err.message : String(err),
+          error: describeEffectError(err),
         })
         return {
           kind: 'failed',
@@ -2891,7 +2906,7 @@ export async function runScriptNode(
             keep: true,
             then: {
               produce: async () => {
-                const msg = err instanceof Error ? err.message : String(err)
+                const msg = describeEffectError(err)
                 await markMergeFailed(isolatedRunBinding(state), nodeRunId, msg, log)
                 return {
                   kind: 'failed' as const,
@@ -4746,7 +4761,7 @@ export async function runAgentSingleNode(
       onIsoSetupFailure: (err) => {
         log.warn('iso worktree setup failed', {
           nodeId: node.id,
-          error: err instanceof Error ? err.message : String(err),
+          error: describeEffectError(err),
         })
         return {
           kind: 'settled',
@@ -4776,7 +4791,7 @@ export async function runAgentSingleNode(
         onIsoRecreateFailure: (err) => {
           log.warn('retry iso recreate failed', {
             nodeId: node.id,
-            error: err instanceof Error ? err.message : String(err),
+            error: describeEffectError(err),
           })
           lastError = 'iso-recreate-failed'
           lastResult = {

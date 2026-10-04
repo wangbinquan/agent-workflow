@@ -47,6 +47,7 @@ import {
 } from '../src/services/nodeIsolation'
 import { mintNodeRun } from '../src/services/nodeRunMint'
 import { createOrRebuildWrapperIso } from '../src/modules/task-execution/composition/wrapperMechanics'
+import { selectIsolationWorkspaceFactory } from '../src/modules/source-control/public/participants'
 import { deriveFrontier } from '../src/modules/task-execution/composition/dagFrontier'
 import { createTaskExecutionPersistence } from '../src/modules/task-execution/composition/taskExecutionPersistence'
 import { createLogger } from '../src/util/log'
@@ -427,6 +428,7 @@ describe('RFC-144 wrapper 同行复活的 iso 基（实现门 P2 第二半）', 
       ],
       opts: {
         appHome: h.appHome,
+        isolationWorkspaces: selectIsolationWorkspaceFactory(),
         persistence: createTaskExecutionPersistence(h.db),
       },
       log: createLogger('rfc144-test'),

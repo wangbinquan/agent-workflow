@@ -1,4 +1,5 @@
 import type { PortArtifactOperations } from '../application/ports/portArtifactContent'
+import type { IsolationWorkspaceFactory } from '@/modules/source-control/public/types'
 import type { NodeRunRuntimePersistence } from '@/modules/task-execution/application/ports/nodeRunRuntimePersistence'
 import type { ObservationInvocationParticipant } from '@/modules/run-observability/public/participants'
 import type { AgentRunSettledObserver } from '@/modules/task-execution/application/ports/agentRunSettledObserver'
@@ -44,6 +45,8 @@ export interface RunTaskOptions {
   nodeRunPrompts?: NodeRunPromptOperations
   /** Selected again by each child drive; never serialized as inherited configuration. */
   portArtifacts?: PortArtifactOperations
+  /** Bootstrap selects a complete factory; each effective canonical scene binds its own scope. */
+  isolationWorkspaces?: IsolationWorkspaceFactory
   /** Collaboration-owned DAG scheduling projection selected by bootstrap. */
   taskDagCollaboration?: TaskDagCollaborationOperations
   /** Collaboration-owned node/review/clarify mechanics selected by bootstrap. */
@@ -216,6 +219,7 @@ export type BoundRunTaskOptions = RunTaskOptions & {
   readonly nodeRunRuntime: NodeRunRuntimePersistence
   readonly nodeRunPrompts: NodeRunPromptOperations
   readonly portArtifacts: PortArtifactOperations
+  readonly isolationWorkspaces: IsolationWorkspaceFactory
   readonly taskDagCollaboration: TaskDagCollaborationOperations
   readonly collaborationRuntime: CollaborationRuntimeMechanics
   readonly workgroupTurns: WorkgroupTurnsOperations
