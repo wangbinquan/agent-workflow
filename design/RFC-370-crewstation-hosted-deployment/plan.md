@@ -820,3 +820,15 @@ R2 原生成器基于已提交 335cc5333ae3883bd8f9b457c3253add552809d9、冻结
 前次 prompt 夹具提交 eef2874b53a073dd19faac654d890a41397a6d88 的 exact 主 CI37151693012 已 completed/cancelled（4 success、1 aggregate failure、42 cancelled），不记为通过。包含修复的后继 57f6c29303a17a2a6b28db5966da1f9bc69b1548 主 CI37151884308 completed/failure（37 success、12 failure、1 cancelled）；其 Ubuntu6 job111287352004 内本批 15 个 prompt binding 用例全 PASS。其余原生观测/W5/R1/超时失败按完整日志归属交由并行 owner 接续，整套 CI 未通过。当前归档批次尚待发布后的 exact-SHA hosted CI；本机无 AW test/typecheck/build/service，只有限 format/lint 和纯 AST/JSON/字节/census 证明。
 
 完整 RFC-370/A1–A8/AC00/A-G 仍开放。A2 runtime 物化、A3 workspace/upload/restore、A4 node/wrapper Git/commit/delivery/conflict/repair、A5 logical materials 与 submit/inspect/events/message/cancel/收据先于激活/reap、A6 purpose commands、A7 authority/recovery 和 A8 全根装配继续；随后独立 CS adapters，先 B/M0 实际部署，再 M1–M4 逐步收编。当前没有 AW-in-CS 部署或验收，不能用有限 PASS 关闭阶段 A 或 RFC。
+
+## 2026-10-04 工作区上传切面交付
+
+SOURCE24 独立功能门有限 PASS，指纹 `daca3967932cf720464fa9c03cae806ecab160dedac0a7e51db777b9048a98a2`；24 owned、14 controls、11 evidence 首末稳定。SC complete factory/六方法 receiver 只解释 workspace/content 引用，TE 保留一份原上传政策；native 同步效果不产生额外 await，旧 helper 不创建目录，旧可变 Map/数组与结果对象身份保持。真实 journal、Task 启动内核和 standalone HTTP multipart 双 provider 回归已写。
+
+原七项业务声明、四项物理 helper 的完整 AST、digest/SQL callback/receipt replay、四个根的原内容、12 个旧 service 出口及 13 份旧源码/测试控制保持。原完整 whole-writer 测试 hook 保留；与显式 selected factory 同时选择时在原 receipt 重放之后明确报错。reserved placement ACK 先于写入，write ACK 先于 written/Task admission，异步回滚有序且首错保持；实际写入后丢 ACK 的重试沿已登记文件名完整字节复核。
+
+一次原 scoped census 基于已提交 `766138c5e371e4b6724458014cd8306878d086dd` 加冻结 SOURCE24；非 owned source/test 使用 exact committed 内容，并行 native page/pump 及前台 WIP 保留、排除。四份原规则不变；sourceDigest `sha256:6c9bcf68d1870290bc9b090ab9e55acfe743ee9ca39efda4a5576c6992fc5b1d`。实际五项增长为 mutation1857→1862（六增一减）、observed imports5983→6015（36增4减）、exception projection5323→5347（28增4减）、public1100→1116（16实际已消费出口）、owners26419→26449（九新生产文件46增、旧service16减）。按原协议登记五项一次回执，匹配 canonical 提交后正常后继退役；129项原有序库存/why、302项原债务全文、40 required SPI、69 target edges 和空 implementation SCC 保持。两项 Task 写点仅 id/line 投影856→859、941→944；14项 ambient root 记录只移行，业务正文保持。原 C2 双向精确相等证明通过。
+
+前次 CI 修复 SHA `de5f90ae80ffdcc4af83fe0a1d39dd01937667a9` 的四个受影响后端 job111317745474/111317745496/111317745535/111317745537、主 Lint/Typecheck/Format job111317745523 和 Windows37162413399 全部 completed/success，满足 SOURCE37 有限正式验证依赖。主 CI37162165195 则 completed/failure（43成功/7失败）；六个浏览器作业及 aggregate 原失败保持。观测失败由并行 owner 接续；macOS四个其它 flaky case 的 daemon-ready timeout 原日志保留，不用后续 retry pass 改记成功。本上传批次仍待新 exact-SHA hosted CI。
+
+本机仅目标 format/lint、纯 AST/字节/JSON 和原 scoped 生成，无 AW test/typecheck/build/service。目标 lint 首轮缺少 HTTP effectiveDeps factory handoff 与 prefer-const 两处 FAIL、首次 AST 根逆变换的分隔 token 误判均保留，源码和证明工具分别修正后有限 PASS；未改变原政策或放宽原回归。完整 A1–A8/AC00/A-G 继续，独立 CS adapters 仍在完整 A-G 后，B/M0先实际部署再逐项M1–M4。尚无 AW-in-CS 部署，不关闭 RFC。

@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 298,
-    "thinFacades": 53
+    "thinFacades": 54
   },
   "entries": [
     {
@@ -5835,32 +5835,22 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:048df8440ef33a7d7453",
+        "import:09b4eb02844d0d05a9be",
         "import:0b4019a616d11d6292fb",
-        "import:627abb411e43ab2daaa2",
-        "import:6d107b24c9c89d4ae379",
-        "import:70fb37b85096154b0220",
-        "import:8cf9114cb71f304fbf5f",
-        "import:95c909ae5adb9ca3e92a"
+        "import:28ccd8aeed65758c962a",
+        "import:8d15d3b779b9131a0e6e",
+        "import:95c909ae5adb9ca3e92a",
+        "import:bf3f5bb09f80453a6660",
+        "import:dd3de81556e9183b9d9b",
+        "import:e8d7d010caa8c8add85a"
       ],
-      "exportedSymbols": [
-        "DEFAULT_UPLOAD_LIMITS",
-        "UploadFile",
-        "UploadInputDef",
-        "UploadLimits",
-        "UploadPlan",
-        "UploadResult",
-        "acceptMatches",
-        "applyUploadsToWorktree",
-        "assertInsideWorktree",
-        "resolveUniqueName",
-        "sniffMime",
-        "validateUploadPlan"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/upload.ts",
       "id": "facade:packages/backend/src/services/upload.ts",
       "ownerEntryId": "owner:packages/backend/src/services/upload.ts#$file",
       "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -6380,5 +6370,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8eeefdd2c263c2f164c86c1774d1b75957e4547469df4406db735c28489ab303"
+  "sourceDigest": "sha256:6c9bcf68d1870290bc9b090ab9e55acfe743ee9ca39efda4a5576c6992fc5b1d"
 }

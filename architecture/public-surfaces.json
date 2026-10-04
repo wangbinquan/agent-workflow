@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1044,
+    "consumers": 1072,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1228,
+    "methods": 1248,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 23388,
-    "symbols": 1100
+    "recursiveFields": 23496,
+    "symbols": 1116
   },
   "entries": [
     {
@@ -139155,6 +139155,209 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:981bebb325370a5ecab4"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:value",
+          "type": "unknown"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "asserts value is WorkspaceUploadContent"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:requireWorkspaceUploadContent",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:cb8a67041259b7bf3bbf4a7c4a6a5ecbb874aa65c21ed4c662db20b60bc85943"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:981bebb325370a5ecab4",
+          "file": "packages/backend/src/modules/task-execution/application/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/workspaceUploads.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:7024ea1134747465ad7af4e49bdddee87fd3b32de4ac0bd03c915ef647c720bd",
+      "status": "target-context-current-surface",
+      "symbol": "requireWorkspaceUploadContent",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:0e997a626603d98bd2db",
+        "import:2b63f0b885a3ae0467be",
+        "import:96ee500d5394e2e4d47c",
+        "import:d093c1b788deb71d9c75"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:0e997a626603d98bd2db",
+            "import:d093c1b788deb71d9c75"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0e997a626603d98bd2db",
+            "import:2b63f0b885a3ae0467be",
+            "import:d093c1b788deb71d9c75"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.version",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2b63f0b885a3ae0467be",
+            "import:d093c1b788deb71d9c75"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0e997a626603d98bd2db",
+            "import:d093c1b788deb71d9c75"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$parameter:binding.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0e997a626603d98bd2db",
+            "import:2b63f0b885a3ae0467be",
+            "import:d093c1b788deb71d9c75"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$parameter:binding.version",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2b63f0b885a3ae0467be",
+            "import:d093c1b788deb71d9c75"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$parameter:binding.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$variant:1",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:selectWorkspaceUploadContentFactory",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:3622a63ff13b1adcac668decb6bda8b38a68db690545d16a7c528c12cd74dff0"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0e997a626603d98bd2db",
+            "import:2b63f0b885a3ae0467be",
+            "import:96ee500d5394e2e4d47c",
+            "import:d093c1b788deb71d9c75"
+          ],
+          "name": "bind",
+          "signatureDigest": "sha256:7a31841205f427e773b3f4ae4ac88cf2098710ffeef041d8a092b80166d54f8d"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:0e997a626603d98bd2db",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:2b63f0b885a3ae0467be",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:96ee500d5394e2e4d47c",
+          "file": "packages/backend/src/modules/task-execution/application/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/workspaceUploads.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:d093c1b788deb71d9c75",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:7043c7fd7289368223920168f144ddc36303366de546381902afd7073c74d4e2",
+      "status": "target-context-current-surface",
+      "symbol": "selectWorkspaceUploadContentFactory",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:6e7068dacfdc540e7db4"
       ],
       "context": "source-control",
@@ -142068,6 +142271,386 @@
       "signatureDigest": "sha256:32cb4b41b739a1cceb20baac3ad1ae0eae8dec8e5bfd9fd55c1802b5695f8de1",
       "status": "target-context-current-surface",
       "symbol": "WorkspaceReadRequest",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:fb0c7e888782e0c15d83"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "version",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspaceRef",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:WorkspaceUploadBinding",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:fb0c7e888782e0c15d83",
+          "file": "packages/backend/src/modules/task-execution/application/ports/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/workspaceUploads.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:selectWorkspaceUploadContentFactory",
+        "public:source-control:types:WorkspaceUploadContentFactory",
+        "public:task-execution:commands:applyWorkspaceUploads",
+        "public:task-execution:types:WorkspaceUploadPlan"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:96a3998e8ea892c89077d93343136de2cc945919b213f5787204db5a17441cc5",
+      "status": "target-context-current-surface",
+      "symbol": "WorkspaceUploadBinding",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 6,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:5d77768da0e79e07853e"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:entry.$parameter:fileRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:entry.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:entry.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:file.$parameter:directoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:file.$parameter:filename",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:file.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:file.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareTarget.$parameter:relativeDirectory",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareTarget.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareTarget.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:read.$parameter:fileRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:read.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:read.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:remove.$parameter:fileRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:remove.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:remove.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:write.$parameter:bytes",
+          "type": "Uint8Array"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:write.$parameter:fileRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:write.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:write.$return.$variant:1",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:WorkspaceUploadContent",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:5d77768da0e79e07853e"
+          ],
+          "name": "entry",
+          "signatureDigest": "sha256:0aa50046e21f9be788e807a16acbfc83ada5ba96cc130896f12e0bbabea04d39"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:5d77768da0e79e07853e"
+          ],
+          "name": "file",
+          "signatureDigest": "sha256:b3356af3f50be0a713b6673c374cfa159e03bd76bd107a80b17bd6e34018a6d5"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:5d77768da0e79e07853e"
+          ],
+          "name": "prepareTarget",
+          "signatureDigest": "sha256:d0eaf20d8eeae6e36191c0925843dcba1e935060f67623621d2937b835ec58d0"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:5d77768da0e79e07853e"
+          ],
+          "name": "read",
+          "signatureDigest": "sha256:994c2ca3a860c1e27c6049b953e6a4e7e5d272be51f2a3b9fdc47237f7ba9835"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:5d77768da0e79e07853e"
+          ],
+          "name": "remove",
+          "signatureDigest": "sha256:1d402002b3f273535e29a372ad68bd02872945f46e0cf62a9fe44a93167595d6"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:5d77768da0e79e07853e"
+          ],
+          "name": "write",
+          "signatureDigest": "sha256:e0551a613e9c3616b8816d01e0e08c3cfb43b8a1f684d9177404231bf9641e34"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:5d77768da0e79e07853e",
+          "file": "packages/backend/src/modules/task-execution/application/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/workspaceUploads.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:baf793ba67a6e08b04c3761371d5fffc155b6e5075e169c877f6d030a10ff571",
+      "status": "target-context-current-surface",
+      "symbol": "WorkspaceUploadContent",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Uint8Array"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:062b1b060e58972cadbc",
+        "import:4653776fb5d9dd538763",
+        "import:55da7ec9c10cc4d00eca",
+        "import:67dd2567a0fd2e9d88df",
+        "import:8cec1ee3ebf7a5478f72",
+        "import:d27507e87fcdd6149649",
+        "import:d3daf7c3d57ed4aa310c"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:062b1b060e58972cadbc",
+            "import:55da7ec9c10cc4d00eca",
+            "import:67dd2567a0fd2e9d88df"
+          ],
+          "fieldPath": "$method:bind.$parameter:binding.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:062b1b060e58972cadbc",
+            "import:4653776fb5d9dd538763",
+            "import:55da7ec9c10cc4d00eca",
+            "import:67dd2567a0fd2e9d88df",
+            "import:d27507e87fcdd6149649"
+          ],
+          "fieldPath": "$method:bind.$parameter:binding.version",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:062b1b060e58972cadbc",
+            "import:55da7ec9c10cc4d00eca",
+            "import:d27507e87fcdd6149649"
+          ],
+          "fieldPath": "$method:bind.$parameter:binding.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$variant:1",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:WorkspaceUploadContentFactory",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:062b1b060e58972cadbc",
+            "import:67dd2567a0fd2e9d88df",
+            "import:d27507e87fcdd6149649",
+            "import:d3daf7c3d57ed4aa310c"
+          ],
+          "name": "bind",
+          "signatureDigest": "sha256:7a31841205f427e773b3f4ae4ac88cf2098710ffeef041d8a092b80166d54f8d"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:062b1b060e58972cadbc",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:4653776fb5d9dd538763",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:55da7ec9c10cc4d00eca",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskWorkspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskWorkspaceUploads.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:67dd2567a0fd2e9d88df",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:8cec1ee3ebf7a5478f72",
+          "file": "packages/backend/src/modules/task-execution/composition/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/workspaceUploads.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:d27507e87fcdd6149649",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:d3daf7c3d57ed4aa310c",
+          "file": "packages/backend/src/modules/task-execution/application/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/workspaceUploads.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:selectWorkspaceUploadContentFactory",
+        "public:task-execution:commands:applyWorkspaceUploads"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:9587afe5829a8c2bda2d23df4108dc2e8af241078af4519ee54c31f75ddc70d9",
+      "status": "target-context-current-surface",
+      "symbol": "WorkspaceUploadContentFactory",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -150799,6 +151382,190 @@
       "transaction": "own-tx",
       "unresolvedTypeRefs": [
         "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:7a6c56576ba275ced48c"
+      ],
+      "context": "task-execution",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:7a6c56576ba275ced48c"
+          ],
+          "fieldPath": "$call.$parameter:plan.defs",
+          "type": "ReadonlyMap<string, UploadInputDef>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7a6c56576ba275ced48c"
+          ],
+          "fieldPath": "$call.$parameter:plan.files",
+          "type": "readonly UploadFile[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7a6c56576ba275ced48c"
+          ],
+          "fieldPath": "$call.$parameter:plan.inputsSubdir",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:plan.limits.perCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:plan.limits.perFile",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:plan.limits.perRequest",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:plan.recovery.$method:placement.$parameter:index",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:plan.recovery.$method:placement.$return.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:plan.recovery.$method:placement.$return.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:plan.recovery.$method:reserve.$parameter:filename",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:plan.recovery.$method:reserve.$parameter:index",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:plan.recovery.$method:reserve.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:plan.workspace.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:plan.workspace.version",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7a6c56576ba275ced48c"
+          ],
+          "fieldPath": "$call.$parameter:plan.workspace.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.version",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7a6c56576ba275ced48c"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7a6c56576ba275ced48c"
+          ],
+          "fieldPath": "$call.$return.packedByKey",
+          "type": "ReadonlyMap<string, readonly string[]>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/commands.ts",
+      "id": "public:task-execution:commands:applyWorkspaceUploads",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:3d00d711d204aa7d6c57c8611731d43118e8122728c0e8f6ed5bfaef44dc630a"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "bind",
+          "signatureDigest": "sha256:7a31841205f427e773b3f4ae4ac88cf2098710ffeef041d8a092b80166d54f8d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7a6c56576ba275ced48c"
+          ],
+          "name": "placement",
+          "signatureDigest": "sha256:a417413a2d4a604c57a70f097285188b9519c3190c7d48a4541c6469e7acf290"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7a6c56576ba275ced48c"
+          ],
+          "name": "reserve",
+          "signatureDigest": "sha256:51f8eb10d12a684859ca6ddaa7eb1ab6178405c474ad18ab4d2d12f0393a81f2"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:7a6c56576ba275ced48c",
+          "file": "packages/backend/src/platform/content/local/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/content/local/workspaceUploads.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:6a07cfaf839197772166707f0cab68cae75687cb600a1c31d73a559071ef22ce",
+      "status": "target-context-current-surface",
+      "symbol": "applyWorkspaceUploads",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [
+        "ReadonlyMap"
       ],
       "version": 1
     },
@@ -172345,6 +173112,77 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:dd3de81556e9183b9d9b"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:accept.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:accept.$variant:1",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:filename",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:mime",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:acceptMatches",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:d346f21f4c2b0b6aa2bfedc696f6391092d3c9f1c97880220ef1c54e4a57b7f1"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:dd3de81556e9183b9d9b",
+          "file": "packages/backend/src/services/upload.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/upload.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:e9a09cdc0d5f8a9d714fd3ae7f8493d5404c1531286929faafc9ef7e4719fbd2",
+      "status": "target-context-current-surface",
+      "symbol": "acceptMatches",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:23d29778fb19b06ecafd"
       ],
       "context": "task-execution",
@@ -172519,6 +173357,45 @@
       "signatureDigest": "sha256:289594200af85310bc0ea8869a7d80f11394ea4624a8f8fba7ba912098aa87c5",
       "status": "target-context-current-surface",
       "symbol": "ContainerRunRow",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:28ccd8aeed65758c962a"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:DEFAULT_UPLOAD_LIMITS",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:28ccd8aeed65758c962a",
+          "file": "packages/backend/src/services/upload.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/upload.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:d780429f21e563dc352c415eda23aaa69528f09691b4c2b351878cdbd00567cb",
+      "status": "target-context-current-surface",
+      "symbol": "DEFAULT_UPLOAD_LIMITS",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -175313,6 +176190,130 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": [
+        "import:af4858e142c4394211fb"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:filename",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:isTaken.$parameter:candidate",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:isTaken.$return",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:resolveUniqueUploadNameSync",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:16acd8c571a77be99e90574d3661a97ac5900ad11267adec82391f915ffae62d"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:af4858e142c4394211fb",
+          "file": "packages/backend/src/platform/content/local/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/content/local/workspaceUploads.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:9a4d87baac30df8ba797865692e5d438b098b374bbca2ce57a38afd76dc9b78a",
+      "status": "target-context-current-surface",
+      "symbol": "resolveUniqueUploadNameSync",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:09b4eb02844d0d05a9be"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:bytes",
+          "type": "Uint8Array"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:sniffMime",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:4719cfcd6418fef9d29ba78cbb6f44fcc0f3b541119d0d994a783423a9e71ac7"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:09b4eb02844d0d05a9be",
+          "file": "packages/backend/src/services/upload.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/upload.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:4d6e138ef5641c913f4819d5ef361f980b51877689db9c5dcf5d5bbb506ff6ab",
+      "status": "target-context-current-surface",
+      "symbol": "sniffMime",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Uint8Array"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": [],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -176557,6 +177558,84 @@
       "symbol": "truncationNotice",
       "transaction": "none",
       "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:048df8440ef33a7d7453"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.defs",
+          "type": "ReadonlyMap<string, UploadInputDef>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.files",
+          "type": "readonly UploadFile[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.limits.perCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.limits.perFile",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.limits.perRequest",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+      "id": "public:task-execution:queries:validateUploadPlan",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:9479c4ccd68e53db68d80d9c1bc29619ea55ebfc34cf45cba13ecb1d9690921a"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:048df8440ef33a7d7453",
+          "file": "packages/backend/src/services/upload.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/upload.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:45d96d50fa20ab88437c86a211fa7638d4b2d00fc2eae83a7b6905ca743f7165",
+      "status": "target-context-current-surface",
+      "symbol": "validateUploadPlan",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "ReadonlyMap"
+      ],
       "version": 1
     },
     {
@@ -183327,6 +184406,227 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": [
+        "import:bf3f5bb09f80453a6660",
+        "import:bf907b2a1ef63431392d"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "bytes",
+          "type": "Uint8Array"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "declaredMime",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:bf907b2a1ef63431392d"
+          ],
+          "fieldPath": "filename",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "inputKey",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:UploadFile",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:bf3f5bb09f80453a6660",
+          "file": "packages/backend/src/services/upload.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/upload.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:bf907b2a1ef63431392d",
+          "file": "packages/backend/src/platform/content/local/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/content/local/workspaceUploads.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:98292e581fe6b561cf1187e106e3dfb6829b2e12c7878323b1329ecb724cb099",
+      "status": "target-context-current-surface",
+      "symbol": "UploadFile",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Uint8Array"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:9d3730bc396c887abadd",
+        "import:e8d7d010caa8c8add85a"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "accept",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:9d3730bc396c887abadd"
+          ],
+          "fieldPath": "key",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "maxFileSize",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "minCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "onConflict",
+          "type": "(typeof UPLOAD_ON_CONFLICT)[number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "targetDir",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:UploadInputDef",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:9d3730bc396c887abadd",
+          "file": "packages/backend/src/platform/content/local/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/content/local/workspaceUploads.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:e8d7d010caa8c8add85a",
+          "file": "packages/backend/src/services/upload.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/upload.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:75bcf03aa58363cd1c8061bf5394d5bde31962e409234a6bb624800d5e94e2d9",
+      "status": "target-context-current-surface",
+      "symbol": "UploadInputDef",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:8d15d3b779b9131a0e6e",
+        "import:9ef125150dbe0b93a528"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "perCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "perFile",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "perRequest",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:UploadLimits",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:8d15d3b779b9131a0e6e",
+          "file": "packages/backend/src/services/upload.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/upload.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:9ef125150dbe0b93a528",
+          "file": "packages/backend/src/platform/content/local/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/content/local/workspaceUploads.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:commands:applyWorkspaceUploads",
+        "public:task-execution:queries:validateUploadPlan",
+        "public:task-execution:types:WorkspaceUploadPlan"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:00aa62d0757f5cf02b6114b4081330b4cfe46ed9ad008231b09cfceae59c5528",
+      "status": "target-context-current-surface",
+      "symbol": "UploadLimits",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": [],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -183371,6 +184671,199 @@
       "symbol": "WebhookTerminalCause",
       "transaction": "none",
       "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:bd85a7b187e4209878d5"
+      ],
+      "context": "task-execution",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:bd85a7b187e4209878d5"
+          ],
+          "fieldPath": "defs",
+          "type": "ReadonlyMap<string, UploadInputDef>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:bd85a7b187e4209878d5"
+          ],
+          "fieldPath": "files",
+          "type": "readonly UploadFile[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:bd85a7b187e4209878d5"
+          ],
+          "fieldPath": "inputsSubdir",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "limits.perCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "limits.perFile",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "limits.perRequest",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:placement.$parameter:index",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:placement.$return.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:placement.$return.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:reserve.$parameter:filename",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:reserve.$parameter:index",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "recovery.$method:reserve.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspace.version",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:bd85a7b187e4209878d5"
+          ],
+          "fieldPath": "workspace.workspaceRef",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:WorkspaceUploadPlan",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:bd85a7b187e4209878d5"
+          ],
+          "name": "placement",
+          "signatureDigest": "sha256:a417413a2d4a604c57a70f097285188b9519c3190c7d48a4541c6469e7acf290"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:bd85a7b187e4209878d5"
+          ],
+          "name": "reserve",
+          "signatureDigest": "sha256:51f8eb10d12a684859ca6ddaa7eb1ab6178405c474ad18ab4d2d12f0393a81f2"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:bd85a7b187e4209878d5",
+          "file": "packages/backend/src/platform/content/local/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/content/local/workspaceUploads.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:commands:applyWorkspaceUploads"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:e45e756eab8bb921e4f3478e00d7f36d49d97fed7142af92560cc55fb7ee1e37",
+      "status": "target-context-current-surface",
+      "symbol": "WorkspaceUploadPlan",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "ReadonlyMap"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:0d877f7bb5e9ad2a54d4"
+      ],
+      "context": "task-execution",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:0d877f7bb5e9ad2a54d4"
+          ],
+          "fieldPath": "packedByKey",
+          "type": "ReadonlyMap<string, readonly string[]>"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/types.ts",
+      "id": "public:task-execution:types:WorkspaceUploadResult",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:0d877f7bb5e9ad2a54d4",
+          "file": "packages/backend/src/platform/content/local/workspaceUploads.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/content/local/workspaceUploads.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:commands:applyWorkspaceUploads"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b23d2ed4ad5bf5b1056ac48ab5396d35210a7fc2eb509f7cd4cf9ce28711ee6f",
+      "status": "target-context-current-surface",
+      "symbol": "WorkspaceUploadResult",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "ReadonlyMap"
+      ],
       "version": 1
     },
     {
@@ -183890,7 +185383,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8eeefdd2c263c2f164c86c1774d1b75957e4547469df4406db735c28489ab303",
+  "sourceDigest": "sha256:6c9bcf68d1870290bc9b090ab9e55acfe743ee9ca39efda4a5576c6992fc5b1d",
   "targetContexts": [
     "collaboration",
     "development-automation",

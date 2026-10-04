@@ -1,3 +1,15 @@
+## 2026-10-04 工作区上传完整内容切面
+
+SOURCE24 独立功能门有限 PASS，指纹 `daca3967932cf720464fa9c03cae806ecab160dedac0a7e51db777b9048a98a2`；24 owned、14 controls、11 evidence 首末稳定。SC complete factory/六方法 receiver 只解释 workspace/content 引用，TE 保留一份原上传政策；native 同步效果不产生额外 await，旧 helper 不创建目录，旧可变 Map/数组与结果对象身份保持。真实 journal、Task 启动内核和 standalone HTTP multipart 双 provider 回归已写。
+
+原七项业务声明、四项物理 helper 的完整 AST、digest/SQL callback/receipt replay、四个根的原内容、12 个旧 service 出口及 13 份旧源码/测试控制保持。原完整 whole-writer 测试 hook 保留；与显式 selected factory 同时选择时在原 receipt 重放之后明确报错。reserved placement ACK 先于写入，write ACK 先于 written/Task admission，异步回滚有序且首错保持；实际写入后丢 ACK 的重试沿已登记文件名完整字节复核。
+
+一次原 scoped census 基于已提交 `766138c5e371e4b6724458014cd8306878d086dd` 加冻结 SOURCE24；非 owned source/test 使用 exact committed 内容，并行 native page/pump 及前台 WIP 保留、排除。四份原规则不变；sourceDigest `sha256:6c9bcf68d1870290bc9b090ab9e55acfe743ee9ca39efda4a5576c6992fc5b1d`。实际五项增长为 mutation1857→1862（六增一减）、observed imports5983→6015（36增4减）、exception projection5323→5347（28增4减）、public1100→1116（16实际已消费出口）、owners26419→26449（九新生产文件46增、旧service16减）。按原协议登记五项一次回执，匹配 canonical 提交后正常后继退役；129项原有序库存/why、302项原债务全文、40 required SPI、69 target edges 和空 implementation SCC 保持。两项 Task 写点仅 id/line 投影856→859、941→944；14项 ambient root 记录只移行，业务正文保持。原 C2 双向精确相等证明通过。
+
+前次 CI 修复 SHA `de5f90ae80ffdcc4af83fe0a1d39dd01937667a9` 的四个受影响后端 job111317745474/111317745496/111317745535/111317745537、主 Lint/Typecheck/Format job111317745523 和 Windows37162413399 全部 completed/success，满足 SOURCE37 有限正式验证依赖。主 CI37162165195 则 completed/failure（43成功/7失败）；六个浏览器作业及 aggregate 原失败保持。观测失败由并行 owner 接续；macOS四个其它 flaky case 的 daemon-ready timeout 原日志保留，不用后续 retry pass 改记成功。本上传批次仍待新 exact-SHA hosted CI。
+
+本机仅目标 format/lint、纯 AST/字节/JSON 和原 scoped 生成，无 AW test/typecheck/build/service。目标 lint 首轮缺少 HTTP effectiveDeps factory handoff 与 prefer-const 两处 FAIL、首次 AST 根逆变换的分隔 token 误判均保留，源码和证明工具分别修正后有限 PASS；未改变原政策或放宽原回归。完整 A1–A8/AC00/A-G 继续，独立 CS adapters 仍在完整 A-G 后，B/M0先实际部署再逐项M1–M4。尚无 AW-in-CS 部署，不关闭 RFC。
+
 ## 2026-10-04 端口归档确切 SHA CI 修复
 
 已发布 34e49589e9bc26c6ea9f3da8a1f9f90f367a29c6 的主 CI37158988630 completed/failure（35 success、15 failure），Windows37158988639 completed/failure；maintenance37158988628 与 OpenCode37158988629 completed/success。全部原完整日志和终态保留。四个后端失败作业只重复本批两处 AST oracle 与零 consumer public 别名；Typecheck 也包含本批 Readonly/HTTP 夹具错误。并行观测 Typecheck、三个 frontend shard3 与六个观测 E2E 作业已按实际日志归属协调，不修改其 WIP，不记整套通过。

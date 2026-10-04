@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1857,
+    "entries": 1862,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -23693,6 +23693,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/source-control/application/ports/workspaceUploadContent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/application/ports/workspaceUploadContent.ts#SynchronousWorkspaceUploadContent",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/application/ports/workspaceUploadContent.ts#SynchronousWorkspaceUploadContent",
+      "symbol": "SynchronousWorkspaceUploadContent",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/source-control/application/repositoryCommit.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/source-control/application/repositoryCommit.ts#commitPreparedRepository",
@@ -24135,6 +24160,56 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileWorkspacePresence.ts#createFileWorkspacePresenceQueries",
       "symbol": "createFileWorkspacePresenceQueries",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileWorkspaceUploadContent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/fileWorkspaceUploadContent.ts#createFileWorkspaceUploadContent",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileWorkspaceUploadContent.ts#createFileWorkspaceUploadContent",
+      "symbol": "createFileWorkspaceUploadContent",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileWorkspaceUploadContent.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/fileWorkspaceUploadContent.ts#createFileWorkspaceUploadContentFactory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileWorkspaceUploadContent.ts#createFileWorkspaceUploadContentFactory",
+      "symbol": "createFileWorkspaceUploadContentFactory",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -27433,6 +27508,31 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/workspaceUploads.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/workspaceUploads.ts#runWorkspaceUploadPolicy",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/workspaceUploads.ts#runWorkspaceUploadPolicy",
+      "symbol": "runWorkspaceUploadPolicy",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "effect",
         "authorization": false,
         "event": false,
@@ -28558,6 +28658,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/triggerExecution.ts#createTaskExecutionTriggerParticipant",
       "symbol": "createTaskExecutionTriggerParticipant",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/workspaceUploads.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/workspaceUploads.ts#applyWorkspaceUploads",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/workspaceUploads.ts#applyWorkspaceUploads",
+      "symbol": "applyWorkspaceUploads",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -33777,6 +33902,30 @@
       "symbol": "saveConfigValueAtomic",
       "targetContext": "platform",
       "targetLayer": "configuration"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/content/local/workspaceUploads.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/content/local/workspaceUploads.ts#applyUploadsToWorktree",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/content/local/workspaceUploads.ts#applyUploadsToWorktree",
+      "symbol": "applyUploadsToWorktree",
+      "targetContext": "platform",
+      "targetLayer": "content"
     },
     {
       "controls": {
@@ -42505,29 +42654,6 @@
     {
       "controls": {
         "audit": false,
-        "authority": "system",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/upload.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/upload.ts#applyUploadsToWorktree",
-      "missingControls": [
-        "audit",
-        "authorization",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/upload.ts#applyUploadsToWorktree",
-      "symbol": "applyUploadsToWorktree",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
         "authority": "none-observed",
         "authorization": true,
         "event": false,
@@ -44407,7 +44533,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:8eeefdd2c263c2f164c86c1774d1b75957e4547469df4406db735c28489ab303",
+  "sourceDigest": "sha256:6c9bcf68d1870290bc9b090ab9e55acfe743ee9ca39efda4a5576c6992fc5b1d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46405,8 +46531,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#856:tasks",
-        "line": 856,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#859:tasks",
+        "line": 859,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#createRootLaunch",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -46421,8 +46547,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "taskExecutionIntents",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#941:taskExecutionIntents",
-        "line": 941,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#944:taskExecutionIntents",
+        "line": 944,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteLaunchOperations.ts#createRootLaunch",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",

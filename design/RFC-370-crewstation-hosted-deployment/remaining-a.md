@@ -407,3 +407,9 @@ R2 原生成器基于已提交 335cc5333ae3883bd8f9b457c3253add552809d9、冻结
 前次 prompt 夹具提交 eef2874b53a073dd19faac654d890a41397a6d88 的 exact 主 CI37151693012 已 completed/cancelled（4 success、1 aggregate failure、42 cancelled），不记为通过。包含修复的后继 57f6c29303a17a2a6b28db5966da1f9bc69b1548 主 CI37151884308 completed/failure（37 success、12 failure、1 cancelled）；其 Ubuntu6 job111287352004 内本批 15 个 prompt binding 用例全 PASS。其余原生观测/W5/R1/超时失败按完整日志归属交由并行 owner 接续，整套 CI 未通过。当前归档批次尚待发布后的 exact-SHA hosted CI；本机无 AW test/typecheck/build/service，只有限 format/lint 和纯 AST/JSON/字节/census 证明。
 
 完整 RFC-370/A1–A8/AC00/A-G 仍开放。A2 runtime 物化、A3 workspace/upload/restore、A4 node/wrapper Git/commit/delivery/conflict/repair、A5 logical materials 与 submit/inspect/events/message/cancel/收据先于激活/reap、A6 purpose commands、A7 authority/recovery 和 A8 全根装配继续；随后独立 CS adapters，先 B/M0 实际部署，再 M1–M4 逐步收编。当前没有 AW-in-CS 部署或验收，不能用有限 PASS 关闭阶段 A 或 RFC。
+
+## 2026-10-04 上传切面后的实际余项
+
+SOURCE24 有限 PASS，SC 六方法完整 content factory 与 TE 一份上传 policy 已贯穿实际 CLI/SQLite/PG/HTTP，placement/write/rollback ACK、完整恢复字节和旧同步可变结果保持；原 scoped 清单及五项真实增长见 [功能门](./functional-gates.md)。前次端口归档 CI 修复的四后端、Lint/Typecheck/Format 和 Windows 正式通过；主 CI37162165195 的43成功/7失败及完整浏览器错误仍保留，新上传批次正式验证待发布后的 exact-SHA CI。
+
+本批只收口 upload 内容与真实根，不据此关闭 A3 全部 workspace 或 A2/A4。继续 runtime/resource 内容物化、两 LaunchLane 与工作区/Git 全消费者、A5 材料/提交/收据/流/消息/取消/捕获/清理、A6 purpose commands、A7 authority/recovery 和 A8 全根/AC00，再独立完整 A-G。随后独立 CS adapters，B/M0先实际部署，逐项M1–M4；尚无 AW-in-CS 实际部署，不关闭 RFC。
