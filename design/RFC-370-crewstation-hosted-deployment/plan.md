@@ -927,3 +927,12 @@ SC 完整七项 ConflictMergeWorkspaceEffects 与 DA 六项 ActionWorkspaceEffec
 匹配清单从已提交 `43808355` 和同一冻结31TS投影一次，sourceDigest `sha256:4d8762a0c70953202b0baf6db646da740c7064a36448d05b79cf0a541adf44ce`；完整并行观测修复包含在基线，下一批和其它在制品排除且保留。13 canonical／129原库存的五项真实增长随匹配发布消费，再普通退役；有限 metadata 门和新 exact-SHA hosted CI 独立留证。Candidate 发布 DESIGN-R2 已通过，补六组 factory 根装配、selected baseline 回读及关闭后持久结算作为下一批推进。
 
 完整 A1～A8／AC00／A-G 继续；其后各层独立 CS adapters，B／M0 先实际部署，再 M1～M4 逐步收编。本批不改变上述验收顺序，不记 M0 或 RFC 完成。
+
+
+### 2026-10-05 Candidate publication 接线与工作区 CI 修复
+
+Candidate publication SOURCE24 独立有限 PASS `ce7e37678052bedc69d28f5c234c375f701d03f1b798f74ba5a850cd94d4668c`；CI-SOURCE6 首门逐根 receiver 断言 P2/FAIL 保留，R2 仅补精确 CLI／HTTP receiver 与 runtimeDeps→effectiveDeps／fallback／mount 传递链，有限 PASS `865163cdaab7bb0741cf3b63081e4baa199428bfcfaa20c448b387ac619f9e56`。两个不重叠候选共28 TS／2说明，保持原同步 native 实现、真实 Git／双 provider／HTTP／Task node/effect 回归和旧断言／预算。六组真实 factory 根、选定 baseline 回读与四处 publication close ACK 已接线；Task 的原九种结算结果只在 close ACK 后按原次序持久化。native fixture 物理机制归 SC local adapter。工作区选择不再改变独立 native evidence namespace，opaque 证据夹具提交其实际 file writer；DE fixture 使用实际 issue 类型。
+
+原四条规则在完整已提交 `bba36c8960d81718987b26c100d25ff767fa3f14` 加上述冻结候选上仅投影一次，6388个非自有源码取该 commit blobs；并行 native owner／schema 在制品排除且保留。sourceDigest `sha256:d9a6f5eed05880c413b06a84d4cfd32bdb08f5ebf11cf1bbd3aaabf5301982e5`。13产物和129行原顺序／why保持；四项实际增长 import6117→6120、exception5420→5423、public1149→1150、owner26563→26564 按原协议具名登记，匹配提交后正常后继退役。原40 SPI／69 targets／空SCC、300债务、Task authority／effects和504 ambient数量保持。完整原JSON validator通过，有限metadata／精确提交／远端CI各自另留证。
+
+旧148436的主CI37212411283 cancelled（34成功／13失败／3取消），Windows37213640174 cancelled；bba36c896 的 Windows37213907338 success，主CI37213782196 failure（41成功／9失败），原完整作业／日志保持，不改为整套通过。本机仅目标format／lint、纯AST／byte／JSON与上述一次原静态生成，没有AW本机tests／typecheck／build／service。完整阶段A／AC00／A-G仍开放，执行／runtime、脚本与执行权恢复继续；随后各层独立CS adapters，B／M0首先实际部署，再逐项M1～M4。尚无AW-in-CS部署，不关闭RFC。

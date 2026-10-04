@@ -767,3 +767,14 @@ Ubuntu 与 Windows 原日志各有相同两项 TS 错误：共享 taskExecutionT
 entry+2、import+11（13新增／2退役）、exceptions+9（11新增／2退役）、public+1、owner+24（31新增／7退役）；129原顺序／why和原规则不改。504 ambient数量保持，仅14地址进／出投影；三个保留导入及两个既有 entry／public 的 owner／consumer 字段按原扫描器投影。原40 SPI／69 target／空SCC、300债务、Task authority和 effects保持。原完整JSON validator已通过；匹配13输出与四份保留全文文档组成后继有限 metadata候选，独立门回执、精确发布、五许可正常退役及新 exact-SHA hosted CI分别留证。
 
 Candidate publication DESIGN1 的“成功结算早于close ACK”P2/FAIL保持，DESIGN-R2有限PASS `ed88a7540384f4f3166423cd356c284e41ecc2a5b26270c41d5fa34f613b389a`；它只批准设计，不能替代后续实现及真实node/effect回归。完整A-G、各层CS adapters和M0～M4仍开放。
+
+
+### 2026-10-05 两项独立源码候选与一次匹配投影
+
+Candidate publication SOURCE24：24 owned／13 controls／29 evidence，指纹 `ce7e37678052bedc69d28f5c234c375f701d03f1b798f74ba5a850cd94d4668c`，独立有限 PASS。原 DESIGN1 close ACK 前终态结算 P2/FAIL、DESIGN-R2 和完整先前证明保持；真实持久 node/effect 在 close 被挂起时仍为 running/open，只在 ACK 后结算，拒绝 ACK 不提前写成功。selected baseline 和 publication factory 贯穿六组 DA／DE roots，四个既有 close 消费者等待 ACK；默认 native 物理 fixture 移至原 owner 的 local adapter，原策略与函数正文保持。
+
+CI-SOURCE6-R2：6 owned／13 controls／26 evidence，指纹 `865163cdaab7bb0741cf3b63081e4baa199428bfcfaa20c448b387ac619f9e56`，独立有限 PASS。首门 P2/FAIL 保留，R2 只补真实逐路径 receiver 与 HTTP runtimeDeps 传递链，38个其他描述符不变，SOURCE24的66项描述符保持。生产修复使 native evidence 默认 root 保持物理 appHome，独立证据 adapter／writer 成对装配；新增双 provider HTTP 回归同时选择 action／conflict scope 与 native evidence，真实 Mission 及 DE Case 原预算／断言保持。没有重跑已通过的源码 gate／proof／格式或完整本机门禁。
+
+两个独立 PASS 候选仅合并生成范围，不伪造一个新的源码门回执。原官方四规则在完整committed `bba36c8960d81718987b26c100d25ff767fa3f14` 加28 TS上执行一次，非自有6388源码从固定 blobs读取，排除并保留并行 native owner/schema WIP；13输出先存私有快照。sourceDigest `sha256:d9a6f5eed05880c413b06a84d4cfd32bdb08f5ebf11cf1bbd3aaabf5301982e5`。原129 ordered ledgers和完整why保持；实际净增长只有import+3（4新增／1退役）、exception+3（4新增／1退役）、public+1和owner+1（3新增／2退役，另1合同更新）。新增完整factory公共类型有SQLite／PostgreSQL／HTTP三处实际生产consumer；原mutation1870与ambient504数量保持，仅真实字段／地址投影。原40 SPI／69 target edges／空implementation SCC、整份300债务、effects／Task authority／facades与原规则保持。完整原JSON validator通过，读回只归一原validator对code-host binding的键顺序，不修改产物值或字节。
+
+仅这四项真实增长以各自完整why随matching canonical消费并正常后继退役；原三份共享文档逐字正文完整保留。有限metadata门、实际发布／post-fetch同步和新exact-SHA CI独立留证。旧148436主CI cancelled 34／13／3与Windows cancelled；bba36c896主CI37213782196正式failure 41／9，Windows37213907338正式success，旧失败／取消不改写。无AW本机tests／typecheck／build／service，不代表完整A-G、CS adapter或M0部署。

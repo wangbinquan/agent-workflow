@@ -1,3 +1,11 @@
+## 2026-10-05 RFC-370 Candidate publication 与工作区 CI 接线
+
+Candidate publication SOURCE24与工作区CI-SOURCE6-R2分别独立有限PASS，首门FAIL与全部原历史保持。六组factory roots、selected baseline回读、四处close ACK及Task在ACK后原顺序持久结算已写；native evidence root与独立writer成对选择修复，真实Git／双provider／HTTP及node/effect回归保留原断言和预算。详情见 design/RFC-370-crewstation-hosted-deployment/candidate-publication-effects.md 与 conflict-workspace-ci-bindings.md。
+
+原四规则从完整bba36c896加冻结28TS投影一次，6388非自有源码取committed blobs，并行native owner／schema WIP排除且保留；sourceDigest `sha256:d9a6f5eed05880c413b06a84d4cfd32bdb08f5ebf11cf1bbd3aaabf5301982e5`。原完整JSON validator通过，129库存／why、300债务、40SPI／69targets／空SCC与effects保持；四项实际import+3／exception+3／public+1／owner+1具名登记，matching发布后正常退役。仅目标format／lint及纯静态证明，无AW本机tests／typecheck／build／service。
+
+旧148436主CI cancelled，bba36c896主CI37213782196 failure（41成功／9失败），Windows37213907338 success；旧结果不改成全绿，新确切SHA正式CI仍待验收。当前仍在阶段A，执行／runtime、脚本、恢复及完整A-G继续；随后独立CS adapters，M0先实际部署再逐项M1～M4，尚无AW-in-CS部署，不关闭RFC。下面全部原正文与并行输出逐字保留。
+
 ## 2026-10-04 RFC-370 冲突／action workspace 有限源码与匹配清单
 
 ## 2026-10-04 RFC-371 已收到用量与泳道 CI 回归修复

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1154,
+    "consumers": 1157,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1352,
+    "methods": 1353,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 24767,
-    "symbols": 1149
+    "recursiveFields": 24774,
+    "symbols": 1150
   },
   "entries": [
     {
@@ -147112,7 +147112,12 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$variant:0.session.$method:close.$return",
+          "fieldPath": "$variant:0.session.$method:close.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.session.$method:close.$return.$variant:1",
           "type": "void"
         },
         {
@@ -147208,7 +147213,7 @@
         {
           "consumerEdgeIds": [],
           "name": "close",
-          "signatureDigest": "sha256:d495e4327f5d828f02d6cd03556d16496b74c9b148dfd6067d9d9c5137f67af7"
+          "signatureDigest": "sha256:0163dd38c813d8ee7f15bc0c3c484ce06ab5599b5e399889a8929bf3375527c6"
         },
         {
           "consumerEdgeIds": [],
@@ -147390,6 +147395,86 @@
       "signatureDigest": "sha256:5fd4a3ebd7a0dc19d1d88930f1cc132610f216dbdbf4d22a89f1598559d676c1",
       "status": "target-context-current-surface",
       "symbol": "PublicRepositorySourceInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:08f877648ee02e098710",
+        "import:0aa3399822e37745bdad",
+        "import:e657f8057579cda37758"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:acquire.$parameter:input.baselineReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:acquire.$parameter:input.overlayReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:acquire.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:acquire.$return.$variant:1",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:RepositoryCandidateEffectsFactory",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "acquire",
+          "signatureDigest": "sha256:139f11463bf40b1d3d91de6f2f85900993ba11e1ba1f2edad2410662107aad34"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:08f877648ee02e098710",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:0aa3399822e37745bdad",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:e657f8057579cda37758",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:01c441f6a047aad2a88d9c731c426842bc91b30915e344ae555ca73fb837c081",
+      "status": "target-context-current-surface",
+      "symbol": "RepositoryCandidateEffectsFactory",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -148833,7 +148918,12 @@
       "fields": [
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:close.$return",
+          "fieldPath": "$method:close.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:close.$return.$variant:1",
           "type": "void"
         },
         {
@@ -148904,7 +148994,7 @@
         {
           "consumerEdgeIds": [],
           "name": "close",
-          "signatureDigest": "sha256:d495e4327f5d828f02d6cd03556d16496b74c9b148dfd6067d9d9c5137f67af7"
+          "signatureDigest": "sha256:0163dd38c813d8ee7f15bc0c3c484ce06ab5599b5e399889a8929bf3375527c6"
         },
         {
           "consumerEdgeIds": [],
@@ -148920,7 +149010,7 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:c1f222948db499e9fc9a92a46357ce38b9aaf5ae62c5fdc691520d1171e41848",
+      "signatureDigest": "sha256:7756768b8dab945948c02ccdc100922d85fd30b39fd8e2e00786985e27633a3f",
       "status": "target-context-current-surface",
       "symbol": "RepositoryPublicationSession",
       "transaction": "none",
@@ -149050,7 +149140,12 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:open.$return.$variant:0.session.$method:close.$return",
+          "fieldPath": "$method:open.$return.$variant:0.session.$method:close.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:open.$return.$variant:0.session.$method:close.$return.$variant:1",
           "type": "void"
         },
         {
@@ -149170,7 +149265,7 @@
             "import:4356c0c71f43c05ed086"
           ],
           "name": "close",
-          "signatureDigest": "sha256:d495e4327f5d828f02d6cd03556d16496b74c9b148dfd6067d9d9c5137f67af7"
+          "signatureDigest": "sha256:0163dd38c813d8ee7f15bc0c3c484ce06ab5599b5e399889a8929bf3375527c6"
         },
         {
           "consumerEdgeIds": [
@@ -195029,7 +195124,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a2b403a35cbbaee34264bcf0aad533e6023b9c3307a985e45879a07ec1a89d39",
+  "sourceDigest": "sha256:d9a6f5eed05880c413b06a84d4cfd32bdb08f5ebf11cf1bbd3aaabf5301982e5",
   "targetContexts": [
     "collaboration",
     "development-automation",

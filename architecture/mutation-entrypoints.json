@@ -893,7 +893,7 @@
       "controls": {
         "audit": false,
         "authority": "system",
-        "authorization": false,
+        "authorization": true,
         "event": false,
         "fenceOrOcc": true,
         "transaction": false
@@ -903,7 +903,6 @@
       "id": "mutation:packages/backend/src/cli/start.ts#StartOptions",
       "missingControls": [
         "audit",
-        "authorization",
         "event",
         "transaction"
       ],
@@ -23689,31 +23688,6 @@
         "fenceOrOcc": false,
         "transaction": false
       },
-      "file": "packages/backend/src/modules/source-control/application/deliverCandidate.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/source-control/application/deliverCandidate.ts#commitTreeIdentityOf",
-      "missingControls": [
-        "audit",
-        "authority",
-        "authorization",
-        "event",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/source-control/application/deliverCandidate.ts#commitTreeIdentityOf",
-      "symbol": "commitTreeIdentityOf",
-      "targetContext": "source-control",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": false,
-        "event": false,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
       "file": "packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/source-control/application/employeeCaseWorkspace.ts#restoreEmployeeCaseWorkspace",
@@ -24181,6 +24155,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryPreviewIndex.ts#createFileRepositoryPreviewIndexPort",
       "symbol": "createFileRepositoryPreviewIndexPort",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryPublicationFixture.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryPublicationFixture.ts#createFileRepositoryPublicationFixtureSession",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryPublicationFixture.ts#createFileRepositoryPublicationFixtureSession",
+      "symbol": "createFileRepositoryPublicationFixtureSession",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -44728,7 +44726,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a2b403a35cbbaee34264bcf0aad533e6023b9c3307a985e45879a07ec1a89d39",
+  "sourceDigest": "sha256:d9a6f5eed05880c413b06a84d4cfd32bdb08f5ebf11cf1bbd3aaabf5301982e5",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
