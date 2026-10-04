@@ -359,3 +359,29 @@ test('a real native Worker keeps EOF behind the original owner ACK and closes af
     ),
   ).rejects.toThrow('root unavailable')
 }, 30000)
+
+// A malformed start previously vanished from the open-step ledger and sealed a false zero.
+test.each(['', null])(
+  'malformed step message identity %p rejects the original snapshot before any clean EOF',
+  (messageId) => {
+    for (const shape of ['start-only', 'finish-only', 'paired'] as const) {
+      const f = fixture()
+      if (shape !== 'finish-only') f.part('a-start', 'root', 'step-start')
+      if (shape !== 'start-only') f.part('z-finish', 'root', 'step-finish')
+      f.db.query('UPDATE part SET message_id=?').run(messageId)
+      if (shape === 'start-only') {
+        const original = readOpencodeUsageSnapshot(f.path, 'root')
+        expect(original.issues).toContain('native-step-unfinished')
+        expect(original.fingerprint).toBeNull()
+      }
+      const reader = f.open(1)
+      const first = reader.next(reader.initialCursor)
+      expect(first.eof).toBeNull()
+      reader.acknowledge(first.ordinal, first.payloadDigest)
+      expect(() => reader.next(first.nextCursor!)).toThrow(
+        'Native step message identity unavailable',
+      )
+      expect(() => reader.next(first.nextCursor!)).toThrow('snapshot closed')
+    }
+  },
+)

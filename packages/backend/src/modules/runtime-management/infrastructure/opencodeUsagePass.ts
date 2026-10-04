@@ -251,6 +251,11 @@ export function openOpencodeUsagePass(
               continue
             }
             if (!identifier(row.id)) throw new Error('Native part cursor unavailable')
+            if (
+              (row.kind === 'step-start' || row.kind === 'step-finish') &&
+              !identifier(row.message_id)
+            )
+              throw new Error('Native step message identity unavailable')
             let value: NativeUsagePassStep | undefined
             if (
               row.kind === 'step-finish' &&

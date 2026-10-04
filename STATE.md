@@ -9796,3 +9796,11 @@ SOURCE7首次FAIL发现JSON布尔值被SQLite转成0/1，原失败保留；只�
 匹配34e49589原提交树与冻结30候选的官方原 AST 生成13完整产物，129原库存检查无违规；sourceDigest sha256:cce6e08058cf1f21df255f9688a98c100352cb0832cdc7d565dce2e4ddb41d37。只登记实际 symbol owner26410→26419增长及正常后继退役，规则／阈值／target／旧 debt均保持。本机仅自有格式、lint、原 AST/JSON/库存投影；没有 AW本地test/types/build/service。
 
 335cc533自身CI37156345771的前端／类型／若干页面与required终态失败仍保留；本批尚待精确发布及新的完整hosted与定时作业。原生v2持久before基线／emission与源ACK／正式采集接线仍待，旧producer总量限制尚未全部解除；两个RFC保持In Progress，CS开发producer OFF，不能以本片SOURCE或库存证明完整统计已验收。
+
+## 2026-10-04 RFC-371 原始 step 身份漏记修正
+
+完整 native reader 的畸形 step-start／step-finish message_id 在推进前具名拒绝并关闭原快照，空字符串／SQL NULL 的开始、完成及成对六种真实 SQLite 形态有回归；有效身份、四桶归一、原 WAL 快照、页 ACK、真实 EOF 与 60／30秒原测试预算保留。有限 SOURCE3 PASS，无 P1／P2；本机仅 scoped format／lint、原 AST／JSON 静态投影，不运行 AW test、typecheck、build 或服务，新行为待本批确切 SHA hosted CI。
+
+原官方完整 census 只读已提交 de5f90ae80ffdcc4af83fe0a1d39dd01937667a9 加冻结3路径，排除且保留全部其它 WIP；完整13产物、129库存一致，无增长许可、无规则／预算／债务放宽，source digest sha256:8eeefdd2c263c2f164c86c1774d1b75957e4547469df4406db735c28489ab303。首次 dry CLI 只输出 report、未保留完整13产物，按 incomplete 留档；正确 write 模式输出仅重定向到私有内存，原 report 逐字数据相等，再用原 provenance helper 定格。
+
+1628e7aacd976775aa7e73562af2358edc6c2ea5 的 [visual-regression-nightly37160496294](https://github.com/wangbinquan/agent-workflow/actions/runs/37160496294) 终态 success，主 CI37160496067 cancelled，不当作通过。de5f90ae 的主 CI37162165195、Windows37162413399 在此前观测时尚无终态；2026-10-04 00:00:03 UTC 冻结原运行响应时，主 CI 为 in_progress，Windows 已于 2026-10-03 23:47:50 UTC 终态 success。旧 FAIL／cancelled 保留。当前仍只是未接线的完整 reader 基础；原 owner 持久 before、肯定 ACK、同事务 emission／revision／source、producer切换、旧采集总量限制移除、100K Task／10M usage、真实模型四桶／人民币与正式页面／剩余 CI 验收继续，两个RFC不关闭。
