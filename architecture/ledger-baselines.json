@@ -812,10 +812,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1862,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 workspace uploads: the unchanged syntactic classifier projects six new entries (including one mapped type, two native factories, the policy driver and two application bridges) and removes the old service writer, net five. This is a source projection; original upload policy and all database callbacks remain unchanged."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -850,10 +847,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6015,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 workspace uploads: the complete source-control content contract, task upload policy, native compatibility and three actual roots add 36 symbol-level import edges and remove four old direct imports, net 32. The original import classifier and public boundary rules remain unchanged."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -874,10 +868,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5347,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 workspace uploads: the unchanged legacy geometry classifier projects 28 added and four removed records from the actual content/compatibility/root import graph, net 24. No handwritten boundary debt clause, expiry or classification rule is added or expanded."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -891,10 +882,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1116,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-370 workspace uploads: 16 consumed public symbols expose three complete content types, two content selectors, the upload command, five existing pure queries and five upload DTOs. Physical upload paths and the synchronous mutable compatibility result remain inside platform/content/local; old public symbols and required SPI remain unchanged."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -915,10 +903,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 26449,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 workspace uploads: nine actual production files add 46 top-level owners and the thin legacy service removes 16 old owners, net 30. Business upload declarations and four complete physical helper functions move with exact AST preservation; only native adapters interpret workspace references."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "canonicalProjection": {
@@ -936,7 +921,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "766138c5e371e4b6724458014cd8306878d086dd",
-    "contentDigest": "sha256:be846ea3c528828ce1393e8067679c8698b003423b8af61f078c21a0b3747c01",
+    "contentDigest": "sha256:32526e6cfbe702fe9c04ea3d6f9713d10da49c825399e56d03841db9fd256d0b",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
