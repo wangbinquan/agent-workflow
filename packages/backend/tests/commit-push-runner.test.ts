@@ -599,7 +599,7 @@ describeEachProvider('RFC-370 selected Git in actual commit-push', (harness) => 
         expect(locks).toEqual(['acquire'])
         const running = (
           await f.db.select().from(nodeRuns).where(eq(nodeRuns.taskId, f.taskId))
-        ).filter((row) => row.cause === 'commit-push')
+        ).filter((row) => row.rerunCause === 'commit-push')
         expect(running).toHaveLength(1)
         expect(running[0]!.status).toBe('running')
         expect(store.opened).toBe(0)

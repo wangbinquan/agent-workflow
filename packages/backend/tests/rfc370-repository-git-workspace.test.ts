@@ -454,7 +454,7 @@ describe('RFC-370 complete selected repository Git workspace', () => {
     const calls: string[][] = [],
       bindings: unknown[] = []
     const factory: RepositoryGitWorkspaceFactory = Object.freeze({
-      bind(binding) {
+      bind(binding: Parameters<RepositoryGitWorkspaceFactory['bind']>[0]) {
         bindings.push(binding)
         return Object.freeze({
           workspaceRef: binding.workspaceRef,

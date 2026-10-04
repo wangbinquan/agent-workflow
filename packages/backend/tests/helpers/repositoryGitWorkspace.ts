@@ -5,6 +5,7 @@ import type {
   RepositoryGitWorkspaceFactory,
   RepositoryGitWorkspaceScope,
   RepositoryPublicationTransport,
+  RepositoryPublicationSession,
 } from '@/modules/source-control/public/types'
 import type { RepositoryPreviewIndexScope } from '@/modules/source-control/application/ports/repositoryPreviewIndex'
 import { selectRepositoryGitWorkspaceFactory } from '@/modules/source-control/public/participants'
@@ -67,7 +68,11 @@ export class GitWorkspaceStore {
           session: Object.freeze({
             endpointUrl: session.endpointUrl,
             receipt: session.receipt,
-            runNetwork: (workspaceRef, args, options) => {
+            runNetwork: (
+              workspaceRef: Parameters<RepositoryPublicationSession['runNetwork']>[0],
+              args: Parameters<RepositoryPublicationSession['runNetwork']>[1],
+              options?: Parameters<RepositoryPublicationSession['runNetwork']>[2],
+            ) => {
               this.networkCalls.push({ workspaceRef, args: [...args] })
               return session.runNetwork(this.physical(workspaceRef), args, options)
             },

@@ -1,3 +1,7 @@
+### 2026-10-04 RFC-370：提交／发布 Git 测试类型补正
+
+5490f43927e816c70719ca26b0a6cf4e45853ff9 的 Windows37192311608 正式 completed/failure：新增测试误读不存在的 cause 列及 Object.freeze 嵌套参数四处隐式 any。三份测试只改真实 rerunCause oracle 和完整合同参数类型；原测试名称、预算、断言、生产机制及 canonical 保持。纯 AST／擦除后代码证明与目标 format/lint 通过，有限独立功能检视及新 exact-SHA hosted CI 另行验收；旧失败不改写。见 design/RFC-370-crewstation-hosted-deployment/repository-publication-git-ci-repair.md。完整阶段 A／A-G、独立 CS adapters、M0 实际部署与 M1～M4 继续，未关闭 RFC。
+
 ## 2026-10-04 RFC-371 总览卡片与实际分类 Token 柱恢复
 
 四张全局卡片只在总览显示；任务追踪、Agent分析、Token与成本及性能与数据质量均实测为零张全局卡。任务详情保留自身完整四桶与人民币。总览沿原不可变报告分页全部Task，用各自原metrics绘制四桶柱，原每日任务／Token趋势保留。实际8个Task含7个完整用量与1个真实缺口，逐Task不重算全范围总量；缺口用问号并保留原原因。桌面962px图内完整显示8柱、全部轨道176px对齐；390px页面无横向溢出，8柱在原TableViewport内滚动，没有截断。
