@@ -1,4 +1,20 @@
 export const runObservabilityZh = {
+  usageGapTitle: 'Token 用量存在缺口',
+  factsAvailable:
+    '任务数量、执行明细与耗时已完整核对，仍可查看。原用量缺失，继续等待不会自动补齐；Token 和费用保持未知，不能按零计入。',
+  gapReason: '缺口原因',
+  affectedTasks: '受影响任务',
+  viewGapTasks: '查看受影响任务：{{reason}}',
+  gapTasksHint:
+    '只列出原始任务记录中确实存在该缺口的任务；同一任务可有多种缺口，各原因数量不能相加作为去重总数。',
+  gapIndexUnavailable: '旧报告未保存关联，请刷新',
+  'gap_invocation-unobserved': '执行尝试缺少原始调用登记',
+  'gap_native-capture-unobserved': '原始调用缺少原生采集记录',
+  'gap_native-capture-records-missing': '原生采集与用量明细数量不一致',
+  'gap_usage-unobserved': '原始调用缺少用量记录或零消耗证明',
+  'gap_usage-incomplete': '输入、缓存或输出 Token 证据不完整',
+  'gap_source-projection-pending': '原始采集尚未全部投影到用量账本',
+  'gap_dimension-unresolved': '模型或运行时归属尚未确认',
   fullTasks: '全部任务',
   exactTaskCount: '{{tasks}} 个任务',
   totalTokens: '完整 Token 消耗',
@@ -304,6 +320,22 @@ export const runObservabilityZh = {
 }
 export type RunObservabilityMessages = { [K in keyof typeof runObservabilityZh]: string }
 export const runObservabilityEn: RunObservabilityMessages = {
+  usageGapTitle: 'Token usage has gaps',
+  factsAvailable:
+    'All task, execution and duration records are reconciled and remain available. Waiting will not restore missing usage; tokens and costs remain unknown, never zero.',
+  gapReason: 'Missing evidence',
+  affectedTasks: 'Affected tasks',
+  viewGapTasks: 'View affected tasks: {{reason}}',
+  gapTasksHint:
+    'These tasks have this gap in their original records. A task can have several gaps; counts across reasons cannot be added as a unique-task total.',
+  gapIndexUnavailable: 'Associations were not sealed in this older report. Refresh.',
+  'gap_invocation-unobserved': 'An execution attempt has no original accepted invocation',
+  'gap_native-capture-unobserved': 'An invocation has no original native capture',
+  'gap_native-capture-records-missing': 'Native capture and usage-record counts do not reconcile',
+  'gap_usage-unobserved': 'An invocation has neither usage records nor proof of zero usage',
+  'gap_usage-incomplete': 'Input, cache or output token evidence is incomplete',
+  'gap_source-projection-pending': 'Original captures have not all reached the usage ledger',
+  'gap_dimension-unresolved': 'Model or runtime attribution is unresolved',
   fullTasks: 'All tasks',
   exactTaskCount: '{{tasks}} tasks',
   totalTokens: 'Complete token usage',

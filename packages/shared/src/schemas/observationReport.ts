@@ -13,6 +13,7 @@ export const COMPLETE_OBSERVATION_SECTIONS = [
   'sources',
   'trends',
   'quality',
+  'quality-tasks',
   'attempts',
   'invocations',
   'allocations',
@@ -35,6 +36,7 @@ export const COMPLETE_OBSERVATION_FACT_SECTIONS: readonly CompleteObservationSec
   'sources',
   'trends',
   'quality',
+  'quality-tasks',
   'attempts',
   'invocations',
   'dimension-tasks',
@@ -171,6 +173,8 @@ export interface CompleteObservationTrend {
 export interface CompleteObservationQuality {
   readonly key: string
   readonly taskCount: string
+  /** Associations exist only after the original parent population matches taskCount. */
+  readonly taskIndexVersion?: 1
 }
 export interface CompleteObservationDimensionTask {
   readonly task: ObservationTaskFacts

@@ -902,12 +902,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26449,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26457,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-371 sealed Task quality index and dimension Dialog: actual original generator owner/root entries 26449 → 26457. Three new frontend production files and exact local quality-index helpers add eight entries. Full original rules, required ports, debts, public surfaces and mutation controls are preserved. One candidate growth only; retire after this matching canonical publication."
+      }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:6c9bcf68d1870290bc9b090ab9e55acfe743ee9ca39efda4a5576c6992fc5b1d",
+    "sourceDigest": "sha256:0977466754d7afd6b5ec3eb3ab718bd68596d60b1c9e1439a0a35d1c8869e977",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -920,8 +923,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "766138c5e371e4b6724458014cd8306878d086dd",
-    "contentDigest": "sha256:32526e6cfbe702fe9c04ea3d6f9713d10da49c825399e56d03841db9fd256d0b",
+    "currentSnapshotSha": "b6195a0cdc1b1c626483aef489e9e00eb6b917a3",
+    "contentDigest": "sha256:5c9288e60b561b08baa3a9841f601e9798d9c847a59d503c8e6f31dc3a844801",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

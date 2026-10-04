@@ -2,6 +2,7 @@ import { useTranslation } from 'react-i18next'
 import type { CompleteObservationMetrics } from '@agent-workflow/shared'
 import { NoticeBanner } from '@/components/NoticeBanner'
 import { OBSERVATION_TOKEN_BUCKETS, formatObservationCny } from './formatObservations'
+import { observationGapLabel } from './observationGapLabel'
 
 export function CompleteTokens({
   value,
@@ -58,7 +59,7 @@ export function CompleteMetrics({ value }: { value: CompleteObservationMetrics }
     return (
       <NoticeBanner tone="warning">
         {t('runObservability.reportNotReady')}
-        <p>{value.gaps.join(' · ')}</p>
+        <p>{value.gaps.map((reason) => observationGapLabel(reason, t)).join(' · ')}</p>
         <CompleteTokens value={value} />
         <p>
           {t('runObservability.cost')} · <CompleteCost value={value} />

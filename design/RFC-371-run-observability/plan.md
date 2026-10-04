@@ -536,3 +536,13 @@ SOURCE v2 的唯一 P2 已按实际事件顺序修正，完整 v3 独立功能�
 原官方 scoped census 在该 source SHA 上生成完整 13 产物，排除并保留他人 EmployeeCase/CI 在制源码；报告只读尝试和缺少 seed 增长的静态 FAIL 均保留。纯治理投影复用生成结果，仅登记五项实际增长：mutation 1826→1829、observed imports 5809→5814、exceptions 5167→5171、symbol owners 25932→26021、physical SQLite fixture 文件 319→320。原 scanner、规则、40 required SPI、304 debt、target 69、273 inbound/31 outbound、background 352、public 1056 与 ambient 501 不变。SOURCE digest `sha256:15e57a059a299e942017fa56f89c6a025ebb98955013158876b8246da9639a79`；129 原库存静态核对通过。增长回执需在匹配 canonical 提交后由正常后继提交退役。
 
 正式报告构建、分页缓存/接口、页面切换、native v2 的完整基线与原完成证明、100K Task/10M usage、真任务四桶/人民币和新 exact-SHA CI 仍待。既有正式链路的截断仍是待修缺陷，不能称为完整统计，也不能以本次底座 SOURCE 或旧真实任务回执替代新全量验收。CS 开发 producer 保持 OFF，两个 RFC 保持 In Progress。
+
+## 2026-10-04 RFC-371 缺口 Task 与维度明细接续
+
+原 Task EOF 完整事实报告保留真实任务数、状态和执行时间。新增由原 Task fold 缺口产生的同快照质量索引；实际原因可在统一 Dialog 中完整分页到原 Task，再打开任务并返回原列表页、滚动与焦点。运行时/实际模型/Agent/用途维度回包保持原受理名字、revision、协议和 provider/model；Task 全量用量与本维度贡献分别保持原资格。缺口报告的 Token 与人民币仍未知，不能伪称完整统计。旧没有索引的报告直接请求 quality-tasks 明确未就绪，不能虚构零任务。单页大小只控制传输，不控制总人口。
+
+DESIGN1 与 SOURCE18 v2 独立功能门 PASS，SOURCE16 三个 P2/FAIL 保留：关闭质量 Dialog 后保存真正触发按钮、单页质量列表避免重复分页操作、旧报告缺失索引拒绝直接 API。原有 facts UI 场景和预算保持；新增双 provider 202 Task、201 缺口任务逐页 EOF/父计数/旧缓存拒绝回归及双语最后行下钻返回。AW 本机只做精确格式/lint、纯 AST/JSON 和原官方静态登记；未运行 AW tests/typecheck/build/service，测试结果以新提交确切 SHA hosted CI 为准。
+
+原官方 census 固定 b6195a0cdc1b1c626483aef489e9e00eb6b917a3 加本片18路径，只生成一次13产物，排除并保留 native-page 和并行 snapshot 在制品。production2958（backend2141/frontend654/shared163）、owner/root26449→26457，九新增条目减一旧位置，净增8；只登记这一实际增长，匹配 canonical 发布后正常退役。原129库存按同一 AST 全部核对、原 canonical validator 与 provenance 摘要通过；原规则、40 required SPI、69 target edges、302债务全文/分类、公开面与 mutation 控制保持。sourceDigest sha256:0977466754d7afd6b5ec3eb3ab718bd68596d60b1c9e1439a0a35d1c8869e977。
+
+此段记录冻结候选与本地静态层级，尚不证明新提交 CI、正式页面/真实模型/人民币或完整原生采集。AW 普通/Windows/定时 CI、旧 E2E 与 doctor 超时、原 native owner 持久 ACK 装配/历史 caps、100K Task/10M usage 和 CS 部署继续，两个 RFC 保持 In Progress。

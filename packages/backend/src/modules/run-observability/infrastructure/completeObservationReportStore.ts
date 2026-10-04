@@ -17,6 +17,7 @@ import type { CompleteObservationReportCache } from '../ports/completeObservatio
 import {
   COMPLETE_OBSERVATION_FACT_SECTIONS,
   type CompleteObservationReportPage,
+  type CompleteObservationQuality,
 } from '@agent-workflow/shared'
 import { CompleteObservationError } from '../domain/completeObservationError'
 import {
@@ -32,6 +33,48 @@ import {
 import { stageCompleteReportPage, publishCompleteReport } from './completeObservationReportStage'
 
 export const completeReportLeaseKey = (id: string) => 'observation-report/' + id
+/** Older immutable reports must not fabricate an empty association index that was never sealed. */
+async function assertCompleteQualityTaskIndex(
+  tx: DatabaseTransaction,
+  id: string,
+  parent: string | null,
+) {
+  if (parent === null)
+    throw new CompleteObservationError('not-ready', 'Original quality reason is required')
+  const original = await tx
+    .select({ document: observationReportRows.document })
+    .from(observationReportRows)
+    .where(
+      and(
+        eq(observationReportRows.reportId, id),
+        eq(observationReportRows.section, 'quality'),
+        eq(observationReportRows.parent, ''),
+        eq(observationReportRows.key, parent),
+      ),
+    )
+    .get()
+  const quality = original ? (JSON.parse(original.document) as CompleteObservationQuality) : null
+  if (
+    !quality ||
+    quality.key !== parent ||
+    quality.taskIndexVersion !== 1 ||
+    !/^(0|[1-9]\d*)$/.test(quality.taskCount)
+  )
+    throw new CompleteObservationError('not-ready', 'Original quality Task index was not sealed')
+  const count = await tx
+    .select({ total: observationReportCounts.total })
+    .from(observationReportCounts)
+    .where(
+      and(
+        eq(observationReportCounts.reportId, id),
+        eq(observationReportCounts.section, 'quality-tasks'),
+        eq(observationReportCounts.parent, parent),
+      ),
+    )
+    .get()
+  if ((count?.total ?? '0') !== quality.taskCount)
+    throw new CompleteObservationError('not-ready', 'Original quality Task population changed')
+}
 export async function clearCompleteReportRows(tx: DatabaseTransaction, id: string) {
   for (const table of [
     observationReportPages,
@@ -212,6 +255,8 @@ export function completeObservationReportCache(
             'not-ready',
             'Original numeric evidence is incomplete; only sealed execution facts are available',
           )
+        if (query.section === 'quality-tasks')
+          await assertCompleteQualityTaskIndex(tx, report.id, query.parent)
         const scope = and(
           eq(observationReportRows.reportId, report.id),
           eq(observationReportRows.section, query.section),

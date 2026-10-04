@@ -5,11 +5,11 @@ import type {
   CompleteObservationDimensionTask,
   CompleteObservationTask,
   CompleteObservationTrend,
+  CompleteObservationQuality,
   ObservationOverviewQuery,
 } from '@agent-workflow/shared'
 import { completeObservationReportContent } from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
-import { Dialog } from '@/components/Dialog'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
 import { NoticeBanner } from '@/components/NoticeBanner'
@@ -19,6 +19,12 @@ import { useObservationReturn } from '@/hooks/useObservationReturn'
 import { CompleteCost, CompleteMetrics, CompleteTokens } from './CompleteObservationMetrics'
 import { CompleteObservationPage } from './CompleteObservationPager'
 import { CompleteTaskRows, CompleteDimensionRows } from './CompleteObservationTables'
+import { CompleteDimensionDetails } from './CompleteDimensionDetails'
+import {
+  CompleteObservationQuality as QualityCard,
+  CompleteQualityDetails,
+} from './CompleteObservationQuality'
+import { observationGapLabel } from './observationGapLabel'
 import { CompleteObservationTrend as Trend } from './CompleteObservationTrend'
 import {
   CompleteObservationCalls,
@@ -27,7 +33,6 @@ import {
   CompleteObservationStatuses,
   CompleteObservationCaptures,
   CompleteObservationAllocations,
-  CompleteObservationQuality,
   CompleteObservationCapabilities,
 } from './CompleteObservationDetails'
 import {
@@ -115,10 +120,15 @@ export function CompleteRunObservability({
   const [dimensions, setDimensions] = useState<
     ReadonlyMap<
       string,
-      {
-        report: ReadableObservationReport
-        row: CompleteObservationDimension
-      } | null
+      | (
+          | {
+              report: ReadableObservationReport
+              row: CompleteObservationDimension
+              kind: 'dimension'
+            }
+          | { report: ReadableObservationReport; row: CompleteObservationQuality; kind: 'quality' }
+        )
+      | null
     >
   >(() => new Map())
   const routeScope = search.task ?? ''
@@ -164,9 +174,10 @@ export function CompleteRunObservability({
   )
   const contributions = useCompleteObservationPage<CompleteObservationDimensionTask>(
     dimension?.report ?? null,
-    'dimension-tasks',
+    dimension?.kind === 'quality' ? 'quality-tasks' : 'dimension-tasks',
     dimension?.row.key ?? null,
     dimensionVisible,
+    dimension?.kind === 'quality' ? dimension.row.taskCount : undefined,
   )
   const trends = useCompleteObservationPage<CompleteObservationTrend>(
     mainReport,
@@ -181,6 +192,7 @@ export function CompleteRunObservability({
     taskRevision,
     dimension?.report.header.reportId ?? null,
     dimension?.row.key ?? null,
+    dimension?.kind ?? null,
   ])
   const sourceTask = dimension?.report.header.taskId === search.task ? undefined : search.task
   const saveReturn = useObservationReturn(
@@ -204,8 +216,14 @@ export function CompleteRunObservability({
   }
   const selectDimension = (row: CompleteObservationDimension, trigger: HTMLElement) => {
     dimensionTrigger.current = trigger
-    if (report) setDimension({ report, row })
+    if (report) setDimension({ report, row, kind: 'dimension' })
   }
+  const selectQuality = (row: CompleteObservationQuality, trigger: HTMLElement) => {
+    dimensionTrigger.current = trigger
+    if (report) setDimension({ report, row, kind: 'quality' })
+  }
+  const selectedDimensionKey = dimension?.kind === 'dimension' ? dimension.row.key : undefined
+  const selectedQualityKey = dimension?.kind === 'quality' ? dimension.row.key : undefined
   const parent = search.task ? JSON.stringify(['task-tree', search.task]) : null
   return (
     <div className="page" ref={pageRef} data-complete-observation>
@@ -286,11 +304,19 @@ export function CompleteRunObservability({
           </>
         )}
       {!current.error && current.data?.state === 'not-ready' && (
-        <NoticeBanner tone="warning" title={t('runObservability.reportNotReady')}>
+        <NoticeBanner
+          tone="warning"
+          title={t(
+            current.data.facts
+              ? 'runObservability.usageGapTitle'
+              : 'runObservability.reportNotReady',
+          )}
+        >
           <p>{t('runObservability.noIncompleteTotals')}</p>
+          {current.data.facts && <p>{t('runObservability.factsAvailable')}</p>}
           <ul>
             {current.data.gaps.map((gap) => (
-              <li key={gap}>{gap}</li>
+              <li key={gap}>{observationGapLabel(gap, t)}</li>
             ))}
           </ul>
         </NoticeBanner>
@@ -317,6 +343,14 @@ export function CompleteRunObservability({
             })}
           </p>
           <Summary report={report} />
+          {report.summary.metrics.state === 'not-ready' && (
+            <QualityCard
+              report={report}
+              onSelect={selectQuality}
+              selectedKey={selectedQualityKey}
+              triggerRef={dimensionTrigger}
+            />
+          )}
           {search.task ? (
             <>
               <Card title={t('runObservability.summary')}>
@@ -335,7 +369,7 @@ export function CompleteRunObservability({
                   section="agents"
                   title={t('runObservability.agents')}
                   onSelect={selectDimension}
-                  selectedKey={dimension?.row.key}
+                  selectedKey={selectedDimensionKey}
                   triggerRef={dimensionTrigger}
                 />
                 <DimensionCard
@@ -343,7 +377,7 @@ export function CompleteRunObservability({
                   section="runtimes"
                   title={t('runObservability.runtimes')}
                   onSelect={selectDimension}
-                  selectedKey={dimension?.row.key}
+                  selectedKey={selectedDimensionKey}
                   triggerRef={dimensionTrigger}
                 />
               </div>
@@ -352,7 +386,7 @@ export function CompleteRunObservability({
                 section="models"
                 title={t('runObservability.actualModel')}
                 onSelect={selectDimension}
-                selectedKey={dimension?.row.key}
+                selectedKey={selectedDimensionKey}
                 triggerRef={dimensionTrigger}
               />
               {report.summary.metrics.state !== 'not-ready' && (
@@ -407,7 +441,7 @@ export function CompleteRunObservability({
                 section="agents"
                 title={t('runObservability.agents')}
                 onSelect={selectDimension}
-                selectedKey={dimension?.row.key}
+                selectedKey={selectedDimensionKey}
                 triggerRef={dimensionTrigger}
               />
               <Card title={t('runObservability.timeline')}>
@@ -425,7 +459,7 @@ export function CompleteRunObservability({
                   section="runtimes"
                   title={t('runObservability.runtimes')}
                   onSelect={selectDimension}
-                  selectedKey={dimension?.row.key}
+                  selectedKey={selectedDimensionKey}
                   triggerRef={dimensionTrigger}
                 />
                 <DimensionCard
@@ -433,7 +467,7 @@ export function CompleteRunObservability({
                   section="models"
                   title={t('runObservability.actualModel')}
                   onSelect={selectDimension}
-                  selectedKey={dimension?.row.key}
+                  selectedKey={selectedDimensionKey}
                   triggerRef={dimensionTrigger}
                 />
               </div>
@@ -443,7 +477,7 @@ export function CompleteRunObservability({
                   section="purposes"
                   title={t('runObservability.purposes')}
                   onSelect={selectDimension}
-                  selectedKey={dimension?.row.key}
+                  selectedKey={selectedDimensionKey}
                   triggerRef={dimensionTrigger}
                 />
                 <DimensionCard
@@ -451,7 +485,7 @@ export function CompleteRunObservability({
                   section="sources"
                   title={t('runObservability.sources')}
                   onSelect={selectDimension}
-                  selectedKey={dimension?.row.key}
+                  selectedKey={selectedDimensionKey}
                   triggerRef={dimensionTrigger}
                 />
               </div>
@@ -469,28 +503,44 @@ export function CompleteRunObservability({
               <Card title={t('runObservability.timeline')}>
                 <CompleteObservationTimeline report={report} />
               </Card>
-              <CompleteObservationQuality report={report} />
+              {report.summary.metrics.state !== 'not-ready' && (
+                <QualityCard
+                  report={report}
+                  onSelect={selectQuality}
+                  selectedKey={selectedQualityKey}
+                  triggerRef={dimensionTrigger}
+                />
+              )}
               <CompleteObservationCapabilities />
             </>
           )}
         </div>
       )}
-      {dimensionVisible && dimension && (
-        <Dialog
-          open
-          onClose={() => setDimension(null)}
-          title={dimension.row.label ?? t('runObservability.contributions')}
-          size="lg"
-          triggerRef={dimensionTrigger}
-        >
-          <div className="stack--md" data-observation-contributions={dimension.row.key}>
-            <CompleteMetrics value={dimension.row.metrics} />
+      {dimensionVisible &&
+        dimension &&
+        (dimension.kind === 'quality' ? (
+          <CompleteQualityDetails
+            row={dimension.row}
+            onClose={() => setDimension(null)}
+            triggerRef={dimensionTrigger}
+            fallbackRef={pageRef}
+          >
             <CompleteObservationPage query={contributions}>
               {(rows) => <CompleteTaskRows rows={rows} onTask={onTask} />}
             </CompleteObservationPage>
-          </div>
-        </Dialog>
-      )}
+          </CompleteQualityDetails>
+        ) : (
+          <CompleteDimensionDetails
+            row={dimension.row}
+            onClose={() => setDimension(null)}
+            triggerRef={dimensionTrigger}
+            fallbackRef={pageRef}
+          >
+            <CompleteObservationPage query={contributions}>
+              {(rows) => <CompleteTaskRows rows={rows} onTask={onTask} />}
+            </CompleteObservationPage>
+          </CompleteDimensionDetails>
+        ))}
     </div>
   )
 }

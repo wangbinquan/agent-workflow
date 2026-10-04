@@ -4,7 +4,6 @@ import type {
   CompleteObservationAllocation,
   CompleteObservationAttempt,
   CompleteObservationInvocation,
-  CompleteObservationQuality as Quality,
   ObservationCaptureCommit,
   ObservationNativeRevisionResolution,
   ObservationTaskDetail,
@@ -287,35 +286,6 @@ export function CompleteObservationStatuses({ report }: { report: ReadableObserv
         </tbody>
       </table>
     </TableViewport>
-  )
-}
-
-export function CompleteObservationQuality({ report }: { report: ReadableObservationReport }) {
-  const { t, i18n } = useTranslation(),
-    query = useCompleteObservationPage<Quality>(report, 'quality')
-  return (
-    <Card title={t('runObservability.dataQuality')}>
-      <CompleteObservationPage query={query}>
-        {(rows) =>
-          rows.length ? (
-            <TableViewport label={t('runObservability.dataQuality')}>
-              <table className="data-table data-table--compact">
-                <tbody>
-                  {rows.map((row) => (
-                    <tr key={row.key}>
-                      <th scope="row">{row.key}</th>
-                      <td>{BigInt(row.taskCount).toLocaleString(i18n.language)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </TableViewport>
-          ) : (
-            <p className="muted">{t('runObservability.fullQualityClear')}</p>
-          )
-        }
-      </CompleteObservationPage>
-    </Card>
   )
 }
 

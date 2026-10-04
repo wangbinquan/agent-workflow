@@ -18,9 +18,11 @@ export interface CompletePageState<T> {
 export function CompleteObservationPage<T>({
   query,
   children,
+  hideSinglePageActions = false,
 }: {
   query: CompletePageState<T>
   children: (items: readonly T[]) => ReactNode
+  hideSinglePageActions?: boolean
 }) {
   const { t, i18n } = useTranslation()
   if (query.error) return <ErrorBanner error={query.error} onRetry={() => void query.refetch()} />
@@ -35,32 +37,34 @@ export function CompleteObservationPage<T>({
             page: query.page,
           })}
         </span>
-        <div className="action-row">
-          <button
-            className="btn btn--sm btn--ghost"
-            type="button"
-            disabled={query.page === 1}
-            onClick={query.first}
-          >
-            {t('runObservability.first')}
-          </button>
-          <button
-            className="btn btn--sm"
-            type="button"
-            disabled={query.page === 1}
-            onClick={query.previous}
-          >
-            {t('runObservability.previous')}
-          </button>
-          <button
-            className="btn btn--sm"
-            type="button"
-            disabled={query.data.nextCursor === null}
-            onClick={query.next}
-          >
-            {t('runObservability.next')}
-          </button>
-        </div>
+        {!hideSinglePageActions || query.page > 1 || query.data.nextCursor !== null ? (
+          <div className="action-row">
+            <button
+              className="btn btn--sm btn--ghost"
+              type="button"
+              disabled={query.page === 1}
+              onClick={query.first}
+            >
+              {t('runObservability.first')}
+            </button>
+            <button
+              className="btn btn--sm"
+              type="button"
+              disabled={query.page === 1}
+              onClick={query.previous}
+            >
+              {t('runObservability.previous')}
+            </button>
+            <button
+              className="btn btn--sm"
+              type="button"
+              disabled={query.data.nextCursor === null}
+              onClick={query.next}
+            >
+              {t('runObservability.next')}
+            </button>
+          </div>
+        ) : null}
       </div>
     </div>
   )

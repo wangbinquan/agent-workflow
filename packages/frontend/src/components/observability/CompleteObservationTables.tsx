@@ -10,6 +10,7 @@ import type {
 import { TableViewport } from '@/components/TableViewport'
 import { EmptyState } from '@/components/EmptyState'
 import { CompleteCost, CompleteTokens } from './CompleteObservationMetrics'
+import { completeDimensionName } from './CompleteDimensionDetails'
 import { formatObservationCny, OBSERVATION_TOKEN_BUCKETS } from './formatObservations'
 
 export function CompleteTaskRows({
@@ -93,17 +94,39 @@ export function CompleteDimensionRows({
                   type="button"
                   className="link link--button data-table__link"
                   data-observation-dimension={row.key}
+                  data-observation-runtime={row.kind === 'runtime' ? row.key : undefined}
+                  data-observation-model={row.kind === 'model' ? row.key : undefined}
+                  aria-label={
+                    row.kind === 'runtime'
+                      ? t('runObservability.runtimeView', { name: completeDimensionName(row, t) })
+                      : row.kind === 'model'
+                        ? t('runObservability.modelView', { name: completeDimensionName(row, t) })
+                        : undefined
+                  }
                   ref={(node) => {
                     if (node && row.key === selectedKey && triggerRef) triggerRef.current = node
                   }}
                   onClick={(event) => onSelect(row, event.currentTarget)}
                 >
-                  {row.kind === 'purpose'
-                    ? t('runObservability.purpose_' + row.label)
-                    : row.kind === 'source'
-                      ? t('runObservability.' + row.label)
-                      : (row.label ?? t('runObservability.unknown'))}
+                  {completeDimensionName(row, t)}
                 </button>
+                {row.selection.runtime && (
+                  <div className="muted">
+                    {row.selection.runtime.configurationRevision != null &&
+                      t('runObservability.revision', {
+                        revision: row.selection.runtime.configurationRevision,
+                      })}
+                    {row.selection.runtime.protocol && (
+                      <>
+                        {row.selection.runtime.configurationRevision != null ? ' · ' : ''}
+                        {row.selection.runtime.protocol}
+                      </>
+                    )}
+                  </div>
+                )}
+                {row.selection.model?.provider && (
+                  <div className="muted">{row.selection.model.provider}</div>
+                )}
                 {row.selection.agent?.revision != null && (
                   <div className="muted">
                     {t('runObservability.revision', { revision: row.selection.agent.revision })}

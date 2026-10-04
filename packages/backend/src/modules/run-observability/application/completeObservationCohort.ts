@@ -141,6 +141,9 @@ export async function buildCompleteObservationCohort(
     mergeCompleteObservationFold(fold, build.fold)
     statuses[task.status] = String(BigInt(statuses[task.status] ?? '0') + 1n)
     await input.rows.insert(space('task-summaries'), [{ key: task.id, document: build.summary }])
+    await input.rows.insert(space('task-quality'), [
+      { key: task.id, document: [...build.fold.gaps] },
+    ])
     await durations.add(build.summary)
     const day = date.format(task.startedAt),
       trend = (await trends.get(day)) ?? {
@@ -303,8 +306,13 @@ export async function buildCompleteObservationCohort(
     compare: (a, b) => b.task.startedAt - a.task.startedAt || b.task.id.localeCompare(a.task.id),
     signal: input.signal,
   })
-  for await (const task of taskOrder.records())
+  for await (const task of taskOrder.records()) {
     await output.append('tasks', null, task.task.id, task)
+    const reasons = await input.rows.get<readonly string[]>(space('task-quality'), task.task.id)
+    if (!reasons || new Set(reasons).size !== reasons.length)
+      throw new Error('Original Task quality membership missing or duplicated')
+    for (const reason of reasons) await output.append('quality-tasks', reason, task.task.id, task)
+  }
   const sections = {
     agent: 'agents',
     runtime: 'runtimes',
@@ -341,8 +349,15 @@ export async function buildCompleteObservationCohort(
     input.rows,
     space('quality'),
     input.signal,
-  ))
-    await output.append('quality', null, row.key, { key: row.key, taskCount: row.document })
+  )) {
+    if ((await output.count('quality-tasks', row.key)) !== row.document)
+      throw new Error('Original quality Task population changed')
+    await output.append('quality', null, row.key, {
+      key: row.key,
+      taskCount: row.document,
+      taskIndexVersion: 1,
+    })
+  }
   await output.flush()
   const metrics = completeObservationMetrics(fold)
   let rootTask: CompleteObservationTask | null = null

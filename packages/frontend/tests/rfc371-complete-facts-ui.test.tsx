@@ -10,6 +10,10 @@ import type {
   ObservationOverviewQuery,
 } from '@agent-workflow/shared'
 import { CompleteRunObservability } from '../src/components/observability/CompleteRunObservability'
+import {
+  CompleteObservationPage,
+  type CompletePageState,
+} from '../src/components/observability/CompleteObservationPager'
 import type { ObservationSearch } from '../src/components/observability/RunObservability'
 import { setBaseUrl, setToken } from '../src/stores/auth'
 import i18n from '../src/i18n'
@@ -39,7 +43,8 @@ const row = (id: string): CompleteObservationTask => ({
 type Facts = Extract<CompleteObservationReport, { state: 'not-ready' }> & {
   facts: NonNullable<Extract<CompleteObservationReport, { state: 'not-ready' }>['facts']>
 }
-function fixture() {
+function fixture(indexed = true, reason = metrics.gaps[0]!) {
+  const valueMetrics = { state: 'not-ready' as const, gaps: [reason] }
   const reports = new Map<string, Facts>(),
     requests: string[] = [],
     state = { damaged: false }
@@ -53,7 +58,7 @@ function fixture() {
         },
         id = crypto.randomUUID()
       const summary: CompleteObservationFactSummary = {
-        metrics,
+        metrics: valueMetrics,
         inventory: { tasks: body.taskId ? '1' : '202', attempts: '1', invocations: '1' },
         statuses: { done: body.taskId ? '1' : '202' },
         timing: { wallMs: '10', runningMs: '10', p50Ms: '10', p95Ms: '10', unknown: '0' },
@@ -62,7 +67,7 @@ function fixture() {
       const value: Facts = {
         state: 'not-ready',
         reportId: id,
-        gaps: metrics.gaps,
+        gaps: valueMetrics.gaps,
         facts: {
           header: {
             reportId: id,
@@ -79,6 +84,7 @@ function fixture() {
           summary,
           counts: {
             tasks: summary.inventory.tasks,
+            quality: '1',
             attempts: '1',
             invocations: '1',
             agents: '0',
@@ -115,10 +121,21 @@ function fixture() {
       )
     )
       throw new Error('Incomplete numeric collection requested')
-    const total = value.facts.counts[section as keyof typeof value.facts.counts] ?? '0'
+    const total =
+      section === 'quality-tasks'
+        ? value.facts.summary.inventory.tasks
+        : (value.facts.counts[section as keyof typeof value.facts.counts] ?? '0')
     let items: unknown[] = [],
       nextCursor: string | null = null
-    if (section === 'tasks') {
+    if (section === 'quality')
+      items = [
+        {
+          key: reason,
+          taskCount: value.facts.summary.inventory.tasks,
+          ...(indexed ? { taskIndexVersion: 1 } : {}),
+        },
+      ]
+    if (section === 'tasks' || section === 'quality-tasks') {
       items = Array.from({ length: Math.min(100, Number(total) - offset) }, (_, i) =>
         row(String(offset + i).padStart(4, '0')),
       )
@@ -229,4 +246,114 @@ test('a damaged retained page clears the sealed fact summary instead of keeping 
   await screen.findByText('retained-output-unverified')
   expect(screen.queryByRole('button', { name: '执行事实 0000' })).toBeNull()
   expect(document.querySelector('.observation-summary')).toBeNull()
+})
+
+// The original parent count covers all pages; Task drilling retains the quality disclosure and page.
+test.each(['zh', 'en'])(
+  'usage gaps explain available facts and preserve the last affected Task on return in %s',
+  async (language) => {
+    await i18n.changeLanguage(language)
+    const f = fixture()
+    const reason = i18n.t('runObservability.gap_native-capture-unobserved')
+    const trigger = await screen.findByRole('button', {
+      name: i18n.t('runObservability.viewGapTasks', { reason }),
+    })
+    expect(screen.getByText(i18n.t('runObservability.factsAvailable'))).toBeTruthy()
+    trigger.focus()
+    fireEvent.click(trigger)
+    let dialog = await screen.findByRole('dialog')
+    fireEvent.click(
+      await within(dialog).findByRole('button', { name: i18n.t('runObservability.next') }),
+    )
+    await within(dialog).findByRole('button', { name: '执行事实 0100' })
+    fireEvent.click(within(dialog).getByRole('button', { name: i18n.t('runObservability.next') }))
+    const last = await within(dialog).findByRole('button', { name: '执行事实 0201' })
+    last.focus()
+    fireEvent.click(last)
+    await screen.findByRole('heading', { level: 1, name: '执行事实 0201' })
+    fireEvent.click(
+      screen.getByRole('button', { name: '← ' + i18n.t('runObservability.backAnalysis') }),
+    )
+    dialog = await screen.findByRole('dialog')
+    expect(await within(dialog).findByRole('button', { name: '执行事实 0201' })).toBeTruthy()
+    expect(dialog.textContent).not.toContain('¥')
+    expect(
+      f.requests.some(
+        (path) => path.includes('section=quality-tasks') && path.includes('after=200'),
+      ),
+    ).toBe(true)
+    expect(within(dialog).queryByRole('button', { name: '执行事实 0000' })).toBeNull()
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement?.getAttribute('aria-label')).toBe(
+      i18n.t('runObservability.viewGapTasks', { reason }),
+    )
+  },
+)
+test('an older report has no fabricated affected-Task index and unknown original reasons stay readable', async () => {
+  fixture(false, 'original-new-runtime-gap')
+  await screen.findByRole('button', { name: '执行事实 0000' })
+  expect(screen.getAllByText('original-new-runtime-gap').length).toBeGreaterThan(0)
+  expect(screen.getByText(i18n.t('runObservability.gapIndexUnavailable'))).toBeTruthy()
+  expect(
+    screen.queryByRole('button', {
+      name: i18n.t('runObservability.viewGapTasks', { reason: 'original-new-runtime-gap' }),
+    }),
+  ).toBeNull()
+})
+
+test('mouse-opened quality disclosure closes back to its actual reason button', async () => {
+  fixture()
+  const reason = i18n.t('runObservability.gap_native-capture-unobserved')
+  const trigger = await screen.findByRole('button', {
+    name: i18n.t('runObservability.viewGapTasks', { reason }),
+  })
+  const other = screen.getByRole('button', { name: i18n.t('runObservability.refresh') })
+  other.focus()
+  // Mouse opening does not itself guarantee focus moves to the trigger in WebKit.
+  fireEvent.click(trigger)
+  const dialog = await screen.findByRole('dialog')
+  fireEvent.keyDown(dialog, { key: 'Escape' })
+  expect(screen.queryByRole('dialog')).toBeNull()
+  expect(document.activeElement).toBe(trigger)
+})
+
+test('compact quality actions only disappear for a true single page; later pages retain navigation', () => {
+  const first = vi.fn(),
+    previous = vi.fn(),
+    next = vi.fn()
+  const query: CompletePageState<unknown> = {
+    data: {
+      reportId: 'original-report',
+      section: 'quality',
+      parent: null,
+      items: [{ key: 'original-gap', taskCount: '201' }],
+      total: '1',
+      nextCursor: null,
+    },
+    error: null,
+    isPending: false,
+    isFetching: false,
+    page: 1,
+    first,
+    previous,
+    next,
+    refetch: async () => undefined,
+  }
+  const view = (value: CompletePageState<unknown>) => (
+    <CompleteObservationPage query={value} hideSinglePageActions>
+      {() => <span>Original reasons</span>}
+    </CompleteObservationPage>
+  )
+  const { rerender } = render(view(query))
+  expect(screen.queryByRole('button', { name: i18n.t('runObservability.next') })).toBeNull()
+  rerender(view({ ...query, data: { ...query.data!, total: '101', nextCursor: 'original-next' } }))
+  fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.next') }))
+  expect(next).toHaveBeenCalledTimes(1)
+  rerender(view({ ...query, page: 2, data: { ...query.data!, total: '101', nextCursor: null } }))
+  expect(screen.getByRole('button', { name: i18n.t('runObservability.next') })).toBeDisabled()
+  fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.previous') }))
+  fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.first') }))
+  expect(previous).toHaveBeenCalledTimes(1)
+  expect(first).toHaveBeenCalledTimes(1)
 })

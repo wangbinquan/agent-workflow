@@ -72,6 +72,7 @@ export function useCompleteObservationPage<T>(
   section: CompleteObservationSection,
   parent: string | null = null,
   enabled = true,
+  expectedTotal?: string,
 ) {
   const client = useQueryClient()
   const scope = JSON.stringify([report?.header.reportId, section, parent])
@@ -112,6 +113,7 @@ export function useCompleteObservationPage<T>(
           page.reportId !== report.header.reportId ||
           page.section !== section ||
           page.parent !== parent ||
+          (expectedTotal !== undefined && page.total !== expectedTotal) ||
           (parent === null && page.total !== (report.counts[section] ?? '0')) ||
           (page.nextCursor !== null && (page.nextCursor === after || page.items.length === 0))
         )

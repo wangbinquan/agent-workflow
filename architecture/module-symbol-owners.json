@@ -1,12 +1,12 @@
 {
   "denominator": {
     "backendFiles": 2141,
-    "frontendFiles": 651,
+    "frontendFiles": 654,
     "legacyFiles": 581,
     "moduleFiles": 1560,
-    "productionFiles": 2955,
+    "productionFiles": 2958,
     "sharedFiles": 163,
-    "symbolsIncludingFileRoots": 26449
+    "symbolsIncludingFileRoots": 26457
   },
   "entries": [
     {
@@ -111396,6 +111396,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStore.ts#assertCompleteQualityTaskIndex",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertCompleteQualityTaskIndex",
       "targetContext": "run-observability",
       "targetLayer": "infrastructure"
     },
@@ -234063,6 +234075,42 @@
       "currentContext": "frontend",
       "currentLayer": "components",
       "exported": false,
+      "file": "packages/frontend/src/components/observability/CompleteDimensionDetails.tsx",
+      "id": "owner:packages/frontend/src/components/observability/CompleteDimensionDetails.tsx#$file",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "$file",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": true,
+      "file": "packages/frontend/src/components/observability/CompleteDimensionDetails.tsx",
+      "id": "owner:packages/frontend/src/components/observability/CompleteDimensionDetails.tsx#CompleteDimensionDetails",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "CompleteDimensionDetails",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": true,
+      "file": "packages/frontend/src/components/observability/CompleteDimensionDetails.tsx",
+      "id": "owner:packages/frontend/src/components/observability/CompleteDimensionDetails.tsx#completeDimensionName",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "completeDimensionName",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": false,
       "file": "packages/frontend/src/components/observability/CompleteObservationDetails.tsx",
       "id": "owner:packages/frontend/src/components/observability/CompleteObservationDetails.tsx#$file",
       "removeAfterWave": null,
@@ -234128,18 +234176,6 @@
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "CompleteObservationCaptures",
-      "targetContext": "frontend",
-      "targetLayer": "components"
-    },
-    {
-      "currentContext": "frontend",
-      "currentLayer": "components",
-      "exported": true,
-      "file": "packages/frontend/src/components/observability/CompleteObservationDetails.tsx",
-      "id": "owner:packages/frontend/src/components/observability/CompleteObservationDetails.tsx#CompleteObservationQuality",
-      "removeAfterWave": null,
-      "status": "cross-package-contract",
-      "symbol": "CompleteObservationQuality",
       "targetContext": "frontend",
       "targetLayer": "components"
     },
@@ -234272,6 +234308,42 @@
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "CompletePageState",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": false,
+      "file": "packages/frontend/src/components/observability/CompleteObservationQuality.tsx",
+      "id": "owner:packages/frontend/src/components/observability/CompleteObservationQuality.tsx#$file",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "$file",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": true,
+      "file": "packages/frontend/src/components/observability/CompleteObservationQuality.tsx",
+      "id": "owner:packages/frontend/src/components/observability/CompleteObservationQuality.tsx#CompleteObservationQuality",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "CompleteObservationQuality",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": true,
+      "file": "packages/frontend/src/components/observability/CompleteObservationQuality.tsx",
+      "id": "owner:packages/frontend/src/components/observability/CompleteObservationQuality.tsx#CompleteQualityDetails",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "CompleteQualityDetails",
       "targetContext": "frontend",
       "targetLayer": "components"
     },
@@ -234716,6 +234788,30 @@
       "removeAfterWave": null,
       "status": "cross-package-contract",
       "symbol": "ObservationFilters",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": false,
+      "file": "packages/frontend/src/components/observability/observationGapLabel.ts",
+      "id": "owner:packages/frontend/src/components/observability/observationGapLabel.ts#$file",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "$file",
+      "targetContext": "frontend",
+      "targetLayer": "components"
+    },
+    {
+      "currentContext": "frontend",
+      "currentLayer": "components",
+      "exported": true,
+      "file": "packages/frontend/src/components/observability/observationGapLabel.ts",
+      "id": "owner:packages/frontend/src/components/observability/observationGapLabel.ts#observationGapLabel",
+      "removeAfterWave": null,
+      "status": "cross-package-contract",
+      "symbol": "observationGapLabel",
       "targetContext": "frontend",
       "targetLayer": "components"
     },
@@ -318123,5 +318219,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6c9bcf68d1870290bc9b090ab9e55acfe743ee9ca39efda4a5576c6992fc5b1d"
+  "sourceDigest": "sha256:0977466754d7afd6b5ec3eb3ab718bd68596d60b1c9e1439a0a35d1c8869e977"
 }

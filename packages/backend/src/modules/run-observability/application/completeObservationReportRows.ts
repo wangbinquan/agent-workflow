@@ -31,6 +31,13 @@ export function completeObservationReportRows(
   }
   return {
     namespace,
+    async count(section: CompleteObservationSection, parent: string | null) {
+      const identity = input.keyOf(JSON.stringify([section, parent]))
+      const value = await counts.get(identity)
+      if (value && (value.section !== section || value.parent !== parent))
+        throw new Error('Complete original output count identity changed')
+      return value?.total ?? '0'
+    },
     countsNamespace,
     flush,
     async append(

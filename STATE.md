@@ -1,3 +1,13 @@
+## 2026-10-04 RFC-371 缺口 Task 与维度明细接续
+
+原 Task EOF 完整事实报告保留真实任务数、状态和执行时间。新增由原 Task fold 缺口产生的同快照质量索引；实际原因可在统一 Dialog 中完整分页到原 Task，再打开任务并返回原列表页、滚动与焦点。运行时/实际模型/Agent/用途维度回包保持原受理名字、revision、协议和 provider/model；Task 全量用量与本维度贡献分别保持原资格。缺口报告的 Token 与人民币仍未知，不能伪称完整统计。旧没有索引的报告直接请求 quality-tasks 明确未就绪，不能虚构零任务。单页大小只控制传输，不控制总人口。
+
+DESIGN1 与 SOURCE18 v2 独立功能门 PASS，SOURCE16 三个 P2/FAIL 保留：关闭质量 Dialog 后保存真正触发按钮、单页质量列表避免重复分页操作、旧报告缺失索引拒绝直接 API。原有 facts UI 场景和预算保持；新增双 provider 202 Task、201 缺口任务逐页 EOF/父计数/旧缓存拒绝回归及双语最后行下钻返回。AW 本机只做精确格式/lint、纯 AST/JSON 和原官方静态登记；未运行 AW tests/typecheck/build/service，测试结果以新提交确切 SHA hosted CI 为准。
+
+原官方 census 固定 b6195a0cdc1b1c626483aef489e9e00eb6b917a3 加本片18路径，只生成一次13产物，排除并保留 native-page 和并行 snapshot 在制品。production2958（backend2141/frontend654/shared163）、owner/root26449→26457，九新增条目减一旧位置，净增8；只登记这一实际增长，匹配 canonical 发布后正常退役。原129库存按同一 AST 全部核对、原 canonical validator 与 provenance 摘要通过；原规则、40 required SPI、69 target edges、302债务全文/分类、公开面与 mutation 控制保持。sourceDigest sha256:0977466754d7afd6b5ec3eb3ab718bd68596d60b1c9e1439a0a35d1c8869e977。
+
+此段记录冻结候选与本地静态层级，尚不证明新提交 CI、正式页面/真实模型/人民币或完整原生采集。AW 普通/Windows/定时 CI、旧 E2E 与 doctor 超时、原 native owner 持久 ACK 装配/历史 caps、100K Task/10M usage 和 CS 部署继续，两个 RFC 保持 In Progress。
+
 ## R2：上传 CI 序列化错误计数说明
 
 META4首轮 5453d2fd946e26f1e0339e646df40de1d98468ab428617672543bae2a838c4a5 的数量文案P2/FAIL保留。上一记录的49属于宽字符串 `could not serialize access`：精确SSI `read/write dependencies among transactions` 为41行（原log4167至4331），另8行为 `concurrent update`（4114/4116/4118/4120/4122/4124/4126/4128），不是49条同一种错误，也不是重复诊断。源码、guard与原SOURCE3-META1 PASS不重开。
