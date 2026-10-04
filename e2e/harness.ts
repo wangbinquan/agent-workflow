@@ -276,7 +276,12 @@ function appendOutputTail(current: string, chunk: string): string {
 }
 
 function isPortCollisionError(error: unknown): boolean {
-  return error instanceof Error && /EADDRINUSE|address already in use/i.test(error.message)
+  return (
+    error instanceof Error &&
+    /EADDRINUSE|address already in use|Failed to start server\. Is port \d+ in use\?/i.test(
+      error.message,
+    )
+  )
 }
 
 /**

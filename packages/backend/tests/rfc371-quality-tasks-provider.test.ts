@@ -103,7 +103,7 @@ describeEachProvider('RFC-371 original gap Task index', (harness) => {
           (snapshot) =>
             composeCompleteObservationSnapshot({
               snapshot,
-              tasks: createCompleteTaskObservationFacts(snapshot.executor),
+              tasks: createCompleteTaskObservationFacts(snapshot.executor, report.request.taskId),
               report,
               spool,
               signal,
@@ -140,8 +140,9 @@ describeEachProvider('RFC-371 original gap Task index', (harness) => {
       for (const task of [original.id, expected[0]!]) {
         const accepted = await service.request(
           actor,
-          { from: COMPLETE_NOW, to: COMPLETE_NOW + 60000, timezone: 'UTC', task },
+          { from: COMPLETE_NOW, to: COMPLETE_NOW + 60000, timezone: 'UTC' },
           'original-gap-tasks',
+          task,
         )
         const independentId =
           accepted.state === 'ready' ? accepted.header.reportId : accepted.reportId
@@ -177,9 +178,11 @@ describeEachProvider('RFC-371 original gap Task index', (harness) => {
           expect(page.total).toBe(reason.taskCount)
           for (const row of page.items) {
             seen.push(row.task.id)
-            expect(row.metrics).toEqual(
-              independentMetrics.get(row.task.id === original.id ? original.id : expected[0]!),
+            const independent = independentMetrics.get(
+              row.task.id === original.id ? original.id : expected[0]!,
             )
+            if (!independent) throw new Error('Original independent Task metrics missing')
+            expect(row.metrics).toEqual(independent)
             expect(row.metrics).not.toHaveProperty('tokens')
             expect(row.metrics).not.toHaveProperty('cost')
           }

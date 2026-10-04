@@ -730,16 +730,15 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
         key: 'retained-model-step',
         document: spans.items[0]!,
       }
-      expect(completeReportFactRow(originalSpan, report.facts.summary.metrics.gaps)).toEqual(
-        originalSpan,
-      )
+      const originalGaps = report.facts.summary.metrics.gaps
+      expect(completeReportFactRow(originalSpan, originalGaps)).toEqual(originalSpan)
       expect(() =>
         completeReportFactRow(
           {
             ...originalSpan,
             document: { ...originalSpan.document, recordedUsage: trend.items[0]!.recordedUsage },
           },
-          report.facts.summary.metrics.gaps,
+          originalGaps,
         ),
       ).toThrow('recorded trend usage is not qualified')
       await expect(

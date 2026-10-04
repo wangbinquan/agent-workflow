@@ -97,6 +97,93 @@ afterEach(() => {
   }
 })
 
+// Exact385 visual run37206563345 failed with Bun's port-collision wording.
+// Exercise the existing three-attempt lifecycle and cleanup, without changing
+// any browser test's assertions or ready-time budget.
+describe('Bun port collision startup diagnostics', () => {
+  test('retries Bun port collision starts with fresh ports and removes the owned home', async () => {
+    const { root, homes, binary } = createFixture(`
+const fs = require('node:fs')
+const stateFile = process.env.HARNESS_ATTEMPT_FILE
+const portsFile = process.env.HARNESS_PORTS_FILE
+const attempt = fs.existsSync(stateFile) ? Number(fs.readFileSync(stateFile, 'utf8')) + 1 : 1
+fs.writeFileSync(stateFile, String(attempt))
+const port = process.argv.at(-1)
+fs.appendFileSync(portsFile, port + '\\n')
+if (attempt < 3) {
+  process.stderr.write('Failed to start server. Is port ' + port + ' in use?\\n')
+  process.exit(1)
+}
+process.stdout.write('agent-workflow ready — open this URL in your browser:\\n')
+process.stdout.write('  http://127.0.0.1:' + port + '/?token=ABC123\\n')
+process.on('SIGTERM', () => process.exit(0))
+setInterval(() => {}, 1_000)
+`)
+    const attemptFile = join(root, 'attempts.txt'),
+      portsFile = join(root, 'ports.txt')
+    let handle: DaemonHandle | undefined
+    try {
+      handle = await withHarnessTmp(homes, () =>
+        startDaemonForTest({
+          binary,
+          extraEnv: { HARNESS_ATTEMPT_FILE: attemptFile, HARNESS_PORTS_FILE: portsFile },
+        }),
+      )
+      expect(readFileSync(attemptFile, 'utf8')).toBe('3')
+      expect(readFileSync(portsFile, 'utf8').trim().split('\n')).toEqual([
+        '45000',
+        '45001',
+        '45002',
+      ])
+      expect(handle.baseUrl).toBe('http://127.0.0.1:45002')
+      expect(existsSync(handle.home)).toBe(true)
+      await handle.stop()
+      handle = undefined
+      expect(readdirSync(homes)).toEqual([])
+    } finally {
+      if (handle !== undefined) await handle.stop()
+    }
+  })
+
+  test('retains the last Bun collision after exactly three attempts and cleans the home', async () => {
+    const { root, homes, binary } = createFixture(`
+const fs = require('node:fs')
+const stateFile = process.env.HARNESS_ATTEMPT_FILE
+const attempt = fs.existsSync(stateFile) ? Number(fs.readFileSync(stateFile, 'utf8')) + 1 : 1
+fs.writeFileSync(stateFile, String(attempt))
+process.stderr.write('Failed to start server. Is port ' + process.argv.at(-1) + ' in use?\\n')
+process.exit(1)
+`)
+    const attemptFile = join(root, 'attempts.txt')
+    await expect(
+      withHarnessTmp(homes, () =>
+        startDaemonForTest({ binary, extraEnv: { HARNESS_ATTEMPT_FILE: attemptFile } }),
+      ),
+    ).rejects.toThrow('Failed to start server. Is port 45002 in use?')
+    expect(readFileSync(attemptFile, 'utf8')).toBe('3')
+    expect(readdirSync(homes)).toEqual([])
+  })
+
+  test('fails an unrelated server startup error once and cleans the home', async () => {
+    const { root, homes, binary } = createFixture(`
+const fs = require('node:fs')
+const stateFile = process.env.HARNESS_ATTEMPT_FILE
+const attempt = fs.existsSync(stateFile) ? Number(fs.readFileSync(stateFile, 'utf8')) + 1 : 1
+fs.writeFileSync(stateFile, String(attempt))
+process.stderr.write('Failed to start server. Invalid configuration\\n')
+process.exit(1)
+`)
+    const attemptFile = join(root, 'attempts.txt')
+    await expect(
+      withHarnessTmp(homes, () =>
+        startDaemonForTest({ binary, extraEnv: { HARNESS_ATTEMPT_FILE: attemptFile } }),
+      ),
+    ).rejects.toThrow('Failed to start server. Invalid configuration')
+    expect(readFileSync(attemptFile, 'utf8')).toBe('1')
+    expect(readdirSync(homes)).toEqual([])
+  })
+})
+
 describe('e2e harness startup lifecycle', () => {
   test('canonical administrator has a complete RFC-320 Git identity', () => {
     expect(harnessTestApi.e2eAdmin).toMatchObject({

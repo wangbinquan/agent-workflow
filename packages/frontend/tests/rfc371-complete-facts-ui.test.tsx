@@ -542,7 +542,7 @@ test.each(['zh', 'en'])(
       metrics.gaps[0]!,
       undefined,
       false,
-      { tab: 'overview' },
+      { from: NOW - 1000, to: NOW + 1, period: 'all', tab: 'overview' },
       trend,
       trend.recordedUsage,
       trend.metrics as CompleteObservationFactSummary['metrics'],
