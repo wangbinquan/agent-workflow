@@ -7,10 +7,10 @@
     "registeredFindings": 79
   },
   "canonicalProjection": {
-    "facadeManifest": "architecture/facades.json",
+    "sourceDigest": "sha256:3df159a4dc1ad7036b65be8092f4a904a3d26ca6e9dbbbad1a0f829e0445b66a",
     "importManifest": "architecture/cross-context-imports.json",
-    "ownerManifest": "architecture/module-symbol-owners.json",
-    "sourceDigest": "sha256:eac2cd19db5b87278b05ff2643cb0639a5b6009f0b10653f7227b25820684f84"
+    "facadeManifest": "architecture/facades.json",
+    "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "entries": [
     {
@@ -7119,13 +7119,6 @@
     }
   ],
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
-  "provenance": {
-    "contentDigest": "sha256:d734d2e63e2d174760c87f4e169dac2fed0e1d10252a59b62481e3a7b2284207",
-    "currentSnapshotSha": "5490f43927e816c70719ca26b0a6cf4e45853ff9",
-    "digestAlgorithm": "sha256",
-    "digestScope": "canonical-json-without-provenance",
-    "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154"
-  },
   "registeredFindings": [
     {
       "anchors": [
@@ -8303,5 +8296,12 @@
       "why": "2026-08-23 审计判定为 P3：形态真实但不产生用户可见的错误结果、授权错误或数据丢失，RFC-317 只登记不修。"
     }
   ],
-  "schemaVersion": 1
+  "schemaVersion": 1,
+  "provenance": {
+    "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
+    "currentSnapshotSha": "b905434e23f8dd670cccc6000ff8fe887a9c2805",
+    "contentDigest": "sha256:e77e64bde5b729b974eb0f888745765c4f4f958d79b6993ec3d599bb2c91f120",
+    "digestAlgorithm": "sha256",
+    "digestScope": "canonical-json-without-provenance"
+  }
 }

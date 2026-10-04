@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2156,
+    "backendFiles": 2159,
     "frontendFiles": 654,
     "legacyFiles": 582,
-    "moduleFiles": 1574,
-    "productionFiles": 2973,
+    "moduleFiles": 1577,
+    "productionFiles": 2976,
     "sharedFiles": 163,
-    "symbolsIncludingFileRoots": 26529
+    "symbolsIncludingFileRoots": 26535
   },
   "entries": [
     {
@@ -116899,6 +116899,30 @@
       "currentContext": "source-control",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/source-control/application/ports/repositoryWorkspaceReadQueries.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/ports/repositoryWorkspaceReadQueries.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/ports/repositoryWorkspaceReadQueries.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/ports/repositoryWorkspaceReadQueries.ts#RepositoryWorkspaceReadQueries",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RepositoryWorkspaceReadQueries",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/source-control/application/ports/scratchWorkspaceEffects.ts",
       "id": "owner:packages/backend/src/modules/source-control/application/ports/scratchWorkspaceEffects.ts#$file",
       "removeAfterWave": null,
@@ -118447,6 +118471,30 @@
       "currentContext": "source-control",
       "currentLayer": "composition",
       "exported": false,
+      "file": "packages/backend/src/modules/source-control/composition/repositoryWorkspaceReadQueries.ts",
+      "id": "owner:packages/backend/src/modules/source-control/composition/repositoryWorkspaceReadQueries.ts#$file",
+      "removeAfterWave": "W5",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/composition/repositoryWorkspaceReadQueries.ts",
+      "id": "owner:packages/backend/src/modules/source-control/composition/repositoryWorkspaceReadQueries.ts#selectRepositoryWorkspaceReadQueries",
+      "removeAfterWave": "W5",
+      "status": "current-module",
+      "symbol": "selectRepositoryWorkspaceReadQueries",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "composition",
+      "exported": false,
       "file": "packages/backend/src/modules/source-control/composition/workspaceMaintenance.ts",
       "id": "owner:packages/backend/src/modules/source-control/composition/workspaceMaintenance.ts#$file",
       "removeAfterWave": "W5",
@@ -119544,6 +119592,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createFileRepositoryPreviewIndexPort",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts#createFileRepositoryWorkspaceReadQueries",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileRepositoryWorkspaceReadQueries",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -319083,5 +319155,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eac2cd19db5b87278b05ff2643cb0639a5b6009f0b10653f7227b25820684f84"
+  "sourceDigest": "sha256:3df159a4dc1ad7036b65be8092f4a904a3d26ca6e9dbbbad1a0f829e0445b66a"
 }

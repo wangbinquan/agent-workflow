@@ -2,22 +2,28 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 504,
-    "architectureExceptions": 5406,
+    "architectureExceptions": 5411,
     "backgroundJobs": 359,
-    "crossContextImports": 6095,
+    "crossContextImports": 6106,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26529,
-    "mutationEntrypoints": 1867,
+    "moduleSymbolOwners": 26535,
+    "mutationEntrypoints": 1868,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1146,
+    "publicSurfaces": 1148,
     "transactionExternalEffects": 267
   },
   "metrics": {
     "ambientWiringEntries": 504,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2156,
+    "backendProductionFiles": 2159,
     "backendValueSccs": [
+      [
+        "packages/backend/src/modules/source-control/composition/repositoryWorkspaceReadQueries.ts",
+        "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
+        "packages/backend/src/modules/source-control/public/queries.ts",
+        "packages/backend/src/platform/workspace/local/isolation.ts"
+      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -110,7 +116,7 @@
       },
       {
         "context": "source-control",
-        "files": 84
+        "files": 87
       },
       {
         "context": "system-operations",
@@ -125,7 +131,7 @@
         "files": 367
       }
     ],
-    "moduleFiles": 1574,
+    "moduleFiles": 1577,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -140,6 +146,12 @@
     ],
     "outboundBoundaryEdges": 30,
     "repoValueSccs": [
+      [
+        "packages/backend/src/modules/source-control/composition/repositoryWorkspaceReadQueries.ts",
+        "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
+        "packages/backend/src/modules/source-control/public/queries.ts",
+        "packages/backend/src/platform/workspace/local/isolation.ts"
+      ],
       [
         "packages/backend/src/services/gitRepoCache.ts",
         "packages/backend/src/services/gitSubmodule.ts",
@@ -161,5 +173,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eac2cd19db5b87278b05ff2643cb0639a5b6009f0b10653f7227b25820684f84"
+  "sourceDigest": "sha256:3df159a4dc1ad7036b65be8092f4a904a3d26ca6e9dbbbad1a0f829e0445b66a"
 }

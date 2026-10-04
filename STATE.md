@@ -1,3 +1,9 @@
+## RFC-370 Task workspace reads 有限发布候选（2026-10-04）
+
+SOURCE15-DOC1 R2有限PASS `6810ac1409c1b961a61f019a55050c7f3da0d17b60b1ef503b699ec0dd322c52`，新测试两项首门P2保留并补正；双provider/三根接完整SC读切面，原diff/repair策略与14其它TS/W29保持。一次原scoped13清单已生成，entry+1/import+11/exception+5/public+2/owner+6，五增长匹配提交后退役；当前不宣称正式CI或完整A4/A-G/部署完成。详情见 design/RFC-370-crewstation-hosted-deployment/task-workspace-read-queries.md。
+
+`b905434e` Windows37193750893正式success；主CI37193533285仍待全套终态，Ubuntu前端3/3 job111410608298确定在`rfc371-run-observability.test.tsx:1120`失败（弹窗返回task-1预期，实际null）。5490主CI取消/Windows失败和全部旧证据保持。仅目标format/lint、源码/JSON及原scoped生成，无本机AW tests/typecheck/build/service；其它A切面继续，完整A-G后才CS adapter，M0先部署再逐项收编。
+
 ### 2026-10-04 RFC-370：提交／发布 Git 测试类型补正
 
 5490f43927e816c70719ca26b0a6cf4e45853ff9 的 Windows37192311608 正式 completed/failure：新增测试误读不存在的 cause 列及 Object.freeze 嵌套参数四处隐式 any。三份测试只改真实 rerunCause oracle 和完整合同参数类型；原测试名称、预算、断言、生产机制及 canonical 保持。纯 AST／擦除后代码证明与目标 format/lint 通过，有限独立功能检视及新 exact-SHA hosted CI 另行验收；旧失败不改写。见 design/RFC-370-crewstation-hosted-deployment/repository-publication-git-ci-repair.md。完整阶段 A／A-G、独立 CS adapters、M0 实际部署与 M1～M4 继续，未关闭 RFC。

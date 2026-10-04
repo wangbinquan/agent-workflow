@@ -1,8 +1,8 @@
 {
   "canonicalProjection": {
-    "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts",
+    "sourceDigest": "sha256:3df159a4dc1ad7036b65be8092f4a904a3d26ca6e9dbbbad1a0f829e0445b66a",
     "role": "supplementary-guard-registry",
-    "sourceDigest": "sha256:eac2cd19db5b87278b05ff2643cb0639a5b6009f0b10653f7227b25820684f84"
+    "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
   "guards": [
     {
@@ -942,16 +942,16 @@
       "runner": "bun"
     },
     {
-      "assertsAbsence": true,
-      "classified": true,
-      "corpusScanner": true,
-      "file": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts",
       "id": "rfc294-canonical-manifests",
-      "lines": 897,
+      "file": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts",
+      "runner": "bun",
       "mechanism": "ast",
+      "corpusScanner": true,
       "minCorpusFiles": 101,
+      "assertsAbsence": true,
       "negativeFixture": true,
-      "runner": "bun"
+      "classified": true,
+      "lines": 897
     },
     {
       "assertsAbsence": true,
@@ -2564,12 +2564,12 @@
     }
   ],
   "note": "RFC-317 守卫清单。三向钉死：①两向枚举（删守卫 / 改守卫名 / 加守卫不登记 ⇒ 红）；②扫语料型守卫（corpusScanner）的语料下限 minCorpusFiles——扫描根失效时「零违规」与「合规」同形，语料下限是唯一能把二者分开的断言；③断言「不存在」的守卫（assertsAbsence）必须有负 fixture（negativeFixture）——语料还在但 matcher 不咬了，违规集合同样回到空。只断言存在的守卫自带证明，不在 ③ 的管辖内。全部判据走 census.ts 单一实现，与生成本账本的实现逐字相同。",
+  "schemaVersion": 1,
   "provenance": {
-    "contentDigest": "sha256:1d51730daa661476c71f37efb72d91a1b44f8bb17562f5a49432601cfd950f50",
-    "currentSnapshotSha": "5490f43927e816c70719ca26b0a6cf4e45853ff9",
+    "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
+    "currentSnapshotSha": "b905434e23f8dd670cccc6000ff8fe887a9c2805",
+    "contentDigest": "sha256:6dbc980eaf3a566640363d3bb3b07685f8bb0e363a7f47cb4e4eb729a0928458",
     "digestAlgorithm": "sha256",
-    "digestScope": "canonical-json-without-provenance",
-    "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492"
-  },
-  "schemaVersion": 1
+    "digestScope": "canonical-json-without-provenance"
+  }
 }

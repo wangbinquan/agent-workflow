@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1137,
+    "consumers": 1149,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1334,
+    "methods": 1345,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 24449,
-    "symbols": 1146
+    "recursiveFields": 24509,
+    "symbols": 1148
   },
   "entries": [
     {
@@ -142007,6 +142007,591 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:209017b5b7135566abad",
+        "import:39c06bdb9c126958ae65",
+        "import:57b9afc8b4c4600ea2c2",
+        "import:7911f4f88bdcc7cab77c",
+        "import:9ebe1d12d488096c877a",
+        "import:a4c1dbcb8433dd44b4f2"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:exists.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:exists.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:exists.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:gitDiffSnapshot.$parameter:fromCommit",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:gitDiffSnapshot.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:gitDiffSnapshot.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:isGitWorkTree.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:isGitWorkTree.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:isGitWorkTree.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:209017b5b7135566abad",
+            "import:9ebe1d12d488096c877a"
+          ],
+          "fieldPath": "$method:isolationRoot.$parameter:input.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:isolationRoot.$parameter:input.persistedWorkspaceRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:isolationRoot.$parameter:input.persistedWorkspaceRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:209017b5b7135566abad"
+          ],
+          "fieldPath": "$method:isolationRoot.$parameter:input.storageRootRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:209017b5b7135566abad",
+            "import:39c06bdb9c126958ae65",
+            "import:57b9afc8b4c4600ea2c2",
+            "import:7911f4f88bdcc7cab77c",
+            "import:9ebe1d12d488096c877a",
+            "import:a4c1dbcb8433dd44b4f2"
+          ],
+          "fieldPath": "$method:isolationRoot.$parameter:input.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:isolationRoot.$return.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:isolationRoot.$return.$variant:1",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:worktreeDiff.$parameter:fromCommit",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:worktreeDiff.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:9ebe1d12d488096c877a"
+          ],
+          "fieldPath": "$method:worktreeDiff.$return.diff",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:9ebe1d12d488096c877a"
+          ],
+          "fieldPath": "$method:worktreeDiff.$return.truncated",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/queries.ts",
+      "id": "public:source-control:queries:RepositoryWorkspaceReadQueries",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:209017b5b7135566abad",
+            "import:39c06bdb9c126958ae65",
+            "import:57b9afc8b4c4600ea2c2",
+            "import:9ebe1d12d488096c877a"
+          ],
+          "name": "exists",
+          "signatureDigest": "sha256:8bdc57e427da19cee4eb24cd71e5bbc25bd92381dec8cfa4300a68c4197379af"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:9ebe1d12d488096c877a"
+          ],
+          "name": "gitDiffSnapshot",
+          "signatureDigest": "sha256:cc13eeeb3a4c276c22f01a6905009dc86c7c1cc96c877822163df14a730a577d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:209017b5b7135566abad",
+            "import:9ebe1d12d488096c877a"
+          ],
+          "name": "isGitWorkTree",
+          "signatureDigest": "sha256:8bff5fd40ff4275f6ed0f0c13ecd633b0ec48566c53e8eb08934274c57c3875a"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:209017b5b7135566abad"
+          ],
+          "name": "isolationRoot",
+          "signatureDigest": "sha256:bb87e50ccd70a1206248123b4fb8933a01251010ee67841bdbd7ef9639d01415"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:9ebe1d12d488096c877a"
+          ],
+          "name": "worktreeDiff",
+          "signatureDigest": "sha256:8f8da5c23f34d4bdfb23bc7552ea3faa8f946e16a6afcf851a7e5cdb0a07419c"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:209017b5b7135566abad",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:39c06bdb9c126958ae65",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:57b9afc8b4c4600ea2c2",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:7911f4f88bdcc7cab77c",
+          "file": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:9ebe1d12d488096c877a",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:a4c1dbcb8433dd44b4f2",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:queries:selectRepositoryWorkspaceReadQueries"
+      ],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:a1a65e7a1c38a06bfba604a36707f401e505f5f49e98a57c42cbc14123ff9d90",
+      "status": "target-context-current-surface",
+      "symbol": "RepositoryWorkspaceReadQueries",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 6,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 40,
+        "maxUnionVariants": 16
+      },
+      "consumerEdgeIds": [
+        "import:12dfecf44d1c49625eff",
+        "import:1bdf396a2f4a339e8143",
+        "import:2818c7992fd51aafd9de",
+        "import:9f33e99ba910c5c7081a",
+        "import:b7f59c9232ca24fc3ef8",
+        "import:c3cfaddd64e621a25244"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "queries",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:exists.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:exists.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:exists.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:gitDiffSnapshot.$parameter:fromCommit",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:gitDiffSnapshot.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:gitDiffSnapshot.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:isGitWorkTree.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:isGitWorkTree.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:isGitWorkTree.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:12dfecf44d1c49625eff",
+            "import:b7f59c9232ca24fc3ef8"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:isolationRoot.$parameter:input.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:isolationRoot.$parameter:input.persistedWorkspaceRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:isolationRoot.$parameter:input.persistedWorkspaceRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b7f59c9232ca24fc3ef8"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:isolationRoot.$parameter:input.storageRootRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:12dfecf44d1c49625eff",
+            "import:1bdf396a2f4a339e8143",
+            "import:2818c7992fd51aafd9de",
+            "import:9f33e99ba910c5c7081a",
+            "import:b7f59c9232ca24fc3ef8",
+            "import:c3cfaddd64e621a25244"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:isolationRoot.$parameter:input.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:isolationRoot.$return.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:isolationRoot.$return.$variant:1",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:worktreeDiff.$parameter:fromCommit",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:worktreeDiff.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:12dfecf44d1c49625eff"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:worktreeDiff.$return.diff",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:12dfecf44d1c49625eff"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:worktreeDiff.$return.truncated",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:exists.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:exists.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:exists.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:gitDiffSnapshot.$parameter:fromCommit",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:gitDiffSnapshot.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:gitDiffSnapshot.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:isGitWorkTree.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:isGitWorkTree.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:isGitWorkTree.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:12dfecf44d1c49625eff",
+            "import:b7f59c9232ca24fc3ef8"
+          ],
+          "fieldPath": "$call.$return.$method:isolationRoot.$parameter:input.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:isolationRoot.$parameter:input.persistedWorkspaceRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:isolationRoot.$parameter:input.persistedWorkspaceRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b7f59c9232ca24fc3ef8"
+          ],
+          "fieldPath": "$call.$return.$method:isolationRoot.$parameter:input.storageRootRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:12dfecf44d1c49625eff",
+            "import:1bdf396a2f4a339e8143",
+            "import:2818c7992fd51aafd9de",
+            "import:9f33e99ba910c5c7081a",
+            "import:b7f59c9232ca24fc3ef8",
+            "import:c3cfaddd64e621a25244"
+          ],
+          "fieldPath": "$call.$return.$method:isolationRoot.$parameter:input.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:isolationRoot.$return.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:isolationRoot.$return.$variant:1",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:worktreeDiff.$parameter:fromCommit",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:worktreeDiff.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:12dfecf44d1c49625eff"
+          ],
+          "fieldPath": "$call.$return.$method:worktreeDiff.$return.diff",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:12dfecf44d1c49625eff"
+          ],
+          "fieldPath": "$call.$return.$method:worktreeDiff.$return.truncated",
+          "type": "boolean"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/queries.ts",
+      "id": "public:source-control:queries:selectRepositoryWorkspaceReadQueries",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:721f6eb378b13d22f49b567949e88c7749edfb03d8c573a59702a3573cb5dc31"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:12dfecf44d1c49625eff",
+            "import:1bdf396a2f4a339e8143",
+            "import:9f33e99ba910c5c7081a",
+            "import:b7f59c9232ca24fc3ef8"
+          ],
+          "name": "exists",
+          "signatureDigest": "sha256:8bdc57e427da19cee4eb24cd71e5bbc25bd92381dec8cfa4300a68c4197379af"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:12dfecf44d1c49625eff"
+          ],
+          "name": "gitDiffSnapshot",
+          "signatureDigest": "sha256:cc13eeeb3a4c276c22f01a6905009dc86c7c1cc96c877822163df14a730a577d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:12dfecf44d1c49625eff",
+            "import:b7f59c9232ca24fc3ef8"
+          ],
+          "name": "isGitWorkTree",
+          "signatureDigest": "sha256:8bff5fd40ff4275f6ed0f0c13ecd633b0ec48566c53e8eb08934274c57c3875a"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:b7f59c9232ca24fc3ef8"
+          ],
+          "name": "isolationRoot",
+          "signatureDigest": "sha256:bb87e50ccd70a1206248123b4fb8933a01251010ee67841bdbd7ef9639d01415"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:12dfecf44d1c49625eff"
+          ],
+          "name": "worktreeDiff",
+          "signatureDigest": "sha256:8f8da5c23f34d4bdfb23bc7552ea3faa8f946e16a6afcf851a7e5cdb0a07419c"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/queries.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:12dfecf44d1c49625eff",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:1bdf396a2f4a339e8143",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:2818c7992fd51aafd9de",
+          "file": "packages/backend/src/modules/task-execution/composition/providerRuntime.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:9f33e99ba910c5c7081a",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:b7f59c9232ca24fc3ef8",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteRepairOperations.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:c3cfaddd64e621a25244",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:af4ddb5a155a1707dec96c3db8e5cfdb70e8c48472a302c38342d32979000966",
+      "status": "target-context-current-surface",
+      "symbol": "selectRepositoryWorkspaceReadQueries",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:5672dbaf6a562489e6e1",
         "import:618e0b89378e59d403d3",
         "import:7ecb49b551c66da55fa3",
@@ -142111,7 +142696,10 @@
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts#$file"
         }
       ],
-      "publicTypeConsumerIds": [],
+      "publicTypeConsumerIds": [
+        "public:source-control:queries:RepositoryWorkspaceReadQueries",
+        "public:source-control:queries:selectRepositoryWorkspaceReadQueries"
+      ],
       "removeAfterWave": null,
       "serialization": "wire",
       "signatureDigest": "sha256:3a71988122399d2f5534d37c2364283826fa2373028625f5435c72cf522d0331",
@@ -193018,7 +193606,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eac2cd19db5b87278b05ff2643cb0639a5b6009f0b10653f7227b25820684f84",
+  "sourceDigest": "sha256:3df159a4dc1ad7036b65be8092f4a904a3d26ca6e9dbbbad1a0f829e0445b66a",
   "targetContexts": [
     "collaboration",
     "development-automation",

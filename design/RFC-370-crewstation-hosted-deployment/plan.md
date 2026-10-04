@@ -899,3 +899,13 @@ mutation 总数 1862 保持，仅两项原 native owner/file 和原 classifier �
 准备脚本首轮传 provenance helper 的参数形状不符实际签名，原证据保留；R2 按其原对象签名恢复 origin/currentSnapshot，不改完整 payload、五项增长、原 why 或规则，不重跑已完成生成。最终 JSON／字节／原计数证明与有限 metadata gate 单独记录。仅做目标 format/lint 和纯静态证明，无本机 AW tests/typecheck/build/service。
 
 旧04a的正式主CI37187048069为completed/cancelled，34 success、14 failure、2 cancelled，Windows37187051255为success；两项test ledger失败已发布4fe2修正，另一个Windows前端wizard断言仍未归属，原失败不改为绿。原E2E入口加载问题由并行06c4修复；4fe2及本批新SHA正式CI分别继续。完整A1～A8/AC00/A-G、各层独立CS adapters、B/M0首先实际部署与M1～M4逐步收编继续，尚无AW-in-CS部署，不关闭RFC。
+
+### 2026-10-04 Task diff／review repair 完整读取切面的有限交付
+
+SOURCE15-DOC1 R2 有限独立 PASS `6810ac1409c1b961a61f019a55050c7f3da0d17b60b1ef503b699ec0dd322c52`；首门两项P2只在新增夹具，Response/Promise和frozen Proxy问题已经补正，其余14TS和原策略/W29规则字节保持。实际SC五方法完整query与独立native实现贯穿Task diff/repair、双provider及CLI/PG/classic HTTP根。新增真实Git/双provider回归保留ACK、opaque/frozen receiver、409/410、多仓顺序/readonly/空与字符串预算、最新wrapper代际和真实review/docVersion/audit；原断言与预算不放宽。
+
+原四条规则一次scoped canonical只读已提交`b905434e23f8dd670cccc6000ff8fe887a9c2805`加本批冻结16路径，6382个非自有TS取完整committed blob，排除观测的一个tracked及四个untracked TS在制文件；13份输出先生成于私有文件。sourceDigest `sha256:3df159a4dc1ad7036b65be8092f4a904a3d26ca6e9dbbbad1a0f829e0445b66a`。原完整JSON validator已通过。实际entry+1、import+11（17新增/6退役）、exception+5（11新增/6退役）、public+2、owner+6；129行顺序/原why、40 SPI/69 target/空SCC、原debt及effects不改。五项实际增长按原协议登记，匹配提交后另行退役。
+
+Git类型修复`b905434e23f8dd670cccc6000ff8fe887a9c2805`的Windows37193750893正式completed/success；主CI37193533285尚未全套终态，Ubuntu前端3/3的111410608298已确定失败，`rfc371-run-observability.test.tsx:1120`返回弹窗来源Task预期task-1但得到null；日志保留，不改原断言或以Windows替代主CI。更早5490的主CI取消与Windows失败保留。当前批次正式测试仍等待发布后新exact-SHA hosted CI。
+
+仅目标format/lint、纯源码/JSON和一次原scoped生成，无本机AW tests/typecheck/build/service。不关闭完整A4或A1～A8/AC00/A-G；delivery/conflict、DA/DE校验及执行/脚本/执行权恢复继续。其后各owner独立CS adapter，B/M0先实际部署，再逐项M1～M4。当前尚无AW-in-CS部署，不关闭RFC。

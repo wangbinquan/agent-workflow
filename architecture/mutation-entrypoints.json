@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1867,
+    "entries": 1868,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -24143,6 +24143,31 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts#createFileRepositoryWorkspaceReadQueries",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts#createFileRepositoryWorkspaceReadQueries",
+      "symbol": "createFileRepositoryWorkspaceReadQueries",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
         "fenceOrOcc": false,
         "transaction": false
@@ -44657,7 +44682,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:eac2cd19db5b87278b05ff2643cb0639a5b6009f0b10653f7227b25820684f84",
+  "sourceDigest": "sha256:3df159a4dc1ad7036b65be8092f4a904a3d26ca6e9dbbbad1a0f829e0445b66a",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {
@@ -46687,8 +46712,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#1869:tasks",
-        "line": 1869,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#1884:tasks",
+        "line": 1884,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#syncWorkflow",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
@@ -46703,8 +46728,8 @@
         "controlSubtype": "continuation-admission",
         "dataClass": "tasks",
         "file": "packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts",
-        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#2195:tasks",
-        "line": 2195,
+        "id": "task-authority:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#2210:tasks",
+        "line": 2210,
         "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskRouteOperations.ts#retryNodeProjection",
         "requiredBrandedProof": "CanonicalControlTransaction",
         "revisionPredicate": "task-lifecycle-revision-and-provider-transaction-cas",
