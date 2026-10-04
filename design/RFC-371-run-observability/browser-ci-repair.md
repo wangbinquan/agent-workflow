@@ -56,3 +56,13 @@ CS 同轮实际页面筛选单任务得到输入 5641、缓存读取 2240、缓�
 CS 最终部署继续，不以这些呈现夹具或有限页面核对宣称全部统计完成。
 
 后继 SOURCE5 v2 保留新增 P2-05／FAIL：新增双语 UT 两处 `exact:true` 不在实际 Testing Library `ByRoleOptions` 中。只删除这两项，名称和断言字节保持；SOURCE1 v3 有限 PASS，其余28项指纹保持，不重开原已闭合范围。正式检验仍以新提交的 hosted CI 为准。
+
+## 精确 hosted Windows 类型回归
+
+`adc59f98a453fa54806e7d89646b06c32a785380` 的 Windows run `37185341073` / job `111385979701`
+在原 Typecheck 步骤报告新增双语 UT 的 `TS2339`：Vitest `Assertion<HTMLElement>` 不声明
+`toHaveAttribute`。原 run 与错误 log 保留。仅将同一真实 tab 的 `aria-selected` 读取为
+`getAttribute`，用标准 `toBe('true')` 精确比较；角色、中文/英文名称、全部其他断言与
+等待预算不变。无生产源码和原 canonical payload 改动，不重复 AST census。有限 SOURCE1-v4
+复核及后继确切 SHA hosted CI 单独核对；当前已绿的视觉、证据 soak、git 协议与 OpenCode
+工作流不能代替剩余常规/Windows/定时或真实模型用量验收。

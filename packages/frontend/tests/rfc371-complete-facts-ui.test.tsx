@@ -297,10 +297,12 @@ test.each(['zh', 'en'])(
     await screen.findByRole('button', { name: '执行事实 0000' })
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(
-      screen.getByRole('tab', {
-        name: language === 'zh' ? '任务追踪' : 'Task traces',
-      }),
-    ).toHaveAttribute('aria-selected', 'true')
+      screen
+        .getByRole('tab', {
+          name: language === 'zh' ? '任务追踪' : 'Task traces',
+        })
+        .getAttribute('aria-selected'),
+    ).toBe('true')
     const selected = f.reportRequests.at(-1)!
     expect(selected.selection).toBe(
       JSON.stringify({

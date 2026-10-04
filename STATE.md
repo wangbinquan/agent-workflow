@@ -1,3 +1,7 @@
+## 2026-10-04 RFC-371 hosted Windows 断言类型修复
+
+观测浏览器恢复已精确发布为 adc59f98a453fa54806e7d89646b06c32a785380（21路径；SOURCE/META有限功能PASS，129原库存零增长）。该SHA视觉、证据soak、git协议与OpenCode集成已绿；Windows原类型检查在新增双语测试的toHaveAttribute报TS2339。只改同一实际tab的getAttribute与标准toBe，保持aria-selected=true、中英名称、全部原断言和等待预算；原失败保留，后继SOURCE1与新SHA CI继续，不以已绿子集关闭全仓/定时/规模/原native owner或CS部署。其余会话及下方历史全文保持。
+
 ## 2026-10-04 RFC-371 正式浏览器回归与实际模型任务入口
 
 正式报告协议已替代旧 E2E mock；保留全部原标题、120s/60s、双语、暗色窄屏、焦点／返回、四类Token与卡片间距断言，模型交集请求回原daemon。正式模型弹窗恢复“查看关联任务”，与原用途、时间、搜索、状态、仓库、工作流范围合并，原JSON字符串wire保持。新增双语前端回归。SOURCE5 v2唯一新增类型P2的FAIL保存；只删两处Testing Library不支持的exact，SOURCE1 v3有限PASS，其他28项及所有断言字节保持。
