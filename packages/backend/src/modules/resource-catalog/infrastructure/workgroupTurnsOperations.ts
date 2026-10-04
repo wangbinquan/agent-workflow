@@ -20,7 +20,7 @@ import type {
   WorkgroupTurnsOperations,
 } from '@/modules/task-execution/public/commands'
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { engineOf } from '@/platform/persistence/databaseTransaction'
+import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
 import {
   WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS,
   WORKGROUP_TURN_GATE_TRANSITIONS,
@@ -536,8 +536,7 @@ export function createWorkgroupTurnsPersistence(
     clarifyAllowed: (input: WorkgroupClarifyAllowedInput) =>
       dependencies.clarifyAskGate.allowed(input),
     async load(taskId: string): Promise<WorkgroupTurnsSnapshot | null> {
-      return await runResourceCatalogTransaction(
-        dependencies.db,
+      return await databaseSessionFor(dependencies.db).snapshotRead(
         async (transaction) =>
           await loadSnapshot(
             transaction,
