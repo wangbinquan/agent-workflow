@@ -846,8 +846,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6015,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6023,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 read snapshot and native isolation ownership: original generation projects nine added and one removed symbol import, net eight; twenty-one existing import records follow the actual source/consumer ownership. The original classifier and boundary rules remain unchanged."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -867,8 +870,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5347,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5354,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 read snapshot and native isolation ownership: the original geometry classifier projects eight added and one removed exception record, net seven, from the actual native/Task/domain import graph. No handwritten debt, expiry, boundary rule or exemption is added or expanded."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -881,8 +887,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1116,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1118,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 native isolation ownership: the unchanged relative-path mapper and legacy Task cleanup are offered through their exact owner public contracts. Both actual new public entries have two production consumers; old compatibility types, method budgets and required SPI remain unchanged."
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -902,15 +911,15 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26457,
+      "baseline": 26461,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-371 sealed Task quality index and dimension Dialog: actual original generator owner/root entries 26449 → 26457. Three new frontend production files and exact local quality-index helpers add eight entries. Full original rules, required ports, debts, public surfaces and mutation controls are preserved. One candidate growth only; retire after this matching canonical publication."
+        "why": "RFC-370 native isolation ownership: original generation adds forty-three and removes thirty-nine top-level owner entries, net four. Thirty-seven complete native declarations, the physical cleanup loop, original Task observer shell and pure relative-path mapper retain their approved AST/byte equivalence. The preceding RFC-371 26449 to 26457 growth was consumed by committed 2f7c3b672 and is retired here; this new four-entry permit is retired in the matching normal successor."
       }
     }
   ],
   "canonicalProjection": {
-    "sourceDigest": "sha256:0977466754d7afd6b5ec3eb3ab718bd68596d60b1c9e1439a0a35d1c8869e977",
+    "sourceDigest": "sha256:66842743a7d98d3224d4858c5bf0772f5cc0480a2bc5b8498f525a21f01aa607",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -923,8 +932,8 @@
   },
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b6195a0cdc1b1c626483aef489e9e00eb6b917a3",
-    "contentDigest": "sha256:5c9288e60b561b08baa3a9841f601e9798d9c847a59d503c8e6f31dc3a844801",
+    "currentSnapshotSha": "2f7c3b672dd8007849348bffe05a95fef7703457",
+    "contentDigest": "sha256:9d47cc368aeb5f886f8e011e2414fc02701679fb87b978ec56b3da3a109c1939",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

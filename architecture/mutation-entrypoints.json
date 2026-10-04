@@ -37357,6 +37357,52 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/workspace/local/isolation.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/workspace/local/isolation.ts#createNodeIso",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/workspace/local/isolation.ts#createNodeIso",
+      "symbol": "createNodeIso",
+      "targetContext": "platform",
+      "targetLayer": "workspace"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/workspace/local/isolation.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/workspace/local/isolation.ts#publishSubmoduleHeads",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/workspace/local/isolation.ts#publishSubmoduleHeads",
+      "symbol": "publishSubmoduleHeads",
+      "targetContext": "platform",
+      "targetLayer": "workspace"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
@@ -39423,52 +39469,6 @@
       "symbol": "upsertProbe",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": false,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/nodeIsolation.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/nodeIsolation.ts#createNodeIso",
-      "missingControls": [
-        "audit",
-        "authority",
-        "event",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/nodeIsolation.ts#createNodeIso",
-      "symbol": "createNodeIso",
-      "targetContext": "platform",
-      "targetLayer": "application"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": false,
-        "transaction": false
-      },
-      "file": "packages/backend/src/services/nodeIsolation.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/services/nodeIsolation.ts#publishSubmoduleHeads",
-      "missingControls": [
-        "audit",
-        "authority",
-        "fenceOrOcc",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/services/nodeIsolation.ts#publishSubmoduleHeads",
-      "symbol": "publishSubmoduleHeads",
-      "targetContext": "platform",
-      "targetLayer": "application"
     },
     {
       "controls": {
@@ -44533,7 +44533,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0977466754d7afd6b5ec3eb3ab718bd68596d60b1c9e1439a0a35d1c8869e977",
+  "sourceDigest": "sha256:66842743a7d98d3224d4858c5bf0772f5cc0480a2bc5b8498f525a21f01aa607",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

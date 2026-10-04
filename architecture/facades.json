@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 298,
-    "thinFacades": 54
+    "thinFacades": 55
   },
   "entries": [
     {
@@ -2295,46 +2295,21 @@
         "import:a002f594de8bd04927da",
         "import:a1c45b85348209ab1b7e",
         "import:b310eac7455e6a398ccd",
-        "import:b91a71d1670ec6593643",
         "import:bc9c83d4447de5b4cd7f",
         "import:c60f083cae677598aa75",
         "import:cbefb72a6c305a93b27d",
+        "import:cdd0ac2ed60a43322dbe",
         "import:d32f91a08e32ffc87ac6",
         "import:d99812d7a0c0f90e0ed1",
         "import:ed7dfa7c029ca1077bb8",
         "import:fc4c03f688f30d553f96"
       ],
-      "exportedSymbols": [
-        "CanonRepo",
-        "CanonicalWorktreeMissingError",
-        "DiscardLock",
-        "ISO_DISCARD_GIT_TIMEOUT_MS",
-        "IsoHandle",
-        "IsoRepo",
-        "IsoWorkspaceBlockedError",
-        "IsoWorkspaceKeyChoice",
-        "MAX_ISO_KEY_GENERATIONS",
-        "MergeAgentChildUnreapedError",
-        "MergeBackConflict",
-        "MergeBackResult",
-        "ResolveConflictOutcome",
-        "chooseIsoWorkspaceKey",
-        "completeHumanResolvedConflict",
-        "createNodeIso",
-        "discardNodeIso",
-        "isoKeyOf",
-        "isoWorktreePathFor",
-        "mergeBackNodeIso",
-        "rebuildIsoHandle",
-        "resolveConflictWithAgent",
-        "snapshotNodeIsoFinal",
-        "undoPriorShardDeltaInIso"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/nodeIsolation.ts",
       "id": "facade:packages/backend/src/services/nodeIsolation.ts",
       "ownerEntryId": "owner:packages/backend/src/services/nodeIsolation.ts#$file",
       "removeAfterWave": "W9",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -6370,5 +6345,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0977466754d7afd6b5ec3eb3ab718bd68596d60b1c9e1439a0a35d1c8869e977"
+  "sourceDigest": "sha256:66842743a7d98d3224d4858c5bf0772f5cc0480a2bc5b8498f525a21f01aa607"
 }

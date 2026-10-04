@@ -714,3 +714,18 @@ SOURCE24 独立功能门有限 PASS，指纹 `daca3967932cf720464fa9c03cae806eca
 META4首轮 5453d2fd946e26f1e0339e646df40de1d98468ab428617672543bae2a838c4a5 的数量文案P2/FAIL保留。上一记录的49属于宽字符串 `could not serialize access`：精确SSI `read/write dependencies among transactions` 为41行（原log4167至4331），另8行为 `concurrent update`（4114/4116/4118/4120/4122/4124/4126/4128），不是49条同一种错误，也不是重复诊断。源码、guard与原SOURCE3-META1 PASS不重开。
 
 这些原服务端记录只证明工作组该时段存在两类序列化冲突，末两UPDATE没有参数且时间晚于首个失败输出，不能唯一映射B/C最终失败。原failed member与全测试诊断仍保留，不将读取snapshot修复当作已经解决全部写问题。a752五路径发布回执和旧WindowsFAIL/maintenancePASS已独立确认；正式新CI、完整A-G/RFC及部署仍开放。原四文档全部全文和首轮失败文字保持，只以此段限定数量与证据范围。
+
+
+### 2026-10-04 RFC-370：只读快照与隔离原生所有权拆分
+
+Resource Catalog 的 Workgroup load 改为既有 DatabaseSession.snapshotRead：PG 使用 REPEATABLE READ READ ONLY，SQLite 与嵌套事务仍走原实现；commit、SQL/CAS、原十次 SERIALIZABLE 写入重试和 full jitter 保持。新六用例使用 branded PG 协议夹具核真实生产调用、同一 transaction、held completion ACK、嵌套 frame 和原拒绝；不把此夹具当作本机真实 PG。SOURCE2 首轮 Bun matcher 泛型 P2/FAIL 保留，只补 expect<unknown> 后 R2 有限 PASS 96d12b4cb1e9d070488dfbe4658a36efcaa323e67c8188d8e329138a704f538c。
+
+隔离工作区本批只完成 native 所有权拆分：37 份完整声明及错误 identity 保留，原 Git/worktree/submodule/ref 机制迁入 platform/workspace/local/isolation；discard 的原 Task observer shell 归 TE infrastructure，pure repoRelForcedPaths 归 SC domain，旧 service 准确转导。原请求/hash/真实行 id、beforeAct 在 try 外、物理 loop、同步 partialFailures 和 settle ACK 保持。SOURCE13 首轮重复 passthrough 检查 P2/FAIL 保留；删除 raw helper 的重复 guard，并新增真实 Git 一次 getter 的回归。R2 有限 PASS 4c496e4c1e00b681190379bbf955dd498b10c43419d706594efc93d3e65c3bc3，其余十一 owned 字节保持。旧四项源码 oracle 只跟随真实 owner；全部原名称/预算/断言保持，C2 按实际薄 facade 增加 nodeIsolation。完整 14-method selected scope 及实际消费者接线仍在下一批，六个新 scope/helper/fixture WIP 不纳入本次发布。
+
+原官方 census 在已提交 2f7c3b672dd8007849348bffe05a95fef7703457 加这十五个冻结 source/test 上只成功执行一次；非 owned tracked 源码与四条原规则读取该提交 blobs，非 owned untracked 排除，全部并行 WIP 保留。sourceDigest sha256:66842743a7d98d3224d4858c5bf0772f5cc0480a2bc5b8498f525a21f01aa607。129 项原库存按原计数函数一致；导入 6015→6023、分类记录 5347→5354、公共符号 1116→1118、符号归属 26457→26461，四项实际增长登记并在 matching canonical 的正常后继退役。按并行 owner 明确交接，2f7 已消费的 RFC-371 owner 26449→26457 一次许可在本次清单中退役，旧 why/回执与已提交完整内容保持在原历史及生成前快照；不把旧许可复用为新四项许可。
+
+mutation 总数 1862 保持，仅两项原 native owner/file 和原 classifier 得到的 targetLayer application→workspace 迁位；原 payload 逆投影后完整一致。原 effect ledger 只有 cleanup owner/file/line/id 迁位并按原排序生成，整份逆投影恢复。两项新增 public 各有两个实际生产消费者，无新零消费者债；原 302 debt 条款/why/退役条件、40 required SPI、69 target edges、空 implementation SCC 与全部原规则保持。C2 guard 895→896、nodeIsolation 薄 facade 和其真实 consumer 投影按源码更新。首私有 metadata proof 遗漏真实 targetLayer 投影的 incomplete 保留，R2 仅补该投影证明，没有重复 census 或改写任何 canonical 判据。
+
+旧上传 SHA 2c474db9 的主 CI37168434612 completed/failure（35 success/14 failure/1 cancelled），Windows37168434657 failure、maintenance37168434632 success；类型补正 a7522bbe 主 CI37170055509 cancelled（37 success/11 failure/2 cancelled），精确手动 Windows37170515895 success 1/1。架构 oracle 补正 b6195a0c 主 CI37171176047 已 completed/failure（43 success/7 failure），后端全部分片及类型/lint 通过，六项页面 E2E 与 required 失败。Ubuntu1 job111344566543 和 Windows3 job111345229706 的原日志核到 RFC-371 观测页面/下钻/捕获断言；其余四份页面日志未逐字核对，不宣称旧整套 CI 通过。并行 owner 已提交其 2f7 修复；本批新源码和原 Git 回归仍交本次发布的 exact-SHA hosted CI。
+
+本机只做 owned format/lint、纯 AST/byte/JSON/原库存投影与一次原 scoped 生成，没有 AW 本机 tests/typecheck/build/service。新行为尚待托管 CI；完整 A1–A8/AC00/A-G 持续，随后各层独立 CS adapters，B/M0 先实际部署再 M1–M4。当前仍无 AW-in-CS 部署，不关闭 RFC。全部旧文档、并行输出、失败与取消历史完整保留。

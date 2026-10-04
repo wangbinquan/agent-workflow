@@ -3272,7 +3272,7 @@
   "finalCriterion": "Every transaction callback is inventoried; external effects are emitted only after a committed intent and the risky subset may only shrink.",
   "kind": "transaction-external-effects",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0977466754d7afd6b5ec3eb3ab718bd68596d60b1c9e1439a0a35d1c8869e977",
+  "sourceDigest": "sha256:66842743a7d98d3224d4858c5bf0772f5cc0480a2bc5b8498f525a21f01aa607",
   "taskExecutionEffectLedger": {
     "codeHostBindings": [
       {
@@ -4274,6 +4274,24 @@
       {
         "attemptPolicy": "per-act",
         "auditRetention": "effect-attempt-watermark-and-decision",
+        "effectKind": "workspace-cleanup",
+        "file": "packages/backend/src/modules/task-execution/infrastructure/isolationCleanup.ts",
+        "generationPolicy": "intent-or-node-generation",
+        "id": "task-effect:packages/backend/src/modules/task-execution/infrastructure/isolationCleanup.ts#22:workspace-cleanup",
+        "journaledBy": "createLocalEffectAttemptObserver",
+        "line": 22,
+        "operationFamily": "lineage-slot-stable-action",
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/isolationCleanup.ts#discardNodeIso",
+        "recoveryClass": "local-probe-or-actor",
+        "recoveryProbeOrActorReplay": "local-probe-or-actor-next-generation",
+        "resourceKeySetResolver": "explicit-multi-resource-set",
+        "responseClassifier": "applied-or-ambiguous-throw",
+        "symbol": "discardNodeIso",
+        "transportRetryPolicy": "caller-explicit-only"
+      },
+      {
+        "attemptPolicy": "per-act",
+        "auditRetention": "effect-attempt-watermark-and-decision",
         "effectKind": "workspace-rollback",
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRollbackPersistence.ts",
         "generationPolicy": "intent-or-node-generation",
@@ -4341,24 +4359,6 @@
         "resourceKeySetResolver": "explicit-multi-resource-set",
         "responseClassifier": "applied-or-ambiguous-throw",
         "symbol": "createIsoUnderLock",
-        "transportRetryPolicy": "caller-explicit-only"
-      },
-      {
-        "attemptPolicy": "per-act",
-        "auditRetention": "effect-attempt-watermark-and-decision",
-        "effectKind": "workspace-cleanup",
-        "file": "packages/backend/src/services/nodeIsolation.ts",
-        "generationPolicy": "intent-or-node-generation",
-        "id": "task-effect:packages/backend/src/services/nodeIsolation.ts#1509:workspace-cleanup",
-        "journaledBy": "createLocalEffectAttemptObserver",
-        "line": 1509,
-        "operationFamily": "lineage-slot-stable-action",
-        "ownerEntryId": "owner:packages/backend/src/services/nodeIsolation.ts#discardNodeIso",
-        "recoveryClass": "local-probe-or-actor",
-        "recoveryProbeOrActorReplay": "local-probe-or-actor-next-generation",
-        "resourceKeySetResolver": "explicit-multi-resource-set",
-        "responseClassifier": "applied-or-ambiguous-throw",
-        "symbol": "discardNodeIso",
         "transportRetryPolicy": "caller-explicit-only"
       },
       {
