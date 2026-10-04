@@ -1,5 +1,12 @@
 ## 2026-10-04 RFC-370 冲突／action workspace 有限源码与匹配清单
 
+## 2026-10-04 RFC-371 已收到用量与泳道 CI 回归修复
+
+`a457563d` 已发布6路径有限CI修复，37续页／202 Task／201缺调用人口及真正独立Task参数均保留，Bun端口碰撞走原三次生命周期重试；exact视觉37209908908已正式success，普通CI及旧385各工作流失败／取消各自留证。新增有限后继恢复既有跨任务Agent中英标题、质量原原因行异步等待、缺1原记录仍保留原4条CNY0.0005／4定价人口，并分别严格拒绝用量／费用人口错配；原完整tokens／cost未知、所有原断言与预算保持。实际原daemon的Agent贡献→真实并行Task→返回原弹窗→Escape维度焦点已验收，原真实E2E限定已存在的dimension按钮身份以避开执行列表同名按钮。
+
+SOURCE5及其2增量SOURCE6均有限PASS，33冻结项稳定；无本机AW tests/typecheck/build/service。唯一生产TS变化是现有标签替换，符号／imports无变化； matching canonical 使用5d4207完整committed provider与原官方生成器，129库存／300债务／原规则及并行许可why保持，不收编下一批源文件。完整JSON资格、有限metadata及新exact-SHA CI另留证，不能将本片当成两个RFC或native durable owner／100K Task／10M usage已关闭。
+
+
 SOURCE32-R2 独立有限 PASS `b8564115bf0e735d9582022fd878ed6fccf4e2d1c9df2271786dfb1264f6657f`，32 owned／14 controls／31 evidence 首末一致。完整 SC conflict七方法、DA action六机制及contents、三根九绑定和持久创建owner回收接线已写；真实Git、双provider Mission／DE Case及HTTP回归保留旧断言与预算。SOURCE30五项P2/FAIL原回执保留，默认hook一次／discard零读取、DE唯一活动轮和两个旧owner oracle已修正。
 
 共享main已与远端同步在43808355，完整包含并行RFC-371已记录用量／泳道修复和其增长许可正常退役。旧317977生成及写入前停止的准备历史保持；同一冻结31TS与438083完整committed基线只投影一次，6381非自有TS取blob，所有Candidate下一批和并行native owner／CI在制品排除并保留。sourceDigest `sha256:4d8762a0c70953202b0baf6db646da740c7064a36448d05b79cf0a541adf44ce`；原完整JSON validator通过，13 canonical实际entry+2/import+11/exception+9/public+1/owner+24按原129库存／why及四规则登记，matching有限metadata门、发布、五许可正常退役和新exact-SHA hosted CI另留证。原40 SPI／69 targets／空SCC、300债务和effects保持。

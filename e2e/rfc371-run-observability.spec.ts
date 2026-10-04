@@ -528,7 +528,10 @@ test('task, agents and attempt drill-down use real observations and standard car
   await expect(
     page.getByRole('heading', { name: 'Agents across tasks', exact: true }),
   ).toBeVisible()
-  await page.getByRole('button', { name: agents[0]!.name, exact: true }).click()
+  await page
+    .getByRole('button', { name: agents[0]!.name, exact: true })
+    .and(page.locator('[data-observation-dimension]'))
+    .click()
   const agentDialog = page.getByRole('dialog', { name: agents[0]!.name, exact: true })
   await expect(
     agentDialog.getByRole('heading', { name: 'Task contributions', exact: true }),

@@ -452,7 +452,7 @@ export function CompleteRunObservability({
               <DimensionCard
                 report={report}
                 section="agents"
-                title={t('runObservability.agents')}
+                title={t('runObservability.crossTaskAgents')}
                 onSelect={selectDimension}
                 selectedKey={selectedDimensionKey}
                 triggerRef={dimensionTrigger}

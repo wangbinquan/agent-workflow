@@ -866,7 +866,9 @@ test('recorded trend qualification keeps unknown buckets unknown and rejects fab
     { ...summary.inventory, numericRecords: '2' },
   ])
     expect(() => completeReportFactSummary({ ...summary, inventory })).toThrow(
-      'recorded summary usage is not qualified',
+      inventory.numericRecords !== summary.inventory.numericRecords
+        ? 'recorded summary cost is not qualified'
+        : 'recorded summary usage is not qualified',
     )
   const partial = emptyCompleteObservationFold('1')
   addCompleteObservationAllocation(

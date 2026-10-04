@@ -83,6 +83,8 @@ describeEachProvider('RFC-371 complete original Task statistics', (harness) => {
     expect(result.summary.metrics).toEqual({
       state: 'not-ready',
       gaps: ['native-capture-records-missing'],
+      costCoverage: { records: '4', pricedRecords: '4', visibility: 'visible' },
+      recordedCost: { currency: 'CNY', amount: '0.0005', records: '4', pricedRecords: '4' },
     })
     expect(result.summary.metrics).not.toHaveProperty('tokens')
     expect(result.summary.metrics).not.toHaveProperty('cost')

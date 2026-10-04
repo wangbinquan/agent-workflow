@@ -746,7 +746,7 @@ test('an older report has no fabricated affected-Task index and unknown original
   await screen.findByRole('button', { name: '执行事实 0000' })
   fireEvent.click(screen.getByRole('tab', { name: i18n.t('runObservability.tab_overview') }))
   await screen.findByRole('heading', { name: i18n.t('runObservability.dataQuality') })
-  expect(screen.getAllByText('original-new-runtime-gap').length).toBeGreaterThan(0)
+  expect((await screen.findAllByText('original-new-runtime-gap')).length).toBeGreaterThan(0)
   expect(screen.getByText(i18n.t('runObservability.gapIndexUnavailable'))).toBeTruthy()
   expect(
     screen.queryByRole('button', {
