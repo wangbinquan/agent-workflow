@@ -21,9 +21,15 @@ export function useCompleteObservationReport(
   enabled: boolean,
 ) {
   const client = useQueryClient()
-  const scope = JSON.stringify([filters, taskId ?? null, revision])
+  const scope = JSON.stringify(['task-scope-metrics/2', filters, taskId ?? null, revision])
   const refreshKey = useMemo(() => ({ scope, key: crypto.randomUUID() }), [scope]).key
-  const key = ['run-observability-complete', filters, taskId ?? null, revision] as const
+  const key = [
+    'run-observability-complete',
+    'task-scope-metrics/2',
+    filters,
+    taskId ?? null,
+    revision,
+  ] as const
   const retainedIds = useRef(new Map<string, string>())
   return useQuery({
     queryKey: key,

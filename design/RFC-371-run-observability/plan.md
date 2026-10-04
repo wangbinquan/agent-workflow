@@ -554,3 +554,8 @@ DESIGN1 与 SOURCE18 v2 独立功能门 PASS，SOURCE16 三个 P2/FAIL 保留：
 实际服务首次报告因原文件spool的旧child指标条件失败；此回执保留。生产spool增加相同的普通Task例外，cache资格升级task-scope-metrics/2，原immutable缓存及失败报告不改。双provider新增回归使用真实文件spool，含混合完整/缺采集Task、全范围未知、原四桶/CNY、分页EOF、独立生命周期对拍和损坏存储拒绝；原测试及预算保持。中英文提示准确描述各范围资格。源码功能检视与hosted CI、实际页面验收分别记录，不能相互替代。
 
 官方纯静态census基线fc688a54加本批7候选，保留并排除其他会话及native owner在制品，13原产物/129原库存验证通过，无新增增长许可，原规则与完整封印/publish/读取核验保持。未在本机运行AW测试、类型检查、构建或启动/替换服务；实际API由原已运行daemon验证。浏览器工具尚不能读取AW实际页，本批新确切SHA CI待发布；旧CI失败与未完成native采集/历史caps/真实任务和规模验收仍保留，RFC保持In Progress。
+
+
+### 2026-10-04 页面旧报告缓存修复
+
+SOURCE2-META1 有限功能门通过：前端 queryKey 与 retainedIds scope 同时采用 task-scope-metrics/2，原 QueryClient 旧报告缓存不删除、不改写，新增新资格POST和完整Task显示回归。129原库存保持；本机只做目标静态检查与原canonical生成。实际入口localhost:5174已到开发SSO，管理员登录待授权，页面验收及新SHA hosted CI未完成；原native采集与规模验收仍开放。

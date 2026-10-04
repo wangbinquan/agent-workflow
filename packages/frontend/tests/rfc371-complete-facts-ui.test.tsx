@@ -47,8 +47,14 @@ function fixture(
   indexed = true,
   reason = metrics.gaps[0]!,
   completeTaskMetrics?: CompleteObservationTask['metrics'],
+  legacyCache = false,
 ) {
   const valueMetrics = { state: 'not-ready' as const, gaps: [reason] }
+  const legacyReport: CompleteObservationReport = {
+    state: 'not-ready',
+    reportId: 'retained-before-task-metric-qualification',
+    gaps: ['native-capture-unobserved'],
+  }
   const reports = new Map<string, Facts>(),
     requests: string[] = [],
     state = { damaged: false }
@@ -104,6 +110,7 @@ function fixture(
     }
     const match = /^\/api\/observability\/reports\/([^/]+)(\/pages)?$/.exec(url.pathname)
     if (!match) throw new Error('Unexpected legacy observation request')
+    if (!match[2] && match[1] === legacyReport.reportId) return Response.json(legacyReport)
     const value = reports.get(match[1]!)!
     if (!match[2])
       return Response.json(
@@ -198,6 +205,20 @@ function fixture(
     return Response.json({ reportId: value.reportId, section, parent, total, items, nextCursor })
   })
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } })
+  const legacyKey = [
+    'run-observability-complete',
+    {
+      from: NOW - 1000,
+      to: NOW + 1,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    },
+    null,
+    0,
+  ] as const
+  if (legacyCache) {
+    client.setQueryDefaults(legacyKey, { gcTime: Infinity })
+    client.setQueryData(legacyKey, legacyReport)
+  }
   function Page() {
     const [search, setSearch] = useState<ObservationSearch>({
       from: NOW - 1000,
@@ -212,7 +233,7 @@ function fixture(
       <Page />
     </QueryClientProvider>,
   )
-  return { requests, state }
+  return { requests, state, client, legacyKey, legacyReport }
 }
 beforeEach(async () => {
   setBaseUrl('http://facts.test')
@@ -222,6 +243,28 @@ beforeEach(async () => {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+})
+
+test('the prior cached report cannot suppress a newly qualified Task and its original cache entry stays unchanged', async () => {
+  const f = fixture(
+    true,
+    metrics.gaps[0]!,
+    {
+      state: 'ready',
+      invocations: '1',
+      observedInvocations: '1',
+      records: '2',
+      tokens: { input: '3', cacheRead: '9', cacheWrite: '15', output: '21', total: '48' },
+      cost: { currency: 'CNY', state: 'complete', amount: '0.00015' },
+    },
+    true,
+  )
+  const task = (await screen.findByRole('button', { name: '执行事实 0000' })).closest('tr')!
+  expect(task.textContent).toContain('48')
+  expect(task.textContent).toContain('¥')
+  expect(f.requests).toContain('/api/observability/reports')
+  expect(f.requests.some((path) => path.includes(f.legacyReport.reportId))).toBe(false)
+  expect(f.client.getQueryData(f.legacyKey)).toEqual(f.legacyReport)
 })
 
 test.each(['zh', 'en'])(

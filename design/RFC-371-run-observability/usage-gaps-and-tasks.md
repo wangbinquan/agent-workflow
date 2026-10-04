@@ -36,3 +36,5 @@ quality-tasks 属于完整执行事实 section。not-ready 仍只发布已封存
 原requestKey加入任务独立资格版本，令同actor/query/sourceRevision的新请求离开旧整体遮罩缓存；旧immutable reportId及字节不改。中英文提示说明哪些范围仍有缺口和独立完整Task的呈现，现有Task详情、返回/焦点、四桶/CNY组件保持。回归用同一真实SQLite/PostgreSQL snapshot的两个Task核对：一个原capture缺失保持未知，另一个原完整Task四桶/CNY与其独立生命周期报告一致；整份人口、缺口与汇总保持，损坏行仍拒绝。AW只在GitHub执行这些用例；所有原用例和时限保留。
 
 实际服务首次核对发现原文件spool还保留“全部child metrics必须not-ready”旧条件，报告以 `Incomplete original statistics cannot expose child subtotals` 失败；此失败回执保留。spool同样只允许普通 `tasks` 行保留原Task自己的完整metrics，其余原数值collection、span和child汇总拒绝条件均保持。资格版本更新为 `task-scope-metrics/2`，避免复用修复期间的失败缓存；既有双provider回归使用真实文件spool并验证完整seal/publish/read链路。
+
+SPA已有query缓存和retainedIds也必须采用同一资格版本：仅升级服务requestKey不会替换页面已经持有的旧reportId。前端queryKey与retainedIds scope同时加入 `task-scope-metrics/2`，新页面资格请求新报告，旧报告及旧cache项保留。新增真实QueryClient缓存回归先放入旧资格报告，再核对新请求、完整Task四桶/CNY显示、旧id未读取和原缓存未改；不清空其他页面缓存，不改变公开wire或分页返回位置。

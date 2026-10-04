@@ -1,3 +1,9 @@
+## 2026-10-04 RFC-371 修复前端继续读取旧报告
+
+原已运行 Vite 的正式入口是 localhost:5174/observability，7456 为 API。普通 Task 指标资格已发布 d005ca80；SPA queryKey 和 retainedIds scope 同时加入 task-scope-metrics/2，离开旧遮罩报告但保留其不可变内容与原查询缓存。真实 QueryClient 缓存回归与有限 SOURCE2-META1 独立功能门通过源码检视；原静态 canonical 129 库存不变，只更新 digest/provenance。没有本机 AW tests/typecheck/build/service。
+
+原服务8 Task逐页EOF、7 Task四桶/CNY与独立明细一致的API回执保持；一个中断原生请求未产生最终用量，整体仍未知，不能将7 Task和冒充总量。浏览器现已到开发SSO登录页，管理员登录待明确授权，正式页面尚未验收；d005ca80及本批新SHA的hosted CI、旧E2E传输更新、原生完整采集与规模验收继续，RFC仍In Progress。
+
 ## 2026-10-04 RFC-371 恢复独立完整任务的实际用量
 
 同一本机原数据库、原 daemon 和七天范围实际有8个任务、28次尝试、14次受理调用。旧全范围缺口遮罩误把7个独立完整任务的指标一并隐藏；本批只恢复普通Task的原完整fold资格，保留一个历史Task的真实缺口和全范围未知。四页到EOF的8个Task身份与原人口一致，7个Task的四桶Token及人民币估值逐字等于各自独立生命周期报告，没有把已知7个的和冒充完整总量。

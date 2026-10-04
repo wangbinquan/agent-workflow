@@ -27,3 +27,8 @@
 实际服务首次报告因原文件spool的旧child指标条件失败；此回执保留。生产spool增加相同的普通Task例外，cache资格升级task-scope-metrics/2，原immutable缓存及失败报告不改。双provider新增回归使用真实文件spool，含混合完整/缺采集Task、全范围未知、原四桶/CNY、分页EOF、独立生命周期对拍和损坏存储拒绝；原测试及预算保持。中英文提示准确描述各范围资格。源码功能检视与hosted CI、实际页面验收分别记录，不能相互替代。
 
 官方纯静态census基线fc688a54加本批7候选，保留并排除其他会话及native owner在制品，13原产物/129原库存验证通过，无新增增长许可，原规则与完整封印/publish/读取核验保持。未在本机运行AW测试、类型检查、构建或启动/替换服务；实际API由原已运行daemon验证。浏览器工具尚不能读取AW实际页，本批新确切SHA CI待发布；旧CI失败与未完成native采集/历史caps/真实任务和规模验收仍保留，RFC保持In Progress。
+
+
+### 2026-10-04 原 SPA 缓存资格补正
+
+服务requestKey已升级时，页面仍可能凭旧query/retainedIds读取旧reportId；client两个键同时采用task-scope-metrics/2，旧immutable报告和原cache保留。新增真实QueryClient缓存回归及SOURCE2-META1有限检视PASS，原13产物只digest/provenance变化、129库存无增长。实际既有Vite5174已提供新模块；浏览器停在开发SSO，管理员登录待明确授权，因此源码/API回执不能当作正式页面验收或hosted测试通过。旧失败与完整native/规模未完成结论全部保持。
