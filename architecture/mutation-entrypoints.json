@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1873,
+    "entries": 1874,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -22774,6 +22774,29 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts#opencodeLocalAgentMaterial",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts#opencodeLocalAgentMaterial",
+      "symbol": "opencodeLocalAgentMaterial",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
         "event": false,
         "fenceOrOcc": true,
         "transaction": false
@@ -44797,7 +44820,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c91e4cdc83a4d6e543bba4a7f7b871cb58b1ba8159687a1df3079b0159814458",
+  "sourceDigest": "sha256:0395d9f636a678230c6e3835f9fce854ec7c943e9b9ee522be196272374d3d05",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

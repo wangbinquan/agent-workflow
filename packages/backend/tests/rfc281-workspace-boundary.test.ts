@@ -619,8 +619,8 @@ describe('gitMetaDirs 已接线（业务误伤检视 P2-1）', () => {
   // EPERM（sandbox 只对会话 cwd 自动解析共享 gitdir）。源码锁防它再退化成死参数。
   test('both drivers derive gitMetaDirs from every mount', () => {
     for (const rel of [
-      '../src/services/runtime/claudeCode/driver.ts',
-      '../src/services/runtime/opencode/driver.ts',
+      '../src/modules/runtime-management/infrastructure/local/claudeAgentMaterial.ts',
+      '../src/modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
     ]) {
       const src = readFileSync(resolve(import.meta.dir, rel), 'utf-8')
       expect({ rel, wired: src.includes('gitMetaDirsFor') }).toEqual({ rel, wired: true })
@@ -678,7 +678,10 @@ describe('toolchainCacheDirs — 构建型节点不再撞死（检视 P2-2，用
 
   test('claude driver 把它们接进 allowWrite（否则 dontAsk 节点无自救路径）', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '../src/services/runtime/claudeCode/driver.ts'),
+      resolve(
+        import.meta.dir,
+        '../src/modules/runtime-management/infrastructure/local/claudeAgentMaterial.ts',
+      ),
       'utf-8',
     )
     expect(src).toContain('toolchainCacheDirs()')

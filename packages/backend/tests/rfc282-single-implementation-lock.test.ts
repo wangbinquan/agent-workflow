@@ -78,7 +78,10 @@ const CONVERSION_LOCKS: readonly ConversionLock[] = [
     face: 'agent-entry-opencode',
     fn: 'renderOpencodeAgentEntry',
     definedIn: 'services/execution/agentInjection.ts',
-    callers: ['services/runtime/opencode/driver.ts', 'services/runtime/opencode/inlineConfig.ts'],
+    callers: [
+      'modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
+      'services/runtime/opencode/inlineConfig.ts',
+    ],
   },
   {
     face: 'subagent-entries-claude',
@@ -90,7 +93,10 @@ const CONVERSION_LOCKS: readonly ConversionLock[] = [
     face: 'skill-staging',
     fn: 'stageSkills',
     definedIn: 'services/runtime/stageSkills.ts',
-    callers: ['services/runtime/opencode/driver.ts', 'services/runtime/claudeCode/config.ts'],
+    callers: [
+      'modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
+      'services/runtime/claudeCode/config.ts',
+    ],
   },
   {
     face: 'plugin-spec',
@@ -170,6 +176,12 @@ const RUNTIME_DRIVER_DIRS = RUNTIME_KINDS.map(
   (kind) => `services/runtime/${kind === 'claude-code' ? 'claudeCode' : kind}/`,
 )
 
+// The complete native assembly moved to these exact runtime owner files.
+const RUNTIME_LOCAL_MATERIAL_FILES = RUNTIME_KINDS.map(
+  (kind) =>
+    `modules/runtime-management/infrastructure/local/${kind === 'claude-code' ? 'claude' : kind}AgentMaterial.ts`,
+)
+
 const FORBIDDEN_TOKENS = ['OPENCODE_CONFIG_CONTENT', '--mcp-config', '.claude/'] as const
 
 describe('RFC-282 A2 — runtime wire knowledge stays inside the fence', () => {
@@ -186,6 +198,7 @@ describe('RFC-282 A2 — runtime wire knowledge stays inside the fence', () => {
       // types / injectionIdentity / index）。于是 runtime 方言破坏力最大的那一块
       // ——两个驱动共同调用的共享内核——恰恰是唯一没有任何守卫看过的地方。
       if (RUNTIME_DRIVER_DIRS.some((dir) => f.rel.startsWith(dir))) continue
+      if (RUNTIME_LOCAL_MATERIAL_FILES.includes(f.rel)) continue
       if (f.rel.startsWith('services/runtime/')) scannedRuntimeCommons.push(f.rel)
       if (RUNTIME_TOKEN_EXCEPTIONS.includes(f.rel)) continue
       const code = stripComments(f.text)
@@ -293,7 +306,9 @@ export const RFC282_DEFINITION_EXCEPTIONS: readonly DuplicateEntry[] = [
     what: 'claude mcp-config write — the ONE helper',
     owning: 'B4',
     signature: /= join\([^)]+, 'mcp-config\.json'\)/,
-    sites: [{ file: 'services/runtime/claudeCode/driver.ts', count: 1 }],
+    sites: [
+      { file: 'modules/runtime-management/infrastructure/local/claudeAgentMaterial.ts', count: 1 },
+    ],
   },
   {
     what: 'plugin enabled filter — declarePlugins + selectShippedPlugins only',

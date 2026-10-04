@@ -1137,7 +1137,22 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:1f1dfaf525355b129cec"
+        "import:062b3a193c32788ccbcd",
+        "import:1f1dfaf525355b129cec",
+        "import:2817d22a583bfbf6e223",
+        "import:2eea0a70136595f1cfca",
+        "import:3dfc5d8044fabe57926e",
+        "import:46f76cdc06775ed19dfa",
+        "import:6672417c6cb20b8225c0",
+        "import:7d9eb056bd9dea080620",
+        "import:9db8f302d772a44f5c37",
+        "import:9f76905b3029eb6fce30",
+        "import:ba9985978f3d9967b916",
+        "import:dc67a5116cc173d45941",
+        "import:e2c1cbe8e77a3153bfe2",
+        "import:e47b300b88bf07b12403",
+        "import:f3250b0731023322a89d",
+        "import:fb9e3347d7fbdb337733"
       ],
       "exportedSymbols": [
         "AgentInjectionError",
@@ -1603,7 +1618,11 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:2f07ba4cf2c104a4e677",
+        "import:44d998b728bbbc33bac2",
+        "import:93dbc6c4691dd12d0281"
+      ],
       "exportedSymbols": [
         "BoundaryCtx",
         "ExternalDirRule",
@@ -3484,7 +3503,10 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:a77a648c00204d64154d",
+        "import:b80ddfe4ce38590ba883"
+      ],
       "exportedSymbols": [
         "ClaudeBoundaryCtx",
         "ClaudeBoundaryRender",
@@ -3504,7 +3526,11 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:2e80660e54868bf803e5",
+        "import:543bcedf69cee693af63",
+        "import:fb410e7912b5d2e5ef1a"
+      ],
       "exportedSymbols": [
         "ClaudeSkillInjection",
         "ClaudeWorktreeAgentProjection",
@@ -3523,13 +3549,13 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:c1a7ee36995d7a0a0261"
+        "import:0e48a1141b5cad4b22a7",
+        "import:609326c5412ccde4d09d",
+        "import:69ec15de1c0276c1a196",
+        "import:e22f32d9e599499b92ff"
       ],
       "exportedSymbols": [
-        "assembleClaudeBusinessSpawn",
-        "assembleClaudePersonaSpawn",
-        "claudeCodeDriver",
-        "renderClaudeInjection"
+        "claudeCodeDriver"
       ],
       "file": "packages/backend/src/services/runtime/claudeCode/driver.ts",
       "id": "facade:packages/backend/src/services/runtime/claudeCode/driver.ts",
@@ -3556,7 +3582,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:2330a2bcd4855bc69597"
+      ],
       "exportedSymbols": [
         "toClaudeAgents"
       ],
@@ -3582,7 +3610,10 @@
       "targetLayer": "domain"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:1ac3bdc245b860e886cf",
+        "import:ad38d35a0c356a40f8dc"
+      ],
       "exportedSymbols": [
         "ClaudeToolGate",
         "GrantableClaudeTool",
@@ -3616,8 +3647,10 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:17a578fc9b30b036929a",
         "import:28f5d5c1f6da104d5136",
-        "import:3ad885de99a0e9a95e22"
+        "import:3ad885de99a0e9a95e22",
+        "import:53b0bae2d394e461c2be"
       ],
       "exportedSymbols": [
         "CaptureClaudeSessionsOpts",
@@ -3635,6 +3668,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:0ff8df59fe9adec116ce",
         "import:3c42cbe78d4b7c2b99a8"
       ],
       "exportedSymbols": [
@@ -3649,7 +3683,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:9fc1ba487f5802ce7ff9"
+      ],
       "exportedSymbols": [
         "CLAUDE_HEADLESS_BASE_ARGV",
         "CLAUDE_PLATFORM_OWNED_FLAGS",
@@ -3682,7 +3718,10 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:3aada143c1c79d01d345",
+        "import:6722e54e4f0fa9832af3"
+      ],
       "exportedSymbols": [
         "pickRuntimeHead"
       ],
@@ -3748,7 +3787,10 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:1c68048123c5baf995bc",
+        "import:a8d1b90381134fa81721"
+      ],
       "exportedSymbols": [
         "composeOpencodeBoundary",
         "machineSkillRoots",
@@ -3764,14 +3806,13 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:645c10c4b96781acd29e",
-        "import:e9392ed19fff78dda4f7"
+        "import:0c137920d927991cde8d",
+        "import:1fe9832478dbb0de70c0",
+        "import:38cf2d4588405354755e",
+        "import:5f995139ea1dc90f5ce2"
       ],
       "exportedSymbols": [
-        "assembleOpencodeBusinessSpawn",
-        "assembleOpencodePersonaSpawn",
-        "opencodeDriver",
-        "renderOpencodeInjection"
+        "opencodeDriver"
       ],
       "file": "packages/backend/src/services/runtime/opencode/driver.ts",
       "id": "facade:packages/backend/src/services/runtime/opencode/driver.ts",
@@ -3801,7 +3842,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:4980f696ab97c6ab2c79"
+        "import:4980f696ab97c6ab2c79",
+        "import:64323b35d6131297a101"
       ],
       "exportedSymbols": [
         "buildInlineConfig"
@@ -3815,7 +3857,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:9300df55e14faa4d1c86"
+      ],
       "exportedSymbols": [
         "ReadSnapshotOptions",
         "readSnapshotFromRunDir",
@@ -3848,7 +3892,10 @@
       "targetLayer": "domain"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:05e478ce9cbc4189df30",
+        "import:1e9810966e808f2802bd"
+      ],
       "exportedSymbols": [
         "createOpencodeUsageNormalizer",
         "opencodeUsageDatabasePath",
@@ -3863,7 +3910,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:2530a75237ca565f8773"
+      ],
       "exportedSymbols": [
         "awInventoryDumpSourcePath",
         "materializeInventoryPlugin"
@@ -3893,7 +3942,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:52c8c5695f2af5849b6b"
+      ],
       "exportedSymbols": [
         "PluginSpec",
         "buildPluginSpecArray",
@@ -3910,6 +3961,8 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:cf142f2d81bbf2ce0f16",
+        "import:e721600586d9fbd53714",
         "import:faba32b7d03f057290e1"
       ],
       "exportedSymbols": [
@@ -3951,6 +4004,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:317c33689480a13e3838",
         "import:fcfddd6e072c42be4bba"
       ],
       "exportedSymbols": [
@@ -3965,7 +4019,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:a0b618f3b1d353cb081e"
+      ],
       "exportedSymbols": [
         "MAX_OPENCODE_PROMPT_BYTES",
         "OPENCODE_AUTO_FLAG_RENAME_VERSION",
@@ -3987,7 +4043,10 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:517a610b8e739c564949"
+        "import:2c3fe1803047219ba4e6",
+        "import:517a610b8e739c564949",
+        "import:6c80f1c9db5be28957aa",
+        "import:b5d99d635a14a4eb3ada"
       ],
       "exportedSymbols": [
         "LivePollOptions",
@@ -4033,7 +4092,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:ff37727817721466258d"
+      ],
       "exportedSymbols": [
         "getOpencodeBinaryVersion",
         "recordOpencodeBinaryVersion",
@@ -4085,7 +4146,12 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:17d4897bd737040077bc",
+        "import:6579da5cbb2188dbd509",
+        "import:905b55867400e3deda7c",
+        "import:b8a0c1743492c073ffec"
+      ],
       "exportedSymbols": [
         "syntheticPersonaAgent",
         "toBusinessCtx",
@@ -4100,7 +4166,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:b56d1916250d7d7252bb"
+      ],
       "exportedSymbols": [
         "StagedSkill",
         "stageSkills"
@@ -4115,16 +4183,38 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:05380b6b070bb45470b5",
+        "import:056b40d2ef34c0fc41e5",
+        "import:07f493e993272ff28864",
         "import:0f471184ca5f65924937",
+        "import:22e2a3e43b9aded6811d",
         "import:25d6e3fda5a55ab36a5d",
         "import:2c57d5f26601e387e86e",
+        "import:5b628f6136e3b8310324",
+        "import:5f13ba9cdabe85fd2703",
+        "import:64cce34581a2c498d55f",
+        "import:668e88a4c0f34dfa5f36",
+        "import:78b1446894fbeba3bf7c",
+        "import:7e35a4d0936147f04ed8",
+        "import:7ebd2695d0ca6170e289",
         "import:878817dd026ba03d55c6",
+        "import:89330d2b30e8e7d95530",
+        "import:8a8e77f2ad8c648b04a1",
+        "import:93651df0029a65d9d006",
         "import:9866049aeb621599bb0f",
+        "import:9b3b731a2da3052932b3",
         "import:a99307c8c8debf377c51",
+        "import:b234142f2b81b77760e6",
         "import:b2ab14f8e45292d8b3f7",
+        "import:b2f9ab2d2a56ded2ee87",
         "import:b63768891ca64af1cb8d",
+        "import:b7435b12258845618f09",
+        "import:b7d325a8d761ddf10b9f",
+        "import:bc66a63defffbd003625",
         "import:d70a8f2b0aab923f89f4",
         "import:deaf92636d39c1f1d373",
+        "import:f620beb601baa671cb51",
+        "import:fb0f31957433ff147406",
         "import:fff3516f6ab19099a34d"
       ],
       "exportedSymbols": [
@@ -6313,5 +6403,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c91e4cdc83a4d6e543bba4a7f7b871cb58b1ba8159687a1df3079b0159814458"
+  "sourceDigest": "sha256:0395d9f636a678230c6e3835f9fce854ec7c943e9b9ee522be196272374d3d05"
 }

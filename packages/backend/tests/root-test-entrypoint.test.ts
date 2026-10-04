@@ -762,6 +762,16 @@ describe('repository test entrypoint', () => {
     for (const [name, source] of [
       ['opencode.ts', opencodeUtil],
       ['opencode/driver.ts', opencodeDriver],
+      [
+        'local/opencodeAgentMaterial.ts',
+        readFileSync(
+          resolve(
+            root,
+            'packages/backend/src/modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
+          ),
+          'utf8',
+        ),
+      ],
       ...workflowSources.map(({ name, source }) => [name, source] as const),
     ]) {
       expect(source, name).not.toContain('MIN_OPENCODE_VERSION')

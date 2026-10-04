@@ -356,12 +356,14 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
     // 锁读取形态（注释可提及）：env 覆盖不再在 distiller 侧读取，回退逻辑在
     // opencode driver 的 buildSpawn 里。
     expect(src).not.toContain('process.env.AGENT_WORKFLOW_OPENCODE_BIN')
-    const driverSrc = SRC('services/runtime/opencode/driver.ts')
+    const driverSrc = SRC(
+      'modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
+    )
     expect(driverSrc).toContain('process.env.AGENT_WORKFLOW_OPENCODE_BIN')
   })
 
   it('claude driver 继承自然认证环境，不再装配凭据桥', () => {
-    const src = SRC('services/runtime/claudeCode/driver.ts')
+    const src = SRC('modules/runtime-management/infrastructure/local/claudeAgentMaterial.ts')
     expect(src).not.toContain('bridgeCredentials:')
   })
 

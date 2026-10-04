@@ -10041,3 +10041,6 @@ H4/H5 设计 R3、NATIVE-PROCESS12-R2 与 WINDOWS-COVERAGE1 已分别独立有�
 
 
 - 2026-10-05 RFC-370 进程回执投影已精确发布：SOURCE9／META16 与两项匹配增长回执正常退役均独立有限 PASS，7387af69＋69f10d9c 已推送，post-fetch 0/0、index empty，全部并行 WIP 保留。69f10d9c 主 CI37237206141 已启动；Windows 专项的原 push／PR path filters 不涵盖本批9个源码／测试，原 suite也未执行新投影回归，不将不存在的Windows运行记成通过。本次只对称增加9个真实 watched paths，并在原平台suite加入新投影与原双provider effect conformance两项（Windows沿原SQLite设置）；runner、原预算、Bun版本、所有已有step与断言保持，没有新生产／canonical变更或本机AW tests/types/build/service。有限workflow检视与后继exact-SHA CI另留证；完整H4/H5、A-G、CS adapter／M0～M4仍继续。
+
+
+- 2026-10-05 RFC-370 双 runtime 本机材料／取证有限候选：NATIVE-AGENT-MATERIAL11 独立 PASS 95a8580c1f73a9baec8fac675503d2f6dafc8099d1a4ab823bdb9baca316b8e3；7个完整helper与12个physical member移入RM-owned两local实现，原协议／purpose成员、registry singleton与全部477原expect AST保持。原scoped生成一次，排除并行WIP；digest sha256:0395d9f636a678230c6e3835f9fce854ec7c943e9b9ee522be196272374d3d05。原规则记录mutation1873→1874、owners26651→26655，79个原依赖新可见＋8条显式兼容入口替代3条旧capture入站（observed6138→6222／exceptions5439→5523）；原依赖名和目标均对拍，公开合同无新增，遗留helper链接仍有记录。Windows push/PR对称补12真实路径、原suite补3项既有golden／boundary回归，原预算／runner／版本／SQLite与步骤保留。完整neutral materials/execution/evidence、三入口真根、脚本／purpose／authority恢复和A-G仍开放；没有CS adapter或部署。旧126e788 CI/Windows取消记录保留，含本批projection/coverage且十文件原字节一致的1f0a2dc exact CI/Windows继续观察。本机仅目标格式／lint、纯AST/JSON/字节、原静态生成，无AW tests/typecheck/build/service。

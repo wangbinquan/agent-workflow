@@ -511,6 +511,8 @@ describe('RFC-154 source guards — config-dir literals confined to the single s
       'services/runtime/claudeCode/driver.ts',
       'services/runtime/claudeCode/spawn.ts',
       'services/runtime/stageSkills.ts',
+      'modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
+      'modules/runtime-management/infrastructure/local/claudeAgentMaterial.ts',
     ]
     for (const f of files) {
       const src = readFileSync(join(BACKEND_SRC, f), 'utf8')

@@ -113,11 +113,26 @@ export default tseslint.config(
   },
   {
     files: ['packages/backend/src/**'],
+    ignores: [
+      'packages/backend/src/modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
+      'packages/backend/src/modules/runtime-management/infrastructure/local/claudeAgentMaterial.ts',
+    ],
     rules: {
       'no-restricted-imports': [
         'error',
         { patterns: [...backendCrossPackagePatterns, ...backendRuntimeFencePatterns] },
       ],
+    },
+  },
+  // RFC-370: the two actual native material implementations retain private
+  // protocol assembly access. Application and all other files keep the fence.
+  {
+    files: [
+      'packages/backend/src/modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
+      'packages/backend/src/modules/runtime-management/infrastructure/local/claudeAgentMaterial.ts',
+    ],
+    rules: {
+      'no-restricted-imports': ['error', { patterns: [...backendCrossPackagePatterns] }],
     },
   },
   {

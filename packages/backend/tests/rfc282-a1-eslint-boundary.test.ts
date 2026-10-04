@@ -97,3 +97,49 @@ describe('RFC-282 A1 — pre-existing cross-package bans survive in BOTH blocks 
     })
   }
 })
+
+// RFC-370: material mechanisms moved to two exact owner files. Adjacent
+// application/common files do not receive private protocol assembly access.
+describe('RFC-370 native material owner import boundary', () => {
+  const nativeFiles = [
+    'packages/backend/src/modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
+    'packages/backend/src/modules/runtime-management/infrastructure/local/claudeAgentMaterial.ts',
+  ]
+  for (const file of nativeFiles) {
+    test(`${file}: actual native assembly retains private protocol access`, async () => {
+      for (const protocol of ['opencode', 'claudeCode']) {
+        const hits = await restrictedImportHits(
+          file,
+          `import { x } from '@/services/runtime/${protocol}/spawn'\nexport const y = x\n`,
+        )
+        expect(hits).toEqual([])
+      }
+    })
+    test(`${file}: backend package boundaries remain active`, async () => {
+      for (const [specifier, message] of [
+        ['@agent-workflow/frontend', 'backend must not import from frontend'],
+        ['react', 'no UI deps in backend'],
+      ]) {
+        const hits = await restrictedImportHits(
+          file,
+          `import { x } from '${specifier}'\nexport const y = x\n`,
+        )
+        expect(hits.length).toBe(1)
+        expect(hits[0]).toContain(message)
+      }
+    })
+  }
+  test('neighboring material application/common files retain the runtime fence', async () => {
+    for (const file of [
+      'packages/backend/src/modules/runtime-management/application/agentMaterial.ts',
+      'packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCommon.ts',
+    ]) {
+      const hits = await restrictedImportHits(
+        file,
+        "import { x } from '@/services/runtime/opencode/spawn'\nexport const y = x\n",
+      )
+      expect(hits.length).toBe(1)
+      expect(hits[0]).toContain('RFC-282')
+    }
+  })
+})

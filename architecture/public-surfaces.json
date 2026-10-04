@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 1157,
+    "consumers": 1154,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
     "methods": 1353,
@@ -130834,9 +130834,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:645c10c4b96781acd29e"
-      ],
+      "consumerEdgeIds": [],
       "context": "runtime-management",
       "dataClass": "metadata",
       "direction": "offered",
@@ -130853,16 +130851,12 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:645c10c4b96781acd29e"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.rootSessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:645c10c4b96781acd29e"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.sourceNamespace",
           "type": "string"
         },
@@ -130892,9 +130886,7 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:645c10c4b96781acd29e"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.resumeSessionId",
           "type": "string"
         }
@@ -130910,14 +130902,7 @@
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:645c10c4b96781acd29e",
-          "file": "packages/backend/src/services/runtime/opencode/driver.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/driver.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -130938,9 +130923,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:e9392ed19fff78dda4f7"
-      ],
+      "consumerEdgeIds": [],
       "context": "runtime-management",
       "dataClass": "metadata",
       "direction": "offered",
@@ -130967,9 +130950,7 @@
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:e9392ed19fff78dda4f7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.nodeRunId",
           "type": "string"
         },
@@ -130984,16 +130965,12 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [
-            "import:e9392ed19fff78dda4f7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.resumeSessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:e9392ed19fff78dda4f7"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.taskId",
           "type": "string"
         }
@@ -131009,14 +130986,7 @@
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:e9392ed19fff78dda4f7",
-          "file": "packages/backend/src/services/runtime/opencode/driver.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/runtime/opencode/driver.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -131035,9 +131005,7 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [
-        "import:c1a7ee36995d7a0a0261"
-      ],
+      "consumerEdgeIds": [],
       "context": "runtime-management",
       "dataClass": "metadata",
       "direction": "offered",
@@ -131049,23 +131017,17 @@
           "type": "z.infer<typeof AcceptedObservationInvocationSchema>"
         },
         {
-          "consumerEdgeIds": [
-            "import:c1a7ee36995d7a0a0261"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.limit",
           "type": "number"
         },
         {
-          "consumerEdgeIds": [
-            "import:c1a7ee36995d7a0a0261"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.rootSessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:c1a7ee36995d7a0a0261"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.sourceNamespace",
           "type": "string"
         },
@@ -131085,16 +131047,12 @@
           "type": "readonly ObservationSpanOwnerProof[]"
         },
         {
-          "consumerEdgeIds": [
-            "import:c1a7ee36995d7a0a0261"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.resumeSessionId",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:c1a7ee36995d7a0a0261"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.sourceNamespace",
           "type": "string"
         }
@@ -131110,14 +131068,7 @@
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
-      "productionConsumers": [
-        {
-          "context": "legacy",
-          "edgeId": "import:c1a7ee36995d7a0a0261",
-          "file": "packages/backend/src/services/runtime/claudeCode/driver.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/driver.ts#$file"
-        }
-      ],
+      "productionConsumers": [],
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -197262,7 +197213,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c91e4cdc83a4d6e543bba4a7f7b871cb58b1ba8159687a1df3079b0159814458",
+  "sourceDigest": "sha256:0395d9f636a678230c6e3835f9fce854ec7c943e9b9ee522be196272374d3d05",
   "targetContexts": [
     "collaboration",
     "development-automation",
