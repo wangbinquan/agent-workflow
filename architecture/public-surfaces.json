@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1075,
+    "consumers": 1119,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1256,
+    "methods": 1303,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 23533,
-    "symbols": 1118
+    "recursiveFields": 24087,
+    "symbols": 1137
   },
   "entries": [
     {
@@ -122402,6 +122402,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:198402857a3c440266f9",
             "import:a7270198332e68bb8ccf"
           ],
           "fieldPath": "$method:spanOwners.$return.complete",
@@ -139155,6 +139156,69 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:11d7da7c9c16eb8c3f08",
+        "import:ba3de623bf26450655a7"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:value",
+          "type": "unknown"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "asserts value is IsolationWorkspaceScope"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:requireIsolationWorkspaceScope",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:76eb04efc95aa054bde2c4f8683187abb91ccc4e14f3af63aa34beed80634043"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:11d7da7c9c16eb8c3f08",
+          "file": "packages/backend/src/modules/task-execution/composition/isolationWorkspaceScene.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/isolationWorkspaceScene.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:ba3de623bf26450655a7",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/isolationWorkspaceView.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/isolationWorkspaceView.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:dde41d116ada9b8ef54d1780ece9e03baf5df874ed30d61200c5ee6982ab4532",
+      "status": "target-context-current-surface",
+      "symbol": "requireIsolationWorkspaceScope",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:981bebb325370a5ecab4"
       ],
       "context": "source-control",
@@ -139198,6 +139262,174 @@
       "signatureDigest": "sha256:7024ea1134747465ad7af4e49bdddee87fd3b32de4ac0bd03c915ef647c720bd",
       "status": "target-context-current-surface",
       "symbol": "requireWorkspaceUploadContent",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:077793f455fd12b53d80",
+        "import:6201e402bfd91675fef7",
+        "import:d03cdda2bdca6544c3e1",
+        "import:daecd60630dbd4c5126d",
+        "import:f8579c6d90fd82342140"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:d03cdda2bdca6544c3e1",
+            "import:f8579c6d90fd82342140"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:077793f455fd12b53d80",
+            "import:d03cdda2bdca6544c3e1",
+            "import:daecd60630dbd4c5126d"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.repositories",
+          "type": "readonly IsolationCanonicalRepository[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.storageRootRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:077793f455fd12b53d80",
+            "import:d03cdda2bdca6544c3e1",
+            "import:daecd60630dbd4c5126d",
+            "import:f8579c6d90fd82342140"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d03cdda2bdca6544c3e1",
+            "import:f8579c6d90fd82342140"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$parameter:binding.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:077793f455fd12b53d80",
+            "import:d03cdda2bdca6544c3e1",
+            "import:daecd60630dbd4c5126d"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$parameter:binding.repositories",
+          "type": "readonly IsolationCanonicalRepository[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$parameter:binding.storageRootRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:077793f455fd12b53d80",
+            "import:d03cdda2bdca6544c3e1",
+            "import:daecd60630dbd4c5126d",
+            "import:f8579c6d90fd82342140"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$variant:1",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:selectIsolationWorkspaceFactory",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:9ff03755a8177bcfaba2a620e40c210c7f7d2a9237293eb0f90881447a2a62af"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:077793f455fd12b53d80",
+            "import:d03cdda2bdca6544c3e1",
+            "import:daecd60630dbd4c5126d",
+            "import:f8579c6d90fd82342140"
+          ],
+          "name": "bind",
+          "signatureDigest": "sha256:fd9e066dd324b9c5c7c926df6d8153303d85059ae8496f0d5fe39001209db404"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:077793f455fd12b53d80",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/isolationWorkspaceView.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/isolationWorkspaceView.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:6201e402bfd91675fef7",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:d03cdda2bdca6544c3e1",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:daecd60630dbd4c5126d",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:f8579c6d90fd82342140",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:07b8c8d1b2971b9d64981d40a7598ace60cf857f2d88c155abf11d3775437c87",
+      "status": "target-context-current-surface",
+      "symbol": "selectIsolationWorkspaceFactory",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -139722,6 +139954,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:4b98fcaf310dc01d82e8",
         "import:7286dbc4f53f3cf50211",
         "import:a9de2657fa9af8915cc9"
       ],
@@ -139763,6 +139996,12 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/queries.ts#$file",
       "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:4b98fcaf310dc01d82e8",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/isolatedAgentRun.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/isolatedAgentRun.ts#$file"
+        },
         {
           "context": "legacy",
           "edgeId": "import:7286dbc4f53f3cf50211",
@@ -140269,6 +140508,2676 @@
       "signatureDigest": "sha256:0bcc6fe5f09cd619bb628b1cd863aeb8e0697f533adb9de57473683a277fc091",
       "status": "target-context-current-surface",
       "symbol": "FrozenRepositoryPreparationRef",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:d66d828d753ec77b43e4"
+      ],
+      "context": "source-control",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:d66d828d753ec77b43e4"
+          ],
+          "fieldPath": "base",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d66d828d753ec77b43e4"
+          ],
+          "fieldPath": "canonicalRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "forcedRelativePaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d66d828d753ec77b43e4"
+          ],
+          "fieldPath": "mergedTree",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d66d828d753ec77b43e4"
+          ],
+          "fieldPath": "mount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "paths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d66d828d753ec77b43e4"
+          ],
+          "fieldPath": "rawConflictOutput",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "salvagedPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d66d828d753ec77b43e4"
+          ],
+          "fieldPath": "taskBaseHead",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:IsolationConflict",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:d66d828d753ec77b43e4",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/isolationWorkspaceView.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/isolationWorkspaceView.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:types:IsolationWorkspaceScope"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:5aba10dd7b28dfaca5e70947ff27bb91563359a9a5f2f6746b1f6bb7eb01e5ae",
+      "status": "target-context-current-surface",
+      "symbol": "IsolationConflict",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:88b5fa136d1da059055a"
+      ],
+      "context": "source-control",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "baseSnapshots",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "dbNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "forcedContainerPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "key",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:88b5fa136d1da059055a"
+          ],
+          "fieldPath": "submodules",
+          "type": "Record<\n    string,\n    {\n      readonly submoduleBases: Record<string, string>\n      readonly poolRefs?: Record<string, string>\n      readonly pendingSubResolutions?: string[]\n    }\n  >"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "taskBaseHeads",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspaceRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspaceRef.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:IsolationRestoreInput",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:88b5fa136d1da059055a",
+          "file": "packages/backend/src/modules/task-execution/composition/isolationWorkspaceScene.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/isolationWorkspaceScene.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:types:IsolationWorkspaceScope"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:0cb8221d9bc621e63318dee8419b9fb3739a2fe51f8bf3048787c436fdb0d9eb",
+      "status": "target-context-current-surface",
+      "symbol": "IsolationRestoreInput",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:64de1b819abe6145bcf0"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "dbNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "isolationRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "key",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "passthrough",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "repositories[].baseBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "repositories[].baseSnapshot",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "repositories[].canonicalRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositories[].forcedRelativePaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "repositories[].mount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositories[].pendingSubResolutions[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "repositories[].poolRefs",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "repositories[].repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "repositories[].submoduleBases",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "repositories[].taskBaseHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "repositories[].workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:64de1b819abe6145bcf0"
+          ],
+          "fieldPath": "workspaceRef",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:IsolationWorkspace",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:64de1b819abe6145bcf0",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/isolationWorkspaceView.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/isolationWorkspaceView.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:types:IsolationWorkspaceScope"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:cd5db3b72842e89b9a519487351df7638b0cc352ce832bfb8f2dc7e34ba25af3",
+      "status": "target-context-current-surface",
+      "symbol": "IsolationWorkspace",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:3b711814d39b7a36bb24",
+        "import:cf4946223e622b8b2d67"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3b711814d39b7a36bb24",
+            "import:cf4946223e622b8b2d67"
+          ],
+          "fieldPath": "repositories",
+          "type": "readonly IsolationCanonicalRepository[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3b711814d39b7a36bb24"
+          ],
+          "fieldPath": "storageRootRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3b711814d39b7a36bb24",
+            "import:cf4946223e622b8b2d67"
+          ],
+          "fieldPath": "taskId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:IsolationWorkspaceBinding",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:3b711814d39b7a36bb24",
+          "file": "packages/backend/src/modules/task-execution/composition/isolationWorkspaceScene.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/isolationWorkspaceScene.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:cf4946223e622b8b2d67",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/isolationWorkspaceView.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/isolationWorkspaceView.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:selectIsolationWorkspaceFactory",
+        "public:source-control:types:IsolationWorkspaceFactory"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:f279ac3bd675f339c091388125a2ad7c5ff3667cd29a7ee3a0b6138640f67ffe",
+      "status": "target-context-current-surface",
+      "symbol": "IsolationWorkspaceBinding",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:224314ba2fff008f58f2",
+        "import:27224a577cedc6d39a8b",
+        "import:4bf78a4ed8b7bb0f70b6",
+        "import:58c18bfdc79b46a556d2",
+        "import:5c56dd777b49d4a51c18",
+        "import:e38ede8048f70c68913a"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:58c18bfdc79b46a556d2",
+            "import:5c56dd777b49d4a51c18",
+            "import:e38ede8048f70c68913a"
+          ],
+          "fieldPath": "$method:bind.$parameter:binding.generation",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:224314ba2fff008f58f2",
+            "import:27224a577cedc6d39a8b",
+            "import:58c18bfdc79b46a556d2"
+          ],
+          "fieldPath": "$method:bind.$parameter:binding.repositories",
+          "type": "readonly IsolationCanonicalRepository[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:224314ba2fff008f58f2"
+          ],
+          "fieldPath": "$method:bind.$parameter:binding.storageRootRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:224314ba2fff008f58f2",
+            "import:27224a577cedc6d39a8b",
+            "import:58c18bfdc79b46a556d2",
+            "import:5c56dd777b49d4a51c18",
+            "import:e38ede8048f70c68913a"
+          ],
+          "fieldPath": "$method:bind.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$variant:1",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:IsolationWorkspaceFactory",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:224314ba2fff008f58f2",
+            "import:27224a577cedc6d39a8b",
+            "import:58c18bfdc79b46a556d2",
+            "import:5c56dd777b49d4a51c18"
+          ],
+          "name": "bind",
+          "signatureDigest": "sha256:fd9e066dd324b9c5c7c926df6d8153303d85059ae8496f0d5fe39001209db404"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:224314ba2fff008f58f2",
+          "file": "packages/backend/src/modules/task-execution/composition/isolationWorkspaceScene.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/isolationWorkspaceScene.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:27224a577cedc6d39a8b",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:4bf78a4ed8b7bb0f70b6",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:58c18bfdc79b46a556d2",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:5c56dd777b49d4a51c18",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:e38ede8048f70c68913a",
+          "file": "packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:selectIsolationWorkspaceFactory"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:649ab111c15512407346a881d33ab876ab1dabbca6292bfea1976009b8e0f0d7",
+      "status": "target-context-current-surface",
+      "symbol": "IsolationWorkspaceFactory",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 20,
+        "maxTopLevelFields": 14,
+        "maxTransitiveLeafFields": 276,
+        "maxUnionVariants": 44
+      },
+      "consumerEdgeIds": [
+        "import:018732be4331dc7d4222",
+        "import:22e7d9c02faf999ad44f",
+        "import:4e4de402aa97febfe24e",
+        "import:c91008884282f0bdd6aa"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:blobHashes.$parameter:paths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:blobHashes.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:blobHashes.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:blobHashes.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:changedFiles.$parameter:baseline",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:changedFiles.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:changedFiles.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:changedFiles.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:baseKey",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$parameter:log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:chooseGeneration.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:trees",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.dbNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.isolationRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.key",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.passthrough",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.repositories[].baseBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.repositories[].baseSnapshot",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.repositories[].canonicalRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.repositories[].forcedRelativePaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.repositories[].mount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.repositories[].pendingSubResolutions[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.repositories[].poolRefs",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.repositories[].repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.repositories[].submoduleBases",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.repositories[].taskBaseHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.repositories[].workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:completeHumanConflict.$parameter:workspace.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:completeHumanConflict.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:create.$parameter:input.dbNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.forcedContainerPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:create.$parameter:input.key",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.submoduleJobs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.submoduleMode.$variant:0",
+          "type": "'auto'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.submoduleMode.$variant:1",
+          "type": "'always'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$parameter:input.submoduleMode.$variant:2",
+          "type": "'never'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:create.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:onProgress.$parameter:partialFailures",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:onProgress.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.dbNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:workspace.isolationRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.key",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.passthrough",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.repositories[].baseBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.repositories[].baseSnapshot",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.repositories[].canonicalRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:workspace.repositories[].forcedRelativePaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.repositories[].mount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:workspace.repositories[].pendingSubResolutions[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.repositories[].poolRefs",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.repositories[].repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.repositories[].submoduleBases",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.repositories[].taskBaseHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.repositories[].workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:discard.$parameter:workspace.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:writeWindow.$method:run.$parameter:act.$return",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:writeWindow.$method:run.$return",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:head.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:head.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:head.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:resolveSubConflict.$parameter:conflict.base",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:resolveSubConflict.$parameter:conflict.canonicalRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:resolveSubConflict.$parameter:conflict.forcedRelativePaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:resolveSubConflict.$parameter:conflict.mergedTree",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:resolveSubConflict.$parameter:conflict.mount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:resolveSubConflict.$parameter:conflict.paths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:resolveSubConflict.$parameter:conflict.rawConflictOutput",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:resolveSubConflict.$parameter:conflict.salvagedPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:resolveSubConflict.$parameter:conflict.taskBaseHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:resolveSubConflict.$return.resolved",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:trees",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.dbNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:workspace.isolationRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.key",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.passthrough",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.repositories[].baseBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.repositories[].baseSnapshot",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.repositories[].canonicalRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:workspace.repositories[].forcedRelativePaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.repositories[].mount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$parameter:workspace.repositories[].pendingSubResolutions[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.repositories[].poolRefs",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.repositories[].repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.repositories[].submoduleBases",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.repositories[].taskBaseHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.repositories[].workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:merge.$parameter:workspace.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:merge.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recoverKey.$parameter:rowId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recoverKey.$parameter:workspaceRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recoverKey.$parameter:workspaceRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recoverKey.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recoverKey.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:resolveConflict.$parameter:conflict.base",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:resolveConflict.$parameter:conflict.canonicalRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:conflict.forcedRelativePaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:resolveConflict.$parameter:conflict.mergedTree",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:resolveConflict.$parameter:conflict.mount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:conflict.paths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:resolveConflict.$parameter:conflict.rawConflictOutput",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:conflict.salvagedPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:resolveConflict.$parameter:conflict.taskBaseHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:resolveConflict.$parameter:input.containerRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f"
+          ],
+          "fieldPath": "$method:resolveConflict.$parameter:input.runAgent.$parameter:manifest[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.runAgent.$parameter:manifest[].type.$variant:0",
+          "type": "'content'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.runAgent.$parameter:manifest[].type.$variant:1",
+          "type": "'modify-delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.runAgent.$parameter:manifest[].type.$variant:2",
+          "type": "'rename-delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.runAgent.$parameter:manifest[].type.$variant:3",
+          "type": "'binary'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.runAgent.$parameter:manifest[].type.$variant:4",
+          "type": "'submodule'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:resolveConflict.$parameter:input.runAgent.$parameter:manifest[].worktreeDirName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.runAgent.$parameter:prompt",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.runAgent.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$parameter:input.runAgent.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolveConflict.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f"
+          ],
+          "fieldPath": "$method:restore.$parameter:input.baseSnapshots",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:restore.$parameter:input.dbNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:restore.$parameter:input.forcedContainerPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:restore.$parameter:input.key",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e"
+          ],
+          "fieldPath": "$method:restore.$parameter:input.submodules",
+          "type": "Record<\n    string,\n    {\n      readonly submoduleBases: Record<string, string>\n      readonly poolRefs?: Record<string, string>\n      readonly pendingSubResolutions?: string[]\n    }\n  >"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f"
+          ],
+          "fieldPath": "$method:restore.$parameter:input.taskBaseHeads",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:restore.$parameter:input.workspaceRef.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:restore.$parameter:input.workspaceRef.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:restore.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:restore.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:extraForcedContainerPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.dbNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:workspace.isolationRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.key",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.passthrough",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.repositories[].baseBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.repositories[].baseSnapshot",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.repositories[].canonicalRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:workspace.repositories[].forcedRelativePaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.repositories[].mount",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$parameter:workspace.repositories[].pendingSubResolutions[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.repositories[].poolRefs",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.repositories[].repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.repositories[].submoduleBases",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.repositories[].taskBaseHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.repositories[].workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:snapshot.$parameter:workspace.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:snapshot.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:submodulePresence.$parameter:workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:submodulePresence.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:submodulePresence.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.forcedRelativePaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.priorBaseCommit.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.priorBaseCommit.$variant:1",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.priorNodeCommit.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$parameter:input.priorNodeCommit.$variant:1",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:4e4de402aa97febfe24e",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "fieldPath": "$method:undoShard.$parameter:input.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:undoShard.$return.$variant:1",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:IsolationWorkspaceScope",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222"
+          ],
+          "name": "blobHashes",
+          "signatureDigest": "sha256:b80f6fb39c17a36374f319484d926711219b10cedd4dc27a2f0885db82fdb738"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222"
+          ],
+          "name": "changedFiles",
+          "signatureDigest": "sha256:16cf5e944990e1bb0be6927183196b86dd114cd31e5f90627759df32b9f5b35d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222"
+          ],
+          "name": "child",
+          "signatureDigest": "sha256:071e5bfe52b7c4f0b54e7c0b0812feb414088ff05e83366892b375b0e1c77526"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "chooseGeneration",
+          "signatureDigest": "sha256:d39c5e3f2e6fa1c7de78f5920a4a635fbaac54672de6ce7d19ce19d0d1326bbf"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "name": "completeHumanConflict",
+          "signatureDigest": "sha256:e4e68912e71a62824d2500d2c293db8fac3cec4963a824b2453ce153dd27c49d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222"
+          ],
+          "name": "create",
+          "signatureDigest": "sha256:9df3ebee00b3ce9965f60a24c1e22f86ede14d824bbdefe144c92de8591f2f90"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "debug",
+          "signatureDigest": "sha256:4ed2e4c6779e0000362ab305ec95337c8155664a34299a7b490baa35b5ccd454"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "name": "discard",
+          "signatureDigest": "sha256:a3c56fdadfdbb509da965c18d39e08981d476037aa4afbbe539deba72760711a"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222"
+          ],
+          "name": "error",
+          "signatureDigest": "sha256:8610745686a9cd96a1ccb76a9aa47e9ab44b312b4e14ccda72cb78fe19764d0c"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f"
+          ],
+          "name": "head",
+          "signatureDigest": "sha256:dea0d43d79b599252099889ae65a77d11a35c038d8c1b255147250a77c576567"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:22e7d9c02faf999ad44f"
+          ],
+          "name": "info",
+          "signatureDigest": "sha256:8b43a7a5a66e4db411b0c228f7556ec6c585330c68a3902c66cac1cbb819e323"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "name": "merge",
+          "signatureDigest": "sha256:8d9754190ace5fa244bb53b0530f52ae850592315d4caae9a847ffe3e86cd8e3"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f"
+          ],
+          "name": "recoverKey",
+          "signatureDigest": "sha256:ec15ad8a29f038e14cbbb995c07b89efe46f7f39fd6ada80e205722c73f33811"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:c91008884282f0bdd6aa"
+          ],
+          "name": "resolveConflict",
+          "signatureDigest": "sha256:b3f614026f41d8073a3df67d6f1c314efa14af7dd7c3dfa939f40f8b04e8761c"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:4e4de402aa97febfe24e"
+          ],
+          "name": "restore",
+          "signatureDigest": "sha256:3f22155c245944b746b8025c1ad80bf92e47a04ddbaa8fb18437bb1f09c188c5"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f"
+          ],
+          "name": "run",
+          "signatureDigest": "sha256:f50fb52e300ba2b5d078e0af285a8d9d02ba652b0d44f4d6d6c6d1fb0400d3db"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f",
+            "import:c91008884282f0bdd6aa"
+          ],
+          "name": "snapshot",
+          "signatureDigest": "sha256:6c804412fa4d47a7cb8a1500682d27766e743d013d4d610af8898f32ff7dfbd2"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:22e7d9c02faf999ad44f"
+          ],
+          "name": "submodulePresence",
+          "signatureDigest": "sha256:2c5b5fd752974212d829a39cb26010cbc27012d0922a863b353c63e3d41931c2"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222"
+          ],
+          "name": "undoShard",
+          "signatureDigest": "sha256:7ac92b00f71cca6c224e555cf8f89317abf5530456d3d69004544394fc6a0c8e"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:018732be4331dc7d4222",
+            "import:22e7d9c02faf999ad44f"
+          ],
+          "name": "warn",
+          "signatureDigest": "sha256:46b33713185cfdc423936222a12d7dafa3cc4b2ad7dab83c82fcda8e10de0a56"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:018732be4331dc7d4222",
+          "file": "packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/wrapperMechanics.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:22e7d9c02faf999ad44f",
+          "file": "packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/executionMergeRecovery.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:4e4de402aa97febfe24e",
+          "file": "packages/backend/src/modules/task-execution/composition/isolationWorkspaceScene.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/isolationWorkspaceScene.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:c91008884282f0bdd6aa",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/isolationWorkspaceView.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/isolationWorkspaceView.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:04237fc9a916b4ee19bfc4c598949cfc6738c394441becd2ea3c897282cf404e",
+      "status": "target-context-current-surface",
+      "symbol": "IsolationWorkspaceScope",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:8481193c6e40bafa9ce2",
+        "import:9c8b4f106bdd3fb8ad05"
+      ],
+      "context": "source-control",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:8481193c6e40bafa9ce2",
+            "import:9c8b4f106bdd3fb8ad05"
+          ],
+          "fieldPath": "path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "type.$variant:0",
+          "type": "'content'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "type.$variant:1",
+          "type": "'modify-delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "type.$variant:2",
+          "type": "'rename-delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "type.$variant:3",
+          "type": "'binary'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "type.$variant:4",
+          "type": "'submodule'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:8481193c6e40bafa9ce2",
+            "import:9c8b4f106bdd3fb8ad05"
+          ],
+          "fieldPath": "worktreeDirName",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:MergeConflictEntry",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:8481193c6e40bafa9ce2",
+          "file": "packages/backend/src/services/mergeAgent.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/mergeAgent.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:9c8b4f106bdd3fb8ad05",
+          "file": "packages/backend/src/services/mergeAgent.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/mergeAgent.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:types:IsolationWorkspaceScope",
+        "public:source-control:types:MergeConflictManifest"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:314fbf2bc8cbbb61697e88b9363911129cb05011e7f0af57f898037b39e075c6",
+      "status": "target-context-current-surface",
+      "symbol": "MergeConflictEntry",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:978a0924e4a6a126de73",
+        "import:b88bd79a90d15ff1e80e"
+      ],
+      "context": "source-control",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:978a0924e4a6a126de73",
+            "import:b88bd79a90d15ff1e80e"
+          ],
+          "fieldPath": "[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "[].type.$variant:0",
+          "type": "'content'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "[].type.$variant:1",
+          "type": "'modify-delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "[].type.$variant:2",
+          "type": "'rename-delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "[].type.$variant:3",
+          "type": "'binary'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "[].type.$variant:4",
+          "type": "'submodule'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:978a0924e4a6a126de73",
+            "import:b88bd79a90d15ff1e80e"
+          ],
+          "fieldPath": "[].worktreeDirName",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:MergeConflictManifest",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:978a0924e4a6a126de73",
+          "file": "packages/backend/src/services/mergeAgent.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/mergeAgent.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:b88bd79a90d15ff1e80e",
+          "file": "packages/backend/src/services/mergeAgent.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/mergeAgent.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:types:IsolationWorkspaceScope"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b275495c14f1ddcc09f979c10b65586345676f29e3112ca97c23bb58b9eb95c1",
+      "status": "target-context-current-surface",
+      "symbol": "MergeConflictManifest",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:3141aa116b31b3fbd57d",
+        "import:4c137168b4f3cc5c02c4"
+      ],
+      "context": "source-control",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0",
+          "type": "'content'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1",
+          "type": "'modify-delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2",
+          "type": "'rename-delete'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:3",
+          "type": "'binary'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:4",
+          "type": "'submodule'"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:MergeConflictType",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:3141aa116b31b3fbd57d",
+          "file": "packages/backend/src/services/mergeAgent.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/mergeAgent.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:4c137168b4f3cc5c02c4",
+          "file": "packages/backend/src/services/mergeAgent.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/mergeAgent.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:types:IsolationWorkspaceScope",
+        "public:source-control:types:MergeConflictEntry",
+        "public:source-control:types:MergeConflictManifest"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:35730fdea8c80fc7aeb5cd8f66bc51e1f407e964ca8ad62830994485f4222273",
+      "status": "target-context-current-surface",
+      "symbol": "MergeConflictType",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -155884,8 +158793,14 @@
         "public:task-execution:operations:assertTaskExecutionContext",
         "public:task-execution:operations:currentTaskExecutionContext",
         "public:task-execution:operations:fenceTaskWrite",
+        "public:task-execution:participants:IsolatedAgentRunBinding",
         "public:task-execution:participants:SchedulerRuntimeTopology",
-        "public:task-execution:participants:TaskRuntimeLifecyclePersistence"
+        "public:task-execution:participants:TaskRuntimeLifecyclePersistence",
+        "public:task-execution:participants:createIsoUnderLock",
+        "public:task-execution:participants:markMergeFailed",
+        "public:task-execution:participants:mergeBackAndSettle",
+        "public:task-execution:participants:persistIsoBase",
+        "public:task-execution:participants:persistIsoNodeTree"
       ],
       "removeAfterWave": null,
       "serialization": "wire",
@@ -165638,6 +168553,327 @@
     {
       "authority": "context-bound",
       "budget": {
+        "maxMethods": 7,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 47,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:a55d31e0e01a32659805"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.appHome",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.intentId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.token.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.token.epoch",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.token.leaseUntil",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.token.ownerId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.token.ownerRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.token.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.persistence",
+          "type": "Pick<\n    TaskExecutionPersistence,\n    'artifactPaths' | 'effects' | 'mergeStates' | 'nodeExecution'\n  >"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.canonRepos[].baseBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.canonRepos[].repoPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.canonRepos[].worktreeDirName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.canonRepos[].worktreePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.isoKeyRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.writeSem.$method:run.$parameter:fn.$return",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.writeSem.$method:run.$return",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.containerPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.dbNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.passthrough",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.repos[].baseBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.repos[].baseSnapshot",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.repos[].canonWorktreePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.repos[].forcedRepoRelPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.repos[].isoWorktreePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.repos[].pendingSubResolves[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.repos[].poolDirs",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.repos[].repoPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.repos[].subBases",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.repos[].taskBaseHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.repos[].worktreeDirName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.taskId",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:createIsoUnderLock",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:d7872e7d264117131a116a350b2b09cb5a9f6fbe298e949e7210b00a17be1b4f"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "child",
+          "signatureDigest": "sha256:071e5bfe52b7c4f0b54e7c0b0812feb414088ff05e83366892b375b0e1c77526"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "debug",
+          "signatureDigest": "sha256:4ed2e4c6779e0000362ab305ec95337c8155664a34299a7b490baa35b5ccd454"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "error",
+          "signatureDigest": "sha256:8610745686a9cd96a1ccb76a9aa47e9ab44b312b4e14ccda72cb78fe19764d0c"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "info",
+          "signatureDigest": "sha256:8b43a7a5a66e4db411b0c228f7556ec6c585330c68a3902c66cac1cbb819e323"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "run",
+          "signatureDigest": "sha256:a0cfe7ebc94b64647e381bf9e856564a9d0494ba732e3e760b7f55ae8c71ae01"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "warn",
+          "signatureDigest": "sha256:46b33713185cfdc423936222a12d7dafa3cc4b2ad7dab83c82fcda8e10de0a56"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:a55d31e0e01a32659805",
+          "file": "packages/backend/src/services/isolatedAgentRun.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:cb9a275794cd3db38fc34fcd2f996d471fd6f1f7488c60894008decf14d000bb",
+      "status": "target-context-current-surface",
+      "symbol": "createIsoUnderLock",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Pick",
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
@@ -166556,7 +169792,7 @@
         {
           "consumerEdgeIds": [],
           "name": "$call",
-          "signatureDigest": "sha256:1cd7fe280d34ec05af0cfcc5318145d4175662c1d99fddbfdab1d98126b9641f"
+          "signatureDigest": "sha256:7e3b5094021206f51d0c82735c2fe99f7e0095cf8701fe71605c7d2766c57031"
         },
         {
           "consumerEdgeIds": [],
@@ -167677,6 +170913,101 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:9221679bd949c6391b71"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "executionContext.intentId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "executionContext.token.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "executionContext.token.epoch",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "executionContext.token.leaseUntil",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "executionContext.token.ownerId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "executionContext.token.ownerRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "executionContext.token.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "persistence",
+          "type": "Pick<\n    TaskExecutionPersistence,\n    'artifactPaths' | 'effects' | 'mergeStates' | 'nodeExecution'\n  >"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:IsolatedAgentRunBinding",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:9221679bd949c6391b71",
+          "file": "packages/backend/src/services/isolatedAgentRun.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:participants:createIsoUnderLock",
+        "public:task-execution:participants:markMergeFailed",
+        "public:task-execution:participants:mergeBackAndSettle",
+        "public:task-execution:participants:persistIsoBase",
+        "public:task-execution:participants:persistIsoNodeTree"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:8e04b11a0ece76266feacdd6b1061cb778007b7d2009776999c2115216430440",
+      "status": "target-context-current-surface",
+      "symbol": "IsolatedAgentRunBinding",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Pick"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24"
       ],
       "context": "task-execution",
@@ -167803,6 +171134,667 @@
       "signatureDigest": "sha256:72f14a21c0535be2052e5e000c62fc599e3efe0d2bae3ab017e757de297b03d6",
       "status": "target-context-current-surface",
       "symbol": "MaintenanceMemberSnapshot",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 6,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 25,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:840ed5c03f455efaceed"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.intentId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.epoch",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.leaseUntil",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.ownerId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.ownerRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.persistence",
+          "type": "Pick<\n    TaskExecutionPersistence,\n    'artifactPaths' | 'effects' | 'mergeStates' | 'nodeExecution'\n  >"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:reason",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:markMergeFailed",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:efce93e90d613841a0468dd47251be2a194b65cf17dacfc72602e483d73c428a"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "child",
+          "signatureDigest": "sha256:071e5bfe52b7c4f0b54e7c0b0812feb414088ff05e83366892b375b0e1c77526"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "debug",
+          "signatureDigest": "sha256:4ed2e4c6779e0000362ab305ec95337c8155664a34299a7b490baa35b5ccd454"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "error",
+          "signatureDigest": "sha256:8610745686a9cd96a1ccb76a9aa47e9ab44b312b4e14ccda72cb78fe19764d0c"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "info",
+          "signatureDigest": "sha256:8b43a7a5a66e4db411b0c228f7556ec6c585330c68a3902c66cac1cbb819e323"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "warn",
+          "signatureDigest": "sha256:46b33713185cfdc423936222a12d7dafa3cc4b2ad7dab83c82fcda8e10de0a56"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:840ed5c03f455efaceed",
+          "file": "packages/backend/src/services/isolatedAgentRun.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:6efee9c353de9dc053f57e85582b604086a2d1c965907ae606f327cb0f8baa17",
+      "status": "target-context-current-surface",
+      "symbol": "markMergeFailed",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Pick",
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 7,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 61,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:3c3dff9b7d4a8a56e559"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.intentId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.token.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.token.epoch",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.token.leaseUntil",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.token.ownerId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.token.ownerRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.executionContext.token.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.binding.persistence",
+          "type": "Pick<\n    TaskExecutionPersistence,\n    'artifactPaths' | 'effects' | 'mergeStates' | 'nodeExecution'\n  >"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.conflictResolver.$parameter:conflicts[].base",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.conflictResolver.$parameter:conflicts[].canonWorktreePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.conflictResolver.$parameter:conflicts[].forcedRepoRelPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.conflictResolver.$parameter:conflicts[].mergedTree",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.conflictResolver.$parameter:conflicts[].paths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.conflictResolver.$parameter:conflicts[].rawConflictOutput",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.conflictResolver.$parameter:conflicts[].salvagedPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.conflictResolver.$parameter:conflicts[].taskBaseHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.conflictResolver.$parameter:conflicts[].worktreeDirName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.conflictResolver.$parameter:containerPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.conflictResolver.$return.allResolved",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.conflictResolver.$return.detail",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.extraForcedContainerPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.containerPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.dbNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.passthrough",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.repos[].baseBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.repos[].baseSnapshot",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.repos[].canonWorktreePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.repos[].forcedRepoRelPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.repos[].isoWorktreePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.repos[].pendingSubResolves[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.repos[].poolDirs",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.repos[].repoPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.repos[].subBases",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.repos[].taskBaseHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.repos[].worktreeDirName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.handle.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.nodeTrees",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.repoCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.via.$variant:0",
+          "type": "'live'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.via.$variant:1",
+          "type": "'replay'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.writeSem.$method:run.$parameter:fn.$return",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:args.writeSem.$method:run.$return",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.detail",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.kind.$variant:0",
+          "type": "'merged'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.kind.$variant:1",
+          "type": "'conflict-human'"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:mergeBackAndSettle",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:2088a1ee99e1fb3f5479fb74f94b5cc25602373ba304526d8ccf76414a524477"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "child",
+          "signatureDigest": "sha256:071e5bfe52b7c4f0b54e7c0b0812feb414088ff05e83366892b375b0e1c77526"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "debug",
+          "signatureDigest": "sha256:4ed2e4c6779e0000362ab305ec95337c8155664a34299a7b490baa35b5ccd454"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "error",
+          "signatureDigest": "sha256:8610745686a9cd96a1ccb76a9aa47e9ab44b312b4e14ccda72cb78fe19764d0c"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "info",
+          "signatureDigest": "sha256:8b43a7a5a66e4db411b0c228f7556ec6c585330c68a3902c66cac1cbb819e323"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "run",
+          "signatureDigest": "sha256:a0cfe7ebc94b64647e381bf9e856564a9d0494ba732e3e760b7f55ae8c71ae01"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "warn",
+          "signatureDigest": "sha256:46b33713185cfdc423936222a12d7dafa3cc4b2ad7dab83c82fcda8e10de0a56"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:3c3dff9b7d4a8a56e559",
+          "file": "packages/backend/src/services/isolatedAgentRun.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:e9fac0303bef9758c7d056517f120229ec15ac9f573360f289b0b95da3939f39",
+      "status": "target-context-current-surface",
+      "symbol": "mergeBackAndSettle",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Pick",
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:0fd7c29b8987438a9e0e"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "detail",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "kind.$variant:0",
+          "type": "'merged'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "kind.$variant:1",
+          "type": "'conflict-human'"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:MergeSettleOutcome",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:0fd7c29b8987438a9e0e",
+          "file": "packages/backend/src/services/isolatedAgentRun.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:participants:mergeBackAndSettle"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:155c110549736fb845e8902ec39bd0970bc20bb42ccb85ffa6719add82740ddf",
+      "status": "target-context-current-surface",
+      "symbol": "MergeSettleOutcome",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -167989,8 +171981,14 @@
         "public:task-execution:operations:currentTaskExecutionContext",
         "public:task-execution:operations:fenceTaskWrite",
         "public:task-execution:operations:withOwnedTaskWrite",
+        "public:task-execution:participants:IsolatedAgentRunBinding",
         "public:task-execution:participants:SchedulerRuntimeTopology",
-        "public:task-execution:participants:TaskRuntimeLifecyclePersistence"
+        "public:task-execution:participants:TaskRuntimeLifecyclePersistence",
+        "public:task-execution:participants:createIsoUnderLock",
+        "public:task-execution:participants:markMergeFailed",
+        "public:task-execution:participants:mergeBackAndSettle",
+        "public:task-execution:participants:persistIsoBase",
+        "public:task-execution:participants:persistIsoNodeTree"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -168038,6 +172036,393 @@
       "symbol": "ownershipTokenKey",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 27,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:c04b69f4da8ac64c9380"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.intentId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.epoch",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.leaseUntil",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.ownerId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.ownerRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.persistence",
+          "type": "Pick<\n    TaskExecutionPersistence,\n    'artifactPaths' | 'effects' | 'mergeStates' | 'nodeExecution'\n  >"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.containerPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.dbNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.passthrough",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].baseBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].baseSnapshot",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].canonWorktreePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].forcedRepoRelPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].isoWorktreePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].pendingSubResolves[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].poolDirs",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].repoPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].subBases",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].taskBaseHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].worktreeDirName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:repoCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:persistIsoBase",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:b1c42aa86ba0a9c1890d18e76bc43cd0146558b9bf82522b00e9de201fb6cfc8"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:c04b69f4da8ac64c9380",
+          "file": "packages/backend/src/services/isolatedAgentRun.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:4c059325cee47bac7a4478b2bebf1fed45515d01f7a4b217dab1072a2100cfb5",
+      "status": "target-context-current-surface",
+      "symbol": "persistIsoBase",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Pick",
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 28,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:a6730859971c0d2c807b"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.intentId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.epoch",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.leaseUntil",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.ownerId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.ownerRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.executionContext.token.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:binding.persistence",
+          "type": "Pick<\n    TaskExecutionPersistence,\n    'artifactPaths' | 'effects' | 'mergeStates' | 'nodeExecution'\n  >"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.containerPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.dbNodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.passthrough",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].baseBranch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].baseSnapshot",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].canonWorktreePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].forcedRepoRelPaths[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].isoWorktreePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].pendingSubResolves[]",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].poolDirs",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].repoPath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].subBases",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].taskBaseHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.repos[].worktreeDirName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:handle.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:nodeTrees",
+          "type": "Record<string, string>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:repoCount",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:persistIsoNodeTree",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:a7caddaad43830fc3a52ccb0db06de713084d7474338fb33da16b23b9b34ef89"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:a6730859971c0d2c807b",
+          "file": "packages/backend/src/services/isolatedAgentRun.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:3c7e23ddf898a04548c0e878fed7ae2439d036891cbcec3d4c13af301da8fd76",
+      "status": "target-context-current-surface",
+      "symbol": "persistIsoNodeTree",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Pick",
+        "Record"
+      ],
       "version": 1
     },
     {
@@ -173427,6 +177812,72 @@
       "version": 1
     },
     {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:d8891c18af05b5f4730b"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:fn.$return",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$return",
+          "type": "T"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:WriteSemLike",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "run",
+          "signatureDigest": "sha256:a0cfe7ebc94b64647e381bf9e856564a9d0494ba732e3e760b7f55ae8c71ae01"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:d8891c18af05b5f4730b",
+          "file": "packages/backend/src/services/isolatedAgentRun.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:task-execution:participants:createIsoUnderLock",
+        "public:task-execution:participants:mergeBackAndSettle"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:0c40578bfd1e80147e516f948f9063f1214567cf42241daf8f86a3848404fb45",
+      "status": "target-context-current-surface",
+      "symbol": "WriteSemLike",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
       "authority": "request-authority",
       "budget": {
         "maxMethods": 5,
@@ -175580,8 +180031,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
-        "import:d8260d5e24c50d0009a1",
-        "import:db39e1296ec2e3fdfb39"
+        "import:d8260d5e24c50d0009a1"
       ],
       "context": "task-execution",
       "dataClass": "metadata",
@@ -175626,12 +180076,6 @@
           "edgeId": "import:d8260d5e24c50d0009a1",
           "file": "packages/backend/src/services/portArtifacts.ts",
           "ownerEntryId": "owner:packages/backend/src/services/portArtifacts.ts#$file"
-        },
-        {
-          "context": "legacy",
-          "edgeId": "import:db39e1296ec2e3fdfb39",
-          "file": "packages/backend/src/services/isolatedAgentRun.ts",
-          "ownerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [],
@@ -185699,7 +190143,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6fe65157bb529157e9fb23a74f8161afb0ef62913a410733121e86092ed4e7ea",
+  "sourceDigest": "sha256:21807212cede9256bc81ed445607a1f6aa12f4c47896e3847e94e2fbbc2e70fb",
   "targetContexts": [
     "collaboration",
     "development-automation",

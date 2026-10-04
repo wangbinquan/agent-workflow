@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 298,
-    "thinFacades": 55
+    "thinFacades": 56
   },
   "entries": [
     {
@@ -1563,6 +1563,7 @@
         "import:6d4dd55fb5471e2376ca",
         "import:71d3a9eedbcc90b75e7f",
         "import:72d6ff98075103026425",
+        "import:7b40bb0b03a701ec8600",
         "import:7fc319259a8835d153f5",
         "import:8c4ac180d94806b3d46b",
         "import:96ac7dbf92a4e284bd34",
@@ -1930,36 +1931,32 @@
     {
       "boundaryEdgeIds": [
         "import:0ebb5df6156b4409f38c",
-        "import:287ac3554b21c34fe3aa",
+        "import:0fd7c29b8987438a9e0e",
         "import:3073351bd21a9dfc592c",
         "import:34478042208a57498527",
         "import:3a6fc23a6aa0e46d0945",
+        "import:3c3dff9b7d4a8a56e559",
         "import:52aba1bdc4a230f5b4c2",
         "import:5cc16851d98947a7965b",
+        "import:840ed5c03f455efaceed",
         "import:8adca7239c7647bba39e",
+        "import:9221679bd949c6391b71",
         "import:92c30c64c373e47552b9",
         "import:95ff44fc8e39f564fa71",
         "import:98184d2db8234ad6a232",
-        "import:cc416c0bc12db151708e",
+        "import:a55d31e0e01a32659805",
+        "import:a6730859971c0d2c807b",
+        "import:c04b69f4da8ac64c9380",
         "import:d06ec7cfd05407a047cb",
-        "import:db39e1296ec2e3fdfb39",
+        "import:d8891c18af05b5f4730b",
         "import:e9fc3b9fae25c6a15def"
       ],
-      "exportedSymbols": [
-        "IsolatedAgentRunBinding",
-        "MergeSettleOutcome",
-        "WriteSemLike",
-        "createIsoUnderLock",
-        "markMergeFailed",
-        "mergeBackAndSettle",
-        "persistIsoBase",
-        "persistIsoNodeTree"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/isolatedAgentRun.ts",
       "id": "facade:packages/backend/src/services/isolatedAgentRun.ts",
       "ownerEntryId": "owner:packages/backend/src/services/isolatedAgentRun.ts#$file",
       "removeAfterWave": "W9",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -2248,18 +2245,21 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:3141aa116b31b3fbd57d",
+        "import:4c137168b4f3cc5c02c4",
         "import:5af6bb3cffb8b9251a95",
         "import:61fafb4bd60c3fc76fe6",
         "import:70c54af64c132bdaca01",
-        "import:a908b109bf2d15e8ef23"
+        "import:8481193c6e40bafa9ce2",
+        "import:978a0924e4a6a126de73",
+        "import:9c8b4f106bdd3fb8ad05",
+        "import:a908b109bf2d15e8ef23",
+        "import:b88bd79a90d15ff1e80e"
       ],
       "exportedSymbols": [
         "MERGE_AGENT_NAME",
         "MERGE_RESOLUTION_PORT",
         "MERGE_RESOLVE_NODE_PREFIX",
-        "MergeConflictEntry",
-        "MergeConflictManifest",
-        "MergeConflictType",
         "ResolutionVerdict",
         "ResolvedPathState",
         "buildMergeAgent",
@@ -2281,27 +2281,20 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:015a57568dc03430be5d",
         "import:2126787881e17e784ce8",
         "import:28fa120b47a47ac913c4",
+        "import:315df01db722578f3655",
         "import:33c872d98a30c6d54efc",
-        "import:36082c73b47775066836",
-        "import:4e69c2cb2d757fbca6bd",
-        "import:53ffc9f7db845b8984d0",
-        "import:565ffb8735e0987d1d86",
-        "import:6d0bc01056bf144b0e6e",
+        "import:677264ae4f8e482a3f36",
         "import:70b42583247fbfc63fa9",
         "import:878a1ab7b52f271f7f6e",
-        "import:a002f594de8bd04927da",
         "import:a1c45b85348209ab1b7e",
-        "import:b310eac7455e6a398ccd",
+        "import:ba09ef00f5c53be9e67c",
         "import:bc9c83d4447de5b4cd7f",
-        "import:c60f083cae677598aa75",
-        "import:cbefb72a6c305a93b27d",
         "import:cdd0ac2ed60a43322dbe",
         "import:d32f91a08e32ffc87ac6",
         "import:d99812d7a0c0f90e0ed1",
-        "import:ed7dfa7c029ca1077bb8",
+        "import:ec89638f9020fdcbd2bb",
         "import:fc4c03f688f30d553f96"
       ],
       "exportedSymbols": [],
@@ -6345,5 +6338,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6fe65157bb529157e9fb23a74f8161afb0ef62913a410733121e86092ed4e7ea"
+  "sourceDigest": "sha256:21807212cede9256bc81ed445607a1f6aa12f4c47896e3847e94e2fbbc2e70fb"
 }

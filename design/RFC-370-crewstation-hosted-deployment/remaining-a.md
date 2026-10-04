@@ -458,3 +458,12 @@ mutation 总数 1862 保持，仅两项原 native owner/file 和原 classifier �
 旧上传 SHA 2c474db9 的主 CI37168434612 completed/failure（35 success/14 failure/1 cancelled），Windows37168434657 failure、maintenance37168434632 success；类型补正 a7522bbe 主 CI37170055509 cancelled（37 success/11 failure/2 cancelled），精确手动 Windows37170515895 success 1/1。架构 oracle 补正 b6195a0c 主 CI37171176047 已 completed/failure（43 success/7 failure），后端全部分片及类型/lint 通过，六项页面 E2E 与 required 失败。Ubuntu1 job111344566543 和 Windows3 job111345229706 的原日志核到 RFC-371 观测页面/下钻/捕获断言；其余四份页面日志未逐字核对，不宣称旧整套 CI 通过。并行 owner 已提交其 2f7 修复；本批新源码和原 Git 回归仍交本次发布的 exact-SHA hosted CI。
 
 本机只做 owned format/lint、纯 AST/byte/JSON/原库存投影与一次原 scoped 生成，没有 AW 本机 tests/typecheck/build/service。新行为尚待托管 CI；完整 A1–A8/AC00/A-G 持续，随后各层独立 CS adapters，B/M0 先实际部署再 M1–M4。当前仍无 AW-in-CS 部署，不关闭 RFC。全部旧文档、并行输出、失败与取消历史完整保留。
+
+
+### 2026-10-04 RFC-370：完整隔离 scope 接线与两项 CI 修复
+
+本批中性 A4 已接入完整 14-method isolation scope 与 node/wrapper/recovery/cleanup 和真实 roots；旧 Task policy 迁 TE，旧 service 薄转导。SOURCE31、W29 三字面值、Workgroup 完整 ACK/重入队列与 Generation lazy 配置提前/关闭修复的四项有限独立 SOURCE 均 PASS；原函数、持久/effect 语义、测试预算和断言保持。两项 CI 修复的新回归仍交 hosted CI；旧 d005 主 CI37177891308 的 42 success/8 failure 保留，不记作已通过。
+
+官方 census 仅在已提交 d3ba4340 与冻结39路径上生成一次，排除且保留并行 WIP；sourceDigest sha256:21807212cede9256bc81ed445607a1f6aa12f4c47896e3847e94e2fbbc2e70fb。129 原库存/why、40 SPI、69 target edges、空 SCC 与原规则保持；五项实际增长随 matching canonical 消费并由正常后继退役。19 新 public 都有生产消费者，两项旧导入债退役 302→300；Task effect 9/0 与 68 code-host bindings 语义保持。详情见 [functional-gates](functional-gates.md)。
+
+只做自有 format/lint、纯 AST/byte/JSON 和一次 scoped 生成，无 AW 本机 tests/typecheck/build/service。剩余 A1～A4、A5～A8/AC00 与完整独立 A-G 继续；随后各层独立 CS adapters、B/M0 先实际部署、再 M1～M4。本任务 M0 首次部署尚未完成，RFC 持续；原正文、旧 gate/CI 历史与全部并行输出保留。

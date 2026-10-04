@@ -729,3 +729,22 @@ mutation 总数 1862 保持，仅两项原 native owner/file 和原 classifier �
 旧上传 SHA 2c474db9 的主 CI37168434612 completed/failure（35 success/14 failure/1 cancelled），Windows37168434657 failure、maintenance37168434632 success；类型补正 a7522bbe 主 CI37170055509 cancelled（37 success/11 failure/2 cancelled），精确手动 Windows37170515895 success 1/1。架构 oracle 补正 b6195a0c 主 CI37171176047 已 completed/failure（43 success/7 failure），后端全部分片及类型/lint 通过，六项页面 E2E 与 required 失败。Ubuntu1 job111344566543 和 Windows3 job111345229706 的原日志核到 RFC-371 观测页面/下钻/捕获断言；其余四份页面日志未逐字核对，不宣称旧整套 CI 通过。并行 owner 已提交其 2f7 修复；本批新源码和原 Git 回归仍交本次发布的 exact-SHA hosted CI。
 
 本机只做 owned format/lint、纯 AST/byte/JSON/原库存投影与一次原 scoped 生成，没有 AW 本机 tests/typecheck/build/service。新行为尚待托管 CI；完整 A1–A8/AC00/A-G 持续，随后各层独立 CS adapters，B/M0 先实际部署再 M1–M4。当前仍无 AW-in-CS 部署，不关闭 RFC。全部旧文档、并行输出、失败与取消历史完整保留。
+
+
+### 2026-10-04 RFC-370：完整隔离 scope 接线与两项 CI 修复
+
+A4 本批完成 14-method IsolationWorkspaceScope：SC owner 保留 native Git/FS 实现，TE owner 保留真实 dbNodeRunId、持久拓扑、写入锁、effect/observer 和 settle ACK。node、wrapper、merge recovery、cleanup 以及 cli/server/provider/child roots 已沿完整 selected factory 接线。旧 Task 七个完整策略函数迁入 TE infrastructure，旧 isolatedAgentRun service 成为准确 public 转导；显式不完整实现拒绝，不逐项退回 native。SOURCE31 有限独立 PASS `00d4a2dc2af1f8572e6751ff77adbdd3e66206fbde8a0afb1c9bd7bba4adce77`，纯 AST 保留 120 个原持久调用及 3 个 observer 调用。原五测试名称、预算和断言保持，新双 provider 回归交 hosted CI。
+
+W29 仅按原 normalizer 更新三项真实字面值：PG declaration 172→173，SQLite application 实际 52→53；原测试没有 SQLite count 断言，未添加虚构预言。八 phase、原 scanner/normalizer、断言和预算保持；SOURCE1 独立 PASS `633187ede63bb0549a695e9b4a2af0c570ebe90f1f1e23ea2d4a805e74f969f3`。
+
+Workgroup commit 使用既有 KeyedSerialQueue 按 db client identity/taskId 保持完整事务 ACK FIFO；既有 holdsExplicitTransaction 识别当前 frame 直接重入，避免嵌套同 Task 和 SQLite writer lease 反向等待。原 SQL/CAS/receipt、任意错误 identity、十次 SERIALIZABLE 写重试与 full jitter 保持，load 与实际 Agent 并行执行不进入队列。10 项实际展开回归涵盖完整 ACK、跨实例/Task/client、双 provider 嵌套、SQLite 外层 lease、原拒绝与重试；协议 PG 夹具不当作真实 PG。DESIGN1 嵌套死锁 FAIL 保留，DESIGN2 PASS；SOURCE4 独立 PASS `962a040950539c77c1c0022ad25549f9866153aae81c1a9683b8ca62c2c0f4a8`。原 RFC185 三成员断言与预算未放宽，其修复效果尚待本批确切 SHA。
+
+Generation resume 将唯一 lazy PostgreSQL runtime 的配置捕获提前到 Source Worker/preflight 前，尚未打开 target SQL/advisory；source 启动失败关闭 runtime，preflight 失败按 source→runtime 关闭，正常迁移及末尾关闭链保持。设计明确有效配置读取时点提前、target 配置与 source 同时无效时先返回配置错误；新增三项真实 coordinator 回归覆盖缺源、坏源、原 getter 拒绝 identity，原 T19h 全文及 5s 预算保持。DESIGN1 与 SOURCE3 独立 PASS，源码指纹 `6cc747e236414875bcf44a4d6b860951155c9062a356fc49af04b380bffd811b`。d005 原 CI37177891308 为 completed/failure（42 success/8 failure），macOS5 job111364257512 的两项 T19h 用例分别 5066.87/5395.90ms，保留原失败，不记作四项独立失败。其余六个页面 E2E 与 required 失败由并行 RFC-371 owner 继续处理；本批不覆盖其 WIP。
+
+按 peer 明确交接，在 d3ba4340a6453c02d2cf263d4b0bbedaf1b03579 与冻结 SOURCE39 上执行唯一一次原 scoped census：6351 个 nonowned source 从该提交 blobs 读取，四个并行 untracked source 排除并保留。sourceDigest `sha256:21807212cede9256bc81ed445607a1f6aa12f4c47896e3847e94e2fbbc2e70fb`。129 项原有序库存及旧 why 保持；实际五项为 mutation 1862→1866、imports 6023→6074、分类记录 5354→5388、public 1118→1137、symbol owner 26461→26516。五项一次增长回执仅由 matching canonical 消费后正常后继退役，原规则/计数函数/阈值不改。
+
+新增 19 public 全有生产消费者；旧 service 的两项内部导入债真实退役，302→300，其余完整条款/why 保持。40 required SPI、69 target edges、空 implementation SCC 保持。Task effect ledger 仍为 9 entries/0 unknown，68 code-host bindings 和全部语义 payload 保持；只投影实际 file/line/id/owner 迁位。C2 实际薄 facade 增加 isolatedAgentRun，896→897；原 exact 双向消费者债等式保持。
+
+本机只做目标 format/lint、纯 byte/AST/JSON、原库存计数与上述一次生成，无 AW 本机 tests/typecheck/build/service。四项 SOURCE PASS 均复用，无 moving HEAD 重启 gate；META 与正常回执退役只作有限审查，正式行为交新 exact-SHA hosted CI。旧失败/取消、原正文与全部并行内容保留。
+
+完整 A1～A4 余项及 A5～A8、AC00 与完整独立 A-G 仍开放；A4 其余 Git inspection/commit/candidate/delivery、Task HTTP diff/repair 和 DE/DA 工作区验证继续。完整 A-G 后编写各层独立 CS adapters，B/M0 先完成实际部署，再逐项 M1～M4。本任务 M0 首次部署尚未完成，不关闭 RFC。
