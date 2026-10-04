@@ -33,3 +33,11 @@ CS独立修复8db68361a85baa9e18579cc8e0d1f408d0b2593c已上远端；其6项确�
 本次原19候选SOURCE1确实发现3项P2并记录FAIL：span-facts早返回未拒绝趋势专属字段、7处新增Testing Library ByRole不支持exact参数、短状态文本与原E2E可见文字精确预言冲突。窄后继在span早返回之前拒绝非trends recordedUsage，并用实际原null usage/cost span作正负回归；只删除新增7处不支持参数，原name仍精确；恢复原完整状态文字，纵向header在原7rem列内换行，176px轨道及原E2E两处预言不改。recorded fallback仅限not-ready，与原formatter一致。随后依用户呈现反馈移除细灰任务数柱，精确任务数量保留在柱顶与aria；实际分类数字和完整总量未知不改。有限后继SOURCE／META和正式CI分别记录，原FAIL不改为PASS。
 
 以上窄R2已有限PASS，原19内容的官方静态生成完成；随后用户继续要求移除顶部巨大的缺口提示。后继只删除已有facts报告的重复NoticeBanner，数据质量Card／各自metrics／趋势实际覆盖仍在，无facts或failed错误说明保留。原两个关于该段重复解释的UI期望改为确实不存在；全分页、Task／调用／维度、返回、数值及预算不改。这个新用户呈现候选单独做窄SOURCE并只生成一次对应canonical，保留先前成功生成结果；不因移动HEAD或未改变的后台重跑任何完整门。
+
+### 已消费增长许可的正常退役（2026-10-04）
+
+`38572c666365e0d5542af421a6b849117f874eca` 已提交对应实际 owner 26536→26539 的 matching canonical；后继仅退役该已消费 `allowGrowth`，baseline 26539、原129条有序库存、每条 why、原300债务、计数与完整源码均保持。原许可说明逐字保留：
+
+> RFC-371：原实际EOF统计新增qualifiedRecordedUsage、共用qualifiedCostEvidence及私有RecordedObservationCost合同三个真实符号，owner26536→26539；全部旧条款、300债务及原规则保持，matching canonical后正常后继退役此一次许可。
+
+使用原 `artifactContentDigest`／`withArtifactProvenance` 更新本 ledger 的摘要与当前已提交快照，逐条按原 `ledgerEntryCount` 核对已提交源；本批不改生产源码、其他12份匹配产物或 scanner，不重复原完整生成，不改写已发布历史。原 SOURCE／META PASS、CI失败及取消历史保留。该SHA Windows在本片测试类型报告四处错误，视觉在daemon启动前失败，分别继续修复，不声称全仓CI成功或RFC完成。

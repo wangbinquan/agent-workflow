@@ -1,3 +1,7 @@
+## 2026-10-04 RFC-371 已消费 owner 增长许可正常退役
+
+38572c666 的26536→26539 matching canonical已上库；只在正常后继退役已消费许可，保留实际26539、全部129条库存／why、300债务与原规则，原说明在 scope-metrics-repair.md逐字保留。原摘要助手及逐条原AST资格另留证；生产／测试源码不变，不重跑完整生成。Windows新增测试四处类型错误和视觉daemon启动失败继续，原失败保持；完整native owner与规模、两个RFC仍进行中。
+
 ## 2026-10-04 RFC-371 已记录 Token／人民币与正式泳道呈现修复
 
 正式总览仅保留任务、Token、人民币估值三张公共Card，运行时执行次数并入任务Card并说明原受理执行口径；全局数据质量也仅总览。缺记录范围显示独立标记的全部已收到四桶与实际CNY，保留原完整总量未知、未定价及不可见状态，不把缺口按零计或用完整Task子集冒充总量。原全cohort/allocation与全部分页到EOF、原fact/spool/seal/retained-count/digest资格保持；同scope独立费用人口costCoverage保留无报价记录，即使没有recordedCost金额也不能丢掉。
