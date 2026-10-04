@@ -44,6 +44,7 @@ import type { Logger } from '@/util/log'
 import { Semaphore } from '@/util/semaphore'
 import { describeEachProvider } from './helpers/eachProvider'
 import { held } from './helpers/portArtifactContent'
+import { composeNodeRunRuntimePersistence } from './helpers/nodeRunRuntime'
 import {
   MemoryIsolationFactory,
   MemoryIsolationStore,
@@ -159,6 +160,16 @@ async function fixture(db: ProviderNeutralDatabase, mounts = ['']) {
       persistence,
       executionContext: context,
       isolationWorkspaces: factory,
+      nodeRunRuntime: new Proxy(composeNodeRunRuntimePersistence(db), {
+        get(target, key) {
+          if (key === 'withSelection')
+            return async () => {
+              throw new Error('fixture stopped before runtime execution')
+            }
+          const value = Reflect.get(target, key)
+          return typeof value === 'function' ? value.bind(target) : value
+        },
+      }),
       defaultNodeRetries: 0,
       operationConfiguration: {
         readBinaryPaths() {

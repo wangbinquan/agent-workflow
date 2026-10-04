@@ -383,6 +383,9 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   'rfc359-w8-logical-source-conformance.test.ts: 1',
   'rfc359-w8-migrator-conformance.test.ts: 1',
   // RFC-371：嵌套子会话数字采集的原生只读 SQLite 夹具，AW 账本另做双 provider 回归。
+  // RFC-370: one native SQLite client records real writer-lease/transaction ACKs.
+  // Its PG protocol fixture is synthetic; real-PG parity is retained as explicit debt below.
+  'rfc370-workgroup-commit-queue.test.ts: 1',
   'rfc371-native-child-capture.test.ts: 1',
   // RFC-371：原生 OpenCode 固定 SQLite 文件夹具（建库/修改各一处），不属于 AW 持久 provider。
   'rfc371-native-model.test.ts: 2',
@@ -884,6 +887,9 @@ export const OPEN_MIGRATION_DEBT: readonly string[] = [
   // `rfc359-task-execution-read-models` 也**一直就属于那一类**（前者与 rfc268 同款装配，
   // 后者直接建 `createSqliteTaskExecutionRuntimeParticipants`），只是判据认的三种拼法都对不上。
   // 补上拼法之后它们离开本名单——「还剩多少要迁」少了两条**假待办**。
+  // RFC-370: SQLite is real, while the held PG transaction ACK/rejection is a protocol fixture.
+  // This is not registered as a sanctioned single-engine exception.
+  'rfc370-workgroup-commit-queue.test.ts',
 ]
 
 describe('RFC-359 W5-T19f —— 测试不得写死引擎（高水位，只降不升）', () => {

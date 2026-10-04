@@ -121,7 +121,22 @@ describe('RFC-060 PR-E — wrapper finalize uses gitChangedFiles, not gitDiffSna
     // 根）做，这正是 RFC-066 当年必须禁掉多仓 wrapper-git 的根因（只看得见第一个
     // 仓）。现在遍历 `diffableRepos`（已滤掉只读成员）逐仓做，路径按挂载路径前缀化
     // 后合并。`wrapperCanonPath` 这个变量随之删除。
-    expect(src).toContain('gitChangedFiles(repo.path')
+    const native = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'localIsolationWorkspace.ts',
+      ),
+      'utf8',
+    )
+    expect(src).toContain('scope.changedFiles(repo.path')
+    expect(src).toContain('workspaceRecord(sceneRecord(scene).handle).scope')
+    expect(native).toContain('changedFiles: gitChangedFiles,')
     expect(src).toContain('for (const repo of diffableRepos(scene))')
     // 反向锁：不得退回完整 patch。
     expect(src).not.toContain('gitDiffSnapshot(wrapperCanonPath')

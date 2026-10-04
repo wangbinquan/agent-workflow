@@ -311,7 +311,23 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     }
     expect(src).toContain('state.log,\n      state.writeSem,\n    )')
     // Round 6 (P2): replay rebuilds must address the PHYSICAL iso identity.
-    expect(src).toContain('nodeRunId: isoKeyOf(r.isoWorktreePath, r.id)')
+    const native = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'source-control',
+        'infrastructure',
+        'local',
+        'localIsolationWorkspace.ts',
+      ),
+      'utf8',
+    )
+    expect(src).toContain('key: await scope.recoverKey(r.isoWorktreePath, r.id)')
+    expect(src).toContain('dbNodeRunId: r.id')
+    expect(src).toContain('workspaceRef: r.isoWorktreePath')
+    expect(native).toContain('recoverKey: isoKeyOf,')
     // And the iso worktree remains on disk in the unit-level flows above; the
     // existence of the discard-in-finally is exactly why the flags must flip.
     expect(existsSync(appHome)).toBe(true)
