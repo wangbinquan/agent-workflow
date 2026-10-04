@@ -8,7 +8,10 @@ import type {
   CompleteObservationQuality,
   ObservationOverviewQuery,
 } from '@agent-workflow/shared'
-import { completeObservationReportContent } from '@agent-workflow/shared'
+import {
+  completeObservationReportContent,
+  ObservationDimensionSelectionSchema,
+} from '@agent-workflow/shared'
 import { Card } from '@/components/Card'
 import { ErrorBanner } from '@/components/ErrorBanner'
 import { LoadingState } from '@/components/LoadingState'
@@ -533,6 +536,28 @@ export function CompleteRunObservability({
           <CompleteDimensionDetails
             row={dimension.row}
             onClose={() => setDimension(null)}
+            onRelatedTasks={
+              !search.task && dimension.row.selection.model
+                ? () => {
+                    const previous = search.selection
+                      ? ObservationDimensionSelectionSchema.parse(JSON.parse(search.selection))
+                      : {}
+                    setDimension(null)
+                    onChange({
+                      ...search,
+                      selection: JSON.stringify({ ...previous, ...dimension.row.selection }),
+                      tab: 'tasks',
+                      after: undefined,
+                      agent: undefined,
+                      quality: undefined,
+                      runtime: undefined,
+                      model: undefined,
+                      attempt: undefined,
+                      span: undefined,
+                    })
+                  }
+                : undefined
+            }
             triggerRef={dimensionTrigger}
             fallbackRef={pageRef}
           >

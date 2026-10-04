@@ -1,3 +1,9 @@
+## 2026-10-04 RFC-371 正式浏览器回归与实际模型任务入口
+
+正式报告协议已替代旧 E2E mock；保留全部原标题、120s/60s、双语、暗色窄屏、焦点／返回、四类Token与卡片间距断言，模型交集请求回原daemon。正式模型弹窗恢复“查看关联任务”，与原用途、时间、搜索、状态、仓库、工作流范围合并，原JSON字符串wire保持。新增双语前端回归。SOURCE5 v2唯一新增类型P2的FAIL保存；只删两处Testing Library不支持的exact，SOURCE1 v3有限PASS，其他28项及所有断言字节保持。
+
+本机正常管理员登录仅验收；AW七天8任务中7项原独立四桶／人民币已恢复，1项真实中断缺用量仍未知，原全范围未知未替换为下界。CS实际单任务8275分类／人民币存在，但七天24任务仍整批遮蔽，正独立修复。此候选不关闭RFC，不将呈现夹具作为供应商数据；新确切SHA主CI、Windows／定时CI、完整原生采集与规模验收继续。没有本机AW test/typecheck/build/service。并行发布已交接完成，其提交内容和所有其他在制品保留。
+
 ## 2026-10-04 RFC-371 修复前端继续读取旧报告
 
 原已运行 Vite 的正式入口是 localhost:5174/observability，7456 为 API。普通 Task 指标资格已发布 d005ca80；SPA queryKey 和 retainedIds scope 同时加入 task-scope-metrics/2，离开旧遮罩报告但保留其不可变内容与原查询缓存。真实 QueryClient 缓存回归与有限 SOURCE2-META1 独立功能门通过源码检视；原静态 canonical 129 库存不变，只更新 digest/provenance。没有本机 AW tests/typecheck/build/service。

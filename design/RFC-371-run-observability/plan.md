@@ -559,3 +559,7 @@ DESIGN1 与 SOURCE18 v2 独立功能门 PASS，SOURCE16 三个 P2/FAIL 保留：
 ### 2026-10-04 页面旧报告缓存修复
 
 SOURCE2-META1 有限功能门通过：前端 queryKey 与 retainedIds scope 同时采用 task-scope-metrics/2，原 QueryClient 旧报告缓存不删除、不改写，新增新资格POST和完整Task显示回归。129原库存保持；本机只做目标静态检查与原canonical生成。实际入口localhost:5174已到开发SSO，管理员登录待授权，页面验收及新SHA hosted CI未完成；原native采集与规模验收仍开放。
+
+## 2026-10-04 正式浏览器回归接续
+
+见[浏览器回归修复](./browser-ci-repair.md)。旧E2E切换正式不可变报告和续页，实际模型交集回原daemon；正式模型弹窗恢复既有查看关联任务入口并保留原范围。原所有用例标题和等待预算不变，有限SOURCE1 v3通过，v1/v2原失败保存。精确生产源码canonical生成／审阅与发布后完整确切SHA CI分别留证；两RFC仍在进行，CS任务遮蔽、完整原生owner接线和规模验收未以本片关闭。

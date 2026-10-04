@@ -473,7 +473,7 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
     await primeAuth(page, daemon)
     await page.goto(`${daemon.baseUrl}/observability`)
     const task = page.getByRole('button', { name: 'A11y task observations', exact: true })
-    await expect(task).toBeVisible()
+    await expect(page.getByRole('heading', { name: 'Task usage trend', exact: true })).toBeVisible()
     await expectNoCriticalOrSeriousAxeViolations(page, '/observability (overview)')
     for (const tab of [
       'Agent analysis',
@@ -485,6 +485,7 @@ test.describe('RFC-054 W2-6 — accessibility (axe-core) on key pages', () => {
       await expect(page.getByRole('tabpanel')).toBeVisible()
       await expectNoCriticalOrSeriousAxeViolations(page, `/observability (${tab})`)
     }
+    await expect(task).toBeVisible()
     await task.click()
     const attempt = page.getByRole('button', { name: /^Show attempt statistics/ }).first()
     await expect(attempt).toBeVisible()

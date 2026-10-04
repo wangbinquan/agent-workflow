@@ -2,13 +2,25 @@
 import { expect, test, type Page } from '@playwright/test'
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import type {
-  ObservationMetrics,
-  ObservationOverview,
-  ObservationTaskDetail,
-  ObservationPriceHistory,
-  ObservationPriceVersion,
-  ObservationPricingRuntime,
+import {
+  COMPLETE_OBSERVATION_SECTIONS,
+  ObservationDimensionSelectionSchema,
+  completeObservationReportContent,
+  type CompleteObservationMetrics,
+  type CompleteObservationReport,
+  type CompleteObservationReportContent,
+  type CompleteObservationReportPage,
+  type CompleteObservationSection,
+  type CompleteObservationTask,
+  type CompleteObservationDimension,
+  type CompleteObservationDimensionTask,
+  type CompleteObservationInvocation,
+  type CompleteObservationAttempt,
+  type CompleteObservationTrend,
+  type ObservationOverviewQuery,
+  type ObservationPriceHistory,
+  type ObservationPriceVersion,
+  type ObservationPricingRuntime,
 } from '@agent-workflow/shared'
 import { startDaemon, type DaemonHandle } from './harness'
 import { ObservationPlatformNativeCaptureSchema } from '../packages/shared/src/schemas/observationPlatform'
@@ -46,7 +58,7 @@ async function seedTask() {
   const fixtureId = randomUUID()
   const agents = await Promise.all(
     ['left', 'right'].map((side) =>
-      api<{ id: string }>('/api/agents', {
+      api<{ id: string; name: string }>('/api/agents', {
         name: `observation-${side}-${fixtureId}`,
         description: 'Observation browser fixture',
         outputs: ['answer'],
@@ -120,6 +132,207 @@ async function prime(page: Page) {
   )
 }
 
+async function settledReport(value: CompleteObservationReport) {
+  let report = value
+  await expect
+    .poll(
+      async () => {
+        if (report.state === 'building')
+          report = await api<CompleteObservationReport>(
+            '/api/observability/reports/' + encodeURIComponent(report.reportId),
+          )
+        return report.state
+      },
+      { timeout: 60_000, intervals: [250, 500, 1000] },
+    )
+    .not.toBe('building')
+  expect(['ready', 'not-ready']).toContain(report.state)
+  return report
+}
+
+async function originalReport(taskId?: string, workflow?: string) {
+  const report = await settledReport(
+    await api<CompleteObservationReport>('/api/observability/reports', {
+      filters: {
+        from: 0,
+        to: Date.now() + 1,
+        timezone: 'UTC',
+        ...(workflow ? { workflow } : {}),
+      },
+      refreshKey: randomUUID(),
+      ...(taskId ? { taskId } : {}),
+    }),
+  )
+  const content = completeObservationReportContent(report)
+  expect(content).not.toBeNull()
+  return content!
+}
+
+async function originalRows<T>(
+  report: CompleteObservationReportContent,
+  section: CompleteObservationSection,
+): Promise<T[]> {
+  const expected = BigInt(report.counts[section] ?? '0')
+  if (expected === 0n) return []
+  const rows: T[] = []
+  let after: string | null = null
+  do {
+    const query = new URLSearchParams({ section, limit: '2', ...(after ? { after } : {}) })
+    const page = await api<CompleteObservationReportPage<T>>(
+      `/api/observability/reports/${encodeURIComponent(report.header.reportId)}/pages?${query}`,
+    )
+    expect(page.reportId).toBe(report.header.reportId)
+    expect(page.section).toBe(section)
+    expect(page.parent).toBeNull()
+    expect(BigInt(page.total)).toBe(expected)
+    expect(page.nextCursor).not.toBe(after === null ? '' : after)
+    rows.push(...page.items)
+    after = page.nextCursor
+  } while (after !== null)
+  expect(BigInt(rows.length)).toBe(expected)
+  return rows
+}
+
+function displayMetrics(
+  total: string,
+  amount: string,
+  calls = 1,
+  buckets = { input: total, cacheRead: '0', cacheWrite: '0', output: '0' },
+): Extract<CompleteObservationMetrics, { state: 'ready' }> {
+  expect(Object.values(buckets).reduce((sum, value) => sum + BigInt(value), 0n)).toBe(BigInt(total))
+  return {
+    state: 'ready',
+    invocations: String(calls),
+    observedInvocations: String(calls),
+    records: String(calls),
+    tokens: { ...buckets, total },
+    cost: { currency: 'CNY', state: 'complete', amount },
+  }
+}
+
+type DisplayRows = Partial<Record<CompleteObservationSection, readonly unknown[]>>
+interface DisplayFixture {
+  readonly whole: CompleteObservationMetrics
+  readonly task: CompleteObservationMetrics
+  readonly rows?: DisplayRows
+  readonly contributions?: ReadonlyMap<string, readonly CompleteObservationDimensionTask[]>
+}
+
+function filterSelection(filters: ObservationOverviewQuery) {
+  return filters.selection
+    ? ObservationDimensionSelectionSchema.parse(JSON.parse(filters.selection))
+    : null
+}
+
+/** Finite, read-only presentation data uses the current report/page protocol.
+ * It does not replace the real-provider journey or claim these numbers are captured usage.
+ */
+async function reportDisplay(
+  page: Page,
+  original: CompleteObservationReportContent,
+  fixture: DisplayFixture,
+) {
+  const root = original.summary.rootTask!
+  expect(root).toBeDefined()
+  const sourceRows = Object.fromEntries(
+    await Promise.all(
+      COMPLETE_OBSERVATION_SECTIONS.map(async (section) => [
+        section,
+        [
+          'dimension-tasks',
+          'quality-tasks',
+          'span-facts',
+          'span-captures',
+          'span-statuses',
+        ].includes(section)
+          ? []
+          : await originalRows<unknown>(original, section),
+      ]),
+    ),
+  ) as Record<CompleteObservationSection, readonly unknown[]>
+  const retained = new Map<
+    string,
+    { report: Extract<CompleteObservationReport, { state: 'ready' }>; rows: DisplayRows }
+  >()
+  await page.route('**/api/observability/reports**', async (route) => {
+    const url = new URL(route.request().url())
+    if (url.pathname === '/api/observability/reports' && route.request().method() === 'POST') {
+      const body = route.request().postDataJSON() as {
+        filters: ObservationOverviewQuery
+        taskId?: string
+      }
+      // Actual model intersections go to the daemon; display values must never become evidence.
+      if (filterSelection(body.filters)?.model) return route.fallback()
+      const scoped = !!body.taskId,
+        task = { ...root, metrics: fixture.task },
+        rows: DisplayRows = {
+          ...sourceRows,
+          ...(scoped ? {} : fixture.rows),
+          ...(scoped ? { tasks: [task] } : {}),
+          ...(fixture.rows?.['platform-captures']
+            ? { 'platform-captures': fixture.rows['platform-captures'] }
+            : {}),
+        },
+        counts = Object.fromEntries(
+          COMPLETE_OBSERVATION_SECTIONS.map((section) => [
+            section,
+            String(rows[section]?.length ?? 0),
+          ]),
+        ),
+        id = 'display-report-' + randomUUID()
+      const report: Extract<CompleteObservationReport, { state: 'ready' }> = {
+        state: 'ready',
+        header: {
+          ...original.header,
+          reportId: id,
+          filters: body.filters,
+          taskId: body.taskId ?? null,
+        },
+        summary: {
+          ...original.summary,
+          metrics: scoped ? fixture.task : fixture.whole,
+          inventory: {
+            tasks: counts.tasks!,
+            attempts: counts.attempts!,
+            invocations: counts.invocations!,
+            numericRecords: counts.allocations!,
+            nativeCaptures: counts['native-captures']!,
+          },
+          rootTask: scoped ? task : null,
+        },
+        counts,
+      }
+      retained.set(id, { report, rows })
+      return route.fulfill({ json: report })
+    }
+    const match = /^\/api\/observability\/reports\/([^/]+)(\/pages)?$/.exec(url.pathname)
+    const value = match && retained.get(decodeURIComponent(match[1]!))
+    if (!value) return route.fallback()
+    if (!match![2]) return route.fulfill({ json: value.report })
+    const section = url.searchParams.get('section') as CompleteObservationSection,
+      parent = url.searchParams.get('parent'),
+      population =
+        section === 'dimension-tasks'
+          ? (fixture.contributions?.get(parent!) ?? [])
+          : (value.rows[section] ?? []),
+      offset = Number(url.searchParams.get('after') ?? '0'),
+      size = Number(url.searchParams.get('limit')),
+      items = population.slice(offset, offset + size)
+    return route.fulfill({
+      json: {
+        reportId: value.report.header.reportId,
+        section,
+        parent,
+        total: String(population.length),
+        items,
+        nextCursor:
+          offset + items.length < population.length ? String(offset + items.length) : null,
+      },
+    })
+  })
+  return root
+}
+
 async function expectCardSpacing(page: Page) {
   // RFC-371: separate boundingBox awaits can span scrolling or a layout update.
   // Keep every rectangle, spacing token and overflow bound in one browser snapshot.
@@ -130,7 +343,7 @@ async function expectCardSpacing(page: Page) {
         title: card.querySelector('.card__title')?.textContent,
         box:
           card.getClientRects().length && getComputedStyle(card).visibility !== 'hidden'
-            ? { y: rect.y, width: rect.width, height: rect.height }
+            ? { x: rect.x, right: rect.right, y: rect.y, width: rect.width, height: rect.height }
             : null,
       }
     }),
@@ -146,13 +359,17 @@ async function expectCardSpacing(page: Page) {
     expect(card.box!.width).toBeGreaterThan(0)
     expect(card.box!.height).toBeGreaterThan(0)
   }
+  let rowBottom = geometry.cards[0]!.box!.y + geometry.cards[0]!.box!.height
   for (let i = 1; i < geometry.cards.length; i++) {
     const before = geometry.cards[i - 1]!,
       after = geometry.cards[i]!
+    const sameRow = Math.abs(after.box!.y - before.box!.y) < 1
     expect(
-      after.box!.y - before.box!.y - before.box!.height,
+      sameRow ? after.box!.x - before.box!.right : after.box!.y - rowBottom,
       JSON.stringify({ before, after, expectedGap: geometry.gap }),
     ).toBeCloseTo(geometry.gap, 0)
+    const bottom = after.box!.y + after.box!.height
+    rowBottom = sameRow ? Math.max(rowBottom, bottom) : bottom
   }
   expect(geometry.scroll).toBeLessThanOrEqual(geometry.client + 1)
 }
@@ -203,24 +420,39 @@ test('task, agents and attempt drill-down use real observations and standard car
   browserName,
 }, testInfo) => {
   const { task, agents, workflow } = await seedTask()
-  const detail = await api<ObservationTaskDetail>(`/api/observability/tasks/${task.id}`)
-  expect(detail.metrics.invocations).toBe(2)
-  expect(detail.agents.map((agent) => agent.agentId).sort()).toEqual(agents.map((a) => a.id).sort())
-  expect(detail.attempts.filter((attempt) => attempt.metrics.invocations > 0)).toHaveLength(2)
-  expect(detail.metrics.tokens.hasKnown).toBe(false)
-  expect(detail.metrics.cost.knownAmount).toBeNull()
-  expect(detail.metrics.cost.currency).toBe('CNY')
+  const detail = await originalReport(task.id)
+  const calls = await originalRows<CompleteObservationInvocation>(detail, 'invocations')
+  const agentRows = await originalRows<CompleteObservationDimension>(detail, 'agents')
+  const attempts = await originalRows<CompleteObservationAttempt>(detail, 'attempts')
+  expect(detail.summary.inventory.invocations).toBe('2')
+  expect(calls).toHaveLength(2)
+  expect(agentRows.map((agent) => agent.selection.agent!.id).sort()).toEqual(
+    agents.map((agent) => agent.id).sort(),
+  )
+  const calledAttempts = new Set(calls.map((call) => call.nodeRunId))
+  expect(attempts.filter((attempt) => calledAttempts.has(attempt.id))).toHaveLength(2)
+  expect(detail.summary.metrics.state).toBe('not-ready')
+  expect(detail.summary.metrics).not.toHaveProperty('tokens')
+  expect(detail.summary.metrics).not.toHaveProperty('cost')
   const directory = await api<{ runtimes: ObservationPricingRuntime[] }>(
     '/api/observability/pricing/runtimes',
   )
-  for (const runtime of detail.runtimes.filter(
-    (row) => row.authority === 'local' && row.registrationId !== null,
-  )) {
-    const original = directory.runtimes.find((row) => row.registrationId === runtime.registrationId)
+  for (const row of await originalRows<CompleteObservationDimension>(detail, 'runtimes')) {
+    const runtime = row.selection.runtime!
+    expect(runtime.authority).toBe('local')
+    expect(runtime.registrationId).not.toBeNull()
+    const original = directory.runtimes.find(
+      (entry) => entry.registrationId === runtime.registrationId,
+    )
     expect(original).toBeDefined()
-    expect(runtime.acceptedNames).toEqual([original!.name])
-    expect(runtime.unnamedInvocations).toBe(0)
+    expect(row.label).toBe(original!.name)
+    expect(runtime.configurationRevision).toBe(original!.configurationRevision)
+    expect(runtime.protocol).toBe(original!.protocol)
   }
+  const trendRows = await originalRows<CompleteObservationTrend>(
+    await originalReport(undefined, workflow.id),
+    'trends',
+  )
   await prime(page)
   await page.goto(`${daemon.baseUrl}/observability`)
   await expect(page.getByRole('heading', { name: 'Run observability', exact: true })).toBeVisible()
@@ -238,14 +470,16 @@ test('task, agents and attempt drill-down use real observations and standard car
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 })
     await expectAnalysisSpacing(page)
-    const chart = page.getByRole('list', { name: 'Task usage trend' })
+    const chart = page.locator('[data-observation-trend]')
     const tracks = await chart.locator('.observation-trend__track').evaluateAll((elements) =>
       elements.map((element) => {
         const box = element.getBoundingClientRect()
         return { x: box.x, y: box.y, height: box.height }
       }),
     )
-    expect(tracks.length).toBeGreaterThan(1)
+    // The complete report groups actual task creation periods, including every original task.
+    expect(tracks).toHaveLength(trendRows.length)
+    expect(tracks.length).toBeGreaterThan(0)
     for (const [i, track] of tracks.entries()) {
       expect(track.height).toBe(176)
       expect(track.y).toBeCloseTo(tracks[0]!.y, 0)
@@ -272,8 +506,8 @@ test('task, agents and attempt drill-down use real observations and standard car
     })
   }
   const observedBucket = page
-    .getByRole('list', { name: 'Task usage trend' })
-    .getByRole('button', { name: /1 tasks.*Not observed Token/ })
+    .locator('[data-observation-trend]')
+    .getByRole('button', { name: /1 tasks.*Complete statistics not ready/ })
   await observedBucket.focus()
   await expect(page.getByRole('group', { name: 'Current trend interval' })).toContainText(
     'Not observed',
@@ -292,30 +526,37 @@ test('task, agents and attempt drill-down use real observations and standard car
   await expect(
     page.getByRole('heading', { name: 'Agents across tasks', exact: true }),
   ).toBeVisible()
-  await page.getByRole('button', { name: new RegExp(agents[0]!.id) }).click()
+  await page.getByRole('button', { name: agents[0]!.name, exact: true }).click()
+  const agentDialog = page.getByRole('dialog', { name: agents[0]!.name, exact: true })
   await expect(
-    page.getByRole('heading', { name: 'Agent contributions by task', exact: true }),
+    agentDialog.getByRole('heading', { name: 'Task contributions', exact: true }),
   ).toBeVisible()
   await expect(page.getByRole('button', { name: /CSV|Export/ })).toHaveCount(0)
-  await page.getByRole('button', { name: 'Observed parallel task', exact: true }).click()
+  await agentDialog.getByRole('button', { name: 'Observed parallel task', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Task total', exact: true })).toBeVisible()
-  await page.getByRole('button', { name: 'Back to analysis', exact: true }).click()
+  await page.getByRole('button', { name: '← Back to analysis', exact: true }).click()
+  await expect(agentDialog).toBeVisible()
   await expect(
-    page.getByRole('heading', { name: 'Agent contributions by task', exact: true }),
+    agentDialog.getByRole('heading', { name: 'Task contributions', exact: true }),
   ).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(agentDialog).toHaveCount(0)
   await page.getByRole('tab', { name: 'Tokens and cost', exact: true }).click()
   await expect(
     page.getByRole('heading', { name: 'Usage by actual model', exact: true }),
   ).toBeVisible()
   await expectAnalysisSpacing(page)
   await page.getByRole('tab', { name: 'Performance and data quality', exact: true }).click()
-  await expect(page.getByRole('heading', { name: 'Task wall time P50', exact: true })).toBeVisible()
+  await expect(page.getByText('Task wall time P50', { exact: true })).toBeVisible()
   await expectAnalysisSpacing(page)
   await page.getByRole('tab', { name: 'Task traces', exact: true }).click()
   await page.getByRole('button', { name: 'Observed parallel task', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Task total', exact: true })).toBeVisible()
   await expectCardSpacing(page)
-  const attempt = page.getByRole('button', { name: /^Show attempt statistics · agent_0 ·/ })
+  const attempt = page.getByRole('button', {
+    name: 'Show attempt statistics · agent_0',
+    exact: true,
+  })
   await attempt.focus()
   await page.keyboard.press('Enter')
   const dialog = page.getByRole('dialog', { name: /^Attempt / })
@@ -334,42 +575,11 @@ test('task, agents and attempt drill-down use real observations and standard car
   expect(box!.x + box!.width).toBeLessThanOrEqual(390)
   await page.screenshot({ path: testInfo.outputPath('attempt-390.png'), fullPage: true })
   await page.keyboard.press('Escape')
-  await page.getByRole('button', { name: 'Back to task usage', exact: true }).click()
+  await page.getByRole('button', { name: '← Back to analysis', exact: true }).click()
   await expect(
     page.getByRole('button', { name: 'Observed parallel task', exact: true }),
   ).toBeVisible()
 })
-
-function displayRuntimeMetrics(
-  base: ObservationMetrics,
-  total: string,
-  amount: string,
-  calls = 1,
-): ObservationMetrics {
-  return {
-    ...base,
-    invocations: calls,
-    observedInvocations: calls,
-    records: calls,
-    tokens: {
-      known: { input: total, cacheRead: '0', cacheWrite: '0', output: '0' },
-      totalKnown: total,
-      hasKnown: true,
-      complete: true,
-      unknownBuckets: { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
-    },
-    cost: {
-      currency: 'CNY',
-      knownAmount: amount,
-      complete: true,
-      pricedRecords: calls,
-      priceVersionIds: ['display-frozen-CNY'],
-      reasons: [],
-    },
-    authorities: ['local'],
-    truncated: false,
-  }
-}
 
 test('runtime last-row contributions preserve Dialog, URL, scroll and focus across task detail in both languages and themes', async ({
   page,
@@ -386,63 +596,58 @@ test('runtime last-row contributions preserve Dialog, URL, scroll and focus acro
       config = (await response.json()) as Record<string, unknown>
     await route.fulfill({ response, json: { ...config, language, theme } })
   })
-  await page.route('**/api/observability/overview?*', async (route) => {
-    const response = await route.fetch(),
-      data = (await response.json()) as ObservationOverview
-    const contribution = displayRuntimeMetrics(data.metrics, '100', '1.25')
-    const whole = displayRuntimeMetrics(data.metrics, '470100', '95.25', 48)
-    const tasks = Array.from({ length: 48 }, (_, i) => ({
+  const original = await originalReport(task.id)
+  const template = original.summary.rootTask!
+  const contribution = displayMetrics('100', '1.25')
+  const tasks = Array.from(
+    { length: 48 },
+    (_, i): CompleteObservationTask => ({
+      ...template,
       task: {
-        ...data.tasks.find((row) => row.task.id === task.id)!.task,
+        ...template.task,
         id: i === 47 ? task.id : 'display-task-' + i,
         name: i === 47 ? 'Observed parallel task' : 'Runtime display task ' + i,
       },
-      metrics: i === 47 ? whole : contribution,
-      wallMs: 10000,
-      runningMs: 5000,
-    }))
-    const runtimes: ObservationOverview['runtimes'] = [
-      ...Array.from({ length: 47 }, (_, i) => ({
-        authority: 'local' as const,
-        sourceId: null,
-        registrationId: 'display-runtime-' + i,
-        configurationRevision: i,
-        protocol: 'opencode',
-        acceptedNames: ['accepted-runtime-' + i],
-        unnamedInvocations: 0,
-        metrics: displayRuntimeMetrics(data.metrics, '10000', '2'),
-        tasks: [{ taskId: task.id, metrics: displayRuntimeMetrics(data.metrics, '10000', '2') }],
-      })),
-      {
-        authority: 'local',
-        sourceId: null,
-        registrationId: 'display-last-runtime',
-        configurationRevision: 7,
-        protocol: 'opencode',
-        acceptedNames: ['original-last-runtime'],
-        unnamedInvocations: 0,
-        metrics: displayRuntimeMetrics(data.metrics, '4800', '60', 48),
-        tasks: tasks.map((row) => ({ taskId: row.task.id, metrics: contribution })),
+      metrics: i === 47 ? displayMetrics('470100', '95.25', 48) : contribution,
+    }),
+  )
+  const runtimes = Array.from(
+    { length: 48 },
+    (_, i): CompleteObservationDimension => ({
+      key: 'runtime-display-' + i,
+      kind: 'runtime',
+      label: i === 47 ? 'original-last-runtime' : 'accepted-runtime-' + i,
+      selection: {
+        runtime: {
+          authority: 'local',
+          sourceId: null,
+          registrationId: i === 47 ? 'display-last-runtime' : 'display-runtime-' + i,
+          configurationRevision: i === 47 ? 7 : i,
+          protocol: 'opencode',
+        },
       },
-    ]
-    await route.fulfill({
-      response,
-      json: {
-        ...data,
-        metrics: displayRuntimeMetrics(data.metrics, '474800', '154', 95),
-        tasks,
-        runtimes,
-        partial: false,
-      },
-    })
-  })
-  await page.route('**/api/observability/tasks/' + task.id, async (route) => {
-    const response = await route.fetch(),
-      data = (await response.json()) as ObservationTaskDetail
-    await route.fulfill({
-      response,
-      json: { ...data, metrics: displayRuntimeMetrics(data.metrics, '470100', '95.25', 48) },
-    })
+      metrics: i === 47 ? displayMetrics('4800', '60', 48) : displayMetrics('10000', '2'),
+      taskCount: i === 47 ? '48' : '1',
+    }),
+  )
+  await reportDisplay(page, original, {
+    whole: displayMetrics('474800', '154', 95),
+    task: displayMetrics('470100', '95.25', 48),
+    rows: { tasks, runtimes },
+    contributions: new Map(
+      runtimes.map((row, i) => [
+        row.key,
+        i === 47
+          ? tasks.map(({ task, timing }) => ({ task, timing, metrics: contribution }))
+          : [
+              {
+                task: template.task,
+                timing: template.timing,
+                metrics: displayMetrics('10000', '2'),
+              },
+            ],
+      ]),
+    ),
   })
   await prime(page)
   const to = Date.now() + 1,
@@ -529,7 +734,7 @@ test('runtime last-row contributions preserve Dialog, URL, scroll and focus acro
         ).toBeVisible()
         await expect(page.locator('.observation-metrics').first()).toContainText('470,100')
         const back = page.getByRole('button', {
-          name: language === 'zh-CN' ? '返回统计分析' : 'Back to analysis',
+          name: language === 'zh-CN' ? '← 返回统计分析' : '← Back to analysis',
           exact: true,
         })
         const backBox = await back.boundingBox()
@@ -580,49 +785,57 @@ test('model contributions restore the exact Dialog and scope before selecting an
       config = (await response.json()) as Record<string, unknown>
     await route.fulfill({ response, json: { ...config, language, theme } })
   })
-  await page.route('**/api/observability/overview?*', async (route) => {
-    expect(route.request().method()).toBe('GET')
-    const response = await route.fetch(),
-      data = (await response.json()) as ObservationOverview
-    const contribution = displayRuntimeMetrics(data.metrics, '100', '1.25')
-    const tasks = Array.from({ length: 48 }, (_, i) => ({
+  const original = await originalReport(task.id)
+  const template = original.summary.rootTask!
+  const contribution = displayMetrics('100', '1.25')
+  const tasks = Array.from(
+    { length: 48 },
+    (_, i): CompleteObservationTask => ({
+      ...template,
       task: {
-        ...data.tasks.find((row) => row.task.id === task.id)!.task,
+        ...template.task,
         id: i === 47 ? task.id : 'display-model-task-' + i,
         name: i === 47 ? 'Observed parallel task' : 'Model display task ' + i,
       },
-      metrics: i === 47 ? displayRuntimeMetrics(data.metrics, '470100', '95.25', 48) : contribution,
-      wallMs: 10000,
-      runningMs: 5000,
-    }))
-    const models: ObservationOverview['models'] = [
-      ...Array.from({ length: 47 }, (_, i) => ({
-        authority: 'local' as const,
-        sourceId: null,
-        provider: 'display-provider',
-        model: 'display-model-' + i,
-        metrics: displayRuntimeMetrics(data.metrics, '10000', '2'),
-        tasks: [{ taskId: task.id, metrics: displayRuntimeMetrics(data.metrics, '10000', '2') }],
-      })),
-      {
-        authority: 'local',
-        sourceId: null,
-        provider: 'display-provider',
-        model: 'original-last-model',
-        metrics: displayRuntimeMetrics(data.metrics, '4800', '60', 48),
-        tasks: tasks.map((row) => ({ taskId: row.task.id, metrics: contribution })),
+      metrics: i === 47 ? displayMetrics('470100', '95.25', 48) : contribution,
+    }),
+  )
+  const models = Array.from(
+    { length: 48 },
+    (_, i): CompleteObservationDimension => ({
+      key: 'model-display-' + i,
+      kind: 'model',
+      label: i === 47 ? 'original-last-model' : 'display-model-' + i,
+      selection: {
+        model: {
+          authority: 'local',
+          sourceId: null,
+          provider: 'display-provider',
+          model: i === 47 ? 'original-last-model' : 'display-model-' + i,
+        },
       },
-    ]
-    await route.fulfill({ response, json: { ...data, tasks, models, partial: false } })
-  })
-  await page.route('**/api/observability/tasks/' + task.id, async (route) => {
-    expect(route.request().method()).toBe('GET')
-    const response = await route.fetch(),
-      data = (await response.json()) as ObservationTaskDetail
-    await route.fulfill({
-      response,
-      json: { ...data, metrics: displayRuntimeMetrics(data.metrics, '470100', '95.25', 48) },
-    })
+      metrics: i === 47 ? displayMetrics('4800', '60', 48) : displayMetrics('10000', '2'),
+      taskCount: i === 47 ? '48' : '1',
+    }),
+  )
+  await reportDisplay(page, original, {
+    whole: displayMetrics('474800', '154', 95),
+    task: displayMetrics('470100', '95.25', 48),
+    rows: { tasks, models },
+    contributions: new Map(
+      models.map((row, i) => [
+        row.key,
+        i === 47
+          ? tasks.map(({ task, timing }) => ({ task, timing, metrics: contribution }))
+          : [
+              {
+                task: template.task,
+                timing: template.timing,
+                metrics: displayMetrics('10000', '2'),
+              },
+            ],
+      ]),
+    ),
   })
   await prime(page)
   const to = Date.now() + 1,
@@ -710,7 +923,7 @@ test('model contributions restore the exact Dialog and scope before selecting an
         ).toBeVisible()
         await expect(page.locator('.observation-metrics').first()).toContainText('470,100')
         const back = page.getByRole('button', {
-          name: language === 'zh-CN' ? '返回统计分析' : 'Back to analysis',
+          name: language === 'zh-CN' ? '← 返回统计分析' : '← Back to analysis',
           exact: true,
         })
         await expect(back).toHaveClass(/page__heading-back/)
@@ -744,9 +957,16 @@ test('model contributions restore the exact Dialog and scope before selecting an
         }
         const responsePromise = page.waitForResponse((response) => {
           const url = new URL(response.url())
+          if (
+            url.pathname !== '/api/observability/reports' ||
+            response.request().method() !== 'POST'
+          )
+            return false
+          const body = response.request().postDataJSON() as {
+            filters: ObservationOverviewQuery
+          } | null
           return (
-            url.pathname === '/api/observability/tasks' &&
-            url.searchParams.get('selection') !== null
+            body !== null && filterSelection(body.filters)?.model?.model === 'original-last-model'
           )
         })
         await dialog
@@ -758,22 +978,27 @@ test('model contributions restore the exact Dialog and scope before selecting an
         const response = await responsePromise
         expect(response.ok()).toBe(true)
         const selectedUrl = new URL(page.url()),
-          requestUrl = new URL(response.url())
+          requestFilters = response.request().postDataJSON().filters as ObservationOverviewQuery
         expect(JSON.parse(JSON.parse(selectedUrl.searchParams.get('selection')!))).toEqual(
           expectedSelection,
         )
-        expect(JSON.parse(requestUrl.searchParams.get('selection')!)).toEqual(expectedSelection)
+        expect(requestFilters.selection).toBe(JSON.stringify(expectedSelection))
+        expect(filterSelection(requestFilters)).toEqual(expectedSelection)
         for (const key of ['from', 'to', 'q', 'status', 'workflow']) {
           expect(selectedUrl.searchParams.get(key)).toBe(scope.get(key))
-          expect(requestUrl.searchParams.get(key)).toBe(scope.get(key))
+          expect(String(requestFilters[key as keyof ObservationOverviewQuery])).toBe(scope.get(key))
         }
-        const result = (await response.json()) as { items: { metrics: ObservationMetrics }[] }
+        const selected = completeObservationReportContent(
+          await settledReport((await response.json()) as CompleteObservationReport),
+        )
         // Basic emits no usage; this journey must not turn the display fixture into facts.
-        expect(
-          result.items.some(
-            (item) => item.metrics.tokens.hasKnown || item.metrics.cost.knownAmount !== null,
-          ),
-        ).toBe(false)
+        if (selected) {
+          expect(selected.summary.metrics.state).not.toBe('ready')
+          for (const item of await originalRows<CompleteObservationTask>(selected, 'tasks')) {
+            expect(item.metrics).not.toHaveProperty('tokens')
+            expect(item.metrics).not.toHaveProperty('cost')
+          }
+        }
         await expect(dialog).toHaveCount(0)
         await expect(
           page.getByRole('tab', {
@@ -799,50 +1024,60 @@ test('model contributions restore the exact Dialog and scope before selecting an
 test('overview omits attention, labels every token column and aligns collection facts', async ({
   page,
 }, testInfo) => {
-  const { workflow } = await seedTask()
-  // Read-only display fixture gives the chart nonzero and partial values; real
-  // daemon task and drill-down coverage remain in the preceding journey.
-  await page.route('**/api/observability/overview?*', async (route) => {
-    const response = await route.fetch(),
-      data = (await response.json()) as ObservationOverview
-    await route.fulfill({
-      response,
-      json: {
-        ...data,
-        trend: data.trend.slice(0, 3).map((row, i) => ({
-          ...row,
-          metrics: {
-            ...row.metrics,
-            tokens: {
-              ...row.metrics.tokens,
-              hasKnown: i !== 2,
-              // The response can carry explicit unknown evidence for empty
-              // intervals. These display fixtures supply known native buckets.
-              hasKnownBuckets: {
-                input: i !== 2,
-                cacheRead: i !== 2,
-                cacheWrite: i !== 2,
-                output: i !== 2,
-              },
-              known: {
-                input: ['800', '1600', '0'][i],
-                cacheRead: ['200', '400', '0'][i],
-                cacheWrite: ['50', '100', '0'][i],
-                output: ['200', '400', '0'][i],
-              },
-              totalKnown: ['1250', '2500', '0'][i],
-              complete: i === 0,
-            },
-          },
-        })),
-      },
-    })
+  const { task, workflow } = await seedTask()
+  const original = await originalReport(task.id)
+  const day = (await originalRows<CompleteObservationTrend>(original, 'trends'))[0]!
+  const first = displayMetrics('1250', '1', 1, {
+    input: '800',
+    cacheRead: '200',
+    cacheWrite: '50',
+    output: '200',
+  })
+  const second = displayMetrics('2500', '2', 1, {
+    input: '1600',
+    cacheRead: '400',
+    cacheWrite: '100',
+    output: '400',
+  })
+  // Complete display values first; then remove the fixture and verify the original
+  // daemon's unknown report. Partial lower bounds must never become exact totals.
+  await reportDisplay(page, original, {
+    whole: displayMetrics('3750', '3', 2, {
+      input: '2400',
+      cacheRead: '600',
+      cacheWrite: '150',
+      output: '600',
+    }),
+    task: first,
+    rows: {
+      tasks: [first, second].map((metrics, i) => ({
+        ...original.summary.rootTask!,
+        task: {
+          ...original.summary.rootTask!.task,
+          id: i === 0 ? task.id : 'display-trend-task',
+          name: i === 0 ? 'Observed parallel task' : 'Trend display task',
+        },
+        metrics,
+      })),
+      trends: [first, second, { state: 'not-applicable' } as const].map((metrics, i) => ({
+        ...day,
+        key: 'display-day-' + i,
+        from: day.from - (2 - i) * 86400000,
+        to: day.to - (2 - i) * 86400000,
+        tasks: i === 2 ? '0' : '1',
+        metrics,
+      })),
+    },
   })
   await prime(page)
   await page.goto(`${daemon.baseUrl}/observability?workflow=${workflow.id}`)
-  const chart = page.getByRole('list', { name: 'Task usage trend' })
-  await expect(chart.locator('.observation-trend__value')).toHaveText(['1,250', '≥ 2,500', '—'])
-  await expect(chart.locator('.observation-trend__segment')).toHaveCount(12)
+  const chart = page.locator('[data-observation-trend]')
+  await expect(chart.locator('.observation-trend__scale strong')).toHaveText([
+    '1,250 Token',
+    '2,500 Token',
+    'No model calls',
+  ])
+  await expect(chart.locator('.observation-trend__segment')).toHaveCount(8)
   await chart.getByRole('button').first().focus()
   const selectedBuckets = page
     .getByRole('group', { name: 'Current trend interval' })
@@ -852,8 +1087,14 @@ test('overview omits attention, labels every token column and aligns collection 
     /Uncached input 800.*Cache read 200.*Cache write 50.*Output 200/,
   )
   await chart.getByRole('button').nth(1).focus()
-  await expect(selectedBuckets.locator('dd')).toHaveText(['≥ 1,600', '≥ 400', '≥ 100', '≥ 400'])
-  await chart.getByRole('button').nth(2).focus()
+  await expect(selectedBuckets.locator('dd')).toHaveText(['1,600', '400', '100', '400'])
+  await page.unroute('**/api/observability/reports**')
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click()
+  await expect(chart.locator('.observation-trend__scale strong')).toHaveText([
+    'Complete statistics not ready',
+  ])
+  await expect(chart.locator('.observation-trend__segment')).toHaveCount(0)
+  await chart.getByRole('button').first().focus()
   await expect(selectedBuckets.locator('dd')).toHaveText([
     'Not observed',
     'Not observed',
@@ -873,7 +1114,9 @@ test('overview omits attention, labels every token column and aligns collection 
   await page.getByRole('tab', { name: 'Performance and data quality', exact: true }).click()
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 })
-    const facts = page.locator('.detail-grid--centered')
+    // The current formal page has timing facts and capture capabilities. Keep
+    // the centering check on both actual lists, rather than the removed status card.
+    const facts = page.getByRole('tabpanel').locator('dl.detail-grid')
     await expect(facts).toHaveCount(2)
     for (const list of await facts.all()) {
       const differences = await list.evaluate((element) =>
@@ -1013,27 +1256,23 @@ test('platform capture dialog keeps last-row focus and shared spacing at wide an
   const { task } = await seedTask()
   const capture = ObservationPlatformNativeCaptureSchema.parse(nativeCapture.capture)
   // Read-only platform display fixture, not a claim of a live managed CS execution.
-  await page.route('**/api/observability/tasks/' + task.id, async (route) => {
-    const response = await route.fetch(),
-      data = (await response.json()) as ObservationTaskDetail
-    await route.fulfill({
-      response,
-      json: {
-        ...data,
-        platformCaptures: Array.from({ length: 30 }, (_, index) => ({
-          invocationId: 'platform-invocation-' + index,
-          nodeRunId: 'platform-attempt-' + index,
-          sourceId: 'cs-fixture',
-          schemaVersion: 2,
-          capture: {
-            ...capture,
-            id: 'capture-' + index,
-            proof: { ...capture.proof, turn: 'turn-' + index, turnIndex: index },
-          },
-          issues: [],
-        })),
-      },
-    })
+  await reportDisplay(page, await originalReport(task.id), {
+    whole: displayMetrics('0', '0', 0),
+    task: displayMetrics('0', '0', 0),
+    rows: {
+      'platform-captures': Array.from({ length: 30 }, (_, index) => ({
+        invocationId: 'platform-invocation-' + index,
+        nodeRunId: 'platform-attempt-' + index,
+        sourceId: 'cs-fixture',
+        schemaVersion: 2,
+        capture: {
+          ...capture,
+          id: 'capture-' + index,
+          proof: { ...capture.proof, turn: 'turn-' + index, turnIndex: index },
+        },
+        issues: [],
+      })),
+    },
   })
   await prime(page)
   await page.goto(`${daemon.baseUrl}/observability?task=${task.id}`)

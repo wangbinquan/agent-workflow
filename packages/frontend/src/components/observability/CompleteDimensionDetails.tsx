@@ -27,12 +27,14 @@ export function completeDimensionName(row: CompleteObservationDimension, t: TFun
 export function CompleteDimensionDetails({
   row,
   onClose,
+  onRelatedTasks,
   triggerRef,
   fallbackRef,
   children,
 }: {
   row: CompleteObservationDimension
   onClose: () => void
+  onRelatedTasks?: () => void
   triggerRef: RefObject<HTMLElement | null>
   fallbackRef: RefObject<HTMLElement | null>
   children: ReactNode
@@ -120,6 +122,11 @@ export function CompleteDimensionDetails({
             <p className="muted">
               {t('runObservability.revision', { revision: row.selection.agent.revision })}
             </p>
+          )}
+          {onRelatedTasks && (
+            <button type="button" className="btn btn--sm" onClick={onRelatedTasks}>
+              {t('runObservability.relatedTasks')}
+            </button>
           )}
         </Card>
         <Card title={t('runObservability.taskContributions')}>{children}</Card>

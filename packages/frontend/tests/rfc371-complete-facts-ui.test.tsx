@@ -48,6 +48,7 @@ function fixture(
   reason = metrics.gaps[0]!,
   completeTaskMetrics?: CompleteObservationTask['metrics'],
   legacyCache = false,
+  initialSearch?: ObservationSearch,
 ) {
   const valueMetrics = { state: 'not-ready' as const, gaps: [reason] }
   const legacyReport: CompleteObservationReport = {
@@ -57,6 +58,7 @@ function fixture(
   }
   const reports = new Map<string, Facts>(),
     requests: string[] = [],
+    reportRequests: ObservationOverviewQuery[] = [],
     state = { damaged: false }
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (raw, init) => {
     const url = new URL(String(raw))
@@ -67,6 +69,7 @@ function fixture(
           filters: ObservationOverviewQuery
         },
         id = crypto.randomUUID()
+      reportRequests.push(body.filters)
       const summary: CompleteObservationFactSummary = {
         metrics: valueMetrics,
         inventory: { tasks: body.taskId ? '1' : '202', attempts: '1', invocations: '1' },
@@ -99,7 +102,7 @@ function fixture(
             invocations: '1',
             agents: '0',
             runtimes: '0',
-            models: '0',
+            models: initialSearch ? '1' : '0',
             'span-facts': '0',
             'span-statuses': '0',
           },
@@ -133,11 +136,13 @@ function fixture(
     )
       throw new Error('Incomplete numeric collection requested')
     const total =
-      section === 'quality-tasks'
-        ? completeTaskMetrics
-          ? '201'
-          : value.facts.summary.inventory.tasks
-        : (value.facts.counts[section as keyof typeof value.facts.counts] ?? '0')
+      section === 'dimension-tasks'
+        ? value.facts.summary.inventory.tasks
+        : section === 'quality-tasks'
+          ? completeTaskMetrics
+            ? '201'
+            : value.facts.summary.inventory.tasks
+          : (value.facts.counts[section as keyof typeof value.facts.counts] ?? '0')
     let items: unknown[] = [],
       nextCursor: string | null = null
     if (section === 'quality')
@@ -148,7 +153,7 @@ function fixture(
           ...(indexed ? { taskIndexVersion: 1 } : {}),
         },
       ]
-    if (section === 'tasks' || section === 'quality-tasks') {
+    if (section === 'tasks' || section === 'quality-tasks' || section === 'dimension-tasks') {
       items = Array.from({ length: Math.min(100, Number(total) - offset) }, (_, i) => {
         const original = row(
           String(
@@ -161,6 +166,19 @@ function fixture(
       })
       if (offset + items.length < Number(total)) nextCursor = String(offset + items.length)
     }
+    if (section === 'models' && initialSearch)
+      items = [
+        {
+          key: 'actual-model-contribution',
+          kind: 'model',
+          label: 'model-A',
+          selection: {
+            model: { authority: 'local', sourceId: null, provider: 'provider-A', model: 'model-A' },
+          },
+          taskCount: value.facts.summary.inventory.tasks,
+          metrics: valueMetrics,
+        },
+      ]
     if (section === 'attempts')
       items = [
         {
@@ -225,6 +243,7 @@ function fixture(
       to: NOW + 1,
       period: 'all',
       tab: 'tasks',
+      ...initialSearch,
     })
     return <CompleteRunObservability search={search} onChange={setSearch} />
   }
@@ -233,7 +252,7 @@ function fixture(
       <Page />
     </QueryClientProvider>,
   )
-  return { requests, state, client, legacyKey, legacyReport }
+  return { requests, reportRequests, state, client, legacyKey, legacyReport }
 }
 beforeEach(async () => {
   setBaseUrl('http://facts.test')
@@ -244,6 +263,59 @@ afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
 })
+
+test.each(['zh', 'en'])(
+  'the %s formal model dialog selects related tasks with the original wire scope intact',
+  async (language) => {
+    await i18n.changeLanguage(language)
+    const initial: ObservationSearch = {
+      from: NOW - 1000,
+      to: NOW + 1,
+      period: 'custom',
+      tab: 'usage',
+      q: '执行事实',
+      status: 'done',
+      repository: '/original/repository',
+      workflow: 'original-workflow',
+      selection: JSON.stringify({ purpose: 'task' }),
+    }
+    const f = fixture(true, metrics.gaps[0]!, undefined, false, initial)
+    fireEvent.click(
+      await screen.findByRole('button', {
+        name:
+          language === 'zh'
+            ? '查看模型 model-A 的任务贡献'
+            : 'View task contributions from model model-A',
+      }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    fireEvent.click(
+      within(dialog).getByRole('button', {
+        name: language === 'zh' ? '查看关联任务' : 'View related tasks',
+      }),
+    )
+    await screen.findByRole('button', { name: '执行事实 0000' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(
+      screen.getByRole('tab', {
+        name: language === 'zh' ? '任务追踪' : 'Task traces',
+      }),
+    ).toHaveAttribute('aria-selected', 'true')
+    const selected = f.reportRequests.at(-1)!
+    expect(selected.selection).toBe(
+      JSON.stringify({
+        purpose: 'task',
+        model: { authority: 'local', sourceId: null, provider: 'provider-A', model: 'model-A' },
+      }),
+    )
+    for (const key of ['from', 'to', 'q', 'status', 'repository', 'workflow'] as const)
+      expect(selected[key]).toEqual(initial[key])
+    expect(document.querySelector('.observation-summary')?.textContent).not.toContain('¥')
+    expect(
+      document.querySelector('.observation-summary')?.querySelectorAll('[data-token-bucket] dd'),
+    ).toHaveLength(4)
+  },
+)
 
 test('the prior cached report cannot suppress a newly qualified Task and its original cache entry stays unchanged', async () => {
   const f = fixture(
