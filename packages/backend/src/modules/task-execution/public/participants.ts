@@ -16,7 +16,7 @@ import {
 } from '../composition'
 import { createCodeHostEffectAttemptObserver as createCodeHostEffectAttemptObserverInternal } from '../application/codeHostEffectObserver'
 import { createLocalEffectAttemptObserver as createLocalEffectAttemptObserverInternal } from '../application/localEffectObserver'
-import { createProcessEffectAttemptObserver as createProcessEffectAttemptObserverInternal } from '../application/processEffectObserver'
+import { createProcessEffectAttemptObserver as createProcessEffectAttemptObserverInternal } from '../composition/processEffectObserver'
 import {
   fenceTaskWrite as fenceTaskWriteInternal,
   withTaskExecutionWrite as withTaskExecutionWriteInternal,

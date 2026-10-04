@@ -785,3 +785,12 @@ CI-SOURCE6-R2：6 owned／13 controls／26 evidence，指纹 `865163cdaab7bb0741
 H4/H5 设计 R3、NATIVE-PROCESS12-R2 与 WINDOWS-COVERAGE1 已分别独立有限 PASS；原 FAIL 回执保持。三份 native 机制完整原体归位 platform/execution/local，旧 API、direct launcher CLI 和 compiled embed 保留；真实双入口 frame/EOF 回归及原四 oracle 保持，Windows push/PR 与实际 suite 同步覆盖。详情见 design/RFC-370-crewstation-hosted-deployment/native-process-mechanisms.md。
 
 设计 be48b13cc70e8c8ec57ab3ea76c1f30d67243aaf37257c4c4e4c297595314bb3；SOURCE12-R2 24583e7f84a855bf5c9ac4872c76c61e42e873e4d8639cbf63bc0549ab94dc37；WINDOWS-COVERAGE1 71bffe5befc4fbacff7c097e2286fce512243bc47cdb3142effb2c2d94197c49。元数据及发布另作有限门，不把上述 PASS 扩成 H4/H5、A5/A-G 或部署完成。
+
+
+### 2026-10-05 PROCESS-EFFECT-PROJECTION9-R4
+
+本批落实已批准 H4/H5 设计 §4 的有限进程 effect 投影，见 process-effect-projection.md。SOURCE9-R4 独立有限 PASS，9 owned／17 controls／33 evidence，FP 4183d3c08171089d8753dcb0546796676812b41534cccd199b6da9d021b166ef。R1 PASS／初版 census INVALID、R2 重复 resource getter P2／FAIL、R3 PASS 及其私有生成完整保留；R4 仅让原资源数组优先于同名 writerWorkspace 元数据，增加一项真实回归，原49项描述符及所有旧测试体保持。
+
+原 generator 对 R4 内容候选只执行一次，非 owned6417源码读取 committed e8222ee0 blobs，全部 peer WIP 排除并保留。13原输出／完整原 JSON validator／129有序库存及每个原 counter 通过；sourceDigest sha256:c4b7972032fb94aa39a1ebe36661611dc12d35c9e692381f2196f5095bf9881f。真实 port／native participant／compatibility composition 产生 owner+12/-2、mutation+2；没有新业务效果、进程机制、计时器或恢复规则。两项 matching allowGrowth 消费后正常后继退役，不重跑同一候选扫描；public1150、40 SPI、69 target edges、空 implementation SCC、原 why／规则保持。
+
+CLI-EACH-MUTABLE1 的一行测试类型修复2c341e29已经发布，首末 FP32ec432903d9bb99c700db4c0d63258988cd2204486ea4c0b4777327e340657d独立 PASS。旧75d1 Windows runtime 用例成功但 TS2769 失败；2c 自身 CI／Windows cancelled。包含它的 e822主 CI37232364129已 cancelled：48 success／1 cancelled／1 required failure，lint/typecheck成功，完整绿灯仍待。本批无本机 AW tests/typecheck/build/service；META／发布及 exact-SHA hosted CI 各留独立证据，完整 H4/H5、A-G、CS adapters 与 M0～M4 均不据此关闭。

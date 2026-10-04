@@ -1,52 +1,35 @@
 // RFC-349 — provider-neutral managed-process effect coordinator.
 
 import { sha256Hex } from '../domain/digest'
-import {
-  operationFamilyKey,
-  requestHash,
-  type TaskExecutionAttemptState,
-} from '../domain/executionEffect'
+import { operationFamilyKey, type TaskExecutionAttemptState } from '../domain/executionEffect'
 import {
   decodeLineageSlotPath,
   encodeLineageSlotPath,
   type LineageSlot,
 } from '../domain/executionIntent'
 import type { TaskExecutionEffectPersistence } from './ports/taskExecutionEffectStore'
+import type { ProcessEffectOutcome, ProcessEffectProjection } from './ports/processEffectProjection'
 import { currentTaskExecutionContext, type TaskExecutionContext } from './taskExecutionContext'
 import { TaskExecutionError } from './taskExecutionError'
 import { waitForEffectResourceTurn } from './effectResourceWait'
 
-export interface ProcessSpawnReceipt {
-  readonly pid: number
-  readonly spawnBinaryPath: string
-  readonly launchNonce?: string
-}
-
-export interface ProcessSettlement {
-  readonly outcome: string
-  readonly exitCode: number | null
-  readonly pid: number | null
-  readonly launchNonce?: string
-  readonly drainTimedOut?: boolean
-  readonly pumpError?: string
-}
-
-export interface ProcessEffectAttemptObserver {
+export interface ProcessEffectAttemptObserver<TReceipt, TResult extends ProcessEffectOutcome> {
   beforeSpawn(): Promise<void>
-  recordSpawnReceipt(receipt: ProcessSpawnReceipt, runtimeParamsJson?: string): Promise<void>
-  settle(result: ProcessSettlement): Promise<void>
+  recordSpawnReceipt(receipt: TReceipt, runtimeParamsJson?: string): Promise<void>
+  settle(result: TResult): Promise<void>
 }
 
-export function createProcessEffectAttemptObserver(input: {
+export function createProcessEffectAttemptObserver<
+  TReceipt,
+  TResult extends ProcessEffectOutcome,
+>(input: {
   persistence: TaskExecutionEffectPersistence
   taskId: string
   nodeRunId: string
   processKind: 'agent' | 'script'
-  argv: readonly string[]
-  cwd: string
-  resourceKeys?: readonly string[]
+  projection: ProcessEffectProjection<TReceipt, TResult>
   context?: TaskExecutionContext
-}): ProcessEffectAttemptObserver | undefined {
+}): ProcessEffectAttemptObserver<TReceipt, TResult> | undefined {
   const context = input.context ?? currentTaskExecutionContext(input.taskId)
   if (context === undefined) return undefined
   let prepared: { readonly effectId: string; readonly attemptId: string } | null = null
@@ -97,8 +80,9 @@ export function createProcessEffectAttemptObserver(input: {
         executionLineageId: lineage.executionLineageId,
         operationFamilyKey: familyKey,
       })
-      prepared = await waitForEffectResourceTurn(() =>
-        input.persistence.prepareAndAcquire({
+      prepared = await waitForEffectResourceTurn(() => {
+        const description = input.projection.describe()
+        return input.persistence.prepareAndAcquire({
           token: context.token,
           intentId: context.intentId,
           operationKey: `${lineage.continuationSlotKey}:process:${input.processKind}`,
@@ -106,39 +90,26 @@ export function createProcessEffectAttemptObserver(input: {
           operationFamilyKey: familyKey,
           operationGeneration,
           kind: 'process',
-          requestHash: requestHash({
-            v: 1,
-            processKind: input.processKind,
-            argv: input.argv,
-            cwd: input.cwd,
-          }),
+          requestHash: description.requestHash,
           slotPathJson,
           slotPathDigest: sha256Hex(slotPathJson),
           candidateId: `${input.processKind}:${input.nodeRunId}`,
-          recoveryClass: 'managed-process-preactivation',
-          classifierVersion: 'rfc328-managed-process-v1',
-          transportPolicyVersion: 'rfc328-preactivation-v1',
+          recoveryClass: description.recoveryClass,
+          classifierVersion: description.classifierVersion,
+          transportPolicyVersion: description.transportPolicyVersion,
           retryAuthority: 'none',
-          resourceKeys: [
-            `process:${input.taskId}:${input.nodeRunId}`,
-            ...(input.resourceKeys ?? []),
-          ],
-        }),
-      )
+          resourceKeys: [`process:${input.taskId}:${input.nodeRunId}`, ...description.resourceKeys],
+        })
+      })
     },
     async recordSpawnReceipt(receipt, runtimeParamsJson) {
       if (prepared === null) throw new Error('process spawn receipt preceded effect preparation')
-      if (receipt.launchNonce === undefined || receipt.launchNonce.length === 0) {
-        throw new Error('task-owned process spawn receipt lacks launch nonce')
-      }
-      await input.persistence.recordProcessSpawn({
+      await input.projection.recordSpawnReceipt({
         token: context.token,
         effectId: prepared.effectId,
         attemptId: prepared.attemptId,
         nodeRunId: input.nodeRunId,
-        pid: receipt.pid,
-        spawnBinaryPath: receipt.spawnBinaryPath,
-        launchNonce: receipt.launchNonce,
+        receipt,
         ...(runtimeParamsJson === undefined ? {} : { runtimeParamsJson }),
         now: Date.now(),
       })
@@ -163,16 +134,7 @@ export function createProcessEffectAttemptObserver(input: {
               ? 'definitely-not-applied'
               : 'ambiguous',
         retryAuthority: 'none',
-        receiptJson: JSON.stringify({
-          v: 1,
-          phase: 'reaped',
-          outcome: result.outcome,
-          exitCode: result.exitCode,
-          pid: result.pid,
-          launchNonce: result.launchNonce ?? null,
-          drainTimedOut: result.drainTimedOut === true,
-          pumpError: result.pumpError ?? null,
-        }),
+        receiptJson: input.projection.settlementReceipt(result),
         failureCode:
           state === 'succeeded'
             ? null

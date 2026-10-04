@@ -1817,7 +1817,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // Read-only executions keep their existing concurrency. Writer agents
       // additionally fence the exact isolation/workspace path, never the task.
       resourceKeys:
-        opts.gitMutationPolicy === 'read-only' ? [] : [`workspace:${sha256Hex(opts.worktreePath)}`],
+        opts.gitMutationPolicy === 'read-only' ? [] : { writerWorkspace: opts.worktreePath },
     })
     const activeProcessEffect = processEffect
     const runResult = await runAgentProcess({

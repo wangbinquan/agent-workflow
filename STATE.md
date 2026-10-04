@@ -10023,3 +10023,10 @@ H4/H5 设计 R3、NATIVE-PROCESS12-R2 与 WINDOWS-COVERAGE1 已分别独立有�
 原四规则在完整 committed 8f294c0c 加冻结 12 TS 上执行一次，13 份产物通过原完整 JSON validator；sourceDigest sha256:3a1df07ad4bbedc70aba97cbda8b2ebe0e2e14068c12ff328c85b1f78fbe05d3。并行 69d03cb9 只退役其已消费许可，六个源码语料 tree 完全相同，复用生成而保留该退役。实际 owner +3（26565→26568），其余库存数量与完整 why、原 SPI/target/SCC 保持；本批匹配许可正常后继退役。
 
 没有运行本机 AW test/typecheck/build/service；scoped format/lint 与纯字节/AST/JSON 证明不代替新 exact-SHA hosted CI。仍在阶段 A，三个 Agent 的中立材料/执行/取证、脚本、执行权/恢复与完整装配继续；A-G 后才开始各 owner 的 CS adapter，M0 首次部署后逐项 M1～M4，当前没有 AW-in-CS 部署。
+
+
+### 2026-10-05 RFC-370 进程 effect 投影切面
+
+本机请求指纹、writer workspace key、启动持久收据和完整结算 JSON 从 application 协调器移入 TE local participant；显式中立 projection port 与原 Agent／脚本 composition 均已接线。原 lineage、generation、资源等待、持久身份与 outcome／retry 规则保持。SOURCE9-R4 有限独立 PASS，原 census INVALID、R2 getter FAIL 与后续修正保留；新 reference-only、held/rejected ACK、getter／数组兼容及真实 Task target 预激活回归已写，仍交 hosted CI。完整材料／执行／取证、三入口真根、A5～A8／A-G 继续，尚无 CS adapter 或 AW-in-CS 部署。
+
+原 scoped generator 在 committed e8222ee0 加冻结9路径上执行一次，13产物／129原库存核对通过；sourceDigest sha256:c4b7972032fb94aa39a1ebe36661611dc12d35c9e692381f2196f5095bf9881f。只有实际 mutation1870→1872 与 owner26568→26578 增长，匹配许可由正常后继退役；原规则、public／SPI／target／SCC 和并行输出保持。另 describe.each readonly tuple 类型修复已发布2c341e29；包含它的 e8222ee0 主 CI37232364129 为 cancelled（48 success／1 cancelled／1 required failure），lint/typecheck job 成功，不能写成整套绿灯。没有本机 AW tests/typecheck/build/service，本批精确发布与新 CI 分别留证。

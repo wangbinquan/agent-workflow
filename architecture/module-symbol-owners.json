@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2172,
+    "backendFiles": 2175,
     "frontendFiles": 654,
     "legacyFiles": 586,
-    "moduleFiles": 1586,
-    "productionFiles": 2989,
+    "moduleFiles": 1589,
+    "productionFiles": 2992,
     "sharedFiles": 163,
-    "symbolsIncludingFileRoots": 26568
+    "symbolsIncludingFileRoots": 26578
   },
   "entries": [
     {
@@ -131786,6 +131786,66 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/processEffectProjection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/processEffectProjection.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/processEffectProjection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/processEffectProjection.ts#ProcessEffectDescription",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ProcessEffectDescription",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/processEffectProjection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/processEffectProjection.ts#ProcessEffectOutcome",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ProcessEffectOutcome",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/processEffectProjection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/processEffectProjection.ts#ProcessEffectProjection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ProcessEffectProjection",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/processEffectProjection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/processEffectProjection.ts#ProcessEffectSpawnIdentity",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ProcessEffectSpawnIdentity",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/ports/reactionAdmissionStore.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/ports/reactionAdmissionStore.ts#$file",
       "removeAfterWave": null,
@@ -134611,30 +134671,6 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "ProcessEffectAttemptObserver",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/application/processEffectObserver.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/application/processEffectObserver.ts#ProcessSettlement",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "ProcessSettlement",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/application/processEffectObserver.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/application/processEffectObserver.ts#ProcessSpawnReceipt",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "ProcessSpawnReceipt",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -138343,6 +138379,30 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "selectPortArtifactReader",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/processEffectObserver.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/processEffectObserver.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/processEffectObserver.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/processEffectObserver.ts#createProcessEffectAttemptObserver",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "createProcessEffectAttemptObserver",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -148027,6 +148087,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "createFileTaskOperationConfiguration",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/processEffectProjection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/processEffectProjection.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/processEffectProjection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/processEffectProjection.ts#createLocalProcessEffectProjection",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createLocalProcessEffectProjection",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/processEffectProjection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/processEffectProjection.ts#LocalProcessResources",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "LocalProcessResources",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/processEffectProjection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/processEffectProjection.ts#LocalProcessSettlement",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "LocalProcessSettlement",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/processEffectProjection.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/processEffectProjection.ts#LocalProcessSpawnReceipt",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "LocalProcessSpawnReceipt",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -319551,5 +319671,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3a1df07ad4bbedc70aba97cbda8b2ebe0e2e14068c12ff328c85b1f78fbe05d3"
+  "sourceDigest": "sha256:c4b7972032fb94aa39a1ebe36661611dc12d35c9e692381f2196f5095bf9881f"
 }

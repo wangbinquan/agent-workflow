@@ -3075,7 +3075,7 @@ async function runOneScriptAttempt(
         processKind: 'script',
         argv,
         cwd,
-        resourceKeys: a.isReadonly ? [] : [`workspace:${sha256Hex(worktreePath)}`],
+        resourceKeys: a.isReadonly ? [] : { writerWorkspace: worktreePath },
       })
       await processEffect?.beforeSpawn()
     },
