@@ -1,3 +1,23 @@
+## 2026-10-04 RFC-370 提交与发布 Git 切面
+
+### 2026-10-04 RFC-370：提交／发布 Git 完整物理 scope 的有限接线
+
+完整 RepositoryGitWorkspaceFactory/scope 在 SC 的 application/composition/local adapter 各层落位。Task 提交与递归子仓的本地命令、discovery、临时 preview index，以及 scheduler 两条终态 status 使用同一选定 factory；原一次 network transport/session、receipt 和最终 close 保留。33 个旧直接 Git 地址只属本批有限库存，Task HTTP diff/repair、其他 delivery/conflict/员工验证等 A4 余项未记完成。
+
+首 SOURCE22-DOC1 的三项 P2/FAIL 全文保留；R2 修复 preview 捕获原 options、native query/update 热读 hook 与两处重复装配字段，独立有限 PASS，指纹9026b1c971ffb25ae8b521c4e45845af985ffa53a220eb8e2e4de9382ee2447a。第一次原 canonical 在 private output 中发现一个无消费者的新增 public helper，之后只删除其 public re-export，完整内部实现和真实调用者不变；增量 SOURCE1 有限 PASS，指纹d74eb46f2b94e4aba78d7142d6bb4d4d2c95c05052c123bfd8433a61b508ada9。旧生成完整保留，新内容候选只生成一次，不因移动 HEAD 重开源门或生成。
+
+最终 scoped canonical 基准4fe2fcaeed44426cc0a969f1a8751728f94a7b43，四原规则不改，所有非本批源码从该 commit 读取并排除保留并行观测/native owner在制品。sourceDigest sha256:b24f35e5ddd5b479b6f1a6aa1c44791b1d0f388c2949f99e2e6482357b71c376；129 原有序库存及完整 why 保留。五项真实增长：mutation1866→1867、observed6074→6095、exact compatibility exceptions5388→5406、public1137→1146、owner26516→26529；各自具名登记，匹配发布后以普通后继退役。此前321/1→322/2的两个测试计数许可已在4fe2提交消费，本批只正常退役许可，计数和实际 synthetic PG open debt 保留。原40 required SPI、69 target edges、空 implementation SCC、完整300债务和C2原精确等式保持；Task effect仅runCommitPush地址187→198投影，原九条语义保留。
+
+准备脚本首轮传 provenance helper 的参数形状不符实际签名，原证据保留；R2 按其原对象签名恢复 origin/currentSnapshot，不改完整 payload、五项增长、原 why 或规则，不重跑已完成生成。最终 JSON／字节／原计数证明与有限 metadata gate 单独记录。仅做目标 format/lint 和纯静态证明，无本机 AW tests/typecheck/build/service。
+
+旧04a的正式主CI37187048069为completed/cancelled，34 success、14 failure、2 cancelled，Windows37187051255为success；两项test ledger失败已发布4fe2修正，另一个Windows前端wizard断言仍未归属，原失败不改为绿。原E2E入口加载问题由并行06c4修复；4fe2及本批新SHA正式CI分别继续。完整A1～A8/AC00/A-G、各层独立CS adapters、B/M0首先实际部署与M1～M4逐步收编继续，尚无AW-in-CS部署，不关闭RFC。
+
+## 2026-10-04 RFC-371 恢复独立统计范围
+
+一个原始调用缺口曾使全范围事实转换覆盖所有非Task scope的原metrics；恢复原Agent／运行时／模型／用途／趋势／尝试／调用及维度任务的独立三态资格，不按完整子集伪造总和。原所有Task、调用、用量到EOF，span usage/cost及原数字集合完整资格、计数／摘要／回执／损坏拒绝保持。四桶和人民币资格同步核生产spool与持久页；同遍历精确计完整／缺口／无模型调用任务人数，服务及SPA资格升级scope-metrics/3，旧不可变报告保留。
+
+本机已有AW正式页实查8Task、14调用、28尝试，7Task独立完整／1真实缺口；Agent B恢复40207 Token（23718输入／12352缓存读取／0缓存写入／4137输出）与¥0.086708，不把仍缺原始记录的全范围合计当零或下界。DESIGN1通过；独立有限SOURCE1、官方精确源码canonical生成与审阅、最终确切SHA hosted CI继续留证。本机仅精确format/lint、只读静态与正常管理员页面验收，没有AW测试／typecheck／build／service。两个RFC保持进行；完整native owner接线、规模验收及CS发布部署未由本修复关闭。并行在制品原样保留。
+
 ## 2026-10-04 RFC-371 hosted Playwright 源码导入修复
 
 adc59f98 的 full-tier37185331328 与 WebKit37185338947 均在加载原观测 spec 时报告 Cannot find package @agent-workflow/shared，尚未执行该批用例。只将三个实际运行时 schema 值改到现有 shared 源码入口，根包类型仍为 erased import type；其余52670字节用例正文、原标题、断言、四桶／人民币／EOF／焦点／主题和120s／60s预算保持。原失败保留，有限 SOURCE1 与新确切SHA hosted CI继续，不做本机AW tests/typecheck/build/service，不重开生产census。

@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2153,
+    "backendFiles": 2156,
     "frontendFiles": 654,
     "legacyFiles": 582,
-    "moduleFiles": 1571,
-    "productionFiles": 2970,
+    "moduleFiles": 1574,
+    "productionFiles": 2973,
     "sharedFiles": 163,
-    "symbolsIncludingFileRoots": 26516
+    "symbolsIncludingFileRoots": 26529
   },
   "entries": [
     {
@@ -116575,6 +116575,90 @@
       "currentContext": "source-control",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts#RepositoryGitOptions",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RepositoryGitOptions",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts#RepositoryGitOutcome",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RepositoryGitOutcome",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts#RepositoryGitWorkspaceBinding",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RepositoryGitWorkspaceBinding",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts#RepositoryGitWorkspaceFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RepositoryGitWorkspaceFactory",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts#RepositoryGitWorkspaceScope",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "RepositoryGitWorkspaceScope",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/ports/repositoryGitWorkspace.ts#SubmoduleEntry",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SubmoduleEntry",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/source-control/application/ports/repositoryLaunch.ts",
       "id": "owner:packages/backend/src/modules/source-control/application/ports/repositoryLaunch.ts#$file",
       "removeAfterWave": null,
@@ -118159,6 +118243,66 @@
       "currentContext": "source-control",
       "currentLayer": "composition",
       "exported": false,
+      "file": "packages/backend/src/modules/source-control/composition/repositoryGitWorkspaces.ts",
+      "id": "owner:packages/backend/src/modules/source-control/composition/repositoryGitWorkspaces.ts#$file",
+      "removeAfterWave": "W5",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/composition/repositoryGitWorkspaces.ts",
+      "id": "owner:packages/backend/src/modules/source-control/composition/repositoryGitWorkspaces.ts#bindRepositoryGitSubworkspace",
+      "removeAfterWave": "W5",
+      "status": "current-module",
+      "symbol": "bindRepositoryGitSubworkspace",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/composition/repositoryGitWorkspaces.ts",
+      "id": "owner:packages/backend/src/modules/source-control/composition/repositoryGitWorkspaces.ts#bindRepositoryGitWorkspace",
+      "removeAfterWave": "W5",
+      "status": "current-module",
+      "symbol": "bindRepositoryGitWorkspace",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/composition/repositoryGitWorkspaces.ts",
+      "id": "owner:packages/backend/src/modules/source-control/composition/repositoryGitWorkspaces.ts#requireRepositoryGitWorkspaceScope",
+      "removeAfterWave": "W5",
+      "status": "current-module",
+      "symbol": "requireRepositoryGitWorkspaceScope",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/composition/repositoryGitWorkspaces.ts",
+      "id": "owner:packages/backend/src/modules/source-control/composition/repositoryGitWorkspaces.ts#selectRepositoryGitWorkspaceFactory",
+      "removeAfterWave": "W5",
+      "status": "current-module",
+      "symbol": "selectRepositoryGitWorkspaceFactory",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "composition",
+      "exported": false,
       "file": "packages/backend/src/modules/source-control/composition/repositoryPreparation.ts",
       "id": "owner:packages/backend/src/modules/source-control/composition/repositoryPreparation.ts#$file",
       "removeAfterWave": "W5",
@@ -119304,6 +119448,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "fileFacts",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryGitWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryGitWorkspace.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryGitWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryGitWorkspace.ts#createFileRepositoryGitWorkspaceFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createFileRepositoryGitWorkspaceFactory",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -187448,18 +187616,6 @@
       "removeAfterWave": "W5",
       "status": "legacy-target",
       "symbol": "SubMergeResult",
-      "targetContext": "source-control",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/gitSubmodule.ts",
-      "id": "owner:packages/backend/src/services/gitSubmodule.ts#SubmoduleEntry",
-      "removeAfterWave": "W5",
-      "status": "legacy-target",
-      "symbol": "SubmoduleEntry",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -318927,5 +319083,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d81a48fbe6a39db14d7aca38443dbef4e9f5e79c6891a4862c7f7929d00134ce"
+  "sourceDigest": "sha256:b24f35e5ddd5b479b6f1a6aa1c44791b1d0f388c2949f99e2e6482357b71c376"
 }

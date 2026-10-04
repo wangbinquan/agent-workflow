@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1119,
+    "consumers": 1137,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1303,
+    "methods": 1334,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 24087,
-    "symbols": 1137
+    "recursiveFields": 24425,
+    "symbols": 1146
   },
   "entries": [
     {
@@ -137418,6 +137418,1114 @@
     {
       "authority": "context-bound",
       "budget": {
+        "maxMethods": 6,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 77,
+        "maxUnionVariants": 24
+      },
+      "consumerEdgeIds": [
+        "import:aca00230c3b17c6913b4"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:0[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:0[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:0[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:1[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:1[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:effectiveSubmodules.$return.$variant:1[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:hasSubmodules.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:hasSubmodules.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.$method:run.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:run.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:run.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:run.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:subrepository.$parameter:relativePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:subrepository.$return",
+          "type": "RepositoryGitWorkspaceScope"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:options.literalPathspecs",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:withPreviewIndex.$parameter:operation.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.$method:withPreviewIndex.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:withPreviewIndex.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:withPreviewIndex.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:withPreviewIndex.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:parent.$method:withPreviewIndex.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$parameter:parent.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:relativePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:hasSubmodules.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:hasSubmodules.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.$method:run.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:run.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:run.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:run.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:subrepository.$parameter:relativePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:subrepository.$return",
+          "type": "RepositoryGitWorkspaceScope"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:options.literalPathspecs",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:operation.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "fieldPath": "$call.$return.workspaceRef",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:bindRepositoryGitSubworkspace",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:f129656416eb78c1fee6e5129f2cb69033caa338aa6e8c1b4621cdb59703ca56"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "name": "effectiveSubmodules",
+          "signatureDigest": "sha256:1587b772ba14ec3485f3d4017ab670500218ab9959eaa5def202c70d327a0dcd"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "name": "hasSubmodules",
+          "signatureDigest": "sha256:f2cfdf58f5fc5f719ffc29ba294d253596a5647ea0c197f346b5806b4433334d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:aca00230c3b17c6913b4"
+          ],
+          "name": "run",
+          "signatureDigest": "sha256:41b89fa115d36cde6fd4a710dc8ba83f4683ddd01757d0a7c38ef1a081b90511"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "subrepository",
+          "signatureDigest": "sha256:4581e266f1fd1b970996a5f186d4db65a75b540d8b951cc4dfb07d9ad4eb2042"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "withPreviewIndex",
+          "signatureDigest": "sha256:2cc86918818e3643560c1e9a77d688901d7e631e86bce80f167aa35b51e60c10"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:aca00230c3b17c6913b4",
+          "file": "packages/backend/src/services/commitPushRunner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b380dacd52a9b7ff5a09a570d3b7780053a048e7ca44dddc825321e03fa4ad18",
+      "status": "target-context-current-surface",
+      "symbol": "bindRepositoryGitSubworkspace",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "AbortSignal",
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 7,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 82,
+        "maxUnionVariants": 24
+      },
+      "consumerEdgeIds": [
+        "import:7e976b837118a9142b3c",
+        "import:e2ad949ede69d0f2a122"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:binding.repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:binding.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$parameter:binding.repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$parameter:binding.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:hasSubmodules.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:hasSubmodules.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:run.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:run.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:run.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:run.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:subrepository.$parameter:relativePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:subrepository.$return",
+          "type": "RepositoryGitWorkspaceScope"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:options.literalPathspecs",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:withPreviewIndex.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:withPreviewIndex.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:withPreviewIndex.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:withPreviewIndex.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.$method:withPreviewIndex.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$parameter:factory.$method:bind.$return.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:0[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:effectiveSubmodules.$return.$variant:1[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:hasSubmodules.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:hasSubmodules.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$return.$method:run.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$return.$method:run.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:run.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:run.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$return.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$return.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$return.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:subrepository.$parameter:relativePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:subrepository.$return",
+          "type": "RepositoryGitWorkspaceScope"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:options.literalPathspecs",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:operation.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:withPreviewIndex.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "fieldPath": "$call.$return.workspaceRef",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:bindRepositoryGitWorkspace",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:a5c3b2656b14c22dee4727e5a08de875e32b5b65136e0ee3e39a8c7cbee82b23"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "bind",
+          "signatureDigest": "sha256:7376a71df94f299eb994a5f21a7deaab58267f932cc95a66239908db3c81d401"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "name": "effectiveSubmodules",
+          "signatureDigest": "sha256:1587b772ba14ec3485f3d4017ab670500218ab9959eaa5def202c70d327a0dcd"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c"
+          ],
+          "name": "hasSubmodules",
+          "signatureDigest": "sha256:f2cfdf58f5fc5f719ffc29ba294d253596a5647ea0c197f346b5806b4433334d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:7e976b837118a9142b3c",
+            "import:e2ad949ede69d0f2a122"
+          ],
+          "name": "run",
+          "signatureDigest": "sha256:41b89fa115d36cde6fd4a710dc8ba83f4683ddd01757d0a7c38ef1a081b90511"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "subrepository",
+          "signatureDigest": "sha256:4581e266f1fd1b970996a5f186d4db65a75b540d8b951cc4dfb07d9ad4eb2042"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "withPreviewIndex",
+          "signatureDigest": "sha256:2cc86918818e3643560c1e9a77d688901d7e631e86bce80f167aa35b51e60c10"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:7e976b837118a9142b3c",
+          "file": "packages/backend/src/services/commitPushRunner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:e2ad949ede69d0f2a122",
+          "file": "packages/backend/src/services/scheduler.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:7f065009367a1f8827916e60858e5c73ab6f26a6e2f046dc7fdaa5306797df91",
+      "status": "target-context-current-surface",
+      "symbol": "bindRepositoryGitWorkspace",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "AbortSignal",
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
@@ -139432,6 +140540,696 @@
       "symbol": "selectIsolationWorkspaceFactory",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 7,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 83,
+        "maxUnionVariants": 24
+      },
+      "consumerEdgeIds": [
+        "import:198d7d1249aa59cd063b",
+        "import:300224cb7bd5b2cfb4d7",
+        "import:3409d49c4e848958f114",
+        "import:3ad85f922f3d6444d5a8",
+        "import:baa4367c7a8c8c97002e",
+        "import:cf7d14cf8d0ed81497e9"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:legacyRunGit",
+          "type": "typeof defaultRunGit"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3ad85f922f3d6444d5a8",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$parameter:binding.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:hasSubmodules.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:hasSubmodules.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3409d49c4e848958f114",
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:run.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:run.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:run.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:run.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114",
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:subrepository.$parameter:relativePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:subrepository.$return",
+          "type": "RepositoryGitWorkspaceScope"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:options.literalPathspecs",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114",
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3409d49c4e848958f114",
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:withPreviewIndex.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:withPreviewIndex.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:withPreviewIndex.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:withPreviewIndex.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.$method:withPreviewIndex.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3ad85f922f3d6444d5a8",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$parameter:selected.$method:bind.$return.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$parameter:binding.repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3ad85f922f3d6444d5a8",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$parameter:binding.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:hasSubmodules.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:hasSubmodules.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3409d49c4e848958f114",
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:run.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:run.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:run.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:run.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114",
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:subrepository.$parameter:relativePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:subrepository.$return",
+          "type": "RepositoryGitWorkspaceScope"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:options.literalPathspecs",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114",
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3409d49c4e848958f114",
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:withPreviewIndex.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:withPreviewIndex.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:withPreviewIndex.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:3409d49c4e848958f114"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:withPreviewIndex.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$call.$return.$method:bind.$return.$method:withPreviewIndex.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3ad85f922f3d6444d5a8",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "fieldPath": "$call.$return.$method:bind.$return.workspaceRef",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:selectRepositoryGitWorkspaceFactory",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "$call",
+          "signatureDigest": "sha256:e0ef868dc59e1979f3474b9eeb01b42a68b210e5a1b162fc3f77c07a88135a0e"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8"
+          ],
+          "name": "bind",
+          "signatureDigest": "sha256:7376a71df94f299eb994a5f21a7deaab58267f932cc95a66239908db3c81d401"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "name": "effectiveSubmodules",
+          "signatureDigest": "sha256:1587b772ba14ec3485f3d4017ab670500218ab9959eaa5def202c70d327a0dcd"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:baa4367c7a8c8c97002e"
+          ],
+          "name": "hasSubmodules",
+          "signatureDigest": "sha256:f2cfdf58f5fc5f719ffc29ba294d253596a5647ea0c197f346b5806b4433334d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:198d7d1249aa59cd063b",
+            "import:300224cb7bd5b2cfb4d7",
+            "import:3409d49c4e848958f114",
+            "import:3ad85f922f3d6444d5a8",
+            "import:baa4367c7a8c8c97002e",
+            "import:cf7d14cf8d0ed81497e9"
+          ],
+          "name": "run",
+          "signatureDigest": "sha256:41b89fa115d36cde6fd4a710dc8ba83f4683ddd01757d0a7c38ef1a081b90511"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "subrepository",
+          "signatureDigest": "sha256:4581e266f1fd1b970996a5f186d4db65a75b540d8b951cc4dfb07d9ad4eb2042"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "withPreviewIndex",
+          "signatureDigest": "sha256:2cc86918818e3643560c1e9a77d688901d7e631e86bce80f167aa35b51e60c10"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:198d7d1249aa59cd063b",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:300224cb7bd5b2cfb4d7",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:3409d49c4e848958f114",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:3ad85f922f3d6444d5a8",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:baa4367c7a8c8c97002e",
+          "file": "packages/backend/src/services/commitPushRunner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:cf7d14cf8d0ed81497e9",
+          "file": "packages/backend/src/services/scheduler.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:52e31feae20c445113cdc7d21b0a9a46e02c6caa30b5d94c260e817847b308ec",
+      "status": "target-context-current-surface",
+      "symbol": "selectRepositoryGitWorkspaceFactory",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "AbortSignal",
+        "Record"
+      ],
       "version": 1
     },
     {
@@ -143611,6 +145409,866 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
+      "consumerEdgeIds": [],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "timeoutMs",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:RepositoryGitOptions",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:bindRepositoryGitSubworkspace",
+        "public:source-control:participants:bindRepositoryGitWorkspace",
+        "public:source-control:participants:selectRepositoryGitWorkspaceFactory",
+        "public:source-control:types:RepositoryGitWorkspaceFactory",
+        "public:source-control:types:RepositoryGitWorkspaceScope"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:9160cdc7166b874a18bb9d01bed4dfe0130407ac1367711e60bc63231fe74045",
+      "status": "target-context-current-surface",
+      "symbol": "RepositoryGitOptions",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "AbortSignal",
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "stdout",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:RepositoryGitOutcome",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:bindRepositoryGitSubworkspace",
+        "public:source-control:participants:bindRepositoryGitWorkspace",
+        "public:source-control:participants:selectRepositoryGitWorkspaceFactory",
+        "public:source-control:types:RepositoryGitWorkspaceFactory",
+        "public:source-control:types:RepositoryGitWorkspaceScope"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:a20fdaaf4a4da5263a4028932ef6572c3c2cd3c9b464ad03bae08c486bf536da",
+      "status": "target-context-current-surface",
+      "symbol": "RepositoryGitOutcome",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "workspaceRef",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:RepositoryGitWorkspaceBinding",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:bindRepositoryGitWorkspace",
+        "public:source-control:participants:selectRepositoryGitWorkspaceFactory",
+        "public:source-control:types:RepositoryGitWorkspaceFactory"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:776ff579f46f6a0284e67c28981f5af01b31681e6ecae175a27b0091ce4a88cf",
+      "status": "target-context-current-surface",
+      "symbol": "RepositoryGitWorkspaceBinding",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 6,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 41,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:0c9643f703d45d89fb85",
+        "import:1a27a58af626d57983cc",
+        "import:58bb93550b353a6a6830",
+        "import:880337bfbd0ecfb25957",
+        "import:c5eded8973c81ed8c8ee",
+        "import:fa5468eabd0357ee196e"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957"
+          ],
+          "fieldPath": "$method:bind.$parameter:binding.repositoryRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1a27a58af626d57983cc",
+            "import:58bb93550b353a6a6830",
+            "import:880337bfbd0ecfb25957",
+            "import:c5eded8973c81ed8c8ee",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:58bb93550b353a6a6830",
+            "import:880337bfbd0ecfb25957",
+            "import:c5eded8973c81ed8c8ee"
+          ],
+          "fieldPath": "$method:bind.$parameter:binding.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957"
+          ],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1a27a58af626d57983cc",
+            "import:58bb93550b353a6a6830",
+            "import:880337bfbd0ecfb25957",
+            "import:c5eded8973c81ed8c8ee",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:0[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957"
+          ],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1a27a58af626d57983cc",
+            "import:58bb93550b353a6a6830",
+            "import:880337bfbd0ecfb25957",
+            "import:c5eded8973c81ed8c8ee",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:effectiveSubmodules.$return.$variant:1[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:hasSubmodules.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:hasSubmodules.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957",
+            "import:c5eded8973c81ed8c8ee",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$return.$method:run.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1a27a58af626d57983cc",
+            "import:58bb93550b353a6a6830",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$return.$method:run.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:run.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1a27a58af626d57983cc",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$return.$method:run.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957"
+          ],
+          "fieldPath": "$method:bind.$return.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$return.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$return.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:subrepository.$parameter:relativePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:subrepository.$return",
+          "type": "RepositoryGitWorkspaceScope"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:options.literalPathspecs",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957"
+          ],
+          "fieldPath": "$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:withPreviewIndex.$parameter:operation.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957",
+            "import:c5eded8973c81ed8c8ee",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$return.$method:withPreviewIndex.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1a27a58af626d57983cc",
+            "import:58bb93550b353a6a6830",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$return.$method:withPreviewIndex.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:withPreviewIndex.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:1a27a58af626d57983cc",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "fieldPath": "$method:bind.$return.$method:withPreviewIndex.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:bind.$return.$method:withPreviewIndex.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:58bb93550b353a6a6830",
+            "import:880337bfbd0ecfb25957",
+            "import:c5eded8973c81ed8c8ee"
+          ],
+          "fieldPath": "$method:bind.$return.workspaceRef",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:RepositoryGitWorkspaceFactory",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:58bb93550b353a6a6830",
+            "import:c5eded8973c81ed8c8ee",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "name": "bind",
+          "signatureDigest": "sha256:7376a71df94f299eb994a5f21a7deaab58267f932cc95a66239908db3c81d401"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957"
+          ],
+          "name": "effectiveSubmodules",
+          "signatureDigest": "sha256:1587b772ba14ec3485f3d4017ab670500218ab9959eaa5def202c70d327a0dcd"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:880337bfbd0ecfb25957"
+          ],
+          "name": "hasSubmodules",
+          "signatureDigest": "sha256:f2cfdf58f5fc5f719ffc29ba294d253596a5647ea0c197f346b5806b4433334d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0c9643f703d45d89fb85",
+            "import:1a27a58af626d57983cc",
+            "import:58bb93550b353a6a6830",
+            "import:880337bfbd0ecfb25957",
+            "import:c5eded8973c81ed8c8ee",
+            "import:fa5468eabd0357ee196e"
+          ],
+          "name": "run",
+          "signatureDigest": "sha256:41b89fa115d36cde6fd4a710dc8ba83f4683ddd01757d0a7c38ef1a081b90511"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "subrepository",
+          "signatureDigest": "sha256:4581e266f1fd1b970996a5f186d4db65a75b540d8b951cc4dfb07d9ad4eb2042"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "withPreviewIndex",
+          "signatureDigest": "sha256:2cc86918818e3643560c1e9a77d688901d7e631e86bce80f167aa35b51e60c10"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:0c9643f703d45d89fb85",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:1a27a58af626d57983cc",
+          "file": "packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:58bb93550b353a6a6830",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:880337bfbd0ecfb25957",
+          "file": "packages/backend/src/services/commitPushRunner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:c5eded8973c81ed8c8ee",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:fa5468eabd0357ee196e",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:bindRepositoryGitWorkspace",
+        "public:source-control:participants:selectRepositoryGitWorkspaceFactory"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:97520eecccc8c024a42ac85b147aff368151e88d4505ede50f9913159d1dfd0d",
+      "status": "target-context-current-surface",
+      "symbol": "RepositoryGitWorkspaceFactory",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "AbortSignal",
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 38,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:ce2def67b1209d2380a6"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:0[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:0[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:0[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:0[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:1[].flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:1[].headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:1[].path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:effectiveSubmodules.$return.$variant:1[].pathDepth",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:hasSubmodules.$return.$variant:0",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:hasSubmodules.$return.$variant:1",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "$method:run.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:subrepository.$parameter:relativePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:subrepository.$return",
+          "type": "RepositoryGitWorkspaceScope"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$parameter:options.literalPathspecs",
+          "type": "true"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "$method:withPreviewIndex.$parameter:operation.$parameter:index.$method:run.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:withPreviewIndex.$parameter:operation.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "$method:withPreviewIndex.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:withPreviewIndex.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:withPreviewIndex.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:withPreviewIndex.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:withPreviewIndex.$return",
+          "type": "Result"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "fieldPath": "workspaceRef",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:RepositoryGitWorkspaceScope",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "name": "effectiveSubmodules",
+          "signatureDigest": "sha256:1587b772ba14ec3485f3d4017ab670500218ab9959eaa5def202c70d327a0dcd"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "name": "hasSubmodules",
+          "signatureDigest": "sha256:f2cfdf58f5fc5f719ffc29ba294d253596a5647ea0c197f346b5806b4433334d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ce2def67b1209d2380a6"
+          ],
+          "name": "run",
+          "signatureDigest": "sha256:41b89fa115d36cde6fd4a710dc8ba83f4683ddd01757d0a7c38ef1a081b90511"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "subrepository",
+          "signatureDigest": "sha256:4581e266f1fd1b970996a5f186d4db65a75b540d8b951cc4dfb07d9ad4eb2042"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "withPreviewIndex",
+          "signatureDigest": "sha256:2cc86918818e3643560c1e9a77d688901d7e631e86bce80f167aa35b51e60c10"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:ce2def67b1209d2380a6",
+          "file": "packages/backend/src/services/commitPushRunner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/commitPushRunner.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:bindRepositoryGitSubworkspace",
+        "public:source-control:participants:bindRepositoryGitWorkspace",
+        "public:source-control:participants:selectRepositoryGitWorkspaceFactory",
+        "public:source-control:types:RepositoryGitWorkspaceFactory"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:f46aad3f8aa3b93d23a5f00948a603cfdb225bb0c4b118cc47f91c089c985427",
+      "status": "target-context-current-surface",
+      "symbol": "RepositoryGitWorkspaceScope",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "AbortSignal",
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
       "consumerEdgeIds": [
         "import:8e9b49d40b137f341667"
       ],
@@ -144841,6 +147499,103 @@
       "signatureDigest": "sha256:02186829f8023d0b55c3dc35fce8584dceda5ba24abf95c54652e19c6d936086",
       "status": "target-context-current-surface",
       "symbol": "SealedPublicRepositorySourceRef",
+      "transaction": "none",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:2fac77682979a4639fa2",
+        "import:fdee11d0fccb6d25bfe6"
+      ],
+      "context": "source-control",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "flag.$variant:0",
+          "type": "' '"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "flag.$variant:1",
+          "type": "'+'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "flag.$variant:2",
+          "type": "'-'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "flag.$variant:3",
+          "type": "'U'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2fac77682979a4639fa2",
+            "import:fdee11d0fccb6d25bfe6"
+          ],
+          "fieldPath": "headSha",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2fac77682979a4639fa2",
+            "import:fdee11d0fccb6d25bfe6"
+          ],
+          "fieldPath": "path",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:2fac77682979a4639fa2",
+            "import:fdee11d0fccb6d25bfe6"
+          ],
+          "fieldPath": "pathDepth",
+          "type": "number"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:SubmoduleEntry",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:2fac77682979a4639fa2",
+          "file": "packages/backend/src/services/gitSubmodule.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/gitSubmodule.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:fdee11d0fccb6d25bfe6",
+          "file": "packages/backend/src/services/gitSubmodule.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/gitSubmodule.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:bindRepositoryGitSubworkspace",
+        "public:source-control:participants:bindRepositoryGitWorkspace",
+        "public:source-control:participants:selectRepositoryGitWorkspaceFactory",
+        "public:source-control:types:RepositoryGitWorkspaceFactory",
+        "public:source-control:types:RepositoryGitWorkspaceScope"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:878dee046f91a6aba5b783529a46cb0b3decef4999a8a50b0dbf3cb12af58709",
+      "status": "target-context-current-surface",
+      "symbol": "SubmoduleEntry",
       "transaction": "none",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -190143,7 +192898,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d81a48fbe6a39db14d7aca38443dbef4e9f5e79c6891a4862c7f7929d00134ce",
+  "sourceDigest": "sha256:b24f35e5ddd5b479b6f1a6aa1c44791b1d0f388c2949f99e2e6482357b71c376",
   "targetContexts": [
     "collaboration",
     "development-automation",

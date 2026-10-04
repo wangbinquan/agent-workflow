@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1866,
+    "entries": 1867,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -24070,6 +24070,31 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryGitWorkspace.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryGitWorkspace.ts#createFileRepositoryGitWorkspaceFactory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryGitWorkspace.ts#createFileRepositoryGitWorkspaceFactory",
+      "symbol": "createFileRepositoryGitWorkspaceFactory",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": true,
         "fenceOrOcc": true,
@@ -44632,7 +44657,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d81a48fbe6a39db14d7aca38443dbef4e9f5e79c6891a4862c7f7929d00134ce",
+  "sourceDigest": "sha256:b24f35e5ddd5b479b6f1a6aa1c44791b1d0f388c2949f99e2e6482357b71c376",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

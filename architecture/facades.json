@@ -753,10 +753,15 @@
     {
       "boundaryEdgeIds": [
         "import:4356c0c71f43c05ed086",
+        "import:7e976b837118a9142b3c",
         "import:86ea9d519113094c7222",
+        "import:880337bfbd0ecfb25957",
         "import:89ec572f61110d303776",
         "import:99d354cc905aa33fa06b",
         "import:aae5da671dd877f9add4",
+        "import:aca00230c3b17c6913b4",
+        "import:baa4367c7a8c8c97002e",
+        "import:ce2def67b1209d2380a6",
         "import:dd7679a3fe25cbd1b67f",
         "import:ffa89aa5d8726be2abad"
       ],
@@ -1751,12 +1756,15 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:0b6df777cb457cba9996"
+        "import:0b6df777cb457cba9996",
+        "import:2fac77682979a4639fa2",
+        "import:713c0a4e96e1133e8a2e",
+        "import:74ea1d3e03f9794067d7",
+        "import:fdee11d0fccb6d25bfe6"
       ],
       "exportedSymbols": [
         "SubMergeResult",
         "SubSnapshot",
-        "SubmoduleEntry",
         "SubmoduleMode",
         "SubmoduleSyncOptions",
         "SubmoduleSyncResult",
@@ -4397,6 +4405,8 @@
         "import:998fd65ab077856a1a2a",
         "import:ae39b5aa97c0e6d132ec",
         "import:bb691cc044791fa7e1ab",
+        "import:cf7d14cf8d0ed81497e9",
+        "import:e2ad949ede69d0f2a122",
         "import:e44b0833070c49ad0c50",
         "import:f46918010b65ada7e149"
       ],
@@ -6338,5 +6348,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d81a48fbe6a39db14d7aca38443dbef4e9f5e79c6891a4862c7f7929d00134ce"
+  "sourceDigest": "sha256:b24f35e5ddd5b479b6f1a6aa1c44791b1d0f388c2949f99e2e6482357b71c376"
 }
