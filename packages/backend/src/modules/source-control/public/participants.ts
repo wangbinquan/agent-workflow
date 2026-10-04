@@ -169,3 +169,8 @@ export {
   selectWorkspaceUploadContentFactory,
   requireWorkspaceUploadContent,
 } from '../composition/workspaceUploads'
+
+export {
+  selectIsolationWorkspaceFactory,
+  requireIsolationWorkspaceScope,
+} from '../composition/isolationWorkspaces'

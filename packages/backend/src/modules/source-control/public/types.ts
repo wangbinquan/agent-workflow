@@ -237,3 +237,18 @@ export type {
   WorkspaceUploadContent,
   WorkspaceUploadContentFactory,
 } from '../application/ports/workspaceUploadContent'
+
+export type {
+  IsolationWorkspace,
+  IsolationWorkspaceBinding,
+  IsolationWorkspaceFactory,
+  IsolationWorkspaceScope,
+  IsolationConflict,
+  IsolationRestoreInput,
+} from '../application/ports/isolationWorkspace'
+
+export type {
+  MergeConflictType,
+  MergeConflictEntry,
+  MergeConflictManifest,
+} from '../domain/isolationConflict'

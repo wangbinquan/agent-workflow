@@ -90,22 +90,16 @@ export function isMergeResolveNodeId(nodeId: string): boolean {
  * that only eyeballs the working tree cannot see them, so they MUST be surfaced
  * via the injected manifest and judged by per-path state (not marker grep).
  */
-export type MergeConflictType =
-  | 'content'
-  | 'modify-delete'
-  | 'rename-delete'
-  | 'binary'
-  | 'submodule'
-
-export interface MergeConflictEntry {
-  /** Per-repo worktree dir name (multi-repo disambiguation). */
-  worktreeDirName: string
-  /** Conflicted path relative to that repo root. */
-  path: string
-  type: MergeConflictType
-}
-
-export type MergeConflictManifest = MergeConflictEntry[]
+export type {
+  MergeConflictType,
+  MergeConflictEntry,
+  MergeConflictManifest,
+} from '@/modules/source-control/public/types'
+import type {
+  MergeConflictType,
+  MergeConflictEntry,
+  MergeConflictManifest,
+} from '@/modules/source-control/public/types'
 
 /**
  * Classify a single `CONFLICT (...)` informational line from `git merge-tree`
