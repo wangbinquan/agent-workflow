@@ -351,7 +351,10 @@ test('compact quality actions only disappear for a true single page; later pages
   fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.next') }))
   expect(next).toHaveBeenCalledTimes(1)
   rerender(view({ ...query, page: 2, data: { ...query.data!, total: '101', nextCursor: null } }))
-  expect(screen.getByRole('button', { name: i18n.t('runObservability.next') })).toBeDisabled()
+  expect(
+    (screen.getByRole('button', { name: i18n.t('runObservability.next') }) as HTMLButtonElement)
+      .disabled,
+  ).toBe(true)
   fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.previous') }))
   fireEvent.click(screen.getByRole('button', { name: i18n.t('runObservability.first') }))
   expect(previous).toHaveBeenCalledTimes(1)

@@ -165,7 +165,6 @@ test.each(['zh', 'en'])(
     fireEvent.click(
       within(dialog.querySelector<HTMLElement>('.dialog__footer')!).getByRole('button', {
         name: i18n.t('common.close'),
-        exact: true,
       }),
     )
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
