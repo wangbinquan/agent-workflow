@@ -6,7 +6,7 @@
     "moduleFiles": 1586,
     "productionFiles": 2986,
     "sharedFiles": 163,
-    "symbolsIncludingFileRoots": 26564
+    "symbolsIncludingFileRoots": 26565
   },
   "entries": [
     {
@@ -112644,6 +112644,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "CompleteObservationTaskInput",
+      "targetContext": "run-observability",
+      "targetLayer": "ports"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "ports",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/ports/completeObservationTask.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/ports/completeObservationTask.ts#CompleteObservationUnallocatedQuality",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "CompleteObservationUnallocatedQuality",
       "targetContext": "run-observability",
       "targetLayer": "ports"
     },
@@ -319503,5 +319515,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d9a6f5eed05880c413b06a84d4cfd32bdb08f5ebf11cf1bbd3aaabf5301982e5"
+  "sourceDigest": "sha256:7fff07f1f30e866bb283ba6996026cef66800274bf8b52dfbf0431a3cbfa2557"
 }

@@ -19,3 +19,5 @@
 `bba36c8960d81718987b26c100d25ff767fa3f14` 的视觉与 Windows 正式通过；full nightly `37213909952` 的原 shard4 失败仍留存。该原 trace 的 Agent 弹窗已经实际显示 Task usage 表和原任务行，但两处标题当前英文均为 Contributions by task，用例却等待不存在的 Task contributions。后继按原 Task usage region 所属的唯一 Card 定位，继续核当前真实标题、原任务钻取／返回／Escape及全部几何／数据断言，避免拿另一个同标题的汇总 Card 冒充原贡献列表。原失败没有改记为通过。
 
 同 trace 的设置卡片间距用例第一次得到负间距、原重试通过：两次独立 boundingBox 之间原运行时／费率卡片完成异步加载，读到两个不同时刻的高度。后继在同一 DOM evaluate 同时读两个真实矩形与原 --space-4；保持1280／390两个宽度、可见性与非空、同一标准间距和原所有超时预算，不通过增加等待或放宽精度掩盖实际布局错误。此片只有原 E2E 与本文，两 RFC 的 native／规模剩余工作保持。
+
+960ff33566298ec9fa20df9413b05e886b1c4ab6 的 visual37218905824与Windows37218909187正式成功，主CI37218451883 cancelled；full37218912081与webkit37218914986在同一原断言正式失败，定位Usage by actual model。实际生产Card一贯使用runObservability.actualModel，其英文是Actual model／中文实际模型；runObservability.models的旧文案不是该Card标题。后继仅按实际Card标题补正这一可见性断言，保留模型卡片存在性、所有原钻取／返回／Escape、四桶／CNY、1280／390、标准间距、15秒等待与全部原预算；原失败和取消不改记通过，继续新确切SHA的正式与定时CI。

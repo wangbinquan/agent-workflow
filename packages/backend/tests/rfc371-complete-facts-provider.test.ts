@@ -204,6 +204,19 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
         state: 'not-ready',
         gaps: ['native-capture-unobserved', 'usage-unobserved'],
         costCoverage: { records: '2', pricedRecords: '2', visibility: 'visible' },
+        tokenCoverage: {
+          invocations: '2',
+          observedInvocations: '1',
+          records: '2',
+          bucketRecords: { input: '2', cacheRead: '2', cacheWrite: '2', output: '2' },
+        },
+        recordedUsage: {
+          invocations: '2',
+          observedInvocations: '1',
+          records: '2',
+          bucketRecords: { input: '2', cacheRead: '2', cacheWrite: '2', output: '2' },
+          tokens: { input: '3', cacheRead: '9', cacheWrite: '15', output: '21', total: '48' },
+        },
         recordedCost: { currency: 'CNY', amount: '0.00015', records: '2', pricedRecords: '2' },
       })
       expect(report.facts.summary.metrics).not.toHaveProperty('tokens')
@@ -238,6 +251,12 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
       expect(missing.metrics).toEqual({
         state: 'not-ready',
         gaps: report.facts.summary.metrics.gaps,
+        tokenCoverage: {
+          invocations: '1',
+          observedInvocations: '0',
+          records: '0',
+          bucketRecords: { input: '0', cacheRead: '0', cacheWrite: '0', output: '0' },
+        },
       })
       expect(missing.metrics).not.toHaveProperty('tokens')
       expect(missing.metrics).not.toHaveProperty('cost')

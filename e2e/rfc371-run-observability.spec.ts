@@ -552,9 +552,7 @@ test('task, agents and attempt drill-down use real observations and standard car
   await page.keyboard.press('Escape')
   await expect(agentDialog).toHaveCount(0)
   await page.getByRole('tab', { name: 'Tokens and cost', exact: true }).click()
-  await expect(
-    page.getByRole('heading', { name: 'Usage by actual model', exact: true }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Actual model', exact: true })).toBeVisible()
   await expectAnalysisSpacing(page)
   await page.getByRole('tab', { name: 'Performance and data quality', exact: true }).click()
   await expect(page.getByText('Task wall time P50', { exact: true })).toBeVisible()

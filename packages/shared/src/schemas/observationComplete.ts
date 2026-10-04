@@ -13,6 +13,35 @@ export type CompleteObservationMetrics =
   | {
       readonly state: 'not-ready'
       readonly gaps: readonly string[]
+      readonly tokenCoverage?: {
+        readonly invocations: string
+        readonly observedInvocations: string
+        readonly records: string
+        readonly bucketRecords: {
+          readonly input: string
+          readonly cacheRead: string
+          readonly cacheWrite: string
+          readonly output: string
+        }
+      }
+      readonly recordedUsage?: {
+        readonly invocations: string
+        readonly observedInvocations: string
+        readonly records: string
+        readonly bucketRecords: {
+          readonly input: string
+          readonly cacheRead: string
+          readonly cacheWrite: string
+          readonly output: string
+        }
+        readonly tokens: {
+          readonly input: string | null
+          readonly cacheRead: string | null
+          readonly cacheWrite: string | null
+          readonly output: string | null
+          readonly total: string
+        }
+      }
       readonly costCoverage?: {
         readonly records: string
         readonly pricedRecords: string
@@ -43,6 +72,8 @@ export interface CompleteObservationAllocation {
   readonly model: { readonly provider: string | null; readonly id: string } | null
   readonly observedAt: number
   readonly contribution: ObservationTokenUsage
+  /** Ambiguous original contributions retain their population, never guessed values. */
+  readonly qualified?: boolean
   readonly cost: {
     readonly amount: string | null
     readonly complete: boolean

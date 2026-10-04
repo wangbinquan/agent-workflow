@@ -83,7 +83,10 @@ function DimensionCard({
 function Summary({ report }: { report: ReadableObservationReport }) {
   const { t, i18n } = useTranslation(),
     value = report.summary.metrics,
-    recorded = value.state === 'not-ready' ? report.summary.recordedUsage : undefined
+    recorded =
+      value.state === 'not-ready'
+        ? (value.recordedUsage ?? report.summary.recordedUsage)
+        : undefined
   return (
     <div className="observation-summary observation-summary--complete">
       <Card title={t('runObservability.fullTasks')}>

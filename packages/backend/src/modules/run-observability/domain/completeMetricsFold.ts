@@ -10,6 +10,16 @@ export function completeMetricsFold(metrics: CompleteObservationMetrics): Comple
   const fold = emptyCompleteObservationFold()
   if (metrics.state === 'not-ready') {
     fold.gaps = [...metrics.gaps]
+    fold.tokenCoverageKnown = metrics.tokenCoverage !== undefined
+    if (metrics.tokenCoverage) {
+      fold.invocations = metrics.tokenCoverage.invocations
+      fold.observedInvocations = metrics.tokenCoverage.observedInvocations
+      fold.records = metrics.tokenCoverage.records
+      fold.bucketRecords = { ...metrics.tokenCoverage.bucketRecords }
+    }
+    if (metrics.recordedUsage)
+      for (const bucket of ['input', 'cacheRead', 'cacheWrite', 'output'] as const)
+        fold.tokens[bucket] = metrics.recordedUsage.tokens[bucket] ?? '0'
     if (metrics.costCoverage) {
       fold.costRecords = metrics.costCoverage.records
       fold.pricedRecords = metrics.costCoverage.pricedRecords
@@ -29,6 +39,12 @@ export function completeMetricsFold(metrics: CompleteObservationMetrics): Comple
   fold.invocations = metrics.invocations
   fold.observedInvocations = metrics.observedInvocations
   fold.records = metrics.records
+  fold.bucketRecords = {
+    input: metrics.records,
+    cacheRead: metrics.records,
+    cacheWrite: metrics.records,
+    output: metrics.records,
+  }
   fold.costRecords = metrics.records
   fold.pricedRecords =
     metrics.cost.state === 'complete'

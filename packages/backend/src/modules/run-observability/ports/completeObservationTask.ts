@@ -28,6 +28,15 @@ export interface CompleteInvocationWorking {
   knownZero: boolean
   emptyCostVisible: boolean
 }
+/** Original all-bucket quality exclusions, retained by the same ordered selection pass. */
+export interface CompleteObservationUnallocatedQuality {
+  readonly invocation: AcceptedObservationInvocation
+  readonly recordId: string
+  readonly sourceId: string
+  readonly model: { readonly provider: string | null; readonly id: string } | null
+  readonly quality: { readonly ambiguous: boolean; readonly unavailable: boolean }
+  readonly visible: boolean
+}
 export interface CompleteObservationTaskInput {
   /** Full original trace evidence is retained for a requested Task, separately from display pages. */
   readonly trace?: boolean
@@ -73,6 +82,9 @@ export interface CompleteObservationTaskBuild {
   readonly attemptsNamespace: string
   readonly invocationsNamespace: string
   readonly allocationsNamespace: string
+  readonly selectedAllocationCount: string
+  readonly unallocatedQualityNamespace: string
+  readonly unallocatedQualityCount: string
   readonly nativeCapturesNamespace: string
   readonly platformCapturesNamespace: string
   readonly trace?: {

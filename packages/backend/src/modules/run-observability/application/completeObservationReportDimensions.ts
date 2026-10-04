@@ -16,6 +16,7 @@ import {
   type CompleteObservationFold,
 } from '../domain/completeObservationMetrics'
 import type { CompleteObservationCohortInput } from '../ports/completeObservationReport'
+import type { CompleteObservationUnallocatedQuality } from '../ports/completeObservationTask'
 import { completeWorkingCache } from './completeWorkingCache'
 import { completeWorkingTraversal } from './completeWorkingTraversal'
 
@@ -107,7 +108,7 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
   }
   async function addModel(
     task: ObservationTaskFacts,
-    allocation: CompleteObservationAllocation,
+    allocation: CompleteObservationAllocation | CompleteObservationUnallocatedQuality,
     invocationMetrics: CompleteObservationMetrics,
   ) {
     const i = allocation.invocation,
@@ -132,8 +133,17 @@ export function completeObservationReportDimensions(input: CompleteObservationCo
         completeObservationGap(value.fold, gap)
         completeObservationGap(membership.fold, gap)
       }
-    addCompleteObservationAllocation(value.fold, allocation.contribution, allocation.cost)
-    addCompleteObservationAllocation(membership.fold, allocation.contribution, allocation.cost)
+    const contribution =
+      'contribution' in allocation
+        ? allocation.contribution
+        : { input: null, cacheRead: null, cacheWrite: null, output: null }
+    const cost =
+      'cost' in allocation
+        ? allocation.cost
+        : { amount: null, complete: false, hidden: !allocation.visible }
+    const qualified = 'contribution' in allocation && allocation.qualified !== false
+    addCompleteObservationAllocation(value.fold, contribution, cost, qualified)
+    addCompleteObservationAllocation(membership.fold, contribution, cost, qualified)
     await cache.put(key, value)
     await memberships.put(member, membership)
   }

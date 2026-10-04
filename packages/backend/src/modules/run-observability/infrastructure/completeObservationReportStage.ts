@@ -259,7 +259,10 @@ export async function publishCompleteReport(
       throw new Error('Original recorded summary cost is not qualified')
     if (
       'recordedUsage' in manifest.summary ||
-      (manifest.summary.metrics.state === 'not-ready' && hasCostEvidence)
+      (manifest.summary.metrics.state === 'not-ready' &&
+        (hasCostEvidence ||
+          'tokenCoverage' in manifest.summary.metrics ||
+          'recordedUsage' in manifest.summary.metrics))
     )
       completeReportFactSummary(manifest.summary)
     if (manifest.summary.metrics.state === 'not-ready') {

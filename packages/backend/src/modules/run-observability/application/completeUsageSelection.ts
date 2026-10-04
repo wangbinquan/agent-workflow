@@ -48,6 +48,14 @@ export function compareCompleteUsage(a: UsageContributionEvidence, b: UsageContr
 export async function selectCompleteUsage<T extends UsageContributionEvidence>(
   workspace: CompleteUsageWorkspace<T>,
   signal?: AbortSignal,
+  issue?: (
+    record: T,
+    quality: {
+      readonly ambiguous: boolean
+      readonly unavailable: boolean
+      readonly allocated: boolean
+    },
+  ) => Promise<void>,
 ) {
   for await (const record of workspace.records()) {
     signal?.throwIfAborted()
@@ -157,6 +165,7 @@ export async function selectCompleteUsage<T extends UsageContributionEvidence>(
     }
     if (ambiguous) ambiguousOverlaps++
     if (unavailable) unavailableSummaries++
+    if (ambiguous || unavailable) await issue?.(record, { ambiguous, unavailable, allocated })
     if (allocated) {
       selected++
       allSelectedComplete &&= record.complete

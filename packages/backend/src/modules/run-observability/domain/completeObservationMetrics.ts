@@ -3,6 +3,9 @@ import { TOKEN_BUCKETS, tokenCount } from './tokenUsage'
 import { cnyPicos } from './cnyPricing'
 export interface CompleteObservationFold {
   tokens: Record<keyof ObservationTokenUsage, string>
+  bucketRecords?: Record<keyof ObservationTokenUsage, string>
+  /** Old immutable incomplete metrics do not prove a new Token population. */
+  tokenCoverageKnown?: boolean
   invocations: string
   observedInvocations: string
   records: string
@@ -16,6 +19,8 @@ export interface CompleteObservationFold {
 export function emptyCompleteObservationFold(invocations = '0'): CompleteObservationFold {
   return {
     tokens: { input: '0', cacheRead: '0', cacheWrite: '0', output: '0' },
+    bucketRecords: { input: '0', cacheRead: '0', cacheWrite: '0', output: '0' },
+    tokenCoverageKnown: true,
     invocations,
     observedInvocations: '0',
     records: '0',
@@ -34,17 +39,34 @@ export function addCompleteObservationAllocation(
   fold: CompleteObservationFold,
   contribution: ObservationTokenUsage,
   cost: { readonly amount: string | null; readonly complete: boolean; readonly hidden: boolean },
+  qualified = true,
 ) {
+  fold.bucketRecords ??= Object.fromEntries(
+    TOKEN_BUCKETS.map((bucket) => [bucket, fold.records]),
+  ) as Record<keyof ObservationTokenUsage, string>
   fold.costRecords = String(BigInt(fold.costRecords ?? fold.records) + 1n)
   fold.pricedRecords ??= fold.priced ? fold.records : '0'
   fold.records = String(BigInt(fold.records) + 1n)
+  fold.visible &&= !cost.hidden
+  if (!qualified) {
+    completeObservationGap(fold, 'coverage-incomplete')
+    fold.priced = false
+    return
+  }
   for (const bucket of TOKEN_BUCKETS) {
     const count = tokenCount(contribution[bucket])
     if (count === null) completeObservationGap(fold, 'usage-incomplete')
-    else fold.tokens[bucket] = String(BigInt(fold.tokens[bucket]) + BigInt(count))
+    else {
+      fold.tokens[bucket] = String(BigInt(fold.tokens[bucket]) + BigInt(count))
+      fold.bucketRecords[bucket] = String(BigInt(fold.bucketRecords[bucket]) + 1n)
+    }
   }
-  fold.visible &&= !cost.hidden
-  if (!cost.complete || cost.amount === null) fold.priced = false
+  if (
+    !cost.complete ||
+    cost.amount === null ||
+    TOKEN_BUCKETS.some((bucket) => contribution[bucket] === null)
+  )
+    fold.priced = false
   else {
     fold.picos = String(BigInt(fold.picos) + cnyPicos(cost.amount))
     if (!cost.hidden) fold.pricedRecords = String(BigInt(fold.pricedRecords) + 1n)
@@ -54,6 +76,16 @@ export function mergeCompleteObservationFold(
   into: CompleteObservationFold,
   next: CompleteObservationFold,
 ) {
+  into.bucketRecords = Object.fromEntries(
+    TOKEN_BUCKETS.map((bucket) => [
+      bucket,
+      String(
+        BigInt(into.bucketRecords?.[bucket] ?? into.records) +
+          BigInt(next.bucketRecords?.[bucket] ?? next.records),
+      ),
+    ]),
+  ) as Record<keyof ObservationTokenUsage, string>
+  into.tokenCoverageKnown = into.tokenCoverageKnown !== false && next.tokenCoverageKnown !== false
   into.costRecords = String(
     BigInt(into.costRecords ?? into.records) + BigInt(next.costRecords ?? next.records),
   )
@@ -81,10 +113,43 @@ export function completeObservationMetrics(
     fold.visible && BigInt(pricedRecords) > 0n
       ? { currency: 'CNY' as const, amount, records, pricedRecords }
       : undefined
-  if (fold.gaps.length)
+  if (fold.gaps.length) {
+    const tokenCoverage = {
+      invocations: fold.invocations,
+      observedInvocations: fold.observedInvocations,
+      records: fold.records,
+      bucketRecords: {
+        ...(fold.bucketRecords ?? {
+          input: fold.records,
+          cacheRead: fold.records,
+          cacheWrite: fold.records,
+          output: fold.records,
+        }),
+      },
+    }
+    const recordedUsage =
+      fold.tokenCoverageKnown !== false &&
+      TOKEN_BUCKETS.some((bucket) => tokenCoverage.bucketRecords[bucket] !== '0')
+        ? {
+            ...tokenCoverage,
+            tokens: {
+              ...(Object.fromEntries(
+                TOKEN_BUCKETS.map((bucket) => [
+                  bucket,
+                  tokenCoverage.bucketRecords[bucket] === '0' ? null : fold.tokens[bucket],
+                ]),
+              ) as Record<keyof ObservationTokenUsage, string | null>),
+              total: String(
+                TOKEN_BUCKETS.reduce((sum, bucket) => sum + BigInt(fold.tokens[bucket]), 0n),
+              ),
+            },
+          }
+        : undefined
     return {
       state: 'not-ready',
       gaps: [...fold.gaps],
+      ...(fold.tokenCoverageKnown !== false ? { tokenCoverage } : {}),
+      ...(recordedUsage ? { recordedUsage } : {}),
       ...(records !== '0' || !fold.visible
         ? {
             costCoverage: {
@@ -96,6 +161,7 @@ export function completeObservationMetrics(
         : {}),
       ...(recordedCost ? { recordedCost } : {}),
     }
+  }
   if (fold.invocations === '0') return { state: 'not-applicable' }
   const state = !fold.visible ? 'hidden' : fold.priced ? 'complete' : 'unpriced'
   return {

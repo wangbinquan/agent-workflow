@@ -272,6 +272,83 @@ describeEachProvider('RFC-371 complete dimension selection on original source', 
     expect(report.rows.filter((row) => row.section === 'invocations')).toHaveLength(1001)
     expect(report.rows.filter((row) => row.section === 'allocations')).toHaveLength(10001)
   }, 120000)
+  for (const scenario of ['overlap', 'covered', 'unknown-model'] as const)
+    test('original allocation and quality EOF retain raw population for ' + scenario, async () => {
+      await seedCompleteTask(harness, 1, 2)
+      const originals = await harness.db.select().from(observationUsageCurrent)
+      expect(originals).toHaveLength(2)
+      for (const original of originals) {
+        const document = JSON.parse(original.document)
+        const second = document.measurement.recordId === completeFixtureId('meter', 1)
+        document.measurement.scope = {
+          root: 'original-summary-root',
+          session: 'original-summary-root',
+          parentSession: null,
+          ancestors: [],
+          turn: second ? 'second-summary' : 'first-summary',
+          turnIndex: second && scenario !== 'covered' ? 2 : 1,
+          level: second && scenario === 'covered' ? 'request' : 'self-total',
+        }
+        document.measurement.coveredThroughTurn = second && scenario !== 'covered' ? 3 : 2
+        if (second && scenario === 'unknown-model') document.measurement.model = null
+        await harness.db
+          .update(observationUsageCurrent)
+          .set({ document: JSON.stringify(document) })
+          .where(eq(observationUsageCurrent.id, original.id))
+          .run()
+      }
+      for (const selection of [agent, model]) {
+        const report = await build(harness, selection)
+        expect(report.taskSource.rows).toBe('1')
+        expect(report.summary.inventory.numericRecords).toBe('2')
+        const metrics = report.summary.metrics
+        if (scenario === 'covered') {
+          expect(metrics).toEqual({
+            state: 'ready',
+            invocations: '1',
+            observedInvocations: '1',
+            records: '1',
+            tokens: { input: '1', cacheRead: '3', cacheWrite: '5', output: '7', total: '16' },
+            cost: { currency: 'CNY', state: 'complete', amount: '0.00005' },
+          })
+        } else {
+          if (metrics.state !== 'not-ready') throw new Error('Original excluded ambiguity lost')
+          expect(metrics.gaps).toContain('coverage-incomplete')
+          if (scenario === 'unknown-model' && selection === model)
+            expect(metrics.gaps).toContain('dimension-unresolved')
+          expect(metrics.tokenCoverage).toEqual({
+            invocations: '1',
+            observedInvocations: '1',
+            records: '2',
+            bucketRecords: { input: '1', cacheRead: '1', cacheWrite: '1', output: '1' },
+          })
+          expect(metrics.recordedUsage?.tokens).toEqual({
+            input: '1',
+            cacheRead: '3',
+            cacheWrite: '5',
+            output: '7',
+            total: '16',
+          })
+          expect(metrics.recordedCost).toEqual({
+            currency: 'CNY',
+            amount: '0.00005',
+            records: '2',
+            pricedRecords: '1',
+          })
+          expect(metrics).not.toHaveProperty('tokens')
+          expect(metrics).not.toHaveProperty('cost')
+          if (scenario === 'overlap') {
+            const dimensions = report.rows.filter((row) => row.section === 'models')
+            expect(dimensions).toHaveLength(1)
+            expect((dimensions[0]!.document as { metrics: unknown }).metrics).toEqual(metrics)
+            const contributions = report.rows.filter((row) => row.section === 'tasks')
+            expect(contributions).toHaveLength(1)
+            expect((contributions[0]!.document as { metrics: unknown }).metrics).toEqual(metrics)
+          }
+        }
+        expect(report.rows.filter((row) => row.section === 'allocations')).toHaveLength(1)
+      }
+    })
   test('a complete excluded model has no matching population and does not become a numeric zero', async () => {
     await seedCompleteTask(harness, 1, 2)
     const report = await build(harness, {
@@ -285,7 +362,16 @@ describeEachProvider('RFC-371 complete dimension selection on original source', 
   test('a model-specific zero is not inferred from an invocation-wide empty capture', async () => {
     await seedCompleteTask(harness, 1, 0)
     const report = await build(harness, model)
-    expect(report.summary.metrics).toEqual({ state: 'not-ready', gaps: ['dimension-unresolved'] })
+    expect(report.summary.metrics).toEqual({
+      state: 'not-ready',
+      gaps: ['dimension-unresolved'],
+      tokenCoverage: {
+        invocations: '1',
+        observedInvocations: '0',
+        records: '0',
+        bucketRecords: { input: '0', cacheRead: '0', cacheWrite: '0', output: '0' },
+      },
+    })
     expect(report.summary.metrics).not.toHaveProperty('tokens')
     expect(report.summary.metrics).not.toHaveProperty('cost')
   })
@@ -337,6 +423,12 @@ describeEachProvider('RFC-371 complete dimension selection on original source', 
     expect(report.summary.metrics).toEqual({
       state: 'not-ready',
       gaps: ['source-projection-pending'],
+      tokenCoverage: {
+        invocations: '0',
+        observedInvocations: '0',
+        records: '0',
+        bucketRecords: { input: '0', cacheRead: '0', cacheWrite: '0', output: '0' },
+      },
     })
     expect(report.summary.metrics).not.toHaveProperty('tokens')
     expect(report.summary.metrics).not.toHaveProperty('cost')

@@ -10,13 +10,77 @@ import {
 import type { CompleteObservationReportRow } from '../ports/completeObservationReport'
 import { completeMetricsFold } from './completeMetricsFold'
 import { completeObservationMetrics } from './completeObservationMetrics'
+import { TOKEN_BUCKETS } from './tokenUsage'
 
 export function qualifiedCostEvidence(metrics: CompleteObservationMetrics): boolean {
   try {
     const canonicalCount = (count: unknown) =>
       typeof count === 'string' && /^(0|[1-9]\d*)$/.test(count)
     if (metrics.state === 'not-applicable')
-      return !('recordedCost' in metrics) && !('costCoverage' in metrics)
+      return (
+        !('recordedCost' in metrics) &&
+        !('costCoverage' in metrics) &&
+        !('recordedUsage' in metrics) &&
+        !('tokenCoverage' in metrics)
+      )
+    if ('tokenCoverage' in metrics) {
+      if (metrics.state !== 'not-ready') return false
+      const coverage = metrics.tokenCoverage
+      if (
+        !coverage ||
+        ![coverage.invocations, coverage.observedInvocations, coverage.records].every(
+          canonicalCount,
+        ) ||
+        BigInt(coverage.observedInvocations) > BigInt(coverage.invocations) ||
+        (BigInt(coverage.records) > 0n && coverage.invocations === '0') ||
+        !TOKEN_BUCKETS.every(
+          (bucket) =>
+            canonicalCount(coverage.bucketRecords[bucket]) &&
+            BigInt(coverage.bucketRecords[bucket]) <= BigInt(coverage.records),
+        ) ||
+        !isDeepStrictEqual(coverage, {
+          invocations: coverage.invocations,
+          observedInvocations: coverage.observedInvocations,
+          records: coverage.records,
+          bucketRecords: Object.fromEntries(
+            TOKEN_BUCKETS.map((bucket) => [bucket, coverage.bucketRecords[bucket]]),
+          ),
+        }) ||
+        (metrics.costCoverage &&
+          (metrics.costCoverage.records !== coverage.records ||
+            !TOKEN_BUCKETS.every(
+              (bucket) =>
+                BigInt(metrics.costCoverage!.pricedRecords) <=
+                BigInt(coverage.bucketRecords[bucket]),
+            )))
+      )
+        return false
+    }
+    if ('recordedUsage' in metrics) {
+      if (metrics.state !== 'not-ready' || !metrics.tokenCoverage) return false
+      const usage = metrics.recordedUsage,
+        coverage = metrics.tokenCoverage
+      if (
+        !usage ||
+        !TOKEN_BUCKETS.some((bucket) => coverage.bucketRecords[bucket] !== '0') ||
+        !TOKEN_BUCKETS.every((bucket) =>
+          coverage.bucketRecords[bucket] === '0'
+            ? usage.tokens[bucket] === null
+            : canonicalCount(usage.tokens[bucket]),
+        ) ||
+        !canonicalCount(usage.tokens.total) ||
+        !isDeepStrictEqual(usage, {
+          ...coverage,
+          tokens: {
+            ...Object.fromEntries(TOKEN_BUCKETS.map((bucket) => [bucket, usage.tokens[bucket]])),
+            total: String(
+              TOKEN_BUCKETS.reduce((sum, bucket) => sum + BigInt(usage.tokens[bucket] ?? '0'), 0n),
+            ),
+          },
+        })
+      )
+        return false
+    }
     if ('costCoverage' in metrics) {
       if (metrics.state !== 'not-ready') return false
       const coverage = metrics.costCoverage
@@ -79,6 +143,11 @@ function qualifiedRecordedUsage(value: unknown, metrics: CompleteObservationMetr
       BigInt(recorded.records) > 0n &&
       BigInt(recorded.observedInvocations) > 0n &&
       BigInt(recorded.observedInvocations) <= BigInt(recorded.invocations) &&
+      (metrics.recordedUsage === undefined ||
+        (recorded.invocations === metrics.recordedUsage.invocations &&
+          recorded.observedInvocations === metrics.recordedUsage.observedInvocations &&
+          recorded.records === metrics.recordedUsage.records &&
+          isDeepStrictEqual(recorded.tokens, metrics.recordedUsage.tokens))) &&
       isDeepStrictEqual(recorded, {
         invocations: recorded.invocations,
         observedInvocations: recorded.observedInvocations,
@@ -112,7 +181,10 @@ export function completeReportFactSummary(
     ('recordedCost' in summary.metrics || 'costCoverage' in summary.metrics) &&
     (!qualifiedCostEvidence(summary.metrics) ||
       ('numericRecords' in summary.inventory &&
-        summary.metrics.costCoverage?.records !== summary.inventory.numericRecords))
+        (summary.metrics.tokenCoverage
+          ? BigInt(summary.metrics.costCoverage?.records ?? '0') >
+            BigInt(summary.inventory.numericRecords)
+          : summary.metrics.costCoverage?.records !== summary.inventory.numericRecords)))
   )
     throw new Error('Original recorded summary cost is not qualified')
   if (
@@ -125,6 +197,15 @@ export function completeReportFactSummary(
         summary.recordedUsage?.records !== summary.inventory.numericRecords))
   )
     throw new Error('Original recorded summary usage is not qualified')
+  if (
+    !qualifiedCostEvidence(summary.metrics) ||
+    (summary.metrics.tokenCoverage &&
+      (summary.metrics.tokenCoverage.invocations !== invocations ||
+        ('numericRecords' in summary.inventory &&
+          BigInt(summary.metrics.tokenCoverage.records) >
+            BigInt(summary.inventory.numericRecords))))
+  )
+    throw new Error('Original recorded summary Token population is not qualified')
   return {
     ...summary,
     inventory: { tasks, attempts, invocations },

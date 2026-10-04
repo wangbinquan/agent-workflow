@@ -84,6 +84,19 @@ describeEachProvider('RFC-371 complete original Task statistics', (harness) => {
       state: 'not-ready',
       gaps: ['native-capture-records-missing'],
       costCoverage: { records: '4', pricedRecords: '4', visibility: 'visible' },
+      tokenCoverage: {
+        invocations: '2',
+        observedInvocations: '2',
+        records: '4',
+        bucketRecords: { input: '4', cacheRead: '4', cacheWrite: '4', output: '4' },
+      },
+      recordedUsage: {
+        invocations: '2',
+        observedInvocations: '2',
+        records: '4',
+        bucketRecords: { input: '4', cacheRead: '4', cacheWrite: '4', output: '4' },
+        tokens: { input: '10', cacheRead: '30', cacheWrite: '50', output: '70', total: '160' },
+      },
       recordedCost: { currency: 'CNY', amount: '0.0005', records: '4', pricedRecords: '4' },
     })
     expect(result.summary.metrics).not.toHaveProperty('tokens')

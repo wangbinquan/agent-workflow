@@ -21,7 +21,7 @@ export function CompleteObservationTrend({
     row.metrics.state === 'ready'
       ? row.metrics.tokens
       : row.metrics.state === 'not-ready'
-        ? row.recordedUsage?.tokens
+        ? (row.metrics.recordedUsage ?? row.recordedUsage)?.tokens
         : undefined,
   )
   const values = usages.map((tokens) => BigInt(tokens?.total ?? '0'))
@@ -34,7 +34,9 @@ export function CompleteObservationTrend({
           {rows.map((row, index) => {
             const value = values[index]!
             const tokens = usages[index]
-            const recorded = row.metrics.state === 'not-ready' && !!row.recordedUsage
+            const recorded =
+              row.metrics.state === 'not-ready' &&
+              !!(row.metrics.recordedUsage ?? row.recordedUsage)
             return (
               <li key={row.key}>
                 <button
@@ -53,7 +55,9 @@ export function CompleteObservationTrend({
                       (bucket) =>
                         t('runObservability.' + bucket) +
                         ' ' +
-                        (tokens ? BigInt(tokens[bucket]).toLocaleString(i18n.language) : '—'),
+                        (tokens && tokens[bucket] !== null
+                          ? BigInt(tokens[bucket]).toLocaleString(i18n.language)
+                          : '—'),
                     ),
                     ...(recorded
                       ? [
@@ -99,7 +103,9 @@ export function CompleteObservationTrend({
                             data-token-color={bucket}
                             style={{
                               height:
-                                value === 0n ? 0 : height(BigInt(tokens[bucket]), value) + '%',
+                                value === 0n
+                                  ? 0
+                                  : height(BigInt(tokens[bucket] ?? '0'), value) + '%',
                             }}
                           />
                         ))}

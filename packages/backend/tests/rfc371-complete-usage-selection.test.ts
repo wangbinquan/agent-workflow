@@ -71,29 +71,43 @@ function record(
   }
 }
 
-async function indexed(records: UsageContributionEvidence[]) {
+async function indexed(
+  records: UsageContributionEvidence[],
+  issue?: (
+    value: UsageContributionEvidence,
+    quality: {
+      readonly ambiguous: boolean
+      readonly unavailable: boolean
+      readonly allocated: boolean
+    },
+  ) => Promise<void>,
+) {
   const index = intervalStore(),
     paths = new Map<string, string>(),
     allocated: Array<{ record: UsageContributionEvidence; contribution: TokenUsage }> = []
-  const output = await selectCompleteUsage({
-    coverage: index.store,
-    async *records() {
-      yield* records
+  const output = await selectCompleteUsage(
+    {
+      coverage: index.store,
+      async *records() {
+        yield* records
+      },
+      async *orderedRecords() {
+        yield* [...records].sort(compareCompleteUsage)
+      },
+      async bindAncestry(group, session, ancestors) {
+        const key = JSON.stringify([group, session]),
+          path = JSON.stringify(ancestors)
+        if (paths.has(key) && paths.get(key) !== path)
+          throw new Error('Conflicting observation session ancestry')
+        paths.set(key, path)
+      },
+      async allocate(record, contribution) {
+        allocated.push({ record, contribution })
+      },
     },
-    async *orderedRecords() {
-      yield* [...records].sort(compareCompleteUsage)
-    },
-    async bindAncestry(group, session, ancestors) {
-      const key = JSON.stringify([group, session]),
-        path = JSON.stringify(ancestors)
-      if (paths.has(key) && paths.get(key) !== path)
-        throw new Error('Conflicting observation session ancestry')
-      paths.set(key, path)
-    },
-    async allocate(record, contribution) {
-      allocated.push({ record, contribution })
-    },
-  })
+    undefined,
+    issue,
+  )
   return { output, allocated, reads: index.reads() }
 }
 
@@ -132,6 +146,51 @@ async function compareOracle(rows: UsageContributionEvidence[]) {
 }
 
 describe('persistent exact coverage selection', () => {
+  test('the original ordered pass awaits each all-bucket overlap issue and ignores fully covered duplicates', async () => {
+    const first = record('first', {
+      measurement: { ...record('first').measurement, coveredThroughTurn: 2 },
+    })
+    const second = record('second', {
+      measurement: {
+        ...record('second').measurement,
+        coveredThroughTurn: 3,
+        scope: { ...record('second').measurement.scope!, turnIndex: 2 },
+      },
+    })
+    const issues: Array<{ recordId: string; allocated: boolean; ambiguous: boolean }> = []
+    const value = await indexed([second, first], async (original, quality) => {
+      await Promise.resolve()
+      issues.push({
+        recordId: original.measurement.recordId,
+        allocated: quality.allocated,
+        ambiguous: quality.ambiguous,
+      })
+    })
+    expect(issues).toEqual([{ recordId: 'second', allocated: false, ambiguous: true }])
+    expect(value.output.selected).toBe('1')
+    expect(value.output.excluded).toBe('1')
+    expect(value.output.ambiguousOverlaps).toBe('1')
+    expect(value.output.allSelectedComplete).toBe(false)
+    await expect(
+      indexed([first, second], async () => {
+        throw new Error('original quality owner failed')
+      }),
+    ).rejects.toThrow('original quality owner failed')
+    const covered = record('covered', {
+      measurement: {
+        ...first.measurement,
+        recordId: 'covered',
+        scope: { ...first.measurement.scope!, level: 'request' },
+      },
+    })
+    const deduplicated = await indexed([covered, first], async () => {
+      throw new Error('fully covered duplicate is not a quality issue')
+    })
+    expect(deduplicated.output.selected).toBe('1')
+    expect(deduplicated.output.excluded).toBe('1')
+    expect(deduplicated.output.ambiguousOverlaps).toBe('0')
+    expect(deduplicated.output.allSelectedComplete).toBe(true)
+  })
   test('keeps original selected-count rejection and covered-count exclusion semantics', async () => {
     for (const invalid of ['-1', '01', '0x10', '', '1.0', '1e3', '9'.repeat(61)]) {
       for (const bucket of ['input', 'cacheRead', 'cacheWrite', 'output'] as const) {

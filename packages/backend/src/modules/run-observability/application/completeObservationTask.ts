@@ -45,7 +45,7 @@ export async function buildCompleteObservationTask(
   const platform = await retainCompleteObservationPlatform(context)
   await validateCompletePlatformTurns(context)
   await validateCompletePlatformRecords(context)
-  await allocateCompleteObservationUsage(
+  const selected = await allocateCompleteObservationUsage(
     context,
     String(BigInt(local.rows) + BigInt(platform.usageCount)),
   )
@@ -161,6 +161,9 @@ export async function buildCompleteObservationTask(
     attemptsNamespace: space('attempts'),
     invocationsNamespace: space('ready-invocations'),
     allocationsNamespace: space('allocations'),
+    selectedAllocationCount: selected.selected,
+    unallocatedQualityNamespace: space('unallocated-quality'),
+    unallocatedQualityCount: selected.unallocatedQualityCount,
     nativeCapturesNamespace: space('captures'),
     platformCapturesNamespace: space('platform-captures'),
   }

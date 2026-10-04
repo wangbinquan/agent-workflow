@@ -11,6 +11,7 @@ import { completeOrdinalKey } from '../domain/completeOrdinal'
 import { parseObservationSelection } from '../domain/analysisDimensions'
 import { selectCompleteObservationTask } from './completeObservationSelection'
 import { completeMetricsFold } from '../domain/completeMetricsFold'
+import { TOKEN_BUCKETS } from '../domain/tokenUsage'
 import type { PlatformSyncState } from '../domain/platformSync'
 import {
   completeObservationMetrics,
@@ -22,6 +23,7 @@ import type {
   CompleteObservationCohortBuild,
   CompleteObservationCohortInput,
 } from '../ports/completeObservationReport'
+import type { CompleteObservationUnallocatedQuality } from '../ports/completeObservationTask'
 import { consumeCompleteSource } from './completePageTraversal'
 import { completeWorkingCache } from './completeWorkingCache'
 import { completeWorkingTraversal } from './completeWorkingTraversal'
@@ -200,11 +202,14 @@ export async function buildCompleteObservationCohort(
           invocation,
         )
     }
+    let allocationPopulation = 0n,
+      qualityPopulation = 0n
     for await (const item of completeWorkingTraversal<CompleteObservationAllocation>(
       input.rows,
       build.allocationsNamespace,
       input.signal,
     )) {
+      allocationPopulation++
       const invocation = await input.rows.get<InvocationRow>(
         build.invocationsNamespace,
         input.keyOf(item.document.invocation.invocationId),
@@ -232,6 +237,24 @@ export async function buildCompleteObservationCohort(
           item.document,
         )
     }
+    for await (const item of completeWorkingTraversal<CompleteObservationUnallocatedQuality>(
+      input.rows,
+      build.unallocatedQualityNamespace,
+      input.signal,
+    )) {
+      qualityPopulation++
+      const invocation = await input.rows.get<InvocationRow>(
+        build.invocationsNamespace,
+        input.keyOf(item.document.invocation.invocationId),
+      )
+      if (!invocation) throw new Error('Complete original quality invocation missing')
+      await dimensions.addModel(task, item.document, invocation.metrics)
+    }
+    if (
+      allocationPopulation !== BigInt(build.selectedAllocationCount) ||
+      qualityPopulation !== BigInt(build.unallocatedQualityCount)
+    )
+      throw new Error('Complete original model contribution population changed')
     for (const [section, namespace] of [
       ['attempts', build.attemptsNamespace],
       ['native-captures', build.nativeCapturesNamespace],
@@ -350,6 +373,7 @@ export async function buildCompleteObservationCohort(
       metrics,
       ...(metrics.state === 'not-ready' &&
       !value.gaps.includes('usage-incomplete') &&
+      TOKEN_BUCKETS.every((bucket) => value.bucketRecords?.[bucket] === value.records) &&
       BigInt(value.records) > 0n
         ? {
             recordedUsage: {
@@ -419,6 +443,7 @@ export async function buildCompleteObservationCohort(
     metrics,
     ...(metrics.state === 'not-ready' &&
     !fold.gaps.includes('usage-incomplete') &&
+    TOKEN_BUCKETS.every((bucket) => fold.bucketRecords?.[bucket] === fold.records) &&
     BigInt(fold.records) > 0n &&
     fold.records === String(inventory.numericRecords) &&
     fold.invocations === String(inventory.invocations)

@@ -11,6 +11,12 @@ import { completeMetricsFold } from '@/modules/run-observability/domain/complete
 import { qualifiedCostEvidence } from '@/modules/run-observability/domain/completeReportFacts'
 
 const usage = { input: '1', cacheRead: '2', cacheWrite: '0', output: '3' }
+const tokenCoverage = (invocations: string, observedInvocations: string, records: string) => ({
+  invocations,
+  observedInvocations,
+  records,
+  bucketRecords: { input: records, cacheRead: records, cacheWrite: records, output: records },
+})
 
 test('a received unpriced invocation preserves its two records when aggregated with one priced record', () => {
   const unpriced = emptyCompleteObservationFold('1')
@@ -27,14 +33,20 @@ test('a received unpriced invocation preserves its two records when aggregated w
     state: 'not-ready',
     gaps: ['native-capture-unobserved'],
     costCoverage: { records: '2', pricedRecords: '0', visibility: 'visible' },
+    tokenCoverage: tokenCoverage('1', '1', '2'),
+    recordedUsage: {
+      ...tokenCoverage('1', '1', '2'),
+      tokens: { input: '2', cacheRead: '4', cacheWrite: '0', output: '6', total: '12' },
+    },
   })
   const restored = completeMetricsFold(original)
   expect(restored.costRecords).toBe('2')
   expect(restored.pricedRecords).toBe('0')
-  expect(restored.records).toBe('0')
-  expect(restored.tokens).toEqual({ input: '0', cacheRead: '0', cacheWrite: '0', output: '0' })
-  // The original cohort supplies invocation identity/count, independently of cost coverage.
-  restored.invocations = '1'
+  expect(restored.records).toBe('2')
+  expect(restored.invocations).toBe('1')
+  expect(restored.observedInvocations).toBe('1')
+  expect(restored.tokens).toEqual({ input: '2', cacheRead: '4', cacheWrite: '0', output: '6' })
+  // The same original Token population survives before any parent dimension merge.
   const priced = emptyCompleteObservationFold('1')
   addCompleteObservationAllocation(priced, usage, {
     amount: '0.02',
@@ -50,6 +62,11 @@ test('a received unpriced invocation preserves its two records when aggregated w
     state: 'not-ready',
     gaps: ['native-capture-unobserved'],
     costCoverage: { records: '3', pricedRecords: '1', visibility: 'visible' },
+    tokenCoverage: tokenCoverage('2', '2', '3'),
+    recordedUsage: {
+      ...tokenCoverage('2', '2', '3'),
+      tokens: { input: '3', cacheRead: '6', cacheWrite: '0', output: '9', total: '18' },
+    },
     recordedCost: { currency: 'CNY', amount: '0.02', records: '3', pricedRecords: '1' },
   })
   expect(value).not.toHaveProperty('tokens')
@@ -101,6 +118,8 @@ test('hidden incomplete cost stays hidden through restoration and aggregation', 
     state: 'not-ready',
     gaps: ['native-capture-unobserved'],
     costCoverage: { records: '1', pricedRecords: '0', visibility: 'hidden' },
+    tokenCoverage: tokenCoverage('1', '0', '1'),
+    recordedUsage: { ...tokenCoverage('1', '0', '1'), tokens: { ...usage, total: '6' } },
   })
   const restored = completeMetricsFold(original)
   expect(restored.visible).toBe(false)

@@ -9,7 +9,10 @@ import {
   addCompleteObservationAllocation,
   completeObservationGap,
 } from '../domain/completeObservationMetrics'
-import type { CompleteObservationContribution } from '../ports/completeObservationTask'
+import type {
+  CompleteObservationContribution,
+  CompleteObservationUnallocatedQuality,
+} from '../ports/completeObservationTask'
 import type { CompleteObservationEvidenceContext } from './completeObservationEvidence'
 import { completePlatformCaptureKey } from './completeObservationPlatform'
 import { completeWorkingPages } from './completeWorkingTraversal'
@@ -26,7 +29,40 @@ export async function allocateCompleteObservationUsage(
 ) {
   const { input, space } = context
   context.usage.seal(count)
-  const selection = await selectCompleteUsage(context.usage.workspace, input.signal)
+  let unallocatedQualityCount = 0n
+  const selection = await selectCompleteUsage(
+    context.usage.workspace,
+    input.signal,
+    async (record, quality) => {
+      const { key, entry } = await context.invocationFor(record.invocationId)
+      completeObservationGap(entry.fold, 'coverage-incomplete')
+      if (!quality.allocated) {
+        addCompleteObservationAllocation(
+          entry.fold,
+          { input: null, cacheRead: null, cacheWrite: null, output: null },
+          { amount: null, complete: false, hidden: !entry.fold.visible },
+          false,
+        )
+        await input.rows.insert(space('unallocated-quality'), [
+          {
+            key: input.keyOf(
+              JSON.stringify([record.sourceId, record.invocationId, record.measurement.recordId]),
+            ),
+            document: {
+              invocation: entry.invocation,
+              recordId: record.measurement.recordId,
+              sourceId: record.sourceId,
+              model: record.localModel ?? record.measurement.model,
+              quality: { ambiguous: quality.ambiguous, unavailable: quality.unavailable },
+              visible: entry.fold.visible,
+            } satisfies CompleteObservationUnallocatedQuality,
+          },
+        ])
+        unallocatedQualityCount++
+      }
+      await context.invocations.put(key, entry)
+    },
+  )
   await context.usage.flush()
   if (selection.ambiguousOverlaps !== '0' || selection.unavailableSummaries !== '0')
     completeObservationGap(context.fold, 'coverage-incomplete')
@@ -42,7 +78,9 @@ export async function allocateCompleteObservationUsage(
       if (quality.ambiguous || quality.unavailable || !record.complete)
         completeObservationGap(entry.fold, 'coverage-incomplete')
       let cost: CompleteObservationAllocation['cost']
-      if (entry.invocation.authority.kind === 'local') {
+      const qualified = !quality.ambiguous && !quality.unavailable
+      if (!qualified) cost = { amount: null, complete: false, hidden: !entry.fold.visible }
+      else if (entry.invocation.authority.kind === 'local') {
         const value = await input.value({
           invocationId: record.invocationId,
           model: record.localModel,
@@ -96,7 +134,7 @@ export async function allocateCompleteObservationUsage(
           hidden: !entry.fold.visible || value?.availability === 'not-authorized',
         }
       }
-      addCompleteObservationAllocation(entry.fold, contribution, cost)
+      addCompleteObservationAllocation(entry.fold, contribution, cost, qualified)
       allocations.push({
         key: row.key,
         document: {
@@ -107,11 +145,12 @@ export async function allocateCompleteObservationUsage(
           observedAt: record.observedAt,
           contribution,
           cost,
+          ...(!qualified ? { qualified: false } : {}),
         } satisfies CompleteObservationAllocation,
       })
       await context.invocations.put(key, entry)
     }
     await input.rows.insert(space('allocations'), allocations)
   }
-  return selection
+  return { ...selection, unallocatedQualityCount: String(unallocatedQualityCount) }
 }

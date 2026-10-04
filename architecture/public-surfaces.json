@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1353,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 24774,
+    "recursiveFields": 25188,
     "symbols": 1150
   },
   "entries": [
@@ -118926,8 +118926,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 377,
-        "maxUnionVariants": 158
+        "maxTransitiveLeafFields": 515,
+        "maxUnionVariants": 206
       },
       "consumerEdgeIds": [
         "import:82f0eb9d4b569c581f9a",
@@ -119119,8 +119119,127 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a2c926cd534a976ddb29"
+          ],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a2c926cd534a976ddb29"
+          ],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -119264,8 +119383,127 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a2c926cd534a976ddb29"
+          ],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a2c926cd534a976ddb29"
+          ],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -119633,8 +119871,127 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a2c926cd534a976ddb29"
+          ],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a2c926cd534a976ddb29"
+          ],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -120105,8 +120462,127 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a2c926cd534a976ddb29"
+          ],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a2c926cd534a976ddb29"
+          ],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -120250,8 +120726,127 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a2c926cd534a976ddb29"
+          ],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a2c926cd534a976ddb29"
+          ],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -120619,8 +121214,127 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a2c926cd534a976ddb29"
+          ],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a2c926cd534a976ddb29"
+          ],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1.manifest.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -120951,8 +121665,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 416,
-        "maxUnionVariants": 172
+        "maxTransitiveLeafFields": 554,
+        "maxUnionVariants": 220
       },
       "consumerEdgeIds": [
         "import:0abc99eac23c4c14732e",
@@ -121162,8 +121876,123 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -121307,8 +122136,123 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:0.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -121674,8 +122618,123 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "manifest.$variant:0.summary.$variant:1.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -122126,8 +123185,123 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -122588,8 +123762,123 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -122733,8 +124022,123 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "report.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [],
@@ -123561,8 +124965,8 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 471,
-        "maxUnionVariants": 198
+        "maxTransitiveLeafFields": 609,
+        "maxUnionVariants": 246
       },
       "consumerEdgeIds": [
         "import:254fc232664722e36ed6"
@@ -123974,11 +125378,130 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [
             "import:254fc232664722e36ed6"
           ],
           "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -124454,11 +125977,130 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [
             "import:254fc232664722e36ed6"
           ],
           "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -124607,11 +126249,130 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [
             "import:254fc232664722e36ed6"
           ],
           "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:request.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -125167,11 +126928,130 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [
             "import:254fc232664722e36ed6"
           ],
           "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:1.facts.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -125647,11 +127527,130 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [
             "import:254fc232664722e36ed6"
           ],
           "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -125800,11 +127799,130 @@
           "type": "string"
         },
         {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.records",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheRead.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.cacheWrite.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.input.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.output.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.recordedUsage.tokens.total",
+          "type": "string"
+        },
+        {
           "consumerEdgeIds": [
             "import:254fc232664722e36ed6"
           ],
           "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.state",
           "type": "'not-ready'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheRead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.cacheWrite",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:254fc232664722e36ed6"
+          ],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.input",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.bucketRecords.output",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.invocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.observedInvocations",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:status.$return.$variant:3.summary.rootTask.$variant:0.metrics.$variant:0.tokenCoverage.records",
+          "type": "string"
         },
         {
           "consumerEdgeIds": [
@@ -195124,7 +197242,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d9a6f5eed05880c413b06a84d4cfd32bdb08f5ebf11cf1bbd3aaabf5301982e5",
+  "sourceDigest": "sha256:7fff07f1f30e866bb283ba6996026cef66800274bf8b52dfbf0431a3cbfa2557",
   "targetContexts": [
     "collaboration",
     "development-automation",

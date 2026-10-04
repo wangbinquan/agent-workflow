@@ -1,3 +1,13 @@
+## 2026-10-05 RFC-371 各原统计范围保留已收到分类 Token
+
+Task、attempt、Agent、运行时、模型、用途、来源与贡献明细沿原 fold 保留自己的已收到四桶及真实已知记录数。缺调用／无值／歧义范围仍保留原人口，未观测保持未知；完整 Token／费用资格、原原始行与全部分页 EOF、source receipt／seal／digest／旧不可变报告保持。服务及 SPA 使用 scope-metrics/7，不能以完整 Task 子集或全局数值填子范围。原质量回调在同一遍历中 awaited，未分配歧义记录不贡献数字，保留原 owner／model 与独立 EOF 人口。
+
+组合27源码有限功能门已通过，原共享公共类型递归深度没有放宽；同一实际候选只运行一次原静态生成，sourceDigest sha256:7fff07f1f30e866bb283ba6996026cef66800274bf8b52dfbf0431a3cbfa2557。复用8份原输出，按 e4919ac87 已提交治理投影13 canonical；129原有序库存／why和并行退役保持，唯一新增已消费质量port type使 owner26564→26565，原规则、300债、40 SPI／69 targets及空SCC保持。matching metadata审阅、发布及新 exact-SHA CI另行留证。
+
+原960ff335视觉／Windows成功，主CI取消，full／WebKit在正式页面“Actual model”与旧标题oracle不一致处失败；只修原标题断言并保留旧检查及预算。普通行将图表长提示换成既有短不完整文案，分类／覆盖／费用不变。正式并行Task已确认650px宽／24px高独立轨道、五刻度、实际重叠区间和零耗时点，原泳道及全部既存失败历史保持。仅精确format/lint、原静态规则与原daemon页面/API验收，无AW本机tests／typecheck／build／新服务。
+
+完整native owner持久baseline／emission／ACK与生产接线、历史采集人口上限移除、真实100K Task／10M usage和余项仍开放；两个RFC仍In Progress。本段只追加，以下共享正文逐字保留。
+
 ## 2026-10-05 RFC-370 Candidate publication 与工作区 CI 接线
 
 Candidate publication SOURCE24与工作区CI-SOURCE6-R2分别独立有限PASS，首门FAIL与全部原历史保持。六组factory roots、selected baseline回读、四处close ACK及Task在ACK后原顺序持久结算已写；native evidence root与独立writer成对选择修复，真实Git／双provider／HTTP及node/effect回归保留原断言和预算。详情见 design/RFC-370-crewstation-hosted-deployment/candidate-publication-effects.md 与 conflict-workspace-ci-bindings.md。

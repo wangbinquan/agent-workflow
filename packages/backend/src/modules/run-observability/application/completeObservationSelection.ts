@@ -18,6 +18,7 @@ import {
 import type {
   CompleteObservationTaskBuild,
   CompleteObservationTaskInput,
+  CompleteObservationUnallocatedQuality,
 } from '../ports/completeObservationTask'
 import { completeWorkingCache } from './completeWorkingCache'
 import { completeWorkingTraversal } from './completeWorkingTraversal'
@@ -52,7 +53,9 @@ export async function selectCompleteObservationTask(
   for (const gap of original.sourceGaps) completeObservationGap(fold, gap)
   let invocationPopulation = 0n,
     allocationPopulation = 0n,
-    numericRecords = 0n
+    qualityPopulation = 0n,
+    selectedAllocations = 0n,
+    selectedQuality = 0n
   for await (const row of completeWorkingTraversal<Invocation>(
     input.rows,
     original.invocationsNamespace,
@@ -102,14 +105,57 @@ export async function selectCompleteObservationTask(
     if (match !== 'excluded') {
       await input.rows.insert(space('allocations'), [row])
       candidate.records = String(BigInt(candidate.records) + 1n)
-      numericRecords++
+      selectedAllocations++
       if (selection.model)
-        addCompleteObservationAllocation(candidate.fold, allocation.contribution, allocation.cost)
+        addCompleteObservationAllocation(
+          candidate.fold,
+          allocation.contribution,
+          allocation.cost,
+          allocation.qualified !== false,
+        )
     }
     await states.put(key, candidate)
   }
-  if (allocationPopulation !== BigInt(original.originalNumericRecords))
+  for await (const row of completeWorkingTraversal<CompleteObservationUnallocatedQuality>(
+    input.rows,
+    original.unallocatedQualityNamespace,
+    input.signal,
+  )) {
+    qualityPopulation++
+    const quality = row.document,
+      key = input.keyOf(quality.invocation.invocationId),
+      candidate = await states.get(key)
+    if (!candidate) throw new Error('Original quality invocation missing')
+    if (!candidate.keep) continue
+    const authority = quality.invocation.authority,
+      match = modelDimensionMatch(selection, {
+        authority: authority.kind,
+        sourceId: authority.kind === 'local' ? null : authority.sourceId,
+        provider: quality.model?.provider ?? null,
+        model: quality.model?.id ?? null,
+      })
+    if (match === 'unresolved') {
+      candidate.unresolved = true
+      completeObservationGap(candidate.fold, 'dimension-unresolved')
+    }
+    if (match !== 'excluded') {
+      await input.rows.insert(space('unallocated-quality'), [row])
+      selectedQuality++
+      candidate.records = String(BigInt(candidate.records) + 1n)
+      if (selection.model)
+        addCompleteObservationAllocation(
+          candidate.fold,
+          { input: null, cacheRead: null, cacheWrite: null, output: null },
+          { amount: null, complete: false, hidden: !quality.visible },
+          false,
+        )
+    }
+    await states.put(key, candidate)
+  }
+  if (allocationPopulation !== BigInt(original.selectedAllocationCount))
     throw new Error('Original selected usage population changed')
+  if (qualityPopulation !== BigInt(original.unallocatedQualityCount))
+    throw new Error('Original unallocated quality population changed')
   if (invocationPopulation === 0n) completeObservationGap(fold, 'dimension-unresolved')
   await states.flush()
   for await (const row of completeWorkingTraversal<Candidate>(
@@ -193,11 +239,14 @@ export async function selectCompleteObservationTask(
     ...(trace ? { trace } : {}),
     sourceGaps: original.sourceGaps,
     fold,
-    originalNumericRecords: String(numericRecords),
+    originalNumericRecords: original.originalNumericRecords,
     sourceReceipts: original.sourceReceipts,
     attemptsNamespace: space('attempts'),
     invocationsNamespace: space('invocations'),
     allocationsNamespace: space('allocations'),
+    selectedAllocationCount: String(selectedAllocations),
+    unallocatedQualityNamespace: space('unallocated-quality'),
+    unallocatedQualityCount: String(selectedQuality),
     nativeCapturesNamespace: space('captures'),
     platformCapturesNamespace: space('platform-captures'),
     summary: {

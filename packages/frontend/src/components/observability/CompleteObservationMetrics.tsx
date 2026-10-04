@@ -1,6 +1,5 @@
 import { useTranslation } from 'react-i18next'
 import type { CompleteObservationMetrics, CompleteObservationTrend } from '@agent-workflow/shared'
-import { NoticeBanner } from '@/components/NoticeBanner'
 import { OBSERVATION_TOKEN_BUCKETS, formatObservationCny } from './formatObservations'
 import { observationGapLabel } from './observationGapLabel'
 
@@ -12,11 +11,13 @@ export function CompleteTokens({
 }: {
   value: CompleteObservationMetrics
   breakdown?: boolean
-  recordedUsage?: CompleteObservationTrend['recordedUsage']
+  recordedUsage?:
+    | CompleteObservationTrend['recordedUsage']
+    | Extract<CompleteObservationMetrics, { state: 'not-ready' }>['recordedUsage']
   compact?: boolean
 }) {
   const { t, i18n } = useTranslation()
-  const recorded = value.state === 'not-ready' ? recordedUsage : undefined
+  const recorded = value.state === 'not-ready' ? (value.recordedUsage ?? recordedUsage) : undefined
   const tokens = value.state === 'ready' ? value.tokens : recorded?.tokens
   return (
     <>
@@ -36,9 +37,16 @@ export function CompleteTokens({
             <div key={bucket} data-token-bucket={bucket}>
               <dt>{t('runObservability.' + bucket)}</dt>
               <dd>
-                {tokens
+                {tokens && tokens[bucket] !== null
                   ? BigInt(tokens[bucket]).toLocaleString(i18n.language)
                   : t('runObservability.unknown')}
+                {recorded && 'bucketRecords' in recorded && (
+                  <span className="muted" title={t('runObservability.numericRecords')}>
+                    {' '}
+                    · {BigInt(recorded.bucketRecords[bucket]).toLocaleString(i18n.language)} /{' '}
+                    {BigInt(recorded.records).toLocaleString(i18n.language)}
+                  </span>
+                )}
               </dd>
             </div>
           ))}
@@ -61,7 +69,7 @@ export function CompleteTokens({
               records: BigInt(recorded.records).toLocaleString(i18n.language),
             })}
           </p>
-          <p className="muted">{t('runObservability.recordedUsageWarning')}</p>
+          <p className="muted">{t('runObservability.reportNotReady')}</p>
         </>
       )}
     </>
@@ -116,36 +124,41 @@ export function CompleteCost({
 }
 export function CompleteMetrics({ value }: { value: CompleteObservationMetrics }) {
   const { t, i18n } = useTranslation()
-  if (value.state === 'not-ready')
-    return (
-      <NoticeBanner tone="warning">
-        {t('runObservability.reportNotReady')}
-        <p>{value.gaps.map((reason) => observationGapLabel(reason, t)).join(' · ')}</p>
-        <CompleteTokens value={value} />
-        <p>
-          {t('runObservability.cost')} · <CompleteCost value={value} />
-        </p>
-      </NoticeBanner>
-    )
   if (value.state === 'not-applicable')
     return <p className="muted">{t('runObservability.notApplicable')}</p>
+  const coverage = value.state === 'ready' ? value : value.tokenCoverage
   return (
     <dl className="detail-grid observation-metrics">
       <dt>{t('runObservability.totalTokens')}</dt>
       <dd>
-        <CompleteTokens value={value} />
+        <CompleteTokens value={value} compact={value.state === 'not-ready'} />
+        {value.state === 'not-ready' && (
+          <p className="muted">
+            {value.gaps.map((reason) => observationGapLabel(reason, t)).join(' · ')}
+          </p>
+        )}
       </dd>
       <dt>{t('runObservability.cost')}</dt>
       <dd>
-        <CompleteCost value={value} />
+        <CompleteCost value={value} compact={value.state === 'not-ready'} />
       </dd>
       <dt>{t('runObservability.coverage')}</dt>
       <dd>
-        {BigInt(value.observedInvocations).toLocaleString(i18n.language)} /{' '}
-        {BigInt(value.invocations).toLocaleString(i18n.language)}
+        {coverage ? (
+          <>
+            {BigInt(coverage.observedInvocations).toLocaleString(i18n.language)} /{' '}
+            {BigInt(coverage.invocations).toLocaleString(i18n.language)}
+          </>
+        ) : (
+          t('runObservability.unknown')
+        )}
       </dd>
       <dt>{t('runObservability.numericRecords')}</dt>
-      <dd>{BigInt(value.records).toLocaleString(i18n.language)}</dd>
+      <dd>
+        {coverage
+          ? BigInt(coverage.records).toLocaleString(i18n.language)
+          : t('runObservability.unknown')}
+      </dd>
     </dl>
   )
 }
