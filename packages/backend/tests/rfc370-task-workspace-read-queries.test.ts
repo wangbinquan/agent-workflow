@@ -187,7 +187,9 @@ describeEachProviderHttpApplication(
       }
       const response = await request
       expect(response.status).toBe(200)
-      const body = await response.json()
+      const body = (await response.json()) as Awaited<
+        ReturnType<RepositoryWorkspaceReadQueries['worktreeDiff']>
+      > & { baseCommit: string }
       const native = await selectRepositoryWorkspaceReadQueries().worktreeDiff(repo.root, repo.base)
       expect(body).toEqual({ ...native, baseCommit: repo.base })
       expect(body.diff).toContain('tracked change')
