@@ -20,6 +20,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 import { EXEMPT_MOUNTS, allRouteMeta } from '@/routes/registry'
+import { mountCompleteObservationRoutes } from '@/modules/run-observability/composition/observationRoutes'
 
 import { buildContractHarness } from '../contracts/harness'
 import { buildHitReport, parseLedger, readJournalDir } from './routeHitLedger'
@@ -35,13 +36,41 @@ function declaredRoutes(): Array<{ method: string; path: string }> {
   return allRouteMeta().map((m) => ({ method: m.method, path: m.path }))
 }
 
+/** The daemon mounts complete reports; the legacy contract harness alone does not. */
+async function buildFullRouteInventory(): Promise<void> {
+  const harness = await buildContractHarness()
+  const declarationsOnly = async (): Promise<never> => {
+    throw new Error('Route inventory must not execute observation queries')
+  }
+  mountCompleteObservationRoutes(harness.app, {
+    request: declarationsOnly,
+    status: declarationsOnly,
+    page: declarationsOnly,
+  })
+}
+
 describe('RFC-319 R1 —— 端点命中账本的结构（无 journal 也必须成立）', () => {
   test('语料非空：声明表本身取到了东西（取空即假绿）', async () => {
-    await buildContractHarness()
+    await buildFullRouteInventory()
     expect(
       declaredRoutes().length,
       '`allRouteMeta()` 取空说明 createApp 没挂上路由——此时任何「未覆盖集合」都是垃圾',
     ).toBeGreaterThan(400)
+  })
+
+  test('formal report routes are mounted by the actual adapter, alongside every legacy alias', async () => {
+    await buildFullRouteInventory()
+    const mounted = new Set(declaredRoutes().map((r) => `${r.method} ${r.path}`))
+    for (const key of [
+      'POST /api/observability/reports',
+      'GET /api/observability/reports/:id',
+      'GET /api/observability/reports/:id/pages',
+      'GET /api/observability/overview',
+      'GET /api/observability/tasks',
+      'GET /api/observability/tasks/:id',
+      'GET /api/observability/tasks/:id/spans',
+    ])
+      expect(mounted.has(key), key).toBe(true)
   })
 
   test('账本升序去重（顺序不稳会让 diff 噪声淹没真实变化）', () => {
@@ -51,7 +80,7 @@ describe('RFC-319 R1 —— 端点命中账本的结构（无 journal 也必须�
   })
 
   test('账本里的每一条**今天确实挂着**（写错的条目会永久占坑）', async () => {
-    await buildContractHarness()
+    await buildFullRouteInventory()
     const mounted = new Set(declaredRoutes().map((r) => `${r.method} ${r.path}`))
     const phantom = LEDGER.uncovered.filter((entry) => !mounted.has(entry))
     expect(
@@ -62,7 +91,7 @@ describe('RFC-319 R1 —— 端点命中账本的结构（无 journal 也必须�
   })
 
   test('账本既不为空也没吞下整张表（两个方向的空转都要红）', async () => {
-    await buildContractHarness()
+    await buildFullRouteInventory()
     const total = declaredRoutes().length
     expect(
       LEDGER.uncovered.length,
@@ -91,7 +120,7 @@ describe.skipIf(JOURNAL_DIR === null)('RFC-319 R1 —— 全量跑后的逐条�
   })
 
   test('未命中集合与账本逐条相等', async () => {
-    await buildContractHarness()
+    await buildFullRouteInventory()
     const report = buildHitReport(declaredRoutes(), readJournalDir(JOURNAL_DIR!))
     expect(
       report.uncovered,
@@ -101,7 +130,7 @@ describe.skipIf(JOURNAL_DIR === null)('RFC-319 R1 —— 全量跑后的逐条�
   })
 
   test('反方向：日志里不该出现注册表没有的 /api 路径', async () => {
-    await buildContractHarness()
+    await buildFullRouteInventory()
     const report = buildHitReport(declaredRoutes(), readJournalDir(JOURNAL_DIR!))
     const apiZombies = report.unresolved.filter((key) => {
       const path = key.slice(key.indexOf(' ') + 1).split('?')[0]!

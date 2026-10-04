@@ -435,6 +435,31 @@ test('task, agents and attempt drill-down use real observations and standard car
   expect(detail.summary.metrics.state).toBe('not-ready')
   expect(detail.summary.metrics).not.toHaveProperty('tokens')
   expect(detail.summary.metrics).not.toHaveProperty('cost')
+  // Keep the actual full-report aliases in the original daemon request journal.
+  // The UI now uses immutable reports directly; that must not erase alias coverage.
+  const aliasFilters = new URLSearchParams({ from: '0', to: String(Date.now() + 1) })
+  for (const path of [
+    '/api/observability/overview?' + aliasFilters,
+    '/api/observability/tasks?' + aliasFilters,
+    `/api/observability/tasks/${task.id}?${aliasFilters}`,
+  ]) {
+    const alias = await settledReport(await api<CompleteObservationReport>(path))
+    expect(completeObservationReportContent(alias)).not.toBeNull()
+    expect(completeObservationReportContent(alias)!.summary.metrics.state).toBe('not-ready')
+  }
+  // Missing original usage must stay explicit even on the retained trace alias.
+  const spans = await fetch(
+    `${daemon.baseUrl}/api/observability/tasks/${task.id}/spans?${new URLSearchParams({
+      reportId: detail.header.reportId,
+      nodeRunId: calls[0]!.nodeRunId,
+    })}`,
+    { headers: { Authorization: `Bearer ${daemon.token}` } },
+  )
+  expect(spans.status).toBe(422)
+  expect(await spans.json()).toMatchObject({
+    code: 'invalid-query',
+    message: 'Complete Task report is not ready or changed scope',
+  })
   const directory = await api<{ runtimes: ObservationPricingRuntime[] }>(
     '/api/observability/pricing/runtimes',
   )
