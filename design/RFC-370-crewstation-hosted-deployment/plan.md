@@ -936,3 +936,12 @@ Candidate publication SOURCE24 独立有限 PASS `ce7e37678052bedc69d28f5c234c37
 原四条规则在完整已提交 `bba36c8960d81718987b26c100d25ff767fa3f14` 加上述冻结候选上仅投影一次，6388个非自有源码取该 commit blobs；并行 native owner／schema 在制品排除且保留。sourceDigest `sha256:d9a6f5eed05880c413b06a84d4cfd32bdb08f5ebf11cf1bbd3aaabf5301982e5`。13产物和129行原顺序／why保持；四项实际增长 import6117→6120、exception5420→5423、public1149→1150、owner26563→26564 按原协议具名登记，匹配提交后正常后继退役。原40 SPI／69 targets／空SCC、300债务、Task authority／effects和504 ambient数量保持。完整原JSON validator通过，有限metadata／精确提交／远端CI各自另留证。
 
 旧148436的主CI37212411283 cancelled（34成功／13失败／3取消），Windows37213640174 cancelled；bba36c896 的 Windows37213907338 success，主CI37213782196 failure（41成功／9失败），原完整作业／日志保持，不改为整套通过。本机仅目标format／lint、纯AST／byte／JSON与上述一次原静态生成，没有AW本机tests／typecheck／build／service。完整阶段A／AC00／A-G仍开放，执行／runtime、脚本与执行权恢复继续；随后各层独立CS adapters，B／M0首先实际部署，再逐项M1～M4。尚无AW-in-CS部署，不关闭RFC。
+
+
+### 2026-10-05 H4/H5 本机进程机制归位
+
+H4/H5 设计 R3、NATIVE-PROCESS12-R2 与 WINDOWS-COVERAGE1 已分别独立有限 PASS；原 FAIL 回执保持。三份 native 机制完整原体归位 platform/execution/local，旧 API、direct launcher CLI 和 compiled embed 保留；真实双入口 frame/EOF 回归及原四 oracle 保持，Windows push/PR 与实际 suite 同步覆盖。详情见 design/RFC-370-crewstation-hosted-deployment/native-process-mechanisms.md。
+
+原四规则在完整 committed 8f294c0c 加冻结 12 TS 上执行一次，13 份产物通过原完整 JSON validator；sourceDigest sha256:3a1df07ad4bbedc70aba97cbda8b2ebe0e2e14068c12ff328c85b1f78fbe05d3。并行 69d03cb9 只退役其已消费许可，六个源码语料 tree 完全相同，复用生成而保留该退役。实际 owner +3（26565→26568），其余库存数量与完整 why、原 SPI/target/SCC 保持；本批匹配许可正常后继退役。
+
+没有运行本机 AW test/typecheck/build/service；scoped format/lint 与纯字节/AST/JSON 证明不代替新 exact-SHA hosted CI。仍在阶段 A，三个 Agent 的中立材料/执行/取证、脚本、执行权/恢复与完整装配继续；A-G 后才开始各 owner 的 CS adapter，M0 首次部署后逐项 M1～M4，当前没有 AW-in-CS 部署。

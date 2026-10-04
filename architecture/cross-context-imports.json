@@ -10943,7 +10943,7 @@
       "owner": "event-center",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#runManagedProcess",
+      "toOwnerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "toPath": "packages/backend/src/services/execution/managedProcess.ts",
       "toSymbol": "runManagedProcess",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -12762,7 +12762,7 @@
       "owner": "resource-catalog",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#runManagedProcess",
+      "toOwnerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "toPath": "packages/backend/src/services/execution/managedProcess.ts",
       "toSymbol": "runManagedProcess",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -103577,7 +103577,7 @@
       "targetSymbol": "runManagedProcess",
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/execution/managedProcess.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#runManagedProcess"
+      "toOwnerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -105545,7 +105545,7 @@
       "targetSymbol": "runManagedProcess",
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/execution/managedProcess.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#runManagedProcess"
+      "toOwnerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -191014,7 +191014,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7fff07f1f30e866bb283ba6996026cef66800274bf8b52dfbf0431a3cbfa2557",
+  "sourceDigest": "sha256:3a1df07ad4bbedc70aba97cbda8b2ebe0e2e14068c12ff328c85b1f78fbe05d3",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

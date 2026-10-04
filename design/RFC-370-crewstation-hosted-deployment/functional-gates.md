@@ -778,3 +778,10 @@ CI-SOURCE6-R2：6 owned／13 controls／26 evidence，指纹 `865163cdaab7bb0741
 两个独立 PASS 候选仅合并生成范围，不伪造一个新的源码门回执。原官方四规则在完整committed `bba36c8960d81718987b26c100d25ff767fa3f14` 加28 TS上执行一次，非自有6388源码从固定 blobs读取，排除并保留并行 native owner/schema WIP；13输出先存私有快照。sourceDigest `sha256:d9a6f5eed05880c413b06a84d4cfd32bdb08f5ebf11cf1bbd3aaabf5301982e5`。原129 ordered ledgers和完整why保持；实际净增长只有import+3（4新增／1退役）、exception+3（4新增／1退役）、public+1和owner+1（3新增／2退役，另1合同更新）。新增完整factory公共类型有SQLite／PostgreSQL／HTTP三处实际生产consumer；原mutation1870与ambient504数量保持，仅真实字段／地址投影。原40 SPI／69 target edges／空implementation SCC、整份300债务、effects／Task authority／facades与原规则保持。完整原JSON validator通过，读回只归一原validator对code-host binding的键顺序，不修改产物值或字节。
 
 仅这四项真实增长以各自完整why随matching canonical消费并正常后继退役；原三份共享文档逐字正文完整保留。有限metadata门、实际发布／post-fetch同步和新exact-SHA CI独立留证。旧148436主CI cancelled 34／13／3与Windows cancelled；bba36c896主CI37213782196正式failure 41／9，Windows37213907338正式success，旧失败／取消不改写。无AW本机tests／typecheck／build／service，不代表完整A-G、CS adapter或M0部署。
+
+
+### H4/H5 native mechanism 有限检视
+
+H4/H5 设计 R3、NATIVE-PROCESS12-R2 与 WINDOWS-COVERAGE1 已分别独立有限 PASS；原 FAIL 回执保持。三份 native 机制完整原体归位 platform/execution/local，旧 API、direct launcher CLI 和 compiled embed 保留；真实双入口 frame/EOF 回归及原四 oracle 保持，Windows push/PR 与实际 suite 同步覆盖。详情见 design/RFC-370-crewstation-hosted-deployment/native-process-mechanisms.md。
+
+设计 be48b13cc70e8c8ec57ab3ea76c1f30d67243aaf37257c4c4e4c297595314bb3；SOURCE12-R2 24583e7f84a855bf5c9ac4872c76c61e42e873e4d8639cbf63bc0549ab94dc37；WINDOWS-COVERAGE1 71bffe5befc4fbacff7c097e2286fce512243bc47cdb3142effb2c2d94197c49。元数据及发布另作有限门，不把上述 PASS 扩成 H4/H5、A5/A-G 或部署完成。

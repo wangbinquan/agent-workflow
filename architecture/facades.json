@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 298,
-    "thinFacades": 56
+    "thinFacades": 58
   },
   "entries": [
     {
@@ -1173,17 +1173,12 @@
     },
     {
       "boundaryEdgeIds": [],
-      "exportedSymbols": [
-        "AgentProcessOutcome",
-        "AgentProcessRequest",
-        "AgentProcessResult",
-        "runAgentProcess"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/execution/agentProcess.ts",
       "id": "facade:packages/backend/src/services/execution/agentProcess.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/agentProcess.ts#$file",
       "removeAfterWave": "W9",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -1310,46 +1305,18 @@
         "import:1db8cdd216f61ab44733",
         "import:223e0cd8394e53cbe18c"
       ],
-      "exportedSymbols": [
-        "FINAL_REAP_MARGIN_MS",
-        "MANAGED_PROCESS_MAX_LINE_CHARS",
-        "MANAGED_PROCESS_MAX_STREAM_CHARS",
-        "ManagedProcessOutcome",
-        "ManagedProcessRequest",
-        "ManagedProcessResult",
-        "pump",
-        "runManagedProcess"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/execution/managedProcess.ts",
       "id": "facade:packages/backend/src/services/execution/managedProcess.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
       "removeAfterWave": "W9",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "platform",
       "targetLayer": "application"
     },
     {
       "boundaryEdgeIds": [],
-      "exportedSymbols": [
-        "MANAGED_PROCESS_LAUNCHER_SUBCOMMAND",
-        "MANAGED_PROCESS_LAUNCH_ERROR_PREFIX",
-        "MANAGED_PROCESS_LAUNCH_NONCE_ENV",
-        "MANAGED_PROCESS_LAUNCH_NONCE_FLAG",
-        "MANAGED_PROCESS_LAUNCH_OUTPUT_PREFIX",
-        "MANAGED_PROCESS_LAUNCH_READY_PREFIX",
-        "MANAGED_PROCESS_TARGET_SEPARATOR",
-        "MANAGED_PROCESS_WINDOWS_CONTROL_FLAG",
-        "MANAGED_PROCESS_WINDOWS_STDERR_FLAG",
-        "MANAGED_PROCESS_WINDOWS_STDOUT_FLAG",
-        "ManagedProcessActivationFrame",
-        "WindowsManagedProcessOutputPaths",
-        "WindowsOutputSpool",
-        "cleanupWindowsOutputSpool",
-        "createWindowsOutputSpool",
-        "managedProcessLauncherArgv",
-        "managedProcessLauncherEnvironment",
-        "runManagedProcessLauncher"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/execution/managedProcessLauncher.ts",
       "id": "facade:packages/backend/src/services/execution/managedProcessLauncher.ts",
       "ownerEntryId": "owner:packages/backend/src/services/execution/managedProcessLauncher.ts#$file",
@@ -6346,5 +6313,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:7fff07f1f30e866bb283ba6996026cef66800274bf8b52dfbf0431a3cbfa2557"
+  "sourceDigest": "sha256:3a1df07ad4bbedc70aba97cbda8b2ebe0e2e14068c12ff328c85b1f78fbe05d3"
 }

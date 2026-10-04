@@ -1,3 +1,7 @@
+## 2026-10-05 RFC-371 scope-metrics/7 的 CI oracle 对齐
+
+原8f294c0c 主CI37225194883明确 failure，生产format/lint/typecheck已绿，四份本批观测测试仍使用旧提示、零记录覆盖形状、损坏人口错误归属或tabpanel布局/P50标签。只改这四份原测试：保留每项原断言、人口、四桶与CNY、完整EOF、全部预算；新增长提示不得出现与零记录不得补造用量断言，布局先确认真实tabpanel共享stack。生产/i18n/原静态规则/canonical零变化，复用已通过的生产投影，不重跑census。有限SOURCE和新确切SHA主/四定时CI另留证；原失败保持，native owner接线/真实100K与10M/两个RFC完成仍开放。以下共享正文逐字保持。
+
 ## 2026-10-05 RFC-371 各原统计范围保留已收到分类 Token
 
 Task、attempt、Agent、运行时、模型、用途、来源与贡献明细沿原 fold 保留自己的已收到四桶及真实已知记录数。缺调用／无值／歧义范围仍保留原人口，未观测保持未知；完整 Token／费用资格、原原始行与全部分页 EOF、source receipt／seal／digest／旧不可变报告保持。服务及 SPA 使用 scope-metrics/7，不能以完整 Task 子集或全局数值填子范围。原质量回调在同一遍历中 awaited，未分配歧义记录不贡献数字，保留原 owner／model 与独立 EOF 人口。
@@ -10010,3 +10014,12 @@ mutation 总数 1862 保持，仅两项原 native owner/file 和原 classifier �
 - 2026-10-05 RFC-370 CI 回执预期补正：`9e327500b7b08d4b42ea7b4e5fb4548ac99e110e` 的 CI `37219704832` 终态 cancelled，macOS shard 4 的唯一功能失败为新增测试错读 logical effect receipt；原持久化在 `lastAttemptReceipt` 中写入实际 pushed／commitSha。仅修测试包裹形状，增加 v／实际 attemptNo／零历史含糊断言，保留 close ACK 前 running／open／无 receipt、拒绝 close 后不结算、真实 Git 和双 provider 的所有原检查。最新 `6521ab0f` Windows `37220626642` 已 success，主 CI 另待终态；不将取消或失败记全绿。不改生产／canonical／扫描／预算，不跑本机 AW test/typecheck/build/service；完整 A-G、CS adapter 与 M0～M4 继续。
 
 - 2026-10-05 RFC-370 余下 CI 预期补正：`6521ab0f` 主 CI `37220500802` completed/cancelled（39 success／8 failure／3 cancelled），同 SHA Windows `37220626642` success，未记全绿。五个 backend 失败只涉及 logical receipt 包裹形状、旧 native evidence 根字符串及 ACK 前缺省 candidate cell 的 matcher 错误；第一项已在 `08553860` 修复，本批仅更新后两处测试，原全部根接线／真双库 Git／ACK 前不发布 derived 与 ACK 后真实事实／预算保持。两个 E2E 失败为 RFC371 model 标题预期；其并行修复已出现在共享树，完整保留并排除本批。无生产／canonical／扫描或重试修改，没有跨session消息，不跑本机 AW test/typecheck/build/service；新 SHA hosted CI、完整 A-G、CS adapter 和 M0～M4 继续。
+
+
+## 2026-10-05 RFC-370 H4/H5 本机进程机制归位
+
+H4/H5 设计 R3、NATIVE-PROCESS12-R2 与 WINDOWS-COVERAGE1 已分别独立有限 PASS；原 FAIL 回执保持。三份 native 机制完整原体归位 platform/execution/local，旧 API、direct launcher CLI 和 compiled embed 保留；真实双入口 frame/EOF 回归及原四 oracle 保持，Windows push/PR 与实际 suite 同步覆盖。详情见 design/RFC-370-crewstation-hosted-deployment/native-process-mechanisms.md。
+
+原四规则在完整 committed 8f294c0c 加冻结 12 TS 上执行一次，13 份产物通过原完整 JSON validator；sourceDigest sha256:3a1df07ad4bbedc70aba97cbda8b2ebe0e2e14068c12ff328c85b1f78fbe05d3。并行 69d03cb9 只退役其已消费许可，六个源码语料 tree 完全相同，复用生成而保留该退役。实际 owner +3（26565→26568），其余库存数量与完整 why、原 SPI/target/SCC 保持；本批匹配许可正常后继退役。
+
+没有运行本机 AW test/typecheck/build/service；scoped format/lint 与纯字节/AST/JSON 证明不代替新 exact-SHA hosted CI。仍在阶段 A，三个 Agent 的中立材料/执行/取证、脚本、执行权/恢复与完整装配继续；A-G 后才开始各 owner 的 CS adapter，M0 首次部署后逐项 M1～M4，当前没有 AW-in-CS 部署。

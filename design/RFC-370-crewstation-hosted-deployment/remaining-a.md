@@ -500,3 +500,10 @@ Task reader CI 修复 SOURCE5-DOC1 独立有限 PASS，指纹 `899180ddebb19b9b0
 9c614ec7 主CI37196589476正式cancelled 11 success / 2 failure / 37 cancelled、Windows37196589510正式failure1/1，原完整日志保留。ae7654de Windows37196996310已正式failure1/1，主CI37196879491的depcheck也已失败；本段是生成前冻结的作业事实，不是主CI整体终态。修复的新确切SHA正式CI仍待发布验收，旧失败不改写。仅精确format/lint、纯byte/AST/JSON和一次原官方静态生成，无AW本机tests/typecheck/build/service。
 
 Conflict DESIGN-R2另已独立PASS，只是设计、尚未实现。完整A1～A8/AC00/A-G继续，之后各层独立CS adapters，B/M0先实际部署再逐项M1～M4；尚无AW-in-CS部署，不关闭RFC。全部旧正文、并行输出与gate/CI历史保持。
+
+
+### 2026-10-05 A5 native mechanism 归位
+
+H4/H5 设计 R3、NATIVE-PROCESS12-R2 与 WINDOWS-COVERAGE1 已分别独立有限 PASS；原 FAIL 回执保持。三份 native 机制完整原体归位 platform/execution/local，旧 API、direct launcher CLI 和 compiled embed 保留；真实双入口 frame/EOF 回归及原四 oracle 保持，Windows push/PR 与实际 suite 同步覆盖。详情见 design/RFC-370-crewstation-hosted-deployment/native-process-mechanisms.md。
+
+A5 的启动 oracle 以 execution-material-implementation.md §3 的原 gated/direct 分支为准：Task receipt ACK 先于 target 激活；system/MCP 保留已创建 target 的 PID、可选 receipt 与原 stdin/输出等待；smoke 不新增 callback 要求。辅助 append 失败保留 incomplete 与有效业务结果；terminal 写失败保持原 complete/incomplete 意图重试。该批仅归位本机机制，不关闭完整 A5；A1～A8 残项继续。
