@@ -143,15 +143,22 @@ test('three original baseline policies receive the same selected factory at thei
   }
 })
 
-function forwarded(value: ts.ObjectLiteralExpression, source: ts.SourceFile, receiver: string) {
+function forwarded(
+  value: ts.ObjectLiteralExpression,
+  source: ts.SourceFile,
+  receiver: string,
+  workspaceReceiver = receiver,
+) {
   for (const key of Object.keys(fields))
-    expect(compact(property(value, source, key), source)).toBe(`${receiver}.${key}`)
+    expect(compact(property(value, source, key), source)).toBe(
+      `${key === 'automationWorkspaceEffects' ? workspaceReceiver : receiver}.${key}`,
+    )
 }
 
 test('CLI initial and replacement sessions forward the same selected storage objects and Worker descriptor', () => {
   const source = load('cli/start.ts')
   forwarded(oneRoot(source, 'composePostgresqlDaemonApplication'), source, 'input')
-  forwarded(oneRoot(source, 'composeSqliteAppDeps'), source, 'input')
+  forwarded(oneRoot(source, 'composeSqliteAppDeps'), source, 'input', 'developmentWorkspaceEffects')
   const session = descendants(
     source,
     (node): node is ts.VariableDeclaration =>
@@ -339,10 +346,11 @@ test('all nine actual automation workspace roots bind the complete factory from 
     'composeDevelopmentEmployeeWorkspace',
     'composeDevelopmentEmployeePlatformWorkItems',
   ] as const
-  for (const [path, receiver, ownerNames] of [
+  for (const [path, receiver, factoryReceiver, ownerNames] of [
     [
       'cli/start.ts',
       'input',
+      'developmentWorkspaceEffects',
       [
         'composeSqliteProviderSession',
         'composeSqliteProviderSession',
@@ -352,6 +360,7 @@ test('all nine actual automation workspace roots bind the complete factory from 
     [
       'cli/postgresqlDaemonApplication.ts',
       'input',
+      'developmentWorkspaceEffects',
       [
         'composePostgresqlApplication',
         'composePostgresqlApplication',
@@ -361,6 +370,7 @@ test('all nine actual automation workspace roots bind the complete factory from 
     [
       'server.ts',
       'deps',
+      'deps',
       [
         'composeFallbackDevelopmentAutomation',
         'composeSqliteApiRouteMounts',
@@ -369,13 +379,23 @@ test('all nine actual automation workspace roots bind the complete factory from 
     ],
   ] as const) {
     const source = load(path)
+    const selection = oneRoot(source, 'selectDevelopmentWorkspaceEffectBinding')
+    expect(compact(property(selection, source, 'automationWorkspaceEffects'), source)).toBe(
+      receiver + '.automationWorkspaceEffects',
+    )
+    expect(compact(property(selection, source, 'actionWorkspaceEffects'), source)).toBe(
+      receiver + '.actionWorkspaceEffects',
+    )
+    expect(compact(property(selection, source, 'conflictWorkspaceSelected'), source)).toBe(
+      receiver + '.conflictMergeWorkspaceEffects!==undefined',
+    )
     for (const [index, name] of roots.entries()) {
       const calls = namedCalls(source, source, name)
       expect(calls).toHaveLength(1)
       const call = calls[0]!
       expect(
         compact(property(objectArgument(call), source, 'automationWorkspaceEffects'), source),
-      ).toBe(receiver + '.automationWorkspaceEffects')
+      ).toBe(factoryReceiver + '.automationWorkspaceEffects')
       let owner: ts.Node | undefined = call.parent
       while (owner !== undefined && !ts.isFunctionDeclaration(owner)) owner = owner.parent
       if (owner === undefined || !ts.isFunctionDeclaration(owner))
@@ -384,6 +404,35 @@ test('all nine actual automation workspace roots bind the complete factory from 
       expect(
         owner.parameters.some((parameter) => compact(parameter.name, source) === receiver),
       ).toBe(true)
+    }
+    if (path === 'server.ts') {
+      const variables = descendants(source, ts.isVariableDeclaration)
+      const variable = (name: string) => {
+        const matching = variables.filter((node) => compact(node.name, source) === name)
+        expect(matching).toHaveLength(1)
+        return matching[0]!
+      }
+      const runtime = variable('runtimeDeps').initializer!
+      if (!ts.isObjectLiteralExpression(runtime)) throw new Error('runtime deps object required')
+      const selected = runtime.properties.filter(
+        (node) =>
+          ts.isSpreadAssignment(node) &&
+          ts.isCallExpression(node.expression) &&
+          compact(node.expression.expression, source) === 'selectDevelopmentWorkspaceEffectBinding',
+      )
+      expect(selected).toHaveLength(1)
+      const effective = variable('effectiveDeps').initializer!
+      if (!ts.isObjectLiteralExpression(effective))
+        throw new Error('effective deps object required')
+      expect(compact(effective.properties[0]!, source)).toBe('...runtimeDeps')
+      const fallback = namedCalls(source, source, 'composeFallbackDevelopmentAutomation')
+      expect(fallback).toHaveLength(1)
+      expect(compact(fallback[0]!.arguments[0]!, source)).toBe(
+        '{...runtimeDeps,...repositoryBootstrap,workspacePresence}',
+      )
+      const mounts = namedCalls(source, source, 'composeSqliteApiRouteMounts')
+      expect(mounts).toHaveLength(1)
+      expect(compact(mounts[0]!.arguments[0]!, source)).toBe('effectiveDeps')
     }
   }
 })

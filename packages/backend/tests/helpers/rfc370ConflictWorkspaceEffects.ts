@@ -16,6 +16,7 @@ import type {
 } from '@/modules/source-control/application/ports/employeeCaseWorkspaceEffects'
 import { createFileEmployeeCaseWorkspaceEffectsFactory } from '@/modules/source-control/infrastructure/local/fileEmployeeCaseWorkspaceEffects'
 import { GatedEvidenceArtifacts, type EvidenceEffect } from './rfc370EvidenceArtifacts'
+import { createFileEvidenceDocumentCommands } from '@/modules/development-automation/infrastructure/local/fileEvidenceDocumentCommands'
 
 export type WorkspaceEffectGate = (effect: string, reference?: string) => Promise<void>
 const immediate: WorkspaceEffectGate = async () => {}
@@ -218,12 +219,16 @@ export class OpaqueActionEffects implements ActionWorkspaceEffects {
 }
 
 export class OpaqueEvidenceArtifacts extends GatedEvidenceArtifacts {
+  readonly documentCommands: ReturnType<typeof createFileEvidenceDocumentCommands>
   constructor(
     readonly codec: WorkspaceReferenceCodec,
     root: string,
     gate: (effect: EvidenceEffect, reference: string) => Promise<void> = immediate,
   ) {
     super(root, gate)
+    this.documentCommands = Object.freeze(
+      createFileEvidenceDocumentCommands({ stagingRoot: join(root, 'staging'), evidence: this }),
+    )
     Object.freeze(this)
   }
   override async materializeBundle(bundle: string, destination: string) {

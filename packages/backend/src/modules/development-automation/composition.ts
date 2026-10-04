@@ -1,4 +1,5 @@
 import type { AutomationWorkspaceEffectsFactory } from './application/ports/automationWorkspaceEffects'
+import { join } from 'node:path'
 export type { AutomationWorkspaceEffectsFactory }
 import { selectedAutomationWorkspaceEffects } from './infrastructure/automationWorkspaceEffects'
 import type { ActionWorkspaceEffects } from './application/ports/actionWorkspaceEffects'
@@ -283,8 +284,7 @@ function composeDevelopmentAutomationFromPersistence(
   const store = persistence.store
   const lookup = deps.admissionLookup ?? persistence.admissionLookup
   const snapshots = persistence.snapshots
-  const evidence =
-    deps.evidenceArtifacts ?? new EvidenceStore(factory.resolve(deps.appHome, 'evidence'))
+  const evidence = deps.evidenceArtifacts ?? new EvidenceStore(join(deps.appHome, 'evidence'))
   const evidenceContents = deps.evidenceRead?.contents ?? deps.evidenceContents ?? evidence.contents
   const evidenceDownloads = deps.evidenceRead?.downloads ?? evidence.downloads
   const materializer = createRequirementMaterializer({
@@ -294,7 +294,7 @@ function composeDevelopmentAutomationFromPersistence(
     store,
     snapshots,
     evidence,
-    stagingRoot: factory.resolve(deps.appHome, 'evidence', 'staging'),
+    stagingRoot: join(deps.appHome, 'evidence', 'staging'),
     ...(deps.requirementSource === undefined ? {} : { source: deps.requirementSource }),
     now,
   })

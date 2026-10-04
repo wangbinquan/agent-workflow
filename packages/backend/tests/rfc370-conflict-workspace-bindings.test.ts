@@ -112,10 +112,12 @@ describeEachProviderHttpApplication(
       expect(action.allocations).toEqual([])
       const evidenceRoot = mkdtempSync(join(tmpdir(), 'aw-conflict-root-evidence-'))
       try {
+        const evidence = new OpaqueEvidenceArtifacts(codec, evidenceRoot)
         const opened = await scope.open({
           conflictMergeWorkspaceEffects: conflict,
           actionWorkspaceEffects: action,
-          evidenceArtifacts: new OpaqueEvidenceArtifacts(codec, evidenceRoot),
+          evidenceArtifacts: evidence,
+          evidenceDocumentCommands: evidence.documentCommands,
         })
         expect(opened.app).toBeDefined()
         expect(conflict.allocations).toEqual([])
@@ -123,6 +125,23 @@ describeEachProviderHttpApplication(
       } finally {
         rmSync(evidenceRoot, { recursive: true, force: true })
       }
+    }, 120_000)
+
+    test('selected conflict owners preserve independently selected native evidence storage', async () => {
+      const codec = new WorkspaceReferenceCodec()
+      const contents = new OpaqueContentFactory(codec)
+      const conflict = new OpaqueConflictEffects(codec)
+      const action = new OpaqueActionEffects(codec, contents)
+      const opened = await scope.open({
+        conflictMergeWorkspaceEffects: conflict,
+        actionWorkspaceEffects: action,
+      })
+      expect(existsSync(join(opened.appHome, 'evidence', 'blobs'))).toBe(true)
+      expect(existsSync(join(opened.appHome, 'evidence', 'bundles'))).toBe(true)
+      expect(existsSync(join(opened.appHome, 'evidence', 'staging'))).toBe(true)
+      expect(conflict.allocations).toEqual([])
+      expect(action.allocations).toEqual([])
+      expect(contents.calls).toEqual([])
     }, 120_000)
   },
 )
@@ -209,7 +228,7 @@ describeEachProvider(
           terminalAt: null,
         })
         const issue = {
-          typeId: 'development.issue',
+          typeId: 'development.issue-handling',
           stateJson: JSON.stringify({
             status: 'active',
             subjectRef: 'selected',

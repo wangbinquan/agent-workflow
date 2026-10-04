@@ -466,6 +466,7 @@ describeEachProvider(
           db: fx.db,
           appHome: codec.reference(HOME),
           evidenceArtifacts: evidence,
+          evidenceDocumentCommands: evidence.documentCommands,
           automationWorkspaceEffects: contents,
           actionWorkspaceEffects: action,
           agentLauncher: scripted,
