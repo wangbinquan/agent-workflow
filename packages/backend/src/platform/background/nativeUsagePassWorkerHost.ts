@@ -17,6 +17,7 @@ const entry =
 export interface NativeUsagePassWorkerReader {
   readonly identity: NativeUsagePassIdentity
   readonly initialCursor: string
+  readonly rootCreatedAt: number | null
   next(cursor: string): Promise<NativeUsagePassPage>
   acknowledge(ordinal: string, payloadDigest: string): Promise<void>
   close(): Promise<void>
@@ -98,6 +99,7 @@ export async function openNativeUsagePassWorker(
     return {
       identity: opened.identity,
       initialCursor: opened.initialCursor,
+      rootCreatedAt: opened.rootCreatedAt,
       async next(cursor) {
         try {
           const result = await request({ kind: 'next', cursor })

@@ -24,7 +24,12 @@ scope.onmessage = (event) => {
       scope.postMessage({
         id,
         ok: true,
-        result: { kind: 'opened', identity: reader.identity, initialCursor: reader.initialCursor },
+        result: {
+          kind: 'opened',
+          identity: reader.identity,
+          initialCursor: reader.initialCursor,
+          rootCreatedAt: reader.rootCreatedAt,
+        },
       })
     } else {
       if (!reader) throw new Error('Native worker has no accepted pass')

@@ -109,6 +109,7 @@ export function openOpencodeUsagePass(
     issues = new Set<string>(),
     fingerprint = createHash('sha256')
   let closed = false,
+    rootCreatedAt: number | null = null,
     ordinal = 0n,
     sessionsRead = 0n,
     partsRead = 0n,
@@ -134,10 +135,23 @@ export function openOpencodeUsagePass(
     db.query<unknown, []>('PRAGMA temp_store=FILE').get()
     db.query<unknown, []>('PRAGMA temp.cache_size=-8192').get()
     db.query<unknown, []>('BEGIN').get()
+    const hasRootTime = db
+      .query<{ name: string }, []>('PRAGMA table_info(session)')
+      .all()
+      .some((column) => column.name === 'time_created')
     const root = db
-      .query<SessionRow, [string]>('SELECT id,parent_id FROM session WHERE id=?')
+      .query<
+        SessionRow & { time_created: unknown },
+        [string]
+      >(`SELECT id,parent_id,${hasRootTime ? 'time_created' : 'NULL'} AS time_created FROM session WHERE id=?`)
       .get(identity.rootSessionId)
     if (!root || !identifier(root.id)) throw new Error('Native root unavailable')
+    rootCreatedAt =
+      typeof root.time_created === 'number' &&
+      Number.isSafeInteger(root.time_created) &&
+      root.time_created >= 0
+        ? root.time_created
+        : null
     db.query<unknown, []>(
       `CREATE TEMP TABLE native_pass_queue (
       id TEXT PRIMARY KEY,parent TEXT,entered INTEGER NOT NULL DEFAULT 0,parts_done INTEGER NOT NULL DEFAULT 0,
@@ -161,6 +175,7 @@ export function openOpencodeUsagePass(
   return {
     identity,
     initialCursor,
+    rootCreatedAt,
     next(after) {
       if (closed) throw new Error('Native snapshot closed; start a new owner pass')
       if (pending) {

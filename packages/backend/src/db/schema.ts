@@ -46,6 +46,7 @@ import {
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
 import { providerAwareSqliteTable } from './providerSchema'
+import { createNativeUsageTables } from './observationNative'
 
 const sqliteTable = providerAwareSqliteTable(physicalSqliteTable)
 
@@ -8554,3 +8555,15 @@ export const maintenanceRuns = sqliteTable(
     ),
   }),
 )
+
+// RFC-371: bind each native evidence relation to this exact original Task table.
+export const {
+  nativeUsagePreparations,
+  nativeUsagePasses,
+  nativeUsagePassHeads,
+  nativeUsagePassPages,
+  nativeUsageSessionParents,
+  nativeUsageStepMembers,
+  nativeUsageEmissions,
+  nativeUsageRevisionHeads,
+} = createNativeUsageTables(tasks)

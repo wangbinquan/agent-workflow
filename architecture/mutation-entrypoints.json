@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1872,
+    "entries": 1873,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -1097,6 +1097,28 @@
       "symbol": "OpenDbOptions",
       "targetContext": "platform",
       "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/db/observationNative.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/db/observationNative.ts#createNativeUsageTables",
+      "missingControls": [
+        "authority",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/db/observationNative.ts#createNativeUsageTables",
+      "symbol": "createNativeUsageTables",
+      "targetContext": "platform",
+      "targetLayer": "application"
     },
     {
       "controls": {
@@ -44775,7 +44797,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:c4b7972032fb94aa39a1ebe36661611dc12d35c9e692381f2196f5095bf9881f",
+  "sourceDigest": "sha256:c91e4cdc83a4d6e543bba4a7f7b871cb58b1ba8159687a1df3079b0159814458",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

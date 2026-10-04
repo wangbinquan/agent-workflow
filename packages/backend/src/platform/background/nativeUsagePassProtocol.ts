@@ -23,6 +23,7 @@ export type NativeUsagePassWorkerResult =
       readonly kind: 'opened'
       readonly initialCursor: string
       readonly identity: NativeUsagePassIdentity
+      readonly rootCreatedAt: number | null
     }
   | { readonly kind: 'page'; readonly page: NativeUsagePassPage }
   | { readonly kind: 'acknowledged' }

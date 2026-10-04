@@ -35,12 +35,12 @@ function fixture() {
   const db = new Database(path)
   cleanup.push(() => db.close())
   db.exec(`PRAGMA journal_mode=WAL;
-    CREATE TABLE session (id TEXT PRIMARY KEY,parent_id TEXT); CREATE INDEX session_parent ON session(parent_id,id);
+    CREATE TABLE session (id TEXT PRIMARY KEY,parent_id TEXT,time_created INTEGER); CREATE INDEX session_parent ON session(parent_id,id);
     CREATE TABLE message (id TEXT PRIMARY KEY,session_id TEXT,data TEXT);
     CREATE TABLE part (id TEXT PRIMARY KEY,session_id TEXT,message_id TEXT,time_created INTEGER,data TEXT);
     CREATE INDEX part_session ON part(session_id,id);`)
   const session = (id: string, parent: string | null = null) =>
-    db.query('INSERT INTO session VALUES (?,?)').run(id, parent)
+    db.query('INSERT INTO session VALUES (?,?,?)').run(id, parent, 1000)
   const part = (id: string, sessionId: string, kind: string, input: unknown = 11) => {
     const messageId = 'message-' + id
     db.query('INSERT INTO message VALUES (?,?,?)').run(
@@ -152,6 +152,9 @@ test('one frozen page requires owner ACK, retries exact bytes, and keeps the ori
   f.part('before', 'root', 'step-finish')
   const reader = f.open(1),
     first = reader.next(reader.initialCursor)
+  expect(reader.rootCreatedAt).toBe(1000)
+  f.db.query('UPDATE session SET time_created=? WHERE id=?').run(2000, 'root')
+  expect(reader.rootCreatedAt).toBe(1000)
   expect(first.nextCursor).not.toBeNull()
   expect(first.eof).toBeNull()
   expect(reader.next(reader.initialCursor)).toEqual(first)
@@ -167,6 +170,7 @@ test('one frozen page requires owner ACK, retries exact bytes, and keeps the ori
     {
       identity: reader.identity,
       initialCursor: first.nextCursor!,
+      rootCreatedAt: reader.rootCreatedAt,
       next: reader.next,
       acknowledge: reader.acknowledge,
       close: reader.close,
@@ -191,6 +195,20 @@ test('the first part range includes malformed empty original keys instead of sil
   const first = reader.next(reader.initialCursor)
   reader.acknowledge(first.ordinal, first.payloadDigest)
   expect(() => reader.next(first.nextCursor!)).toThrow('Native part cursor unavailable')
+})
+
+test('missing original root birth metadata preserves every numeric row without fabricating a time', () => {
+  const f = fixture()
+  f.db.exec('ALTER TABLE session DROP COLUMN time_created')
+  f.part('known', 'root', 'step-finish', '29')
+  const reader = f.open(1)
+  expect(reader.rootCreatedAt).toBeNull()
+  const values: string[] = []
+  const final = consume(reader, (page) => {
+    for (const step of page.steps) values.push(step.usage.input!)
+  })
+  expect(values).toEqual(['29'])
+  expect(final.eof?.counts.steps).toBe('1')
 })
 
 test('the first child range includes malformed empty session keys and cannot seal a complete subset', () => {
@@ -317,6 +335,7 @@ test('a real native Worker keeps EOF behind the original owner ACK and closes af
     abort.signal,
   )
   try {
+    expect(reader.rootCreatedAt).toBe(1000)
     const first = await reader.next(reader.initialCursor)
     expect(first.eof).toBeNull()
     expect(await reader.next(first.cursor)).toEqual(first)

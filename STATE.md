@@ -1,3 +1,11 @@
+## 2026-10-05 RFC-371 原始分页持久 owner 候选
+
+实现原 Task claim／accepted invocation／node 事务里的 prepare、admit、原 page 持久回执、interrupt 和完整 membership／parent 查询。重送返回冻结回执，中断快照必须明确新 pass 替代；正 ACK 只在原事务提交后返回。原 Worker 从同一 SQLite 快照传递 root birth，缺字段保持 null。八个追加关系保留原证据与 ledger 映射，不构造第二套数字账本。双 provider 回归包含10001 step／1025 session／80层及37条续页全部EOF，测试只写入 hosted 流程。
+
+独立有限 SOURCE29 与必要5文件增量通过；首轮metadata值级环FAIL保留，原schema根注入真实Task table的修复候选只运行一次原静态生成，sourceDigest `sha256:c91e4cdc83a4d6e543bba4a7f7b871cb58b1ba8159687a1df3079b0159814458`。共享 RFC-370 已提交及许可退役的69f10d9c实质更新了13 canonical；本次只为合并后的源码生成匹配登记，29源码与SOURCE回执逐字复用，未来revision allocator在制品排除。旧v2 metadata PASS及首轮FAIL各自保留。13 matching 输出保留129库存顺序／why、300债、40 SPI／69 targets／空implementation SCC与原规则；backend／repo值级SCC逐字回到原baseline；实际entry1872→1873／imports6120→6138／exceptions5423→5439／owners26578→26651四项具名增长，发布后正常退役。源旧snapshot的本次generator覆写仅反向恢复自有变更；原失败保留，旧迁移不变，新SQLite0238／PG0014仅追加，详见 native-pages-owner-implementation.md。
+
+本片尚未切换正式 producer，没有 stub emit／seal；原 daemon 的统计与页面继续沿既有链路。native source allocation／历史 baseline 对照／seal／生产接线、CS 对应 owner、100K Task／10M usage 和确切SHA CI另行验收，两个RFC仍In Progress。仅目标format／lint、原纯AST／JSON及生成元数据，无AW本机tests／typecheck／build／新服务。以下共享正文与历史逐字保留。
+
 ## 2026-10-05 RFC-371 scope-metrics/7 的 CI oracle 对齐
 
 原8f294c0c 主CI37225194883明确 failure，生产format/lint/typecheck已绿，四份本批观测测试仍使用旧提示、零记录覆盖形状、损坏人口错误归属或tabpanel布局/P50标签。只改这四份原测试：保留每项原断言、人口、四桶与CNY、完整EOF、全部预算；新增长提示不得出现与零记录不得补造用量断言，布局先确认真实tabpanel共享stack。生产/i18n/原静态规则/canonical零变化，复用已通过的生产投影，不重跑census。有限SOURCE和新确切SHA主/四定时CI另留证；原失败保持，native owner接线/真实100K与10M/两个RFC完成仍开放。以下共享正文逐字保持。

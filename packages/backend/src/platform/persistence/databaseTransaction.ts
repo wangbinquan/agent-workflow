@@ -160,6 +160,11 @@ function reuseFrame(client: object): DatabaseTransaction | undefined {
   return frames.getStore()?.find((frame) => frame.client === client)?.tx
 }
 
+/** A durable receipt cannot be returned from an outer transaction that has not committed. */
+export function databaseTransactionIsActive(handle: DatabaseTransaction): boolean {
+  return frames.getStore()?.some((frame) => frame.client === handle || frame.tx === handle) ?? false
+}
+
 function withFrame<T>(client: object, tx: DatabaseTransaction, run: () => Promise<T>): Promise<T> {
   const next: readonly TransactionFrame[] = [...(frames.getStore() ?? []), { client, tx }]
   // 同时登记进 `db/transactionScope`：`dbTxSync` 据此判断「有事务开着且我不在它的上下文里」，
