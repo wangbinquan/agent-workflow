@@ -8,6 +8,7 @@ import {
   selectNodeRunPromptOperations,
 } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
+import { selectIsolationWorkspaceFactory } from '@/modules/source-control/public/participants'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeNodeRunRuntimePersistence } from './nodeRunRuntime'
@@ -280,6 +281,7 @@ export function runTaskWithRealTestTopology(
   const runtimeRegistry = options.runtimeRegistry ?? composeRuntimeRegistryOperations(options.db)
   const repositoryPublicationTransport =
     options.repositoryPublicationTransport ?? createTestRepositoryPublicationTransport()
+  const isolationWorkspaces = selectIsolationWorkspaceFactory(options.isolationWorkspaces)
   const dynamicWorkflow =
     options.dynamicWorkflow ??
     Object.freeze({
@@ -313,6 +315,7 @@ export function runTaskWithRealTestTopology(
       nodeRunRuntime,
       dynamicWorkflow,
       repositoryPublicationTransport,
+      isolationWorkspaces,
     }),
   })
   return driveTaskEngineApplication(
@@ -360,6 +363,7 @@ export function runTaskWithRealTestTopology(
       dynamicWorkflow,
       processConcurrencyScope: options.processConcurrencyScope ?? options.db,
       repositoryPublicationTransport,
+      isolationWorkspaces,
     },
     runtime.topology,
     runtime,

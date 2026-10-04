@@ -748,3 +748,12 @@ Generation resume 将唯一 lazy PostgreSQL runtime 的配置捕获提前到 Sou
 本机只做目标 format/lint、纯 byte/AST/JSON、原库存计数与上述一次生成，无 AW 本机 tests/typecheck/build/service。四项 SOURCE PASS 均复用，无 moving HEAD 重启 gate；META 与正常回执退役只作有限审查，正式行为交新 exact-SHA hosted CI。旧失败/取消、原正文与全部并行内容保留。
 
 完整 A1～A4 余项及 A5～A8、AC00 与完整独立 A-G 仍开放；A4 其余 Git inspection/commit/candidate/delivery、Task HTTP diff/repair 和 DE/DA 工作区验证继续。完整 A-G 后编写各层独立 CS adapters，B/M0 先完成实际部署，再逐项 M1～M4。本任务 M0 首次部署尚未完成，不关闭 RFC。
+
+
+### 2026-10-04 RFC-370：隔离测试装配类型补正
+
+SOURCE39、META17 与五项 matching 回执正常后继已发布至 eadf4dfc042f60f60e228be50c111589fa4103bf，6 提交／56 独立路径；post-fetch 精确0/0、index empty、双锁释放并交回，全部并行 WIP 保留。该 SHA Windows37182705756 completed/failure（1 failure），maintenance37182705749 completed/success（1 success）；主 CI37182705799 的 lint/typecheck job111378311643 completed/failure。主 workflow 正式终态另记，不把某个 job 或维护结果当作全 CI 通过。旧失败保持。
+
+Ubuntu 与 Windows 原日志各有相同两项 TS 错误：共享 taskExecutionTestTopology helper 的 BoundRunTaskOptions 没有必需的 isolationWorkspaces，新增 isolation bindings fixture 缺少 Task 必填 startedAt。本次 helper 沿真实 public selector 选择一次 factory，并将同一 receiver/identity 传给原 participants 和 drive options；默认仍为现有 native factory，显式选择仍沿原完整选择规则。fixture 只补 startedAt: Date.now()。两完整原文件分别逆向删除四处接线和一个字段后逐字恢复，全部原函数、断言、名称与预算保持；无需添加镜像式测试。
+
+两个测试路径均不属于原生产 canonical 语料，生产实现、schema、原 scanner/normalizer/库存/增长条款及已发布 sourceDigest 保持，不重跑成功 census。目标 format/lint 和纯 byte 证明通过；有限 SOURCE2/DOC1 门单独留档，实际验证交修复后的 exact-SHA hosted CI，无 AW 本机 tests/typecheck/build/service。完整 A1～A8/AC00/A-G 与后续独立 CS adapters、M0～M4 继续；M0 首次部署尚未完成，不关闭 RFC。

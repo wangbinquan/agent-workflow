@@ -78,6 +78,7 @@ async function fixture(db: ProviderNeutralDatabase, mounts = ['']) {
     branch: `agent-workflow/${taskId}`,
     repoCount: mounts.length,
     status: 'running',
+    startedAt: Date.now(),
     inputs: '{}',
     executionLineageId: taskId,
     lineageSlotPathJson: slotPathJson,
