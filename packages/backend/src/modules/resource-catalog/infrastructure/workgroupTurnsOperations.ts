@@ -21,6 +21,7 @@ import type {
 } from '@/modules/task-execution/public/commands'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { databaseSessionFor, engineOf } from '@/platform/persistence/databaseTransaction'
+import { runWorkgroupCommit } from './workgroupCommitQueue'
 import {
   WORKGROUP_TURN_ASSIGNMENT_TRANSITIONS,
   WORKGROUP_TURN_GATE_TRANSITIONS,
@@ -548,40 +549,42 @@ export function createWorkgroupTurnsPersistence(
     async commit(
       input: Parameters<WorkgroupTurnsPersistencePort['commit']>[0],
     ): Promise<WorkgroupTurnsLedgerCommitReceipt> {
-      try {
-        return await runResourceCatalogTransaction(dependencies.db, async (transaction) => {
-          const hostLedger = dependencies.hostLedgerFactory.inTransaction(transaction)
-          const mintedRuns: WorkgroupTurnMintedRun[] = []
-          const skippedOperationKeys: string[] = []
-          const failedRunIds: string[] = []
-          for (const operation of input.operations) {
-            if (isHostLedgerOperation(operation)) {
-              const receipt = await hostLedger.apply({
-                taskId: input.taskId,
-                operations: [operation],
-              })
-              if (!receipt.committed) {
-                throw new WorkgroupLedgerConflict(receipt.conflictOperationKey)
+      return await runWorkgroupCommit(dependencies.db, input.taskId, async () => {
+        try {
+          return await runResourceCatalogTransaction(dependencies.db, async (transaction) => {
+            const hostLedger = dependencies.hostLedgerFactory.inTransaction(transaction)
+            const mintedRuns: WorkgroupTurnMintedRun[] = []
+            const skippedOperationKeys: string[] = []
+            const failedRunIds: string[] = []
+            for (const operation of input.operations) {
+              if (isHostLedgerOperation(operation)) {
+                const receipt = await hostLedger.apply({
+                  taskId: input.taskId,
+                  operations: [operation],
+                })
+                if (!receipt.committed) {
+                  throw new WorkgroupLedgerConflict(receipt.conflictOperationKey)
+                }
+                mintedRuns.push(...receipt.mintedRuns)
+                failedRunIds.push(...(receipt.failedRunIds ?? []))
+                continue
               }
-              mintedRuns.push(...receipt.mintedRuns)
-              failedRunIds.push(...(receipt.failedRunIds ?? []))
-              continue
+              const skipped = await applyResourceCatalogOperation(
+                transaction,
+                input.taskId,
+                operation,
+              )
+              if (skipped !== null) skippedOperationKeys.push(skipped)
             }
-            const skipped = await applyResourceCatalogOperation(
-              transaction,
-              input.taskId,
-              operation,
-            )
-            if (skipped !== null) skippedOperationKeys.push(skipped)
+            return { committed: true, mintedRuns, skippedOperationKeys, failedRunIds }
+          })
+        } catch (error) {
+          if (error instanceof WorkgroupLedgerConflict) {
+            return { committed: false, conflictOperationKey: error.operationKey }
           }
-          return { committed: true, mintedRuns, skippedOperationKeys, failedRunIds }
-        })
-      } catch (error) {
-        if (error instanceof WorkgroupLedgerConflict) {
-          return { committed: false, conflictOperationKey: error.operationKey }
+          throw error
         }
-        throw error
-      }
+      })
     },
   })
 }
