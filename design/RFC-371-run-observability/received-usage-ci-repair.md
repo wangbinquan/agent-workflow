@@ -15,3 +15,7 @@
 `a457563d42eca56b26f3c93ccb1073331bec66a7` 的视觉 CI `37209908908` 已正式成功；普通 CI 与其后继 exact-SHA 各自留证。该标题改动只替换现有渲染字符串，没有新增、删除或改名符号；新 canonical 必须使用原 committed source、完整库存及原规则，保留并行生成在制品，不能把本文或局部通过当作 RFC 关闭依据。
 
 实际本机页面沿原 Agent 汇总、贡献、真实并行 Task、返回原弹窗和 Escape 恢复原维度焦点完成验收。原执行列表也有同名 Agent 按钮，因此真实 E2E 的开头全页名称定位现以已有 `data-observation-dimension` 身份限定汇总触发器，仍使用原 button role／名称和真实点击；保留后续原弹窗、Task、时间、泳道、间距及焦点断言，不能用任意 first 匹配掩盖歧义。其新增冻结后继单独检视，前一 SOURCE5 不代签新增 E2E 字节。
+
+`bba36c8960d81718987b26c100d25ff767fa3f14` 的视觉与 Windows 正式通过；full nightly `37213909952` 的原 shard4 失败仍留存。该原 trace 的 Agent 弹窗已经实际显示 Task usage 表和原任务行，但两处标题当前英文均为 Contributions by task，用例却等待不存在的 Task contributions。后继按原 Task usage region 所属的唯一 Card 定位，继续核当前真实标题、原任务钻取／返回／Escape及全部几何／数据断言，避免拿另一个同标题的汇总 Card 冒充原贡献列表。原失败没有改记为通过。
+
+同 trace 的设置卡片间距用例第一次得到负间距、原重试通过：两次独立 boundingBox 之间原运行时／费率卡片完成异步加载，读到两个不同时刻的高度。后继在同一 DOM evaluate 同时读两个真实矩形与原 --space-4；保持1280／390两个宽度、可见性与非空、同一标准间距和原所有超时预算，不通过增加等待或放宽精度掩盖实际布局错误。此片只有原 E2E 与本文，两 RFC 的 native／规模剩余工作保持。

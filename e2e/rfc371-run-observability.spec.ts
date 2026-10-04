@@ -533,16 +533,21 @@ test('task, agents and attempt drill-down use real observations and standard car
     .and(page.locator('[data-observation-dimension]'))
     .click()
   const agentDialog = page.getByRole('dialog', { name: agents[0]!.name, exact: true })
+  const agentContributions = agentDialog
+    .locator('.card')
+    .filter({ has: page.getByRole('region', { name: 'Task usage', exact: true }) })
+  await expect(agentContributions).toHaveCount(1)
   await expect(
-    agentDialog.getByRole('heading', { name: 'Task contributions', exact: true }),
+    agentContributions.getByRole('heading', { name: 'Contributions by task', exact: true }),
   ).toBeVisible()
   await expect(page.getByRole('button', { name: /CSV|Export/ })).toHaveCount(0)
   await agentDialog.getByRole('button', { name: 'Observed parallel task', exact: true }).click()
   await expect(page.getByRole('heading', { name: 'Task total', exact: true })).toBeVisible()
   await page.getByRole('button', { name: '← Back to analysis', exact: true }).click()
   await expect(agentDialog).toBeVisible()
+  await expect(agentContributions).toHaveCount(1)
   await expect(
-    agentDialog.getByRole('heading', { name: 'Task contributions', exact: true }),
+    agentContributions.getByRole('heading', { name: 'Contributions by task', exact: true }),
   ).toBeVisible()
   await page.keyboard.press('Escape')
   await expect(agentDialog).toHaveCount(0)
@@ -1152,11 +1157,18 @@ test('runtime configuration and CNY price cards retain the shared section gap', 
   await expect(pricing).toBeVisible()
   for (const width of [1280, 390]) {
     await page.setViewportSize({ width, height: 844 })
-    const before = await runtime.boundingBox(),
-      after = await pricing.boundingBox()
-    const expectedGap = await page
-      .locator('html')
-      .evaluate((el) => Number.parseFloat(getComputedStyle(el).getPropertyValue('--space-4')))
+    // Both cards can finish loading between two separate boundingBox calls.
+    // Read their actual geometry together, keeping the original gap oracle.
+    const { before, after, expectedGap } = await runtime.evaluate((element) => {
+      const other = document.querySelector('#token-cost > .settings-card')
+      return {
+        before: element.getBoundingClientRect().toJSON(),
+        after: other?.getBoundingClientRect().toJSON() ?? null,
+        expectedGap: Number.parseFloat(
+          getComputedStyle(document.documentElement).getPropertyValue('--space-4'),
+        ),
+      }
+    })
     expect(before).not.toBeNull()
     expect(after).not.toBeNull()
     expect(after!.y - before!.y - before!.height).toBeCloseTo(expectedGap, 0)
