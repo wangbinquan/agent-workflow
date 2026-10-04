@@ -192,7 +192,7 @@ describe('RFC-187 §4-2 mergeBackNodeIso 逐路径救回', () => {
 describe('RFC-187 §4-2 salvage 失败语义（Codex 实现门 P1 源级锁）', () => {
   test('只有纯树构造 fail-open；materialize 失败必须向上抛（canonical 无回滚）', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'nodeIsolation.ts'),
+      resolve(import.meta.dir, '..', 'src', 'platform', 'workspace', 'local', 'isolation.ts'),
       'utf8',
     )
     // 新形状：catch 只包 buildSalvageTree（fail-open 日志文案锁定），

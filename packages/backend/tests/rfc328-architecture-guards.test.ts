@@ -86,7 +86,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     ],
   ],
   [
-    'packages/backend/src/services/nodeIsolation.ts',
+    'packages/backend/src/modules/task-execution/infrastructure/isolationCleanup.ts',
     [
       {
         callable: 'discardNodeIso',
@@ -95,7 +95,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
         // 不变——**这个真实外部副作用必须被 effect observer 括起来**——只是 act
         // 原语换了名字。RFC-328 的 act 清单按名字匹配，所以改实现必须同步改这里，
         // 否则守卫会报「act boundary 不见了」（本 RFC 实撞，CI run 33840839902）。
-        actCallees: new Set(['reclaimWorktreePath']),
+        actCallees: new Set(['discardIsolationWorkspace']),
         observerCallees: new Set(['createLocalEffectAttemptObserver']),
       },
     ],

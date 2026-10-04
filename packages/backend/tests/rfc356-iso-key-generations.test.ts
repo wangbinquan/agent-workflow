@@ -191,7 +191,7 @@ describe('RFC-356 · 选键：常态零成本，有残留才回收', () => {
 
   test('容器判空要防 ENOENT：删除与判空之间有竞态，抛出去会变成一次假的 iso-setup 失败', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'nodeIsolation.ts'),
+      resolve(import.meta.dir, '..', 'src', 'platform', 'workspace', 'local', 'isolation.ts'),
       'utf8',
     )
     const at = src.indexOf('function containerStillBlocks')
@@ -266,7 +266,15 @@ describe('RFC-356 · 双身份 handle（设计门 P0-1）', () => {
 
   test('discardNodeIso 的 effect observer 吃的是 DB 身份，不是物理键', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'nodeIsolation.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'isolationCleanup.ts',
+      ),
       'utf8',
     )
     const at = src.indexOf('export async function discardNodeIso')
@@ -278,14 +286,23 @@ describe('RFC-356 · 双身份 handle（设计门 P0-1）', () => {
     expect(body, 'observer 不得吃物理键').not.toMatch(/nodeRunId: handle\.nodeRunId,\s*\n\s*kind:/)
     // 反过来：路径 / ref / resourceKeys 必须继续用物理键。
     expect(body).toMatch(/isolation:\$\{handle\.taskId\}:\$\{handle\.nodeRunId\}/)
-    expect(body).toMatch(/deleteIsoRefs\(r\.canonWorktreePath, handle\.taskId, handle\.nodeRunId/)
+    const native = readFileSync(
+      resolve(import.meta.dir, '..', 'src', 'platform', 'workspace', 'local', 'isolation.ts'),
+      'utf8',
+    )
+    const nativeAt = native.indexOf('export async function discardIsolationWorkspace')
+    expect(nativeAt).toBeGreaterThan(-1)
+    const physical = native.slice(nativeAt, native.indexOf('\n}', nativeAt))
+    expect(physical).toMatch(
+      /deleteIsoRefs\(r\.canonWorktreePath, handle\.taskId, handle\.nodeRunId/,
+    )
   })
 })
 
 describe('RFC-356 · handleTaskIdOf 分隔符（AC-14）', () => {
   test('POSIX 与 Windows 两种路径形状都能回读 taskId', () => {
     const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'nodeIsolation.ts'),
+      resolve(import.meta.dir, '..', 'src', 'platform', 'workspace', 'local', 'isolation.ts'),
       'utf8',
     )
     const at = src.indexOf('function handleTaskIdOf')

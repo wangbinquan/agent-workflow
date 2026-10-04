@@ -8,15 +8,7 @@ export function encodePortSegment(portName: string): string {
   return `${sanitized}_${digest}`
 }
 
-export function repoRelForcedPaths(
-  containerPaths: readonly string[] | undefined,
-  worktreeDirName: string,
-): string[] {
-  if (containerPaths === undefined || containerPaths.length === 0) return []
-  if (worktreeDirName === '') return [...containerPaths]
-  const prefix = worktreeDirName + '/'
-  return containerPaths.filter((p) => p.startsWith(prefix)).map((p) => p.slice(prefix.length))
-}
+export { repoRelForcedPaths } from '@/modules/source-control/public/queries'
 
 export function parseArchiveJson(raw: string | null | undefined): PortArchive | null {
   if (raw === null || raw === undefined || raw === '') return null

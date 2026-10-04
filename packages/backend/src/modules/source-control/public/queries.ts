@@ -11,3 +11,5 @@ export interface OwnRepositoryTransportCredentialQueries {
 export interface RepositoryOverviewQueries {
   countCachedRepositories(): Promise<number>
 }
+
+export { repoRelForcedPaths } from '../domain/forcedWorkspacePaths'

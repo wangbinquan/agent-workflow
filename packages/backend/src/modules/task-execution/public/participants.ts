@@ -352,3 +352,6 @@ export interface TaskWorkspaceCommitParticipant {
  * 所以那个端口类型从这里出去。实现仍由组合根装配后注入。
  */
 export type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
+
+// Exact existing native cleanup compatibility; selected scene state stays private.
+export { discardNodeIso } from '../infrastructure/isolationCleanup'

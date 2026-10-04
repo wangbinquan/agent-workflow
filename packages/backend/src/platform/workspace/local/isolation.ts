@@ -1,0 +1,1918 @@
+// RFC-130 — per-node isolated worktree lifecycle (design.md §2/§4/§5).
+//
+// Each agent node run executes in its OWN isolated git worktree, branched from a
+// full snapshot of the canonical worktree taken at dispatch. On success the node's
+// delta is 3-way merged back into the canonical worktree under the task write lock.
+// This module owns the git mechanics (create / snapshot-final / merge-back / discard);
+// the scheduler (services/scheduler.ts) owns the DB column writes + lock ordering
+// so it can keep the writeSem critical sections tight (§7).
+//
+// Multi-repo (RFC-066): every canonical repo gets its OWN iso worktree; snapshot +
+// merge-back are per-repo and independent (a conflict in one repo does not touch
+// another — design.md §9).
+
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { basename, join } from 'node:path'
+import { removeDirectoryWithRetry } from '@/util/fsReclaim'
+import {
+  alignWorktreeGitlinks,
+  AW_INTERNAL_GIT_IDENTITY,
+  buildSalvageTree,
+  commitTree,
+  createIsolatedWorktree,
+  deleteIsoRefs,
+  gitCommitExists,
+  isGitWorkTree,
+  isoRefName,
+  materializeTree,
+  mergeTreeInMemory,
+  reclaimWorktreePath,
+  runGit,
+  snapshotFullState,
+} from '@/util/git'
+import {
+  buildMergeResolvePrompt,
+  evaluateResolution,
+  type MergeConflictEntry,
+  type MergeConflictManifest,
+  parseConflictManifest,
+  type ResolvedPathState,
+} from '@/services/mergeAgent'
+import { repoRelForcedPaths } from '@/modules/source-control/public/queries'
+
+// RFC-210. Static import is safe: gitSubmodule imports util/git, util/git reaches
+// gitSubmodule only through a dynamic import, so the edge stays one-way.
+import {
+  bottomUp,
+  detectSubmodules,
+  ensureSubmoduleAlternates,
+  ensureSubmodulePool,
+  listEffectiveSubmodules,
+  mergeSubmoduleTrees,
+  poolRefName,
+  pushObjectsToPool,
+  resolveSubmodulePool,
+  subSlug,
+  rewriteGitlinkInCommit,
+  submoduleGitDir,
+  usableSubmodules,
+  worktreeRefName,
+} from '@/services/gitSubmodule'
+import type { Logger } from '@/util/log'
+
+/** One canonical repo + its isolated mirror for a single node run. */
+export interface IsoRepo {
+  /** Source repo (for `git worktree add/remove` + ref ops). */
+  repoPath: string
+  /** Canonical worktree — snapshot source + merge-back target. */
+  canonWorktreePath: string
+  /** The isolated worktree — the node's opencode cwd. */
+  isoWorktreePath: string
+  /** '' for single-repo; the per-repo sub-dir name for multi-repo. */
+  worktreeDirName: string
+  baseBranch: string
+  /** Full-state snapshot commit the iso branched from (merge base). */
+  baseSnapshot: string
+  /** Canonical HEAD when the iso was created (iso `reset --mixed` target). */
+  taskBaseHead: string
+  /**
+   * RFC-193 K1 必达：this repo's repo-relative force-include roster (archived
+   * path-port source files so far in this task). EVERY full-state snapshot of
+   * this repo (base / final / ours / conflict-resolve) carries it — gitignored
+   * port files must survive all three hops of the propagation chain
+   * (producer final → canonical materialize → consumer base), and add -A
+   * drops them at each hop (design §4.5).
+   */
+  forcedRepoRelPaths: string[]
+  /**
+   * RFC-210: submodule path → its HEAD when this iso was created. The merge base
+   * for the per-submodule three-way merge at merge-back.
+   *
+   * Carried ON THE HANDLE rather than looked up on demand because this module is
+   * git-only and never touches the DB — and merge-back, which is where the value
+   * is needed, runs long after the iso worktree that could have been probed for
+   * it. Empty for repos without submodules (the common case) and for passthrough.
+   */
+  subBases: Record<string, string>
+  /**
+   * RFC-210: shared object pool backing each submodule, keyed by submodule path.
+   *
+   * Per SUBMODULE, not per repo. Every submodule owns a separate module dir and
+   * therefore a separate pool; a repo-level `poolDir` (what this used to be,
+   * recording whichever submodule happened to be first) sent every subsequent
+   * submodule's objects into a foreign pool, and merge-back then died on
+   * `fatal: unable to read tree` for anything past the first one — i.e. any repo
+   * with two submodules, and every nested case, which is the headline scenario.
+   *
+   * A path missing from this map is running degraded and must be skipped, not
+   * silently pointed at some other submodule's pool: path-mode repos
+   * deliberately get none (D11 — the host is the USER'S repo, and a pool there
+   * accumulates platform objects/refs/commits that can never be cleaned up), and
+   * mock harnesses have no git host at all.
+   */
+  poolDirs: Record<string, string>
+  /**
+   * RFC-210: submodule paths whose three-way merge conflicted and are still
+   * unresolved. Written at merge-back (the conflict set is not knowable at iso
+   * creation) and read back on resume.
+   *
+   * Non-empty MUST fail the human-resolve completion closed. A conflicted
+   * submodule produces no parent-level resolve-iso — the gitlink is one tree
+   * entry and the disagreement lives inside it — so the "no resolve-iso ⇒
+   * re-probe the parent" path below would find the parent clean and declare the
+   * whole repo resolved while the submodule conflict is still open.
+   */
+  pendingSubResolves: string[]
+}
+
+export interface IsoHandle {
+  taskId: string
+  /**
+   * **物理 iso 键**——路径（`isoWorktreePathFor`）、pin ref（`isoRefName`）、池 ref
+   * （`poolRefName`）与 effect 的 `resourceKeys` 都按它派生。
+   *
+   * ⚠️ 它**不一定等于 node_runs 的行 id**：RFC-210 round 6 P2 起，同一棵 iso 会跨
+   * 重试复用原始行的键（D17），而 RFC-356 的代际自愈会在残留清不掉时把它推进成
+   * `{原键}-2`。要 DB 身份请用 `dbNodeRunId`。
+   */
+  nodeRunId: string
+  /**
+   * **DB 身份**——真实存在的 `node_runs` 行 id。
+   *
+   * RFC-356 P0-1：凡是要落 effect 账本的地方（`createLocalEffectAttemptObserver`）
+   * 必须用它。observer 的 `beforeAct()` 会 `readLineage({taskId, intentId, nodeRunId})`，
+   * 而 sqlite / postgresql 两个实现都在查不到行时返回 null ⇒ 抛
+   * `task-continuation-stale`；而 `discardNodeIso` 的 `beforeAct()` 在 `try` **之外**，
+   * 调用点 `schedulerAssembly.ts` 的 `await spec.discardIso(handle)` 又是**裸 await**
+   * ——喂给它一个合成键，异常会直接穿出 `runAssembly`，把节点打成
+   * `scheduler-node-threw`。那会是一个比 issue #13 更早触发的 wedge。
+   */
+  dbNodeRunId: string
+  /** `{appHome}/iso/{taskId}/{nodeRunId}` — the GC/resume cleanup root (D14). */
+  containerPath: string
+  repos: IsoRepo[]
+  /**
+   * True when the canonical worktree is NOT a git repo, so isolation was skipped
+   * and the node runs directly in the canonical worktree (no snapshot / merge-back
+   * / discard). Real task worktrees are always `git worktree add`ed, so this only
+   * triggers in mock harnesses that stub the worktree — it keeps those tests
+   * running the pre-RFC-130 in-place path (merge_state stays NULL → golden-lock).
+   */
+  passthrough: boolean
+}
+
+/** A canonical repo as the scheduler knows it (subset of state.repos[]). */
+export interface CanonRepo {
+  repoPath: string
+  worktreePath: string
+  worktreeDirName: string
+  baseBranch: string
+}
+
+/**
+ * 2026-08-04 incident: a task whose canonical worktree VANISHED from disk (the
+ * observed row pointed into the ephemeral `iso/` space, which is cleaned after
+ * runs) must fail its node runs loudly at iso-setup time. Letting the dead path
+ * fall through to the spawn produced an ENOENT that Bun blames on argv[0], plus
+ * a per-retry failure storm, because the runner-level spawn failure sits INSIDE the retry loop
+ * while iso-setup failures fail the node once, before admission/spawn.
+ */
+export class CanonicalWorktreeMissingError extends Error {
+  readonly code = 'workspace-missing' as const
+  constructor(readonly worktreePath: string) {
+    super(`workspace-missing: canonical worktree does not exist: ${worktreePath}`)
+    this.name = 'CanonicalWorktreeMissingError'
+  }
+}
+
+/**
+ * RFC-210 round 6 P2 —— the run id that KEYS the physical iso (worktree path +
+ * ref namespaces), recovered from the persisted container path. A process-retry
+ * keeps the original row's iso (D17) while its DB row is the retry mint;
+ * RFC-356 additionally advances it to `{原键}-N` when a residual cannot be reclaimed.
+ * Falling back to the row id preserves pre-column-era rows.
+ *
+ * RFC-356 T15 把它从 `modules/task-execution/composition/nodeMechanics.ts` 搬到这里：
+ * `taskLifecycleRepair/options-S1.ts`（legacy 层）要用它，而从那里 import 模块
+ * composition 是 RFC-317 R1 明令禁止的越界边（CI 实红）。这里才是它的**天然归属**
+ * ——与 `isoWorktreePathFor` 同属 iso 键 / 路径原语，且 legacy 层本就依赖本模块。
+ * 修法上选了「搬到合法位置」而不是「登记一条 R1 债」：RFC-294 的方向是消这类边，
+ * 不是记账。
+ */
+export function isoKeyOf(isoWorktreePath: string | null, rowId: string): string {
+  if (isoWorktreePath === null || isoWorktreePath === '') return rowId
+  const base = basename(isoWorktreePath)
+  return base === '' ? rowId : base
+}
+
+/** Absolute iso worktree path — always OUTSIDE any canonical worktree (D14). */
+export function isoWorktreePathFor(
+  appHome: string,
+  taskId: string,
+  nodeRunId: string,
+  worktreeDirName: string,
+): string {
+  const root = join(appHome, 'iso', taskId, nodeRunId)
+  return worktreeDirName === '' ? root : join(root, worktreeDirName)
+}
+
+async function headOf(worktreePath: string): Promise<string> {
+  const r = await runGit(worktreePath, ['rev-parse', 'HEAD'])
+  return r.stdout.trim()
+}
+async function treeOf(repoPath: string, commit: string): Promise<string> {
+  const r = await runGit(repoPath, ['rev-parse', `${commit}^{tree}`])
+  return r.stdout.trim()
+}
+
+/**
+ * RFC-356 L4 —— iso 键的代际上限（即最多 `-2` / `-3` / `-4`）。
+ *
+ * ⚠️ 这**不是**一根够不到的保险丝：脚本线 `isoOnRetry: 'always-recreate'` 每次重试都
+ * 换树，而 `defaultNodeRetries` 上限是 50。在本 RFC 瞄准的病态场景里（每次被杀都留下
+ * 一棵清不掉的树）第 5 次尝试就会耗尽代际，此后以 §6 的结构化诊断失败收场。
+ */
+export const MAX_ISO_KEY_GENERATIONS = 3
+
+/** 一次成功的选键结果。 */
+export interface IsoWorkspaceKeyChoice {
+  /** 物理 iso 键：第 0 代就是基键，之后是 `{基键}-2`、`-3`…… */
+  key: string
+  generation: number
+  /** 本次真的回收掉了几处残留（0 = 常态，路径本来就干净）。 */
+  reclaimed: number
+}
+
+/** 全部代际都被残留挡住——带上够排障的现场。 */
+export class IsoWorkspaceBlockedError extends Error {
+  readonly code = 'iso-workspace-blocked' as const
+  constructor(
+    readonly detail: {
+      baseKey: string
+      generationsTried: number
+      residualPath: string
+      lastError: string
+    },
+  ) {
+    super(
+      `无法回收残留的隔离工作树（已尝试 ${detail.generationsTried} 代）\n` +
+        `  残留: ${detail.residualPath}\n` +
+        `  最后错误: ${detail.lastError}`,
+    )
+    this.name = 'IsoWorkspaceBlockedError'
+  }
+}
+
+/**
+ * 容器删不掉时，它到底还挡不挡路？
+ *
+ * `git worktree add` 接受**空目录**（实测），所以「删不掉但已经空了」不算挡路。
+ * 读目录本身要防 ENOENT：删除与这次读之间有竞态窗口，而这里抛出去会被上层当成一次
+ * iso-setup 失败——比它要防的问题更糟。读不到就当它不挡路，判据交给紧随其后的建树。
+ */
+function containerStillBlocks(containerPath: string): boolean {
+  try {
+    return readdirSync(containerPath).length > 0
+  } catch {
+    return false
+  }
+}
+
+function isoKeyForGeneration(baseKey: string, generation: number): string {
+  // `-` 而不是 `~`：键会被拼进 git ref（`isoRefName` / `poolRefName`），而
+  // `git check-ref-format` 收 `-2`、**拒** `~2`（`~` 是保留字符，实测）。
+  // ULID 是 Crockford base32，不含 `-`，所以 `basename` 回读无歧义；与 repo-group
+  // 隔离分支的去重后缀（`agent-workflow/{taskId}-2`）也是同一套约定。
+  return generation === 0 ? baseKey : `${baseKey}-${generation + 1}`
+}
+
+/**
+ * RFC-356 L4 —— 为一次建树挑一个**可用**的物理 iso 键。
+ *
+ * 起于 issue #13：重试在同一条路径上裸 `git worktree add`，而上一次的残留目录清不掉
+ * （Windows 句柄），于是逐次撞 `fatal: '<path>' already exists`、任务永久停摆。
+ *
+ * 逐代推进，每代三步：
+ *
+ * 1. **`existsSync(容器)` 短路**——这是压倒性的常态，**零 git 进程、零 registry 锁**，
+ *    与改动前逐字等价。选键不该给正常创建路径加任何成本。
+ * 2. 有残留 ⇒ **逐仓**走回收阶梯（各用自己的 `repoPath`）。
+ * 3. 多仓时容器只是装着 N 棵树的普通父目录，**只能整体退避删除**——对它走阶梯会先撞
+ *    `is not a working tree`，随后的 `rm -rf` 会绕过 git 把 N 棵树一起删掉。
+ *
+ * 任一步 `blocked` ⇒ 进下一代；全部代际都被挡 ⇒ 抛 `IsoWorkspaceBlockedError`。
+ * `git worktree add` 接受**空目录**（实测），所以「删空了但目录还在」也算通过。
+ */
+export async function chooseIsoWorkspaceKey(opts: {
+  appHome: string
+  taskId: string
+  /** 基键——通常是 D17 那条贯穿全部 attempt 的原始行 id。 */
+  baseKey: string
+  canonRepos: CanonRepo[]
+  log?: Logger
+}): Promise<IsoWorkspaceKeyChoice> {
+  let lastBlocked: { residualPath: string; lastError: string } | null = null
+  for (let generation = 0; generation <= MAX_ISO_KEY_GENERATIONS; generation += 1) {
+    const key = isoKeyForGeneration(opts.baseKey, generation)
+    const containerPath = isoWorktreePathFor(opts.appHome, opts.taskId, key, '')
+    if (!existsSync(containerPath)) return { key, generation, reclaimed: 0 }
+
+    let reclaimed = 0
+    let blocked: { residualPath: string; lastError: string } | null = null
+    for (const repo of opts.canonRepos) {
+      const isoPath = isoWorktreePathFor(opts.appHome, opts.taskId, key, repo.worktreeDirName)
+      const outcome = await reclaimWorktreePath({
+        repoPath: repo.worktreePath,
+        worktreePath: isoPath,
+        ...(opts.log === undefined ? {} : { log: opts.log }),
+      })
+      if (outcome.kind === 'removed') reclaimed += 1
+      else if (outcome.kind === 'blocked') {
+        blocked = { residualPath: outcome.residualPath, lastError: outcome.lastError }
+        break
+      }
+    }
+    if (blocked === null && existsSync(containerPath)) {
+      // 多仓的容器（或逐仓回收后剩下的空壳）。空目录 git 是接受的，所以删不掉也
+      // 只在**非空**时才算挡路。
+      const removedContainer = await removeDirectoryWithRetry(containerPath, {
+        ...(opts.log === undefined ? {} : { log: opts.log }),
+      })
+      if (!removedContainer.removed && containerStillBlocks(containerPath)) {
+        blocked = {
+          residualPath: containerPath,
+          lastError: removedContainer.lastError ?? 'iso container is not empty',
+        }
+      } else if (removedContainer.removed) reclaimed += 1
+    }
+    if (blocked === null) {
+      opts.log?.info('reclaimed a stale iso workspace before recreating it', {
+        taskId: opts.taskId,
+        isoKey: key,
+        generation,
+        reclaimed,
+      })
+      return { key, generation, reclaimed }
+    }
+    lastBlocked = blocked
+    opts.log?.warn('iso workspace generation is blocked; advancing to the next one', {
+      taskId: opts.taskId,
+      isoKey: key,
+      generation,
+      residualPath: blocked.residualPath,
+      error: blocked.lastError,
+    })
+  }
+  throw new IsoWorkspaceBlockedError({
+    baseKey: opts.baseKey,
+    generationsTried: MAX_ISO_KEY_GENERATIONS + 1,
+    residualPath: lastBlocked?.residualPath ?? '(unknown)',
+    lastError: lastBlocked?.lastError ?? '(unknown)',
+  })
+}
+
+/**
+ * Create the isolated worktree(s) for a node run (all repos). Snapshots each
+ * canonical worktree's FULL state (incl. untracked), pins it as the base ref
+ * (D26), and checks out an iso worktree with the accumulated changes UNSTAGED
+ * (D23/D28). Does NOT touch the DB — the caller persists iso_base_snapshot(s) +
+ * iso_worktree_path.
+ */
+export async function createNodeIso(opts: {
+  appHome: string
+  taskId: string
+  /** 物理 iso 键（见 `IsoHandle.nodeRunId`）。 */
+  nodeRunId: string
+  /**
+   * 真实的 `node_runs` 行 id。缺省 = 与物理键相同（今天所有调用点都如此）。
+   * RFC-356 代际自愈把物理键推进成 `{原键}-N` 时**必须**显式传它。
+   */
+  dbNodeRunId?: string
+  canonRepos: CanonRepo[]
+  /**
+   * RFC-193 K1：container-relative force-include roster (forcedPortPathsForTask
+   * 的产出，调用方聚合——本模块保持 git-only、不查 DB)。Split per-repo onto
+   * IsoRepo.forcedRepoRelPaths; the BASE snapshot below already carries it so
+   * a downstream iso checks out the gitignored port files of its upstreams.
+   */
+  forcedContainerPaths?: string[]
+  submoduleMode?: 'auto' | 'always' | 'never'
+  submoduleJobs?: number
+  log?: Logger
+}): Promise<IsoHandle> {
+  // 2026-08-04 incident gate: a canonical worktree that does not EXIST fails
+  // fast here — before the retry loop and spawn.
+  // The passthrough below used to swallow it (missing ⇒ "not a git repo") and
+  // hand the dead path to the runner as cwd, where Bun's ENOENT names argv[0]
+  // instead of the missing directory. Probed for EVERY
+  // repo, not just the primary — any missing member breaks the run the same way.
+  for (const repo of opts.canonRepos) {
+    if (!existsSync(repo.worktreePath)) throw new CanonicalWorktreeMissingError(repo.worktreePath)
+  }
+  const dbNodeRunId = opts.dbNodeRunId ?? opts.nodeRunId
+  // RFC-356 P0-1 的结构性防线：带代际后缀的**合成**物理键必须显式带上 DB 身份。
+  // 缺省回落只对「两者本来就相同」的既有调用点成立；一个合成键配着回落的 DB 身份
+  // 会让后续的 discard 在 effect observer 里抛 `task-continuation-stale`，而那条
+  // 调用链上没有 catch。宁可在这里响亮地拒绝。
+  if (dbNodeRunId === opts.nodeRunId && /-\d+$/.test(opts.nodeRunId)) {
+    throw new Error(
+      `createNodeIso: iso key '${opts.nodeRunId}' looks generational but no dbNodeRunId was given ` +
+        '(RFC-356: effect observers need the real node_runs row id)',
+    )
+  }
+  // Passthrough fallback: if the canonical worktree EXISTS but isn't a git repo
+  // (only ever true in mock test harnesses), skip isolation and run in place —
+  // the node's writes go straight to the canonical worktree as they did
+  // pre-RFC-130. A MISSING canonical is never passthrough — see the gate above.
+  const primary = opts.canonRepos[0]
+  if (primary === undefined || !(await isGitWorkTree(primary.worktreePath))) {
+    opts.log?.warn('canonical worktree is not a git repo — skipping isolation (passthrough)', {
+      worktreePath: primary?.worktreePath ?? '(none)',
+    })
+    return {
+      taskId: opts.taskId,
+      nodeRunId: opts.nodeRunId,
+      dbNodeRunId,
+      containerPath: isoWorktreePathFor(opts.appHome, opts.taskId, opts.nodeRunId, ''),
+      passthrough: true,
+      repos: opts.canonRepos.map((r) => ({
+        repoPath: r.repoPath,
+        canonWorktreePath: r.worktreePath,
+        isoWorktreePath: r.worktreePath, // run in place
+        worktreeDirName: r.worktreeDirName,
+        baseBranch: r.baseBranch,
+        baseSnapshot: '',
+        taskBaseHead: '',
+        forcedRepoRelPaths: [],
+        subBases: {},
+        poolDirs: {},
+        pendingSubResolves: [],
+      })),
+    }
+  }
+  const repos: IsoRepo[] = []
+  for (const r of opts.canonRepos) {
+    const isoWorktreePath = isoWorktreePathFor(
+      opts.appHome,
+      opts.taskId,
+      opts.nodeRunId,
+      r.worktreeDirName,
+    )
+    const forcedRepoRelPaths = repoRelForcedPaths(opts.forcedContainerPaths, r.worktreeDirName)
+    const taskBaseHead = await headOf(r.worktreePath)
+    const baseSnapshot = await snapshotFullState(r.worktreePath, {
+      pinRef: isoRefName(opts.taskId, opts.nodeRunId, 'base'),
+      log: opts.log,
+      forceIncludePaths: forcedRepoRelPaths,
+    })
+    // Run `git worktree add` from the CANONICAL worktree, not the source repo:
+    // the base-snapshot commit was just created in the canonical worktree's
+    // (shared) ODB, and `git worktree` ops work from any worktree of the set.
+    // A real task worktree is a linked worktree of repoPath (shared ODB), so this
+    // is equivalent there — but it also works when a test wires them as separate
+    // repos (the snapshot lives only in the canonical worktree's ODB).
+    await createIsolatedWorktree({
+      repoPath: r.worktreePath,
+      isoPath: isoWorktreePath,
+      baseSnapshotCommit: baseSnapshot,
+      taskBaseHead,
+      ...(opts.submoduleMode !== undefined ? { submoduleMode: opts.submoduleMode } : {}),
+      ...(opts.submoduleJobs !== undefined ? { submoduleJobs: opts.submoduleJobs } : {}),
+    })
+    let { subBases, poolDirs } = await captureSubmoduleTopology(
+      isoWorktreePath,
+      r.worktreePath,
+      opts.log,
+    )
+    // Impl-gate A3-fix: the sync inside createIsolatedWorktree obeys the index
+    // (= task base), so submodule checkouts lag the accumulated snapshot the
+    // parent files show — and a submodule an EARLIER node added is not attached
+    // at all (its gitlink lives only in the accumulated state). Align gitlinks
+    // to the base snapshot — attaching new paths from their pools — then
+    // re-capture so `subBases` records the heads the node ACTUALLY starts
+    // from. Runs after the capture above because a moved gitlink's target
+    // usually exists only in the pool, reachable via the alternates that
+    // capture just attached.
+    if (detectSubmodules(isoWorktreePath)) {
+      const aligned = await alignWorktreeGitlinks(isoWorktreePath, baseSnapshot, taskBaseHead, {
+        ...(opts.submoduleMode !== undefined ? { submoduleMode: opts.submoduleMode } : {}),
+        ...(opts.submoduleJobs !== undefined ? { submoduleJobs: opts.submoduleJobs } : {}),
+        ...(opts.log !== undefined ? { log: opts.log } : {}),
+      })
+      // Re-capture only when the alignment actually moved/attached something —
+      // the common no-drift case keeps iso creation at one capture.
+      if (aligned) {
+        ;({ subBases, poolDirs } = await captureSubmoduleTopology(
+          isoWorktreePath,
+          r.worktreePath,
+          opts.log,
+        ))
+      }
+    }
+    repos.push({
+      repoPath: r.repoPath,
+      canonWorktreePath: r.worktreePath,
+      isoWorktreePath,
+      worktreeDirName: r.worktreeDirName,
+      baseBranch: r.baseBranch,
+      baseSnapshot,
+      taskBaseHead,
+      forcedRepoRelPaths,
+      subBases,
+      poolDirs,
+      pendingSubResolves: [],
+    })
+  }
+  return {
+    taskId: opts.taskId,
+    nodeRunId: opts.nodeRunId,
+    dbNodeRunId,
+    containerPath: isoWorktreePathFor(opts.appHome, opts.taskId, opts.nodeRunId, ''),
+    passthrough: false,
+    repos,
+  }
+}
+
+/**
+ * RFC-210 — record a fresh iso worktree's submodule topology and hook each
+ * submodule up to the shared object pool.
+ *
+ * Gated on `detectSubmodules` (a plain `existsSync('.gitmodules')`) so a repo
+ * without submodules — the overwhelming majority — spawns ZERO extra git
+ * processes and stays byte-identical to the pre-RFC-210 path.
+ *
+ * Attaching alternates is what makes a node's submodule commits reachable from
+ * canonical later; `submodule update --reference` cannot be relied on for it
+ * (no-op on an already-initialized module dir on some git versions, and git
+ * applies a single `--reference` to every submodule in the tree), so the
+ * alternates file is written explicitly, per submodule.
+ *
+ * Fail-soft throughout: a repo whose pool cannot be resolved simply runs
+ * degraded (private module dir, objects fetched into the target worktree at
+ * merge-back instead) rather than failing the node.
+ */
+async function captureSubmoduleTopology(
+  isoWorktreePath: string,
+  canonWorktreePath: string,
+  log?: Logger,
+): Promise<{ subBases: Record<string, string>; poolDirs: Record<string, string> }> {
+  if (!detectSubmodules(isoWorktreePath)) return { subBases: {}, poolDirs: {} }
+  // Effective list, not `git submodule status`: a submodule an earlier node
+  // ADDED exists only as an unstaged delta, and `submodule status` iterates
+  // INDEX gitlinks — it prints nothing for an attached-but-unstaged path
+  // (measured), which would drop the new submodule from this node's topology.
+  const subs = usableSubmodules(await listEffectiveSubmodules(isoWorktreePath))
+  if (subs.length === 0) return { subBases: {}, poolDirs: {} }
+
+  const subBases: Record<string, string> = {}
+  const poolDirs: Record<string, string> = {}
+  for (const s of subs) {
+    subBases[s.path] = s.headSha
+    const pool = await resolveSubmodulePool(isoWorktreePath, s.path)
+    if (pool === null) {
+      log?.info('submodule pool unavailable — running degraded', { subPath: s.path })
+      continue
+    }
+    // Keyed by path. This used to keep only the first pool for the whole repo,
+    // which cross-wired every other submodule onto it.
+    poolDirs[s.path] = pool
+    // BOTH sides must borrow from the pool. The iso side is where the node's
+    // commits are produced; the CANONICAL side is where merge-back later has to
+    // check them out — and every worktree owns a private module dir, so without
+    // this canonical simply cannot see them (`fatal: unable to read tree`).
+    for (const [label, wt] of [
+      ['iso', isoWorktreePath],
+      ['canonical', canonWorktreePath],
+    ] as const) {
+      const linked = await ensureSubmoduleAlternates(wt, s.path, pool)
+      if (!linked.ok) {
+        log?.warn('submodule alternates attach failed — running degraded', {
+          side: label,
+          subPath: s.path,
+          error: linked.error ?? '',
+        })
+      }
+    }
+  }
+  return { subBases, poolDirs }
+}
+
+/** Reconstruct an IsoHandle from persisted columns (resume / GC replay — D15). */
+export function rebuildIsoHandle(opts: {
+  appHome: string
+  taskId: string
+  /** 物理 iso 键——resume 路径通常传 `isoKeyOf(持久化路径, 行 id)`。 */
+  nodeRunId: string
+  /** 真实的 `node_runs` 行 id；缺省 = 与物理键相同（RFC-356 P0-1）。 */
+  dbNodeRunId?: string
+  canonRepos: CanonRepo[]
+  baseSnapshots: Record<string, string>
+  taskBaseHeads: Record<string, string>
+  /** RFC-193 K1（同 createNodeIso）：resume 路径的快照同样要带清单。 */
+  forcedContainerPaths?: string[]
+  /**
+   * RFC-210: per-repo submodule topology read back from `iso_submodules_json` /
+   * `iso_submodules_repos_json`, keyed by `worktreeDirName`.
+   *
+   * Replay MUST carry this. Without it a resumed merge-back falls back to a
+   * parent-only merge, where a gitlink both sides moved resolves as "take
+   * theirs" — silently discarding the other node's submodule commits, which is
+   * precisely the class of loss RFC-210 exists to fix.
+   */
+  submodules?: Record<
+    string,
+    {
+      subBases: Record<string, string>
+      poolDirs?: Record<string, string>
+      pendingSubResolves?: string[]
+    }
+  >
+}): IsoHandle {
+  const repos: IsoRepo[] = opts.canonRepos.map((r) => ({
+    repoPath: r.repoPath,
+    canonWorktreePath: r.worktreePath,
+    isoWorktreePath: isoWorktreePathFor(
+      opts.appHome,
+      opts.taskId,
+      opts.nodeRunId,
+      r.worktreeDirName,
+    ),
+    worktreeDirName: r.worktreeDirName,
+    baseBranch: r.baseBranch,
+    baseSnapshot: opts.baseSnapshots[r.worktreeDirName] ?? '',
+    taskBaseHead: opts.taskBaseHeads[r.worktreeDirName] ?? '',
+    forcedRepoRelPaths: repoRelForcedPaths(opts.forcedContainerPaths, r.worktreeDirName),
+    subBases: opts.submodules?.[r.worktreeDirName]?.subBases ?? {},
+    poolDirs: opts.submodules?.[r.worktreeDirName]?.poolDirs ?? {},
+    pendingSubResolves: opts.submodules?.[r.worktreeDirName]?.pendingSubResolves ?? [],
+  }))
+  return {
+    taskId: opts.taskId,
+    nodeRunId: opts.nodeRunId,
+    dbNodeRunId: opts.dbNodeRunId ?? opts.nodeRunId,
+    containerPath: isoWorktreePathFor(opts.appHome, opts.taskId, opts.nodeRunId, ''),
+    passthrough: false,
+    repos,
+  }
+}
+
+/**
+ * Snapshot each iso worktree's FINAL state (the node's product) as a pinned
+ * commit (D15/D26 `node` ref). Returns per-repo node_tree shas so the caller can
+ * persist iso_node_tree(+_repos_json) BEFORE the merge-back (crash-replay, D15).
+ */
+export async function snapshotNodeIsoFinal(
+  handle: IsoHandle,
+  log?: Logger,
+  /**
+   * RFC-193 K1：EXTRA container-relative force-include paths unioned onto the
+   * handle roster — the producing node's own just-emitted port files
+   * (RunResult.portFilePaths, not yet in the DB-aggregated roster) and the
+   * wrapper-final re-aggregation (inner nodes archived DURING the wrapper's
+   * lifetime; the wrapper handle is the one long-lived exception, §4.5).
+   */
+  extraForcedContainerPaths?: string[],
+): Promise<Record<string, string>> {
+  if (handle.passthrough) return {}
+  const out: Record<string, string> = {}
+  for (const r of handle.repos) {
+    // RFC-130 D22 RETIRED by RFC-210.
+    //
+    // D22 threw here when the node left uncommitted content inside a submodule,
+    // because `snapshotFullState` captures only the gitlink and those edits would
+    // have been dropped on merge-back — failing loudly beat losing work silently.
+    //
+    // That trade-off is gone: publishSubmoduleHeads below commits the leftovers
+    // under the platform identity and publishes them to the shared pool, and
+    // materializeTree checks the merged gitlink out on the canonical side. The
+    // edits now survive, so there is nothing left to reject. (`hasDirtySubmoduleContent`
+    // itself stays — it is a cheap probe other code can still use.)
+    //
+    // RFC-210 T15: publish every submodule's CURRENT head into the shared pool
+    // before this iso can be discarded.
+    //
+    // UNCONDITIONAL, not "only when dirty": an agent may well have committed
+    // inside the submodule itself (today's D22 error message literally tells it
+    // to), leaving the submodule clean while its HEAD sits on a commit that
+    // exists ONLY in this iso's module dir. `git worktree remove --force` then
+    // takes that module dir with it, and the commit is gone for good — canonical
+    // would later resolve the gitlink to an unreachable object.
+    await publishSubmoduleHeads(handle, r)
+
+    out[r.worktreeDirName] = await snapshotFullState(r.isoWorktreePath, {
+      pinRef: isoRefName(handle.taskId, handle.nodeRunId, 'node'),
+      log,
+      forceIncludePaths: [
+        ...r.forcedRepoRelPaths,
+        ...repoRelForcedPaths(extraForcedContainerPaths, r.worktreeDirName),
+      ],
+    })
+  }
+  return out
+}
+
+/**
+ * RFC-210 §2.3 — resolve every submodule of one repo and fold the results into
+ * the node's `theirs` commit.
+ *
+ * For each submodule the three sides are:
+ *   base   — its HEAD when this iso was created (recorded on the handle)
+ *   ours   — canonical's current HEAD for it
+ *   theirs — the iso's current HEAD for it
+ *
+ * `mergeSubmoduleTrees` short-circuits the three trivial shapes (nobody moved /
+ * only one side moved) and only builds a merge commit when both sides diverged.
+ * Whatever comes out is written into `theirs` as a plain gitlink update, so the
+ * superproject-level merge that follows sees the trivial "one side moved" shape
+ * it can actually handle.
+ *
+ * Bottom-up: a nested submodule's result changes ITS parent's gitlink, and that
+ * parent must be rewritten before it is itself folded into the level above.
+ */
+async function mergeSubmodulesIntoTheirs(
+  r: IsoRepo,
+  theirsCommit: string,
+  log?: Logger,
+  agent?: {
+    containerPath: string
+    resolveSubConflict?: (conflict: MergeBackConflict) => Promise<{ resolved: boolean }>
+  },
+): Promise<{ theirs: string; conflicts: string[] }> {
+  const paths = Object.keys(r.subBases)
+  if (paths.length === 0) return { theirs: theirsCommit, conflicts: [] }
+
+  const conflicts: string[] = []
+  let theirs = theirsCommit
+  const ordered = [...paths].sort(
+    (a, b) => b.split('/').length - a.split('/').length || b.localeCompare(a),
+  )
+  for (const subPath of ordered) {
+    const base = r.subBases[subPath]
+    if (base === undefined) continue
+    // Each submodule's own pool. Missing ⟹ this one is degraded; skip it rather
+    // than reaching for a sibling's pool, which is what the old repo-level
+    // `poolDir` did and is why anything past the first submodule died on
+    // `unable to read tree`.
+    const pool = r.poolDirs[subPath]
+    if (pool === undefined) continue
+    const oursHead = await runGit(join(r.canonWorktreePath, subPath), ['rev-parse', 'HEAD'])
+    const theirsHead = await runGit(join(r.isoWorktreePath, subPath), ['rev-parse', 'HEAD'])
+    if (oursHead.exitCode !== 0 || theirsHead.exitCode !== 0) continue // uninitialized side
+    const ours = oursHead.stdout.trim()
+    const sub = theirsHead.stdout.trim()
+
+    let res = await mergeSubmoduleTrees(pool, { base, ours, theirs: sub })
+    if (res.merged === null) {
+      // RFC-210 T25: give the merge agent a shot inside the submodule before
+      // withholding the whole repo. A submodule IS an ordinary git work tree, so
+      // the existing resolve-iso machinery applies verbatim — the only thing that
+      // differs is which directory it points at.
+      const settled = await tryAgentResolveSubmodule(r, subPath, {
+        base,
+        ours,
+        theirs: sub,
+        raw: res.error ?? '',
+        ...(agent ?? { containerPath: '' }),
+        ...(log !== undefined ? { log } : {}),
+      })
+      if (settled === null) {
+        log?.warn('submodule three-way merge conflicted', { subPath, error: res.error ?? '' })
+        conflicts.push(subPath)
+        continue
+      }
+      res = { merged: settled, trivial: false, error: null }
+    }
+    // Every branch above either produced a commit or `continue`d, but TS cannot
+    // see that through the reassignment — assert it once instead of sprinkling
+    // non-null assertions over the four uses below.
+    const mergedSha = res.merged
+    if (mergedSha === null) continue
+    // Anchor whatever canonical is about to point at, ALWAYS — not just for a
+    // real merge commit. The node-scoped anchor dies with `discardNodeIso`, so
+    // after that this worktree-scoped ref is the only thing keeping canonical's
+    // gitlink target reachable; a plain "take theirs" result needs it just as
+    // much as a merge does.
+    //
+    // Impl-gate A1-fix: a failed anchor is a hard error, not a warning. With
+    // only the node-scoped ref holding the objects, the next pool gc after
+    // `discardNodeIso` turns canonical's gitlink into `bad object` — the
+    // superproject's own `git status` (hence every later snapshot) dies with
+    // it. Failing the merge-back keeps the node refs (and the iso) alive.
+    const anchored = await runGit(pool, [
+      'update-ref',
+      worktreeRefName(handleTaskIdOf(r), subPath),
+      mergedSha,
+    ])
+    if (anchored.exitCode !== 0) {
+      throw new Error(
+        `submodule worktree anchor failed for '${subPath}' at ${mergedSha}: ` +
+          `${anchored.stderr.trim() || 'unknown error'} — refusing to land a gitlink the next gc can orphan`,
+      )
+    }
+    if (mergedSha === sub) continue // theirs already carries it — nothing to rewrite
+    const rewritten = await rewriteGitlinkInCommit(r.canonWorktreePath, {
+      commit: theirs,
+      subPath,
+      sha: mergedSha,
+    })
+    if (rewritten === null) {
+      log?.warn('gitlink rewrite failed — treating as conflict', { subPath })
+      conflicts.push(subPath)
+      continue
+    }
+    theirs = rewritten
+  }
+  return { theirs, conflicts }
+}
+
+/**
+ * RFC-210 — durable-anchor NEW paths (pool but no base — the node added the
+ * submodule) at DISCARD time, reading the truth from the canonical worktree.
+ *
+ * Why here and not in the merge (Codex review rounds 3 + 4): anchoring before
+ * the parent merge decided stamped candidates a later add/add conflict would
+ * reject; anchoring after materialize created a failure window where a bad
+ * `update-ref` failed the merge AFTER canonical was already mutated; and the
+ * conflict-resolution paths (merge agent §6.2④, human resume §6.3) materialize
+ * adopted gitlinks without ever passing through the merge loop. All of those
+ * share one invariant instead: the NODE-scoped pool refs keep every published
+ * sha reachable until `discardNodeIso` — so the moment the wt anchor must take
+ * over is the discard itself, and the sha to anchor is whatever canonical
+ * ACTUALLY has attached at that moment (two independent candidates for a new
+ * path share the same per-path pool, so the landed one is present either way;
+ * unlike KNOWN paths there is no merge-ancestry between them to lean on).
+ *
+ * FAIL-SOFT, leak-not-lose: a path whose anchor cannot be written (canonical
+ * head advanced to a commit the pool never saw, ref lock, fs error) keeps its
+ * node-scoped ref — the caller skips deleting it. Canonical is long settled by
+ * now, so throwing could only create split states; a kept ref costs disk.
+ *
+ * Returns the sub paths whose node refs must be KEPT.
+ */
+async function anchorNewPathsAtDiscard(
+  r: IsoRepo,
+  taskId: string,
+  log?: Logger,
+): Promise<Set<string>> {
+  const keep = new Set<string>()
+  for (const [subPath, pool] of Object.entries(r.poolDirs)) {
+    if (r.subBases[subPath] !== undefined) continue // known paths: merge-ancestry covers them
+    const subAbs = join(r.canonWorktreePath, subPath)
+    // Never landed in canonical (merge failed / conflict abandoned / retry
+    // discard): nothing adopted, so nothing to protect beyond this run's own
+    // refs — which the discard is abandoning by design.
+    if (!existsSync(join(subAbs, '.git'))) continue
+    // CAS discipline (Codex review round 5, P1): this runs OUTSIDE the task
+    // write lock, so between our reads and our write a sibling can land a
+    // NEWER sha and anchor it from its own discard. The expected-old guard
+    // makes any such stale write fail instead of clobbering: the ref only
+    // moves if it still is what we read ('' ⟹ must not exist). A failed CAS
+    // keeps our node refs — converging is the surviving discarder's job.
+    const wtRef = worktreeRefName(taskId, subPath)
+    const oldRef = await runGit(pool, ['rev-parse', '--verify', '--quiet', wtRef], {
+      timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+    })
+    const expectedOld = oldRef.exitCode === 0 ? oldRef.stdout.trim() : ''
+    const head = await runGit(subAbs, ['rev-parse', 'HEAD'], {
+      timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+    })
+    const sha = head.stdout.trim()
+    if (head.exitCode !== 0 || !/^[0-9a-f]{40,64}$/.test(sha)) {
+      log?.warn('discard anchor: canonical submodule head unreadable — keeping node refs', {
+        subPath,
+        error: head.stderr.trim(),
+      })
+      keep.add(subPath)
+      continue
+    }
+    const anchored = await runGit(pool, ['update-ref', wtRef, sha, expectedOld], {
+      timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+    })
+    if (anchored.exitCode !== 0) {
+      log?.warn('discard anchor failed or lost the CAS — keeping node refs (leak-not-lose)', {
+        subPath,
+        sha,
+        error: anchored.stderr.trim(),
+      })
+      keep.add(subPath)
+    }
+  }
+  return keep
+}
+
+/**
+ * RFC-210 T25 — run the merge agent inside a conflicted submodule.
+ *
+ * Builds the same `MergeBackConflict` shape the parent level uses, but pointed at
+ * the submodule's own work tree, and lets `resolveConflictWithAgent` do the rest
+ * (resolve-iso, prompt, per-path verdict, materialize). Returns the resolved
+ * commit, or null to fall back to withholding the repo.
+ *
+ * The resolve-iso lives under `resolve-sub/<slug>` — hashed, because a submodule
+ * path contains '/' and may contain spaces, neither of which survives being used
+ * as a directory name segment here.
+ */
+async function tryAgentResolveSubmodule(
+  r: IsoRepo,
+  subPath: string,
+  ctx: {
+    base: string
+    ours: string
+    theirs: string
+    raw: string
+    containerPath?: string
+    resolveSubConflict?: (conflict: MergeBackConflict) => Promise<{ resolved: boolean }>
+    log?: Logger
+  },
+): Promise<string | null> {
+  if (ctx.resolveSubConflict === undefined || ctx.containerPath === undefined) return null
+  const pool = r.poolDirs[subPath]
+  if (pool === undefined) return null
+  const subAbs = join(r.canonWorktreePath, subPath)
+  // The conflicted tree the agent has to fix — recomputed here because
+  // mergeSubmoduleTrees only reports that it failed, not the tree it produced.
+  const mt = await runGit(pool, [
+    'merge-tree',
+    '--write-tree',
+    `--merge-base=${ctx.base}`,
+    ctx.ours,
+    ctx.theirs,
+  ])
+  const mergedTree = mt.stdout.split('\n')[0]?.trim()
+  if (mergedTree === undefined || mergedTree === '') return null
+
+  const conflict: MergeBackConflict = {
+    // Names the resolve-iso directory; slugged because subPath has slashes.
+    worktreeDirName: `sub/${subSlug(subPath)}`,
+    paths: [subPath],
+    mergedTree,
+    rawConflictOutput: ctx.raw,
+    base: ctx.base,
+    canonWorktreePath: subAbs,
+    taskBaseHead: ctx.ours,
+    salvagedPaths: [],
+    forcedRepoRelPaths: [],
+  }
+  let outcome: { resolved: boolean }
+  try {
+    outcome = await ctx.resolveSubConflict(conflict)
+  } catch (err) {
+    ctx.log?.warn('submodule merge agent threw — withholding repo', {
+      subPath,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return null
+  }
+  if (!outcome.resolved) return null
+
+  // The agent materialized its resolution into the submodule work tree; turn it
+  // into a real commit so the parent has a gitlink to point at, and publish it.
+  const staged = await runGit(subAbs, ['add', '-A'])
+  if (staged.exitCode !== 0) return null
+  const committed = await runGit(
+    subAbs,
+    ['commit', '-q', '-m', `aw: submodule merge resolution (${subPath})`],
+    { env: AW_INTERNAL_GIT_IDENTITY },
+  )
+  if (committed.exitCode !== 0) return null
+  const head = await runGit(subAbs, ['rev-parse', 'HEAD'])
+  if (head.exitCode !== 0) return null
+  const sha = head.stdout.trim()
+  const gitDir = await submoduleGitDir(r.canonWorktreePath, subPath)
+  if (gitDir !== null) {
+    await pushObjectsToPool(pool, gitDir, sha, worktreeRefName(handleTaskIdOf(r), subPath))
+  }
+  ctx.log?.info('submodule conflict resolved by merge agent', { subPath, sha })
+  return sha
+}
+
+/**
+ * The worktree-scoped anchor is keyed on the task, but IsoRepo does not carry the
+ * task id. Deriving it from the container path keeps the anchor stable without
+ * widening the struct for one caller.
+ */
+function handleTaskIdOf(r: IsoRepo): string {
+  // `{appHome}/iso/{taskId}/{isoKey}[/{dir}]` — walk up from the iso worktree.
+  //
+  // RFC-356 T18：**两种分隔符都要认**。路径由 `join()` 生成，Windows 上是 `\`，
+  // 而原来只按 `/` 拆 ⇒ `lastIndexOf('iso')` 恒为 -1 ⇒ 函数恒返回 `'unknown'`。
+  // 后果是 RFC-210 的 worktree-scoped 池锚点在 Windows 上全部落成 `wt/unknown/{slug}`：
+  // 不同任务的锚点互相串台，按 taskId 的清理也永远匹配不上。
+  // 不用 `path.sep`：`appHome` 与 git 回读的路径在 Windows 上都可能带 `/`。
+  const parts = r.isoWorktreePath.split(/[\\/]/)
+  const isoAt = parts.lastIndexOf('iso')
+  return isoAt >= 0 && parts[isoAt + 1] !== undefined ? (parts[isoAt + 1] as string) : 'unknown'
+}
+
+/**
+ * RFC-210 — make this repo's submodule commits reachable outside the iso.
+ *
+ * Each submodule's head is fetched into the shared pool AND anchored with a
+ * node-scoped ref. The anchor is not optional: `git fetch <dir> <sha>` writes
+ * only FETCH_HEAD, so the objects land unreachable and an ordinary `git gc`
+ * past `gc.pruneExpire` collects them — long after the node succeeded, turning
+ * canonical's submodule into `bad object HEAD` and taking the superproject's
+ * `git status` (hence `snapshotFullState`) down with it.
+ *
+ * Impl-gate A1-fix — failures here THROW instead of warning. The iso worktree
+ * is the ONLY copy of this work: the parent snapshot records just the gitlink,
+ * so a swallowed auto-commit / publish failure let the settle report clean and
+ * `discardNodeIso` then deleted the sole copy (hook rejection and index errors
+ * are everyday triggers). The one deliberate skip that remains is a KNOWN path
+ * running degraded — no pool by design (D11 path mode / mock harness), where
+ * the module dir is durable on the user's host and there is nothing to
+ * publish. A NEW path (the node ran `git submodule add`) gets a pool CREATED:
+ * its module dir is private to the iso worktree's admin area and dies with it,
+ * so "degraded" is not survivable there.
+ */
+async function publishSubmoduleHeads(handle: IsoHandle, r: IsoRepo): Promise<void> {
+  if (Object.keys(r.subBases).length === 0 && !detectSubmodules(r.isoWorktreePath)) return
+  const fail = (subPath: string, step: string, detail: string): never => {
+    throw new Error(
+      `submodule publish failed for '${subPath}' (${step}): ${detail || 'unknown error'} — ` +
+        `failing the snapshot so the iso (sole copy of the work) is not discarded as merged`,
+    )
+  }
+  // Bottom-up: committing a nested submodule moves ITS gitlink, and that change
+  // is only visible to the level above if the child is committed first.
+  // Effective list: an unstaged-new submodule (this node's own `submodule add`,
+  // or one inherited from the accumulated task state) has no index entry and is
+  // invisible to `git submodule status` (measured).
+  for (const s of bottomUp(usableSubmodules(await listEffectiveSubmodules(r.isoWorktreePath)))) {
+    const subAbs = join(r.isoWorktreePath, s.path)
+
+    // RFC-210 (this is what retires RFC-130 D22): commit whatever the node left
+    // uncommitted inside the submodule, under the platform identity.
+    //
+    // `snapshotFullState` records only the gitlink, so uncommitted submodule
+    // content cannot ride the snapshot — which is precisely why D22 used to fail
+    // the node loudly. Now that such commits can actually REACH canonical
+    // (shared pool + gitlink checkout at materialize), turning the edits into a
+    // real commit carries the work through instead of rejecting it.
+    const status = await runGit(subAbs, ['status', '--porcelain', '--untracked-files=all'])
+    if (status.exitCode !== 0) fail(s.path, 'status', status.stderr.trim())
+    if (status.stdout.trim() !== '') {
+      const staged = await runGit(subAbs, ['add', '-A'])
+      if (staged.exitCode !== 0) fail(s.path, 'add', staged.stderr.trim())
+      const committed = await runGit(
+        subAbs,
+        ['commit', '-q', '-m', `aw: submodule changes from node ${handle.nodeRunId}`],
+        { env: AW_INTERNAL_GIT_IDENTITY },
+      )
+      if (committed.exitCode !== 0) fail(s.path, 'commit', committed.stderr.trim())
+    }
+
+    // This submodule's own pool. Publishing into a sibling's pool (what the
+    // repo-level poolDir did) put the objects somewhere merge-back never looks.
+    let pool = r.poolDirs[s.path]
+    const isNewPath = r.subBases[s.path] === undefined
+    if (pool === undefined) {
+      // Known path without a pool = degraded BY DESIGN (D11) — skip, as ever.
+      if (!isNewPath) continue
+      // New path: create the durable pool now. Refusing beats proceeding — the
+      // gitlink would reach canonical while its objects die with the iso.
+      const created = await ensureSubmodulePool(r.isoWorktreePath, s.path)
+      if (created === null) fail(s.path, 'ensure-pool', 'cannot resolve or create a shared pool')
+      pool = created as string
+      r.poolDirs[s.path] = pool
+    }
+    // Re-read HEAD: the auto-commit above may have moved it.
+    const head = await runGit(subAbs, ['rev-parse', 'HEAD'])
+    if (head.exitCode !== 0) fail(s.path, 'rev-parse HEAD', head.stderr.trim())
+    const sha = head.stdout.trim()
+    const gitDir = await submoduleGitDir(r.isoWorktreePath, s.path)
+    if (gitDir === null) fail(s.path, 'git-dir', 'submodule git dir not resolvable')
+    const ref = poolRefName(handle.taskId, handle.nodeRunId, s.path)
+    const res = await pushObjectsToPool(pool, gitDir as string, sha, ref)
+    if (!res.ok) fail(s.path, 'publish', res.error ?? '')
+    // Read the anchor BACK: only a pool ref that provably resolves to the
+    // published head counts as durable (impl-gate A1-fix recommendation).
+    const pinned = await runGit(pool, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
+    if (pinned.exitCode !== 0 || pinned.stdout.trim() !== sha) {
+      fail(
+        s.path,
+        'publish-verify',
+        `pool ref resolves to '${pinned.stdout.trim()}', wanted ${sha}`,
+      )
+    }
+    if (isNewPath) {
+      // The node-scoped anchor above dies with `discardNodeIso`. A KNOWN path
+      // gets its long-lived worktree anchor when the merge folds it in
+      // (mergeSubmodulesIntoTheirs); a NEW path never passes through there —
+      // no base, nothing to merge — yet canonical may adopt its gitlink
+      // verbatim, so the durable anchor must be written here.
+      //
+      // CREATE-ONLY (empty oldvalue ⟹ ref must not exist): two siblings adding
+      // the same path both publish BEFORE the merge lock, and an unconditional
+      // write let the LOSER overwrite the anchor with its rejected sha — the
+      // winner's canonical-adopted commit then survived only on node refs and
+      // died at discard (Codex review round 2, P1). The winner's merge
+      // re-points the anchor under the lock (mergeSubmodulesIntoTheirs); a
+      // failed create with the ref already present just means a sibling got
+      // here first — our sha stays reachable via the node ref until merged.
+      const wtRef = worktreeRefName(handle.taskId, s.path)
+      const wt = await runGit(pool, ['update-ref', wtRef, sha, ''])
+      if (wt.exitCode !== 0) {
+        const existing = await runGit(pool, ['rev-parse', '--verify', '--quiet', wtRef])
+        if (existing.exitCode !== 0) fail(s.path, 'anchor', wt.stderr.trim())
+      }
+    }
+  }
+}
+
+/**
+ * One conflicted repo from a merge-back. Carries everything the merge agent
+ * (§6) needs to build a resolve-iso and materialize a resolution WITHOUT going
+ * back to the DB: the conflicted auto-merge tree, the raw merge-tree output (for
+ * conflict-CLASS classification), and the merge base + canon refs.
+ */
+export interface MergeBackConflict {
+  worktreeDirName: string
+  /** Conflicted paths (back-compat with pre-PR-B callers). */
+  paths: string[]
+  /** Conflicted auto-merge tree OID — `commit-tree` this to seed resolve-iso (§6.2①). */
+  mergedTree: string
+  /** Raw `git merge-tree` stdout → parseConflictManifest for the 5-class manifest. */
+  rawConflictOutput: string
+  /** Merge base (iso baseSnapshot) — the commit-tree parent (§6.2①). */
+  base: string
+  /** git-ops dir = canonical worktree (shared ODB); the resolution's materialize target. */
+  canonWorktreePath: string
+  /** Canonical HEAD when the iso was created — materializeTree's taskBaseHead (§5.3). */
+  taskBaseHead: string
+  /**
+   * RFC-187 §4-2 — cleanly-merged paths ALREADY materialized into canonical
+   * despite this repo's conflict (per-path salvage; empty when the salvage
+   * failed closed on an exotic conflict class or nothing clean differed).
+   * The conflicted paths above remain withheld for the merge agent / human.
+   */
+  salvagedPaths: string[]
+  /** RFC-193 K1：carried from IsoRepo so the resolve-flow snapshots (§6.2①/④)
+   *  keep force-including the task's gitignored port files. */
+  forcedRepoRelPaths: string[]
+}
+
+export interface MergeBackResult {
+  clean: boolean
+  /** Per-repo conflicts (only repos that conflicted appear). */
+  conflicts: MergeBackConflict[]
+}
+
+/**
+ * Merge each repo's iso final tree back into its canonical worktree (design.md
+ * §5). Per repo: snapshot canonical NOW (ours), 3-way merge-tree(base, ours,
+ * node_tree). Clean → materialize into canonical (unstaged, HEAD unchanged).
+ * Conflict → left for the caller (merge agent / awaiting_human, PR-B); canonical
+ * for that repo is NOT touched (D27 — kept clean for sibling merge-backs).
+ *
+ * `nodeTrees` maps worktreeDirName → node_tree sha (from snapshotNodeIsoFinal, or
+ * re-read from the persisted column on a replay).
+ */
+export async function mergeBackNodeIso(
+  handle: IsoHandle,
+  nodeTrees: Record<string, string>,
+  log?: Logger,
+  /**
+   * RFC-210 T25 — optional merge-agent hook for a conflicted SUBMODULE.
+   *
+   * Called synchronously, inside merge-back, before the superproject merge runs.
+   * That timing is what makes it safe: a resolution is folded straight into the
+   * parent's `theirs` tree and the merge continues, so there is no "resolved but
+   * the parent never re-merged" window and no cross-resume convergence path to
+   * get wrong. Absent (or unresolved) ⟹ today's behaviour: withhold the whole
+   * repo and park for a human.
+   */
+  resolveSubConflict?: (conflict: MergeBackConflict) => Promise<{ resolved: boolean }>,
+): Promise<MergeBackResult> {
+  if (handle.passthrough) return { clean: true, conflicts: [] }
+  const conflicts: MergeBackResult['conflicts'] = []
+  for (const r of handle.repos) {
+    let theirs = nodeTrees[r.worktreeDirName]
+    if (theirs === undefined) continue
+    // RFC-210 §2.3: resolve每个 submodule FIRST, folding the result back into
+    // `theirs`. git's own merge-tree refuses a gitlink both sides moved
+    // ("Recursive merging with submodules currently only supports trivial
+    // cases"), so by the time the superproject merge below runs, every gitlink
+    // must already look like a one-sided change.
+    const subMerge = await mergeSubmodulesIntoTheirs(r, theirs, log, {
+      containerPath: handle.containerPath,
+      ...(resolveSubConflict !== undefined ? { resolveSubConflict } : {}),
+    })
+    // Record on the handle either way: a resolved round must CLEAR a stale set
+    // left by a previous attempt, otherwise resume stays failed forever.
+    r.pendingSubResolves = subMerge.conflicts
+    if (subMerge.conflicts.length > 0) {
+      // A conflicted submodule cannot be represented as a parent-level path
+      // conflict (the gitlink is one entry, the disagreement is inside it), so
+      // the whole repo is withheld and handed to the human/agent resolve path.
+      conflicts.push({
+        worktreeDirName: r.worktreeDirName,
+        paths: subMerge.conflicts.map((p) => `${p} (submodule)`),
+        mergedTree: '',
+        rawConflictOutput: subMerge.conflicts
+          .map((p) => `CONFLICT (submodule): Merge conflict in ${p}`)
+          .join('\n'),
+        base: r.baseSnapshot,
+        canonWorktreePath: r.canonWorktreePath,
+        taskBaseHead: r.taskBaseHead,
+        salvagedPaths: [],
+        forcedRepoRelPaths: r.forcedRepoRelPaths,
+      })
+      continue
+    }
+    theirs = subMerge.theirs
+    const ours = await snapshotFullState(r.canonWorktreePath, {
+      log,
+      forceIncludePaths: r.forcedRepoRelPaths,
+    })
+    const merge = await mergeTreeInMemory(r.canonWorktreePath, {
+      base: r.baseSnapshot,
+      ours,
+      theirs,
+    })
+    if (merge.conflicts.length > 0) {
+      // RFC-187 §4-2 — per-path salvage: land the cleanly-merged paths NOW
+      // (mergedTree with each conflicted path reverted to `ours`), withholding
+      // ONLY the conflicted ones. Idempotent on replay: a re-run's `ours`
+      // already contains the salvage, so the re-merge is clean on those paths
+      // and the salvage tree equals ours (landedPaths=[] → materialize
+      // skipped). buildSalvageTree fails closed (null) on directory-entry
+      // conflict classes — that repo keeps today's withhold-everything shape.
+      //
+      // Codex impl-gate P1: ONLY the pure tree CONSTRUCTION is fail-open —
+      // it has not touched canonical, so falling back to withhold-all is
+      // truthful. materializeTree failures PROPAGATE (same as the clean-path
+      // materialize below): it mutates canonical with no rollback, so a
+      // swallowed mid-mutation error would leave canonical partially changed
+      // while claiming the delta was withheld.
+      // RFC-210 §2.4 — never salvage a conflict that touches a gitlink.
+      //
+      // buildSalvageTree reverts each conflicted path to `ours`, and it only
+      // fail-closes on DIRECTORY entries — a gitlink is neither a tree nor a
+      // blob, so it slips through. When `ours` has no entry for it (one node
+      // removed the submodule while another changed it) the revert becomes a
+      // deletion, and materializeTree step ① then `rm -rf`s the submodule
+      // directory out of the canonical worktree. Withhold the whole repo and let
+      // a human decide instead.
+      //
+      // Impl-gate A3-fix: the base topology is not the full oracle — a path
+      // BOTH sides newly added (two nodes `git submodule add`ed the same path
+      // at different shas) is in neither `subBases` nor necessarily `poolDirs`
+      // on the ours side, yet salvaging it would silently pick ours and drop
+      // this node's submodule. Probe the trees for a 160000 entry as well.
+      let gitlinkConflict = merge.conflicts.find(
+        (p) => r.subBases[p] !== undefined || r.poolDirs[p] !== undefined,
+      )
+      if (gitlinkConflict === undefined) {
+        for (const p of merge.conflicts) {
+          if (
+            (await isGitlinkInTree(r.canonWorktreePath, ours, p)) ||
+            (await isGitlinkInTree(r.canonWorktreePath, theirs, p))
+          ) {
+            gitlinkConflict = p
+            break
+          }
+        }
+      }
+      if (gitlinkConflict !== undefined) {
+        log?.warn('gitlink conflict — withholding repo instead of salvaging', {
+          worktreeDirName: r.worktreeDirName,
+          subPath: gitlinkConflict,
+        })
+        conflicts.push({
+          worktreeDirName: r.worktreeDirName,
+          paths: merge.conflicts,
+          mergedTree: merge.mergedTree,
+          rawConflictOutput: merge.rawConflictOutput,
+          base: r.baseSnapshot,
+          canonWorktreePath: r.canonWorktreePath,
+          taskBaseHead: r.taskBaseHead,
+          salvagedPaths: [],
+          forcedRepoRelPaths: r.forcedRepoRelPaths,
+        })
+        continue
+      }
+      let salvage: { tree: string; landedPaths: string[] } | null = null
+      try {
+        salvage = await buildSalvageTree(r.canonWorktreePath, {
+          mergedTree: merge.mergedTree,
+          ours,
+          conflicts: merge.conflicts,
+        })
+      } catch (err) {
+        log?.warn('salvage tree construction failed (falling back to withhold-all)', {
+          worktreeDirName: r.worktreeDirName,
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+      let salvagedPaths: string[] = []
+      if (salvage !== null && salvage.landedPaths.length > 0) {
+        const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
+        await materializeTree(r.canonWorktreePath, {
+          mergedTree: salvage.tree,
+          canonCurrentTree,
+          taskBaseHead: r.taskBaseHead,
+        })
+        salvagedPaths = salvage.landedPaths
+      }
+      conflicts.push({
+        worktreeDirName: r.worktreeDirName,
+        paths: merge.conflicts,
+        mergedTree: merge.mergedTree,
+        rawConflictOutput: merge.rawConflictOutput,
+        base: r.baseSnapshot,
+        canonWorktreePath: r.canonWorktreePath,
+        taskBaseHead: r.taskBaseHead,
+        salvagedPaths,
+        forcedRepoRelPaths: r.forcedRepoRelPaths,
+      })
+      continue
+    }
+    const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
+    await materializeTree(r.canonWorktreePath, {
+      mergedTree: merge.mergedTree,
+      canonCurrentTree,
+      taskBaseHead: r.taskBaseHead,
+    })
+  }
+  return { clean: conflicts.length === 0, conflicts }
+}
+
+/**
+ * RFC-130 §8.3 D9 (T14): before a fan-out shard is RE-RUN to REPLACE a prior merged
+ * attempt, undo that prior delta INSIDE THE ISO WORKTREE — so the agent starts from
+ * the pre-shard state and its output cleanly REPLACES (not superimposes on) the prior
+ * output. Called AFTER createNodeIso (iso checked out from canon, which still carries
+ * the prior delta) and BEFORE the agent runs.
+ *
+ * Why the ISO (not canon, not the post-run node tree):
+ *  - Canon-safe / failure-safe (Codex impl-gate P1, AC-6): the iso is isolated, so a
+ *    failed/canceled rerun leaves canon — and the prior merged delta — untouched.
+ *    Canon changes only at merge-back, after success.
+ *  - Correct for IDENTICAL re-output (Codex impl-gate P2): because we undo BEFORE the
+ *    agent writes, a file the agent later RE-PRODUCES with identical bytes survives
+ *    (it reappears as the agent's own write on the clean base), whereas a post-run
+ *    tree-reverse could not tell "inherited prior file" from "agent re-wrote it" and
+ *    would wrongly drop it.
+ *  - Sibling-safe: the undo is a 3-way merge (base = prior node_tree, ours = iso now
+ *    == canon-at-dispatch, theirs = prior base_snapshot); base→ours carries unrelated
+ *    sibling deltas already in canon, base→theirs removes only the prior shard delta.
+ *
+ * At undo time the iso content EQUALS the prior node_tree (+ any sibling deltas), so
+ * the 3-way merge is unambiguous. The merge base for the eventual merge-back stays the
+ * iso's own base_snapshot (canon-at-dispatch, which HAS the prior delta) — that is what
+ * lets the merge-back drop prior files the agent didn't reproduce.
+ *
+ * FAIL-OPEN: a pruned prior snapshot (unpinned after discardNodeIso) or a reverse
+ * conflict returns false (no change) → pre-T14 superimposition, never destructive.
+ * Returns true iff the iso worktree was rewritten. The caller MUST hold no canon lock
+ * (this only touches the private iso worktree).
+ */
+export async function undoPriorShardDeltaInIso(
+  isoWorktreePath: string,
+  priorNodeCommit: string | undefined,
+  priorBaseCommit: string | undefined,
+  log?: Logger,
+  /** RFC-193 K1：shard 重跑的 undo 快照同样携带该 repo 的必达清单。 */
+  forcedRepoRelPaths?: string[],
+): Promise<boolean> {
+  if (priorNodeCommit === undefined || priorBaseCommit === undefined) return false
+  if (!(await isGitWorkTree(isoWorktreePath))) return false
+  if (
+    !(await gitCommitExists(isoWorktreePath, priorNodeCommit)) ||
+    !(await gitCommitExists(isoWorktreePath, priorBaseCommit))
+  ) {
+    log?.warn('T14 iso-undo: prior shard snapshot pruned — superimposition fallback', {
+      priorNodeCommit,
+      priorBaseCommit,
+    })
+    return false
+  }
+  const isoCurrent = await snapshotFullState(isoWorktreePath, {
+    log,
+    ...(forcedRepoRelPaths !== undefined ? { forceIncludePaths: forcedRepoRelPaths } : {}),
+  })
+  const rev = await mergeTreeInMemory(isoWorktreePath, {
+    base: priorNodeCommit,
+    ours: isoCurrent,
+    theirs: priorBaseCommit,
+  })
+  if (rev.conflicts.length > 0) {
+    log?.warn('T14 iso-undo: reverse-merge conflicted — superimposition fallback', {
+      conflicts: rev.conflicts,
+    })
+    return false
+  }
+  // RFC-210 pre-flight: this function's contract is FAIL-OPEN and never
+  // destructive — it either undoes the prior delta completely or leaves the iso
+  // alone and lets the next shard superimpose. materializeTree now also moves
+  // submodule gitlinks, and that step THROWS when a gitlink's commit is not
+  // reachable. Letting it throw here would be the one outcome the contract
+  // forbids: steps ①-④ have already rewritten the parent files by then, so the
+  // iso would sit half-undone (parent reverted, submodules still on the previous
+  // shard's commits) and the next shard's output would merge on top of that mix.
+  // Checking reachability BEFORE touching anything keeps the bail-out clean.
+  if (!(await gitlinksReachable(isoWorktreePath, rev.mergedTree))) {
+    log?.warn('T14 iso-undo: submodule gitlink unreachable — superimposition fallback', {
+      mergedTree: rev.mergedTree,
+    })
+    return false
+  }
+  const canonCurrentTree = await treeOf(isoWorktreePath, isoCurrent)
+  const taskBaseHead = await headOf(isoWorktreePath)
+  await materializeTree(isoWorktreePath, {
+    mergedTree: rev.mergedTree,
+    canonCurrentTree,
+    taskBaseHead,
+    ...(log !== undefined ? { log } : {}),
+  })
+  return true
+}
+
+/** Does `treeish` record a gitlink (mode 160000) at `path`? */
+async function isGitlinkInTree(repoPath: string, treeish: string, path: string): Promise<boolean> {
+  const r = await runGit(repoPath, ['ls-tree', treeish, '--', path])
+  return r.exitCode === 0 && /^160000 commit /m.test(r.stdout)
+}
+
+/**
+ * RFC-210 — can every gitlink in `tree` actually be checked out here?
+ *
+ * Only walks one level: a nested submodule's gitlinks live inside ITS commit,
+ * which we cannot inspect until the outer one is reachable anyway — so an outer
+ * miss is enough to bail, and an outer hit makes the inner check materializeTree's
+ * problem (where throwing is the correct response).
+ */
+async function gitlinksReachable(worktreePath: string, tree: string): Promise<boolean> {
+  const listed = await runGit(worktreePath, ['ls-tree', tree])
+  if (listed.exitCode !== 0) return true // cannot tell — don't block on a guess
+  for (const line of listed.stdout.split('\n')) {
+    const [meta, name] = line.split('\t')
+    if (meta === undefined || name === undefined) continue
+    const parts = meta.trim().split(/\s+/)
+    if (parts[1] !== 'commit') continue
+    const sha = parts[2]
+    if (sha === undefined) continue
+    const subPath = join(worktreePath, name)
+    if (!existsSync(subPath)) continue
+    if (!(await gitCommitExists(subPath, sha))) return false
+  }
+  return true
+}
+
+/**
+ * RFC-208: every git call in the discard path is bounded.
+ *
+ * This is pure best-effort cleanup — a worktree we fail to remove is picked up
+ * by GC — but it used to be UNBOUNDED, and that turned a stuck
+ * `git worktree remove` (residual `index.lock`, stalled network volume) into a
+ * daemon-wide outage: the scheduler awaited it while holding the shared
+ * node-pool permit, so the permit never came back and, once capacity was
+ * exhausted, every task in the daemon stopped. Bounding it here is what lets
+ * `runHostNode` — and therefore `runTask` — resolve at all, which the release
+ * reordering alone does not achieve (Codex design gate, RFC-208 §6-3).
+ */
+export const ISO_DISCARD_GIT_TIMEOUT_MS = 60_000
+
+/** Structural slice of the per-task write lock (TaskWriteSem shape) — declared
+ *  here because this module may not import isolatedAgentRun (edge direction). */
+export interface DiscardLock {
+  run<T>(fn: () => Promise<T>): Promise<T>
+}
+
+/** Remove all iso worktrees + delete the base/node pin refs for a run (best-effort).
+ *
+ *  `writeSem` (RFC-210 review round 6, P1): when given, the NEW-path anchor
+ *  handoff + node-ref drop run under the task write lock. Outside it, a
+ *  known-path merge could anchor its candidate, this discard could then read
+ *  the still-unmaterialized canonical and CAS the ref BACKWARD (the sibling's
+ *  in-merge write is the CAS's expected-old), and the sibling — seeing the
+ *  path as known — would never re-anchor at its own discard: its landed
+ *  commit ends one pool gc away from `bad object`. Under the lock no merge
+ *  interleaves the read and the write; the CAS stays as the cross-discard
+ *  guard. Callers that cannot supply the lock (tests, GC sweeps) keep the
+ *  CAS-only behavior. */
+export async function discardIsolationWorkspace(
+  handle: IsoHandle,
+  log?: Logger,
+  writeSem?: DiscardLock,
+  onProgress?: (partialFailures: number) => void,
+): Promise<void> {
+  let partialFailures = 0
+  for (const r of handle.repos) {
+    // RFC-356 T3：走回收阶梯（remove → 锁外退避删除 → prune），不再是一发
+    // `worktree remove` 一击即弃。`blocked` 只记 warn 并计入 partialFailures，
+    // 由调用方的选键（RFC-356 L4）换代绕开。
+    const reclaimed = await reclaimWorktreePath({
+      repoPath: r.canonWorktreePath,
+      worktreePath: r.isoWorktreePath,
+      timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+      ...(log === undefined ? {} : { log }),
+    })
+    if (reclaimed.kind === 'blocked') {
+      partialFailures += 1
+      onProgress?.(partialFailures)
+      // 文案不再承诺 GC：iso GC **明确跳过活跃 / 非终态任务**
+      // （`systemWorkspaceGc.ts` / `workspaceMaintenance.ts`），任务还活着的时候
+      // 没有任何代码会来收这个残留——旧文案「leaving for GC」对活任务从不成立。
+      log?.warn('iso worktree reclaim blocked (will retry with a new generation)', {
+        isoWorktreePath: reclaimed.residualPath,
+        attempts: reclaimed.attempts,
+        error: reclaimed.lastError,
+      })
+    }
+    await deleteIsoRefs(r.canonWorktreePath, handle.taskId, handle.nodeRunId, {
+      timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+    })
+    // RFC-210 (review round 4): hand NEW paths their durable worktree anchor
+    // from canonical's actual state BEFORE this run's node refs go away; a
+    // path that cannot be anchored keeps its node refs (leak-not-lose).
+    const handoff = async (): Promise<void> => {
+      const keepRefs = await anchorNewPathsAtDiscard(r, handle.taskId, log)
+      await dropNodePoolRefs(r, handle.taskId, handle.nodeRunId, log, keepRefs)
+    }
+    if (writeSem !== undefined && Object.keys(r.poolDirs).length > 0) {
+      await writeSem.run(handoff)
+    } else {
+      await handoff()
+    }
+  }
+}
+
+/**
+ * RFC-210 — drop this node's anchors from the shared object pool.
+ *
+ * The pool is shared ACROSS tasks, so anchors that are never released grow
+ * without bound. Only the NODE-scoped ones go here (`pool/<task>/<run>/<slug>`);
+ * the worktree-scoped `wt/<task>/<slug>` anchors deliberately outlive the node —
+ * they are what keep the commit canonical's gitlink points at reachable, and
+ * canonical worktrees are long-lived (`worktreeAutoGc` defaults to false).
+ *
+ * Best-effort: this is cleanup, and a leaked ref costs disk, not correctness.
+ */
+async function dropNodePoolRefs(
+  r: IsoRepo,
+  taskId: string,
+  nodeRunId: string,
+  log?: Logger,
+  /** Paths whose node refs must be KEPT (anchor handover failed — leak-not-lose). */
+  keep?: Set<string>,
+): Promise<void> {
+  // `poolDirs`, not `subBases`: node-scoped refs are created exactly for the
+  // pooled paths, and a NEW path the node added has a pool but no base — keyed
+  // off subBases its ref would never be deleted and would leak (impl-gate).
+  for (const [subPath, pool] of Object.entries(r.poolDirs)) {
+    if (keep?.has(subPath) === true) continue
+    // Delete each ref from the pool it was CREATED in. With the old repo-level
+    // poolDir every ref was deleted from the first submodule's pool, so all the
+    // others silently failed and leaked.
+    const ref = poolRefName(taskId, nodeRunId, subPath)
+    const res = await runGit(pool, ['update-ref', '-d', ref], {
+      timeoutMs: ISO_DISCARD_GIT_TIMEOUT_MS,
+    })
+    if (res.exitCode !== 0) {
+      log?.warn('pool ref delete failed (leaving for GC)', { ref, error: res.stderr.trim() })
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// RFC-130 §6.2 — merge-agent conflict resolution (git orchestration).
+// The scheduler injects `runAgent` (a runNode call that BYPASSES the node pool, §7)
+// so this git-only orchestration stays unit-testable with a mock agent.
+// ---------------------------------------------------------------------------
+
+export interface ResolveConflictOutcome {
+  resolved: boolean
+  /** Manifest entries the framework could NOT confirm resolved (empty if resolved). */
+  unresolved: MergeConflictEntry[]
+  /**
+   * The resolve-iso worktree. On SUCCESS it has been removed (null). On FAILURE
+   * it is KEPT (D27/§6.3) so a human can finish the resolution there; the path is
+   * returned for the awaiting_human detail + resume.
+   */
+  resolveIsoPath: string | null
+}
+
+/**
+ * The merge agent process survived its TERM/KILL escalation. This is a hard
+ * framework barrier: the resolve worktree must remain intact and no later
+ * conflict agent may start while the old writer can still mutate it.
+ */
+export class MergeAgentChildUnreapedError extends Error {
+  constructor() {
+    super('merge-agent-child-unreaped')
+    this.name = 'MergeAgentChildUnreapedError'
+  }
+}
+
+/**
+ * RFC-130 §6.2: try to auto-resolve ONE conflicted repo with the built-in merge
+ * agent. Seeds a detached resolve-iso from the conflicted auto-merge tree (so
+ * content conflicts carry markers), runs the agent there, then judges resolution
+ * from the framework's OWN observation of the worktree (D6) — never the agent's
+ * self-report. On success the resolution is materialized into the canonical
+ * worktree and the resolve-iso removed; on failure the resolve-iso is preserved.
+ *
+ * `runAgent(prompt, cwd)` is injected by the scheduler and MUST dispatch the merge
+ * agent WITHOUT acquiring a node-pool slot (§7 deadlock avoidance). Setup failures
+ * (commit-tree / worktree add) throw → caller treats as merge-failed; a failed
+ * agent RUN resolves to `{ resolved: false }` with the iso kept.
+ */
+export async function resolveConflictWithAgent(
+  conflict: MergeBackConflict,
+  opts: {
+    containerPath: string
+    runAgent: (prompt: string, cwd: string, manifest: MergeConflictManifest) => Promise<void>
+    log?: Logger
+  },
+): Promise<ResolveConflictOutcome> {
+  const { containerPath, runAgent, log } = opts
+  // RFC-210: a submodule-only conflict carries NO parent-level merged tree — the
+  // gitlink is a single tree entry and the disagreement lives inside it, so there
+  // is nothing a parent-level resolve-iso could show the agent. Passing '' to
+  // commit-tree below is `fatal: not a valid object name`, and commitTree turns
+  // a non-zero exit into a throw: the exception escaped this function, went past
+  // writeSem and mergeBackAndSettle, and the node ended up merge-failed with raw
+  // git noise instead of parked as awaiting_human — i.e. the human never got a
+  // recovery path for exactly the case that needs one. The in-submodule agent
+  // attempt already happened upstream in mergeSubmodulesIntoTheirs (T25), so
+  // reaching here means it did not resolve; park directly.
+  if (conflict.mergedTree === '') {
+    log?.info('submodule conflict has no parent-level merged tree — parking without resolve-iso', {
+      worktreeDirName: conflict.worktreeDirName,
+      paths: conflict.paths.join(', '),
+    })
+    return {
+      resolved: false,
+      unresolved: conflict.paths.map((p) => ({
+        worktreeDirName: conflict.worktreeDirName,
+        path: p,
+        type: 'submodule' as const,
+      })),
+      resolveIsoPath: null,
+    }
+  }
+  const repoGit = conflict.canonWorktreePath // shared-ODB git dir for worktree/commit ops
+  // §6.2①: commit-tree the conflicted merged tree (worktree add needs a commit-ish),
+  // then check it out detached — the working tree now carries the conflict markers.
+  // The commit's PARENT is canonical-at-conflict (`ours`), NOT the node base: this
+  // pins `ours-at-conflict` in git so a §6.3 RESUME can recover it via
+  // `git rev-parse HEAD^` and use it as the re-merge base — WITHOUT a new DB column.
+  // (Merging the human's resolution back against the node base instead would spuriously
+  // re-conflict on the very region both sides touched.) We hold writeSem across §6.2,
+  // so this `ours` equals the `ours` the materialize below re-snapshots.
+  const oursAtConflict = await snapshotFullState(repoGit, {
+    log,
+    forceIncludePaths: conflict.forcedRepoRelPaths,
+  })
+  const cmt = await commitTree(repoGit, conflict.mergedTree, oursAtConflict, 'aw-conflict')
+  const suffix = conflict.worktreeDirName === '' ? 'repo' : conflict.worktreeDirName
+  const resolveIso = join(containerPath, `resolve-${suffix}`)
+  // A stale resolve-iso (crash mid-resolution) would make `worktree add` fail;
+  // remove it first (best-effort), then fail LOUD if the add still fails — running
+  // the agent against a missing/stale worktree would mis-judge resolution (Codex P2).
+  // RFC-356 T3：resolve-iso 就落在 iso 容器**内部**，删不掉会让容器非空、
+  // 直接挡住同代重建，所以这里也走回收阶梯而不是一发 remove。
+  if (existsSync(resolveIso)) {
+    await reclaimWorktreePath({
+      repoPath: repoGit,
+      worktreePath: resolveIso,
+      ...(log === undefined ? {} : { log }),
+    })
+  }
+  const add = await runGit(repoGit, ['worktree', 'add', '--detach', resolveIso, cmt])
+  if (add.exitCode !== 0) {
+    throw new Error(`merge-resolve setup failed: worktree add ${resolveIso}: ${add.stderr.trim()}`)
+  }
+
+  const manifest = parseConflictManifest(conflict.rawConflictOutput, conflict.worktreeDirName)
+  // Fail closed on UNRECOGNIZED conflict classes (Codex P1): git may report a class
+  // the classifier does not model (rename/rename, file/directory, …) — its path is
+  // in `conflict.paths` but absent from `manifest`, so the agent is never told and
+  // evaluateResolution can't judge it. Any such path makes the whole resolution
+  // UNRESOLVED so we never materialize an unhandled conflict into canonical. (The
+  // synthetic entry's `type` is only used for the detail message.)
+  const manifestPaths = new Set(manifest.map((e) => e.path))
+  const unhandled: MergeConflictEntry[] = conflict.paths
+    .filter((p) => !manifestPaths.has(p))
+    .map((p) => ({ worktreeDirName: conflict.worktreeDirName, path: p, type: 'content' }))
+  let resolved = false
+  let unresolved: MergeConflictEntry[] = [...manifest, ...unhandled]
+  try {
+    // §6.2②: run the merge agent in the resolve-iso (scheduler bypasses the node pool).
+    await runAgent(buildMergeResolvePrompt({ manifest }), resolveIso, manifest)
+    // §6.2③: framework self-check from observed worktree state.
+    const states = gatherResolvedStates(resolveIso, manifest)
+    const verdict = evaluateResolution(manifest, states)
+    resolved = verdict.resolved && unhandled.length === 0
+    unresolved = [...verdict.unresolved, ...unhandled]
+    if (unhandled.length > 0) {
+      log?.warn('merge-back: unrecognized conflict class(es) → fail closed (unresolved)', {
+        resolveIso,
+        unhandled: unhandled.map((e) => e.path),
+      })
+    }
+  } catch (err) {
+    if (err instanceof MergeAgentChildUnreapedError) throw err
+    log?.warn('merge agent run failed → treat as unresolved', {
+      resolveIso,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    resolved = false
+  }
+
+  if (!resolved) {
+    // §6.3: KEEP the resolve-iso (do NOT materialize markers into canon) — the
+    // canonical worktree stays clean for sibling merge-backs; human resolves here.
+    return { resolved: false, unresolved, resolveIsoPath: resolveIso }
+  }
+  // §6.2④: snapshot the resolution + materialize into the canonical worktree.
+  const resolvedTree = await snapshotFullState(resolveIso, {
+    log,
+    forceIncludePaths: conflict.forcedRepoRelPaths,
+  })
+  const ours = await snapshotFullState(conflict.canonWorktreePath, {
+    log,
+    forceIncludePaths: conflict.forcedRepoRelPaths,
+  })
+  const canonCurrentTree = await treeOf(conflict.canonWorktreePath, ours)
+  await materializeTree(conflict.canonWorktreePath, {
+    mergedTree: resolvedTree,
+    canonCurrentTree,
+    taskBaseHead: conflict.taskBaseHead,
+  })
+  // §6.2⑤: discard the resolve-iso (resolution now lives in canon).
+  const discardedResolveIso = await reclaimWorktreePath({
+    repoPath: repoGit,
+    worktreePath: resolveIso,
+    ...(log === undefined ? {} : { log }),
+  })
+  if (discardedResolveIso.kind === 'blocked') {
+    log?.warn('resolve-iso reclaim blocked (container stays non-empty)', {
+      resolveIso,
+      attempts: discardedResolveIso.attempts,
+      error: discardedResolveIso.lastError,
+    })
+  }
+  return { resolved: true, unresolved: [], resolveIsoPath: null }
+}
+
+/** Read each manifest path's state from the resolve-iso worktree (§6.2③ inputs). */
+function gatherResolvedStates(
+  resolveIso: string,
+  manifest: MergeConflictEntry[],
+): ResolvedPathState[] {
+  const out: ResolvedPathState[] = []
+  for (const e of manifest) {
+    const abs = join(resolveIso, e.path)
+    if (!existsSync(abs)) {
+      out.push({ worktreeDirName: e.worktreeDirName, path: e.path, present: false, content: null })
+      continue
+    }
+    const buf = readFileSync(abs)
+    // git's binary heuristic: a NUL byte ⟹ binary → no text markers to grep.
+    const content = buf.includes(0) ? null : buf.toString('utf8')
+    out.push({ worktreeDirName: e.worktreeDirName, path: e.path, present: true, content })
+  }
+  return out
+}
+
+/**
+ * RFC-130 §6.3 resume — complete a conflict-human node whose human has resolved
+ * the conflict in the preserved resolve-iso worktree(s). Per repo (multi-repo
+ * independent): re-derive the conflict manifest against CURRENT canonical, verify
+ * the human left no unresolved path (§6.2③ per-path self-check, D6 — NOT the
+ * agent's self-report), then re-merge the human's resolution against the current
+ * canonical (siblings may have advanced it) and materialize on a clean re-merge.
+ * A repo whose resolve-iso is missing / still-conflicting / has residual markers
+ * stays unresolved → the caller keeps it parked (awaiting_human another round).
+ *
+ * `nodeTrees` maps worktreeDirName → the node's persisted final tree (iso_node_tree).
+ */
+export async function completeHumanResolvedConflict(
+  handle: IsoHandle,
+  nodeTrees: Record<string, string>,
+  log?: Logger,
+): Promise<{ allResolved: boolean; unresolvedRepos: string[] }> {
+  if (handle.passthrough) return { allResolved: true, unresolvedRepos: [] }
+  const unresolved: string[] = []
+  for (const r of handle.repos) {
+    // RFC-210 fail-closed: an unresolved SUBMODULE conflict never produces a
+    // parent-level resolve-iso, so without this gate the re-probe below sees a
+    // clean parent tree and declares the repo resolved — landing a gitlink whose
+    // conflict nobody ever settled.
+    if (r.pendingSubResolves.length > 0) {
+      log?.warn('conflict-human resume: submodule conflicts still unresolved', {
+        worktreeDirName: r.worktreeDirName,
+        subPaths: r.pendingSubResolves,
+      })
+      unresolved.push(r.worktreeDirName)
+      continue
+    }
+    const nodeTree = nodeTrees[r.worktreeDirName]
+    const suffix = r.worktreeDirName === '' ? 'repo' : r.worktreeDirName
+    const resolveIso = join(handle.containerPath, `resolve-${suffix}`)
+    // No recorded delta for this repo — FAIL CLOSED (Codex impl-gate P2):
+    // every repo of a real run gets a snapshot commit (even a no-op delta),
+    // so a missing iso_node_tree entry at conflict-human resume means the
+    // recovery data was lost, not that the repo had nothing to merge.
+    // Treating it as resolved would advance merge_state without ever merging
+    // a final tree.
+    if (nodeTree === undefined) {
+      unresolved.push(r.worktreeDirName)
+      continue
+    }
+    // RFC-187 (design-gate P1-9 precondition) — a repo WITHOUT a resolve-iso is
+    // NOT automatically unresolved: in a multi-repo conflict, the repos that
+    // merged clean at conflict time materialized immediately and never got a
+    // resolve-iso — the old unconditional `unresolved.push` here wedged such a
+    // task parked FOREVER even after the human resolved the one真正 conflicted
+    // repo. Re-probe against CURRENT canonical: clean ⇒ (re-)materialize — a
+    // byte-identical no-op when the delta already landed — and count it
+    // resolved; a genuine conflict (resolve-iso GC'd / deleted by hand) stays
+    // parked, exactly the old behavior for the truly-conflicted repo.
+    if (!existsSync(resolveIso) || !(await isGitWorkTree(resolveIso))) {
+      const ours = await snapshotFullState(r.canonWorktreePath, {
+        log,
+        forceIncludePaths: r.forcedRepoRelPaths,
+      })
+      const probe = await mergeTreeInMemory(r.canonWorktreePath, {
+        base: r.baseSnapshot,
+        ours,
+        theirs: nodeTree,
+      })
+      if (probe.conflicts.length > 0) {
+        unresolved.push(r.worktreeDirName)
+        continue
+      }
+      const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
+      await materializeTree(r.canonWorktreePath, {
+        mergedTree: probe.mergedTree,
+        canonCurrentTree,
+        taskBaseHead: r.taskBaseHead,
+      })
+      continue
+    }
+    // ours-at-conflict = the resolve-iso commit's PARENT — pinned in §6.2① exactly
+    // so resume can recover it here (no DB column) as the correct re-merge base.
+    const oursAtConflict = (await runGit(resolveIso, ['rev-parse', 'HEAD^'])).stdout.trim()
+    // §6.2③ — reconstruct the ORIGINAL conflict (node base vs node_tree over
+    // ours-at-conflict) and confirm the human decided EVERY conflicted path (content:
+    // no residual markers; silent classes: a definite keep/delete/side; unrecognized
+    // class → fail closed). Never trust the agent's word (D6).
+    const probe = await mergeTreeInMemory(r.canonWorktreePath, {
+      base: r.baseSnapshot,
+      ours: oursAtConflict,
+      theirs: nodeTree,
+    })
+    const manifest = parseConflictManifest(probe.rawConflictOutput, r.worktreeDirName)
+    const states = gatherResolvedStates(resolveIso, manifest)
+    const manifestPaths = new Set(manifest.map((e) => e.path))
+    const unhandled = probe.conflicts.filter((p) => !manifestPaths.has(p))
+    if (!evaluateResolution(manifest, states).resolved || unhandled.length > 0) {
+      unresolved.push(r.worktreeDirName)
+      continue
+    }
+    // §6.3 — re-merge the human's resolution against the CURRENT canonical, based at
+    // ours-at-conflict so ONLY a post-conflict sibling advance INTO the same region
+    // re-conflicts (not the region the human just reconciled).
+    const resolvedTree = await snapshotFullState(resolveIso, {
+      log,
+      forceIncludePaths: r.forcedRepoRelPaths,
+    })
+    const ours = await snapshotFullState(r.canonWorktreePath, {
+      log,
+      forceIncludePaths: r.forcedRepoRelPaths,
+    })
+    const merge = await mergeTreeInMemory(r.canonWorktreePath, {
+      base: oursAtConflict,
+      ours,
+      theirs: resolvedTree,
+    })
+    if (merge.conflicts.length > 0) {
+      unresolved.push(r.worktreeDirName)
+      continue
+    }
+    const canonCurrentTree = await treeOf(r.canonWorktreePath, ours)
+    await materializeTree(r.canonWorktreePath, {
+      mergedTree: merge.mergedTree,
+      canonCurrentTree,
+      taskBaseHead: r.taskBaseHead,
+    })
+    // resolved — discard the resolve-iso.
+    const humanResolveDiscard = await reclaimWorktreePath({
+      repoPath: r.canonWorktreePath,
+      worktreePath: resolveIso,
+      ...(log === undefined ? {} : { log }),
+    })
+    if (humanResolveDiscard.kind === 'blocked') {
+      log?.warn('resolve-iso reclaim blocked after human resolution', {
+        resolveIso,
+        attempts: humanResolveDiscard.attempts,
+        error: humanResolveDiscard.lastError,
+      })
+    }
+  }
+  return { allResolved: unresolved.length === 0, unresolvedRepos: unresolved }
+}

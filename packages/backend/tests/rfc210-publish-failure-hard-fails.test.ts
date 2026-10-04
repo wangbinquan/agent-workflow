@@ -278,7 +278,7 @@ describe('RFC-210 — submodule publish failures fail the snapshot', () => {
     // Round 5 (P1): the discard-time anchor handoff must be a CAS (expected-old
     // guard) — an unconditional write races concurrent merge-backs.
     const iso = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'nodeIsolation.ts'),
+      resolve(import.meta.dir, '..', 'src', 'platform', 'workspace', 'local', 'isolation.ts'),
       'utf8',
     )
     expect(iso).toContain("['update-ref', wtRef, sha, expectedOld]")
