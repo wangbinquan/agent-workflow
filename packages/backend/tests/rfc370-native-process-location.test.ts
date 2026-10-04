@@ -38,7 +38,7 @@ function fixtureRoot(): string {
   return root
 }
 
-describe.each(entries)('RFC-370 $name launcher CLI compatibility', ({ path }) => {
+describe.each([...entries])('RFC-370 $name launcher CLI compatibility', ({ path }) => {
   test('delivers the complete activation frame, cwd, environment and one-shot stdin', async () => {
     const root = fixtureRoot()
     const stdoutPath = join(root, 'stdout')
