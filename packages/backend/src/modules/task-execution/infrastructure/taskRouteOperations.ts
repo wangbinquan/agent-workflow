@@ -50,7 +50,6 @@ import {
   type WorkflowSyncPreview,
 } from '@agent-workflow/shared'
 import { and, asc, count, desc, eq, gt, inArray, isNull, sql, type SQL } from 'drizzle-orm'
-import { existsSync } from 'node:fs'
 import { ulid } from 'ulid'
 
 import type { Actor } from '@/auth/actor'
@@ -147,7 +146,10 @@ import { selectSyncRollbackTargets } from '@/services/task'
 import { ConflictError, DomainError, NotFoundError, ValidationError } from '@/util/errors'
 import { createLogger } from '@/util/log'
 import { killStaleRunProcessTree } from '@/util/process'
-import { gitDiffSnapshot, isGitWorkTree, worktreeDiff } from '@/util/git'
+import {
+  selectRepositoryWorkspaceReadQueries,
+  type RepositoryWorkspaceReadQueries,
+} from '@/modules/source-control/public/queries'
 import { assertCanReplaySourceTask } from '@/services/taskCollab'
 import { deleteTask } from '@/services/taskDelete'
 import { replaceReviewNodeReviewers } from '@/modules/collaboration/public/commands'
@@ -190,6 +192,7 @@ const RETRYABLE_TASK_STATUSES = [
  * PG 绑定的依赖面现在 `extends` 它、只把 `db` 收窄成 PG 客户端。
  */
 export interface TaskRouteOperationsDependencies {
+  readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly nodeRunPrompts?: NodeRunPromptOperations
   readonly db: ProviderNeutralDatabase
   readonly collaboration: CollaborationCommandContext<'taskExecutionReadModels'>
@@ -1233,11 +1236,15 @@ export async function nodeRunStdoutProjection(
  * 总预算同为 1 MiB，与单仓分支共用的 `worktreeDiff` 一样按字符串长度记账。
  */
 export async function taskDiffProjection(
-  dependencies: Readonly<{ db: ProviderNeutralDatabase }>,
+  dependencies: Readonly<{
+    db: ProviderNeutralDatabase
+    workspaceReads?: RepositoryWorkspaceReadQueries
+  }>,
   taskId: string,
 ): Promise<TaskDiff> {
   const task = await loadTask(dependencies.db, taskId)
   if (task === null) throw new NotFoundError('task-not-found', `task '${taskId}' not found`)
+  const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
   if (task.repoCount === 1) {
     if (task.baseCommit === null) {
       throw new DomainError(
@@ -1249,31 +1256,39 @@ export async function taskDiffProjection(
     // `existsSync` 不够：工作树目录可以比它的源仓活得久（源仓被移动 / 删除），留下一个
     // git 解析不了的目录。在这里探一次，把 `git diff` 那份 600 行的 `--no-index` 用法转储
     // 换成一个干净的 410。
-    if (!(await isGitWorkTree(task.worktreePath))) {
+    if (!(await workspaceReads.isGitWorkTree(task.worktreePath))) {
       throw new DomainError(
         'task-worktree-missing',
-        existsSync(task.worktreePath)
+        (await workspaceReads.exists(task.worktreePath))
           ? `worktree '${task.worktreePath}' is no longer a valid git repository (its source repo was moved or deleted); cannot compute diff`
           : `worktree '${task.worktreePath}' does not exist; cannot compute diff`,
         410,
       )
     }
-    const result = await worktreeDiff(task.worktreePath, task.baseCommit)
+    const result = await workspaceReads.worktreeDiff(task.worktreePath, task.baseCommit)
     return { ...result, baseCommit: task.baseCommit }
   }
 
   // 多仓：父工作树目录必须在（它是 runtime 子进程的 cwd）。
-  if (!existsSync(task.worktreePath)) {
+  if (!(await workspaceReads.exists(task.worktreePath))) {
     throw new DomainError(
       'task-worktree-missing',
       `worktree '${task.worktreePath}' does not exist; cannot compute diff`,
       410,
     )
   }
-  const candidates = task.repos.filter(
-    (repo) => repo.baseCommit !== null && repo.baseCommit !== '' && existsSync(repo.worktreePath),
+  const candidates: (typeof task.repos)[number][] = []
+  for (const repo of task.repos) {
+    if (
+      repo.baseCommit !== null &&
+      repo.baseCommit !== '' &&
+      (await workspaceReads.exists(repo.worktreePath))
+    )
+      candidates.push(repo)
+  }
+  const valid = await Promise.all(
+    candidates.map((repo) => workspaceReads.isGitWorkTree(repo.worktreePath)),
   )
-  const valid = await Promise.all(candidates.map((repo) => isGitWorkTree(repo.worktreePath)))
   const usable = candidates.filter((_, index) => valid[index] === true)
   if (usable.length === 0) {
     throw new DomainError(
@@ -1288,7 +1303,7 @@ export async function taskDiffProjection(
   let truncated = false
   for (const repo of usable) {
     if (repo.readonly === true) continue
-    const value = await gitDiffSnapshot(repo.worktreePath, repo.baseCommit as string)
+    const value = await workspaceReads.gitDiffSnapshot(repo.worktreePath, repo.baseCommit as string)
     if (value === '') continue
     const header = `# === Repo: ${labelOf.get(repo) ?? '.'} ===\n`
     const remaining = TASK_DIFF_MAX_BYTES - diff.length
@@ -2388,6 +2403,7 @@ export async function retryNodeProjection(
 export function createTaskRouteOperations(
   dependencies: TaskRouteOperationsDependencies,
 ): TaskRouteOperations & Pick<TaskRepairOperations, 'automaticRepair'> {
+  const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
   const nodeRunPrompts = selectNodeRunPromptOperations(
     dependencies.nodeRunPrompts,
     dependencies.appHome === undefined ? Paths.runsDir : join(dependencies.appHome, 'runs'),
@@ -2408,6 +2424,7 @@ export function createTaskRouteOperations(
     })
   }
   const repairs = createTaskRouteRepairOperations({
+    workspaceReads,
     db: dependencies.db,
     persistence: dependencies.persistence,
     activity: dependencies.activity,
@@ -2496,7 +2513,7 @@ export function createTaskRouteOperations(
         input,
       ),
     nodeRuns: (taskId) => taskNodeRunsProjection({ db: dependencies.db, nodeRunPrompts }, taskId),
-    diff: (taskId) => taskDiffProjection({ db: dependencies.db }, taskId),
+    diff: (taskId) => taskDiffProjection({ db: dependencies.db, workspaceReads }, taskId),
     stdout: (taskId, nodeRunId) =>
       nodeRunStdoutProjection({ db: dependencies.db }, taskId, nodeRunId),
     events: (taskId, nodeRunId, options) =>

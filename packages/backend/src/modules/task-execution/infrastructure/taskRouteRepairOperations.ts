@@ -18,7 +18,6 @@ import {
   type WorkflowDefinition,
   type WorkflowNode,
 } from '@agent-workflow/shared'
-import { existsSync } from 'node:fs'
 
 import { and, asc, desc, eq, inArray, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -33,9 +32,11 @@ import type {
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { runLifecycleInvariants, type LifecycleAlertRow } from '@/services/lifecycleInvariants'
 import { buildContainerMap } from '@/services/scheduler'
-import { isoKeyOf, isoWorktreePathFor } from '@/services/nodeIsolation'
 import { runStuckTaskDetector } from '@/services/stuckTaskDetector'
-import { isGitWorkTree } from '@/util/git'
+import {
+  selectRepositoryWorkspaceReadQueries,
+  type RepositoryWorkspaceReadQueries,
+} from '@/modules/source-control/public/queries'
 import { ConflictError, NotFoundError, ValidationError } from '@/util/errors'
 import type { TaskExecutionPersistence } from '../application/ports/taskExecutionPersistence'
 import type { ActiveTaskExecutionParticipant } from '../application/ports/taskExecutionRuntimeParticipants'
@@ -332,6 +333,7 @@ const ACTIVITY_GATED_OPTIONS = new Set<RepairOptionId>([
 ])
 
 export interface TaskRouteRepairOperationsDependencies {
+  readonly workspaceReads?: RepositoryWorkspaceReadQueries
   /**
    * RFC-359 AC-1（第 8 刀）：句柄是**中立**的。这份实现合并前就已经在两个引擎上被驱动
    *（`rfc359-w8-auto-repair-conformance` 的两条 lane），合并后更是两个部署共用的唯一一份，
@@ -601,13 +603,16 @@ async function deriveScopeRoot(
     .limit(1)
   const wrapperRun = rows[0]
   if (wrapperRun === undefined) return taskWorktreePath
-  const isoRoot = isoWorktreePathFor(
-    dependencies.appHome,
-    ctx.task.id,
-    isoKeyOf(wrapperRun.isoWorktreePath ?? null, wrapperRun.id),
-    '',
-  )
-  return existsSync(isoRoot) && (await isGitWorkTree(isoRoot)) ? isoRoot : taskWorktreePath
+  const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
+  const isoRoot = await workspaceReads.isolationRoot({
+    storageRootRef: dependencies.appHome,
+    taskId: ctx.task.id,
+    nodeRunId: wrapperRun.id,
+    persistedWorkspaceRef: wrapperRun.isoWorktreePath ?? null,
+  })
+  return (await workspaceReads.exists(isoRoot)) && (await workspaceReads.isGitWorkTree(isoRoot))
+    ? isoRoot
+    : taskWorktreePath
 }
 
 async function clarifyCandidate(
@@ -1431,8 +1436,12 @@ function optionForPreflight(definition: OptionDefinition, result: Preflight): Re
  * Collaboration's selected-provider participants.
  */
 export function createTaskRouteRepairOperations(
-  dependencies: TaskRouteRepairOperationsDependencies,
+  input: TaskRouteRepairOperationsDependencies,
 ): TaskRepairOperations {
+  const dependencies = {
+    ...input,
+    workspaceReads: selectRepositoryWorkspaceReadQueries(input.workspaceReads),
+  }
   async function context(taskId: string, alertId: string): Promise<RepairContext> {
     const [alert, task] = await Promise.all([
       loadAlert(dependencies.db, taskId, alertId),

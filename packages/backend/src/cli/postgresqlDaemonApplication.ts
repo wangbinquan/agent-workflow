@@ -165,7 +165,11 @@ import {
 import { createDatabaseTaskExecutionCatalogSourceFactory } from '@/modules/task-execution/composition/taskExecutionRuntime'
 import { composeWorktreeResumePreflight } from '@/modules/task-execution/public/participants'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
-import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
+import {
+  selectRepositoryWorkspaceReadQueries,
+  type RepositoryWorkspaceReadQueries,
+  type WorkspacePresenceQueries,
+} from '@/modules/source-control/public/queries'
 import { composeTaskExecutionCatalogSources } from '@/modules/task-execution/application/adapters/task-catalog-adapter'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { composeWorkgroupHostLedgerParticipantFactory } from '@/modules/task-execution/composition/workgroupHostLedger'
@@ -463,6 +467,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly lockPath: string
   readonly secretBox: SecretBox
   readonly workspacePresence?: WorkspacePresenceQueries
+  readonly workspaceReads?: RepositoryWorkspaceReadQueries
   /** RFC-349 T10 — see `DatabaseSourceWriteWindow`; bootstrap supplies the live one. */
   readonly sourceWriteWindow?: DatabaseSourceWriteWindow
   readonly databaseMigration: DatabaseMigrationModule
@@ -606,6 +611,7 @@ export async function composePostgresqlApplication(
   const workspaceUploads = selectWorkspaceUploadContentFactory(input.workspaceUploads)
   const isolationWorkspaces = selectIsolationWorkspaceFactory(input.isolationWorkspaces)
   const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(input.repositoryGitWorkspaces)
+  const workspaceReads = selectRepositoryWorkspaceReadQueries(input.workspaceReads)
   const portArtifacts = composePortArtifactOperations(
     input.portArtifactContentEffects,
     input.appHome,
@@ -1088,6 +1094,7 @@ export async function composePostgresqlApplication(
     })
   const taskExecutionProvider = composePostgresqlTaskExecutionProviderRuntime(input.db, {
     archive: input.taskArchive,
+    workspaceReads,
     runtime: {
       nodeRunPromptsFor: () => nodeRunPrompts,
       portArtifactsFor: () => portArtifacts,

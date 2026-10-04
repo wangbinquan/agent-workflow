@@ -429,6 +429,11 @@ import {
 } from '@/modules/system-operations/composition/daemonHostLifecycle'
 import type { DaemonRuntimeQueries } from '@/modules/system-operations/public/queries'
 
+import {
+  selectRepositoryWorkspaceReadQueries,
+  type RepositoryWorkspaceReadQueries,
+} from '@/modules/source-control/public/queries'
+
 export interface StartOptions {
   port?: number
   host?: string
@@ -451,6 +456,7 @@ export interface StartOptions {
   workspaceUploads?: WorkspaceUploadContentFactory
   isolationWorkspaces?: IsolationWorkspaceFactory
   repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
+  workspaceReads?: RepositoryWorkspaceReadQueries
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -640,6 +646,7 @@ async function composePostgresqlProviderSession(
     workspaceUploads: input.workspaceUploads,
     isolationWorkspaces: input.isolationWorkspaces,
     repositoryGitWorkspaces: input.repositoryGitWorkspaces,
+    workspaceReads: input.workspaceReads,
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     evidenceRead: input.evidenceRead,
@@ -1189,6 +1196,7 @@ interface DaemonProviderSessionComposeInput {
   readonly workspaceUploads: WorkspaceUploadContentFactory
   readonly isolationWorkspaces: IsolationWorkspaceFactory
   readonly repositoryGitWorkspaces: RepositoryGitWorkspaceFactory
+  readonly workspaceReads: RepositoryWorkspaceReadQueries
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -1659,6 +1667,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       workspaceUploads: selectWorkspaceUploadContentFactory(opts.workspaceUploads),
       isolationWorkspaces: selectIsolationWorkspaceFactory(opts.isolationWorkspaces),
       repositoryGitWorkspaces: selectRepositoryGitWorkspaceFactory(opts.repositoryGitWorkspaces),
+      workspaceReads: selectRepositoryWorkspaceReadQueries(opts.workspaceReads),
       employeeCaseWorkspaceEffects: opts.employeeCaseWorkspaceEffects,
       repositoryBaselines: opts.repositoryBaselines,
       maintenanceEffectsBootstrap: opts.maintenanceEffectsBootstrap,
@@ -1986,6 +1995,7 @@ async function composeSqliteProviderSession(
   const taskExecutionProvider: SelectedSqliteTaskExecutionProviderRuntime<CollaborationRouteContext> =
     composeSqliteTaskExecutionProviderRuntime(db, {
       archive: input.taskArchive,
+      workspaceReads: input.workspaceReads,
       runtime: {
         nodeRunPromptsFor: () => nodeRunPrompts,
         portArtifactsFor: () => portArtifacts,
@@ -3198,6 +3208,7 @@ async function composeSqliteProviderSession(
     workspaceUploads: input.workspaceUploads,
     isolationWorkspaces: input.isolationWorkspaces,
     repositoryGitWorkspaces: input.repositoryGitWorkspaces,
+    workspaceReads: input.workspaceReads,
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     evidenceRead: input.evidenceRead,

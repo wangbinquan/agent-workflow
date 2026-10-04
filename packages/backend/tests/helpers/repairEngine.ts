@@ -40,6 +40,7 @@ export function unusedDependency<T extends object>(methods: Partial<T> = {}): T 
 }
 
 export interface RepairEngineOptions {
+  readonly workspaceReads?: Dependencies['workspaceReads']
   /** 复活类修复会调它。默认记录调用但不真跑——行为套件断言的是库里的状态转移。 */
   readonly resume?: (taskId: string) => Promise<void>
   readonly isActive?: (taskId: string) => boolean
@@ -103,6 +104,7 @@ export function createRepairEngine(
     awaitReleasedSettled: async () => {},
   }
   const repairs = createTaskRouteRepairOperations({
+    workspaceReads: options.workspaceReads,
     db,
     persistence,
     activity,

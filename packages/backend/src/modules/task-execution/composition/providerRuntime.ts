@@ -1,3 +1,7 @@
+import {
+  selectRepositoryWorkspaceReadQueries,
+  type RepositoryWorkspaceReadQueries,
+} from '@/modules/source-control/public/queries'
 import { composePortArtifactOperations } from './portArtifacts'
 import { join } from 'node:path'
 import { composeNodeRunPromptOperations } from './nodeRunPrompts'
@@ -188,6 +192,7 @@ export interface TaskExecutionProviderRouteContext {
  * appHome 之类）。合并之前这份清单两支各写一份、还不一样长。
  */
 type ProviderRouteOperationsAssembled =
+  | 'workspaceReads'
   | 'db'
   | 'persistence'
   | 'children'
@@ -236,6 +241,7 @@ export interface SqliteTaskExecutionProviderRuntimeDependencies<
   C extends SqliteRouteCollaborationContext = SqliteRouteCollaborationContext,
 > {
   readonly archive?: TaskArchiveContentBinding
+  readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly runtime: Omit<
     TaskExecutionRuntimeParticipantsInput,
     // RFC-359 AC-1（plan §5hn 批次二 ⑤）：`childLaunchWorkgroup` 与 PostgreSQL 那一支同形——
@@ -269,6 +275,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
   db: DbClient,
   dependencies: SqliteTaskExecutionProviderRuntimeDependencies<C>,
 ): SelectedSqliteTaskExecutionProviderRuntime<C> {
+  const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
   const persistence = createTaskExecutionPersistence(db, {
     workspacePresence: dependencies.runtime.workspacePresence,
   })
@@ -335,6 +342,7 @@ export function composeSqliteTaskExecutionProviderRuntime<
       review: createPostgresqlReviewRepairParticipant(db),
     },
     ...routeDependencies,
+    workspaceReads,
   })
   const cancellation = cancellationCommand(participants)
   // RFC-359 AC-1（plan §5hn 批次二 ①②）：触发器参与者两个引擎共用一份。
@@ -443,6 +451,7 @@ export interface PostgresqlTaskExecutionRuntimeDependencies extends Omit<
 
 export interface PostgresqlTaskExecutionProviderRuntimeDependencies {
   readonly archive?: TaskArchiveContentBinding
+  readonly workspaceReads?: RepositoryWorkspaceReadQueries
   readonly runtime: Omit<PostgresqlTaskExecutionRuntimeDependencies, 'childLaunchWorkgroup'>
   readonly rootResumeRuntime: (taskId: string) => ChildResumeRuntime
   readonly routeLaunch: Omit<TaskRouteLaunchDependencies, 'db' | 'workspace'>
@@ -466,6 +475,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
   db: PostgresqlDatabaseClient,
   dependencies: PostgresqlTaskExecutionProviderRuntimeDependencies,
 ): SelectedPostgresqlTaskExecutionProviderRuntime {
+  const workspaceReads = selectRepositoryWorkspaceReadQueries(dependencies.workspaceReads)
   const persistence =
     dependencies.runtime.persistence ??
     createTaskExecutionPersistence(db, {
@@ -559,6 +569,7 @@ export function composePostgresqlTaskExecutionProviderRuntime(
       review: createPostgresqlReviewRepairParticipant(db),
     },
     ...routeDependencies,
+    workspaceReads,
   })
   const cancellation = cancellationCommand(participants)
   const taskExecutions = createTaskExecutionTriggerParticipant({

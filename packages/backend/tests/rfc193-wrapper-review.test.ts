@@ -447,6 +447,17 @@ describe('RFC-193 source locks (scopeRoot / review.ts)', () => {
     'taskRouteRepairOperations.ts',
   )
 
+  const WORKSPACE_READS = resolve(
+    import.meta.dir,
+    '..',
+    'src',
+    'modules',
+    'source-control',
+    'infrastructure',
+    'local',
+    'fileRepositoryWorkspaceReadQueries.ts',
+  )
+
   test('review.ts never touches task.worktreePath (AC-7)', () => {
     const src = readFileSync(REVIEW, 'utf8')
     expect(src).not.toContain('task.worktreePath')
@@ -466,7 +477,8 @@ describe('RFC-193 source locks (scopeRoot / review.ts)', () => {
     const src = readFileSync(S1, 'utf8')
     expect(src).toContain('deriveScopeRoot')
     expect(src).toContain('scopeRoot: await deriveScopeRoot(')
-    expect(src).toContain('isoWorktreePathFor')
+    expect(readFileSync(WORKSPACE_READS, 'utf8')).toContain('isoWorktreePathFor')
+    expect(src).toContain('await workspaceReads.isolationRoot(')
     // 反面：不许再退回直传任务根。
     expect(src).not.toContain('scopeRoot: ctx.task.worktreePath')
   })

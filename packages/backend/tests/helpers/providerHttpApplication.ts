@@ -47,6 +47,7 @@ export type ProviderHttpApplicationInput = Pick<
   | 'resourcePackageSkillContent'
   | 'workspaceContent'
   | 'workspaceUploads'
+  | 'workspaceReads'
   | 'employeeCaseWorkspaceEffects'
   | 'repositoryBaselines'
   | 'automationWorkspaceEffects'

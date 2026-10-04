@@ -244,7 +244,11 @@ import {
   type EmployeeCaseWorkspaceEffectsFactory,
   type WorkspaceContentEffectsFactory,
 } from '@/modules/source-control/composition'
-import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
+import {
+  selectRepositoryWorkspaceReadQueries,
+  type RepositoryWorkspaceReadQueries,
+  type WorkspacePresenceQueries,
+} from '@/modules/source-control/public/queries'
 import { createChildTaskLifecycleParticipant } from '@/modules/task-execution/infrastructure/childTaskLifecycleParticipant'
 import { createDatabaseTaskDriverLifecyclePort } from '@/modules/task-execution/infrastructure/taskDriverLifecycle'
 import { finishClaimedWebhookWorkspacePrune } from '@/platform/persistence/sqlite/systemWorkspaceGc'
@@ -853,6 +857,7 @@ export interface AppDeps {
   taskArchiveMaintenance?: TaskArchiveMaintenanceCommand
   /** SC presence facts selected once for root/child/continuation resume. */
   workspacePresence?: WorkspacePresenceQueries
+  workspaceReads?: RepositoryWorkspaceReadQueries
   /**
    * RFC-349 bootstrap-selected provider core shared by HTTP, MCP, WebSocket
    * and background services. Individual fields below remain test seams; the
@@ -2107,6 +2112,7 @@ export function composeSqliteApplicationDeps(
   const workspaceUploads = selectWorkspaceUploadContentFactory(deps.workspaceUploads)
   const isolationWorkspaces = selectIsolationWorkspaceFactory(deps.isolationWorkspaces)
   const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(deps.repositoryGitWorkspaces)
+  const workspaceReads = selectRepositoryWorkspaceReadQueries(deps.workspaceReads)
   const nodeRunPrompts =
     deps.nodeRunPrompts === undefined
       ? composeNodeRunPromptOperations(deps.nodeRunPromptContentEffects, join(appHome, 'runs'))
@@ -2400,6 +2406,7 @@ export function composeSqliteApplicationDeps(
     workspaceUploads,
     isolationWorkspaces,
     repositoryGitWorkspaces,
+    workspaceReads,
     nodeRunPrompts,
     portArtifacts,
     workspacePresence,
@@ -2839,6 +2846,7 @@ function composeSqliteApiRouteMounts(
   const schedulerDriver = deps.schedulerDriver
   const codeWorkspace = composeLegacyCodeReadProviders(deps.db).workspace
   const taskRouteOperations = createTaskRouteOperations({
+    workspaceReads: deps.workspaceReads,
     effects: deps.taskDeletionEffects,
     nodeRunPrompts: deps.nodeRunPrompts,
     db: deps.db,
