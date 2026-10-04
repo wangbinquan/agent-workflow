@@ -696,3 +696,21 @@ SOURCE24 独立功能门有限 PASS，指纹 `daca3967932cf720464fa9c03cae806eca
 原 canonical 只扫描三个 package 的 src，加 `.dependency-cruiser.cjs`／`scripts/depcheck.ts` 两输入；本测试不在该语料。故不重跑已成功 census、不改 sourceDigest／数量／库存／规则或增长回执。目标 format/lint 及纯 byte 逆变换通过，无本机 AW test/typecheck/build/service；修复的正式验证仍等新 exact-SHA hosted CI。
 
 完整 A1～A8／AC00／A-G、各层独立 CS adapters 与 B/M0～M4 继续。隔离 workspace 设计正在有限修订，原失败历史保留；源码未实施。尚无 AW-in-CS 实际部署，不关闭 RFC。并行观测 WIP、旧文档与所有 gate/CI 历史保持。
+
+## 2026-10-04 上传切面架构 CI 预言补正
+
+2c474 主 CI37168434612 的正式终态为 completed/failure：35 success、14 failure、1 cancelled，共50 jobs；Windows37168434657 completed/failure，maintenance37168434632 completed/success。所有原日志与失败/取消历史保留。纯类型修复 a7522bbe232d4e8d5cbfbf6df2d25b9515962b12 已发布，5路径、post-fetch 0/0、index empty；其正式 CI 尚待，不把后继改记成旧 run 通过。
+
+本次补正实际上传 SOURCE24 的三个遗漏预言。C2原精确薄 facade 名单新增已经迁出的 services/upload.ts，W7原四写点的 TaskRouteLaunchOperations 地址856→859，三列与原Task SQL全文保持。W29严格原normalizer得 PG声明171→172、SQLite application51→52、HTTP mounts65→65；只更新原计数及三个实际摘要，八phase、所有原scanner/normalizer函数、断言机制、名称和预算不变。完整测试只六项精确编辑，逆向逐字恢复旧三文件。
+
+唯一guard元数据为C2行数894→895，原provenance函数更新contentDigest与本次基准a7522bbe。guard所有其它行/字段、原sourceDigest sha256:6c9bcf68d1870290bc9b090ab9e55acfe743ee9ca39efda4a5576c6992fc5b1d、inventory/ledger/required SPI/债务保持；不重新执行已经成功的生产census。SOURCE3-META1独立有限PASS，指纹 e4a880afa6278c1e1bc73fe9b0998613969485d245f7845dfa02891432584bfe，4 owned/8 controls/12 evidence 首末稳定。纯字节/AST/JSON和目标format/lint通过，无本机AW test/typecheck/build/service。证明工具R1/R2均在任何repo写入前失败，历史保留。
+
+原PG185三成员用例另有两个startup账本失败；原PostgreSQL容器完整日志显示同时间段49次SSI序列化冲突，未把它误记为上传TS或架构预言失败。现有十次满抖动事务重试已核，工作组只读snapshot选择修复另立有限设计复核，生产尚未修改，其效果仍等新确切SHA证据。原三成员并发、brief隔离、独立run/result和聚合断言不放宽。
+
+隔离workspace DESIGN-R3独立有限PASS 2266f5474fd5f53d2f214e548b91e11ac20f45926f2e74bdcefafa6009ab11eb；R1/R2失败与全文保持，A4源码尚未实施。完整A1–A8/AC00/A-G、各层独立CS adapters、B/M0实际部署及M1–M4继续，尚无AW-in-CS部署，不关闭RFC。并行观测源码保留且不纳入本次投影。
+
+## R2：上传 CI 序列化错误计数说明
+
+META4首轮 5453d2fd946e26f1e0339e646df40de1d98468ab428617672543bae2a838c4a5 的数量文案P2/FAIL保留。上一记录的49属于宽字符串 `could not serialize access`：精确SSI `read/write dependencies among transactions` 为41行（原log4167至4331），另8行为 `concurrent update`（4114/4116/4118/4120/4122/4124/4126/4128），不是49条同一种错误，也不是重复诊断。源码、guard与原SOURCE3-META1 PASS不重开。
+
+这些原服务端记录只证明工作组该时段存在两类序列化冲突，末两UPDATE没有参数且时间晚于首个失败输出，不能唯一映射B/C最终失败。原failed member与全测试诊断仍保留，不将读取snapshot修复当作已经解决全部写问题。a752五路径发布回执和旧WindowsFAIL/maintenancePASS已独立确认；正式新CI、完整A-G/RFC及部署仍开放。原四文档全部全文和首轮失败文字保持，只以此段限定数量与证据范围。

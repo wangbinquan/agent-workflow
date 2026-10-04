@@ -382,6 +382,7 @@ describe('RFC-294 N1b canonical architecture manifests', () => {
       'packages/backend/src/services/taskPlatformInputPaths.ts',
       'packages/backend/src/services/taskQuestionDispatch.ts',
       'packages/backend/src/services/taskQuestions.ts',
+      'packages/backend/src/services/upload.ts',
       'packages/backend/src/services/workflow.ts',
       'packages/backend/src/services/workflow.validator.ts',
       'packages/backend/src/services/workflow.yaml.ts',

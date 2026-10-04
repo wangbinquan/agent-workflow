@@ -948,7 +948,7 @@
       "assertsAbsence": true,
       "negativeFixture": true,
       "classified": true,
-      "lines": 894
+      "lines": 895
     },
     {
       "id": "rfc294-review-module-layer-rules",
@@ -2567,8 +2567,8 @@
   },
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "766138c5e371e4b6724458014cd8306878d086dd",
-    "contentDigest": "sha256:0de614348d7e114eb65a31c456ea7c04e18da793f908a78b4920af07964f8145",
+    "currentSnapshotSha": "a7522bbe232d4e8d5cbfbf6df2d25b9515962b12",
+    "contentDigest": "sha256:5ad9c6e05cb1a8086deed1ae2fa64ef7ada0e7abe1eee51fd7b7389902f5232a",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
