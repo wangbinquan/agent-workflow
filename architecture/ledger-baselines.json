@@ -818,9 +818,6 @@
       "why": "RFC-362 已批准的 22 个精确前置 public 合同，仅类型声明及测试 provider；未接生产装配，按 declared-contract-debt 单列。后继 RFC-362-E1-production-cutover 完成某项真实 provider/callsite 后删除该 ID 并同步缩小基线，不领取 W4-E1/W5 完成信用。 RFC-363 reader cutover consumes six exact declarations: 22 -> 16; launch debt remains. RFC-363 Task admission and effects consume 13 exact launch declarations: 16 -> 3. Public URL seal remains open. RFC-363 production URL sealing activates the final three declarations: 3 -> 0. Full RFC-363 acceptance is still separate."
     },
     {
-      "allowGrowth": {
-        "why": "RFC-370 A4 完整隔离 scope、真实恢复消费者与工作组 commit 排队：原分类器实际 1862→1866，旧 createIsoUnderLock 迁位并新增四项原分类结果；规则与所有旧条款保持。本次 matching canonical 提交消费后由正常后继退役此一次增长回执。"
-      },
       "baseline": 1866,
       "file": "architecture/mutation-entrypoints.json",
       "id": "rfc294-mutation-entrypoints",
@@ -856,9 +853,6 @@
       "why": "RFC-294 N1：production register/global setter ambient wiring 的 exact 分母；W6/W9 只许随实例化 composition 收敛。"
     },
     {
-      "allowGrowth": {
-        "why": "RFC-370 SOURCE39 的隔离 workspace owner、Task 接线和两项 CI 修复增加真实导入；原扫描实际 6023→6074，保留原 40 required SPI、69 target edges 与空 implementation SCC。本次 matching canonical 提交消费后由正常后继退役此一次增长回执。"
-      },
       "baseline": 6074,
       "file": "architecture/cross-context-imports.json",
       "id": "rfc294-cross-context-observed-imports",
@@ -880,9 +874,6 @@
       "why": "RFC-294 N1：consumer-owned required SPI 的 consumer/provider/composition liveness 与显式迁移债；未分类或 stale symbol 必须红。"
     },
     {
-      "allowGrowth": {
-        "why": "RFC-370 SOURCE39 原分类规则对真实导入投影为 5354→5388，未修改规则、旧债务条款或退役条件；旧 service 两项内部导入债已实际移除。本次 matching canonical 提交消费后由正常后继退役此一次增长回执。"
-      },
       "baseline": 5388,
       "file": "architecture/cross-context-imports.json",
       "id": "rfc294-architecture-exceptions",
@@ -897,9 +888,6 @@
       "why": "RFC-294 N1：当前 services 文件到 target context/layer 的完整归属与 boundary facade exact edge；不能用 unassigned 桶掩盖 owner。"
     },
     {
-      "allowGrowth": {
-        "why": "RFC-370 A4 中性 isolation factory/scope 与 Task owner 的真实公共符号 1118→1137；新增 19 项全部有生产消费者，未新增零消费者债。本次 matching canonical 提交消费后由正常后继退役此一次增长回执。"
-      },
       "baseline": 1137,
       "file": "architecture/public-surfaces.json",
       "id": "rfc294-public-surfaces",
@@ -921,9 +909,6 @@
       "why": "RFC-294 N1：TaskCatalog membership 与 DigitalEmployee Case link 两组 edge-neutral field growth 的 owner/writer/consumer/rollback 账本。"
     },
     {
-      "allowGrowth": {
-        "why": "RFC-370 SOURCE39 的实际 owner 迁位和新增中性隔离、排队与恢复实现，原 AST 符号清单 26461→26516，原扫描与库存规则保持。本次 matching canonical 提交消费后由正常后继退役此一次增长回执。"
-      },
       "baseline": 26516,
       "file": "architecture/module-symbol-owners.json",
       "id": "rfc294-module-symbol-owners",
@@ -933,7 +918,7 @@
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
   "provenance": {
-    "contentDigest": "sha256:9150aa8a89c8e9a8fb1c29c30bda56ba39a4160934bfe27dd6db5cff18b01622",
+    "contentDigest": "sha256:5eca6f1b2420c2b97d46f343c741f5c5934d5416878028f75e1d8e5c3e5d280d",
     "currentSnapshotSha": "d3ba4340a6453c02d2cf263d4b0bbedaf1b03579",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance",
