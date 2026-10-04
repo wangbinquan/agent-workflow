@@ -284,7 +284,10 @@ function conflictEnvelope(prompt: string, conflictRefs: readonly string[]): stri
   return `agent log\n<agent-result nonce="${nonce}">\n${json}\n</agent-result>\n`
 }
 
-function exited(executionRef: string, resultText: string): AgentExecutionSnapshot {
+function exited(
+  executionRef: string,
+  resultText: string,
+): Extract<AgentExecutionSnapshot, { kind: 'exited' }> {
   return {
     kind: 'exited',
     executionRef,
