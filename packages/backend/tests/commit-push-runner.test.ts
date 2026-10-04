@@ -679,6 +679,7 @@ describeEachProvider('RFC-370 selected Git in actual commit-push', (harness) => 
 })
 
 // DESIGN-R2: a return Promise is insufficient; actual durable success must wait.
+// CI 37219704832: the logical effect receipt wraps the actual attempt receipt.
 describeEachProvider('RFC-370 publication close precedes Task and effect success', (harness) => {
   for (const rejectClose of [false, true]) {
     test(
@@ -801,8 +802,13 @@ describeEachProvider('RFC-370 publication close precedes Task and effect success
             )[0]!
             expect(effect.state).toBe('succeeded')
             expect(JSON.parse(effect.receiptJson!)).toMatchObject({
-              outcome: 'pushed',
-              commitSha: result.meta.commitSha,
+              v: 1,
+              appliedAttemptNo: attempts[0]!.attemptNo,
+              priorAmbiguityCount: 0,
+              lastAttemptReceipt: {
+                outcome: 'pushed',
+                commitSha: result.meta.commitSha,
+              },
             })
           }
           expect(store.publicationOpens).toBe(1)

@@ -9996,3 +9996,5 @@ mutation 总数 1862 保持，仅两项原 native owner/file 和原 classifier �
 官方 census 仅在已提交 d3ba4340 与冻结39路径上生成一次，排除且保留并行 WIP；sourceDigest sha256:21807212cede9256bc81ed445607a1f6aa12f4c47896e3847e94e2fbbc2e70fb。129 原库存/why、40 SPI、69 target edges、空 SCC 与原规则保持；五项实际增长随 matching canonical 消费并由正常后继退役。19 新 public 都有生产消费者，两项旧导入债退役 302→300；Task effect 9/0 与 68 code-host bindings 语义保持。详情见 [functional-gates](design/RFC-370-crewstation-hosted-deployment/functional-gates.md)。
 
 只做自有 format/lint、纯 AST/byte/JSON 和一次 scoped 生成，无 AW 本机 tests/typecheck/build/service。剩余 A1～A4、A5～A8/AC00 与完整独立 A-G 继续；随后各层独立 CS adapters、B/M0 先实际部署、再 M1～M4。本任务 M0 首次部署尚未完成，RFC 持续；原正文、旧 gate/CI 历史与全部并行输出保留。
+
+- 2026-10-05 RFC-370 CI 回执预期补正：`9e327500b7b08d4b42ea7b4e5fb4548ac99e110e` 的 CI `37219704832` 终态 cancelled，macOS shard 4 的唯一功能失败为新增测试错读 logical effect receipt；原持久化在 `lastAttemptReceipt` 中写入实际 pushed／commitSha。仅修测试包裹形状，增加 v／实际 attemptNo／零历史含糊断言，保留 close ACK 前 running／open／无 receipt、拒绝 close 后不结算、真实 Git 和双 provider 的所有原检查。最新 `6521ab0f` Windows `37220626642` 已 success，主 CI 另待终态；不将取消或失败记全绿。不改生产／canonical／扫描／预算，不跑本机 AW test/typecheck/build/service；完整 A-G、CS adapter 与 M0～M4 继续。
