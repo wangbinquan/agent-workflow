@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1149,
+    "consumers": 1154,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1345,
+    "methods": 1352,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 24737,
-    "symbols": 1148
+    "recursiveFields": 24767,
+    "symbols": 1149
   },
   "entries": [
     {
@@ -144099,6 +144099,269 @@
     {
       "authority": "none",
       "budget": {
+        "maxMethods": 7,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 30,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:420f362388c2b12863d5",
+        "import:a899cd9240c2918f5769",
+        "import:f50902fa9db8e4981243"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "types",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:allocate.$parameter:storageRootReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:allocate.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:allocate.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:cloneBaseline.$parameter:baselineReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:cloneBaseline.$parameter:workspaceReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:cloneBaseline.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a899cd9240c2918f5769"
+          ],
+          "fieldPath": "$method:cloneBaseline.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a899cd9240c2918f5769"
+          ],
+          "fieldPath": "$method:cloneBaseline.$return.stdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$parameter:workspaceReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:discard.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:installPlatformExclude.$parameter:workspaceReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:installPlatformExclude.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:installPlatformExclude.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:mergeHeadExists.$parameter:workspaceReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:mergeHeadExists.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:mergeHeadExists.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readConflictFile.$parameter:relativePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readConflictFile.$parameter:workspaceReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readConflictFile.$return.$variant:0",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:readConflictFile.$return.$variant:1",
+          "type": "T"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:args",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:420f362388c2b12863d5",
+            "import:a899cd9240c2918f5769"
+          ],
+          "fieldPath": "$method:run.$parameter:options.env",
+          "type": "Record<string, string | undefined>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a899cd9240c2918f5769",
+            "import:f50902fa9db8e4981243"
+          ],
+          "fieldPath": "$method:run.$parameter:options.signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:options.stdin",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a899cd9240c2918f5769"
+          ],
+          "fieldPath": "$method:run.$parameter:options.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$parameter:workspaceReference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:run.$return.exitCode",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a899cd9240c2918f5769"
+          ],
+          "fieldPath": "$method:run.$return.stderr",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a899cd9240c2918f5769"
+          ],
+          "fieldPath": "$method:run.$return.stdout",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/types.ts",
+      "id": "public:source-control:types:ConflictMergeWorkspaceEffects",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "allocate",
+          "signatureDigest": "sha256:92334a65d6ad297508f5312a677d1b3530dc99d824125ebdc73ea52517845a64"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "cloneBaseline",
+          "signatureDigest": "sha256:9a3c4d3bc49b1f1772e7ad2e2b04178222f9ffbdbc982107e1d94862284fee72"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "discard",
+          "signatureDigest": "sha256:84f59d5ef9b58e1e32e474ea9caf702f257941d45a7fa7f2919aa02c212073ed"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "installPlatformExclude",
+          "signatureDigest": "sha256:58c8e6619b81d2bf2205e762655ecf4d92f62a071b13512290a32e3ec08e786e"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "mergeHeadExists",
+          "signatureDigest": "sha256:be26ae5f033e202134df0731af49194014d70f30a551541b372a72974b0b42be"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "readConflictFile",
+          "signatureDigest": "sha256:67e07526ff65ca63ef2daa657f6d7d1ba0a892b51438bb9f21a932cf7d71eea5"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:420f362388c2b12863d5",
+            "import:a899cd9240c2918f5769",
+            "import:f50902fa9db8e4981243"
+          ],
+          "name": "run",
+          "signatureDigest": "sha256:b9707bd814d1973d1385c99ea7669e06bab2c3ef2d8481d576e2847f738b550c"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:420f362388c2b12863d5",
+          "file": "packages/backend/src/server.ts",
+          "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:a899cd9240c2918f5769",
+          "file": "packages/backend/src/cli/start.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/start.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:f50902fa9db8e4981243",
+          "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+          "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:76071c9f56c9e15be7df0bcadce57b723c6e11c1b81b94d0ec4915bc2d426b04",
+      "status": "target-context-current-surface",
+      "symbol": "ConflictMergeWorkspaceEffects",
+      "transaction": "none",
+      "unresolvedTypeRefs": [
+        "AbortSignal",
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "none",
+      "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
@@ -147257,7 +147520,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:47482d40a1df22f071d1"
+      ],
       "context": "source-control",
       "dataClass": "confidential",
       "direction": "offered",
@@ -147289,11 +147554,19 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "development-automation",
+          "edgeId": "import:47482d40a1df22f071d1",
+          "file": "packages/backend/src/modules/development-automation/application/ports/actionWorkspaceEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/ports/actionWorkspaceEffects.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:source-control:participants:bindRepositoryGitSubworkspace",
         "public:source-control:participants:bindRepositoryGitWorkspace",
         "public:source-control:participants:selectRepositoryGitWorkspaceFactory",
+        "public:source-control:types:ConflictMergeWorkspaceEffects",
         "public:source-control:types:RepositoryGitWorkspaceFactory",
         "public:source-control:types:RepositoryGitWorkspaceScope"
       ],
@@ -147317,7 +147590,9 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
+      "consumerEdgeIds": [
+        "import:dc5515c7f0ad49029c98"
+      ],
       "context": "source-control",
       "dataClass": "confidential",
       "direction": "offered",
@@ -147344,11 +147619,19 @@
       "members": [],
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/types.ts#$file",
-      "productionConsumers": [],
+      "productionConsumers": [
+        {
+          "context": "development-automation",
+          "edgeId": "import:dc5515c7f0ad49029c98",
+          "file": "packages/backend/src/modules/development-automation/application/ports/actionWorkspaceEffects.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/development-automation/application/ports/actionWorkspaceEffects.ts#$file"
+        }
+      ],
       "publicTypeConsumerIds": [
         "public:source-control:participants:bindRepositoryGitSubworkspace",
         "public:source-control:participants:bindRepositoryGitWorkspace",
         "public:source-control:participants:selectRepositoryGitWorkspaceFactory",
+        "public:source-control:types:ConflictMergeWorkspaceEffects",
         "public:source-control:types:RepositoryGitWorkspaceFactory",
         "public:source-control:types:RepositoryGitWorkspaceScope"
       ],
@@ -194746,7 +195029,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:de58ac6a25dcc0544c067c3cfcea7666050ea30ea91e4a4fd7aed7430a88ed5b",
+  "sourceDigest": "sha256:4d8762a0c70953202b0baf6db646da740c7064a36448d05b79cf0a541adf44ce",
   "targetContexts": [
     "collaboration",
     "development-automation",

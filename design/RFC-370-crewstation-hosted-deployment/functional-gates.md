@@ -757,3 +757,13 @@ SOURCE39、META17 与五项 matching 回执正常后继已发布至 eadf4dfc042f
 Ubuntu 与 Windows 原日志各有相同两项 TS 错误：共享 taskExecutionTestTopology helper 的 BoundRunTaskOptions 没有必需的 isolationWorkspaces，新增 isolation bindings fixture 缺少 Task 必填 startedAt。本次 helper 沿真实 public selector 选择一次 factory，并将同一 receiver/identity 传给原 participants 和 drive options；默认仍为现有 native factory，显式选择仍沿原完整选择规则。fixture 只补 startedAt: Date.now()。两完整原文件分别逆向删除四处接线和一个字段后逐字恢复，全部原函数、断言、名称与预算保持；无需添加镜像式测试。
 
 两个测试路径均不属于原生产 canonical 语料，生产实现、schema、原 scanner/normalizer/库存/增长条款及已发布 sourceDigest 保持，不重跑成功 census。目标 format/lint 和纯 byte 证明通过；有限 SOURCE2/DOC1 门单独留档，实际验证交修复后的 exact-SHA hosted CI，无 AW 本机 tests/typecheck/build/service。完整 A1～A8/AC00/A-G 与后续独立 CS adapters、M0～M4 继续；M0 首次部署尚未完成，不关闭 RFC。
+
+### 2026-10-04 Conflict workspace SOURCE32-R2 与匹配 metadata
+
+有限 SOURCE30 原 FAIL 及其五项 P2 完整保留；SOURCE32-R2 修复六个相关路径后独立 PASS `b8564115bf0e735d9582022fd878ed6fccf4e2d1c9df2271786dfb1264f6657f`，32 owned／14 controls／31 evidence 首末一致。真实 native getter／discard、DE 单活动轮和旧两个 owner oracle 已补齐，纯 AST／逆向字节证明与目标 format/lint通过；没有本机 AW tests／typecheck／build／service。
+
+旧317977 private census 和其准备因38572前进而在写入前终止的失败保持。438083完整已提交观测源码及许可正常退役进入新投影基线，源码门结果复用，31TS内容不变。原四规则对该完整内容候选只运行一次并生成13份 private输出，sourceDigest `sha256:4d8762a0c70953202b0baf6db646da740c7064a36448d05b79cf0a541adf44ce`。6381份非自有TS取 committed blob；所有下一批 Candidate及并行 native owner／CI在制品完整排除并保留。
+
+entry+2、import+11（13新增／2退役）、exceptions+9（11新增／2退役）、public+1、owner+24（31新增／7退役）；129原顺序／why和原规则不改。504 ambient数量保持，仅14地址进／出投影；三个保留导入及两个既有 entry／public 的 owner／consumer 字段按原扫描器投影。原40 SPI／69 target／空SCC、300债务、Task authority和 effects保持。原完整JSON validator已通过；匹配13输出与四份保留全文文档组成后继有限 metadata候选，独立门回执、精确发布、五许可正常退役及新 exact-SHA hosted CI分别留证。
+
+Candidate publication DESIGN1 的“成功结算早于close ACK”P2/FAIL保持，DESIGN-R2有限PASS `ed88a7540384f4f3166423cd356c284e41ecc2a5b26270c41d5fa34f613b389a`；它只批准设计，不能替代后续实现及真实node/effect回归。完整A-G、各层CS adapters和M0～M4仍开放。

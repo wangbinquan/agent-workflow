@@ -919,3 +919,11 @@ Task reader CI 修复 SOURCE5-DOC1 独立有限 PASS，指纹 `899180ddebb19b9b0
 9c614ec7 主CI37196589476正式cancelled 11 success / 2 failure / 37 cancelled、Windows37196589510正式failure1/1，原完整日志保留。ae7654de Windows37196996310已正式failure1/1，主CI37196879491的depcheck也已失败；本段是生成前冻结的作业事实，不是主CI整体终态。修复的新确切SHA正式CI仍待发布验收，旧失败不改写。仅精确format/lint、纯byte/AST/JSON和一次原官方静态生成，无AW本机tests/typecheck/build/service。
 
 Conflict DESIGN-R2另已独立PASS，只是设计、尚未实现。完整A1～A8/AC00/A-G继续，之后各层独立CS adapters，B/M0先实际部署再逐项M1～M4；尚无AW-in-CS部署，不关闭RFC。全部旧正文、并行输出与gate/CI历史保持。
+
+### 2026-10-04 冲突／action workspace 有限交付候选
+
+SC 完整七项 ConflictMergeWorkspaceEffects 与 DA 六项 ActionWorkspaceEffects／完整 contents 按原各层 owner 接线；三根九组 conflict 绑定与普通／冲突创建 owner 的持久恢复回收均等待 ACK。SOURCE30 五项 P2/FAIL 保留，SOURCE32-R2 有限 PASS `b8564115bf0e735d9582022fd878ed6fccf4e2d1c9df2271786dfb1264f6657f`。新增真实 Git 与双 provider Mission／DE Case／HTTP 入口回归已写，原断言与预算保持；本机只有目标 format/lint 与纯源码／JSON证明。
+
+匹配清单从已提交 `43808355` 和同一冻结31TS投影一次，sourceDigest `sha256:4d8762a0c70953202b0baf6db646da740c7064a36448d05b79cf0a541adf44ce`；完整并行观测修复包含在基线，下一批和其它在制品排除且保留。13 canonical／129原库存的五项真实增长随匹配发布消费，再普通退役；有限 metadata 门和新 exact-SHA hosted CI 独立留证。Candidate 发布 DESIGN-R2 已通过，补六组 factory 根装配、selected baseline 回读及关闭后持久结算作为下一批推进。
+
+完整 A1～A8／AC00／A-G 继续；其后各层独立 CS adapters，B／M0 先实际部署，再 M1～M4 逐步收编。本批不改变上述验收顺序，不记 M0 或 RFC 完成。

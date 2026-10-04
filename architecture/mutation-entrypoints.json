@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1868,
+    "entries": 1870,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -874,7 +874,7 @@
         "authority": "system",
         "authorization": true,
         "event": true,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/cli/start.ts",
@@ -882,7 +882,6 @@
       "id": "mutation:packages/backend/src/cli/start.ts#startCommand",
       "missingControls": [
         "audit",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#startCommand",
@@ -896,7 +895,7 @@
         "authority": "system",
         "authorization": false,
         "event": false,
-        "fenceOrOcc": false,
+        "fenceOrOcc": true,
         "transaction": false
       },
       "file": "packages/backend/src/cli/start.ts",
@@ -906,7 +905,6 @@
         "audit",
         "authorization",
         "event",
-        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#StartOptions",
@@ -7365,6 +7363,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/gitBaselineReader.ts#createRepositoryLocationRead",
       "symbol": "createRepositoryLocationRead",
+      "targetContext": "development-automation",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/development-automation/infrastructure/local/fileActionWorkspaceEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/development-automation/infrastructure/local/fileActionWorkspaceEffects.ts#createFileActionWorkspaceEffects",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/local/fileActionWorkspaceEffects.ts#createFileActionWorkspaceEffects",
+      "symbol": "createFileActionWorkspaceEffects",
       "targetContext": "development-automation",
       "targetLayer": "infrastructure"
     },
@@ -24014,6 +24036,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/journaledWorktreeMaterializer.ts#createJournaledWorktreeMaterializer",
       "symbol": "createJournaledWorktreeMaterializer",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileConflictMergeWorkspaceEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/fileConflictMergeWorkspaceEffects.ts#createFileConflictMergeWorkspaceEffects",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileConflictMergeWorkspaceEffects.ts#createFileConflictMergeWorkspaceEffects",
+      "symbol": "createFileConflictMergeWorkspaceEffects",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -44682,7 +44728,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:de58ac6a25dcc0544c067c3cfcea7666050ea30ea91e4a4fd7aed7430a88ed5b",
+  "sourceDigest": "sha256:4d8762a0c70953202b0baf6db646da740c7064a36448d05b79cf0a541adf44ce",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

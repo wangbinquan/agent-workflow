@@ -1,3 +1,11 @@
+## 2026-10-04 RFC-370 冲突／action workspace 有限源码与匹配清单
+
+SOURCE32-R2 独立有限 PASS `b8564115bf0e735d9582022fd878ed6fccf4e2d1c9df2271786dfb1264f6657f`，32 owned／14 controls／31 evidence 首末一致。完整 SC conflict七方法、DA action六机制及contents、三根九绑定和持久创建owner回收接线已写；真实Git、双provider Mission／DE Case及HTTP回归保留旧断言与预算。SOURCE30五项P2/FAIL原回执保留，默认hook一次／discard零读取、DE唯一活动轮和两个旧owner oracle已修正。
+
+共享main已与远端同步在43808355，完整包含并行RFC-371已记录用量／泳道修复和其增长许可正常退役。旧317977生成及写入前停止的准备历史保持；同一冻结31TS与438083完整committed基线只投影一次，6381非自有TS取blob，所有Candidate下一批和并行native owner／CI在制品排除并保留。sourceDigest `sha256:4d8762a0c70953202b0baf6db646da740c7064a36448d05b79cf0a541adf44ce`；原完整JSON validator通过，13 canonical实际entry+2/import+11/exception+9/public+1/owner+24按原129库存／why及四规则登记，matching有限metadata门、发布、五许可正常退役和新exact-SHA hosted CI另留证。原40 SPI／69 targets／空SCC、300债务和effects保持。
+
+Candidate发布DESIGN-R2已通过，已开始不重叠源码，待补六组真实根接线、完整关闭ACK及Task关闭后持久结算回归。完整A1～A8／AC00／A-G继续，之后各层独立CS adapters，B／M0先实际部署，再逐步M1～M4；尚无AW-in-CS部署，不关闭RFC。只做目标format/lint、纯AST／byte／JSON与原静态投影，没有AW本机tests／typecheck／build／service。
+
 ## 2026-10-04 RFC-371 已消费 owner 增长许可正常退役
 
 38572c666 的26536→26539 matching canonical已上库；只在正常后继退役已消费许可，保留实际26539、全部129条库存／why、300债务与原规则，原说明在 scope-metrics-repair.md逐字保留。原摘要助手及逐条原AST资格另留证；生产／测试源码不变，不重跑完整生成。Windows新增测试四处类型错误和视觉daemon启动失败继续，原失败保持；完整native owner与规模、两个RFC仍进行中。
