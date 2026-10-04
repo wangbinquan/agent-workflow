@@ -85,7 +85,8 @@ describe('RFC-284 T7 — 唯一性文本锁', () => {
         // 峰值内存有界——Bun fetch 不背压教训，见 dev-gotchas）：
         'modules/development-automation/infrastructure/local/fileEvidenceStore.ts',
         'modules/development-automation/infrastructure/local/fileRepositoryBaselineEffects.ts',
-        'modules/development-automation/infrastructure/actionWorkspace.ts',
+        'modules/development-automation/application/actionWorkspace.ts',
+        'modules/development-automation/infrastructure/local/fileActionWorkspaceEffects.ts',
         'modules/development-automation/infrastructure/uploadPlacement.ts',
         // RFC-371: streams every original receipt into one digest, without a full-population array.
         'modules/run-observability/infrastructure/completeObservationSourceRevision.ts',

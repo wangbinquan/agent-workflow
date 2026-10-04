@@ -278,7 +278,7 @@ export interface ActionWorkspacePort {
   }):
     | { readonly workspacePath: string; readonly businessTreeDigest: string }
     | Promise<{ readonly workspacePath: string; readonly businessTreeDigest: string }>
-  discard(workspacePath: string): void
+  discard(workspacePath: string): void | Promise<void>
 }
 
 /** PR-4 —— upload plan 读侧（seed 定位用 planDigest、validator/candidate 用 entries）。 */
@@ -662,7 +662,7 @@ export interface ConflictMergePort {
         readonly ok: true
         readonly workspacePath: string
         readonly conflictPaths: readonly string[]
-        cleanup(): void
+        cleanup(): void | Promise<void>
       }
     | { readonly ok: false; readonly code: string; readonly detail: string }
   >
@@ -676,6 +676,7 @@ export interface ConflictMergePort {
     | { readonly ok: true; readonly mergeCommitSha: string; readonly treeOid: string }
     | { readonly ok: false; readonly code: string; readonly detail: string }
   >
+  discard(input: { readonly workspacePath: string }): void | Promise<void>
 }
 
 export interface ReconcilerPorts {

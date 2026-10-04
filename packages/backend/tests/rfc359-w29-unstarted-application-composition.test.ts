@@ -717,7 +717,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
     // RFC-370 adds one selected read/write binding declaration; all original phase statements remain.
     // RFC-371 adds the build adapter and the original-source report service.
     // Both declarations remain inside the original composition; phase and lifetime checks stay intact.
-    expect(restored.statements).toHaveLength(175)
+    // RFC-370: one complete paired conflict/action selection precedes allocation; original phase blocks remain.
+    expect(restored.statements).toHaveLength(176)
     expect(namedCalls(body, pg, 'composeRuntimeManagement')).toHaveLength(1)
     // RFC-359 AC-10：摘要随 `runFrameBackfillOnBoot({ provider: 'postgresql', db })` →
     // `({ db })` 更新。`FrameBackfillDatabase` 的 provider 标签是摆设（联合两个成员结构逐字
@@ -838,7 +839,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
       // RFC-371: the complete report service shares the selected source generation and numeric owner.
-      '31639490d9163f619e114defe1052cd3de3e16d07e416c29f483d47eb3acdd91',
+      '8af75d5f0fa8c0a0ca88acd68c7667b300e7a9bd165a328b96ce85efb925437b',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(
@@ -906,7 +907,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-371: standalone task execution receives mandatory durable invocation accounting.
       // RFC-371: the same database now supplies the committed numeric source participant.
       // RFC-370: selected terminal presence and aggregate reuse only; full AST binding inverse verified.
-      '19dd2c6a49869c8f9dfdf5c817171fd84d22ad9bd591323268757db6f1b7bf26',
+      '9e66815ed188a808cda5a6a3ecc4e45df3a7997122576773c157d8dcdc96fa0d',
     )
     // RFC-359 W57：`overviewQuery` 的装配挪进了这一层（`scheduledTaskRuntime` 就在上面几行），
     // 同时形参表里少了原来那个 `overviewQuery: OverviewRouteQuery`。
@@ -1053,7 +1054,7 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
       // RFC-371: the mounted task queries now use the same complete report service and source generation.
-      '6fafb73aba3aa98f92727b8fd8c8d4a7b689fd759ef1600e170eef9189eaf6b8',
+      '7e2f7d9da48e005b05356551a2cb126206e37387d603187fc1934213f513643c',
     )
     expect(
       namedCalls(

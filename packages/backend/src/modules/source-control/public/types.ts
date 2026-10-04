@@ -261,3 +261,5 @@ export type {
   MergeConflictEntry,
   MergeConflictManifest,
 } from '../domain/isolationConflict'
+
+export type { ConflictMergeWorkspaceEffects } from '../application/ports/conflictMergeWorkspaceEffects'

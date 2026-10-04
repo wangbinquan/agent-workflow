@@ -639,7 +639,7 @@ export interface DevelopmentEmployeeWorkspaceCompositionInput {
           readonly ok: true
           readonly workspacePath: string
           readonly conflictPaths: readonly string[]
-          cleanup(): void
+          cleanup(): void | Promise<void>
         }
       | {
           readonly ok: false

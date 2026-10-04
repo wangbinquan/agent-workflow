@@ -13,10 +13,10 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, statSync, writeFileS
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 
-import {
-  finishConflictMerge,
-  prepareConflictMerge,
-} from '../src/modules/source-control/application/conflictMerge'
+import { bindConflictMergeParticipant } from '../src/modules/source-control/composition'
+
+const { finish: finishConflictMerge, prepare: prepareConflictMerge } =
+  bindConflictMergeParticipant()
 
 setDefaultTimeout(120_000)
 
@@ -135,7 +135,7 @@ describe('rfc310 pr7b T77 — conflict merge prepare/finish', () => {
     expect(finished.treeOid).toMatch(/^[0-9a-f]{40}$/)
     const merged = git(prepared.workspacePath, 'show', 'HEAD:X.txt')
     expect(merged).toBe('line1-merged\nline2\n')
-    prepared.cleanup()
+    await prepared.cleanup()
 
     // ---- 干净合并路：target 改不同文件 → no-conflict（不该派 repair）。
     const clean = conflictRepo({ file: 'other.txt', content: 'target-side\n' })
@@ -191,7 +191,7 @@ describe('rfc310 pr7b T77 — conflict merge prepare/finish', () => {
       .trim()
       .split(' ')
     expect(parents).toEqual([sourceSha, targetSha])
-    prepared.cleanup()
+    await prepared.cleanup()
   })
 
   // T78：prepare 出来的现场要**直接交给 Agent 跑**，所以它必须与普通 action
@@ -242,7 +242,7 @@ describe('rfc310 pr7b T77 — conflict merge prepare/finish', () => {
       missionId: 'm-t78-shape',
     })
     expect(again).toEqual(finished)
-    prepared.cleanup()
+    await prepared.cleanup()
   })
 
   test('T79 negative lock: no conflict shortcut anywhere in source-control', () => {

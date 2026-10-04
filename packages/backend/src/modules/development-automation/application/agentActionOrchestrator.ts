@@ -51,6 +51,7 @@ import { runCapabilitySemanticValidator } from '../engine/envelope/semanticValid
 import { publishConflictRepair } from './conflictRepairDelivery'
 import type { MissionRow, MissionPersistence } from './ports/missionStore'
 import type { ReconcileDeps } from './missionReconciler'
+import type { ReconcilerPorts } from './ports/reconcilerPorts'
 import { recordOnMission } from './missionRecord'
 
 /** 预算硬上限（policy 级配置接线归 PR-5；先取保守常量并入 pre-state 冻结）。 */
@@ -140,6 +141,22 @@ interface AttemptPreState {
     readonly candidateRef?: string
     /** PR-6 T69：pipeline.repair 的 issue 闭集（launch 冻结）。 */
     readonly pipelineIssueRefs?: readonly string[]
+  }
+}
+
+/** Durable scene ownership survives composition rebuilds and fresh retries. */
+async function discardOwnedAttemptWorkspace(
+  ports: ReconcilerPorts,
+  scene: Pick<AttemptPreState, 'workspacePath' | 'capabilityId' | 'conflict'>,
+): Promise<void> {
+  if (
+    scene.conflict !== undefined ||
+    capabilityDefinition(scene.capabilityId as CapabilityId).workspaceMode === 'edit-conflicts'
+  ) {
+    if (ports.conflictMerge === undefined) throw new Error('conflict-merge-discard-not-wired')
+    await ports.conflictMerge.discard({ workspacePath: scene.workspacePath })
+  } else {
+    await ports.actionWorkspace?.discard(scene.workspacePath)
   }
 }
 
@@ -427,10 +444,19 @@ export async function launchAgentAttempt(
     conflictPaths = prepared.conflictPaths
     conflictPin = conflict
     seedRef = null
-    workspace = await ports.actionWorkspace!.adopt({
-      workspacePath: prepared.workspacePath,
-      bundles,
-    })
+    try {
+      workspace = await ports.actionWorkspace!.adopt({
+        workspacePath: prepared.workspacePath,
+        bundles,
+      })
+    } catch (error) {
+      try {
+        await prepared.cleanup()
+      } catch {
+        /* Preserve the original adopt error; GC handles leftovers. */
+      }
+      throw error
+    }
   } else {
     workspace = await ports.actionWorkspace!.materialize({
       baselineRepoPath: baseline.repoPath,
@@ -439,9 +465,13 @@ export async function launchAgentAttempt(
       bundles,
     })
   }
-  const discard = (): void => {
+  const discard = async (): Promise<void> => {
     try {
-      ports.actionWorkspace!.discard(workspace.workspacePath)
+      await discardOwnedAttemptWorkspace(ports, {
+        workspacePath: workspace.workspacePath,
+        capabilityId: input.capabilityId,
+        conflict: conflictPin,
+      })
     } catch {
       // 废弃失败不掩盖主错误；孤儿目录由 GC 兜底。
     }
@@ -534,7 +564,7 @@ export async function launchAgentAttempt(
     protocol: { nonce, port: 'agent-result', outcomeSchemaId: definition.outputSchemaId },
   })
   if (!manifestParsed.success) {
-    discard()
+    await discard()
     return {
       ok: false,
       blockCode: 'agent-input-manifest-invalid',
@@ -671,7 +701,7 @@ export async function launchAgentAttempt(
       ? await ports.agentLauncher!.launch({ ...launchCommon, agentId: preState.agentId! })
       : await ports.scriptLauncher!.launch({ ...launchCommon, scriptRef: preState.scriptRef })
   if (!launched.ok) {
-    discard()
+    await discard()
     return {
       ok: false,
       blockCode: `agent-launch-failed:${launched.failure.code}`,
@@ -700,7 +730,7 @@ export async function launchAgentAttempt(
     // 直接取消（launcher 幂等 cancel），不 block mission。
     if (preState.scriptRef === null) await ports.agentLauncher!.cancel(launched.executionRef)
     else await ports.scriptLauncher!.cancel(launched.executionRef)
-    discard()
+    await discard()
     return { ok: false, blockCode: 'attempt-ordinal-taken', detail: null }
   }
   return { ok: true, executionRef: launched.executionRef }
@@ -884,7 +914,7 @@ export async function collectAgentAttempt(
       })
       if (!manifest.success || manifest.data.inputDigest !== attempt.inputDigest) {
         try {
-          ports.actionWorkspace?.discard(preState.workspacePath)
+          await discardOwnedAttemptWorkspace(ports, preState)
         } catch {
           // GC 兜底。
         }
@@ -947,7 +977,7 @@ export async function collectAgentAttempt(
         else await ports.scriptLauncher!.cancel(launched.executionRef)
       }
       try {
-        ports.actionWorkspace?.discard(preState.workspacePath)
+        await discardOwnedAttemptWorkspace(ports, preState)
       } catch {
         // GC 兜底。
       }
@@ -961,7 +991,7 @@ export async function collectAgentAttempt(
     // boundary violation can therefore never leak a tainted workspace forward.
     if (preState !== null) {
       try {
-        ports.actionWorkspace?.discard(preState.workspacePath)
+        await discardOwnedAttemptWorkspace(ports, preState)
       } catch {
         // GC 兜底。
       }
@@ -1039,7 +1069,7 @@ export async function collectAgentAttempt(
     })
     if (preState !== null) {
       try {
-        ports.actionWorkspace?.discard(preState.workspacePath)
+        await discardOwnedAttemptWorkspace(ports, preState)
       } catch {
         // GC 兜底。
       }
@@ -1209,7 +1239,7 @@ export async function collectAgentAttempt(
           now,
         })
         try {
-          ports.actionWorkspace?.discard(preState.workspacePath)
+          await discardOwnedAttemptWorkspace(ports, preState)
         } catch {
           // GC 兜底。
         }

@@ -15,7 +15,12 @@ import type {
   TaskDeletionEffects,
 } from '@/modules/task-execution/public/types'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
-import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/composition'
+import {
+  selectDevelopmentWorkspaceEffectBinding,
+  type ActionWorkspaceEffects,
+  type AutomationWorkspaceEffectsFactory,
+} from '@/modules/development-automation/composition'
+import type { ConflictMergeWorkspaceEffects } from '@/modules/source-control/public/types'
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
@@ -460,6 +465,8 @@ export interface StartOptions {
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
+  actionWorkspaceEffects?: ActionWorkspaceEffects
+  conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
   taskDeletionEffects?: TaskDeletionEffects
   nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   portArtifactContentEffects?: PortArtifactContentEffects
@@ -627,6 +634,8 @@ async function composePostgresqlProviderSession(
     nodeRunPromptContentEffects: input.nodeRunPromptContentEffects,
     portArtifactContentEffects: input.portArtifactContentEffects,
     automationWorkspaceEffects: input.automationWorkspaceEffects,
+    actionWorkspaceEffects: input.actionWorkspaceEffects,
+    conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,
     provider: input.provider,
     db,
     config: input.config,
@@ -1200,6 +1209,8 @@ interface DaemonProviderSessionComposeInput {
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
+  readonly actionWorkspaceEffects?: ActionWorkspaceEffects
+  readonly conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
   readonly taskDeletionEffects?: TaskDeletionEffects
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   portArtifactContentEffects?: PortArtifactContentEffects
@@ -1649,6 +1660,8 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       nodeRunPromptContentEffects: opts.nodeRunPromptContentEffects,
       portArtifactContentEffects: opts.portArtifactContentEffects,
       automationWorkspaceEffects: opts.automationWorkspaceEffects,
+      actionWorkspaceEffects: opts.actionWorkspaceEffects,
+      conflictMergeWorkspaceEffects: opts.conflictMergeWorkspaceEffects,
       config,
       configuration,
       applicationConfiguration,
@@ -1756,6 +1769,11 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
 async function composeSqliteProviderSession(
   input: DaemonProviderSessionComposeInput,
 ): Promise<ComposedDaemonProviderSession> {
+  const developmentWorkspaceEffects = selectDevelopmentWorkspaceEffectBinding({
+    actionWorkspaceEffects: input.actionWorkspaceEffects,
+    automationWorkspaceEffects: input.automationWorkspaceEffects,
+    conflictWorkspaceSelected: input.conflictMergeWorkspaceEffects !== undefined,
+  })
   const databaseProvider = requireDatabaseProviderRuntime(input.provider, 'sqlite')
   const nodeRunPrompts = composeNodeRunPromptOperations(
     input.nodeRunPromptContentEffects,
@@ -2784,7 +2802,8 @@ async function composeSqliteProviderSession(
     }
   })()
   const developmentAutomation = composeDevelopmentAutomation({
-    automationWorkspaceEffects: input.automationWorkspaceEffects,
+    actionWorkspaceEffects: developmentWorkspaceEffects.actionWorkspaceEffects,
+    automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     db,
     appHome: Paths.root,
@@ -2798,7 +2817,7 @@ async function composeSqliteProviderSession(
     candidateDelivery: bindCandidateDeliveryParticipant({
       publicationTransport: repositoryPublicationTransport,
     }),
-    conflictMerge: bindConflictMergeParticipant(),
+    conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
     ...buildDevelopmentDeliveryDeps(developmentDeliveryProvider),
     ...buildDevelopmentPipelineDeps(developmentDeliveryProvider.pipeline),
     ...buildDevelopmentMrFactsDeps(developmentDeliveryProvider),
@@ -3167,7 +3186,9 @@ async function composeSqliteProviderSession(
     nodeRunPrompts,
     portArtifacts,
     taskDeletionEffects: input.taskDeletionEffects,
-    automationWorkspaceEffects: input.automationWorkspaceEffects,
+    automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
+    actionWorkspaceEffects: developmentWorkspaceEffects.actionWorkspaceEffects,
+    conflictMergeWorkspaceEffects: input.conflictMergeWorkspaceEffects,
     providerCore,
     token,
     digitalEmployeePlatformTools,
@@ -3496,7 +3517,7 @@ async function composeSqliteProviderSession(
     input.employeeInputArtifacts ??
     createEmployeeInputArtifactStore(join(Paths.root, 'artifacts', 'employee-inputs'))
   const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
-    automationWorkspaceEffects: input.automationWorkspaceEffects,
+    automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
     db,
     appHome: Paths.root,
     reactionRounds: createEmployeeReactionRoundQueries(db),
@@ -3508,7 +3529,7 @@ async function composeSqliteProviderSession(
       publicationTransport: repositoryPublicationTransport,
       effects: input.employeeCaseWorkspaceEffects,
     }),
-    conflictMerge: bindConflictMergeParticipant(),
+    conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
   })
   const employeeEventCenter = employeeHttpEventCenter
   const employeeDelivery = buildDevelopmentDeliveryDeps(developmentDeliveryProvider)
@@ -3573,7 +3594,7 @@ async function composeSqliteProviderSession(
         executionContracts: employeeExecutionContracts,
       }),
       platformWorkItems: composeDevelopmentEmployeePlatformWorkItems({
-        automationWorkspaceEffects: input.automationWorkspaceEffects,
+        automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
         repositoryBaselines: input.repositoryBaselines,
         evidenceArtifacts: input.evidenceArtifacts,
         reactionRounds: createEmployeeReactionRoundQueries(db),
@@ -3581,7 +3602,9 @@ async function composeSqliteProviderSession(
         appHome: Paths.root,
         approvalGateway: developmentApprovalGateway,
         ...employeeDelivery,
-        conflictMerge: bindConflictMergeParticipant(),
+        conflictMerge: bindConflictMergeParticipant({
+          effects: input.conflictMergeWorkspaceEffects,
+        }),
         sourceControl: {
           ...bindChangeCandidateParticipant(),
           ...bindCandidateDeliveryParticipant({

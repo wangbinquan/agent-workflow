@@ -1,6 +1,10 @@
 import type { AutomationWorkspaceEffectsFactory } from './application/ports/automationWorkspaceEffects'
 export type { AutomationWorkspaceEffectsFactory }
 import { selectedAutomationWorkspaceEffects } from './infrastructure/automationWorkspaceEffects'
+import type { ActionWorkspaceEffects } from './application/ports/actionWorkspaceEffects'
+import { selectActionWorkspaceEffects } from './infrastructure/actionWorkspaceEffects'
+export type { ActionWorkspaceEffects }
+export { selectDevelopmentWorkspaceEffectBinding } from './infrastructure/actionWorkspaceEffects'
 import type { RepositoryBaselineEffectsFactory } from './application/ports/repositoryBaselineEffects'
 // development-automation 装配入口（RFC-310）。
 //
@@ -65,11 +69,7 @@ import type { UploadPlacementPersistence } from './application/ports/uploadPlace
 import type { RecoveryReaders } from './application/missionRecovery'
 import type { WakeSweepReaders } from './application/missionWakeSweep'
 import { createWorkspaceValidationAdapter } from './infrastructure/attemptSupport'
-import {
-  adoptActionWorkspace,
-  discardWorkspace,
-  materializeActionWorkspace,
-} from './infrastructure/actionWorkspace'
+import { adoptActionWorkspace, materializeActionWorkspace } from './application/actionWorkspace'
 import { EvidenceStore } from './infrastructure/evidenceStore'
 import type { EvidenceContentQueries } from './application/pipelineEvidenceRead'
 import type { EvidenceDownloadQueries } from './application/evidenceDownloads'
@@ -214,6 +214,7 @@ export interface DevelopmentAutomationModule {
 }
 
 export interface DevelopmentAutomationCompositionOptions {
+  readonly actionWorkspaceEffects?: ActionWorkspaceEffects
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly appHome: string
@@ -271,7 +272,12 @@ function composeDevelopmentAutomationFromPersistence(
   deps: DevelopmentAutomationCompositionOptions,
   persistence: DevelopmentAutomationPersistenceBundle,
 ): DevelopmentAutomationModule {
-  const factory = selectedAutomationWorkspaceEffects(deps.automationWorkspaceEffects)
+  const actionWorkspaceEffects = selectActionWorkspaceEffects(deps.actionWorkspaceEffects)
+  const factory = selectedAutomationWorkspaceEffects(
+    deps.automationWorkspaceEffects === undefined
+      ? actionWorkspaceEffects.contents
+      : deps.automationWorkspaceEffects,
+  )
 
   const now = (): number => Date.now()
   const store = persistence.store
@@ -335,9 +341,10 @@ function composeDevelopmentAutomationFromPersistence(
             workspacesRoot: factory.resolve(deps.appHome, 'workspaces', 'actions'),
           },
           input,
+          actionWorkspaceEffects,
         ),
-      adopt: (input) => adoptActionWorkspace({ evidence }, input),
-      discard: discardWorkspace,
+      adopt: (input) => adoptActionWorkspace({ evidence }, input, actionWorkspaceEffects),
+      discard: (reference) => actionWorkspaceEffects.discard(reference),
     },
     uploadPlanReader: persistence.uploadPlanReader,
     attemptContext: deps.attemptContext ?? evidence.contexts,
@@ -384,6 +391,8 @@ function composeDevelopmentAutomationFromPersistence(
               }),
             finish: (input: Parameters<ConflictMergePort['finish']>[0]) =>
               deps.conflictMerge!.finish(input),
+            discard: (input: Parameters<ConflictMergePort['discard']>[0]) =>
+              deps.conflictMerge!.discard(input),
           },
         }),
     pipelineImport: createPipelineImportAdapter(evidence, PIPELINE_IMPORT_BUDGET),

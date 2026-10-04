@@ -17,7 +17,12 @@ import type {
   PortArtifactContentEffects,
   PortArtifactOperations,
 } from '@/modules/task-execution/public/types'
-import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/composition'
+import {
+  selectDevelopmentWorkspaceEffectBinding,
+  type ActionWorkspaceEffects,
+  type AutomationWorkspaceEffectsFactory,
+} from '@/modules/development-automation/composition'
+import type { ConflictMergeWorkspaceEffects } from '@/modules/source-control/public/types'
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import type {
   CompleteObservationReportQueries,
@@ -843,6 +848,8 @@ export interface AppDeps {
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
+  actionWorkspaceEffects?: ActionWorkspaceEffects
+  conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
   taskDeletionEffects?: TaskDeletionEffects
   nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   nodeRunPrompts?: NodeRunPromptOperations
@@ -2057,6 +2064,7 @@ function composeFallbackDevelopmentAutomation(
     drive: (missionId) => automation.drive(missionId),
   })
   const automation = composeDevelopmentAutomation({
+    actionWorkspaceEffects: deps.actionWorkspaceEffects,
     automationWorkspaceEffects: deps.automationWorkspaceEffects,
     repositoryBaselines: deps.repositoryBaselines,
     db: deps.db,
@@ -2071,7 +2079,7 @@ function composeFallbackDevelopmentAutomation(
     candidateDelivery: bindCandidateDeliveryParticipant({
       publicationTransport: deps.repositoryPublicationTransport,
     }),
-    conflictMerge: bindConflictMergeParticipant(),
+    conflictMerge: bindConflictMergeParticipant({ effects: deps.conflictMergeWorkspaceEffects }),
     ...buildDevelopmentDeliveryDeps(deps.developmentDeliveryProvider),
     ...buildDevelopmentPipelineDeps(deps.developmentDeliveryProvider.pipeline),
     ...buildDevelopmentMrFactsDeps(deps.developmentDeliveryProvider),
@@ -2330,6 +2338,11 @@ export function composeSqliteApplicationDeps(
           ),
         }
       : deps),
+    ...selectDevelopmentWorkspaceEffectBinding({
+      actionWorkspaceEffects: deps.actionWorkspaceEffects,
+      automationWorkspaceEffects: deps.automationWorkspaceEffects,
+      conflictWorkspaceSelected: deps.conflictMergeWorkspaceEffects !== undefined,
+    }),
     appHome,
     authRuntime,
     tokenCallAudit,
@@ -3001,7 +3014,7 @@ function composeSqliteApiRouteMounts(
       publicationTransport: repositoryPublicationTransport,
       effects: deps.employeeCaseWorkspaceEffects,
     }),
-    conflictMerge: bindConflictMergeParticipant(),
+    conflictMerge: bindConflictMergeParticipant({ effects: deps.conflictMergeWorkspaceEffects }),
   })
   const executionContracts = deps.executionContracts
   const eventCenter =
@@ -3147,7 +3160,9 @@ function composeSqliteApiRouteMounts(
         appHome,
         approvalGateway,
         ...developmentDelivery,
-        conflictMerge: bindConflictMergeParticipant(),
+        conflictMerge: bindConflictMergeParticipant({
+          effects: deps.conflictMergeWorkspaceEffects,
+        }),
         sourceControl: {
           ...bindChangeCandidateParticipant(),
           ...bindCandidateDeliveryParticipant({

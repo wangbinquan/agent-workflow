@@ -92,6 +92,8 @@ export interface Pr3FixtureOptions<Database extends ProviderNeutralDatabase = Db
   readonly feedbackRoute?: boolean
   /** PR-7b T78：员工加 conflict.repair 路由（含专用模板）——冲突收敛旅程用。 */
   readonly conflictRoute?: boolean
+  /** RFC-370: publish a real conflict template with an explicit retry policy for recovery cases. */
+  readonly conflictRetryDefaults?: { readonly sameSession: number; readonly freshSession: number }
   /** PR-7b T78：conflict policy（缺省沿用 default 的 report-only）。 */
   readonly conflictPolicy?: {
     readonly mode: 'report-only' | 'repair'
@@ -283,7 +285,7 @@ export async function buildPr3Fixture(
           writablePathPolicyRef: null,
           additionalProtectedPathClasses: [],
           verificationProfileRef: 'vp',
-          retryDefaults: { sameSession: 0, freshSession: 0 },
+          retryDefaults: options.conflictRetryDefaults ?? { sameSession: 0, freshSession: 0 },
         },
       },
     )

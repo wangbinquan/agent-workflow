@@ -72,10 +72,10 @@ test('actual DA, pipeline, Mission capture and daemon HTTP roots forward the sam
     "deps.evidenceArtifacts ?? new EvidenceStore(factory.resolve(deps.appHome, 'evidence'))",
   )
   expect(composition.text).toContain(
-    'const factory = selectedAutomationWorkspaceEffects(deps.automationWorkspaceEffects)',
+    'const factory = selectedAutomationWorkspaceEffects(\n    deps.automationWorkspaceEffects === undefined\n      ? actionWorkspaceEffects.contents\n      : deps.automationWorkspaceEffects,\n  )',
   )
   for (const [path, expression, count] of [
-    ['infrastructure/actionWorkspace.ts', 'deps.evidence.materializeBundle', 2],
+    ['application/actionWorkspace.ts', 'deps.evidence.materializeBundle', 2],
     ['infrastructure/uploadPlacement.ts', 'deps.evidence.materializeBlob', 1],
     ['application/agentActionOrchestrator.ts', 'ports.actionWorkspace!.adopt', 1],
     ['composition/digitalEmployeePlatformWorkItems.ts', 'store.materializeBundle', 1],

@@ -16,7 +16,8 @@
 // 以及 `__mr.factsCollectedAt` 归零（head 变了，mr.* 全部要重采）。
 
 import { beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -41,6 +42,19 @@ import { cachedRepos } from '../src/db/schema'
 import { buildPr3Fixture, type ProviderPr3Fixture } from './helpers/rfc310Pr3Fixture'
 import { describeEachProvider } from './helpers/eachProvider'
 import type { ProviderNeutralDatabase } from '../src/db/query'
+import { requirementBundlePath } from '@agent-workflow/shared'
+import { createRequirementBundleRefPersistence } from '../src/modules/development-automation/infrastructure/requirementBundleRefPersistence'
+import {
+  heldEffect,
+  enteredBeforeOutcome,
+  OpaqueActionEffects,
+  OpaqueCandidateDelivery,
+  OpaqueConflictEffects,
+  OpaqueContentFactory,
+  OpaqueEvidenceArtifacts,
+  WorkspaceReferenceCodec,
+  type WorkspaceEffectGate,
+} from './helpers/rfc370ConflictWorkspaceEffects'
 
 setDefaultTimeout(120_000)
 
@@ -130,13 +144,17 @@ function startLaneWorld(): void {
 }
 
 /** 库侧夹具：**每个用例**重建（PG 泳道每个用例前会整库快照回滚）。 */
-async function seedLaneDatabase(db: ProviderNeutralDatabase): Promise<void> {
+async function seedLaneDatabase(
+  db: ProviderNeutralDatabase,
+  conflictRetryDefaults?: { readonly sameSession: number; readonly freshSession: number },
+): Promise<void> {
   launches.length = 0
   outcomes.clear()
   fx = await buildPr3Fixture({
     db,
     conflictRoute: true,
     conflictPolicy: { mode: 'repair', maxRepairAttempts: 2 },
+    ...(conflictRetryDefaults === undefined ? {} : { conflictRetryDefaults }),
     rules: [
       {
         ruleId: 'repair-on-conflict',
@@ -421,5 +439,319 @@ describeEachProvider(
         .trim()
       expect(afterHead).toBe(humanHead)
     })
+  },
+)
+
+// RFC-370: extend the original real Mission fixture, keeping every native T78 case above.
+// New cases persist actual pre-state, reconstruct composition, and await creating-owner cleanup.
+describeEachProvider(
+  'RFC-370 opaque conflict scene — actual Mission and durable recovery',
+  (harness) => {
+    beforeAll(startLaneWorld)
+    beforeEach(async () => {
+      await seedLaneDatabase(harness.db, { sameSession: 0, freshSession: 1 })
+    }, 120_000)
+
+    function selectedWorld(conflictGate?: WorkspaceEffectGate, contentGate?: WorkspaceEffectGate) {
+      const codec = new WorkspaceReferenceCodec()
+      const contents = new OpaqueContentFactory(codec, contentGate)
+      const action = new OpaqueActionEffects(codec, contents)
+      const conflict = new OpaqueConflictEffects(codec, conflictGate)
+      const evidence = new OpaqueEvidenceArtifacts(codec, join(HOME, 'selected-evidence'))
+      const compose = () =>
+        composeDevelopmentAutomation({
+          db: fx.db,
+          appHome: codec.reference(HOME),
+          evidenceArtifacts: evidence,
+          automationWorkspaceEffects: contents,
+          actionWorkspaceEffects: action,
+          agentLauncher: scripted,
+          changeCandidate: bindChangeCandidateParticipant(),
+          conflictMerge: bindConflictMergeParticipant({ effects: conflict }),
+          candidateDelivery: new OpaqueCandidateDelivery(codec),
+          repoRemote: { resolve: () => ({ remoteUrl: remotePath, defaultBranch: 'main' }) },
+        })
+      automation = compose()
+      return { codec, contents, action, conflict, evidence, compose }
+    }
+
+    async function addActualRequirement(missionId: string, evidence: OpaqueEvidenceArtifacts) {
+      const bodyRoot = join(HOME, `body-${missionId}`)
+      mkdirSync(bodyRoot)
+      const bytes = new Uint8Array([0, 255, 65, 10])
+      writeFileSync(join(bodyRoot, 'body.bin'), bytes)
+      const budget = { maxFiles: 10, maxFileBytes: 4096, maxTotalBytes: 8192 }
+      const body = await evidence.importStagedTree(bodyRoot, budget)
+      const core = {
+        schemaVersion: 1,
+        bundleId: body.bundleId,
+        source: { kind: 'direct', submissionId: `submission-${missionId}` },
+        title: 'actual binary requirement',
+        fetchedAt: new Date().toISOString(),
+        complete: true,
+        files: [
+          {
+            fileId: 'body',
+            ordinal: 0,
+            relativePath: 'body.bin',
+            role: 'requirement',
+            mediaType: 'application/octet-stream',
+            bytes: bytes.length,
+            sha256: createHash('sha256').update(bytes).digest('hex'),
+            redaction: 'none',
+            repositoryPlacement: null,
+          },
+        ],
+        totals: { files: 1, bytes: bytes.length },
+        writebackRef: null,
+      }
+      const manifestDigest = canonicalDigest(core)
+      const manifestRoot = join(HOME, `manifest-${missionId}`)
+      mkdirSync(manifestRoot)
+      writeFileSync(
+        join(manifestRoot, 'requirement-manifest.json'),
+        canonicalStringify({ ...core, manifestDigest }),
+      )
+      const manifest = await evidence.importStagedTree(manifestRoot, budget)
+      await createRequirementBundleRefPersistence(fx.db).insert({
+        id: `manifest-ref-${missionId}`,
+        missionId,
+        purpose: 'requirement-manifest',
+        evidenceRef: manifest.bundleId,
+        manifestDigest,
+        fileCount: 1,
+        totalBytes: manifest.totalBytes,
+        retentionState: 'active',
+        createdAt: Date.now(),
+      })
+      await fx.store.insertMissionSource({
+        id: `source-${missionId}`,
+        missionId,
+        generation: 1,
+        sourceKind: 'direct',
+        externalId: null,
+        adapterId: null,
+        adapterRevision: null,
+        sourceRevision: manifestDigest,
+        bundleRef: body.bundleId,
+        manifestDigest,
+        fileCount: 1,
+        totalBytes: bytes.length,
+        state: 'materialized',
+        createdAt: Date.now(),
+      })
+      return { bytes, mountPath: requirementBundlePath(body.bundleId), manifestDigest }
+    }
+
+    async function launchedAttempt(
+      missionId: string,
+      world: ReturnType<typeof selectedWorld>,
+      withRequirement = false,
+    ) {
+      await seedConflictedMission(missionId)
+      const requirement = withRequirement
+        ? await addActualRequirement(missionId, world.evidence)
+        : null
+      const reconciled = await automation.reconcile(missionId)
+      expect(reconciled).toMatchObject({ kind: 'decided', handled: 'action-launched' })
+      const launch = launches[launches.length - 1]!
+      const mission = (await fx.store.getMission(missionId))!
+      expect(mission.blockCode).toBeNull()
+      const attempts = await fx.store.listAttempts(mission.currentActionRunId!)
+      expect(attempts).toHaveLength(1)
+      const pre = JSON.parse(
+        (await world.evidence.contexts.load(attempts[0]!.preSnapshotRef!))!,
+      ) as Record<string, unknown>
+      expect(pre).toMatchObject({
+        capabilityId: 'conflict.repair',
+        workspacePath: launch.workspacePath,
+        conflict: { sourceSha, targetSha },
+      })
+      expect(launch.workspacePath).toBe(world.conflict.allocations[0]!)
+      expect(launch.workspacePath).toStartWith('aw-fixture-workspace:')
+      expect(world.action.allocations).toEqual([])
+      expect(world.contents.calls).toContain('readBytes')
+      return { launch, requirement, pre }
+    }
+
+    test.each([false, true])(
+      'prepare/adopt/validation/launch persist the exact reference with nonempty evidence=%s',
+      async (withRequirement) => {
+        const world = selectedWorld()
+        const { launch, requirement, pre } = await launchedAttempt(
+          `m-selected-${withRequirement}`,
+          world,
+          withRequirement,
+        )
+        const physical = world.codec.physical(launch.workspacePath)
+        try {
+          expect(readFileSync(join(physical, 'X.txt'), 'utf8')).toContain('<<<<<<<')
+          expect(existsSync(join(physical, '.git', 'MERGE_HEAD'))).toBe(true)
+          if (requirement !== null) {
+            expect(
+              new Uint8Array(readFileSync(join(physical, requirement.mountPath, 'body.bin'))),
+            ).toEqual(requirement.bytes)
+            expect(
+              JSON.parse(
+                readFileSync(
+                  join(physical, requirement.mountPath, 'requirement-manifest.json'),
+                  'utf8',
+                ),
+              ),
+            ).toMatchObject({ manifestDigest: requirement.manifestDigest })
+            expect(pre.bundles).toHaveLength(2)
+          } else expect(pre.bundles).toEqual([])
+        } finally {
+          await world.conflict.discard(launch.workspacePath)
+        }
+      },
+      120_000,
+    )
+
+    test('adopt rejection awaits exactly one SC cleanup, propagating the original rejection', async () => {
+      const cleanup = heldEffect()
+      const failure = new Error('actual-adopt-content-failure')
+      const world = selectedWorld(
+        async (effect) => {
+          if (effect === 'discard') await cleanup.wait()
+        },
+        async (effect) => {
+          if (effect === 'listNames') throw failure
+        },
+      )
+      const missionId = 'm-selected-adopt-failure'
+      await seedConflictedMission(missionId)
+      let returned = false
+      const pending = automation.reconcile(missionId).then(
+        (value) => {
+          returned = true
+          return value
+        },
+        (error: unknown) => {
+          returned = true
+          return error
+        },
+      )
+      await enteredBeforeOutcome(cleanup, pending)
+      const reference = world.conflict.allocations[0]!
+      try {
+        expect(returned).toBe(false)
+        expect(launches).toEqual([])
+        expect(world.conflict.discards).toEqual([reference])
+        expect(world.action.discards).toEqual([])
+        expect(existsSync(world.codec.physical(reference))).toBe(true)
+      } finally {
+        cleanup.release()
+      }
+      expect<unknown>(await pending).toBe(failure)
+      expect(world.conflict.discards).toEqual([reference])
+      expect(existsSync(world.codec.physical(reference))).toBe(false)
+    }, 120_000)
+
+    test.each(['fresh', 'canceled', 'head-changed'] as const)(
+      'restored %s branch awaits the durable SC owner before retry/block/return',
+      async (mode) => {
+        const cleanup = heldEffect()
+        const world = selectedWorld(async (effect) => {
+          if (effect === 'discard') await cleanup.wait()
+        })
+        const missionId = `m-selected-restored-${mode}`
+        const { launch } = await launchedAttempt(missionId, world, mode === 'fresh')
+        if (mode === 'canceled') {
+          outcomes.set(launch.executionRef, {
+            ...exited(launch.executionRef, ''),
+            taskStatus: 'canceled',
+            resultText: null,
+          })
+        } else if (mode === 'fresh') {
+          outcomes.set(launch.executionRef, {
+            ...exited(launch.executionRef, ''),
+            taskStatus: 'interrupted',
+            resultText: null,
+          })
+        } else {
+          const side = join(HOME, `side-${missionId}`)
+          mkdirSync(side)
+          git(side, 'clone', '-q', remotePath, '.')
+          git(side, 'checkout', '-q', branchOf(missionId))
+          writeFileSync(join(side, 'human.txt'), 'human push\n')
+          git(side, 'add', '-A')
+          git(side, 'commit', '-q', '-m', 'human push')
+          git(side, 'push', '-q', 'origin', branchOf(missionId))
+          writeFileSync(
+            join(world.codec.physical(launch.workspacePath), 'X.txt'),
+            'line1-merged\nline2\n',
+          )
+          outcomes.set(
+            launch.executionRef,
+            exited(launch.executionRef, conflictEnvelope(launch.prompt, ['X.txt'])),
+          )
+        }
+        // The durable context, not a prepare closure or an in-process owner map, drives cleanup.
+        automation = world.compose()
+        let returned = false
+        const pending = automation.reconcile(missionId).then((value) => {
+          returned = true
+          return value
+        })
+        await enteredBeforeOutcome(cleanup, pending)
+        try {
+          expect(returned).toBe(false)
+          expect(world.conflict.discards).toEqual([launch.workspacePath])
+          expect(world.action.discards).toEqual([])
+          expect(world.conflict.allocations).toHaveLength(1)
+          expect(launches).toHaveLength(1)
+          expect((await fx.store.getMission(missionId))!.blockCode).toBeNull()
+          expect(existsSync(world.codec.physical(launch.workspacePath))).toBe(true)
+        } finally {
+          cleanup.release()
+        }
+        const collected = await pending
+        expect(collected.kind).toBe('action-collect')
+        if (collected.kind !== 'action-collect') throw new Error(collected.kind)
+        expect(existsSync(world.codec.physical(launch.workspacePath))).toBe(false)
+        expect(world.action.discards).toEqual([])
+        if (mode === 'fresh') {
+          expect(collected.result).toMatchObject({ kind: 'action-retry', rerunSeq: 1 })
+          expect(world.conflict.allocations).toHaveLength(2)
+          expect(launches).toHaveLength(2)
+          expect(launches[1]!.workspacePath).toBe(world.conflict.allocations[1]!)
+          const mission = (await fx.store.getMission(missionId))!
+          const attempts = await fx.store.listAttempts(mission.currentActionRunId!)
+          expect(
+            attempts.map((attempt) => ({
+              rerunSeq: attempt.rerunSeq,
+              attemptSeq: attempt.attemptSeq,
+            })),
+          ).toEqual([
+            { rerunSeq: 0, attemptSeq: 0 },
+            { rerunSeq: 1, attemptSeq: 0 },
+          ])
+          expect((await world.evidence.contexts.load(attempts[1]!.preSnapshotRef!))!).toContain(
+            launches[1]!.workspacePath,
+          )
+          await world.conflict.discard(launches[1]!.workspacePath)
+        } else {
+          const code = mode === 'canceled' ? 'agent-execution-canceled' : 'conflict-head-changed'
+          expect(collected.result).toMatchObject({ kind: 'action-failed', blockCode: code })
+          expect((await fx.store.getMission(missionId))!.blockCode).toBe(code)
+          expect(world.conflict.allocations).toHaveLength(1)
+          if (mode === 'head-changed') {
+            expect(
+              git(repoPath, 'ls-remote', remotePath, `refs/heads/${branchOf(missionId)}`)
+                .split('\t')[0]!
+                .trim(),
+            ).not.toBe(sourceSha)
+            const mission = (await fx.store.getMission(missionId))!
+            expect(
+              (await fx.snapshots.getCells(mission.requirementBundleRef!))![
+                '__mr.factsCollectedAt'
+              ],
+            ).toMatchObject({ state: 'known', value: '0' })
+          }
+        }
+      },
+      120_000,
+    )
   },
 )

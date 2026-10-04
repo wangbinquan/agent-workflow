@@ -20,12 +20,6 @@ import { createFileRepositoryPreviewIndexPort } from './infrastructure/local/fil
 import type { RepositoryPreviewIndexPort } from './application/ports/repositoryPreviewIndex'
 import type { RepositoryGitWorkspaceScope } from './application/ports/repositoryGitWorkspace'
 import { requireRepositoryGitWorkspaceScope } from './composition/repositoryGitWorkspaces'
-import {
-  discardConflictMergeWorkspace,
-  finishConflictMerge,
-  inspectConflictMerge,
-  prepareConflictMerge,
-} from './application/conflictMerge'
 import type { PlatformWorkspaceKind } from '@agent-workflow/shared'
 import { type CodeHostProvider } from '@agent-workflow/shared'
 import { readFileSync } from 'node:fs'
@@ -278,19 +272,7 @@ export { bindCandidateDeliveryParticipant } from './composition/repositoryCandid
  * conflict markers 供 repair Agent、finish 只收冲突集并以平台身份产 merge
  * commit）。结构同形注入 development-automation；Mission 侧永不直接调 Git。
  */
-export function bindConflictMergeParticipant(): {
-  prepare: typeof prepareConflictMerge
-  inspect: typeof inspectConflictMerge
-  finish: typeof finishConflictMerge
-  discard: typeof discardConflictMergeWorkspace
-} {
-  return {
-    prepare: prepareConflictMerge,
-    inspect: inspectConflictMerge,
-    finish: finishConflictMerge,
-    discard: discardConflictMergeWorkspace,
-  }
-}
+export { bindConflictMergeParticipant } from './composition/conflictMerge'
 
 type BoundEmployeeCaseOperation<F extends (...args: never[]) => unknown> = (
   request: Parameters<F>[0],

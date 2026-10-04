@@ -17,7 +17,7 @@
 //   3. no-change 相对 action baseline clean 的合法性。
 
 import { beforeAll, beforeEach, expect, setDefaultTimeout, test } from 'bun:test'
-import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 
@@ -27,7 +27,19 @@ import type {
   AgentActionLauncherPort,
   AgentExecutionSnapshot,
 } from '../src/modules/development-automation/application/ports/reconcilerPorts'
-import { bindChangeCandidateParticipant } from '../src/modules/source-control/composition'
+import {
+  bindChangeCandidateParticipant,
+  bindConflictMergeParticipant,
+} from '../src/modules/source-control/composition'
+import { createFileAutomationWorkspaceEffectsFactory } from '../src/modules/development-automation/infrastructure/local/fileAutomationWorkspaceEffects'
+import {
+  heldEffect,
+  enteredBeforeOutcome,
+  OpaqueActionEffects,
+  OpaqueContentFactory,
+  OpaqueConflictEffects,
+  WorkspaceReferenceCodec,
+} from './helpers/rfc370ConflictWorkspaceEffects'
 import { cachedRepos } from '../src/db/schema'
 import {
   buildPr3Fixture,
@@ -209,6 +221,59 @@ describeEachProvider(
     beforeEach(async () => {
       await seedLaneDatabase(harness.db, repoPath)
     }, 120_000)
+
+    test('RFC-370 restored ordinary canceled action awaits DA discard and never invokes the SC conflict owner', async () => {
+      const first = await launchMissionToAction('j4-selected-canceled')
+      const evidence = automation.evidence
+      const held = heldEffect()
+      const codec = new WorkspaceReferenceCodec()
+      const action = new OpaqueActionEffects(
+        codec,
+        new OpaqueContentFactory(codec),
+        async (effect) => {
+          if (effect === 'discard') await held.wait()
+        },
+      )
+      const conflict = new OpaqueConflictEffects(codec)
+      const executionRef = launches[0]!.executionRef
+      outcomes.set(executionRef, {
+        ...exited(executionRef, ''),
+        taskStatus: 'canceled',
+        resultText: null,
+      })
+      automation = composeDevelopmentAutomation({
+        db: fx.db,
+        appHome: HOME,
+        evidenceArtifacts: evidence,
+        automationWorkspaceEffects: createFileAutomationWorkspaceEffectsFactory(),
+        actionWorkspaceEffects: action,
+        agentLauncher: scripted,
+        conflictMerge: bindConflictMergeParticipant({ effects: conflict }),
+        changeCandidate: bindChangeCandidateParticipant(),
+      })
+      let returned = false
+      const pending = automation.reconcile(first.missionId).then((value) => {
+        returned = true
+        return value
+      })
+      await enteredBeforeOutcome(held, pending)
+      try {
+        expect(returned).toBe(false)
+        expect(action.discards).toEqual([first.workspacePath])
+        expect(conflict.discards).toEqual([])
+        expect((await fx.store.getMission(first.missionId))!.blockCode).toBeNull()
+        expect(existsSync(first.workspacePath)).toBe(true)
+      } finally {
+        held.release()
+      }
+      expect(await pending).toMatchObject({
+        kind: 'action-collect',
+        result: { kind: 'action-failed', blockCode: 'agent-execution-canceled' },
+      })
+      expect(existsSync(first.workspacePath)).toBe(false)
+      expect(action.discards).toEqual([first.workspacePath])
+      expect(conflict.calls).toEqual([])
+    })
 
     test('positive: workspace materialized with evidence mount; changed outcome derives a real git candidate', async () => {
       const { missionId, actionRunId, workspacePath, prompt } =

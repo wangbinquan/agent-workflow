@@ -15,7 +15,12 @@ import type {
   TaskDeletionEffects,
 } from '@/modules/task-execution/public/types'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
-import type { AutomationWorkspaceEffectsFactory } from '@/modules/development-automation/composition'
+import {
+  selectDevelopmentWorkspaceEffectBinding,
+  type ActionWorkspaceEffects,
+  type AutomationWorkspaceEffectsFactory,
+} from '@/modules/development-automation/composition'
+import type { ConflictMergeWorkspaceEffects } from '@/modules/source-control/public/types'
 import type { RepositoryBaselineEffectsFactory } from '@/modules/development-automation/composition'
 import {
   readDaemonStartupRecoveryAuthority,
@@ -455,6 +460,8 @@ export interface PostgresqlDaemonApplicationInput {
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
+  readonly actionWorkspaceEffects?: ActionWorkspaceEffects
+  readonly conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
   readonly taskDeletionEffects?: TaskDeletionEffects
   readonly nodeRunPromptContentEffects?: NodeRunPromptContentEffects
   readonly portArtifactContentEffects?: PortArtifactContentEffects
@@ -612,6 +619,11 @@ export async function composePostgresqlApplication(
   const isolationWorkspaces = selectIsolationWorkspaceFactory(input.isolationWorkspaces)
   const repositoryGitWorkspaces = selectRepositoryGitWorkspaceFactory(input.repositoryGitWorkspaces)
   const workspaceReads = selectRepositoryWorkspaceReadQueries(input.workspaceReads)
+  const developmentWorkspaceEffects = selectDevelopmentWorkspaceEffectBinding({
+    actionWorkspaceEffects: input.actionWorkspaceEffects,
+    automationWorkspaceEffects: input.automationWorkspaceEffects,
+    conflictWorkspaceSelected: input.conflictMergeWorkspaceEffects !== undefined,
+  })
   const portArtifacts = composePortArtifactOperations(
     input.portArtifactContentEffects,
     input.appHome,
@@ -1570,7 +1582,7 @@ export async function composePostgresqlApplication(
     createEmployeeInputArtifactStore(join(input.appHome, 'artifacts', 'employee-inputs'))
   const employeeReactionRounds = createEmployeeReactionRoundQueries(input.db)
   const employeeWorkspace = composeDevelopmentEmployeeWorkspace({
-    automationWorkspaceEffects: input.automationWorkspaceEffects,
+    automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
     db: input.db,
     appHome: input.appHome,
     reactionRounds: employeeReactionRounds,
@@ -1584,11 +1596,11 @@ export async function composePostgresqlApplication(
       publicationTransport: repositoryPublicationTransport,
       effects: input.employeeCaseWorkspaceEffects,
     }),
-    conflictMerge: bindConflictMergeParticipant(),
+    conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
   })
   const employeeDelivery = buildDevelopmentDeliveryDeps(developmentDeliveryProvider)
   const employeePlatformWorkItems = composeDevelopmentEmployeePlatformWorkItems({
-    automationWorkspaceEffects: input.automationWorkspaceEffects,
+    automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     evidenceArtifacts: input.evidenceArtifacts,
     db: input.db,
@@ -1596,7 +1608,7 @@ export async function composePostgresqlApplication(
     reactionRounds: employeeReactionRounds,
     approvalGateway: developmentApprovalGateway,
     ...employeeDelivery,
-    conflictMerge: bindConflictMergeParticipant(),
+    conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
     sourceControl: {
       ...bindChangeCandidateParticipant(),
       ...bindCandidateDeliveryParticipant({
@@ -1790,7 +1802,8 @@ export async function composePostgresqlApplication(
     },
   }
   const developmentAutomation = composeDevelopmentAutomation({
-    automationWorkspaceEffects: input.automationWorkspaceEffects,
+    actionWorkspaceEffects: developmentWorkspaceEffects.actionWorkspaceEffects,
+    automationWorkspaceEffects: developmentWorkspaceEffects.automationWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     db: input.db,
     appHome: input.appHome,
@@ -1804,7 +1817,7 @@ export async function composePostgresqlApplication(
     candidateDelivery: bindCandidateDeliveryParticipant({
       publicationTransport: repositoryPublicationTransport,
     }),
-    conflictMerge: bindConflictMergeParticipant(),
+    conflictMerge: bindConflictMergeParticipant({ effects: input.conflictMergeWorkspaceEffects }),
     ...buildDevelopmentDeliveryDeps(developmentDeliveryProvider),
     ...buildDevelopmentPipelineDeps(developmentDeliveryProvider.pipeline),
     ...buildDevelopmentMrFactsDeps(developmentDeliveryProvider),
