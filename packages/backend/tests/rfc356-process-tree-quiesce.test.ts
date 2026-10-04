@@ -50,7 +50,7 @@ function codeOnly(source: string): string {
 
 describe('RFC-356 · Job Object 接线（防止再次退化成死代码）', () => {
   test('managedProcess 在 spawn 后接管进程树，且先于 onSpawned 的 DB 往返', () => {
-    const src = readSource('services', 'execution', 'managedProcess.ts')
+    const src = readSource('platform', 'execution', 'local', 'managedProcess.ts')
     expect(src, '必须真的调用 adoptSpawnedProcessTree').toContain('adoptSpawnedProcessTree(pid)')
     const adoptAt = src.indexOf('adoptSpawnedProcessTree(pid)')
     const onSpawnedAt = src.indexOf('await req.onSpawned(')
@@ -62,7 +62,7 @@ describe('RFC-356 · Job Object 接线（防止再次退化成死代码）', () 
   })
 
   test('正常收尾释放归属；childUnreaped 分支刻意不释放', () => {
-    const src = readSource('services', 'execution', 'managedProcess.ts')
+    const src = readSource('platform', 'execution', 'local', 'managedProcess.ts')
     expect(src).toContain('releaseProcessTreeOwnership(pid)')
     // unreaped 分支到它自己的 return 之间不得出现 release：那条分支的前提是
     // 「树没死、我们主动放弃它」，而 release 走的是 dispose = 连带杀树。
@@ -73,7 +73,7 @@ describe('RFC-356 · Job Object 接线（防止再次退化成死代码）', () 
   })
 
   test('杀树的门是 killTree 而不是 escalate（drain 超时那条也要算）', () => {
-    const src = readSource('services', 'execution', 'managedProcess.ts')
+    const src = readSource('platform', 'execution', 'local', 'managedProcess.ts')
     expect(src, '门标志必须存在').toContain('treeKillAttempted')
     // 三处杀树调用都要经过带门的包装，否则 drain 超时那条会漏掉——而它的触发
     // 条件逐字就是「幸存的孙进程把管道写端占着」。

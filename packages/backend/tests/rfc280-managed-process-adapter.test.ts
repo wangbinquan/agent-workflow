@@ -171,7 +171,7 @@ describe('P1-A reap-deadline path source-locks (impl-gate 2nd round)', () => {
   // convention for a real-but-hard-to-behaviorally-reproduce process invariant
   // is a source-level lock (cf. scheduler-audit-s15 / rfc108 / rfc098-source).
   const src = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'execution', 'managedProcess.ts'),
+    resolve(import.meta.dir, '..', 'src', 'platform', 'execution', 'local', 'managedProcess.ts'),
     'utf8',
   )
 

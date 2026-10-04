@@ -33,7 +33,7 @@ import { resolve } from 'node:path'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
 const RUNNER = resolve(BACKEND_SRC, 'services', 'runner.ts')
-const MANAGED_PROCESS = resolve(BACKEND_SRC, 'services', 'execution', 'managedProcess.ts')
+const MANAGED_PROCESS = resolve(BACKEND_SRC, 'platform', 'execution', 'local', 'managedProcess.ts')
 const ORPHANS = resolve(BACKEND_SRC, 'services', 'orphans.ts')
 const STUCK = resolve(BACKEND_SRC, 'services', 'stuckTaskDetector.ts')
 // RFC-359 W4-B1 批 2e：恢复读 / 写只有一份 provider 中立实现。
