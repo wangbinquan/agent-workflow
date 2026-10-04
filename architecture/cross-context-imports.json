@@ -7908,23 +7908,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts#$file",
-      "fromPath": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:154633d706471d28b2ba",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "source-control",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/workspace/local/isolation.ts#isoWorktreePathFor",
-      "toPath": "packages/backend/src/platform/workspace/local/isolation.ts",
-      "toSymbol": "isoWorktreePathFor",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
       "fromSymbol": "$file",
@@ -18533,6 +18516,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:31fa728b86fce4fd20ca",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/workspace/local/isolationReferences.ts#isoKeyOf",
+      "toPath": "packages/backend/src/platform/workspace/local/isolationReferences.ts",
+      "toSymbol": "isoKeyOf",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginRepository.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/pluginRepository.ts",
       "fromSymbol": "$file",
@@ -27620,7 +27620,7 @@
       "owner": "source-control",
       "removeAfterWave": "W9",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/workspace/local/isolation.ts#isoKeyOf",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/workspace/local/isolation.ts#$file",
       "toPath": "packages/backend/src/platform/workspace/local/isolation.ts",
       "toSymbol": "isoKeyOf",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -40238,6 +40238,23 @@
       "toPath": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toSymbol": "taskArchiveAudit",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts#$file",
+      "fromPath": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:7097d2f424e59c2fcd6c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/workspace/local/isolationReferences.ts#isoWorktreePathFor",
+      "toPath": "packages/backend/src/platform/workspace/local/isolationReferences.ts",
+      "toSymbol": "isoWorktreePathFor",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -72438,23 +72455,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts#$file",
-      "fromPath": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:cc88659d433d6c17b62e",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "source-control",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/workspace/local/isolation.ts#isoKeyOf",
-      "toPath": "packages/backend/src/platform/workspace/local/isolation.ts",
-      "toSymbol": "isoKeyOf",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/routes/skills.ts#$file",
@@ -100129,22 +100129,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "source-control",
-      "fromFile": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts#$file",
-      "id": "import:154633d706471d28b2ba",
-      "owner": "source-control",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/workspace/local/isolation",
-      "syntax": "static-import",
-      "targetSymbol": "isoWorktreePathFor",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/workspace/local/isolation.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/workspace/local/isolation.ts#isoWorktreePathFor"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/taskDagCollaborationOperations.ts#$file",
@@ -111409,6 +111393,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts#$file",
+      "id": "import:31fa728b86fce4fd20ca",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/workspace/local/isolationReferences",
+      "syntax": "static-import",
+      "targetSymbol": "isoKeyOf",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/workspace/local/isolationReferences.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/workspace/local/isolationReferences.ts#isoKeyOf"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/pluginRepository.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/pluginRepository.ts#$file",
@@ -121053,7 +121053,7 @@
       "targetSymbol": "isoKeyOf",
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/workspace/local/isolation.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/workspace/local/isolation.ts#isoKeyOf"
+      "toOwnerEntryId": "owner:packages/backend/src/platform/workspace/local/isolation.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -134830,6 +134830,22 @@
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteTransportMechanisms.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "source-control",
+      "fromFile": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts#$file",
+      "id": "import:7097d2f424e59c2fcd6c",
+      "owner": "source-control",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/workspace/local/isolationReferences",
+      "syntax": "static-import",
+      "targetSymbol": "isoWorktreePathFor",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/workspace/local/isolationReferences.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/workspace/local/isolationReferences.ts#isoWorktreePathFor"
     },
     {
       "edgeKind": "value",
@@ -169120,22 +169136,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#intentDrafts"
     },
     {
-      "edgeKind": "value",
-      "fromContext": "source-control",
-      "fromFile": "packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileRepositoryWorkspaceReadQueries.ts#$file",
-      "id": "import:cc88659d433d6c17b62e",
-      "owner": "source-control",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/platform/workspace/local/isolation",
-      "syntax": "static-import",
-      "targetSymbol": "isoKeyOf",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/platform/workspace/local/isolation.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/platform/workspace/local/isolation.ts#isoKeyOf"
-    },
-    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/routes/skills.ts",
@@ -190586,7 +190586,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3df159a4dc1ad7036b65be8092f4a904a3d26ca6e9dbbbad1a0f829e0445b66a",
+  "sourceDigest": "sha256:0b89825f380acb270867144f623daf295a41a725abec08e6979ddd60bdc1e1ed",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

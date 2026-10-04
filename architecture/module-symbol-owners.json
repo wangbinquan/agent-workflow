@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2159,
+    "backendFiles": 2160,
     "frontendFiles": 654,
-    "legacyFiles": 582,
+    "legacyFiles": 583,
     "moduleFiles": 1577,
-    "productionFiles": 2976,
+    "productionFiles": 2977,
     "sharedFiles": 163,
-    "symbolsIncludingFileRoots": 26535
+    "symbolsIncludingFileRoots": 26536
   },
   "entries": [
     {
@@ -173992,18 +173992,6 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/workspace/local/isolation.ts",
-      "id": "owner:packages/backend/src/platform/workspace/local/isolation.ts#isoKeyOf",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isoKeyOf",
-      "targetContext": "platform",
-      "targetLayer": "workspace"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/workspace/local/isolation.ts",
       "id": "owner:packages/backend/src/platform/workspace/local/isolation.ts#IsoRepo",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -174032,18 +174020,6 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "IsoWorkspaceKeyChoice",
-      "targetContext": "platform",
-      "targetLayer": "workspace"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/workspace/local/isolation.ts",
-      "id": "owner:packages/backend/src/platform/workspace/local/isolation.ts#isoWorktreePathFor",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "isoWorktreePathFor",
       "targetContext": "platform",
       "targetLayer": "workspace"
     },
@@ -174212,6 +174188,42 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "undoPriorShardDeltaInIso",
+      "targetContext": "platform",
+      "targetLayer": "workspace"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/workspace/local/isolationReferences.ts",
+      "id": "owner:packages/backend/src/platform/workspace/local/isolationReferences.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "workspace"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/workspace/local/isolationReferences.ts",
+      "id": "owner:packages/backend/src/platform/workspace/local/isolationReferences.ts#isoKeyOf",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "isoKeyOf",
+      "targetContext": "platform",
+      "targetLayer": "workspace"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/workspace/local/isolationReferences.ts",
+      "id": "owner:packages/backend/src/platform/workspace/local/isolationReferences.ts#isoWorktreePathFor",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "isoWorktreePathFor",
       "targetContext": "platform",
       "targetLayer": "workspace"
     },
@@ -319155,5 +319167,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3df159a4dc1ad7036b65be8092f4a904a3d26ca6e9dbbbad1a0f829e0445b66a"
+  "sourceDigest": "sha256:0b89825f380acb270867144f623daf295a41a725abec08e6979ddd60bdc1e1ed"
 }

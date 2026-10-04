@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:3df159a4dc1ad7036b65be8092f4a904a3d26ca6e9dbbbad1a0f829e0445b66a",
+    "sourceDigest": "sha256:0b89825f380acb270867144f623daf295a41a725abec08e6979ddd60bdc1e1ed",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -912,16 +912,19 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26535,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26536,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 Task reader CI repair: the original classifier adds the pure isolationReferences file owner and relocates the two unchanged address function owners, three additions minus two removals, net one (26535 to 26536). All original ownership rules, rows and reasons remain unchanged."
+      }
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
   "schemaVersion": 1,
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b905434e23f8dd670cccc6000ff8fe887a9c2805",
-    "contentDigest": "sha256:8a298fb6995331e7620fa3fe472422c17fc12d560c9bd1a59f3c28d0f7ff46b5",
+    "currentSnapshotSha": "ae7654de662f29fc720402e574bf7267b1e7e53d",
+    "contentDigest": "sha256:ab5ff4676027b147c079ec695e7708a00109959387c9bb90a3a84625af4c2aa5",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

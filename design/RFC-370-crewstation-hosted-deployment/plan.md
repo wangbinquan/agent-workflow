@@ -909,3 +909,13 @@ SOURCE15-DOC1 R2 有限独立 PASS `6810ac1409c1b961a61f019a55050c7f3da0d17b60b1
 Git类型修复`b905434e23f8dd670cccc6000ff8fe887a9c2805`的Windows37193750893正式completed/success；主CI37193533285尚未全套终态，Ubuntu前端3/3的111410608298已确定失败，`rfc371-run-observability.test.tsx:1120`返回弹窗来源Task预期task-1但得到null；日志保留，不改原断言或以Windows替代主CI。更早5490的主CI取消与Windows失败保留。当前批次正式测试仍等待发布后新exact-SHA hosted CI。
 
 仅目标format/lint、纯源码/JSON和一次原scoped生成，无本机AW tests/typecheck/build/service。不关闭完整A4或A1～A8/AC00/A-G；delivery/conflict、DA/DE校验及执行/脚本/执行权恢复继续。其后各owner独立CS adapter，B/M0先实际部署，再逐项M1～M4。当前尚无AW-in-CS部署，不关闭RFC。
+
+## 2026-10-04 Task workspace reader CI 修复投影
+
+Task reader CI 修复 SOURCE5-DOC1 独立有限 PASS，指纹 `899180ddebb19b9b0186f1297b0b701b33137095566793bb2453ff4ae8b8b5a1`。两个原纯地址函数和注释逐字迁到同 owner 的 isolationReferences，native 原名出口与函数身份保持；reader 仅改叶子引用，从实际 no-circular 链拆出完整隔离模块。新增测试只给 JSON 响应补真实返回合同的擦除型类型断言，完整旧测试可逆向逐字恢复，全部原内容断言及预算保持。new leaf/native/legacy 与真实默认查询的引用回归已写。
+
+原 scoped canonical 只运行一次，固定 ae7654de 加五个 TS 候选，其余6394个 nonowned 源码全部按已提交 blob读取；排除并完整保留并行观测17 tracked / 4 untracked TS。sourceDigest `sha256:0b89825f380acb270867144f623daf295a41a725abec08e6979ddd60bdc1e1ed`。原两符号的边改指纯叶子，imports6106、exceptions5411数量不变；localIsolationWorkspace 旧 isoKeyOf import未改，原扫描器因native现在re-export将其 target owner投影为完整文件owner，只有该owner字段变化。原required40 SPI / 69 targets、空implementation SCC、public面、全部债与effects、Task authority及504 ambient保持。新leaf一个fileowner及两个迁位函数，3 added / 2 retired净增1，原owners26535→26536。只登记这一实际增长许可，匹配canonical发布后正常退役，原129 ordered rows / why保持；不改任何rule、allowlist、周期或预算。
+
+9c614ec7 主CI37196589476正式cancelled 11 success / 2 failure / 37 cancelled、Windows37196589510正式failure1/1，原完整日志保留。ae7654de Windows37196996310已正式failure1/1，主CI37196879491的depcheck也已失败；本段是生成前冻结的作业事实，不是主CI整体终态。修复的新确切SHA正式CI仍待发布验收，旧失败不改写。仅精确format/lint、纯byte/AST/JSON和一次原官方静态生成，无AW本机tests/typecheck/build/service。
+
+Conflict DESIGN-R2另已独立PASS，只是设计、尚未实现。完整A1～A8/AC00/A-G继续，之后各层独立CS adapters，B/M0先实际部署再逐项M1～M4；尚无AW-in-CS部署，不关闭RFC。全部旧正文、并行输出与gate/CI历史保持。
