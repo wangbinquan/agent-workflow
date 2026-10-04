@@ -231,3 +231,9 @@ export interface BoundedWorkspaceContent {
 
 /** The existing Git outcome, reused by neutral baseline effects. */
 export type { RepositoryCandidateGitOutcome } from '../application/ports/repositoryCandidateEffects'
+
+export type {
+  WorkspaceUploadBinding,
+  WorkspaceUploadContent,
+  WorkspaceUploadContentFactory,
+} from '../application/ports/workspaceUploadContent'

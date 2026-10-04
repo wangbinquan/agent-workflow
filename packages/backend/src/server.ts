@@ -1,3 +1,5 @@
+import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
+import { selectWorkspaceUploadContentFactory } from '@/modules/source-control/public/participants'
 import {
   composePortArtifactOperations,
   selectPortArtifactOperations,
@@ -823,6 +825,7 @@ export interface AppDeps {
   resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
   resourcePackageSkillContent?: SkillPackageContentReader
   workspaceContent?: WorkspaceContentEffectsFactory
+  workspaceUploads?: WorkspaceUploadContentFactory
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -2091,6 +2094,7 @@ export function composeSqliteApplicationDeps(
   unstarted?: UnstartedApplicationScope,
 ): SqliteAppComposition {
   const appHome = deps.appHome ?? Paths.root
+  const workspaceUploads = selectWorkspaceUploadContentFactory(deps.workspaceUploads)
   const nodeRunPrompts =
     deps.nodeRunPrompts === undefined
       ? composeNodeRunPromptOperations(deps.nodeRunPromptContentEffects, join(appHome, 'runs'))
@@ -2379,6 +2383,7 @@ export function composeSqliteApplicationDeps(
   })
   const effectiveDeps: SqliteComposedAppDeps = {
     ...runtimeDeps,
+    workspaceUploads,
     nodeRunPrompts,
     portArtifacts,
     workspacePresence,
@@ -3183,6 +3188,7 @@ function composeSqliteApiRouteMounts(
   // RFC-359 AC-1（plan §5hn 批次二 ①）：这一份依赖束同时喂给**路由启动**与**启动参与者**
   // ——定时 / webhook 触发走后者，两条路因此共用同一台内核。
   const taskRouteLaunchDependencies: SqliteTaskRouteLaunchDependencies = Object.freeze({
+    workspaceUploads: deps.workspaceUploads,
     db: deps.db,
     configPath: deps.configPath,
     // RFC-359 AC-1（plan §5hn 批次一）：单代理启动改走与 PostgreSQL 同一份编排。

@@ -1,5 +1,8 @@
 import type { ProviderNeutralDatabase } from '@/db/query'
-import { applyUploadsToWorktree, type UploadPlan, type UploadResult } from '@/services/upload'
+import type { UploadPlan, UploadResult } from '@/platform/content/local/workspaceUploads'
+import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
+import type { WorkspaceUploadResult } from '../application/ports/workspaceUploads'
+import { applyWorkspaceUploads } from '../composition/workspaceUploads'
 import { canonicalJson } from '@agent-workflow/shared'
 import { sha256Hex } from '@/util/hash'
 import { ConflictError } from '@/util/errors'
@@ -12,9 +15,10 @@ export async function applyTaskWorkspaceUploads(input: {
   db: ProviderNeutralDatabase
   taskId: string
   plan: UploadPlan
+  workspaceUploads?: WorkspaceUploadContentFactory
   /** Effect substitution is used by the process interruption oracle. */
   write?: (plan: UploadPlan) => Promise<UploadResult>
-}): Promise<UploadResult> {
+}): Promise<WorkspaceUploadResult> {
   const requestDigest = sha256Hex(
     canonicalJson({
       worktreePath: input.plan.worktreePath,
@@ -54,9 +58,13 @@ export async function applyTaskWorkspaceUploads(input: {
   }
   if (receipt.uploadPlan !== undefined && receipt.uploadPlan.requestDigest !== requestDigest)
     throw new ConflictError('workspace-upload-request-mismatch', 'workspace upload request changed')
+  if (typeof input.write === 'function' && input.workspaceUploads !== undefined)
+    throw new TypeError(
+      'Workspace uploads cannot select a content factory and a whole writer override',
+    )
   let version = prepared.version
   const placements = [...(receipt.uploadPlan?.placements ?? [])]
-  const result = await (input.write ?? applyUploadsToWorktree)({
+  const plan: UploadPlan = {
     ...input.plan,
     recovery: {
       placement: (index) => placements[index] ?? null,
@@ -77,7 +85,25 @@ export async function applyTaskWorkspaceUploads(input: {
         })
       },
     },
-  })
+  }
+  const result =
+    input.write === undefined || input.write === null
+      ? await applyWorkspaceUploads(
+          {
+            workspace: {
+              workspaceRef: plan.worktreePath,
+              generation: String(prepared.ownerFence),
+              version: String(prepared.version),
+            },
+            defs: plan.defs,
+            files: plan.files,
+            limits: plan.limits,
+            ...(plan.inputsSubdir === undefined ? {} : { inputsSubdir: plan.inputsSubdir }),
+            recovery: plan.recovery,
+          },
+          input.workspaceUploads,
+        )
+      : await input.write(plan)
   await withTaskExecutionWrite(input.db, async (tx) => {
     if (
       (await createWorkspacePreparationJournal(tx).completeUploads({

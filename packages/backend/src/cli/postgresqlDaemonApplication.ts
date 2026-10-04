@@ -1,3 +1,5 @@
+import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
+import { selectWorkspaceUploadContentFactory } from '@/modules/source-control/public/participants'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import type { PortArtifactContentEffects } from '@/modules/task-execution/public/types'
 import type {
@@ -435,6 +437,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
   readonly resourcePackageSkillContent?: SkillPackageContentReader
   readonly workspaceContent?: WorkspaceContentEffectsFactory
+  readonly workspaceUploads?: WorkspaceUploadContentFactory
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -590,6 +593,7 @@ export async function composePostgresqlApplication(
       join(input.appHome, 'runs'),
     ),
     workspacePresence = input.workspacePresence ?? createFileWorkspacePresenceQueries()
+  const workspaceUploads = selectWorkspaceUploadContentFactory(input.workspaceUploads)
   const portArtifacts = composePortArtifactOperations(
     input.portArtifactContentEffects,
     input.appHome,
@@ -1118,6 +1122,7 @@ export async function composePostgresqlApplication(
       cloneTimeoutMs: launchRuntime.cloneTimeoutMs,
     },
     routeLaunch: {
+      workspaceUploads,
       configPath: input.configPath,
       gitCommitIdentity: identityAccess.getUserGitCommitIdentity,
       coordinator: taskDriveCoordinator,

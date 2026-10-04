@@ -141,3 +141,11 @@ export {
   resolveTaskSubagentLiveCaptureFromReader,
   resolveTaskUploadLimitsFromReader,
 } from '../application/launchConfiguration'
+
+export {
+  DEFAULT_UPLOAD_LIMITS,
+  sniffMime,
+  acceptMatches,
+  validateUploadPlan,
+} from '../domain/uploads'
+export { resolveUniqueUploadNameSync } from '../application/workspaceUploads'

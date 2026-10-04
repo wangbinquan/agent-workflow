@@ -1,3 +1,4 @@
+import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
 import type { TaskLaunchConfigurationQueries } from '../application/ports/taskLaunchConfiguration'
 import { resolveTaskUploadLimits } from '../application/launchConfiguration'
 import { DEFAULT_UPLOAD_LIMITS } from '@/services/upload'
@@ -72,7 +73,7 @@ import { assertNotBuiltin } from '@/services/systemResources'
 import { assertWorkflowLaunchInputs } from '@/services/workflowLaunchInputs'
 import { layoutBuiltinWorkflowSnapshot } from '@/services/task'
 import type { WorkspaceCleanupReport } from '../application/ports/preparedWorkspace'
-import { validateUploadPlan } from '@/services/upload'
+import { validateUploadPlan } from '../domain/uploads'
 import { applyTaskWorkspaceUploads } from './taskWorkspaceUploads'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import type { AgentLaunchResourceOperations } from '../application/ports/agentLaunchResourceOperations'
@@ -286,6 +287,7 @@ export interface WorkgroupRouteLaunchResources {
 
 export interface RootTaskLaunchDependencies {
   readonly launchConfiguration?: TaskLaunchConfigurationQueries
+  readonly workspaceUploads?: WorkspaceUploadContentFactory
   readonly db: ProviderNeutralDatabase
   readonly gitCommitIdentity: Readonly<{
     execute(userId: string): Promise<GitCommitIdentity>
@@ -800,6 +802,7 @@ function createRootLaunch(
         const landed = await applyTaskWorkspaceUploads({
           db: dependencies.db,
           taskId,
+          workspaceUploads: dependencies.workspaceUploads,
           plan: {
             worktreePath: preparedWorkspace.worktreePath,
             ...(preparedWorkspace.kind === 'group' ? { inputsSubdir: UPLOAD_INPUTS_DIR } : {}),

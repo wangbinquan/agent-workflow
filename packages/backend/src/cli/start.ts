@@ -1,3 +1,5 @@
+import type { WorkspaceUploadContentFactory } from '@/modules/source-control/public/types'
+import { selectWorkspaceUploadContentFactory } from '@/modules/source-control/public/participants'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import type { PortArtifactContentEffects } from '@/modules/task-execution/public/types'
 import type {
@@ -438,6 +440,7 @@ export interface StartOptions {
   resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
   resourcePackageSkillContent?: SkillPackageContentReader
   workspaceContent?: WorkspaceContentEffectsFactory
+  workspaceUploads?: WorkspaceUploadContentFactory
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -624,6 +627,7 @@ async function composePostgresqlProviderSession(
     resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
     resourcePackageSkillContent: input.resourcePackageSkillContent,
     workspaceContent: input.workspaceContent,
+    workspaceUploads: input.workspaceUploads,
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     evidenceRead: input.evidenceRead,
@@ -1170,6 +1174,7 @@ interface DaemonProviderSessionComposeInput {
   readonly resourcePackagePluginArtifacts?: ResourcePackagePluginArtifactOwner
   readonly resourcePackageSkillContent?: SkillPackageContentReader
   readonly workspaceContent?: WorkspaceContentEffectsFactory
+  readonly workspaceUploads: WorkspaceUploadContentFactory
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
@@ -1637,6 +1642,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       resourcePackagePluginArtifacts: opts.resourcePackagePluginArtifacts,
       resourcePackageSkillContent: opts.resourcePackageSkillContent,
       workspaceContent: opts.workspaceContent,
+      workspaceUploads: selectWorkspaceUploadContentFactory(opts.workspaceUploads),
       employeeCaseWorkspaceEffects: opts.employeeCaseWorkspaceEffects,
       repositoryBaselines: opts.repositoryBaselines,
       maintenanceEffectsBootstrap: opts.maintenanceEffectsBootstrap,
@@ -2001,6 +2007,7 @@ async function composeSqliteProviderSession(
         repositoryPublicationTransport,
       },
       routeLaunch: {
+        workspaceUploads: input.workspaceUploads,
         configPath: Paths.config,
         // RFC-359 AC-1（plan §5hn 批次一）：单代理启动改走与 PostgreSQL **同一份**编排
         // （`createAgentRouteLaunch`，终端是根启动内核）。下面这几格就是那份编排要的依赖。
@@ -3170,6 +3177,7 @@ async function composeSqliteProviderSession(
     resourcePackagePluginArtifacts: input.resourcePackagePluginArtifacts,
     resourcePackageSkillContent: input.resourcePackageSkillContent,
     workspaceContent: input.workspaceContent,
+    workspaceUploads: input.workspaceUploads,
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     evidenceRead: input.evidenceRead,

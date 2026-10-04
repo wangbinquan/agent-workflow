@@ -436,3 +436,5 @@ export function requireSchedulerDriver(
   if (driver === undefined) throw new Error('task-execution-driver-not-composed')
   return driver
 }
+
+export { applyWorkspaceUploads } from '../composition/workspaceUploads'

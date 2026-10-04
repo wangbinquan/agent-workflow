@@ -164,3 +164,8 @@ export interface TaskDeletionRepositoryParticipant {
   }): void | Promise<void>
   deleteSnapshotRefs(repoPath: string, taskId: string): void | Promise<void>
 }
+
+export {
+  selectWorkspaceUploadContentFactory,
+  requireWorkspaceUploadContent,
+} from '../composition/workspaceUploads'
