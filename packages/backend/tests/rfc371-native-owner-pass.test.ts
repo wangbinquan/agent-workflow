@@ -8,7 +8,7 @@ import {
   ObservationNativePassPageSchema,
   ObservationNativePassAckSchema,
   type ObservationNativePassAck,
-} from '@agent-workflow/shared/schemas/observationNativePages'
+} from '@agent-workflow/shared'
 import { openOpencodeUsagePass } from '@/modules/runtime-management/infrastructure/opencodeUsagePass'
 import { persistNativeUsagePass } from '@/modules/runtime-management/application/persistNativeUsagePass'
 import type {

@@ -3,16 +3,17 @@ import type {
   ObservationNativePassAdmission,
   ObservationNativePassIdentity,
   ObservationNativePassPage,
-} from '@agent-workflow/shared/schemas/observationNativePages'
+} from '@agent-workflow/shared'
 import type {
   ObservationNativeCompletion,
   ObservationNativeBeforeSpawnAck,
   ObservationNativeMeasurement,
   ObservationNativeSourceAck,
   ObservationNativeScopeReference,
-} from '@agent-workflow/shared/schemas/observationNativeCompletion'
+} from '@agent-workflow/shared'
 import type { ObservationCapturedUsage, ObservationMeasurement } from '@agent-workflow/shared'
 import type { TaskExecutionContextRef } from './taskExecutionTopology'
+import type { ObservationNativeProcessFact } from '@agent-workflow/shared'
 
 /** Bound to the actual accepted invocation and trusted original Task claim. */
 export interface NativeUsageOwnerBinding {
@@ -24,6 +25,7 @@ export interface NativeUsageOwnerBinding {
 export type NativeUsageSourceAck = ObservationNativeSourceAck
 export type NativeUsageEvidence = Omit<ObservationCapturedUsage, 'measurements' | 'capture'> & {
   readonly measurements: readonly (ObservationMeasurement | ObservationNativeMeasurement)[]
+  readonly nativeProcess?: ObservationNativeProcessFact
 }
 /** Internal Task owner seam. All positive receipts follow the original transaction commit. */
 export interface NativeUsagePersistence {

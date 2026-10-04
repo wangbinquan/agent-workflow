@@ -25,6 +25,8 @@ import {
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { count, eq } from 'drizzle-orm'
+import { insertInBatches } from '../src/platform/persistence/batchInsert'
+import { NATIVE_USAGE_ARCHIVE } from '../src/modules/task-execution/infrastructure/nativeUsageArchive'
 
 import type { Hono } from 'hono'
 
@@ -664,4 +666,137 @@ describe('RFC-311 T19 / RFC-317 R8 — 级联闭包与导出清单的对账', ()
     // 豁免是有代价的(数据真的没了),所以清单必须短且逐条有理由。
     expect([...ARCHIVE_EXEMPT_TABLES]).toEqual(['runtime_session_leases'])
   })
+})
+
+describeEachProvider('RFC-371 native evidence archive', (harness) => {
+  test('all original native relations and every membership page survive Task deletion', async () => {
+    const db = harness.db
+    const dirs = tmpDirs()
+    await seedBase(db)
+    await createProviderTaskSeed()(db, {
+      id: 'native-archive',
+      status: 'done',
+      finishedAt: NOW - 300 * DAY,
+    })
+    await addRunWithEvents(db, 'native-archive', 'native-archive-node', 1)
+    const invocationId = 'native-archive-call'
+    const passId = 'native-archive-pass'
+    const document = JSON.stringify({ original: 'native-page-evidence', input: '9007199254740993' })
+    await db.insert(schema.nativeUsagePreparations).values({
+      invocationId,
+      taskId: 'native-archive',
+      nodeRunId: 'native-archive-node',
+      ownerReceiptId: 'original-before-spawn',
+      fence: 'original-claim',
+      document,
+      state: 'sealed',
+    })
+    await db.insert(schema.nativeUsagePasses).values({
+      passId,
+      invocationId,
+      headKey: 'original-head',
+      ownerReceiptId: 'original-owner',
+      identity: document,
+      initialCursor: 'original-cursor',
+      admission: document,
+      rootCreatedAt: 100,
+      state: 'eof',
+      nextOrdinal: '2',
+      nextCursor: null,
+      digest: 'a'.repeat(64),
+      position: '1002',
+      counts: JSON.stringify({ sessions: '1', parts: '1001', steps: '1001' }),
+      lastAck: document,
+    })
+    await db.insert(schema.nativeUsagePassHeads).values({ key: 'original-head', passId })
+    await db.insert(schema.nativeUsagePassPages).values(
+      [0, 1].map((ordinal) => ({
+        passId,
+        ordinal: String(ordinal),
+        payloadDigest: 'a'.repeat(64),
+        cumulativeDigest: 'b'.repeat(64),
+        document,
+        ack: document,
+      })),
+    )
+    await db.insert(schema.nativeUsageSessionParents).values({
+      passId,
+      sessionId: 'original-root',
+      parentSessionId: null,
+      ordinal: '0',
+      pathDigest: 'c'.repeat(64),
+      depth: '0',
+    })
+    const members = Array.from({ length: 1001 }, (_, n) => ({
+      passId,
+      stepId: 'original-step-' + String(n).padStart(6, '0'),
+      sessionId: 'original-root',
+      ordinal: n < 1000 ? '0' : '1',
+      document: JSON.stringify({ stepId: n, original: document }),
+    }))
+    await insertInBatches(db, schema.nativeUsageStepMembers, members, (batch) =>
+      db
+        .insert(schema.nativeUsageStepMembers)
+        .values([...batch])
+        .run(),
+    )
+    const [source] = await db
+      .insert(schema.taskExecutionObservationSources)
+      .values({
+        taskId: 'native-archive',
+        nodeRunId: 'native-archive-node',
+        evidenceJson: JSON.stringify({ invocationId, measurements: [], diagnostics: [] }),
+      })
+      .returning({ id: schema.taskExecutionObservationSources.id })
+    await db.insert(schema.nativeUsageEmissions).values({
+      invocationId,
+      eventId: 'original-frame',
+      fingerprint: 'd'.repeat(64),
+      sourceRowId: source!.id,
+      document,
+      ack: document,
+    })
+    await db.insert(schema.nativeUsageRevisionHeads).values({
+      invocationId,
+      recordId: 'original-record',
+      revision: 17,
+    })
+    const tables = [
+      schema.nativeUsagePreparations,
+      schema.nativeUsagePasses,
+      schema.nativeUsagePassHeads,
+      schema.nativeUsagePassPages,
+      schema.nativeUsageSessionParents,
+      schema.nativeUsageStepMembers,
+      schema.nativeUsageEmissions,
+      schema.nativeUsageRevisionHeads,
+    ]
+    const expected = await Promise.all(tables.map((table) => db.select().from(table)))
+    const result = await createDrizzleTaskArchiveMaintenanceCommand(db).runManual(
+      {
+        retentionDays: 90,
+        maxTrees: 2,
+        actorUserId: 'u1',
+        now: NOW,
+      },
+      { ...dirs, now: NOW },
+    )
+    expect(result.archived).toHaveLength(1)
+    const archive = result.archived[0]!
+    for (let n = 0; n < tables.length; n++) {
+      const name = NATIVE_USAGE_ARCHIVE[n]!.name
+      const actual = readFileSync(join(archive.dir, 'db', name + '.jsonl'), 'utf8')
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+      expect(actual).toHaveLength(expected[n]!.length)
+      expect(actual.map((row) => JSON.stringify(row)).sort()).toEqual(
+        expected[n]!.map((row) => JSON.stringify(row)).sort(),
+      )
+      expect(archive.rows[name]).toBe(expected[n]!.length)
+      expect(await db.select().from(tables[n]!)).toHaveLength(0)
+    }
+    expect(archive.rows.task_execution_native_usage_step_members).toBe(1001)
+    expect(await taskCount(db)).toBe(0)
+  }, 30_000)
 })

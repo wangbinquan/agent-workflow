@@ -1,7 +1,7 @@
 import type {
   ObservationNativePassAck,
   ObservationNativePassAdmission,
-} from '@agent-workflow/shared/schemas/observationNativePages'
+} from '@agent-workflow/shared'
 import type { NativeUsagePassIdentity, NativeUsagePassPage } from './nativeUsagePass'
 
 /** Bound to the original accepted invocation and its existing Task owner context. */

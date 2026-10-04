@@ -203,3 +203,72 @@ describe('P1-A reap-deadline path source-locks (impl-gate 2nd round)', () => {
     expect(src).toContain('if (reapDeadlineTimer !== undefined) clearTimeout(reapDeadlineTimer)')
   })
 })
+
+describe('RFC-371 original process observations', () => {
+  test('spawn, reap and EOF times are frozen before delayed cleanup', async () => {
+    const dir = scratch()
+    const script = join(dir, 'native-observation.ts')
+    writeFileSync(script, `console.log('original-output'); console.error('original-error')`)
+    let spawnedAt: number | null = null
+    let cleanupStartedAt: number | null = null
+    const result = await runAgentProcess({
+      cmd: [BUN, script],
+      cwd: dir,
+      env: { ...process.env } as Record<string, string>,
+      timeoutMs: 20_000,
+      requireSpawnReceipt: true,
+      onSpawned: (receipt) => {
+        spawnedAt = receipt.spawnedAt
+      },
+      cleanup: async () => {
+        cleanupStartedAt = Date.now()
+        await Bun.sleep(30)
+      },
+      capture: { rawStdout: true },
+    })
+    expect(result.outcome).toBe('ok')
+    expect(result.rawStdout).toContain('original-output')
+    expect(result.stderrTail).toContain('original-error')
+    expect(result.lifecycle?.spawnedAt).toBe(spawnedAt)
+    expect(result.lifecycle?.reapedAt).not.toBeNull()
+    expect(result.lifecycle?.drainedAt).not.toBeNull()
+    expect(result.lifecycle!.reapedAt!).toBeGreaterThanOrEqual(result.lifecycle!.spawnedAt)
+    expect(result.lifecycle!.drainedAt!).toBeGreaterThanOrEqual(result.lifecycle!.spawnedAt)
+    expect(result.lifecycle!.reapedAt!).toBeLessThanOrEqual(cleanupStartedAt!)
+    expect(result.lifecycle!.drainedAt!).toBeLessThanOrEqual(cleanupStartedAt!)
+  }, 30_000)
+
+  test('a failed output callback never supplies a successful EOF observation', async () => {
+    const dir = scratch()
+    const script = join(dir, 'native-output-failure.ts')
+    writeFileSync(script, `console.log('original-output'); await Bun.sleep(100)`)
+    const result = await runAgentProcess({
+      cmd: [BUN, script],
+      cwd: dir,
+      env: { ...process.env } as Record<string, string>,
+      timeoutMs: 20_000,
+      capture: {
+        onStdoutLine: () => {
+          throw new Error('original-capture-failed')
+        },
+      },
+    })
+    expect(result.pumpError).toContain('original-capture-failed')
+    expect(result.lifecycle?.drainedAt).toBeNull()
+    expect(result.lifecycle?.reapedAt).not.toBeNull()
+  }, 30_000)
+
+  test('an unstarted process supplies no fabricated lifecycle times', async () => {
+    const result = await runAgentProcess({
+      cmd: [BUN, '-e', 'console.log("must-not-run")'],
+      cwd: scratch(),
+      env: { ...process.env } as Record<string, string>,
+      beforeSpawn: () => {
+        throw new Error('original-before-spawn-failed')
+      },
+    })
+    expect(result.outcome).toBe('spawn-failed')
+    expect(result.pid).toBeNull()
+    expect(result.lifecycle).toBeUndefined()
+  })
+})

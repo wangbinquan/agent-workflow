@@ -82,6 +82,7 @@ export interface ManagedProcessRequest {
    */
   onSpawned?: (info: {
     pid: number
+    spawnedAt: number
     spawnBinaryPath: string
     /** Present for the RFC-328 pre-activation launcher. */
     launchNonce?: string
@@ -144,6 +145,12 @@ export interface ManagedProcessResult {
   spawnBinaryPath: string
   /** null when the child never started. */
   pid: number | null
+  /** Original process/pump settlement observations; absent on legacy injected results. */
+  lifecycle?: {
+    spawnedAt: number
+    reapedAt: number | null
+    drainedAt: number | null
+  }
   /** Durable launcher identity when pre-activation is enabled. */
   launchNonce?: string
   spawnError?: string
@@ -521,7 +528,13 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     }
   }
 
-  const childExited = child.exited
+  const spawnedAt = Date.now()
+  let reapedAt: number | null = null
+  let drainedAt: number | null = null
+  const childExited = child.exited.then((code) => {
+    reapedAt = Date.now()
+    return code
+  })
   const activeOutputSpool = outputSpool
   const outputWritersClosed =
     activeOutputSpool === undefined ? Promise.resolve() : childExited.then(() => {})
@@ -544,6 +557,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     try {
       await req.onSpawned({
         pid,
+        spawnedAt,
         spawnBinaryPath,
         ...(launchNonce !== undefined ? { launchNonce } : {}),
       })
@@ -808,6 +822,16 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   void stdoutPump.done.catch(onPumpError)
   void stderrPump.done.catch(onPumpError)
   void controlPump?.done.catch(onPumpError)
+  // Observe the actual EOF promises before waiting for reap. No timer or outcome changes.
+  const allOutputsDone = Promise.allSettled([
+    stdoutPump.done,
+    stderrPump.done,
+    ...(controlPump === undefined ? [] : [controlPump.done]),
+  ]).then((results) => {
+    if (results.every((result) => result.status === 'fulfilled') && pumpError === undefined)
+      drainedAt = Date.now()
+    return true
+  })
 
   const onAbort = (): void => {
     if (outcome === 'exited') outcome = 'aborted'
@@ -895,6 +919,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
       truncated,
       spawnBinaryPath,
       pid,
+      lifecycle: { spawnedAt, reapedAt: null, drainedAt: null },
       ...(launchNonce !== undefined ? { launchNonce } : {}),
       ...(activationFailure !== null ? { spawnError: activationFailure } : {}),
       ...(pumpError !== undefined ? { pumpError } : {}),
@@ -908,11 +933,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   const drained = await Promise.race([
     // allSettled: a rejected pump (callback threw) is already recorded via
     // onPumpError — it must not THROW out of the race.
-    Promise.allSettled([
-      stdoutPump.done,
-      stderrPump.done,
-      ...(controlPump === undefined ? [] : [controlPump.done]),
-    ]).then(() => true),
+    allOutputsDone,
     new Promise<boolean>((resolve) => {
       // RFC-254: this deadline must stay ref'd — the await depends on it, and
       // unref'd timers never fire on Windows Bun once the loop is otherwise
@@ -971,6 +992,11 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
     truncated,
     spawnBinaryPath,
     pid,
+    lifecycle: {
+      spawnedAt,
+      reapedAt,
+      drainedAt: drained && pumpError === undefined ? drainedAt : null,
+    },
     ...(launchNonce !== undefined ? { launchNonce } : {}),
     ...(activationFailure !== null
       ? { spawnError: activationFailure }

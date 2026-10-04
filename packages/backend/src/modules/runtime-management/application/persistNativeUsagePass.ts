@@ -4,7 +4,7 @@ import {
   ObservationNativePassPageSchema,
   ObservationNativePassIdentitySchema,
   type ObservationNativePassAck,
-} from '@agent-workflow/shared/schemas/observationNativePages'
+} from '@agent-workflow/shared'
 import type { AsyncNativeUsagePassReader, NativeUsagePassOwner } from './ports/nativeUsageOwner'
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)

@@ -15,18 +15,27 @@ import {
   nativeUsagePreparations,
   nativeUsageStepMembers,
   nativeUsageSessionParents,
+  nativeUsageEmissions,
+  nativeUsageRevisionHeads,
+  taskExecutionOwners,
 } from '@/db/schema'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
 import { createObservationInvocationStore } from '@/modules/run-observability/infrastructure/invocationPersistence'
 import { DrizzleNativeUsagePages } from '@/modules/task-execution/infrastructure/drizzleNativeUsagePages'
+import { DrizzleNativeUsageEmission } from '@/modules/task-execution/infrastructure/drizzleNativeUsageEmission'
+import { createUsageLedgerStore } from '@/modules/run-observability/infrastructure/usageLedgerPersistence'
+import { createUsageIngestion } from '@/modules/run-observability/application/usageIngestion'
+import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
+import { insertInBatches } from '@/platform/persistence/batchInsert'
+import type { ObservationMeasurement } from '@agent-workflow/shared'
 import { openOpencodeUsagePass } from '@/modules/runtime-management/infrastructure/opencodeUsagePass'
 import { persistNativeUsagePass } from '@/modules/runtime-management/application/persistNativeUsagePass'
 import type { NativeUsagePassOwner } from '@/modules/runtime-management/application/ports/nativeUsageOwner'
 import type { NativeUsageOwnerBinding } from '@/modules/task-execution/application/ports/nativeUsagePersistence'
-import type { ObservationNativePassIdentity } from '@agent-workflow/shared/schemas/observationNativePages'
-import type { ObservationNativeScopeReference } from '@agent-workflow/shared/schemas/observationNativeCompletion'
+import type { ObservationNativePassIdentity } from '@agent-workflow/shared'
+import type { ObservationNativeScopeReference } from '@agent-workflow/shared'
 import { describeEachProvider } from './helpers/eachProvider'
 
 const cleanup: (() => void)[] = []
@@ -99,6 +108,7 @@ describeEachProvider('RFC-371 original native pages and membership', (harness) =
       branch: 'native-fixture',
       status: 'running',
       inputs: '{}',
+      startedAt: Date.now(),
       executionLineageId: taskId,
       lineageSlotPathJson: JSON.stringify(slotPath),
     })
@@ -410,5 +420,313 @@ describeEachProvider('RFC-371 original native pages and membership', (harness) =
     ]) {
       expect((await f.db.select().from(table)).length).toBe(0)
     }
+  })
+
+  function numeric(
+    binding: NativeUsageOwnerBinding,
+    recordId = 'opencode:step:original',
+  ): ObservationMeasurement {
+    return {
+      schemaVersion: 1,
+      invocationId: binding.invocationId,
+      recordId,
+      revision: 1,
+      taskId: binding.taskId,
+      nodeRunId: binding.nodeRunId,
+      agentId: null,
+      occurredAt: 100,
+      observedAt: 200,
+      model: { provider: 'original-provider', id: 'original-model' },
+      adapterVersion: 'opencode-native-pages-v2',
+      reporting: 'cumulative',
+      inclusion: 'self',
+      coverage: 'complete',
+      validity: 'valid',
+      basis: { kind: 'invocation' },
+      usage: { input: '11', cacheRead: '13', cacheWrite: '17', output: '19' },
+    }
+  }
+
+  test('numeric ACK retains the exact original source and replay after projection', async () => {
+    const f = await fixture('fresh')
+    const input = {
+      binding: f.binding,
+      eventId: 'actual-frame',
+      evidence: {
+        invocationId: f.binding.invocationId,
+        measurements: [numeric(f.binding)],
+        diagnostics: [],
+      },
+    }
+    const emission = new DrizzleNativeUsageEmission(f.db)
+    const ack = await emission.emit(input)
+    expect(ack.measurements[0]?.revision).toBe(1)
+    const originals = await f.db.select().from(taskExecutionObservationSources)
+    expect(originals).toHaveLength(1)
+    expect(ack.sourceWatermark).toBe(String(originals[0]!.id))
+    expect(JSON.parse(originals[0]!.evidenceJson).measurements).toEqual(ack.measurements)
+    await f.db.update(taskExecutionObservationSources).set({ pending: false })
+    expect(await new DrizzleNativeUsageEmission(f.db).emit(input)).toEqual(ack)
+    const changed = { ...input, evidence: { ...input.evidence, diagnostics: ['changed'] } }
+    await expect(emission.emit(changed)).rejects.toThrow('changed its frozen payload')
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(1)
+    expect(await f.db.select().from(nativeUsageEmissions)).toHaveLength(1)
+    const next = await emission.emit({ ...input, eventId: 'actual-next-frame' })
+    expect(next.measurements[0]?.revision).toBe(2)
+    expect(BigInt(next.sourceWatermark)).toBeGreaterThan(BigInt(ack.sourceWatermark))
+    expect(await emission.emit(input)).toEqual(ack)
+  })
+
+  test('allocation covers all original pending, projected and observed revisions through EOF', async () => {
+    const f = await fixture('fresh')
+    const pending = numeric(f.binding, 'opencode:step:pending')
+    const observed = numeric(f.binding, 'opencode:step:observed')
+    const originals = Array.from({ length: 501 }, (_, n) => ({
+      taskId: f.binding.taskId,
+      nodeRunId: f.binding.nodeRunId,
+      evidenceJson: JSON.stringify({
+        invocationId: f.binding.invocationId,
+        measurements: [{ ...pending, revision: n + 1 }],
+        diagnostics: [],
+      }),
+      pending: n % 2 === 0,
+    }))
+    originals.push({
+      ...originals[0]!,
+      pending: false,
+      evidenceJson: JSON.stringify({
+        invocationId: f.binding.invocationId,
+        measurements: [{ ...pending, revision: 777 }],
+        diagnostics: [],
+      }),
+    })
+    await databaseSessionFor(f.db).transaction((tx) =>
+      insertInBatches(tx, taskExecutionObservationSources, originals, (batch) =>
+        tx
+          .insert(taskExecutionObservationSources)
+          .values([...batch])
+          .run(),
+      ),
+    )
+    const sourceId = 'local-node:' + f.binding.nodeRunId
+    await createUsageIngestion(createUsageLedgerStore(f.db)).ingest({
+      sourceId,
+      expectedCursor: null,
+      nextCursor: 'original-observed',
+      events: [{ eventId: 'observed-event', measurement: { ...observed, revision: 1000 } }],
+    })
+    const ack = await new DrizzleNativeUsageEmission(f.db).emit({
+      binding: f.binding,
+      eventId: 'original-high-water-frame',
+      evidence: {
+        invocationId: f.binding.invocationId,
+        measurements: [pending, observed],
+        diagnostics: [],
+      },
+    })
+    expect(ack.measurements.map((measurement) => measurement.revision)).toEqual([778, 1001])
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(503)
+  }, 30_000)
+
+  test('failed binding rolls allocation and original source back before the next ACK', async () => {
+    const f = await fixture('fresh')
+    const measurement = numeric(f.binding)
+    const emission = new DrizzleNativeUsageEmission(f.db)
+    const input = {
+      binding: f.binding,
+      eventId: 'rollback-frame',
+      evidence: {
+        invocationId: f.binding.invocationId,
+        measurements: [measurement, { ...measurement, taskId: 'different-original-task' }],
+        diagnostics: [],
+      },
+    }
+    await expect(emission.emit(input)).rejects.toThrow('changed its binding')
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(0)
+    expect(await f.db.select().from(nativeUsageRevisionHeads)).toHaveLength(0)
+    expect(await f.db.select().from(nativeUsageEmissions)).toHaveLength(0)
+    const ack = await emission.emit({
+      ...input,
+      evidence: { ...input.evidence, measurements: [measurement] },
+    })
+    expect(ack.measurements[0]?.revision).toBe(1)
+  })
+
+  test('original Task owner change cannot produce a numeric ACK', async () => {
+    const f = await fixture('fresh')
+    await f.db
+      .update(taskExecutionOwners)
+      .set({ epoch: f.binding.executionContext.token.epoch + 1 })
+      .where(eq(taskExecutionOwners.taskId, f.binding.taskId))
+    await expect(
+      new DrizzleNativeUsageEmission(f.db).emit({
+        binding: f.binding,
+        eventId: 'stale-frame',
+        evidence: {
+          invocationId: f.binding.invocationId,
+          measurements: [numeric(f.binding)],
+          diagnostics: [],
+        },
+      }),
+    ).rejects.toThrow('mutation was fenced')
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(0)
+    expect(await f.db.select().from(nativeUsageEmissions)).toHaveLength(0)
+  })
+
+  test('numeric ACK cannot escape a caller transaction that has not committed', async () => {
+    const f = await fixture('fresh')
+    await expect(
+      databaseSessionFor(f.db).transaction(() =>
+        new DrizzleNativeUsageEmission(f.db).emit({
+          binding: f.binding,
+          eventId: 'outer-uncommitted-frame',
+          evidence: {
+            invocationId: f.binding.invocationId,
+            measurements: [numeric(f.binding)],
+            diagnostics: [],
+          },
+        }),
+      ),
+    ).rejects.toThrow('original transaction commit')
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(0)
+  })
+
+  test('numeric native scopes reference the actual persisted parent chain', async () => {
+    const f = await fixture('fresh')
+    const native = nativeFixture(3, 82)
+    const writer = new Database(native.path)
+    try {
+      writer.run('INSERT INTO message VALUES (?,?,?)', [
+        'deep-message',
+        'child-000080',
+        JSON.stringify({
+          role: 'assistant',
+          providerID: 'original-provider',
+          modelID: 'original-model',
+        }),
+      ])
+      writer.run('INSERT INTO part VALUES (?,?,?,?,?)', [
+        'deep-original-step',
+        'child-000080',
+        'deep-message',
+        native.bornAt,
+        JSON.stringify({
+          type: 'step-finish',
+          tokens: { input: 5, output: 6, reasoning: 0, cache: { read: 7, write: 8 } },
+        }),
+      ])
+    } finally {
+      writer.close()
+    }
+    const final = await persistNativeUsagePass(
+      f.open(native.path, f.identity('final'), 7),
+      f.owner(),
+    )
+    const reference: ObservationNativeScopeReference = {
+      root: 'root',
+      session: 'child-000080',
+      parentSession: 'child-000079',
+      turn: f.binding.invocationId,
+      turnIndex: 0,
+      level: 'request',
+      ancestry: {
+        kind: 'native-pass-v2',
+        identity: final.identity,
+        ownerReceiptId: final.ownerReceiptId,
+        pageOrdinal: final.ordinal,
+        cumulativeDigest: final.cumulativeDigest,
+      },
+    }
+    const emission = new DrizzleNativeUsageEmission(f.db)
+    const measurement = {
+      ...numeric(f.binding, 'opencode:step:deep-original-step'),
+      scope: reference,
+      reporting: 'delta' as const,
+      occurredAt: native.bornAt,
+      usage: { input: '5', cacheRead: '7', cacheWrite: '8', output: '6' },
+    }
+    const evidence = {
+      invocationId: f.binding.invocationId,
+      measurements: [measurement],
+      diagnostics: [],
+    }
+    const ack = await emission.emit({ binding: f.binding, eventId: 'actual-deep-scope', evidence })
+    expect(ack.measurements[0]?.scope).toEqual(reference)
+    expect(ack.measurements[0]?.usage).toEqual(measurement.usage)
+    expect(final.eof?.counts.steps).toBe('4')
+    for (const [name, changed, message] of [
+      ['absent-step', { ...measurement, recordId: 'opencode:step:original' }, 'step is absent'],
+      [
+        'other-session',
+        { ...measurement, recordId: 'opencode:step:step-000000' },
+        'step is absent',
+      ],
+      [
+        'changed-input',
+        { ...measurement, usage: { ...measurement.usage, input: '6' } },
+        'original step numbers',
+      ],
+      [
+        'changed-model',
+        { ...measurement, model: { ...measurement.model!, id: 'other-model' } },
+        'original step numbers',
+      ],
+      ['changed-time', { ...measurement, occurredAt: native.bornAt + 1 }, 'original step numbers'],
+      [
+        'summary-scope',
+        { ...measurement, scope: { ...reference, level: 'self-total' as const } },
+        'original step numbers',
+      ],
+      [
+        'cumulative-step',
+        { ...measurement, reporting: 'cumulative' as const },
+        'original step numbers',
+      ],
+    ] as const) {
+      await expect(
+        emission.emit({
+          binding: f.binding,
+          eventId: name,
+          evidence: { ...evidence, measurements: [changed] },
+        }),
+      ).rejects.toThrow(message)
+    }
+    const wrong = {
+      ...reference,
+      ancestry: {
+        ...reference.ancestry,
+        cumulativeDigest:
+          (reference.ancestry.cumulativeDigest[0] === '0' ? '1' : '0') +
+          reference.ancestry.cumulativeDigest.slice(1),
+      },
+    }
+    await expect(
+      emission.emit({
+        binding: f.binding,
+        eventId: 'changed-scope',
+        evidence: { ...evidence, measurements: [{ ...measurement, scope: wrong }] },
+      }),
+    ).rejects.toThrow('changed its persisted page')
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(1)
+  }, 30_000)
+
+  test('concurrent original frames get distinct increasing revisions', async () => {
+    const f = await fixture('fresh')
+    const emission = new DrizzleNativeUsageEmission(f.db)
+    const evidence = {
+      invocationId: f.binding.invocationId,
+      measurements: [numeric(f.binding)],
+      diagnostics: [],
+    }
+    const replies = await Promise.all(
+      ['first-original', 'second-original'].map((eventId) =>
+        emission.emit({ binding: f.binding, eventId, evidence }),
+      ),
+    )
+    expect(replies.map((ack) => ack.measurements[0]!.revision).sort((a, b) => a - b)).toEqual([
+      1, 2,
+    ])
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(2)
+    expect(await f.db.select().from(nativeUsageEmissions)).toHaveLength(2)
   })
 })

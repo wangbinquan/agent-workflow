@@ -6,11 +6,11 @@ import {
   ObservationNativePassIdentitySchema,
   ObservationNativePassPageSchema,
   ObservationNativePassCountsSchema,
-} from '@agent-workflow/shared/schemas/observationNativePages'
+} from '@agent-workflow/shared'
 import {
   ObservationNativeBeforeSpawnAckSchema,
   ObservationNativeScopeReferenceSchema,
-} from '@agent-workflow/shared/schemas/observationNativeCompletion'
+} from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   nativeUsagePreparations,

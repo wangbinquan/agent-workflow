@@ -1,5 +1,5 @@
 import { z } from 'zod'
-import { ObservationTokenUsageSchema } from './observationUsage'
+import { ObservationTokenUsageSchema } from './observationUsageCore'
 
 const key = z.string().min(1).max(512)
 // Total population and positions are arbitrary-precision decimals, never a packet-size budget.

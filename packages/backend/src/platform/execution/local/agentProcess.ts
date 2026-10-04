@@ -82,6 +82,8 @@ export interface AgentProcessResult {
   outcome: AgentProcessOutcome
   exitCode: number | null
   pid: number | null
+  /** Frozen from the original managed process; never inferred after cleanup. */
+  lifecycle?: ManagedProcessResult['lifecycle']
   launchNonce?: string
   /** capture.rawStdout 时为 byte-exact rolling tail，否则 ''。 */
   rawStdout: string
@@ -137,13 +139,14 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
       ? {
           onSpawned: async (info: {
             pid: number
+            spawnedAt: number
             spawnBinaryPath: string
             launchNonce?: string
           }) => {
             try {
               await req.onSpawned?.({
                 pid: info.pid,
-                spawnedAt: Date.now(),
+                spawnedAt: info.spawnedAt,
                 spawnBinaryPath: info.spawnBinaryPath,
                 ...(info.launchNonce !== undefined ? { launchNonce: info.launchNonce } : {}),
               })
@@ -209,6 +212,7 @@ export async function runAgentProcess(req: AgentProcessRequest): Promise<AgentPr
     outcome,
     exitCode: mp.exitCode,
     pid: mp.pid,
+    ...(mp.lifecycle === undefined ? {} : { lifecycle: mp.lifecycle }),
     ...(mp.launchNonce !== undefined ? { launchNonce: mp.launchNonce } : {}),
     rawStdout: mp.rawStdout,
     stderrTail: mp.stderrTail,

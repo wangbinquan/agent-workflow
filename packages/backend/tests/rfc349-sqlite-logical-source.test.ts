@@ -36,7 +36,7 @@ describe('RFC-349 SQLite logical source', () => {
     const source = openSqliteLogicalSource({ path, contract })
     try {
       const snapshot = await source.preflight()
-      expect(Object.keys(snapshot.tableRows)).toHaveLength(208)
+      expect(Object.keys(snapshot.tableRows)).toHaveLength(216)
       expect(snapshot.tableRows.users).toBeGreaterThanOrEqual(2)
       const table = contract.tables.find((candidate) => candidate.id === 'users')!
       const rows = await source.readChunk(table, null, 10)
@@ -105,7 +105,7 @@ describe('RFC-349 SQLite logical source', () => {
     const source = await openSqliteLogicalSourceWorker({ path, contract })
     try {
       const snapshot = await source.preflight()
-      expect(Object.keys(snapshot.tableRows)).toHaveLength(208)
+      expect(Object.keys(snapshot.tableRows)).toHaveLength(216)
       const table = contract.tables.find((candidate) => candidate.id === 'users')!
       const rows = await source.readChunk(table, null, 1)
       expect(rows).toHaveLength(1)

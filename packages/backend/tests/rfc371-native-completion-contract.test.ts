@@ -7,7 +7,7 @@ import {
   ObservationNativePassCompletionSchema,
   ObservationNativeScopeReferenceSchema,
   ObservationNativeSourceAckSchema,
-} from '@agent-workflow/shared/schemas/observationNativeCompletion'
+} from '@agent-workflow/shared'
 
 const digest = 'a'.repeat(64)
 const identity = {

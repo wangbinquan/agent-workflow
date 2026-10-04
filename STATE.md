@@ -1,3 +1,11 @@
+## 2026-10-05 RFC-371 原生数字回执与证据归档
+
+原数字帧在原 Task claim／accepted invocation／node 事务内分配真实高水位修订、追加原 source、冻结原 ACK，再在真实提交后返回。来源修订沿全部 pending／已投影记录持续到 EOF，不形成第二套 Token 账本；真实 v2 step 的 session／引用页进度／模型／原时间和四桶联校，80层正向使用原 child step。原进程在 spawn／reap／output EOF 当时保留时刻，cleanup 不重写；八张原证据表实际分页写入 Task 原归档，全量 JSONL 与原删除闭包对账，非归档豁免。旧v1与v2功能门FAIL及其数字／fixture修复各自留证。
+
+原1f0a2dc1主CI failure、Windows cancelled，full E2E／WebKit／visual success；原日志保留。对应修复包含共享根入口／纯数值叶子、216 source／210 active／六archive-only原合同报告、0238 head及真实原fixture必需字段与原生SQLite调用登记，原断言、分类器、历史freeze及预算不放宽。本批32候选与已提交RFC-370 native material合并视图只运行一次有效原静态生成，sourceDigest `sha256:838ede05504198c6789afb9e8069fae751a4326a4d79ceaf7c9430afd03efd54`；首个未传write的只读输出未形成13产物，明确无效留证。13 matching保留129有序库存／why、300债、40SPI／69targets、原值级SCC及空implementation SCC。实际imports+33／exceptions+28／owners+35及两固定外部格式fixture文件的登记具名增长，matching发布后正常退役；SOURCE、matching metadata、确切SHA正式CI各自验收。
+
+仅目标format／lint、原纯AST／JSON／schema-report generator，未跑AW本机tests／typecheck／build／新服务或更换原daemon。正式泳道及原已收到分类Token／CNY继续沿已验收页面。producer仍OFF，native seal／历史baseline配对／生产接线、CS对应journal／Pod owner、真100K Task／10M usage与两RFC收尾仍开放，未记Done。以下完整共享正文与并行提交逐字保留。
+
 ## 2026-10-05 RFC-371 原始分页持久 owner 候选
 
 实现原 Task claim／accepted invocation／node 事务里的 prepare、admit、原 page 持久回执、interrupt 和完整 membership／parent 查询。重送返回冻结回执，中断快照必须明确新 pass 替代；正 ACK 只在原事务提交后返回。原 Worker 从同一 SQLite 快照传递 root birth，缺字段保持 null。八个追加关系保留原证据与 ledger 映射，不构造第二套数字账本。双 provider 回归包含10001 step／1025 session／80层及37条续页全部EOF，测试只写入 hosted 流程。

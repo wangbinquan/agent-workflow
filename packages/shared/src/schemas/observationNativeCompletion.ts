@@ -3,7 +3,7 @@ import {
   ObservationNativePassAckSchema,
   ObservationNativePassIdentitySchema,
 } from './observationNativePages'
-import { ObservationMeasurementSchema } from './observationUsage'
+import { ObservationMeasurementSchema } from './observationUsageCore'
 
 const key = z.string().min(1).max(512)
 const decimal = z.string().regex(/^(0|[1-9]\d*)$/)
