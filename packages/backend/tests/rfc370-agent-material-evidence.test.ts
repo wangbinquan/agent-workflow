@@ -19,6 +19,7 @@ import { getRuntimeDriver, bindNativeAgentMaterialEvidence } from '../src/servic
 import { cwdSlug } from '../src/services/runtime/claudeCode/sessionCapture'
 import { NOOP_HANDLE } from '../src/services/runtime/opencode/subagentLiveCapture'
 import type {
+  AgentSpawnPlan,
   SessionCaptureContext,
   SystemAgentSessionSweepContext,
 } from '../src/services/runtime/types'
@@ -449,4 +450,32 @@ describe('RFC-370 selected material evidence', () => {
       rmSync(root, { recursive: true, force: true })
     }
   })
+})
+
+// CI 5083d73: system preparation assigns a nullable plan before binding its
+// lazy evidence scope. Type narrowing must survive that callback, while each
+// actual evidence request still reads the final environment at call time.
+test('system evidence reads the prepared plan lazily and preserves later environment replacement', () => {
+  let plan: Pick<AgentSpawnPlan, 'env'> | null = null
+  plan = { env: { SELECTED_PROFILE: 'prepared' } }
+  const environments: Readonly<Record<string, string | undefined>>[] = []
+  const evidence = bindNativeAgentMaterialEvidence(
+    {
+      captureSessions: async () => {},
+      prepareUsageNormalizer(context) {
+        environments.push(context.env)
+        return () => ({ measurements: [], diagnostics: [] })
+      },
+    },
+    {
+      ...scope,
+      environment: () => plan!.env,
+    },
+  )
+  expect(environments).toEqual([])
+  const finalEnvironment = { SELECTED_PROFILE: 'final' }
+  plan.env = finalEnvironment
+  evidence.prepareUsageNormalizer!()
+  expect(environments).toEqual([finalEnvironment])
+  expect(environments[0]).toBe(finalEnvironment)
 })

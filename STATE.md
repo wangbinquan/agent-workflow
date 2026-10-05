@@ -10092,3 +10092,13 @@ Task 和 System/MCP 的八项真实 material evidence 消费改接 RM applicatio
 有效原规则只生成一次13产物，6442非自有源码读 committed0cb05ac9，排除并保留 native pages 与六份并行 native usage WIP；digest sha256:a1ae054d5539aa95885e53a945687f6f9c057fe1b6493c9935c42c174954a085。原129库存／why／40SPI／69targets／空implementation SCC保持，commons304只退役实际1边并具名补3分组为306；实际entry1875→1876／imports6283→6300／exceptions5577→5594／owners26718→26730四项匹配增长正常后继退役，public1148→1147清除实际死导出。Windows原watch对称补10路径、原suite加3真实测试，原workflow逐字逆变换保持。
 
 基线0cb05ac9主CI37252344342正式failure（44success／6failure），Windows37252344340正式failure；本批修复nullable matcher类型和span dead export，不混入并行native pages失败／实现。有限metadata门、精确发布与新hosted CI分别留证；没有本机AW tests/typecheck/build/service。仍在A-T5，完整材料／执行／取证组合、全部真根、脚本、执行权恢复与A-G继续；独立CS adapters和M0首次部署／M1～M4尚未开始，不关闭RFC。
+
+## 2026-10-05 RFC-370 Agent 取证批次 CI 修复
+
+5083d73c5bf1f511329613676127a6dfd33186fb 的主 CI37257533997 为 failure，50 jobs 中45 success／5 failure；Windows37257533971 为 failure。Windows 的平台用例259 pass／3 skip／0 fail与shared2295 pass／0 fail只是对应测试证据，两套 workflow 都在 System plan 的 TS18047 类型检查失败，不能报告整体绿色。主 CI 另有原 RFC-317 R2 三条未登记 type/static-import 差额；native pages 并行失败保留其归属，未收进本批修复。
+
+System 修复只在既有 lazy env 回调保留非空事实，类型擦除后的完整原算法 AST 相等；新增实际回归验证 binding 不提前读取 env，且请求读取后来替换的最终 env。有限 EVIDENCE-CI-REPAIR-DELTA2 功能 PASS，指纹ad65e7e676b3b2a573e0ee19a39a66953bec872cdabc0d8974aa2cd62408e0a0。当前 execution WIP 完整保留，本批只发布已审的一处 System type-only hunk，不创建额外 checkout 或 alternate index。
+
+三条实际 RM evidence application→legacy spanCapture／types／usage 类型出边按原判据具名登记，原306条有序记录及why保留，outbound30→33，总数309；退役目标仍为RFC-370 A-T7 selected material and evidence roots。原规则按 committed68be15bfd1ba7ce8ecb1de6a9d357db7232b6bbb 加 reviewed 两路径数据投影执行一次，13 private产物有效，sourceDigest为sha256:68671bf7bb79b244f46d0da2dd3a5f6c6ab8ae85552712f08c7a7d7f6daeb920。原129库存、全部计数、字段、why及permit不变，无新增长许可；原validator通过。其他共享WIP和未审execution内容排除并保留，不改scanner、断言、预算或旧失败记录。
+
+本机只做owned format／lint与纯AST／JSON／字节、原静态投影，没有AW test／typecheck／build／service。匹配metadata门、精确上库和新exact-SHA CI分别验收。仍在A-T5，完整执行／材料／取证组合、所有真根、脚本、H7与A-G继续；CS adapters、M0首次实际部署和M1～M4尚未完成，本批不关闭RFC。

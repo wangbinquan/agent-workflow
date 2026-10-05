@@ -823,3 +823,13 @@ SOURCE15-R2 独立有限功能 PASS；15 owned／11 control／14 evidence，首�
 原静态规则对committed0cb05ac9加冻结SOURCE15有效执行一次，13产物digest sha256:a1ae054d5539aa95885e53a945687f6f9c057fe1b6493c9935c42c174954a085；非自有6442源码均读committed，排除并保留其他WIP。原validator、129完整有序库存/why、40SPI/69targets/空implementation SCC不变；实际退役1旧debt并登记3兼容分组（304→306），原303row完整保留。四项实际entry/import/exception/owner matching增长和正常后继退役分列留证，public真实减1。Windows新增10watch/3suite，完整原workflow逆变换逐字保持。
 
 基线主CI37252344342正式failure44success/6failure、Windows37252344340 failure原记录保持；span孤儿导出与nullable matcher修复属于本批，native pages并行失败不归入本批。匹配metadata独立回执、发布SHA及新双OS/双数据库CI分别留证；SOURCE或静态证明均不是整套CI/A-G/RFC Done。没有CS adapter或部署；完整H4/H5、全部真根、脚本/H7/A-G和M0～M4继续。
+
+## 2026-10-05 RFC-370 Agent 取证批次 CI 修复
+
+5083d73c5bf1f511329613676127a6dfd33186fb 的主 CI37257533997 为 failure，50 jobs 中45 success／5 failure；Windows37257533971 为 failure。Windows 的平台用例259 pass／3 skip／0 fail与shared2295 pass／0 fail只是对应测试证据，两套 workflow 都在 System plan 的 TS18047 类型检查失败，不能报告整体绿色。主 CI 另有原 RFC-317 R2 三条未登记 type/static-import 差额；native pages 并行失败保留其归属，未收进本批修复。
+
+System 修复只在既有 lazy env 回调保留非空事实，类型擦除后的完整原算法 AST 相等；新增实际回归验证 binding 不提前读取 env，且请求读取后来替换的最终 env。有限 EVIDENCE-CI-REPAIR-DELTA2 功能 PASS，指纹ad65e7e676b3b2a573e0ee19a39a66953bec872cdabc0d8974aa2cd62408e0a0。当前 execution WIP 完整保留，本批只发布已审的一处 System type-only hunk，不创建额外 checkout 或 alternate index。
+
+三条实际 RM evidence application→legacy spanCapture／types／usage 类型出边按原判据具名登记，原306条有序记录及why保留，outbound30→33，总数309；退役目标仍为RFC-370 A-T7 selected material and evidence roots。原规则按 committed68be15bfd1ba7ce8ecb1de6a9d357db7232b6bbb 加 reviewed 两路径数据投影执行一次，13 private产物有效，sourceDigest为sha256:68671bf7bb79b244f46d0da2dd3a5f6c6ab8ae85552712f08c7a7d7f6daeb920。原129库存、全部计数、字段、why及permit不变，无新增长许可；原validator通过。其他共享WIP和未审execution内容排除并保留，不改scanner、断言、预算或旧失败记录。
+
+本机只做owned format／lint与纯AST／JSON／字节、原静态投影，没有AW test／typecheck／build／service。匹配metadata门、精确上库和新exact-SHA CI分别验收。仍在A-T5，完整执行／材料／取证组合、所有真根、脚本、H7与A-G继续；CS adapters、M0首次实际部署和M1～M4尚未完成，本批不关闭RFC。

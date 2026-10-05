@@ -515,7 +515,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       }
 
       const materialEvidence = bindNativeAgentMaterialEvidence(driver, {
-        environment: () => plan.env,
+        environment: () => plan!.env,
         runContent: () => runDir,
         sessionLocation: () => ({ worktreePath: worktreeDir }),
       })
