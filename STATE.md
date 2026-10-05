@@ -1,3 +1,17 @@
+## 2026-10-06 RFC-370 Task Git matching 与共享前端提交合成
+
+共享 main 新提交 147ade45 只增加前端焦点恢复的原调用及用例。Task SOURCE8-DOC2-R2 与 META15-R1 的已审内容完整保持，源码门和原有效 census 不重跑。对其已有独立原生成 8 canonical 的数值/shape 与完整已提交 4ff95e5e 逐项比较，只有 sourceDigest 改变；完整三份旧/base、前端和自有候选摘要分别复原，再由原 sourceDigest 函数合成已提交 147ade45 与十冻结候选。最终 sha256:2f9da6919c9eebab26f881d811992595fd62efb46598e021826df46181ac6dc9，13 matching 的全部原数值/shape、331 债/330 旧 authored 行、129 库存/why、40 SPI/69 targets、SCC 和四个尚未发布的实际 matching 许可不变。只推进当前 snapshot 与对应摘要，未改分类器或断言。
+
+META15-R1 独立有限 PASS，51 项首末指纹 4519c6a5469ffc556cb021debd93cd27593980180976b2a22e0429ccd934b67c；R2 只审这次匹配合成差额。以下共享原记录和并行内容全文保留。119b59c7 主 CI 37349482894 最终 cancelled，其中已有失败分片；Windows 37349482848 success 分列留证。新确切 SHA CI 另验核，完整 Task/根/retention、A-G、CS adapter/首次部署/M1～M4 和 RFC 继续开放。
+
+## 2026-10-06 RFC-370 Task Git 观测切面与历史数据库 CI 用例修复
+
+Task 原六项 Git 观测、digest、私有 ref 过滤、并行读取与原前后触发时机完整保留，迁入 source-control application；独立绑定的 purpose 在 capture 时读取原 cwd，保留 receiver。新增真实 Git／不透明引用与拒绝用例。历史数据库回归在同一真实 fixture/coordinator 上依次验证 accepting-writes/finalized，仍保留 root/head 四种组合、原错误和字节断言、原 5 秒预算；没有修改生产迁移算法。SOURCE8-DOC2-R2 独立有限 PASS，45 项首末指纹 1136cab75fd52885a9c48b6bf287f08be1ffe254fd6ca16017f6f4ef902895c7。R1 元组类型 FAIL 与修复后的 PASS 分别留证。
+
+有效原 scoped census 仅一次，冻结十文件和完整已提交 4ff95e5e 人口，sourceDigest sha256:a0f25d7ebf0e32893a379f5bf07f5b005a3b13131927c7b4167089fd37c64636。13 matching 保留并行 guard 登记、129 有序库存/why、全部 330 原债、40 SPI/69 targets、原值级 SCC 与空 implementation SCC；仅登记实际 Runner 到 composition 地址，债 331。原 counter 实增 imports 6464→6469、exceptions 5714→5719、public 1167→1169、owners 26885→26891，四个具名许可在下一普通后继退役。原纯治理 JSON 属性次序 FAIL 保留，后继仅恢复原 validator 的属性次序，不重扫、不改规则、断言或预算。
+
+119b59c7 Windows 37349482848 success，主 CI 37349482894 的原失败记录保留；并行缺失 guard 登记由已提交 4ff95e5e 修复，新确切 SHA hosted CI 另验。目标 format/lint 与纯 AST/字节逆向对拍已通过，无本机 AW tests/typecheck/build/service。共享 STATE 全文和并行内容完整保留。输出校验适配设计已有限 PASS，源码随后实施；完整 Task、正常根、retention、脚本和执行权恢复、A-G、CS adapter、M0 首次部署及 M1～M4 继续开放，RFC 未完成，尚无 AW-in-CS 部署。
+
 ## 2026-10-06 RFC-370 原完整观测类型归属与 CI 修复
 
 五份完整观测声明及注释迁入RM application port，legacy保留全部原名称，public从自身application导出；原算法、成员与其他出口保持。原canonical薄facade清单仅补sessionEventSink实际地址，规则／断言／预算不变。SOURCE4-DOC1-R1独立有限PASS，21项首末指纹f01f2dfe70b8de534d3ab8f2829e7ccdc547a0d838364625a0568295bdcd99c2；完整AST／注释／其他源码对拍及目标format／lint通过。
@@ -10267,3 +10281,7 @@ CS自有测试分层修复已直接提交远端be7e9d3584a15b0fcbcf85162d736d749
 ## 2026-10-06 RFC-371 Task public 回归守卫补登
 
 自有 SOURCE16 与 META14／COUNT 修正已分别推送 b386d3108、1d287eddf，远端同步，其他会话源码未提交。旧确切 CI 的完整失败日志确认新增 native-participant-boundary 守卫漏登；使用原 census 单文件纯解析补登记第214条，原213条逐字保留，原 corpus／absence／negative-fixture 判据不动。129库存基线、顺序与why保持，119b59c78已消费的4条一次增长声明按原规则退役；保留原官方生产sourceDigest，不重跑完整AST。原META2有限FAIL确认退役后ledger provenance未刷新，修正用原withArtifactProvenance；旧失败留证。有限补充检视与新确切SHA CI另验，默认producer／CS v2／规模及两RFC余项继续。
+
+## 2026-10-06 RFC-371 贡献详情返回焦点 CI 修复
+
+自有补登记已直接推送4ff95e5e2，post-fetch远端同步，没有联系或提交其他会话源码。1d287eddf确切CI暴露中文运行时弹窗返回焦点被共享Dialog后发初始焦点覆盖；原完整中英文oracle与预算保持，在真实返回行使用既有data-dialog-autofocus合同，使两个事件都定位原行，延迟portal等待和滚动恢复保持。新增原resolver后发回归，目标format/lint通过，无本机AW tests/types/build/service。当前正式页面8Task/14受理/四桶123238/人民币0.16583逐项核对，实际贡献→任务整体→返回同Task行和位置已验证留证，不把旧数据回读当新模型验收；完整producer/CS v2/规模及两RFC仍开放。

@@ -156,53 +156,15 @@ import {
   type RuntimeSessionLeaseToken,
 } from '@/services/runtimeSessionLease'
 import { sha256Hex } from '@/util/hash'
-import { runGit, type GitRunResult } from '@/util/git'
+import type {
+  AgentWorkspaceGitControlSnapshot as GitControlSnapshot,
+  AgentWorkspaceGitControlObservation,
+} from '@/modules/source-control/public/participants'
+import { bindNativeAgentWorkspaceGitControlObservation } from '@/modules/source-control/composition/agentWorkspaceGitControl'
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.
 export type { SkillSource, ResolvedSkill } from './runtime/types'
-
-interface GitControlSnapshot {
-  readonly head: string
-  readonly symbolicHead: string
-  readonly index: string
-  readonly refs: string
-  readonly localConfig: string
-  readonly worktreeConfig: string
-}
-
-function digestGitObservation(result: GitRunResult, stdout = result.stdout): string {
-  return sha256Hex(`${result.exitCode}\0${stdout}\0${result.stderr}`)
-}
-
-/**
- * Capture semantic Git control state around the exact Agent child window.
- * Read-only commands such as `git status` may refresh index stat data, so the
- * index observation deliberately hashes `ls-files --stage`, not `.git/index`
- * bytes. Platform-private refs are excluded; TaskEngine owns that namespace.
- */
-async function captureGitControlSnapshot(cwd: string): Promise<GitControlSnapshot> {
-  const [head, symbolicHead, index, refs, localConfig, worktreeConfig] = await Promise.all([
-    runGit(cwd, ['rev-parse', '--verify', 'HEAD']),
-    runGit(cwd, ['symbolic-ref', '--quiet', 'HEAD']),
-    runGit(cwd, ['ls-files', '--stage', '-z']),
-    runGit(cwd, ['for-each-ref', '--format=%(refname) %(objectname)']),
-    runGit(cwd, ['config', '--local', '--null', '--list']),
-    runGit(cwd, ['config', '--worktree', '--null', '--list']),
-  ])
-  const publicRefs = refs.stdout
-    .split('\n')
-    .filter((line) => !line.startsWith('refs/agent-workflow/'))
-    .join('\n')
-  return {
-    head: digestGitObservation(head),
-    symbolicHead: digestGitObservation(symbolicHead),
-    index: digestGitObservation(index),
-    refs: digestGitObservation(refs, publicRefs),
-    localConfig: digestGitObservation(localConfig),
-    worktreeConfig: digestGitObservation(worktreeConfig),
-  }
-}
 
 function changedGitControlFields(before: GitControlSnapshot, after: GitControlSnapshot): string[] {
   return (Object.keys(before) as Array<keyof GitControlSnapshot>).filter(
@@ -616,6 +578,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     workingDirectory: () => opts.worktreePath,
   })
   const runRoot = materialWorkspace.locations.runDirectory
+  const gitControlObservation: AgentWorkspaceGitControlObservation =
+    bindNativeAgentWorkspaceGitControlObservation({ workingDirectory: () => opts.worktreePath })
   // RFC-200: this persisted value is the single source for BOTH prompt emit
   // and stdout parse. Empty means a pre-upgrade in-flight row and preserves
   // the historical bare-envelope protocol byte-for-byte.
@@ -1848,9 +1812,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     //    (real exitCode kept, `drainTimedOut`); a child that survives SIGKILL
     //    past the REAP deadline comes back `unreaped` (→ childUnkillable below).
     const gitControlBefore =
-      opts.gitMutationPolicy === 'read-only'
-        ? await captureGitControlSnapshot(opts.worktreePath)
-        : undefined
+      opts.gitMutationPolicy === 'read-only' ? await gitControlObservation.capture() : undefined
     const taskEffects = opts.persistence.effects
     const localExecution = invocation.bindExecution(
       bindLocalAgentExecutionParticipants({
@@ -2046,7 +2008,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     }
     let gitMutationViolation: string | undefined
     if (gitControlBefore !== undefined && runResult.outcome !== 'unreaped') {
-      const gitControlAfter = await captureGitControlSnapshot(opts.worktreePath)
+      const gitControlAfter = await gitControlObservation.capture()
       const changedFields = changedGitControlFields(gitControlBefore, gitControlAfter)
       if (changedFields.length > 0) {
         gitMutationViolation = `changed Git control fields: ${changedFields.join(', ')}`

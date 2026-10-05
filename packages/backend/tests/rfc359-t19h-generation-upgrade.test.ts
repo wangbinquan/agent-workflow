@@ -264,30 +264,30 @@ function interruptedPointerFixture(version: 'root' | 'head' = 'root') {
   return { ...base, operationId, pointer, store, manifest: next }
 }
 
-function completedPointerFixture(
-  version: 'root' | 'head',
-  phase: 'accepting-writes' | 'finalized',
+function advanceCompletedFixtureManifest(
+  fixture: ReturnType<typeof interruptedPointerFixture>,
+  nextPhase: 'accepting-writes' | 'finalized',
 ) {
-  const fixture = interruptedPointerFixture(version)
-  const { paths, pointer, store, operationId } = fixture
-  for (const nextPhase of ['accepting-writes', 'finalized'] as const) {
-    const current = store.read(operationId)!
-    const next = advanceDatabaseMigration(current, {
-      expectedRevision: current.payload.revision,
-      expectedPhase: current.payload.phase,
-      nextPhase,
-      ownerId: current.payload.owner.id,
-      ownerFence: current.payload.owner.fence,
-      idempotencyKey: `checkpoint-${nextPhase}`,
-      now: current.payload.updatedAt + 1,
-      ...(nextPhase === 'finalized' ? { receiptDigest: `sha256:${'e'.repeat(64)}` } : {}),
-    })
-    store.compareAndSwap(
-      { operationId, revision: current.payload.revision, digest: current.digest },
-      next,
-    )
-    if (nextPhase === phase) break
-  }
+  const { store, operationId } = fixture
+  const current = store.read(operationId)!
+  const next = advanceDatabaseMigration(current, {
+    expectedRevision: current.payload.revision,
+    expectedPhase: current.payload.phase,
+    nextPhase,
+    ownerId: current.payload.owner.id,
+    ownerFence: current.payload.owner.fence,
+    idempotencyKey: `checkpoint-${nextPhase}`,
+    now: current.payload.updatedAt + 1,
+    ...(nextPhase === 'finalized' ? { receiptDigest: `sha256:${'e'.repeat(64)}` } : {}),
+  })
+  store.compareAndSwap(
+    { operationId, revision: current.payload.revision, digest: current.digest },
+    next,
+  )
+}
+
+function writeCompletedFixturePointer(fixture: ReturnType<typeof interruptedPointerFixture>) {
+  const { paths, pointer, operationId } = fixture
   writeDatabaseGenerationAtomic({
     pointerPath: paths.generationPointerPath,
     payload: {
@@ -297,6 +297,18 @@ function completedPointerFixture(
       ),
     },
   })
+}
+
+function completedPointerFixture(
+  version: 'root' | 'head',
+  phase: 'accepting-writes' | 'finalized',
+) {
+  const fixture = interruptedPointerFixture(version)
+  for (const nextPhase of ['accepting-writes', 'finalized'] as const) {
+    advanceCompletedFixtureManifest(fixture, nextPhase)
+    if (nextPhase === phase) break
+  }
+  writeCompletedFixturePointer(fixture)
   return fixture
 }
 
@@ -859,26 +871,33 @@ describe('RFC-359 T19h interrupted copy pointer discovery', () => {
   test.each(['root', 'head'] as const)(
     'a healthy completed %s target keeps the original public resume rejection',
     async (version) => {
+      // One real coordinator follows both completed states; its existing history
+      // cache avoids loading the same historical schema twice in this 5s case.
+      const f = completedPointerFixture(version, 'accepting-writes')
+      const { paths, store, operationId } = f
+      const coordinator = createDatabaseMigrationCoordinator({
+        ...paths,
+        contract: history.head.contract,
+        env: {},
+        admission: {
+          async freezeAndDrain() {
+            throw new Error('completed operation must not freeze the source')
+          },
+          async reopenSqlite() {},
+          async activatePostgresql() {},
+          async openPostgresqlAdmission() {},
+        },
+        activateTargetConfig() {},
+        activateSourceConfig() {},
+      })
       for (const phase of ['accepting-writes', 'finalized'] as const) {
-        const { paths, store, operationId } = completedPointerFixture(version, phase)
+        if (phase === 'finalized') {
+          advanceCompletedFixtureManifest(f, phase)
+          writeCompletedFixturePointer(f)
+        }
         const originalManifest = store.read(operationId)
         const originalPointer = readFileSync(paths.generationPointerPath, 'utf8')
         const originalDatabase = readFileSync(paths.sqlitePath)
-        const coordinator = createDatabaseMigrationCoordinator({
-          ...paths,
-          contract: history.head.contract,
-          env: {},
-          admission: {
-            async freezeAndDrain() {
-              throw new Error('completed operation must not freeze the source')
-            },
-            async reopenSqlite() {},
-            async activatePostgresql() {},
-            async openPostgresqlAdmission() {},
-          },
-          activateTargetConfig() {},
-          activateSourceConfig() {},
-        })
         await expect(coordinator.resume({ operationId })).rejects.toMatchObject({
           code: 'database-migration-source-not-sqlite',
           message: 'one-click migration requires the live database generation to be SQLite',

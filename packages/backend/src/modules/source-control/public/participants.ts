@@ -180,3 +180,8 @@ export {
   selectIsolationWorkspaceFactory,
   requireIsolationWorkspaceScope,
 } from '../composition/isolationWorkspaces'
+
+export type {
+  AgentWorkspaceGitControlSnapshot,
+  AgentWorkspaceGitControlObservation,
+} from '../application/ports/agentWorkspaceGitControl'

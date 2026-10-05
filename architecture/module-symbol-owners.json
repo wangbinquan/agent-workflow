@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2236,
+    "backendFiles": 2240,
     "frontendFiles": 654,
     "legacyFiles": 588,
-    "moduleFiles": 1648,
-    "productionFiles": 3057,
+    "moduleFiles": 1652,
+    "productionFiles": 3061,
     "sharedFiles": 167,
-    "symbolsIncludingFileRoots": 26885
+    "symbolsIncludingFileRoots": 26891
   },
   "entries": [
     {
@@ -117333,6 +117333,42 @@
       "currentContext": "source-control",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/source-control/application/agentWorkspaceGitControl.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/agentWorkspaceGitControl.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/agentWorkspaceGitControl.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/agentWorkspaceGitControl.ts#captureAgentWorkspaceGitControlSnapshot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "captureAgentWorkspaceGitControlSnapshot",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/application/agentWorkspaceGitControl.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/agentWorkspaceGitControl.ts#digestGitObservation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "digestGitObservation",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/source-control/application/changeCandidate.ts",
       "id": "owner:packages/backend/src/modules/source-control/application/changeCandidate.ts#$file",
       "removeAfterWave": null,
@@ -117914,6 +117950,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "withEmployeeCaseEffects",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/application/ports/agentWorkspaceGitControl.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/ports/agentWorkspaceGitControl.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/ports/agentWorkspaceGitControl.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/ports/agentWorkspaceGitControl.ts#AgentWorkspaceGitControlObservation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AgentWorkspaceGitControlObservation",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/application/ports/agentWorkspaceGitControl.ts",
+      "id": "owner:packages/backend/src/modules/source-control/application/ports/agentWorkspaceGitControl.ts#AgentWorkspaceGitControlSnapshot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AgentWorkspaceGitControlSnapshot",
       "targetContext": "source-control",
       "targetLayer": "application"
     },
@@ -119853,6 +119925,18 @@
       "currentContext": "source-control",
       "currentLayer": "composition",
       "exported": false,
+      "file": "packages/backend/src/modules/source-control/composition/agentWorkspaceGitControl.ts",
+      "id": "owner:packages/backend/src/modules/source-control/composition/agentWorkspaceGitControl.ts#$file",
+      "removeAfterWave": "W5",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "composition",
+      "exported": false,
       "file": "packages/backend/src/modules/source-control/composition/conflictMerge.ts",
       "id": "owner:packages/backend/src/modules/source-control/composition/conflictMerge.ts#$file",
       "removeAfterWave": "W5",
@@ -121166,6 +121250,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "reclaimLegacyWorkspaceArtifacts",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileAgentWorkspaceGitControl.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileAgentWorkspaceGitControl.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/fileAgentWorkspaceGitControl.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/local/fileAgentWorkspaceGitControl.ts#bindFileAgentWorkspaceGitControlObservation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "bindFileAgentWorkspaceGitControlObservation",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -199363,18 +199471,6 @@
       "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/runner.ts",
-      "id": "owner:packages/backend/src/services/runner.ts#captureGitControlSnapshot",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "captureGitControlSnapshot",
-      "targetContext": "platform",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/runner.ts",
       "id": "owner:packages/backend/src/services/runner.ts#changedGitControlFields",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -199405,30 +199501,6 @@
       "symbol": "detectPluginLoadFailure",
       "targetContext": "platform",
       "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/runner.ts",
-      "id": "owner:packages/backend/src/services/runner.ts#digestGitObservation",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "digestGitObservation",
-      "targetContext": "platform",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": false,
-      "file": "packages/backend/src/services/runner.ts",
-      "id": "owner:packages/backend/src/services/runner.ts#GitControlSnapshot",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "GitControlSnapshot",
-      "targetContext": "platform",
-      "targetLayer": "infrastructure"
     },
     {
       "currentContext": "legacy",
@@ -323358,5 +323430,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:86b1823937eda09be7e2a015190702f4f9c69f3cd8884a692137c0e83861b7eb"
+  "sourceDigest": "sha256:2f9da6919c9eebab26f881d811992595fd62efb46598e021826df46181ac6dc9"
 }

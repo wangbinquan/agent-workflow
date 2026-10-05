@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1203,
+    "consumers": 1205,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1502,
+    "methods": 1503,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 26630,
-    "symbols": 1167
+    "recursiveFields": 26642,
+    "symbols": 1169
   },
   "entries": [
     {
@@ -146600,6 +146600,164 @@
     {
       "authority": "context-bound",
       "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:a00d7f02b53713cd6ddf"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:a00d7f02b53713cd6ddf"
+          ],
+          "fieldPath": "$method:capture.$return.head",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:a00d7f02b53713cd6ddf"
+          ],
+          "fieldPath": "$method:capture.$return.index",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:capture.$return.localConfig",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:capture.$return.refs",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:capture.$return.symbolicHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:capture.$return.worktreeConfig",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:AgentWorkspaceGitControlObservation",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:a00d7f02b53713cd6ddf"
+          ],
+          "name": "capture",
+          "signatureDigest": "sha256:9e534372483fdb430e7e80b2c2ce06c08d82966a96c334f4c76ad28ed752adce"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:a00d7f02b53713cd6ddf",
+          "file": "packages/backend/src/services/runner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:7ce3f13affe134a90a67cf41cdfe18e72e99765228b8aefa2157d94966ff3985",
+      "status": "target-context-current-surface",
+      "symbol": "AgentWorkspaceGitControlObservation",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:ba8777befd1894ea7b2d"
+      ],
+      "context": "source-control",
+      "dataClass": "confidential",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:ba8777befd1894ea7b2d"
+          ],
+          "fieldPath": "head",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ba8777befd1894ea7b2d"
+          ],
+          "fieldPath": "index",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "localConfig",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "refs",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "symbolicHead",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "worktreeConfig",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/source-control/public/participants.ts",
+      "id": "public:source-control:participants:AgentWorkspaceGitControlSnapshot",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:ba8777befd1894ea7b2d",
+          "file": "packages/backend/src/services/runner.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:source-control:participants:AgentWorkspaceGitControlObservation"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:34b8c34b1d54292bf41dda7cf127530f5f4da353fbdfb3455d7c2956af5b15fa",
+      "status": "target-context-current-surface",
+      "symbol": "AgentWorkspaceGitControlSnapshot",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
         "maxMethods": 6,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 77,
@@ -206419,7 +206577,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:86b1823937eda09be7e2a015190702f4f9c69f3cd8884a692137c0e83861b7eb",
+  "sourceDigest": "sha256:2f9da6919c9eebab26f881d811992595fd62efb46598e021826df46181ac6dc9",
   "targetContexts": [
     "collaboration",
     "development-automation",

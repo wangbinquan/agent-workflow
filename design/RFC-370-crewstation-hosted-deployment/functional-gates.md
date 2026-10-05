@@ -913,3 +913,14 @@ ab30 主 CI37296573386 正式 completed/cancelled（21 success／7 failure／20 
 - 原有效scoped census一次，b386d310完整已提交人口＋五冻结候选，sourceDigest sha256:86b1823937eda09be7e2a015190702f4f9c69f3cd8884a692137c0e83861b7eb。1d287edd只改测试／登记，不变的SOURCE21与原扫描复用。13 matching完整保留其129顺序／why、其他guard行、40SPI／69targets、原值级SCC及空implementation SCC。
 - 最新331债仅退役实际public到legacy地址至330，无新债；并行已退役runner地址／四smoke许可结果保持，不重复销账。五个RFC371 matching许可普通退役，外部SQLite fixture328不变。imports6459→6464／exceptions5709→5714／public1164→1167／owners26884→26885四项实际原counter增长具名登记，新四许可在下个普通后继退役。原326／328纯投影FAIL保留，规则／scanner／assertions／预算完整保持。
 - 目标format／lint通过，源码门、metadata有限门与确切SHA hosted CI分别验核。ef双run cancelled、b386 Windows success／主CI failure各自保持。无AW本机tests／typecheck／build／service，不评价并行producer功能。Task／完整根／retention、A-G、CS首次部署和RFC继续开放。
+
+## 2026-10-06 A-T5 Task Git 观测与历史数据库 CI 用例有限门
+
+- TASK-AGENT-GIT-CONTROL-SOURCE8-DOC2-R2：独立有限 PASS，45 项=10 owned/15 control/20 evidence；首末指纹 1136cab75fd52885a9c48b6bf287f08be1ffe254fd6ca16017f6f4ef902895c7。完整原六项读取、digest、refs 过滤、receiver 与实际 Task 前后调用条件保持；R1 readonly tuple 类型 finding 已闭合，其余候选不变。历史 fixture 的四种组合、原错误/字节断言和 5 秒预算保持，复用真实 coordinator 历史缓存。
+- 原有效 scoped census 一次，完整 4ff95e5e 已提交人口和十冻结文件，sourceDigest sha256:a0f25d7ebf0e32893a379f5bf07f5b005a3b13131927c7b4167089fd37c64636；未提交并行 frontend 内容不进入本批人口。13 matching 完整保留已提交 guard 登记、129 顺序/why、330 原债、40 SPI/69 targets、原值级 SCC 与空 implementation SCC。仅新增实际 Runner→composition 地址至 331 债。
+- 实际原 counter imports 6464→6469、exceptions 5714→5719、public 1167→1169、owners 26885→26891，四个具名 matching 许可在下一普通后继退役；4ff95e5e 已退役的上批许可不重复退役。纯治理第一轮属性次序 FAIL 保留，修复仅使用原对象次序，原规则/生成/断言/预算完整保持，不重扫 SOURCE。
+- TASK-OUTPUT-VALIDATION-DESIGN-R2 独立有限 PASS，指纹 b08aad91bcfeab0a8f7293d80aac9d2e545566fbf89df83cd73fdab6a480f7f8；源码尚未实现，不作为本批交付。SOURCE、metadata 和 hosted exact-SHA CI 分列验收。119 Windows success/主 CI 失败各自留证；完整 Task/正常根/retention、A-G、CS adapter/首次部署和 RFC 均未关闭。
+
+## 2026-10-06 Task Git matching 对共享 147ade45 的原摘要合成
+
+META15-R1 有限 PASS，51 项首末指纹 4519c6a5469ffc556cb021debd93cd27593980180976b2a22e0429ccd934b67c，旧候选全文稳定。SOURCE8-DOC2-R2 PASS 与原 census 一次均复用。共享前端 147ade45 的已有原生成与 committed 4ff95e5e 八 canonical 除摘要外逐项相等；旧/base、前端和十自有冻结候选的摘要均由同一原 sourceDigest 函数复原，合成已提交 147ade45 后为 sha256:2f9da6919c9eebab26f881d811992595fd62efb46598e021826df46181ac6dc9。没有 AST/scanner/generator 重跑，13 数值/shape、旧债/库存/why、SPI/targets/SCC 与原四个 matching 许可保持。原 R1 metadata 和全部共享 STATE/gates 原文保留；R2 有限门仅审摘要/snapshot 合成，完整 Task/A-G/CS/RFC 继续。
