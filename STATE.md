@@ -10251,3 +10251,7 @@ CS自有测试分层修复已直接提交远端be7e9d3584a15b0fcbcf85162d736d749
 原19源码后继 matching14已推送5d016e742，main/origin同步；有限metadata PASS、原静态validator PASS与精确hosted CI分开留证。没有联系或收编其他会话源码。ad4467631的SQLite/PG真实1001 child用量数量及四桶已通过，新增验收用例遗漏原requireSpawnReceipt导致实际nonce缺失、完整proof为partial；后继选择原真实机制并增加nonce断言，完整资格、原数值oracle及预算不放宽。Task port到Drizzle页边界复制三份readonly数组，保留原字段及JSON顺序，修复TS2322。
 
 恢复final可选使用平台独立原read snapshot，全部before页/ACK/父关系/membership一次核验后按包查冻结索引，避免每页重复全人口读取；真实文件WAL在final写入和live旧成员丢失后仍只计新增step。双provider2501原成员与实际SQL行数、缺索引负例及WAL1001+2四桶回归随实现；单连接内存和PG poolMax1保留原完整逐页路径。测试引擎登记仅增加真实外部SQLite格式调用点，不改分类器、旧oracle或预算。实现审阅、matching与新exact-SHA hosted CI另验；无本机AW tests/types/build/service。CS be7e9d35六项CI全绿、八组件本机部署成功及原250迁移/存储身份保持。正式页面仍待本机解锁。默认producer、恢复/多root、CS数值v2和规模及完整两RFC余项继续，不宣称完成。
+
+## 2026-10-06 RFC-371 原 before 快照 matching 登记
+
+自有16源码／测试／文档已独立推送b386d3108，完整共享STATE已由前提交ef4019c6c原样保留，没有跨会话消息。SOURCE13及补充SOURCE4有限功能PASS，所有候选与必要控制保持。原官方AST在完整已提交b386d3108生成13matching；此前5d加候选生成作为原子范围证据保留，随后真正整合的RFC370源码改变完整输入，本次明确刷新原committed delta，不读取未提交并行源码。129原有序库存/why、332旧债中仅退役SOURCE4真正消除的Runner私有入边，剩余331条原顺序与why保持、原规则/目标/SPI/SCC保持，四个已消费RFC370许可正常退役；原before快照真实imports/exceptions/public/owner及两个外部SQLite测试行的实际增长按原parser具名登记。新许可下一普通匹配退役，属于架构库存，不是Task/Token限制。原child数量/四桶/complete/oracle/预算与原类型修复和WAL回归保持；实现门与原静态validator通过，新确切SHA hosted CI另验。无本机AW tests/types/build/service、无跨会话消息、无foreign源码提交，两RFC余项继续。

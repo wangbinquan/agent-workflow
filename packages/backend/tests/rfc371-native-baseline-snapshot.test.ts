@@ -1,6 +1,8 @@
 // RFC-371: a resume must check its entire original before index once and retain
 // that actual snapshot while final pages commit. Losing a live old member must
 // never charge an old native step to the resumed invocation.
+// Keep the original COUNT(*) proof separate from full-page reads; see
+// design/RFC-371-run-observability/native-baseline-ci-repair.md.
 import { afterEach, expect, test } from 'bun:test'
 import { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -85,10 +87,12 @@ describeEachProvider('RFC-371 verified original native before snapshot', (harnes
     expect(original).not.toBeNull()
     const recording = harness.recordStatements()
     let retained: NativeUsageBaselineReadView | undefined
+    const originalPageQueries = () =>
+      recording.selects().filter((r) => r.sql.includes('native_usage_pass_pages'))
+    const isPopulationCount = (sql: string) => /\bcount\s*\(\s*\*\s*\)/i.test(sql)
     const originalPagesRead = () =>
-      recording
-        .selects()
-        .filter((r) => r.sql.includes('native_usage_pass_pages'))
+      originalPageQueries()
+        .filter((r) => !isPopulationCount(r.sql))
         .reduce((sum, r) => sum + r.rows, 0)
     try {
       await withNativeUsageBaselineSnapshot({
@@ -100,6 +104,8 @@ describeEachProvider('RFC-371 verified original native before snapshot', (harnes
           retained = view!
           const beforeLookup = originalPagesRead()
           expect(beforeLookup).toBe(Number(original!.pageCount))
+          expect(originalPageQueries().filter((r) => isPopulationCount(r.sql))).toHaveLength(1)
+          const beforeQueryCount = originalPageQueries().length
           let verified = 0
           for (let from = 0; from < 2501; from += 97) {
             const ids = Array.from({ length: Math.min(97, 2501 - from) }, (_, n) => step(from + n))
@@ -109,6 +115,7 @@ describeEachProvider('RFC-371 verified original native before snapshot', (harnes
           }
           expect(verified).toBe(2501)
           expect(originalPagesRead()).toBe(beforeLookup)
+          expect(originalPageQueries()).toHaveLength(beforeQueryCount)
         },
       })
     } finally {

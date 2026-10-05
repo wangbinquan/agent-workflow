@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2233,
+    "backendFiles": 2235,
     "frontendFiles": 654,
     "legacyFiles": 588,
-    "moduleFiles": 1645,
-    "productionFiles": 3054,
+    "moduleFiles": 1647,
+    "productionFiles": 3056,
     "sharedFiles": 167,
-    "symbolsIncludingFileRoots": 26878
+    "symbolsIncludingFileRoots": 26884
   },
   "entries": [
     {
@@ -132676,6 +132676,30 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/nativeUsageBaseline.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/nativeUsageBaseline.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/nativeUsageBaseline.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/nativeUsageBaseline.ts#NativeUsageBaselineReadView",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NativeUsageBaselineReadView",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts#$file",
       "removeAfterWave": null,
@@ -150868,6 +150892,42 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageBaselineSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageBaselineSnapshot.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageBaselineSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageBaselineSnapshot.ts#originalNativeUsageBaseline",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "originalNativeUsageBaseline",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageBaselineSnapshot.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageBaselineSnapshot.ts#withNativeUsageBaselineSnapshot",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "withNativeUsageBaselineSnapshot",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageEmissionVerification.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageEmissionVerification.ts#$file",
       "removeAfterWave": null,
@@ -159591,6 +159651,19 @@
       "signatureDigest": "sha256:378dd0107f5412d46acc3e2870eba3ee20f7084b8b8284144ea7548e845bfc0e",
       "status": "current-module",
       "symbol": "fenceTaskWrite",
+      "targetContext": "task-execution",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/public/participants.ts#finalizeNativeUsageInvocation",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:dab6b81b1b4140d2866e54d0ffe8670623378a0906c52ad72d17a8f4f4b858a1",
+      "status": "current-module",
+      "symbol": "finalizeNativeUsageInvocation",
       "targetContext": "task-execution",
       "targetLayer": "public"
     },
@@ -323273,5 +323346,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5cc7f81577140480e3f820cb8eeba7651545241585391cadd03ef88f59e494b8"
+  "sourceDigest": "sha256:db2a0778469353b10cd7e3d02b440a9fe28a9e06095c216bad0cafadcc708bfb"
 }
