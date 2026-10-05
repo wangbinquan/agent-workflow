@@ -33,6 +33,7 @@ function agent(): Agent {
     name: 'selected-task-agent',
     description: '',
     outputs: ['summary', 'closed'],
+    branchPorts: ['closed'],
     outputKinds: { summary: 'path<md>', closed: 'path<md>' },
     syncOutputsOnIterate: true,
     permission: {},

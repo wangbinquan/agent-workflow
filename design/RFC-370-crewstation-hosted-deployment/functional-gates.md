@@ -949,3 +949,7 @@ META15-R1 有限 PASS，51 项首末指纹 4519c6a5469ffc556cb021debd93cd2759398
 ## 2026-10-06 完整 Task 核心 META17-R2 匹配候选
 
 META16-R1 有效有限 FAIL97（指纹78b5ab3805ef86785ba946a42ad32c2dfce5b2f6a916aea32504a3cd6c59ac15）唯一P2仅是C2薄门面精确名单缺Runner。正常名单增一项，完整测试逆向保持原正文、所有判据和预算；SOURCE-R2 PASS108及54 owned字节保持。原Task census不覆盖或删除；并行已提交65431b1d的两生产单元和三个测试改变当前完整人口，进行一次必要原规则匹配投影，新sourceDigest sha256:8131f7030ec6c84b435654153e44f9e543edf90c4a5f5a2f8baa8aad71ed9200；原规则全字节未变，13 matching、350债、129有序库存/why、40SPI/69targets和原SCC保持，owner原counter26945。全部旧STATE/gates全文及并行内容保留；新peer未提交内容不纳入。仅检视登记和匹配，不重启Task源码门，不宣告CI、五真实入口/全部根、A-G或部署完成。
+
+## 2026-10-06 Task selected 成功用例分支声明修复
+
+Windows 37380867203 在 a69d71bea1e7cce219295e7700846c5e9e33f18c 上两个正常执行用例失败。fixture 的 closed inactive 输出未配原必需 branchPorts；仅增加声明一行，完整逆向证明其余测试、原断言和预算未变，生产算法不变。CI-FIX-BRANCH-DECLARATION-R1 是有限功能修复门，候选/证据在 /tmp/aw-rfc370-task-agent-ci-branch-declaration-*，不重启完整 Task 核心门或 census。a69 主 CI cancelled、integration-opencode success；修复提交 CI 另验。六个实际生产调用点与根接线、A-G、CS 部署和完整 RFC 继续。

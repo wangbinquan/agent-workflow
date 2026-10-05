@@ -1,3 +1,7 @@
+## 2026-10-06 RFC-370 Task 正常执行用例分支声明 CI 修复
+
+完整 Task 核心 a69d71bea1e7cce219295e7700846c5e9e33f18c 的 Windows 37380867203 实际失败两个 selected success 用例；测试输出 closed active="false" 却未声明 branchPorts，完整原核心会按 branch-port-not-declared 原规则拒绝。本批只在 fixture 补 branchPorts: [closed]；完整逆向恢复原测试，生产源码、原断言与预算不变，不放宽分支规则。主 CI 37380867057 终态 cancelled，不能计通过；独立 integration-opencode 37380867069 success 分列记录。功能有限门与修复提交 exact-SHA CI 分别验收，无本机 AW tests/typecheck/build/service。六个真实 Task 调用点（nodeMechanics 三处、wrapperMechanics 两处、scheduler commit-message 一处）及全根仍待接线；完整 RFC、A-G、CS 首部署与逐步收编继续开放。以下共享正文完整保留。
+
 ## 2026-10-06 RFC-370 完整 Task 核心匹配登记续批
 
 META16-R1 有效有限 FAIL97 的唯一 P2 是 C2 严格薄门面名单少 Runner；原回执保留。只在原排序位置补一项，完整逆向恢复原测试全文，所有原判据和预算保持，目标 format/lint 通过。SOURCE-R2 PASS108 和全部54 owned字节未变，不重复源码门。原 bfe27e75 Task census 保留；并行 65431b1d 已提交两生产单元、三测试和文档，未改 Task 候选，使用完整已提交新人口与冻结 Task 内容作一次必要匹配投影，原四个规则文件字节不变；未提交 backup/upgrade 测试及 migration metadata 保留并排除。当前 sourceDigest sha256:8131f7030ec6c84b435654153e44f9e543edf90c4a5f5a2f8baa8aad71ed9200；13 matching、350债、129有序库存/why、40SPI/69targets、原值级SCC与空implementation SCC保持，owners实际26945（新提交观测人口+2），其余原计数一致。以下第一批记录保留为历史证据。本批仅增加真实 C2 登记并同步当前提交人口，未跑本机 tests/typecheck/build/service；生产Task五入口和全部根、A-G、CS M0及M1～M4仍继续，RFC未完成、AW尚未部署到CS。
