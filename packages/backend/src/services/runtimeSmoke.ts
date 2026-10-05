@@ -16,7 +16,6 @@
 import { randomBytes } from 'node:crypto'
 import {
   getRuntimeDriver,
-  getNativeAgentMaterialReference,
   bindNativeAgentMaterialWorkspace,
   type RuntimeKind,
 } from '@/services/runtime'
@@ -24,7 +23,10 @@ import type { SpawnPlan } from '@/services/runtime/types'
 import { createLogger, type Logger } from '@/util/log'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
 import { outputTail } from '@/util/spawnDiagnostics'
-import { bindLocalAgentExecutionEffect } from '@/modules/task-execution/infrastructure/local/agentExecutionEffect'
+import {
+  bindNativeAgentInvocation,
+  bindNativeAgentProtocol,
+} from '@/modules/runtime-management/infrastructure/local/agentInvocationBinding'
 import { Paths } from '@/util/paths'
 
 export type SmokeOutcome =
@@ -245,21 +247,32 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
   // RFC-280 T4 — process reliability is the unified executor's job
   // (managedProcess adapter): spawn/stdin/timeout/TERM→KILL/reap/drain all live
   // there; this probe only classifies what came back.
-  const localExecution = bindLocalAgentExecutionEffect({
-    materialRef: getNativeAgentMaterialReference(plan),
-    command: () => plan.cmd,
+  const invocation = bindNativeAgentInvocation({
+    plan,
+    protocol: bindNativeAgentProtocol(driver),
+    workspace: materialWorkspace.workspace,
     workingDirectory: () => worktreeDir,
-    environment: () => plan.env,
-    stdin: () => plan.stdin,
+    cleanupReceiver: 'executor',
+    evidenceHooks: driver,
+    evidenceScope: {
+      environment: () => plan.env,
+      runContent: () => runDir,
+      sessionLocation: () => ({ worktreePath: worktreeDir }),
+    },
   })
+  const localExecution = invocation.bindExecution()
   const run = await localExecution.effect.submit({
     executionRef: localExecution.executionRef,
     materialRef: localExecution.materialRef,
     workspaceRef: localExecution.workspaceRef,
     timeoutMs,
     termGraceMs: CHILD_TERM_GRACE_MS,
-    ...(plan.beforeSpawn !== undefined ? { beforeStart: plan.beforeSpawn } : {}),
-    ...(plan.cleanup !== undefined ? { cleanup: plan.cleanup } : {}),
+    ...(invocation.lifecycle.beforeStart !== undefined
+      ? { beforeStart: invocation.lifecycle.beforeStart }
+      : {}),
+    ...(invocation.lifecycle.cleanup !== undefined
+      ? { cleanup: invocation.lifecycle.cleanup }
+      : {}),
     capture: {
       onStdoutLine: (line) => {
         if (outBytes >= MAX_OUTPUT_BYTES) return
@@ -270,7 +283,7 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
         if (line.includes('"type":"result"') || line.includes('"is_error":true')) {
           lastResultLine = line
         }
-        const ev = driver.parseEvent(line)
+        const ev = invocation.protocol.parseEvent(line)
         if (ev !== null) {
           sawEvent = true
           if (ev.sessionId !== undefined) {
@@ -311,7 +324,7 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
   })
 
   if (run.outcome === 'spawn-failed') {
-    await materialWorkspace.workspace.discard()
+    await invocation.workspace.discard()
     return {
       outcome: 'spawn-failed',
       conforms: false,
@@ -430,7 +443,7 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
   }
 
   try {
-    await materialWorkspace.workspace.discard()
+    await invocation.workspace.discard()
   } catch {
     return {
       outcome: 'spawn-failed',

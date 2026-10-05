@@ -28,15 +28,16 @@ test('real spawn admission precedes span baseline and actual spawn receipt prece
       process = node
     if (
       ts.isVariableDeclaration(node) &&
-      node.name.getText(source) === 'localExecution' &&
+      node.name.getText(source) === 'invocation' &&
       node.initializer !== undefined &&
       ts.isCallExpression(node.initializer) &&
-      node.initializer.expression.getText(source) === 'bindLocalAgentExecutionEffect'
+      node.initializer.expression.getText(source) === 'bindNativeAgentInvocation'
     )
       binding = node.initializer
   })
   expect(process).toBeDefined()
   expect(binding).toBeDefined()
+  expect(text).toContain('const localExecution = invocation.bindExecution(')
   const argument = process!.arguments[0]!
   if (!ts.isObjectLiteralExpression(argument))
     throw new Error('Agent process input must remain reviewable')

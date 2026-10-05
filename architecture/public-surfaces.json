@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1166,
+    "consumers": 1172,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1371,
+    "methods": 1384,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 25278,
-    "symbols": 1153
+    "recursiveFields": 25417,
+    "symbols": 1155
   },
   "entries": [
     {
@@ -172978,6 +172978,913 @@
     {
       "authority": "context-bound",
       "budget": {
+        "maxMethods": 13,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 139,
+        "maxUnionVariants": 42
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:56913aa1e3441935ce59",
+        "import:ed1e9f961cc5eea08ba1"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "$method:acknowledgeOwner.$parameter:receipt.executionRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:acknowledgeOwner.$parameter:receipt.startedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:acknowledgeOwner.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:acknowledgeOwner.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recordTaskReceipt.$parameter:nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "$method:recordTaskReceipt.$parameter:receipt.executionRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recordTaskReceipt.$parameter:receipt.startedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recordTaskReceipt.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.deadlineMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:input.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.cleanupFailed",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.drainTimedOut",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.durationMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.executionRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.exitCode.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.exitCode.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.outcome.$variant:0",
+          "type": "'ok'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.outcome.$variant:1",
+          "type": "'nonzero-exit'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.outcome.$variant:2",
+          "type": "'timeout'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.outcome.$variant:3",
+          "type": "'aborted'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.outcome.$variant:4",
+          "type": "'spawn-failed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.outcome.$variant:5",
+          "type": "'unreaped'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.pumpError",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.rawStdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.spawnError",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$parameter:result.stderrTail",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reportUnreaped.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:deadlineMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.cleanupFailed",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.drainTimedOut",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.durationMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.executionRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.exitCode.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.exitCode.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.outcome.$variant:0",
+          "type": "'ok'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.outcome.$variant:1",
+          "type": "'nonzero-exit'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.outcome.$variant:2",
+          "type": "'timeout'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.outcome.$variant:3",
+          "type": "'aborted'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.outcome.$variant:4",
+          "type": "'spawn-failed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.outcome.$variant:5",
+          "type": "'unreaped'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.pumpError",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.rawStdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.spawnError",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$parameter:result.stderrTail",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:unreapedMessage.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.abortSignal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.beforeStart.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.beforeStart.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.onLineTruncated.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.onLineTruncated.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.onStderrChunkEnd.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.onStderrChunkEnd.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.onStderrLine.$parameter:line",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.onStderrLine.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.onStderrLine.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.onStdoutChunkEnd.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.onStdoutChunkEnd.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.onStdoutLine.$parameter:line",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.onStdoutLine.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.onStdoutLine.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.capture.rawStdout",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.cleanup.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.cleanup.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "effect.$method:submit.$parameter:request.executionRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:child.$parameter:name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:child.$return",
+          "type": "Logger"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:debug.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:debug.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:debug.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:error.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:error.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:error.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:info.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:info.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:info.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:warn.$parameter:fields",
+          "type": "Record<string, unknown>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:warn.$parameter:msg",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.log.$method:warn.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:56913aa1e3441935ce59",
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "effect.$method:submit.$parameter:request.materialRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "effect.$method:submit.$parameter:request.onStarted.$parameter:receipt.executionRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.onStarted.$parameter:receipt.startedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.onStarted.$return.$variant:0",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.onStarted.$return.$variant:1",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.termGraceMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$parameter:request.timeoutMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "effect.$method:submit.$parameter:request.workspaceRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.cleanupFailed",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.drainTimedOut",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.durationMs",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "effect.$method:submit.$return.executionRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.exitCode.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.exitCode.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.outcome.$variant:0",
+          "type": "'ok'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.outcome.$variant:1",
+          "type": "'nonzero-exit'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.outcome.$variant:2",
+          "type": "'timeout'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.outcome.$variant:3",
+          "type": "'aborted'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.outcome.$variant:4",
+          "type": "'spawn-failed'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.outcome.$variant:5",
+          "type": "'unreaped'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.pumpError",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.rawStdout",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.spawnError",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "effect.$method:submit.$return.stderrTail",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "executionRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:56913aa1e3441935ce59",
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "materialRef",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:describe.$return.classifierVersion",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:describe.$return.recoveryClass",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:describe.$return.requestHash",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "projection.$method:describe.$return.resourceKeys",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:describe.$return.transportPolicyVersion",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$parameter:input.attemptId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$parameter:input.effectId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$parameter:input.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$parameter:input.now",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$parameter:input.receipt",
+          "type": "TReceipt"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$parameter:input.runtimeParamsJson",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$parameter:input.token.daemonGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$parameter:input.token.epoch",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$parameter:input.token.leaseUntil",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$parameter:input.token.ownerId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$parameter:input.token.ownerRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$parameter:input.token.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:recordSpawnReceipt.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:settlementReceipt.$parameter:result",
+          "type": "TResult"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "projection.$method:settlementReceipt.$return",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "fieldPath": "workspaceRef",
+          "type": "string"
+        }
+      ],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:AgentExecutionBinding",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "name": "acknowledgeOwner",
+          "signatureDigest": "sha256:530d3fb1eafe1877a3325e9f43fa31e256eaf17b76428bcbf2d357c1aa0f0c1c"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "child",
+          "signatureDigest": "sha256:071e5bfe52b7c4f0b54e7c0b0812feb414088ff05e83366892b375b0e1c77526"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "debug",
+          "signatureDigest": "sha256:4ed2e4c6779e0000362ab305ec95337c8155664a34299a7b490baa35b5ccd454"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "describe",
+          "signatureDigest": "sha256:f562333d3997028c4b558b7c6fc31e820c28be0568eb1eadb643133498fa5efd"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "error",
+          "signatureDigest": "sha256:8610745686a9cd96a1ccb76a9aa47e9ab44b312b4e14ccda72cb78fe19764d0c"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "info",
+          "signatureDigest": "sha256:8b43a7a5a66e4db411b0c228f7556ec6c585330c68a3902c66cac1cbb819e323"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "recordSpawnReceipt",
+          "signatureDigest": "sha256:7490bc4d6ff1f49d0d8fe3c2c714d56d115045617da93fdd5e2673a6acc181e8"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "name": "recordTaskReceipt",
+          "signatureDigest": "sha256:46238fe59aec4c71a432ae2ecd8b5e01535617615721a78098a852786f2340e2"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "name": "reportUnreaped",
+          "signatureDigest": "sha256:91a7bcf9f0114617fa3c77f1cc7572869c96e5e112068889238bed0e9809493c"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "settlementReceipt",
+          "signatureDigest": "sha256:45ea24b46cb2f7202f00b5e1b85727ad6f9da35e64c5b81c13bb1ab58e0cc0fa"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "submit",
+          "signatureDigest": "sha256:8ba93afe42aebbfc02376b37bf1e7b60622c36c02665d465051df56c6d768299"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ed1e9f961cc5eea08ba1"
+          ],
+          "name": "unreapedMessage",
+          "signatureDigest": "sha256:9eb08bce2b40c86270c5808abcef7b1a65ea50b0ff99d3f55b82a57d915da7ca"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "warn",
+          "signatureDigest": "sha256:46b33713185cfdc423936222a12d7dafa3cc4b2ad7dab83c82fcda8e10de0a56"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "runtime-management",
+          "edgeId": "import:56913aa1e3441935ce59",
+          "file": "packages/backend/src/modules/runtime-management/application/ports/agentInvocationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/ports/agentInvocationBinding.ts#$file"
+        },
+        {
+          "context": "runtime-management",
+          "edgeId": "import:ed1e9f961cc5eea08ba1",
+          "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:90c7fb7f08b7f56e7afe1e00e70bf6d534d0704e35e02be7447e7ee02a899ff6",
+      "status": "target-context-current-surface",
+      "symbol": "AgentExecutionBinding",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "AbortSignal",
+        "Record"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:075f63d0c44a4eb0cc24",
+        "import:7388af904abee478015e",
+        "import:9a8ab2a62c200d89eed2"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/participants.ts",
+      "id": "public:task-execution:participants:AgentExecutionParticipants",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:075f63d0c44a4eb0cc24",
+          "file": "packages/backend/src/services/taskExecutionParticipants.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/taskExecutionParticipants.ts#$file"
+        },
+        {
+          "context": "runtime-management",
+          "edgeId": "import:7388af904abee478015e",
+          "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts#$file"
+        },
+        {
+          "context": "runtime-management",
+          "edgeId": "import:9a8ab2a62c200d89eed2",
+          "file": "packages/backend/src/modules/runtime-management/application/ports/agentInvocationBinding.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/ports/agentInvocationBinding.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:6532b949a68435b87bdd6bfdf4140fb74eec9b586e1dee371da53a0792af8ba2",
+      "status": "target-context-current-surface",
+      "symbol": "AgentExecutionParticipants",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
@@ -179688,6 +180595,7 @@
         "public:task-execution:operations:currentTaskExecutionContext",
         "public:task-execution:operations:fenceTaskWrite",
         "public:task-execution:operations:withOwnedTaskWrite",
+        "public:task-execution:participants:AgentExecutionBinding",
         "public:task-execution:participants:IsolatedAgentRunBinding",
         "public:task-execution:participants:SchedulerRuntimeTopology",
         "public:task-execution:participants:TaskRuntimeLifecyclePersistence",
@@ -198038,7 +198946,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:44ea54dd61eb8cea7505f717517a6d824218595504f69b58e2262f1e276d6880",
+  "sourceDigest": "sha256:565b595c3ee4bde39cef71bd68b3170e1d89c6ffa9446a67a2bb0c957a80e027",
   "targetContexts": [
     "collaboration",
     "development-automation",

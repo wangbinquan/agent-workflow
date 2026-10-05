@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:44ea54dd61eb8cea7505f717517a6d824218595504f69b58e2262f1e276d6880`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:565b595c3ee4bde39cef71bd68b3170e1d89c6ffa9446a67a2bb0c957a80e027`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2212 |
+| backend production TS 文件 | 2215 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1624 / 18 |
+| `modules/**` 文件 / 非空 context | 1627 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 361 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 285 / 33 |
+| RFC-317 boundary census（inbound / outbound） | 287 / 35 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5657 |
+| `architectureExceptions` | 5678 |
 | `backgroundJobs` | 361 |
-| `crossContextImports` | 6379 |
+| `crossContextImports` | 6400 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 26814 |
+| `moduleSymbolOwners` | 26829 |
 | `mutationEntrypoints` | 1881 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1153 |
+| `publicSurfaces` | 1155 |
 | `transactionExternalEffects` | 267 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -49,7 +49,7 @@
 | --- | --- |
 | task-execution / infrastructure | 141 |
 | resource-catalog / infrastructure | 129 |
-| task-execution / application | 117 |
+| task-execution / application | 118 |
 | resource-catalog / application | 77 |
 | task-execution / composition | 69 |
 | development-automation / application | 61 |
@@ -66,13 +66,13 @@
 | system-operations / infrastructure | 27 |
 | identity-access / application | 25 |
 | run-observability / domain | 25 |
-| runtime-management / application | 24 |
+| runtime-management / application | 25 |
 | integration / application | 23 |
 | system-operations / application | 23 |
 | integration / infrastructure | 22 |
 | run-observability / infrastructure | 21 |
+| runtime-management / infrastructure | 21 |
 | code-capability / application | 20 |
-| runtime-management / infrastructure | 20 |
 | task-execution / engine | 20 |
 | integration / composition | 18 |
 | intent / domain | 18 |
@@ -208,12 +208,12 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3651 |
-| legacy-inbound | 1820 |
+| legacy-outbound | 3660 |
+| legacy-inbound | 1825 |
 | infrastructure-external | 315 |
 | offered-consumption | 263 |
-| temporary-internal-debt | 91 |
-| off-dag-offered | 83 |
+| temporary-internal-debt | 94 |
+| off-dag-offered | 87 |
 | authority-type-only | 78 |
 | required-implementation | 72 |
 | external-layer-debt | 4 |
@@ -223,10 +223,10 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3651 |
-| legacy-inbound | 1820 |
-| temporary-internal-debt | 91 |
-| off-dag-offered | 83 |
+| legacy-outbound | 3660 |
+| legacy-inbound | 1825 |
+| temporary-internal-debt | 94 |
+| off-dag-offered | 87 |
 | no-circular | 6 |
 | external-layer-debt | 4 |
 | no-util-to-upper | 2 |
@@ -235,9 +235,9 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3077 |
-| W9-D | 997 |
-| W4-E1 | 723 |
+| W9 | 3078 |
+| W9-D | 1015 |
+| W4-E1 | 725 |
 | W5 | 202 |
 | W4 | 201 |
 | W4-B | 187 |
@@ -255,7 +255,7 @@
 
 | context | 数量 |
 | --- | --- |
-| task-execution | 277 |
+| task-execution | 279 |
 | resource-catalog | 240 |
 | collaboration | 122 |
 | source-control | 99 |
@@ -274,7 +274,7 @@
 | intent | 10 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 137 / 1153）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 137 / 1155）
 
 | context | 数量 |
 | --- | --- |

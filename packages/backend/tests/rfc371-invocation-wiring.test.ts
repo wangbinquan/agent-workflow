@@ -57,10 +57,10 @@ test('six scheduler invocation entries forward the frozen identity and selected 
 })
 
 test('all standalone bootstraps explicitly bind local accounting', () => {
-  for (const [path, database] of [
-    ['cli/start.ts', 'db'],
-    ['cli/postgresqlDaemonApplication.ts', 'input.db'],
-    ['server.ts', 'deps.db'],
+  for (const [path, database, historyProvider] of [
+    ['cli/start.ts', 'db', 'sqlite'],
+    ['cli/postgresqlDaemonApplication.ts', 'input.db', 'postgresql'],
+    ['server.ts', 'deps.db', null],
   ] as const) {
     let count = 0
     const walk = (node: ts.Node) => {
@@ -77,7 +77,33 @@ test('all standalone bootstraps explicitly bind local accounting', () => {
         if (!ts.isCallExpression(participant))
           throw new Error('source must be an explicit participant')
         expect(participant.expression.getText()).toBe('composeObservationUsageSource')
-        expect(participant.arguments.map((argument) => argument.getText())).toEqual([database])
+        expect(participant.arguments[0]?.getText()).toBe(database)
+        expect(participant.arguments).toHaveLength(historyProvider === null ? 1 : 2)
+        if (historyProvider !== null) {
+          const history = participant.arguments[1]!
+          expect(ts.isCallExpression(history)).toBe(true)
+          if (!ts.isCallExpression(history)) throw new Error('history must use the actual reader')
+          expect(history.expression.getText()).toBe('nativeHistoryRead')
+          expect(history.arguments).toHaveLength(1)
+          const input = history.arguments[0]!
+          expect(ts.isObjectLiteralExpression(input)).toBe(true)
+          if (!ts.isObjectLiteralExpression(input))
+            throw new Error('history source must be explicit')
+          const fields = properties(input)
+          expect(fields.get('provider')?.getText()).toBe(`'${historyProvider}'`)
+          const shorthand = input.properties.filter(ts.isShorthandPropertyAssignment)
+          if (historyProvider === 'sqlite') {
+            expect([...fields.keys()].sort()).toEqual(['generationId', 'provider'])
+            expect(shorthand.map((field) => field.name.text)).toEqual([database])
+            expect(fields.get('generationId')?.getText()).toBe(
+              'databaseProvider.generation.payload.generationId',
+            )
+          } else {
+            expect([...fields.keys()].sort()).toEqual(['provider', 'runtime'])
+            expect(shorthand).toHaveLength(0)
+            expect(fields.get('runtime')?.getText()).toBe('input.provider.runtime')
+          }
+        }
         count++
       }
       ts.forEachChild(node, walk)
@@ -107,12 +133,26 @@ test('native model preparation uses final spawn env and local numeric retries av
     normalizers = 0,
     retries = 0
   const walk = (node: ts.Node) => {
-    if (
+    if (ts.isCallExpression(node) && node.expression.getText() === 'bindNativeAgentInvocation') {
+      const input = node.arguments[0]!
+      expect(ts.isObjectLiteralExpression(input)).toBe(true)
+      if (ts.isObjectLiteralExpression(input)) {
+        expect(properties(input).get('evidenceHooks')?.getText()).toBe('driver')
+        const scope = properties(input).get('evidenceScope')!
+        expect(ts.isObjectLiteralExpression(scope)).toBe(true)
+        if (!ts.isObjectLiteralExpression(scope))
+          throw new Error('Selected evidence scope must remain reviewable')
+        const environment = properties(scope).get('environment')
+        expect(environment && ts.isArrowFunction(environment)).toBe(true)
+        if (environment && ts.isArrowFunction(environment)) env = environment.body.getText()
+      }
+    } else if (
       ts.isCallExpression(node) &&
       node.expression.getText() === 'bindNativeAgentMaterialEvidence'
     ) {
       expect(node.arguments[0]?.getText()).toBe('driver')
       const input = node.arguments[1]!
+      expect(ts.isObjectLiteralExpression(input)).toBe(true)
       if (ts.isObjectLiteralExpression(input)) {
         const environment = properties(input).get('environment')
         expect(environment && ts.isArrowFunction(environment)).toBe(true)
@@ -174,6 +214,14 @@ test('native child capture freezes its contract before spawn and starts only aft
   expect(text.slice(accepted, begin)).toContain('if (localObservationAccepted)')
   let requiredReceipts = 0
   const checkRequiredReceipt = (node: ts.Node) => {
+    if (ts.isCallExpression(node) && node.expression.getText() === 'bindNativeAgentInvocation') {
+      const input = node.arguments[0]!
+      expect(ts.isObjectLiteralExpression(input)).toBe(true)
+      if (ts.isObjectLiteralExpression(input)) {
+        expect(properties(input).get('requireSpawnReceipt')?.kind).toBe(ts.SyntaxKind.TrueKeyword)
+        requiredReceipts++
+      }
+    }
     if (
       ts.isCallExpression(node) &&
       node.expression.getText() === 'bindLocalAgentExecutionEffect'
@@ -189,6 +237,13 @@ test('native child capture freezes its contract before spawn and starts only aft
   }
   checkRequiredReceipt(file)
   expect(requiredReceipts).toBe(1)
+  if (text.includes('bindNativeAgentInvocation')) {
+    expect(text).toContain('const localExecution = invocation.bindExecution(')
+    expect(text).toContain('const materialEvidence = invocation.evidence')
+  } else {
+    expect(text).toContain('const localExecution = bindLocalAgentExecutionEffect(')
+    expect(text).toContain('const materialEvidence = bindNativeAgentMaterialEvidence(')
+  }
 
   const finalCapture = text.indexOf('nativeUsageCapture?.finish(')
   expect(finalCapture).toBeGreaterThan(

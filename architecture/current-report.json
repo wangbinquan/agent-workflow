@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 504,
-    "architectureExceptions": 5657,
+    "architectureExceptions": 5678,
     "backgroundJobs": 361,
-    "crossContextImports": 6379,
+    "crossContextImports": 6400,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26814,
+    "moduleSymbolOwners": 26829,
     "mutationEntrypoints": 1881,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1153,
+    "publicSurfaces": 1155,
     "transactionExternalEffects": 267
   },
   "metrics": {
     "ambientWiringEntries": 504,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2212,
+    "backendProductionFiles": 2215,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -49,7 +49,7 @@
     ],
     "directNativeIntervals": 22,
     "directNativeTimers": 78,
-    "inboundBoundaryEdges": 285,
+    "inboundBoundaryEdges": 287,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -106,7 +106,7 @@
       },
       {
         "context": "runtime-management",
-        "files": 56
+        "files": 58
       },
       {
         "context": "source-control",
@@ -122,10 +122,10 @@
       },
       {
         "context": "task-execution",
-        "files": 390
+        "files": 391
       }
     ],
-    "moduleFiles": 1624,
+    "moduleFiles": 1627,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -138,7 +138,7 @@
         "symbol": "nodeRunMintProgram"
       }
     ],
-    "outboundBoundaryEdges": 33,
+    "outboundBoundaryEdges": 35,
     "repoValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:44ea54dd61eb8cea7505f717517a6d824218595504f69b58e2262f1e276d6880"
+  "sourceDigest": "sha256:565b595c3ee4bde39cef71bd68b3170e1d89c6ffa9446a67a2bb0c957a80e027"
 }

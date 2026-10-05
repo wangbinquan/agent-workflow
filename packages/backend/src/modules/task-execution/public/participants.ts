@@ -369,3 +369,9 @@ export type {
   WriteSemLike,
   MergeSettleOutcome,
 } from '../infrastructure/isolatedAgentRun'
+
+/** Runtime material composition supplies the implementation for these attempts. */
+export type {
+  AgentExecutionBinding,
+  AgentExecutionParticipants,
+} from '../application/ports/agentExecutionBinding'

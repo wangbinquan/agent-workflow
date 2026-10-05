@@ -86,6 +86,9 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
       expect(consumer, `${rel} still switches on startupObservation`).not.toContain(
         'switch (driver.capabilities.startupObservation)',
       )
+      expect(consumer, `${rel} still switches on startupObservation`).not.toContain(
+        'switch (protocol.capabilities.startupObservation)',
+      )
     }
   })
 

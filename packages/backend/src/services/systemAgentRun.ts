@@ -23,14 +23,17 @@
 
 import {
   getRuntimeDriver,
-  bindNativeAgentMaterialEvidence,
   getNativeAgentMaterialReference,
   bindNativeAgentMaterialWorkspace,
   type RuntimeKind,
 } from '@/services/runtime'
 import type { AgentSpawnContext, AgentSpawnPlan } from '@/services/runtime/types'
-import { bindLocalAgentExecutionEffect } from '@/modules/task-execution/infrastructure/local/agentExecutionEffect'
+import {
+  bindNativeAgentInvocation,
+  bindNativeAgentProtocol,
+} from '@/modules/runtime-management/infrastructure/local/agentInvocationBinding'
 import type { ExecutionStartReceipt } from '@/modules/task-execution/application/ports/executionEffect'
+import type { AgentInvocationBinding } from '@/modules/runtime-management/application/ports/agentInvocationBinding'
 import type {
   RuntimeDriver,
   SpawnPlan,
@@ -300,6 +303,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
   }
 
   let plan: SpawnPlan | null = null
+  let invocation: AgentInvocationBinding | undefined
   // RFC-282 B1b — declared manifest from the unified assembly (absent on
   // testPlanOverride fixtures); threaded onto the result for settle-time
   // verification so no consumer re-renders it (§2.1b-2).
@@ -472,11 +476,22 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         })
       }
 
-      const materialEvidence = bindNativeAgentMaterialEvidence(driver, {
-        environment: () => plan!.env,
-        runContent: () => runDir,
-        sessionLocation: () => ({ worktreePath: worktreeDir }),
+      invocation = bindNativeAgentInvocation({
+        plan,
+        protocol: bindNativeAgentProtocol(driver),
+        workspace: materialWorkspace.workspace,
+        workingDirectory: () => worktreeDir,
+        nativeStartOwner: opts,
+        cleanupReceiver: 'material',
+        evidenceHooks: driver,
+        evidenceScope: {
+          environment: () => plan!.env,
+          runContent: () => runDir,
+          sessionLocation: () => ({ worktreePath: worktreeDir }),
+        },
       })
+      const materialEvidence = invocation.evidence
+      const protocol = invocation.protocol
 
       // RFC-280 T4 — the child's whole lifecycle (spawn / stdin / timers /
       // TERM→KILL / reap / bounded drain) lives in the unified agent executor;
@@ -496,15 +511,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       let receiptError: unknown
       let capturedStartupInventory: StartupInventory | null = null
 
-      const nativePlan = plan
-      const localExecution = bindLocalAgentExecutionEffect({
-        materialRef: getNativeAgentMaterialReference(nativePlan),
-        command: () => nativePlan.cmd,
-        workingDirectory: () => worktreeDir,
-        environment: () => nativePlan.env,
-        stdin: () => nativePlan.stdin,
-        nativeStartOwner: opts,
-      })
+      const localExecution = invocation.bindExecution()
       const run = await localExecution.effect.submit({
         executionRef: localExecution.executionRef,
         materialRef: localExecution.materialRef,
@@ -512,12 +519,14 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         timeoutMs,
         termGraceMs: CHILD_TERM_GRACE_MS,
         ...(opts.abortSignal !== undefined ? { abortSignal: opts.abortSignal } : {}),
-        ...(plan.beforeSpawn !== undefined ? { beforeStart: plan.beforeSpawn } : {}),
+        ...(invocation.lifecycle.beforeStart !== undefined
+          ? { beforeStart: invocation.lifecycle.beforeStart }
+          : {}),
         ...(opts.onSpawned !== undefined
           ? {
               onStarted: async (receipt: ExecutionStartReceipt) => {
                 try {
-                  await localExecution.acknowledgeNativeOwner(receipt)
+                  await localExecution.acknowledgeOwner(receipt)
                 } catch (err) {
                   // Historical contract: a failed spawn receipt is a SPAWN
                   // failure (mcp playground admission fence) — remember the
@@ -530,7 +539,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
           : {}),
         capture: {
           onStdoutLine: async (line) => {
-            const observation = driver.observeSystemEvent?.(line)
+            const observation = protocol.observeSystemEvent?.(line)
             if (observation !== undefined) {
               if (observation.runtimeEventType !== null) {
                 outputEvidence.lastRuntimeEventType = observation.runtimeEventType
@@ -544,9 +553,9 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
                 outputEvidence.terminalResult = 'success'
               }
             }
-            const terminalError = driver.parseTerminalResultError?.(line)
+            const terminalError = protocol.parseTerminalResultError?.(line)
             if (terminalError != null) resultError = terminalError
-            const ev = driver.parseEvent(line)
+            const ev = protocol.parseEvent(line)
             // RFC-280 T6 / RFC-297 T14 —— 一次性启动报告。改为消费 driver 在
             // **同一次解析**里挂上的事件载荷，不再对同一行二次 JSON.parse。
             if (capturedStartupInventory === null && ev !== null) {
@@ -799,7 +808,8 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
     } else {
       let cleanupOk = true
       try {
-        await preparedPlan?.cleanup?.()
+        if (invocation === undefined) await preparedPlan?.cleanup?.()
+        else await invocation.lifecycle.cleanup?.()
       } catch {
         cleanupOk = false
       }
@@ -816,7 +826,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         let scratchRemoved = false
         if (wantScratchRemoved) {
           try {
-            await materialWorkspace.workspace.discard()
+            await invocation!.workspace.discard()
             scratchRemoved = true
           } catch {
             // Retained deliberately — recovery + GC own it now.

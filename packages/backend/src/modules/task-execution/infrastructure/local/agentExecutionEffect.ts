@@ -1,3 +1,4 @@
+import type { AgentExecutionParticipants } from '../../application/ports/agentExecutionBinding'
 import { ulid } from 'ulid'
 import type {
   ExecutionEffectPort,
@@ -191,4 +192,29 @@ export function bindLocalAgentExecutionEffect(input: {
       return `child-unkillable: pid ${native.pid} survived SIGTERM→SIGKILL escalation past ${deadlineMs}ms; abandoned (detached process group left running)`
     },
   }
+}
+
+/** Only this native owner interprets the participant it issued. Another
+ * selected implementation owns its own receipt dialect and participant. */
+interface NativeAgentExecutionTaskParticipants {
+  readonly persistence: TaskExecutionEffectPersistence
+  readonly nodeExecution: () => NodeExecutionPersistence
+  readonly readOnlyWorkspace: () => boolean
+}
+const nativeTaskParticipants = new WeakMap<object, NativeAgentExecutionTaskParticipants>()
+
+export function bindLocalAgentExecutionParticipants(
+  input: NativeAgentExecutionTaskParticipants,
+): AgentExecutionParticipants {
+  const taskEffect = Object.freeze({}) as NonNullable<AgentExecutionParticipants['taskEffect']>
+  nativeTaskParticipants.set(taskEffect, input)
+  return { taskEffect }
+}
+
+export function resolveLocalAgentExecutionParticipants(participants?: AgentExecutionParticipants) {
+  const reference = participants?.taskEffect
+  if (reference === undefined) return undefined
+  const native = nativeTaskParticipants.get(reference)
+  if (native === undefined) throw new Error('agent-execution-task-participant-unavailable')
+  return native
 }

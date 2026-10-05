@@ -59,7 +59,11 @@ import type {
   ExecutionEffectResult,
   ExecutionStartReceipt,
 } from '@/modules/task-execution/application/ports/executionEffect'
-import { bindLocalAgentExecutionEffect } from '@/modules/task-execution/infrastructure/local/agentExecutionEffect'
+import {
+  bindNativeAgentInvocation,
+  bindNativeAgentProtocol,
+} from '@/modules/runtime-management/infrastructure/local/agentInvocationBinding'
+import { bindLocalAgentExecutionParticipants } from '@/modules/task-execution/infrastructure/local/agentExecutionEffect'
 import { createLogger, type Logger } from '@/util/log'
 import {
   BRANCH_MARKER_MALFORMED_PREFIX,
@@ -93,8 +97,6 @@ import { renderUserPrompt } from './protocol'
 import {
   getRuntimeDriver,
   pluginFileSpec,
-  bindNativeAgentMaterialEvidence,
-  getNativeAgentMaterialReference,
   bindNativeAgentMaterialWorkspace,
   type RuntimeKind,
 } from './runtime'
@@ -1187,20 +1189,32 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     }
   }
   const { cmd, env } = plan
-  const materialEvidence = bindNativeAgentMaterialEvidence(driver, {
-    environment: () => plan.env,
-    runContent: () => runRoot,
-    sessionLocation: () => ({
-      worktreePath: opts.worktreePath,
-      configDirEnv: configDir.env,
-      configDirName: configDir.name,
-    }),
+  const invocation = bindNativeAgentInvocation({
+    plan,
+    protocol: bindNativeAgentProtocol(driver),
+    workspace: materialWorkspace.workspace,
+    workingDirectory: () => opts.worktreePath,
+    taskSnapshot: { command: cmd, environment: env },
+    requireSpawnReceipt: true,
+    cleanupReceiver: 'material',
+    evidenceHooks: driver,
+    evidenceScope: {
+      environment: () => plan.env,
+      runContent: () => runRoot,
+      sessionLocation: () => ({
+        worktreePath: opts.worktreePath,
+        configDirEnv: configDir.env,
+        configDirName: configDir.name,
+      }),
+    },
   })
+  const materialEvidence = invocation.evidence
+  const protocol = invocation.protocol
   // RFC-282 B1b — the declared manifest is a FIELD of the assembly result now
   // (same computation, not a second render). §7-9: a defensive render failure
   // inside the driver degrades it to an empty manifest + warn, never fails
   // the node — matching the old independent try/catch's semantics.
-  const injectionDeclared = plan.declared
+  const injectionDeclared = invocation.declared!
   // 落差③/④ — referencing a disabled MCP or passing params this runtime
   // drops was fully silent before RFC-280; say it at spawn time too (the
   // persisted record lands at settle).
@@ -1224,12 +1238,12 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     if (!planArtifactsCleaned) {
       planArtifactsCleaned = true
       try {
-        await plan.cleanup?.()
+        await invocation.lifecycle.cleanup?.()
       } catch {
         log.warn('runtime-plan-cleanup-failed', { nodeRunId: opts.nodeRunId, runtime })
       }
       try {
-        await materialWorkspace.workspace.discard()
+        await invocation.workspace.discard()
       } catch {
         // Best-effort cleanup preserves the historical runner contract.
       }
@@ -1392,7 +1406,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     const stdoutEvents = makeEventBuffer('node-run-event/stdout')
     const stderrEvents = makeEventBuffer('node-run-event/stderr')
     let localObservationAccepted = false
-    const usageNormalizer = materialEvidence.prepareUsageNormalizer?.() ?? driver.normalizeUsage
+    const usageNormalizer = materialEvidence.prepareUsageNormalizer?.() ?? protocol.normalizeUsage
     const captureUsage = createInvocationUsageCapture({
       ...(usageNormalizer ? { normalize: usageNormalizer } : {}),
       invocationId,
@@ -1500,11 +1514,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // capture; duplicate Claude init frames are common around async agents.
       if (
         !startupInventoryPersistedLive &&
-        driver.capabilities.startupObservation === 'init-event'
+        protocol.capabilities.startupObservation === 'init-event'
       ) {
         const runtimeInventoryJson = JSON.stringify(
           buildRuntimeInventoryObservation({
-            capabilities: driver.capabilities,
+            capabilities: protocol.capabilities,
             freshRun: freshAgentRun,
             declared: injectionDeclared,
             claudeInit: capturedStartupInventory,
@@ -1571,11 +1585,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       // envelope") AFTER burning the node's whole retry budget. Same disease as
       // the 2026-08-04 incident's "swallowed into a bare nonce missing", which
       // was fixed on the smoke path only.
-      const resultError = driver.parseTerminalResultError?.(line)
+      const resultError = protocol.parseTerminalResultError?.(line)
       if (resultError !== undefined && resultError !== null && terminalResultError === undefined) {
         terminalResultError = resultError
       }
-      const ev = driver.parseEvent(line)
+      const ev = protocol.parseEvent(line)
       if (ev) {
         await consumeInventoryPayload(ev)
         try {
@@ -1833,23 +1847,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         ? await captureGitControlSnapshot(opts.worktreePath)
         : undefined
     const taskEffects = opts.persistence.effects
-    const localExecution = bindLocalAgentExecutionEffect({
-      materialRef: getNativeAgentMaterialReference(plan),
-      command: () => cmd,
-      workingDirectory: () => opts.worktreePath,
-      environment: () => env,
-      stdin: () => plan.stdin,
-      requireSpawnReceipt: true,
-      taskEffect: {
+    const localExecution = invocation.bindExecution(
+      bindLocalAgentExecutionParticipants({
         persistence: taskEffects,
         nodeExecution: () => opts.persistence.nodeExecution,
-        argv: cmd,
-        cwd: opts.worktreePath,
-        // Preserve the exact original writer resource fingerprint.
-        resourceKeys:
-          opts.gitMutationPolicy === 'read-only' ? [] : { writerWorkspace: opts.worktreePath },
-      },
-    })
+        readOnlyWorkspace: () => opts.gitMutationPolicy === 'read-only',
+      }),
+    )
     processEffect = createProcessEffectAttemptObserver({
       persistence: taskEffects,
       taskId: opts.taskId,
@@ -1929,7 +1933,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         // specific binary, not a fuzzy regex.
         //
         if (activeProcessEffect === undefined) {
-          await localExecution.recordLegacyTaskReceipt(receipt, opts.nodeRunId)
+          await localExecution.recordTaskReceipt(receipt, opts.nodeRunId)
         } else {
           await activeProcessEffect.recordSpawnReceipt(receipt)
         }
@@ -2659,7 +2663,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // readInventory-presence proxy (a third runtime silently fell into
     // the claude branch). P1-7: the fresh-run guard stays FIRST — flipping the
     // order re-creates the followup "cannot verify" noise (RFC-280 P2-E).
-    const caps = driver.capabilities
+    const caps = protocol.capabilities
     const observationSkippedByDesign = caps.observationRequiresFreshRun && !freshAgentRun
 
     // RFC-297 T18 —— 清单观测**无条件**落库，与下面的验证判定分开。
