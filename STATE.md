@@ -10160,3 +10160,8 @@ b3dbcdda9453cf545f07dc80684b52bce4974f4a 主CI37270989081正式cancelled（50job
 Task／System Agent／runtime smoke 的原目录准备、seed写入和删除接RM application材料生命周期接口及native adapter。Task保留builder惰性物化和capture后best-effort清理；System保留原名称／parent／seed reader读取时点、失败和unreaped保留、成功retainScratch决策；smoke保留原try外准备、失败删除与unreaped保留。两个旧scratch/seed导出指向整体原函数。纯AST对拍证明三入口除明确IO映射外完整算法相等，PWD原其余断言和预算、Windows逆映射后的整份原字节保持。新增六项真实文件回归，正式运行仍交hosted CI。详见design/RFC-370-crewstation-hosted-deployment/agent-material-workspace.md。
 
 本片独立功能门、matching原静态投影、精确发布和新exact-SHA CI分别验收；只做owned格式／lint与纯AST／字节，无本机AW tests/typecheck/build/service。并行RFC371内容保留且不纳入source生成；旧FAIL／cancelled不替换。仍在A-T5，完整selected材料／取证／生命周期／执行／receipt组合及所有真根、脚本、执行权恢复和A-G继续；CS adapters、M0首次实际部署及M1～M4未开始，本片不关闭RFC。原共享正文逐字保持，仅追加此段。
+
+
+### 2026-10-05 RFC-370 材料目录切面发布与增长许可退役
+
+f3f28e46683aaad856ba12941771fc7e5435c1b0 已精确发布25路径；SOURCE12-R1／META14-R1独立有限PASS，post-fetch main／origin同步0/0、index空，所有并行观测WIP未暂存／提交。SOURCE12的STATE原记录已由dd4fefbbb整份共享文件保留，本片保留其前缀与正文。本正常后继仅退役该源增长已消费的三条许可：imports6361／exceptions5646／owners26784；129原库存／顺序／数值／why与其余许可保持，由原helper刷新provenance，不重新census或源门。f3主CI37280896960与Windows37280896928仍待正式终态，新后继精确SHA CI另验收；有限PASS不代替全仓CI。没有本机AW tests／typecheck／build／service。仍在A-T5，完整selected组合、真根、脚本、执行权恢复与A-G继续；CS adapters、M0首次部署及M1～M4未开始，不关闭RFC。原共享全文逐字保留，只追加此段。
