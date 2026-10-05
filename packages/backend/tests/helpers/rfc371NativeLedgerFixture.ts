@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto'
 import { tasks, nodeRuns } from '@/db/schema'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
+import { createNativeUsageInvocationPersistence } from '@/modules/task-execution/composition/nativeUsageInvocation'
 import { createTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
 import { createObservationInvocationStore } from '@/modules/run-observability/infrastructure/invocationPersistence'
 import { DrizzleNativeUsagePages } from '@/modules/task-execution/infrastructure/drizzleNativeUsagePages'
@@ -15,6 +16,11 @@ export async function originalNativeLedgerFixture(
   harness: ProviderHarness,
   mode: 'fresh' | 'resume' = 'fresh',
   numericPages = true,
+  nativeStore: {
+    readonly source?: string
+    readonly generation?: string
+    readonly producer?: true
+  } = {},
 ) {
   const db = harness.db
   const taskId = 'native-owner-' + randomUUID()
@@ -39,7 +45,9 @@ export async function originalNativeLedgerFixture(
     lineageSlotPathJson: JSON.stringify(slotPath),
   })
   await db.insert(nodeRuns).values({ id: nodeRunId, taskId, nodeId: 'agent', status: 'running' })
-  const persistence = createTaskExecutionPersistence(db)
+  const persistence = createTaskExecutionPersistence(db, {
+    ...(nativeStore.producer ? { nativeUsage: createNativeUsageInvocationPersistence(db) } : {}),
+  })
   const execution = createProviderTaskExecutionModule({
     daemonGeneration: 'native-generation',
     persistence,
@@ -79,13 +87,13 @@ export async function originalNativeLedgerFixture(
     purpose: 'task',
     authority: { kind: 'local', runtime: null },
     nativeCaptureContract: 'opencode-child-pages-v2',
-    nativeCaptureSource: 'actual-native-store',
+    nativeCaptureSource: nativeStore.source ?? 'actual-native-store',
   })
   const pages = new DrizzleNativeUsagePages(db, numericPages)
   const prepareInput = {
     binding,
-    nativeSource: 'actual-native-store',
-    sourceGeneration: 'original-sqlite-generation',
+    nativeSource: nativeStore.source ?? 'actual-native-store',
+    sourceGeneration: nativeStore.generation ?? 'original-sqlite-generation',
     resumeRootSessionId: mode === 'resume' ? 'root' : null,
   }
   const before = await pages.prepare(prepareInput)
@@ -132,5 +140,5 @@ export async function originalNativeLedgerFixture(
       close: async () => reader.close(),
     }
   }
-  return { db, binding, pages, before, prepareInput, identity, owner, open }
+  return { db, binding, persistence, pages, before, prepareInput, identity, owner, open }
 }

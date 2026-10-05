@@ -32,6 +32,7 @@ import {
 } from '../infrastructure/taskExecutionIntentTerminalPersistence'
 import { createRuntimeSessionLeaseOperations as createRuntimeSessionLeaseOperationsInternal } from '../infrastructure/runtimeSessionLeaseOperations'
 import { repairRuntimeSessionLeasesAfterOrphanReap } from '@/services/runtimeSessionLease'
+import type { NativeUsageInvocationPersistence } from '../application/ports/nativeUsageInvocation'
 
 /**
  * RFC-359 AC-10：恢复管理面**一份实现**。两个 provider 曾各有一份，四个方法里两个逐字相同、
@@ -123,6 +124,8 @@ function createRecoveryAdministration(
  */
 export interface TaskExecutionPersistenceDependencies {
   readonly workspacePresence?: WorkspacePresenceQueries
+  /** Selected by the original owner only after all runtime entrypoints pass acceptance. */
+  readonly nativeUsage?: NativeUsageInvocationPersistence
 }
 
 export function createTaskRuntimeLifecyclePersistence(
@@ -142,6 +145,7 @@ export function createTaskExecutionPersistence(
   const effects = new DrizzleTaskExecutionEffectPersistence(db)
   const runtimeLifecycle = createTaskRuntimeLifecyclePersistence(db, dependencies)
   return Object.freeze({
+    ...(dependencies.nativeUsage ? { nativeUsage: dependencies.nativeUsage } : {}),
     drive: new DrizzleTaskEngineApplicationPersistence(db),
     ownership: new DrizzleTaskOwnershipPersistence(db),
     intents: new DrizzleTaskExecutionIntentPersistence(db),

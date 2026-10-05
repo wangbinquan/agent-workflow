@@ -25,6 +25,7 @@ export function createUsageSourceProjection(input: {
   let afterNodeRunId: string | undefined
   let afterCaptureId: string | undefined
   let active: Promise<number> | null = null
+  let activeNodeRunId: string | undefined
   const project = async (nodeRunId?: string) => {
     const rows = await input.source.pending({
       limit: 100,
@@ -110,13 +111,22 @@ export function createUsageSourceProjection(input: {
     if (errors.length) throw new AggregateError(errors, 'Observation projection remains pending')
     return count
   }
-  return (nodeRunId?: string): Promise<number> => {
+  const reconcile = (nodeRunId?: string): Promise<number> => {
     // Coalesce chunk notifications with the provider background sweep. Remaining rows stay pending.
-    if (active) return active
+    if (active) {
+      if (activeNodeRunId === nodeRunId) return active
+      // An unrelated sweep returning zero cannot prove this node's original source EOF.
+      return active.then(
+        () => reconcile(nodeRunId),
+        () => reconcile(nodeRunId),
+      )
+    }
+    activeNodeRunId = nodeRunId
     const next = project(nodeRunId).finally(() => {
       if (active === next) active = null
     })
     active = next
     return next
   }
+  return reconcile
 }

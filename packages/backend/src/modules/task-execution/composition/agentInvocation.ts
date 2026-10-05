@@ -95,6 +95,9 @@ export function bindNativeAgentInvocation(input: {
               taskEffect: {
                 persistence: task.persistence,
                 nodeExecution: task.nodeExecution,
+                ...(task.observeNativeProcess === undefined
+                  ? {}
+                  : { observeNativeProcess: task.observeNativeProcess }),
                 argv: command(),
                 cwd: input.workingDirectory(),
                 // Preserve the exact original writer resource fingerprint.

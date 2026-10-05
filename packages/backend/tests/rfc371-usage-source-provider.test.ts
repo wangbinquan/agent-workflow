@@ -1055,6 +1055,39 @@ describeEachProvider('RFC-371 committed numeric source projection', (harness) =>
     expect(await f.source.pending({ limit: 10 })).toEqual([])
     expect((await f.store.records('task', { limit: 10 })).items).toHaveLength(1)
   })
+  test('an unrelated empty sweep never substitutes for the requested node original EOF', async () => {
+    const f = await fixture()
+    await f.write('run')
+    let entered!: () => void, release!: () => void
+    const started = new Promise<void>((resolve) => {
+      entered = resolve
+    })
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const project = createUsageSourceProjection({
+      ...f,
+      source: {
+        ...f.source,
+        async pending(input) {
+          if (input.nodeRunId === 'other') {
+            entered()
+            await blocked
+          }
+          return f.source.pending(input)
+        },
+      },
+    })
+    const unrelated = project('other')
+    await started
+    const requested = project('run')
+    release()
+    expect(await unrelated).toBe(0)
+    expect(await requested).toBe(1)
+    expect(await project('run')).toBe(0)
+    expect(await f.source.pending({ nodeRunId: 'run', limit: 10 })).toEqual([])
+    expect((await f.store.records('task', { limit: 10 })).items).toHaveLength(1)
+  })
   test('numeric-only model refinement keeps the original stdout and one projected contribution', async () => {
     const { writer, write, project, store, source } = await fixture()
     await write()

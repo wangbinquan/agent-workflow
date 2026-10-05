@@ -63,6 +63,7 @@ export function createLocalAgentMaterialEvidence(input: {
                 ? { resumeSessionId: identity.resumeSessionId }
                 : {}),
               ...('nextRevision' in identity ? { nextRevision: identity.nextRevision } : {}),
+              ...('durableOwner' in identity ? { durableOwner: identity.durableOwner } : {}),
             })
     },
     get prepareSpanCapture() {

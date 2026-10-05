@@ -62,6 +62,7 @@ import type {
 import { bindNativeAgentInvocation } from '@/modules/task-execution/composition/agentInvocation'
 import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
 import { bindLocalAgentExecutionParticipants } from '@/modules/task-execution/infrastructure/local/agentExecutionEffect'
+import { finalizeNativeUsageInvocation } from '@/modules/task-execution/application/finalizeNativeUsageInvocation'
 import { createLogger, type Logger } from '@/util/log'
 import {
   BRANCH_MARKER_MALFORMED_PREFIX,
@@ -1414,6 +1415,11 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       resumeSessionId: effectiveResumeSessionId,
       includeMeasurement: (row) => nativeUsageCapture?.includesRecord(row.recordId) ?? true,
     })
+    const durableNativeUsageOwner = opts.persistence.nativeUsage?.forInvocation({
+      invocationId,
+      taskId: opts.taskId,
+      nodeRunId: opts.nodeRunId,
+    })
     const nativeUsageCapture = materialEvidence.prepareNativeUsageCapture?.({
       invocationId,
       taskId: opts.taskId,
@@ -1421,6 +1427,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       agentId: opts.agent.id,
       resumeSessionId: effectiveResumeSessionId,
       nextRevision: captureUsage.nextRevision,
+      ...(durableNativeUsageOwner ? { durableOwner: durableNativeUsageOwner } : {}),
     })
     const preparedSpans = materialEvidence.prepareSpanCapture?.({ invocationId })
     let nativeSpanCapture: NativeSpanCapture | undefined
@@ -1850,6 +1857,9 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         persistence: taskEffects,
         nodeExecution: () => opts.persistence.nodeExecution,
         readOnlyWorkspace: () => opts.gitMutationPolicy === 'read-only',
+        ...(nativeUsageCapture?.recordProcess
+          ? { observeNativeProcess: nativeUsageCapture.recordProcess }
+          : {}),
       }),
     )
     processEffect = createProcessEffectAttemptObserver({
@@ -1896,7 +1906,8 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         localObservationAccepted = accepted.authority.kind === 'local'
         if (localObservationAccepted) {
           try {
-            nativeUsageCapture?.begin()
+            if (nativeUsageCapture?.beginDurable) await nativeUsageCapture.beginDurable()
+            else nativeUsageCapture?.begin()
           } catch {
             log.warn('node-run-observation-baseline-failed', { nodeRunId: opts.nodeRunId })
           }
@@ -1976,6 +1987,22 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           : []
       } catch {
         log.warn('node-run-observation-span-final-failed', { nodeRunId: opts.nodeRunId })
+      }
+      if (nativeUsageCapture?.finishDurable) {
+        try {
+          await finalizeNativeUsageInvocation({
+            capture: nativeUsageCapture,
+            observations: opts.observationInvocations,
+            invocationId,
+            nodeRunId: opts.nodeRunId,
+            rootSessionId: sessionId ?? effectiveResumeSessionId ?? null,
+          })
+        } catch (error) {
+          log.warn('node-run-observation-native-final-failed', {
+            nodeRunId: opts.nodeRunId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
       }
       try {
         const observations = [

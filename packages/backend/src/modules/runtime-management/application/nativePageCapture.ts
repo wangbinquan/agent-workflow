@@ -1,0 +1,91 @@
+import {
+  ObservationNativeBeforeSpawnAckSchema,
+  type ObservationNativeBeforeSpawnAck,
+} from '@agent-workflow/shared'
+import type { NativeUsageCapture, NativeUsageCaptureIdentity } from './ports/nativeUsageCapture'
+import type { AsyncNativeUsagePassReader } from './ports/nativeUsageOwner'
+import type { NativeUsagePassIdentity } from './ports/nativeUsagePass'
+import { persistNativeUsagePass } from './persistNativeUsagePass'
+
+/** One frozen reader packet at a time. Neither baseline nor final has a population limit. */
+export function createNativePageCapture(
+  input: NativeUsageCaptureIdentity & {
+    readonly nativeSource: string
+    readonly durableOwner: NonNullable<NativeUsageCaptureIdentity['durableOwner']>
+    readonly generation: () => Promise<string | null>
+    readonly open: (identity: NativeUsagePassIdentity) => Promise<AsyncNativeUsagePassReader>
+    readonly passId: () => string
+    readonly now: () => number
+  },
+): NativeUsageCapture {
+  let before: ObservationNativeBeforeSpawnAck | undefined
+  let begin: Promise<void> | undefined
+  let final: Promise<void> | undefined
+  let baselineReady = false
+  const read = async (phase: 'baseline' | 'final', rootSessionId: string) => {
+    if (!before) throw new Error('Original native before-spawn receipt is unavailable')
+    if ((await input.generation()) !== before.sourceGeneration)
+      throw new Error('Original native store generation changed')
+    const reader = await input.open({
+      passId: input.passId(),
+      invocationId: input.invocationId,
+      nativeSource: before.nativeSource,
+      sourceGeneration: before.sourceGeneration,
+      rootSessionId,
+      lineage: before.lineage,
+      epoch: before.epoch,
+      phase,
+    })
+    await persistNativeUsagePass(reader, input.durableOwner.passOwner(before))
+  }
+  return {
+    contract: 'opencode-child-pages-v2',
+    nativeSource: input.nativeSource,
+    // Once before is durable the native pages are the sole owner of step numbers.
+    // Failed before capture leaves already observed stdout numbers available.
+    includesRecord: (recordId) => !baselineReady || !recordId.startsWith('opencode:step:'),
+    begin() {},
+    finish: () => [],
+    beginDurable() {
+      return (begin ??= (async () => {
+        const sourceGeneration = await input.generation()
+        if (sourceGeneration === null) throw new Error('Original native store is unavailable')
+        const original = await input.durableOwner.prepare({
+          nativeSource: input.nativeSource,
+          sourceGeneration,
+          resumeRootSessionId: input.resumeSessionId ?? null,
+        })
+        before = ObservationNativeBeforeSpawnAckSchema.parse(original)
+        if (
+          before.invocationId !== input.invocationId ||
+          before.nativeSource !== input.nativeSource ||
+          before.sourceGeneration !== sourceGeneration ||
+          before.rootSessionId !== (input.resumeSessionId ?? null)
+        )
+          throw new Error('Original native before-spawn owner changed its accepted invocation')
+        if (input.resumeSessionId) await read('baseline', input.resumeSessionId)
+        baselineReady = true
+      })())
+    },
+    finishDurable(rootSessionId) {
+      return (final ??= (async () => {
+        if (!before) throw new Error('Original native before-spawn receipt is unavailable')
+        try {
+          if (rootSessionId === null) throw new Error('Original native root is unavailable')
+          if (before.mode === 'resume' && rootSessionId !== before.rootSessionId)
+            throw new Error('Original native resume root changed')
+          await read('final', rootSessionId)
+        } finally {
+          // Missing pages retain the actual partial proof and every committed number.
+          await input.durableOwner.seal(input.now())
+        }
+      })())
+    },
+    async recordProcess(fact) {
+      if (before) await input.durableOwner.recordProcess(fact)
+    },
+    async sealDurable() {
+      if (before) await input.durableOwner.seal(input.now())
+    },
+  }
+}

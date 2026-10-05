@@ -10227,3 +10227,7 @@ ab30 主 CI37296573386 正式 completed/cancelled（21 success／7 failure／20 
 本片新增原 Task 显式装配的 before/final、真实 native 进程事实、逐页 source 与历史修订收敛；默认生产装配不切换。不同 node 的 projection 请求不能复用 unrelated=0 当作自身 EOF，原唯一账本和全人口遍历保持。新增真实 SQLite/WAL／Bun子进程／Worker 与双 provider 四桶、1001条原步骤和后续原owner修订回归；本机只精确format/lint，未运行AW tests／types／build／服务。独立有限功能门、matching登记和新确切SHA CI分别验核，不声明尚未运行的用例通过。剩余全部入口／恢复／多root／规模与CS平台v2接线继续。
 
 CS自有测试分层修复已直接提交远端be7e9d3584a15b0fcbcf85162d736d74970dae7e，只迁移原逐字测试与追加原文档；新CI37328576055及固定源码镜像本机部署继续。AW c835052b5的full37318548076、WebKit37320628193、visual37320636702均终态success；主CI旧路径失败仍保留，不混为整仓通过。没有联系其他会话，全部共享正文与并行文件保持。
+
+## 2026-10-05 RFC-371 原 Task 生命周期独立发布接续
+
+按用户要求只提交本会话的19个相关文件，不联系其他会话。原 SOURCE v2 的18份候选及before字节不变；e3e3bb518 后继仅改变两个受影响依赖，新增type-only出口及原材料函数export，函数体与既有出口保留，追加有限兼容性核对。并行canonical已提交，下一片只生成与本批源码匹配的登记。CS be7e9d35六项CI已通过；本机部署在读取当前镜像与344回执不同处停止，尚未修改资源，正在核对实际OCI来源。原失败与在制品全部保留，本片不宣称producer默认激活或两个RFC完成。

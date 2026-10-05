@@ -18,6 +18,7 @@ import {
   type AgentProcessResult,
 } from '@/platform/execution/local/agentProcess'
 import type { Logger } from '@/util/log'
+import type { ObservationNativeProcessFact } from '@agent-workflow/shared'
 
 type NativeStartReceipt = Parameters<NonNullable<AgentProcessRequest['onSpawned']>>[0]
 
@@ -46,6 +47,7 @@ export function bindLocalAgentExecutionEffect(input: {
     readonly argv: readonly string[]
     readonly cwd: string
     readonly resourceKeys: LocalProcessResources
+    readonly observeNativeProcess?: (fact: ObservationNativeProcessFact) => Promise<void>
   }
   /** Native test fixture only; normal execution contracts contain no runner. */
   readonly runNative?: typeof runAgentProcess
@@ -67,6 +69,13 @@ export function bindLocalAgentExecutionEffect(input: {
       }
       if (submitted) throw new Error('execution-binding-already-submitted')
       submitted = true
+      const observe = async (fact: ObservationNativeProcessFact) => {
+        try {
+          await input.taskEffect?.observeNativeProcess?.(fact)
+        } catch {
+          request.log?.warn('native-process-observation-write-failed')
+        }
+      }
       const result = await runNative({
         cmd: input.command(),
         cwd: input.workingDirectory(),
@@ -76,7 +85,7 @@ export function bindLocalAgentExecutionEffect(input: {
         ...(request.abortSignal !== undefined ? { abortSignal: request.abortSignal } : {}),
         ...(input.stdin()?.mode === 'pipe' ? { stdin: input.stdin() } : {}),
         ...(request.beforeStart !== undefined ? { beforeSpawn: request.beforeStart } : {}),
-        ...(request.onStarted !== undefined
+        ...(request.onStarted !== undefined || input.taskEffect?.observeNativeProcess !== undefined
           ? {
               onSpawned: async (native: NativeStartReceipt) => {
                 const receipt: ExecutionStartReceipt = {
@@ -84,6 +93,19 @@ export function bindLocalAgentExecutionEffect(input: {
                   startedAt: native.spawnedAt,
                 }
                 receipts.set(receipt, native)
+                if (native.pid !== null)
+                  await observe({
+                    contract: 'native-process-facts-v2',
+                    phase: 'spawned',
+                    pid: native.pid,
+                    launchNonce: native.launchNonce ?? null,
+                    spawnedAt: native.spawnedAt,
+                    reapedAt: null,
+                    drainedAt: null,
+                    outcome: null,
+                    drainTimedOut: false,
+                    pumpError: false,
+                  })
                 await request.onStarted?.(receipt)
               },
             }
@@ -94,6 +116,18 @@ export function bindLocalAgentExecutionEffect(input: {
         ...(request.log !== undefined ? { log: request.log } : {}),
       })
       terminal = result
+      await observe({
+        contract: 'native-process-facts-v2',
+        phase: 'settled',
+        pid: result.pid,
+        launchNonce: result.launchNonce ?? null,
+        spawnedAt: result.lifecycle?.spawnedAt ?? null,
+        reapedAt: result.lifecycle?.reapedAt ?? null,
+        drainedAt: result.lifecycle?.drainedAt ?? null,
+        outcome: result.outcome,
+        drainTimedOut: result.drainTimedOut === true,
+        pumpError: result.pumpError !== undefined,
+      })
       return {
         executionRef,
         outcome: result.outcome,
@@ -200,6 +234,7 @@ interface NativeAgentExecutionTaskParticipants {
   readonly persistence: TaskExecutionEffectPersistence
   readonly nodeExecution: () => NodeExecutionPersistence
   readonly readOnlyWorkspace: () => boolean
+  readonly observeNativeProcess?: (fact: ObservationNativeProcessFact) => Promise<void>
 }
 const nativeTaskParticipants = new WeakMap<object, NativeAgentExecutionTaskParticipants>()
 
