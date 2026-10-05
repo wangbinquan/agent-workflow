@@ -50,6 +50,12 @@ describeEachProvider('RFC-371 complete capture documents', (harness) => {
       previous: before,
       current: before,
     }))
+    // First v1 capture has neither a previous row nor v2 history. Equal missing
+    // fingerprints must not dereference a nonexistent previous.history.
+    expect(await readUsageCapturePage(harness.db, 'original-task', { limit: 1 })).toEqual({
+      items: [],
+      nextCursor: null,
+    })
     await commitUsageCapture(
       harness.db,
       'original-source',
@@ -65,6 +71,7 @@ describeEachProvider('RFC-371 complete capture documents', (harness) => {
       .from(observationUsageCaptures)
       .get()
     expect(JSON.parse(stored!.summary).evidence.capture).not.toHaveProperty('baselineSteps')
+    expect(JSON.parse(stored!.summary)).not.toHaveProperty('history')
     expect(JSON.parse(stored!.summary).resolutions).toHaveLength(100)
     expect(JSON.parse(stored!.document).resolutions).toHaveLength(101)
     const page = await readUsageCapturePage(harness.db, 'original-task', { limit: 1 })
@@ -72,5 +79,13 @@ describeEachProvider('RFC-371 complete capture documents', (harness) => {
     expect(page.items).toHaveLength(1)
     expect(page.items[0]?.capture).toEqual(evidence.capture)
     expect(page.items[0]?.resolutions).toEqual(resolutions)
+    await commitUsageCapture(
+      harness.db,
+      'original-source',
+      'original-cursor',
+      evidence,
+      resolutions,
+    )
+    expect(await readUsageCapturePage(harness.db, 'original-task', { limit: 1 })).toEqual(page)
   })
 })

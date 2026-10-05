@@ -50,10 +50,12 @@ function deferred() {
   return { promise, resolve }
 }
 function waitForFile(directory: string, path: string) {
+  // Windows can report creation while Bun.write is still writing the marker.
+  // Reject the receipt only after the target has persisted its exact start fact.
   let close: () => void = () => {}
   const promise = new Promise<void>((resolve, reject) => {
     const watcher = watch(directory, () => {
-      if (existsSync(path)) {
+      if (existsSync(path) && readFileSync(path, 'utf8') === 'started') {
         close()
         resolve()
       }
@@ -66,7 +68,7 @@ function waitForFile(directory: string, path: string) {
       watcher.close()
       clearTimeout(timeout)
     }
-    if (existsSync(path)) {
+    if (existsSync(path) && readFileSync(path, 'utf8') === 'started') {
       close()
       resolve()
     }

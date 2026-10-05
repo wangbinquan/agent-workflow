@@ -839,7 +839,8 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
       // RFC-370: the same selected archive command/content binding now reaches HTTP;
       // original statement counts, phase blocks and all lifetime predicates remain.
       // RFC-371: the complete report service shares the selected source generation and numeric owner.
-      '16a2141b9385ec49ba4a48854c807df8d5fe658994346ee53c2bef2912dc086e',
+      // RFC-371 binds nativeHistoryRead to the same original PG runtime; phase order is unchanged.
+      '9130fad695ac09680662e30fdd71ed0175a058a27c3c56dc2091ca1fead78e3d',
     )
     expect(phaseBlocks.filter((node) => node.elseStatement !== undefined)).toHaveLength(1)
     expect(

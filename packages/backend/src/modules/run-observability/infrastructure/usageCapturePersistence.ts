@@ -163,7 +163,7 @@ export async function commitUsageCapture(
   const retainedHistory =
     history ??
     (previous?.history?.preparation.valueFingerprint === valueFingerprint
-      ? previous.history
+      ? previous?.history
       : undefined)
   if (retainedHistory && retainedHistory.preparation.valueFingerprint !== valueFingerprint)
     throw new ObservationIngestError(

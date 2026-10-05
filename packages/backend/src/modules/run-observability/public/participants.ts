@@ -15,7 +15,7 @@ import type {
   NativeHistoryStep,
   NativeHistoryProgress,
 } from '../domain/nativeUsageHistory'
-export type { NativeHistoryPreparation, NativeHistoryStep } from '../domain/nativeUsageHistory'
+export type { NativeHistoryPreparation } from '../domain/nativeUsageHistory'
 export {
   nativeHistoryFingerprint,
   NativeHistoryPreparationSchema,

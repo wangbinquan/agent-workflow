@@ -229,8 +229,8 @@ export function createObservationNativeHistory(
         let child: typeof nativeUsageSessionParents.$inferSelect | undefined
         let path: string | undefined
         while (session !== null) {
-          const parentKey = JSON.stringify([member.passId, session])
-          const parent =
+          const parentKey: string = JSON.stringify([member.passId, session])
+          const parent: typeof nativeUsageSessionParents.$inferSelect | undefined =
             parents.get(parentKey) ??
             (
               await db
