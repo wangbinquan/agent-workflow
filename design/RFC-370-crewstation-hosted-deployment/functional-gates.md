@@ -873,3 +873,5 @@ SOURCE14-R2 独立有限功能门 PASS，无剩余 P1／P2；14 owned、9 contro
 ab30 主 CI37296573386 正式 completed/cancelled（21 success／7 failure／20 cancelled）；本批修正 Task／System PWD 旧源码地址并精确登记 RM 两文件→TE 的真实 type-only offered 边及37→39 matching增长，原 DAG／分类／predicate／预算保持。并行 a0117 的 dead public 删除和059a的 canonical 修正完整保留，不重复生成。详见 design/RFC-370-crewstation-hosted-deployment/agent-invocation-ci-repair.md。
 
 有限独立功能门、精确发布与新 exact-SHA CI 分别验收；仅 owned format／lint、纯AST／字节／JSON和原provenance helper，无本机AW test／typecheck／build／service，不重跑不变生产census。旧FAIL／cancelled留证，完整selected factory／真根、脚本／执行权恢复与A-G、独立CS adapters及M0～M4继续开放，尚无AW-in-CS部署，不关闭RFC。原共享正文逐字保留，只追加本段。
+
+- 2026-10-05 RFC-370 同材料入口 CI 检查补正已精确发布：CI-REPAIR6-R1 独立有限 PASS，3cade06f56d566d633e08e83ed994e9a100129d2 提交6个相关文件，post-fetch main／origin同步0/0、index空，全部并行输出保留。正式主CI37301196167排队，尚无全仓绿结论。本正常后继只退役已消费的一条 matching37→39增长许可；129原有序库存、所有why／数值与其余字段保持，两个实际debt pair保留，由原provenance helper刷新，不重跑census或源码门。完整selected factory／真根、脚本／执行权恢复与A-G、CS独立adapters及M0～M4继续开放，未部署AW、不关闭RFC。共享旧全文逐字保留，仅追加本行。

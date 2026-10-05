@@ -136,10 +136,7 @@
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "id": "rfc294-review-off-dag-offered-edges",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。 （RFC-359 AC-1 第 13 刀收尾：`/api/tasks` 的两个 provider 绑定合成一个中立工厂 `createTaskRouteOperations`，两份 provider 命名文件退役，这一对随之销账。）基线 41 → 39。",
-      "allowGrowth": {
-        "why": "RFC-370 SOURCE14-R2 同材料 binding 的四个实际 type imports 形成两个 from-file/to-context 组合；CI37296573386 指出此前漏记，CI-REPAIR6 逐文件登记并保持原 DAG/分类/相等/stale 判据。真实库存37→39，完整 selected factory 将跨 owner 组合移至 composition 时销账；此匹配发布后普通后继退役许可。"
-      }
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。 （RFC-359 AC-1 第 13 刀收尾：`/api/tasks` 的两个 provider 绑定合成一个中立工厂 `createTaskRouteOperations`，两份 provider 命名文件退役，这一对随之销账。）基线 41 → 39。"
     },
     {
       "baseline": 136,
@@ -923,8 +920,8 @@
   "schemaVersion": 1,
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "059a845fcac4a5a169086eef293d2aa707a4204d",
-    "contentDigest": "sha256:0db1f5b352ea511f026213fba35886e1badb5e03a08ec3b16e50f824e78317f1",
+    "currentSnapshotSha": "3cade06f56d566d633e08e83ed994e9a100129d2",
+    "contentDigest": "sha256:2a4eac81cede3e3972981802bb1be2deb3eb77d4b3fbb5572be34879e3c702fe",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
