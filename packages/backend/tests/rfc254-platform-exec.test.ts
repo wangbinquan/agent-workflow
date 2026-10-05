@@ -210,7 +210,16 @@ describe('RFC-254 — repo-relative paths in port data are portable, not host-fl
     // Both sites take a `relative()` result that is stored and consumed, so a
     // future one added without the wrapper reintroduces the split.
     const envelope = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'envelope.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'task-execution',
+        'infrastructure',
+        'local',
+        'filePortOutputValidation.ts',
+      ),
       'utf8',
     )
     // RFC-284 T6 改判：resolveWorktreePath 迁移到 checkLexicalThenRealpath 骨架后，

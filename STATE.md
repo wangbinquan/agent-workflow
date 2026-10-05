@@ -1,3 +1,11 @@
+## 2026-10-06 RFC-370 输出校验 Windows 源码锁地址修复
+
+77017a67 Windows 37362639406 的原 portable relative-path 源码锁仍读取旧 envelope，完整 native IO 已迁到 Task local adapter。本次只更新一个 reader 地址，两个原断言、完整其余用例、预算和生产源码保持；纯完整 AST 逆向与 scoped format/lint 通过。上一批四个 matching 许可在本普通后继退役，129 行原顺序/why/实际 baseline 与全部生产人口、债/SPI/SCC 不变，复用原一次 scoped census，sourceDigest sha256:f888632c511a6cd2cd5f205280681aca5c71cbc6e68e133f47404c0a57e6d7b9，不重扫。纯证明首轮 synthetic quote FAIL 和 exact-call inverse PASS 保留。
+
+完整 Task 共同核心 DESIGN-R2 独立有限 PASS，30 项指纹 c0c47f9a0573b4ed36e309ff88b99cd0678b4e007f3b33ebf9f19bf25c859b5c；R1 mount/catch 边界 P2 与全文保留，修订明确原 mount getter/计算拒绝在 try 外，以同一错误传播，材料 compile 仍在 catch 内。共同核心源码和五个真实调用点及全根接线尚待实施。
+
+0fd982ff 主 CI 37359218532 终态 cancelled，原 PostgreSQL RFC-310 question-set stash 失败另行调查；frontend 原日志是 runner shutdown/cancel，没有断言失败证据。77017a67 新主 CI 37362357631 仍待终态，后继 exact-SHA 和 Windows 另验。本机无 AW tests/typecheck/build/service。完整共享旧 STATE/gates 与并行内容保持；全根/retention/脚本authority恢复、A-G、CS adapters、M0 首次部署和 M1～M4 持续，RFC 未完成。
+
 ## 2026-10-06 RFC-370 Task 输出内容校验适配切面
 
 完整原 output resolver、path/list 校验与 native IO 已移入 Task application／local infrastructure；旧同步 API 仍运行同一 policy。五个原 handler 保留解析、匹配、编码和既有行为，新增必选 validationPolicy；同步／异步解释器保持 receiver、错误位置、列表串行顺序和聚合细节。内容 resolve/read purpose 使用不透明引用；正常 Task 主核心的接线仍待实施。SOURCE16-DOC1-R1 独立有限 PASS，48 项=17 owned/14 control/17 evidence，首末指纹 7a58bc42221791f2e7d701614ccf3f277e6d0456d5c4745e4ab38d2d2de254fc。15 项新回归待 hosted CI，原 RFC-080 负类型 fixture 仅补齐新的必选 policy，继续缺失原五种方法，原断言和预算保持。

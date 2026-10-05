@@ -931,3 +931,10 @@ META15-R1 有限 PASS，51 项首末指纹 4519c6a5469ffc556cb021debd93cd2759398
 - 原有效 scoped census 一次，完整 0fd982ff 已提交人口及 17 冻结文件，13 production=5 backend/8 shared，sourceDigest sha256:f888632c511a6cd2cd5f205280681aca5c71cbc6e68e133f47404c0a57e6d7b9。13 matching 完整保留 331 原债，七个真实 legacy envelope→Task 地址登记至 338，129 顺序/why、40 SPI/69 targets、原值级 SCC 和空 implementation SCC 保持，无新增 public→legacy 出边。
 - 四个上一批 matching 许可完整退役；本批原 counter 实增 mutation 1893→1894、imports 6469→6479、exceptions 5719→5729、owners 26891→26915，四个具名许可下一普通后继退役。纯治理第一轮 backend 文件计数 FAIL 与同数据计数修复分别留证；最后只对齐七条新增债的 A-T5 退役说明，未重扫、未改原规则、断言或预算。
 - SOURCE、metadata 和 hosted exact-SHA CI 分列验收；共享 STATE/gates 全文与并行已提交成果保持。0fd982ff Windows success/主 CI 待终态，后继 exact-SHA 验证另记。正常 Task 主核心和五个调用点接线、全根/retention、A-G、CS adapter/首次部署以及完整 RFC 均未关闭。
+
+## 2026-10-06 输出校验源码锁修复与 Task 共同核心设计
+
+- Windows 37362639406/job111940665659 原失败是 RFC-254 portable relative-path source-reader 指向旧 facade；只迁一个读地址到完整 native IO。原两个 predicate、全部其他用例与预算保持，pure full-test AST inverse 和 scoped format/lint 通过，首轮纯 printer quote FAIL 保留。
+- 同一 production sourceDigest sha256:f888632c511a6cd2cd5f205280681aca5c71cbc6e68e133f47404c0a57e6d7b9 与原一次有效 census 复用；仅退役前批 mutation/imports/exceptions/owners 四个 matching allowGrowth，129 ordered rows/why/counts 和所有其他事实保持，不重扫。
+- TASK-AGENT-COMMON-CORE-DESIGN-R2 独立有限 PASS30，指纹 c0c47f9a0573b4ed36e309ff88b99cd0678b4e007f3b33ebf9f19bf25c859b5c。原 mount 参数读取/计算在 try 外的拒绝身份、lease与failed-write边界保留；材料读取/compile仍在原catch。R1一项P2与全文保持，源码未实施，五处Task调用点/真实根继续。
+- 0fd982ff 主CI cancelled、PostgreSQL question-set stash失败和frontend runner shutdown各自留证，后端另行归因，不用本次地址修复宣告解决。77017a67主CI和后继exact-SHA/Windows分别验收。完整Task/retention/A-G/CS首次部署及RFC开放，全部共享旧正文与并行内容保持。
