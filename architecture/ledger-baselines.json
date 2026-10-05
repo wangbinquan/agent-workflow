@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:4d2de07179aaf057464eed6223b41c33adc1e6ab3b430a01fcdcf991b25d7b90",
+    "sourceDigest": "sha256:a139a9620d7ce1f050e4f0eecbf7cc6ae19aa5b570d693c37fcead03b0476246",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -856,8 +856,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6357,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6361,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 native material directory lifecycle SOURCE12-R1: the original classifier observes four net symbol-level edges (6357 -> 6361): three actual gateway exports, one native util import, and two existing legacy consumer edges whose relocated target owner links change without changing their count. Register only the single actual R1 value/export group; the native infrastructure util edge is outside the original R2 boundary predicate. A-T7 full selected roots retire the compatibility group. This matching one-commit growth permission is retired by a normal successor."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -877,8 +880,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5642,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5646,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 native material directory lifecycle SOURCE12-R1: four net original-classifier exception records match the actual observed edges (5642 -> 5646). No classifier, boundary predicate, fixture or exemption changes; the exact gateway compatibility group remains named for A-T7 retirement. This matching one-commit growth permission is retired by a normal successor."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -912,16 +918,19 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26778,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26784,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 native material directory lifecycle SOURCE12-R1: two actual new file roots, the two normal lifecycle port types, the private native input type and the native binding factory add six net original-counter owner entries (26778 -> 26784). The two original scratch/seed function owners move from the legacy service to the native file without net growth. No owner or public exemption is introduced. This matching one-commit growth permission is retired by a normal successor."
+      }
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
   "schemaVersion": 1,
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "7c1267756317aa492e4987a6882c0f76547b145b",
-    "contentDigest": "sha256:bee2ed62babb051690e4b332e38a70f216cd0512791d6fee2ce585b4dc0c4192",
+    "currentSnapshotSha": "dd4fefbbbf55cf8c8852631b003f8ec621aaa9e4",
+    "contentDigest": "sha256:9b90dfee120a703ca00393bb2c995120b91ec062d94cbf9f6f6079224a26b3d1",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -47,7 +47,6 @@ import { randomBytes } from 'node:crypto'
 import { ulid } from 'ulid'
 import type { ObservationInvocationParticipant } from '@/modules/run-observability/public/participants'
 import { createInvocationUsageCapture } from './runtime/usage'
-import { rmSync } from 'node:fs'
 import { join } from 'node:path'
 
 import type { NodeRunPromptOperations } from '@/modules/task-execution/public/types'
@@ -96,6 +95,7 @@ import {
   pluginFileSpec,
   bindNativeAgentMaterialEvidence,
   getNativeAgentMaterialReference,
+  bindNativeAgentMaterialWorkspace,
   type RuntimeKind,
 } from './runtime'
 import type {
@@ -607,7 +607,14 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   const log = opts.log ?? createLogger('runner')
   // A resumed/follow-up process is a new invocation even when nodeRunId is reused.
   const invocationId = ulid()
-  const runRoot = join(opts.appHome, 'runs', opts.taskId, opts.nodeRunId)
+  const materialWorkspace = bindNativeAgentMaterialWorkspace({
+    kind: 'task',
+    appHome: opts.appHome,
+    taskId: opts.taskId,
+    nodeRunId: opts.nodeRunId,
+    workingDirectory: () => opts.worktreePath,
+  })
+  const runRoot = materialWorkspace.locations.runDirectory
   // RFC-200: this persisted value is the single source for BOTH prompt emit
   // and stdout parse. Empty means a pre-upgrade in-flight row and preserves
   // the historical bare-envelope protocol byte-for-byte.
@@ -1222,7 +1229,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         log.warn('runtime-plan-cleanup-failed', { nodeRunId: opts.nodeRunId, runtime })
       }
       try {
-        rmSync(runRoot, { recursive: true, force: true })
+        await materialWorkspace.workspace.discard()
       } catch {
         // Best-effort cleanup preserves the historical runner contract.
       }

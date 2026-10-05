@@ -13,12 +13,11 @@
 // only after reap and plan cleanup are both confirmed; unsafe remnants are
 // deliberately retained for recovery instead of recursively deleted.
 
-import { mkdirSync, rmSync } from 'node:fs'
-import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
 import {
   getRuntimeDriver,
   getNativeAgentMaterialReference,
+  bindNativeAgentMaterialWorkspace,
   type RuntimeKind,
 } from '@/services/runtime'
 import type { SpawnPlan } from '@/services/runtime/types'
@@ -195,11 +194,10 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
     `Use the \`ok\` output port (or plain text if you have no ports).`
   // RFC-280 T4/T5（落差⑤）：appHome scratch，不再 OS tmpdir —— GC 归属确定，
   // 与 systemAgentRun 的 scratch 策略一致。
-  const attemptDir = join(Paths.root, 'scratch', `runtime-smoke-${randomBytes(8).toString('hex')}`)
-  const worktreeDir = join(attemptDir, 'worktree')
-  const runDir = join(attemptDir, 'run')
-  mkdirSync(worktreeDir, { recursive: true, mode: 0o700 })
-  mkdirSync(runDir, { recursive: true, mode: 0o700 })
+  const materialWorkspace = bindNativeAgentMaterialWorkspace({ kind: 'smoke', appHome: Paths.root })
+  const worktreeDir = materialWorkspace.locations.workingDirectory
+  const runDir = materialWorkspace.locations.runDirectory
+  await materialWorkspace.workspace.prepare()
 
   let plan: SpawnPlan
   try {
@@ -215,7 +213,7 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
       log,
     )
   } catch (err) {
-    rmSync(attemptDir, { recursive: true, force: true })
+    await materialWorkspace.workspace.discard()
     return {
       outcome: 'spawn-failed',
       conforms: false,
@@ -313,7 +311,7 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
   })
 
   if (run.outcome === 'spawn-failed') {
-    rmSync(attemptDir, { recursive: true, force: true })
+    await materialWorkspace.workspace.discard()
     return {
       outcome: 'spawn-failed',
       conforms: false,
@@ -432,7 +430,7 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
   }
 
   try {
-    rmSync(attemptDir, { recursive: true, force: true })
+    await materialWorkspace.workspace.discard()
   } catch {
     return {
       outcome: 'spawn-failed',

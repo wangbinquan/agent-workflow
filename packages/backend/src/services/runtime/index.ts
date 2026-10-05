@@ -121,3 +121,10 @@ export function bindNativeAgentMaterialEvidence(
 ) {
   return createLocalAgentMaterialEvidence({ hooks, scope })
 }
+
+// Native compatibility views of the neutral material content lifecycle.
+export {
+  bindNativeAgentMaterialWorkspace,
+  releaseSystemAgentScratch,
+  assertSafeSeedPath,
+} from '@/modules/runtime-management/infrastructure/local/agentMaterialWorkspace'

@@ -14377,7 +14377,7 @@
       "owner": "memory",
       "removeAfterWave": "W4-E1",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#releaseSystemAgentScratch",
+      "toOwnerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#$file",
       "toPath": "packages/backend/src/services/systemAgentRun.ts",
       "toSymbol": "releaseSystemAgentScratch",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -15010,6 +15010,23 @@
       "toPath": "packages/backend/src/services/humanGateComposition.ts",
       "toSymbol": "humanGateComposition",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
+      "fromPath": "packages/backend/src/services/runtime/index.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:267fabe51b68683a0eaa",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#bindNativeAgentMaterialWorkspace",
+      "toPath": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "toSymbol": "bindNativeAgentMaterialWorkspace",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
       "edgeKind": "value",
@@ -28113,7 +28130,7 @@
       "owner": "intent",
       "removeAfterWave": "W4-E1",
       "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#releaseSystemAgentScratch",
+      "toOwnerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#$file",
       "toPath": "packages/backend/src/services/systemAgentRun.ts",
       "toSymbol": "releaseSystemAgentScratch",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
@@ -48793,6 +48810,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
+      "fromPath": "packages/backend/src/services/runtime/index.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:835ec062b66a4ad7e8a4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#assertSafeSeedPath",
+      "toPath": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "toSymbol": "assertSafeSeedPath",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
       "fromPath": "packages/backend/src/server.ts",
       "fromSymbol": "$file",
@@ -49366,6 +49400,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger",
       "toPath": "packages/backend/src/util/log.ts",
       "toSymbol": "createLogger",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#$file",
+      "fromPath": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:85419938a9976a00ef56",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/platformExec.ts#isLexicallyInsideForHost",
+      "toPath": "packages/backend/src/util/platformExec.ts",
+      "toSymbol": "isLexicallyInsideForHost",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -88318,6 +88369,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
+      "fromPath": "packages/backend/src/services/runtime/index.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ec966ccb441f6ab979e4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#releaseSystemAgentScratch",
+      "toPath": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "toSymbol": "releaseSystemAgentScratch",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts#$file",
       "fromPath": "packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts",
       "fromSymbol": "$file",
@@ -95916,9 +95984,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5642,
+    "architectureExceptions": 5646,
     "implementationSccs": 0,
-    "observedEdges": 6357,
+    "observedEdges": 6361,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -111028,7 +111096,7 @@
       "targetSymbol": "releaseSystemAgentScratch",
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/systemAgentRun.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#releaseSystemAgentScratch"
+      "toOwnerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -111733,6 +111801,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/humanGateComposition.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/humanGateComposition.ts#humanGateComposition"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/runtime/index.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
+      "id": "import:267fabe51b68683a0eaa",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/runtime-management/infrastructure/local/agentMaterialWorkspace",
+      "syntax": "export",
+      "targetSymbol": "bindNativeAgentMaterialWorkspace",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#bindNativeAgentMaterialWorkspace"
     },
     {
       "edgeKind": "value",
@@ -125428,7 +125512,7 @@
       "targetSymbol": "releaseSystemAgentScratch",
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/systemAgentRun.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#releaseSystemAgentScratch"
+      "toOwnerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -147639,6 +147723,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/util/git.ts#gitMetaDirsFor"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/runtime/index.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
+      "id": "import:835ec062b66a4ad7e8a4",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/runtime-management/infrastructure/local/agentMaterialWorkspace",
+      "syntax": "export",
+      "targetSymbol": "assertSafeSeedPath",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#assertSafeSeedPath"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "integration",
       "fromFile": "packages/backend/src/modules/integration/infrastructure/webhookExecutionRuntime.ts",
@@ -148309,6 +148409,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/log.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#createLogger"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "runtime-management",
+      "fromFile": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#$file",
+      "id": "import:85419938a9976a00ef56",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/platformExec",
+      "syntax": "static-import",
+      "targetSymbol": "isLexicallyInsideForHost",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/platformExec.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/platformExec.ts#isLexicallyInsideForHost"
     },
     {
       "edgeKind": "value",
@@ -189720,6 +189836,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/runtime/index.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
+      "id": "import:ec966ccb441f6ab979e4",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9-D",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/runtime-management/infrastructure/local/agentMaterialWorkspace",
+      "syntax": "export",
+      "targetSymbol": "releaseSystemAgentScratch",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#releaseSystemAgentScratch"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "event-center",
       "fromFile": "packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/eventAutomationWorkIntentStore.ts#$file",
@@ -198529,7 +198661,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4d2de07179aaf057464eed6223b41c33adc1e6ab3b430a01fcdcf991b25d7b90",
+  "sourceDigest": "sha256:a139a9620d7ce1f050e4f0eecbf7cc6ae19aa5b570d693c37fcead03b0476246",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

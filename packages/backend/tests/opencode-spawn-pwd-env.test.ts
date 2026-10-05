@@ -127,7 +127,18 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
     // The isolated worktree under the caller's scratch is the ONE cwd handed to
     // both plan construction and the executor, so buildOpencodeEnv pins the same
     // PWD (ENV_PWD_SITES above) and managedProcess spawns with it (SPAWN_CWD_SITES).
-    expect(src).toContain("const worktreeDir = join(scratchDir, 'worktree')")
+    const workspace = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts',
+      ),
+      'utf-8',
+    )
+    expect(workspace).toContain("join(root, 'worktree')")
+    expect(src).toContain('const worktreeDir = materialWorkspace.locations.workingDirectory')
+    expect(src).toContain("kind: 'system'")
+    expect(src).toContain('parent: () => opts.scratchParent,')
     expect(src).toContain('cwd: worktreeDir,')
     expect(src).toContain('await localExecution.effect.submit({')
     expect(src).toContain('workingDirectory: () => worktreeDir,')

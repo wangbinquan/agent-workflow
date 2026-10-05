@@ -870,3 +870,10 @@ ad1主CI37268055252终态cancelled（返回46jobs：13success／30cancelled／3f
 b3dbcdda9453cf545f07dc80684b52bce4974f4a 主CI37270989081正式cancelled（50jobs：25success／7failure／18cancelled），Windows37270989104正式failure；platform272pass／3skip／0fail和shared2295pass／0fail只是对应证据。新夹具readonly类型、S15/RFC108旧源码定位、macOS direct rejection错误断言窗口分别修复。原native拒绝后的abort/drain保留，零output/input检查移到拒绝前；aborted、原预算及其余11项整项AST不变，并补拒绝后回调、pumpError和原buffered raw/line一致检查。详情见design/RFC-370-crewstation-hosted-deployment/execution-ci-fidelity.md。
 
 只修改三份测试及追加记录；原生产/workflow七项控制字节不变，不重新census。有限独立功能门、精确发布与新exact-SHA CI分别留证，旧FAIL/cancelled及并行RFC371失败保留。没有本机AW tests/typecheck/build/service。完整selected材料／取证／生命周期／执行／回执与所有真根、脚本、执行权恢复及A-G继续；CS adapters、M0首次部署及M1～M4未开始，RFC仍在A-T5。原共享正文逐字保留，仅追加此段。
+
+
+### 2026-10-05 RFC-370 原生材料目录生命周期切面
+
+Task／System Agent／runtime smoke 的原目录准备、seed写入和删除接RM application材料生命周期接口及native adapter。Task保留builder惰性物化和capture后best-effort清理；System保留原名称／parent／seed reader读取时点、失败和unreaped保留、成功retainScratch决策；smoke保留原try外准备、失败删除与unreaped保留。两个旧scratch/seed导出指向整体原函数。纯AST对拍证明三入口除明确IO映射外完整算法相等，PWD原其余断言和预算、Windows逆映射后的整份原字节保持。新增六项真实文件回归，正式运行仍交hosted CI。详见design/RFC-370-crewstation-hosted-deployment/agent-material-workspace.md。
+
+本片独立功能门、matching原静态投影、精确发布和新exact-SHA CI分别验收；只做owned格式／lint与纯AST／字节，无本机AW tests/typecheck/build/service。并行RFC371内容保留且不纳入source生成；旧FAIL／cancelled不替换。仍在A-T5，完整selected材料／取证／生命周期／执行／receipt组合及所有真根、脚本、执行权恢复和A-G继续；CS adapters、M0首次实际部署及M1～M4未开始，本片不关闭RFC。原共享正文逐字保持，仅追加此段。

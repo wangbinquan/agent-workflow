@@ -1,13 +1,13 @@
 {
   "baseline": {
-    "inboundEdges": 284,
+    "inboundEdges": 285,
     "outboundEdges": 33,
     "recordedAt": "2026-09-04",
-    "recordedAtShaNote": "RFC-366（2026-09-21）：inbound 边 252→253。执行结束记忆提炼把 agent 运行结束观察者装进 task-execution 自己的 composition，由 legacy `services/task.ts` 的 runtimeConfigOpts 消费；条目文本由 RFC-366 作者提供。\n\nRFC-367（2026-09-21）：outbound 边 27→31。记忆蒸馏器改用共享的 `runSystemAgent` 运行原语，让候选解析与会话页记录同源于一条规范化事件流（此前两条 reader 各解析一次同一段输出，漂移过两次、静默丢光候选）。四条新边分别是 memory→`@/services/systemAgentRun`（type+value）、memory 的 distill 端口→`@/services/sessionEventSink`（type）、以及候选解析改用公共 envelope 解析件带来的 memory→`@/services/envelope`（value）。三个目标都仍在 legacy `services/` 下，本 RFC 只做最小扩展不顺手迁位；随 RFC-294 W4-C / W4-E1 归位时一并销账。\n\nRFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged.\n\nRFC-360 T3: register eight exact temporary forwarding imports/exports for the relocated single registry. Remove these with the named compatibility consumers in T6; no directory or scanner exemption is added.\n\nRFC-370 H2：auth/session 兼容门面指向 identity-access composition 的 type/value import/export 四条边精确登记；WS 传输和两个 HTTP bootstrap 已注入 participant，剩余兼容调用者在 A-T7 逐项收口。\n\nRFC-370 H1：五条配置 local composition 的 exact compatibility 入边补记，255→260；selected query 与 policy 从 public 出口消费，默认兼容边于 A-T7 逐入口收口，原 scanner/fixtures 不变。\n\nRFC-370 H1（2026-10-02）：installation seed completion 兼容默认仅由 SO composition 选择，services/demoSeed 新增一条 exact value/static-import 入边，260→261；原 owner native seed 顺序不变，所选完成事实无本机 fallback，A-T7 root injection 收口后退役。TE composition→SC composition 的所选 presence 默认属于实际 temporary-internal-debt，owner task-execution，随 A-T7 完整依赖注入后删除该默认内部边；不是 R1 legacy 口径，未虚增本账本。\n\nRFC-370 A2（2026-10-02）：插件安装和 generation GC 原物理主体下沉 RC independent local adapter，service 只保留原准确兼容出口及 worker 业务。两条实际目标路径按原 R1 的 type/value 与 import/export 口径登记六项（261→267），owner resource-catalog，随 A-T7 bootstrap selected effect 贯穿及旧调用者收口退役。原边界算法、public 规则与 scanner 未改。\n\nRFC-370 A1（2026-10-02）：原 pendingRestore 物理主体完整移到 SO independent local，旧 service 仅10项准确 value/type 转出口；pre-open history/generation/restore 接所选中立效果。按真实目标登记两项 type/value export 的 R1（267→269），owner system-operations，随 A-T7 selected restore roots/legacy callers退役，原算法与规则不变。\n\nRFC-370 A1 (2026-10-02): manual migration now selects the existing configuration/installation ports through a narrow SO composition. The actual CLI type/value R1 entries replace its retired direct preparation entry, inbound 269 -> 270; owner system-operations, retirement A-T7 bootstrap/CLI convergence. All original clauses, scanner rules and other entries remain unchanged.\n\nRFC-370 A1 (2026-10-02): config CLI consumes the existing SO persistence contract through one purpose composition, adding only its actual type/value R1 pair. Inbound 270 -> 272; SO owns the existing behavior and A-T7 bootstrap/CLI convergence retires both. The original bootstrap list, clauses, reasons, scanner rules and all old entries are unchanged.\n\nRFC-370 A1 (2026-10-02): the independently reviewed doctor query binding adds only its actual purpose-composition value R1. Inbound 272 -> 273, owner SO and retirement A-T7 bootstrap/CLI convergence; the original public query type is accepted without a new clause. Every prior record, original rule and bootstrap list remains unchanged.\n\nRFC-370 H4/H5 (2026-10-05): register the four exact compatibility driver value import/export edges to the two actual native material owners, inbound 270 -> 274. Original physical implementations and assembly API remain intact; A-T7 selected material/evidence root convergence retires these entries. The original boundary scanner and every previous debt clause remain unchanged.\n\nRFC-370 H4 Agent execution native compatibility: register eight exact value/type static imports from the three real agent consumers and runtime material gateway; inbound276→284, original309 rows/outbound33 retained. Retirement requires A-T7 full selected bundle and true roots; no directory/classifier/guard exemption.",
+    "recordedAtShaNote": "RFC-366（2026-09-21）：inbound 边 252→253。执行结束记忆提炼把 agent 运行结束观察者装进 task-execution 自己的 composition，由 legacy `services/task.ts` 的 runtimeConfigOpts 消费；条目文本由 RFC-366 作者提供。\n\nRFC-367（2026-09-21）：outbound 边 27→31。记忆蒸馏器改用共享的 `runSystemAgent` 运行原语，让候选解析与会话页记录同源于一条规范化事件流（此前两条 reader 各解析一次同一段输出，漂移过两次、静默丢光候选）。四条新边分别是 memory→`@/services/systemAgentRun`（type+value）、memory 的 distill 端口→`@/services/sessionEventSink`（type）、以及候选解析改用公共 envelope 解析件带来的 memory→`@/services/envelope`（value）。三个目标都仍在 legacy `services/` 下，本 RFC 只做最小扩展不顺手迁位；随 RFC-294 W4-C / W4-E1 归位时一并销账。\n\nRFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged.\n\nRFC-360 T3: register eight exact temporary forwarding imports/exports for the relocated single registry. Remove these with the named compatibility consumers in T6; no directory or scanner exemption is added.\n\nRFC-370 H2：auth/session 兼容门面指向 identity-access composition 的 type/value import/export 四条边精确登记；WS 传输和两个 HTTP bootstrap 已注入 participant，剩余兼容调用者在 A-T7 逐项收口。\n\nRFC-370 H1：五条配置 local composition 的 exact compatibility 入边补记，255→260；selected query 与 policy 从 public 出口消费，默认兼容边于 A-T7 逐入口收口，原 scanner/fixtures 不变。\n\nRFC-370 H1（2026-10-02）：installation seed completion 兼容默认仅由 SO composition 选择，services/demoSeed 新增一条 exact value/static-import 入边，260→261；原 owner native seed 顺序不变，所选完成事实无本机 fallback，A-T7 root injection 收口后退役。TE composition→SC composition 的所选 presence 默认属于实际 temporary-internal-debt，owner task-execution，随 A-T7 完整依赖注入后删除该默认内部边；不是 R1 legacy 口径，未虚增本账本。\n\nRFC-370 A2（2026-10-02）：插件安装和 generation GC 原物理主体下沉 RC independent local adapter，service 只保留原准确兼容出口及 worker 业务。两条实际目标路径按原 R1 的 type/value 与 import/export 口径登记六项（261→267），owner resource-catalog，随 A-T7 bootstrap selected effect 贯穿及旧调用者收口退役。原边界算法、public 规则与 scanner 未改。\n\nRFC-370 A1（2026-10-02）：原 pendingRestore 物理主体完整移到 SO independent local，旧 service 仅10项准确 value/type 转出口；pre-open history/generation/restore 接所选中立效果。按真实目标登记两项 type/value export 的 R1（267→269），owner system-operations，随 A-T7 selected restore roots/legacy callers退役，原算法与规则不变。\n\nRFC-370 A1 (2026-10-02): manual migration now selects the existing configuration/installation ports through a narrow SO composition. The actual CLI type/value R1 entries replace its retired direct preparation entry, inbound 269 -> 270; owner system-operations, retirement A-T7 bootstrap/CLI convergence. All original clauses, scanner rules and other entries remain unchanged.\n\nRFC-370 A1 (2026-10-02): config CLI consumes the existing SO persistence contract through one purpose composition, adding only its actual type/value R1 pair. Inbound 270 -> 272; SO owns the existing behavior and A-T7 bootstrap/CLI convergence retires both. The original bootstrap list, clauses, reasons, scanner rules and all old entries are unchanged.\n\nRFC-370 A1 (2026-10-02): the independently reviewed doctor query binding adds only its actual purpose-composition value R1. Inbound 272 -> 273, owner SO and retirement A-T7 bootstrap/CLI convergence; the original public query type is accepted without a new clause. Every prior record, original rule and bootstrap list remains unchanged.\n\nRFC-370 H4/H5 (2026-10-05): register the four exact compatibility driver value import/export edges to the two actual native material owners, inbound 270 -> 274. Original physical implementations and assembly API remain intact; A-T7 selected material/evidence root convergence retires these entries. The original boundary scanner and every previous debt clause remain unchanged.\n\nRFC-370 H4 Agent execution native compatibility: register eight exact value/type static imports from the three real agent consumers and runtime material gateway; inbound276→284, original309 rows/outbound33 retained. Retirement requires A-T7 full selected bundle and true roots; no directory/classifier/guard exemption.\n\nRFC-370 native material directory lifecycle: register the single actual R1 value/export compatibility group to the native material directory owner, inbound284→285. Outbound33 and all original317 debt records retained; the infrastructure util dependency is an observed canonical edge but is outside the original R2 boundary predicate and does not add a fictitious R2 debt. A-T7 selected roots retire the exact compatibility group.",
     "registeredFindings": 79
   },
   "canonicalProjection": {
-    "sourceDigest": "sha256:4d2de07179aaf057464eed6223b41c33adc1e6ab3b430a01fcdcf991b25d7b90",
+    "sourceDigest": "sha256:a139a9620d7ce1f050e4f0eecbf7cc6ae19aa5b570d693c37fcead03b0476246",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
@@ -6630,8 +6630,8 @@
         "import:c35fd8f01b06d7380c8c"
       ],
       "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/systemAgentRun.ts#$file",
         "owner:packages/backend/src/services/systemAgentRun.ts#classifyMissingEnvelope",
-        "owner:packages/backend/src/services/systemAgentRun.ts#releaseSystemAgentScratch",
         "owner:packages/backend/src/services/systemAgentRun.ts#runSystemAgent"
       ],
       "edgeKind": "value",
@@ -6843,8 +6843,8 @@
         "import:9f9ee23d0b828aefa094"
       ],
       "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/systemAgentRun.ts#$file",
         "owner:packages/backend/src/services/systemAgentRun.ts#classifyMissingEnvelope",
-        "owner:packages/backend/src/services/systemAgentRun.ts#releaseSystemAgentScratch",
         "owner:packages/backend/src/services/systemAgentRun.ts#runSystemAgent"
       ],
       "edgeKind": "value",
@@ -7449,6 +7449,31 @@
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
       "canonicalToOwnerEntryIds": [
         "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts#bindNativeAgentMaterialReference"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/runtime/index.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/runtime/index.ts",
+      "specifier": "@/modules/runtime-management/infrastructure/local/agentMaterialWorkspace",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "runtime-management",
+      "introducedByRFC": "RFC-370 A-T5 native material directory lifecycle",
+      "why": "RFC-370 H4/H5: the existing runtime gateway forwards exactly the original seed validator, scratch release and native material directory factory from the independent runtime-management native adapter. The original three agent entry algorithms, path layout, lazy preparation, failure boundaries and retention decisions remain intact. A-T7 full selected bundle and true composition roots retire this exact compatibility export group; the original boundary scanner and all previous entries remain unchanged.",
+      "removeAfterWave": "RFC-370 A-T7 selected material and evidence roots",
+      "canonicalImportEdgeIds": [
+        "import:267fabe51b68683a0eaa",
+        "import:835ec062b66a4ad7e8a4",
+        "import:ec966ccb441f6ab979e4"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtime/index.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#assertSafeSeedPath",
+        "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#bindNativeAgentMaterialWorkspace",
+        "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#releaseSystemAgentScratch"
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/runtime/index.ts"
@@ -8636,8 +8661,8 @@
   "schemaVersion": 1,
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "7c1267756317aa492e4987a6882c0f76547b145b",
-    "contentDigest": "sha256:bf638339db44d0b5199839a4ec2f4a0f146dc259d2a4897e3ba37d6f079a615d",
+    "currentSnapshotSha": "dd4fefbbbf55cf8c8852631b003f8ec621aaa9e4",
+    "contentDigest": "sha256:49d2a425e4c448e8b1943fe1794bc08bc67addc7f3e22ec6a9d026d5ea7c2436",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -21,13 +21,11 @@
 //  - stderr tails pass through maskDiagnosticsText before leaving this module
 //    (design §8 — diagnostics are a secret egress surface too).
 
-import { lstatSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { dirname, isAbsolute, join, resolve } from 'node:path'
-import { randomBytes } from 'node:crypto'
 import {
   getRuntimeDriver,
   bindNativeAgentMaterialEvidence,
   getNativeAgentMaterialReference,
+  bindNativeAgentMaterialWorkspace,
   type RuntimeKind,
 } from '@/services/runtime'
 import type { AgentSpawnContext, AgentSpawnPlan } from '@/services/runtime/types'
@@ -40,7 +38,6 @@ import type {
   SystemAgentOutputEvidence,
 } from '@/services/runtime/types'
 import { createLogger, type Logger } from '@/util/log'
-import { isLexicallyInsideForHost } from '@/util/platformExec'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
 import type {
   SessionCaptureIncompleteReason,
@@ -253,50 +250,8 @@ function saturatingAdd(left: number, right: number): number {
   return Math.min(Number.MAX_SAFE_INTEGER, left + right)
 }
 
-export function releaseSystemAgentScratch(input: {
-  scratchDir: string
-  expectedParent: string
-  expectedName: string
-}): { removed: boolean; reason?: 'unsafe-path' | 'remove-failed' } {
-  if (
-    !isAbsolute(input.expectedParent) ||
-    resolve(input.expectedParent) !== input.expectedParent ||
-    input.expectedName.length === 0 ||
-    input.expectedName.includes('\0') ||
-    input.expectedName.includes('/') ||
-    input.expectedName.includes('\\') ||
-    !isAbsolute(input.scratchDir) ||
-    resolve(input.scratchDir) !== input.scratchDir ||
-    input.scratchDir !== join(input.expectedParent, input.expectedName)
-  ) {
-    return { removed: false, reason: 'unsafe-path' }
-  }
-  try {
-    const metadata = lstatSync(input.scratchDir)
-    if (metadata.isSymbolicLink() || !metadata.isDirectory()) {
-      return { removed: false, reason: 'unsafe-path' }
-    }
-    rmSync(input.scratchDir, { recursive: true, force: true })
-    return { removed: true }
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return { removed: true }
-    return { removed: false, reason: 'remove-failed' }
-  }
-}
-
-/** Reject traversal/absolute seed paths BEFORE any filesystem write. */
-export function assertSafeSeedPath(worktreeDir: string, relPath: string): string {
-  if (relPath.length === 0 || isAbsolute(relPath)) {
-    throw new Error(`unsafe seed path: ${relPath}`)
-  }
-  // RFC-254 T1: `resolve()` yields `\`-separated paths on Windows, so the old
-  // `${worktreeDir}/` prefix test rejected every legitimate seed path there.
-  const abs = resolve(worktreeDir, relPath)
-  if (!isLexicallyInsideForHost(worktreeDir, abs)) {
-    throw new Error(`unsafe seed path: ${relPath}`)
-  }
-  return abs
-}
+// Native compatibility names keep the original implementation and results.
+export { releaseSystemAgentScratch, assertSafeSeedPath } from '@/services/runtime'
 
 export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<SystemAgentRunResult> {
   const log = opts.log ?? createLogger('systemAgentRun')
@@ -305,10 +260,16 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
   const startedAt = Date.now()
   const driver = getRuntimeDriver(opts.protocol)
 
-  const scratchName = opts.scratchName ?? `${opts.feature}-${randomBytes(8).toString('hex')}`
-  const scratchDir = join(opts.scratchParent, scratchName)
-  const worktreeDir = join(scratchDir, 'worktree')
-  const runDir = join(scratchDir, 'run')
+  const materialWorkspace = bindNativeAgentMaterialWorkspace({
+    kind: 'system',
+    parent: () => opts.scratchParent,
+    feature: () => opts.feature,
+    scratchName: () => opts.scratchName,
+    seedFiles: () => opts.seedFiles,
+  })
+  const scratchDir = materialWorkspace.locations.root
+  const worktreeDir = materialWorkspace.locations.workingDirectory
+  const runDir = materialWorkspace.locations.runDirectory
 
   const outputEvidence = emptySystemAgentOutputEvidence()
   const fail = (
@@ -328,16 +289,9 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
 
   // ── scratch layout + seed files (platform-side; agent never fetches) ──
   try {
-    mkdirSync(opts.scratchParent, { recursive: true, mode: 0o700 })
-    mkdirSync(worktreeDir, { recursive: true, mode: 0o700 })
-    mkdirSync(runDir, { recursive: true, mode: 0o700 })
-    for (const seed of opts.seedFiles ?? []) {
-      const abs = assertSafeSeedPath(worktreeDir, seed.path)
-      mkdirSync(dirname(abs), { recursive: true })
-      writeFileSync(abs, seed.content)
-    }
+    await materialWorkspace.workspace.prepare()
   } catch (err) {
-    rmSync(scratchDir, { recursive: true, force: true })
+    await materialWorkspace.workspace.discard()
     return fail('spawn-failed', {
       stderrTail: maskDiagnosticsText(
         `scratch setup failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -862,7 +816,7 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         let scratchRemoved = false
         if (wantScratchRemoved) {
           try {
-            rmSync(scratchDir, { recursive: true, force: true })
+            await materialWorkspace.workspace.discard()
             scratchRemoved = true
           } catch {
             // Retained deliberately — recovery + GC own it now.

@@ -3746,6 +3746,7 @@
         "import:079166cc8e49ffebb3e4",
         "import:08e63587084385a1429a",
         "import:0d84849979600beb3392",
+        "import:267fabe51b68683a0eaa",
         "import:26fe0c0ce3c7def7d032",
         "import:28490b02663597eaeebe",
         "import:39ddda7a36b8ec55d9e0",
@@ -3754,9 +3755,11 @@
         "import:55f7c3a1e3e1628e4302",
         "import:6086843b83980e7f72de",
         "import:70fef04c52ff0c283a17",
+        "import:835ec062b66a4ad7e8a4",
         "import:9b40bf959bd20a789e88",
         "import:9b54bbf2ad1b84de8700",
         "import:ea97292b0b4cff7fc31f",
+        "import:ec966ccb441f6ab979e4",
         "import:ed4eeb7ac1111ebf2f6e"
       ],
       "exportedSymbols": [
@@ -5277,10 +5280,8 @@
         "SystemAgentRunResult",
         "SystemAgentRunStatus",
         "SystemAgentSeedFile",
-        "assertSafeSeedPath",
         "classifyMissingEnvelope",
         "emptySystemAgentOutputEvidence",
-        "releaseSystemAgentScratch",
         "runSystemAgent"
       ],
       "file": "packages/backend/src/services/systemAgentRun.ts",
@@ -6439,5 +6440,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4d2de07179aaf057464eed6223b41c33adc1e6ab3b430a01fcdcf991b25d7b90"
+  "sourceDigest": "sha256:a139a9620d7ce1f050e4f0eecbf7cc6ae19aa5b570d693c37fcead03b0476246"
 }

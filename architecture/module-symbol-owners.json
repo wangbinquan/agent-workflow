@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2205,
+    "backendFiles": 2207,
     "frontendFiles": 654,
     "legacyFiles": 587,
-    "moduleFiles": 1618,
-    "productionFiles": 3026,
+    "moduleFiles": 1620,
+    "productionFiles": 3028,
     "sharedFiles": 167,
-    "symbolsIncludingFileRoots": 26778
+    "symbolsIncludingFileRoots": 26784
   },
   "entries": [
     {
@@ -113893,6 +113893,42 @@
       "currentContext": "runtime-management",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentMaterialWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentMaterialWorkspace.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentMaterialWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentMaterialWorkspace.ts#AgentMaterialSeedFile",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AgentMaterialSeedFile",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentMaterialWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentMaterialWorkspace.ts#AgentMaterialWorkspace",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AgentMaterialWorkspace",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/runtime-management/application/ports/nativeSpanCapture.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/application/ports/nativeSpanCapture.ts#$file",
       "removeAfterWave": null,
@@ -115410,6 +115446,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "NativeAgentMaterialEvidenceScope",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#assertSafeSeedPath",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "assertSafeSeedPath",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#bindNativeAgentMaterialWorkspace",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "bindNativeAgentMaterialWorkspace",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#NativeAgentMaterialWorkspaceInput",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NativeAgentMaterialWorkspaceInput",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialWorkspace.ts#releaseSystemAgentScratch",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "releaseSystemAgentScratch",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -207171,18 +207267,6 @@
     {
       "currentContext": "legacy",
       "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/systemAgentRun.ts",
-      "id": "owner:packages/backend/src/services/systemAgentRun.ts#assertSafeSeedPath",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "assertSafeSeedPath",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
       "exported": false,
       "file": "packages/backend/src/services/systemAgentRun.ts",
       "id": "owner:packages/backend/src/services/systemAgentRun.ts#CHILD_TERM_GRACE_MS",
@@ -207249,18 +207333,6 @@
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "MissingEnvelopeReason",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/systemAgentRun.ts",
-      "id": "owner:packages/backend/src/services/systemAgentRun.ts#releaseSystemAgentScratch",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "releaseSystemAgentScratch",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -322072,5 +322144,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:4d2de07179aaf057464eed6223b41c33adc1e6ab3b430a01fcdcf991b25d7b90"
+  "sourceDigest": "sha256:a139a9620d7ce1f050e4f0eecbf7cc6ae19aa5b570d693c37fcead03b0476246"
 }
