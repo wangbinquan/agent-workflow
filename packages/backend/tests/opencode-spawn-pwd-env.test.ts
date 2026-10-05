@@ -75,13 +75,28 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
   test('runner.ts hands opts.worktreePath + the driver env straight to the executor', () => {
     const src = readFileSync(resolve(import.meta.dir, '..', 'src/services/runner.ts'), 'utf-8')
     // RFC-370: the selected native binding keeps cwd = the task worktree and
-    // env = the driver-assembled plan env, read only when execution submits.
+    // env = the original early snapshot of the driver-assembled plan env.
     expect(src).toContain('await localExecution.effect.submit({')
     expect(src).toContain('workingDirectory: () => opts.worktreePath,')
-    expect(src).toContain('environment: () => env,')
+    expect(src).toContain('taskSnapshot: { command: cmd, environment: env },')
     expect(src).toContain('cwd: opts.worktreePath,')
     expect(src).toContain('env,')
     expect(src).not.toContain('Bun.spawn(')
+    expect(src).toContain('const { cmd, env } = plan')
+    expect(src).toContain('const invocation = bindNativeAgentInvocation({')
+    const binding = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts',
+      ),
+      'utf-8',
+    )
+    expect(binding).toContain(
+      'const environment = () => input.taskSnapshot?.environment ?? input.plan.env',
+    )
+    expect(binding).toContain('workingDirectory: input.workingDirectory,')
+    expect(binding).toContain('environment,')
     const native = readFileSync(
       resolve(
         import.meta.dir,
@@ -142,8 +157,31 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
     expect(src).toContain('cwd: worktreeDir,')
     expect(src).toContain('await localExecution.effect.submit({')
     expect(src).toContain('workingDirectory: () => worktreeDir,')
-    expect(src).toContain('const nativePlan = plan')
-    expect(src).toContain('environment: () => nativePlan.env,')
+    expect(src).toContain('invocation = bindNativeAgentInvocation({\n        plan,')
+    expect(src).toContain('environment: () => plan!.env,')
+    const binding = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts',
+      ),
+      'utf-8',
+    )
+    expect(binding).toContain(
+      'const environment = () => input.taskSnapshot?.environment ?? input.plan.env',
+    )
+    expect(binding).toContain('workingDirectory: input.workingDirectory,')
+    expect(binding).toContain('environment,')
+    const native = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts',
+      ),
+      'utf-8',
+    )
+    expect(native).toContain('cwd: input.workingDirectory(),')
+    expect(native).toContain('env: input.environment(),')
   })
 
   for (const [rel, cwdExpr, envExpr] of SPAWN_CWD_SITES) {

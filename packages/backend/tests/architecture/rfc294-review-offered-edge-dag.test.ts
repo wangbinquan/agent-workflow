@@ -569,6 +569,18 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
+  {
+    from: 'packages/backend/src/modules/runtime-management/application/ports/agentInvocationBinding.ts',
+    to: 'task-execution',
+    why: 'RFC-370 SOURCE14-R2 的同材料 Agent binding 实际消费 Task-owned 执行接口和不透明 participant；该 type-only offered 边不在目标 DAG，完整 selected factory 接线时把跨 owner 组合移到 composition 后销账。',
+    removeAfterWave: 'W4-E7（RFC-370 A-T5 selected factory composition）',
+  },
+  {
+    from: 'packages/backend/src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts',
+    to: 'task-execution',
+    why: 'RFC-370 SOURCE14-R2 的 native 同材料工厂实际消费 Task-owned 执行接口和不透明 participant；该 type-only offered 边不在目标 DAG，完整 selected factory 接线时把跨 owner 组合移到 composition 后销账。',
+    removeAfterWave: 'W4-E7（RFC-370 A-T5 selected factory composition）',
+  },
 ]
 
 const PAIRS = offeredPairs(TARGET_CONTEXT_EDGES)

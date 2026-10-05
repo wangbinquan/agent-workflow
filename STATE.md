@@ -10178,3 +10178,9 @@ Task／System／Smoke 实际消费同材料 invocation binding；纯协议、wor
 共享 rfc371-invocation-wiring.test.ts 在 SOURCE14-R2 门结束后由并行会话补齐已提交 native history 根的实际两参数与 old/new native 绑定位置；完整输出保留并独立补充检视，SHARED-INVOCATION-ORACLE-SOURCE1-R1 PASS（1 owned／4 control／10 evidence共15项），FP db91375c51659b567f7b438cc71b3fc786004c194ee819158cee809107e1cb43。原5个用例名／顺序／预算不变，原38个expect只将旧单参数投影1项改为真实数据库首参数＋精确history reader／provider／参数数／字段，其余37完整AST保持、新57项。原8份生产源码及另49冻结条目字节相同；原canonical摘要仅消费生产units，不因该测试补充重跑census。最终发布使用SOURCE14-R2与共享SOURCE1两份不可变PASS共同覆盖当前完整源码，不冒充原50项指纹是修改后的整文件指纹。两份共享文档只整理旧重复空行，所有旧非空行／顺序及原fenced内容逐字保持；无旧正文或并行内容删除。
 
 - 2026-10-05 RFC-370 同材料三入口已精确发布：SOURCE14-R2／共享 SOURCE1／META15-R1 独立有限 PASS，b4f36cf9d746cf509810e8032ab7d0384d15f1d8 提交29个相关文件，post-fetch main／origin同步0/0、shared index空；完整并行入口测试保留。主线随后安全纳入 a0117acb4157f594f5528c9a7833e7362de653f0 的观测 CI 修复，当前14份本批源码保持。此正常后继只退役已消费的四条 matching许可（imports6400／exceptions5678／public1155／owners26829）；原129有序库存、所有数值／why及其余许可原样保持，由原 helper 刷新 provenance，不重跑 census或源门。b4 Windows 已正式 cancelled，主CI在采样时仍在途，integration-opencode成功不替代整体CI；新确切SHA另验收。完整 selected factory／全部真根、脚本／执行权恢复与A-G、CS adapters和M0～M4继续开放，未部署AW、不关闭RFC。原共享全文逐字保留，只追加此行。
+
+### 2026-10-05 RFC-370 同材料入口 CI 检查补正
+
+ab30 主 CI37296573386 正式 completed/cancelled（21 success／7 failure／20 cancelled）；本批修正 Task／System PWD 旧源码地址并精确登记 RM 两文件→TE 的真实 type-only offered 边及37→39 matching增长，原 DAG／分类／predicate／预算保持。并行 a0117 的 dead public 删除和059a的 canonical 修正完整保留，不重复生成。详见 design/RFC-370-crewstation-hosted-deployment/agent-invocation-ci-repair.md。
+
+有限独立功能门、精确发布与新 exact-SHA CI 分别验收；仅 owned format／lint、纯AST／字节／JSON和原provenance helper，无本机AW test／typecheck／build／service，不重跑不变生产census。旧FAIL／cancelled留证，完整selected factory／真根、脚本／执行权恢复与A-G、独立CS adapters及M0～M4继续开放，尚无AW-in-CS部署，不关闭RFC。原共享正文逐字保留，只追加本段。
