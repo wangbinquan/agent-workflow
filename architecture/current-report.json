@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 504,
-    "architectureExceptions": 5733,
+    "architectureExceptions": 5777,
     "backgroundJobs": 361,
-    "crossContextImports": 6484,
+    "crossContextImports": 6547,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26921,
-    "mutationEntrypoints": 1894,
+    "moduleSymbolOwners": 26945,
+    "mutationEntrypoints": 1897,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 1169,
     "transactionExternalEffects": 267
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 504,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2245,
+    "backendProductionFiles": 2254,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -49,7 +49,7 @@
     ],
     "directNativeIntervals": 22,
     "directNativeTimers": 78,
-    "inboundBoundaryEdges": 302,
+    "inboundBoundaryEdges": 298,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -102,7 +102,7 @@
       },
       {
         "context": "run-observability",
-        "files": 105
+        "files": 106
       },
       {
         "context": "runtime-management",
@@ -122,10 +122,10 @@
       },
       {
         "context": "task-execution",
-        "files": 412
+        "files": 420
       }
     ],
-    "moduleFiles": 1657,
+    "moduleFiles": 1666,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -138,7 +138,7 @@
         "symbol": "nodeRunMintProgram"
       }
     ],
-    "outboundBoundaryEdges": 36,
+    "outboundBoundaryEdges": 52,
     "repoValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0d3560a35017f51a1076bafcace3232e20901b1187a102bf243c396868717198"
+  "sourceDigest": "sha256:8131f7030ec6c84b435654153e44f9e543edf90c4a5f5a2f8baa8aad71ed9200"
 }

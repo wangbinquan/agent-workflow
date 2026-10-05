@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-181 —— 工作组「全自动」硬化回归锁
 // (design/RFC-181-workgroup-autonomous-hardening/{proposal,design}.md)
 //
@@ -515,7 +516,7 @@ describeEachProvider(
 
 describe('RFC-181 C — 源级契约锁', () => {
   test('runner：runNode 收尾期前的 envelope 时刻判定器拒绝（实现门 P1-①/P2 双向实时）', () => {
-    const runner = SRC('services/runner.ts')
+    const runner = readTaskAgentSources()
     // 判定器分支必须先于合法 clarify 的 clarifyResult 赋值（终态持久化之前分类）。
     expect(runner).toContain('await opts.clarifySuppressed?.()')
     const suppress = runner.indexOf('await opts.clarifySuppressed?.()')

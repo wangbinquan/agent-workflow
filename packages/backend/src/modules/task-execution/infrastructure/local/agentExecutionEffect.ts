@@ -240,7 +240,7 @@ const nativeTaskParticipants = new WeakMap<object, NativeAgentExecutionTaskParti
 
 export function bindLocalAgentExecutionParticipants(
   input: NativeAgentExecutionTaskParticipants,
-): AgentExecutionParticipants {
+): AgentExecutionParticipants & Required<Pick<AgentExecutionParticipants, 'taskEffect'>> {
   const taskEffect = Object.freeze({}) as NonNullable<AgentExecutionParticipants['taskEffect']>
   nativeTaskParticipants.set(taskEffect, input)
   return { taskEffect }

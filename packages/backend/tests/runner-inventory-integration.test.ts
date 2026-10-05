@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-029 T4 + T8 — runner.ts must:
 //   1. copy aw-inventory-dump.mjs into the per-run dir before spawning,
 //   2. append a `file://` plugin spec into OPENCODE_CONFIG_CONTENT.plugin,
@@ -379,10 +380,7 @@ describe('runner.ts source: dump plugin wiring lock', () => {
     // fallback.
     expect(driverSrc).toContain('materializeInventoryPlugin')
     expect(driverSrc).toContain('inventoryOutPath')
-    const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
-      'utf-8',
-    )
+    const src = readTaskAgentSources()
     // RFC-146: the agent-kind gate is the shared isAgentNodeKind now
     // (inventory.isAgentRunKind was a local copy of it and is gone).
     expect(src).toContain('isAgentNodeKind')

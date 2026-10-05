@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // flag-audit §8 决策（用户 2026-07-07）——node_run_outputs.kind 别名倒灌修复的回归锁。
 //
 // 病根（audit §3-11）：review.ts approve 路径持续向新行写 legacy 'markdown_file'，
@@ -39,7 +40,7 @@ describe('写入点不再倒灌别名（源码锁）', () => {
   })
 
   test('runner.ts 端口 kind 过 normalizeKindString', () => {
-    expect(SRC('services/runner.ts')).toMatch(/normalizeKindString\(outputKinds\[name\]!\)/)
+    expect(readTaskAgentSources()).toMatch(/normalizeKindString\(outputKinds\[name\]!\)/)
   })
 })
 

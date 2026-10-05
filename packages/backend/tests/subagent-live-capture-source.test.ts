@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-048 — source-code-level guards. These tests don't exercise behavior;
 // they pin down the file layout that the RFC's plan.md §T6 acceptance
 // list calls out so a refactor can't silently drop one of:
@@ -27,7 +28,7 @@ describe('RFC-048 source-layout guards', () => {
     // moved from free fns to the selected material evidence participant.
     // The lifecycle contract this guards (poller started once, stopped after the
     // bounded exit wait and BEFORE the post-run capture) is unchanged.
-    const src = read('packages/backend/src/services/runner.ts')
+    const src = readTaskAgentSources()
     const startCount = (src.match(/materialEvidence\.startLiveCapture\?\.\(/g) ?? []).length
     expect(startCount).toBe(1)
     const stmtPattern = /liveCtrl\.abort\(\)\n\s+livePoller\.stop\(\)/
@@ -46,7 +47,7 @@ describe('RFC-048 source-layout guards', () => {
   })
 
   test('runner.ts captures subagent sessions post-run via the driver (RFC-027 fail-safe preserved)', () => {
-    const src = read('packages/backend/src/services/runner.ts')
+    const src = readTaskAgentSources()
     // RFC-143: was `await captureChildSessions({` — now the driver capability.
     expect(src).toContain('await materialEvidence.captureSessions({')
     // Must forward the live poller's partId dedupe Map so post-run BFS

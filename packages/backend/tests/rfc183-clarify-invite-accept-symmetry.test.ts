@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-183 — 反问「邀请 ⟺ 接受」对称收口（design/RFC-183-clarify-invite-accept-symmetry/）。
 //
 // 为什么这条测试存在：用户原则「不需要反问时不该给 agent 注入反问样例，反之同理」。
@@ -338,10 +339,7 @@ describe('RFC-183 E: 穷举分类器与注入⟺接受同源锁', () => {
     ),
     'utf8',
   )
-  const runnerSrc = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
-    'utf8',
-  )
+  const runnerSrc = readTaskAgentSources()
   const promptSrc = readFileSync(
     resolve(import.meta.dir, '..', '..', 'shared', 'src', 'prompt.ts'),
     'utf8',

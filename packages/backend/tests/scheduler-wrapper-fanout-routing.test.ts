@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-060 PR-D — wrapper-fanout runtime routing locks.
 //
 // Source-text guards for the WrapperRuntime dispatch contract:
@@ -34,10 +35,7 @@ const wrapperMechanicsSrc = readFileSync(
   ),
   'utf8',
 )
-const runnerSrc = readFileSync(
-  resolve(import.meta.dirname, '..', 'src', 'services', 'runner.ts'),
-  'utf8',
-)
+const runnerSrc = readTaskAgentSources()
 const taskEngineApplicationSrc = readFileSync(
   resolve(
     import.meta.dirname,

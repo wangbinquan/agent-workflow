@@ -1,3 +1,4 @@
+import { taskAgentSource } from './helpers/taskAgentSource'
 // RFC-371: every production process entry keeps the accepted runtime identity
 // and bootstrap-selected participant, including internal commit/merge agents.
 import { expect, test } from 'bun:test'
@@ -114,7 +115,7 @@ test('all standalone bootstraps explicitly bind local accounting', () => {
 })
 
 test('usage capture receives the effective resume identity used by the process', () => {
-  const file = source('services/runner.ts')
+  const file = taskAgentSource()
   let resumed: ts.Expression | undefined
   const walk = (node: ts.Node) => {
     if (ts.isCallExpression(node) && node.expression.getText() === 'createInvocationUsageCapture') {
@@ -128,7 +129,7 @@ test('usage capture receives the effective resume identity used by the process',
 })
 
 test('native model preparation uses final spawn env and local numeric retries avoid replaying stdout', () => {
-  const file = source('services/runner.ts')
+  const file = taskAgentSource()
   let env: string | undefined,
     normalizers = 0,
     retries = 0
@@ -201,7 +202,7 @@ test('native model preparation uses final spawn env and local numeric retries av
 })
 
 test('native child capture freezes its contract before spawn and starts only after local acceptance', () => {
-  const file = source('services/runner.ts'),
+  const file = taskAgentSource(),
     text = file.getFullText()
   expect(text).toContain('materialEvidence.prepareNativeUsageCapture?.({')
   expect(text).toContain('nativeCaptureContract: nativeUsageCapture.contract')

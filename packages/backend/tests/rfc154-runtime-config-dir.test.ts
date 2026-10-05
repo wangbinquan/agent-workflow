@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-154 — per-runtime config-dir injection configurability. Locks in:
 //   (1) validateConfigDirName / validateConfigDirEnv — path-traversal +
 //       reserved-spawn-env rejection (Codex design-gate P1/P3);
@@ -494,7 +495,7 @@ describe('RFC-154 source guards — config-dir literals confined to the single s
   const BACKEND_SRC = resolve(import.meta.dir, '../src')
 
   test('runner.ts no longer hardcodes the .opencode preamble', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'services/runner.ts'), 'utf8')
+    const src = readTaskAgentSources()
     expect(src).not.toContain("join(runRoot, '.opencode')")
     expect(src).not.toContain('prepareSkills(')
   })

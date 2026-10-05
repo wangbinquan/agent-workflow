@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 298,
-    "thinFacades": 59
+    "thinFacades": 60
   },
   "entries": [
     {
@@ -1086,20 +1086,32 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:06ba260990f97983328c",
+        "import:0949c70eab77a8d6ddd5",
         "import:237027e65851bf907a0e",
         "import:30c979fb8114e7c45873",
         "import:3bdd0a3f60f431a57790",
         "import:418c2731619192fbd49d",
+        "import:4c424e663d87e494394e",
+        "import:4c6ae9e27d40d98fba84",
         "import:5cd2429ca9f560a06c20",
+        "import:5e6091f0e26ef599010a",
         "import:81b36bcfd937dc8102e8",
         "import:857744f91ea3df8c150b",
+        "import:85dee064552f5f2f765d",
         "import:9cd1ecd28bee8f231dc8",
+        "import:a9d9c84df21038b3dc3a",
         "import:adfee2c9182d3bcca25a",
+        "import:b2d19b21d13432411317",
+        "import:b84ea71240d96393cf83",
+        "import:c3c3086fbb779bd151b7",
         "import:d37c9f82789cf492db72",
         "import:e49c91328fdbaa749ab7",
         "import:e4a6d01939efe9f5f405",
+        "import:f283b7729153aef516d6",
         "import:f580e75fb7569dcfb61a",
-        "import:f58e18bf6fc0ed8c4efe"
+        "import:f58e18bf6fc0ed8c4efe",
+        "import:fd54d9a9572eb50e0147"
       ],
       "exportedSymbols": [
         "BRANCH_MARKER_MALFORMED_PREFIX",
@@ -1146,6 +1158,8 @@
         "import:2eea0a70136595f1cfca",
         "import:3dfc5d8044fabe57926e",
         "import:46f76cdc06775ed19dfa",
+        "import:537871ccfb897af979ec",
+        "import:5647ee99688ff730c2da",
         "import:5cde01eb6b7b59202904",
         "import:6672417c6cb20b8225c0",
         "import:7d9eb056bd9dea080620",
@@ -1156,6 +1170,7 @@
         "import:dc67a5116cc173d45941",
         "import:e2c1cbe8e77a3153bfe2",
         "import:e47b300b88bf07b12403",
+        "import:ec4ab55e96557fbc1779",
         "import:f3250b0731023322a89d",
         "import:fb9e3347d7fbdb337733"
       ],
@@ -1289,7 +1304,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:979ea08fb6f5ffabfffd"
+      ],
       "exportedSymbols": [
         "buildRuntimeInventoryObservation"
       ],
@@ -1323,7 +1340,9 @@
     {
       "boundaryEdgeIds": [
         "import:1db8cdd216f61ab44733",
-        "import:223e0cd8394e53cbe18c"
+        "import:223e0cd8394e53cbe18c",
+        "import:8ba1c8249feca47d9878",
+        "import:c610a40ee57a389b46ec"
       ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/execution/managedProcess.ts",
@@ -1426,8 +1445,12 @@
     {
       "boundaryEdgeIds": [
         "import:06aa1bdf37ab75b19788",
+        "import:2336edf349078afbda97",
+        "import:42c591f50dda68aa294c",
         "import:6ed5193fb5a6157c46fc",
-        "import:c6e6a5a3f908a35d87cf"
+        "import:9a8fa4097be3c7526615",
+        "import:c6e6a5a3f908a35d87cf",
+        "import:d3e040569d1b1fd55777"
       ],
       "exportedSymbols": [
         "ClaudeInitObservation",
@@ -1626,6 +1649,7 @@
       "boundaryEdgeIds": [
         "import:2f07ba4cf2c104a4e677",
         "import:44d998b728bbbc33bac2",
+        "import:48b3c62a8ee9ac53661a",
         "import:93dbc6c4691dd12d0281"
       ],
       "exportedSymbols": [
@@ -2759,7 +2783,9 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:f6fff929e1b6d2f9d30b"
+      ],
       "exportedSymbols": [],
       "file": "packages/backend/src/services/protocol.ts",
       "id": "facade:packages/backend/src/services/protocol.ts",
@@ -3463,58 +3489,28 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:02c2ddc6c0165da4b087",
-        "import:07b177300be85056ef4a",
-        "import:2077adb281ac6413cafe",
-        "import:3236e5a6d1bd7a30b325",
-        "import:57cebe4e4f8060aa5a3d",
-        "import:647d2f3472f9ceefca7f",
-        "import:66f9229180690fd14710",
-        "import:67576bc58043c5f2d0af",
-        "import:6b9905a2553872fcfec0",
+        "import:0e72464bd92e60966f5f",
+        "import:219557f207cda2e8238a",
+        "import:55ed9421ce11cd3124c6",
+        "import:62106c4b94ab47d09b1d",
+        "import:6a895204248d6507f361",
         "import:6c106e47305a3b3ebdc5",
-        "import:a00d7f02b53713cd6ddf",
-        "import:a0be50c8c5f99fc17814",
-        "import:a3cc771dbfd60e02c49d",
+        "import:87c673262e895a463947",
+        "import:9469298f1d8c19e6862d",
+        "import:a25045d4909b7552e5ac",
         "import:a6fb16c2bb04fa5da12f",
-        "import:a7270198332e68bb8ccf",
-        "import:a7c32bef082cd461eebc",
-        "import:b61a529357a48372edc9",
-        "import:ba8777befd1894ea7b2d",
-        "import:c6c1a3eab289cb08185f",
-        "import:c6d83040f9bf48f345f9",
+        "import:b3687b266bacc4ea2e3a",
         "import:c74b0ad40adb1d4f2de1",
-        "import:c88fc44a99a98d580503",
-        "import:c8ad6a199fcae1b2ac22",
         "import:cb91aa44b71df5165d3c",
-        "import:d29deadaed350aaa4533",
-        "import:d3b53e3b0101dae3dc04",
-        "import:d3d3a14e1388ded283d9",
-        "import:dba082fcaa3501c2d332",
-        "import:ddb1a9cb8d5a6063f9cf",
-        "import:de51dddefd44d47d947e",
-        "import:e572ac07448d3e20981a",
-        "import:ef6d239c3d1ca57471ef",
-        "import:f8a4030fdfccacbf609e"
+        "import:ee176df359198c8c415a",
+        "import:fe03b21954ad00a6a922"
       ],
-      "exportedSymbols": [
-        "MAX_AGENT_TEXT_CHARS",
-        "MAX_STDERR_TAIL_CHARS",
-        "MAX_STDERR_TAIL_LINE_CHARS",
-        "MAX_STREAM_LINE_CHARS",
-        "RunFinalStatus",
-        "RunNodeOptions",
-        "RunResult",
-        "appendBoundedTail",
-        "clampTailLine",
-        "detectPluginLoadFailure",
-        "runNode"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/runner.ts",
       "id": "facade:packages/backend/src/services/runner.ts",
       "ownerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
       "removeAfterWave": "W9",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "platform",
       "targetLayer": "application"
     },
@@ -3755,19 +3751,25 @@
         "import:079166cc8e49ffebb3e4",
         "import:08e63587084385a1429a",
         "import:0d84849979600beb3392",
+        "import:1937e669a6971f8afdb1",
         "import:267fabe51b68683a0eaa",
         "import:26fe0c0ce3c7def7d032",
         "import:28490b02663597eaeebe",
+        "import:2acdda338012e6e6e6ca",
         "import:39ddda7a36b8ec55d9e0",
         "import:3b0939b8480fceab955a",
         "import:508585b40e2cf04f1432",
         "import:55f7c3a1e3e1628e4302",
         "import:6086843b83980e7f72de",
         "import:63fad3747b478edc6675",
+        "import:64a3671d1cfcaeb2a1c6",
         "import:70fef04c52ff0c283a17",
         "import:835ec062b66a4ad7e8a4",
         "import:9b40bf959bd20a789e88",
         "import:9b54bbf2ad1b84de8700",
+        "import:d84409822ef4e47283a6",
+        "import:d98eada297d0a956485e",
+        "import:e476ae62c20624ad3827",
         "import:ea97292b0b4cff7fc31f",
         "import:ec966ccb441f6ab979e4",
         "import:ed4eeb7ac1111ebf2f6e"
@@ -4229,6 +4231,8 @@
         "import:47b606aacb3f97b34dc0",
         "import:47cc33988e1b2a35ecf4",
         "import:5235722d4d845e5cd372",
+        "import:57e5709740865a8fbe44",
+        "import:5a4995c07578e6366930",
         "import:5b628f6136e3b8310324",
         "import:5c6302c94f8d4b6d3a5d",
         "import:5f13ba9cdabe85fd2703",
@@ -4251,6 +4255,7 @@
         "import:8a8e77f2ad8c648b04a1",
         "import:93651df0029a65d9d006",
         "import:94e62c590b11471f8c45",
+        "import:95b10de073b3a49cb39d",
         "import:971abb78211b75c4b3d3",
         "import:9866049aeb621599bb0f",
         "import:9b3b731a2da3052932b3",
@@ -4264,6 +4269,7 @@
         "import:b7435b12258845618f09",
         "import:b7d325a8d761ddf10b9f",
         "import:bc66a63defffbd003625",
+        "import:d070f91205f306479806",
         "import:d70a8f2b0aab923f89f4",
         "import:dc3c32ec5d84e4835f82",
         "import:deaf92636d39c1f1d373",
@@ -4271,6 +4277,7 @@
         "import:e6f1c034a5c2c26ed0b1",
         "import:f0ec5f08b0efbd70f987",
         "import:f620beb601baa671cb51",
+        "import:f7b1795ce0d56f998073",
         "import:fb0f31957433ff147406",
         "import:fb76dab074c63b00088c",
         "import:fff3516f6ab19099a34d"
@@ -4319,6 +4326,7 @@
     {
       "boundaryEdgeIds": [
         "import:24e348f91bc98bf33e1c",
+        "import:73e38b90cec8dc8a7732",
         "import:da19feebd4b9f65a1ce4",
         "import:f5eef367e6cf5c4cb039",
         "import:fb3a89d8731f00d87bf0"
@@ -4349,12 +4357,23 @@
       "boundaryEdgeIds": [
         "import:018b39ab07e8e1cf873a",
         "import:06d43f7c8e0e605685d2",
+        "import:175b6de4632f599b8097",
         "import:2dcfbc5351c19063ccd2",
         "import:3ceb55f57502b92e8498",
+        "import:3fa7f15f2688e09bb9c8",
         "import:4e5cf034a0fcabdd998f",
+        "import:5ef2e9488a928d7701b9",
         "import:656d3a45711f5db539f7",
         "import:94245d5b038cf4f5f01e",
-        "import:9cb4cd454ef118124fbd"
+        "import:9cb4cd454ef118124fbd",
+        "import:c5923f4ad7662a3f8d59",
+        "import:cc041719df5808709c36",
+        "import:d3a8a9d9a42b73c62a02",
+        "import:d4a9aeffddac59f8bf54",
+        "import:d865f3cb35e5ba624517",
+        "import:efe3cea9098dd038f46a",
+        "import:f4476433c1b17ea26dce",
+        "import:f4c730ae04dc9eb37ff4"
       ],
       "exportedSymbols": [
         "claimNewRuntimeSession",
@@ -6467,5 +6486,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:0d3560a35017f51a1076bafcace3232e20901b1187a102bf243c396868717198"
+  "sourceDigest": "sha256:8131f7030ec6c84b435654153e44f9e543edf90c4a5f5a2f8baa8aad71ed9200"
 }

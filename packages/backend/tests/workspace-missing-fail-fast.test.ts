@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // 2026-08-04 incident regression locks (Linux deployment, claude-code protocol).
 //
 // A task row whose canonical worktree pointed into the EPHEMERAL iso/ space
@@ -127,7 +128,7 @@ describe('spawn catches route through explainSpawnEnoent (source-level wiring lo
     // managedProcess core owns the ENOENT translation; the runner turns the
     // returned spawnError into its runtime-spawn-failed message.
     expect(src('platform/execution/local/managedProcess.ts')).toContain('explainSpawnEnoent(')
-    expect(src('services/runner.ts')).toContain('runResult.spawnError')
+    expect(readTaskAgentSources()).toContain('runResult.spawnError')
   })
 
   test('runtimeSmoke.ts surfaces the executor-translated probe-spawn ENOENT', () => {

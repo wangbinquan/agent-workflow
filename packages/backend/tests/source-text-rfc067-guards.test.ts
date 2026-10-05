@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-067 — source-layer guards locking the runner / service / schema
 // wiring against silent regressions. Targets:
 //   (a) the opencode spawn env (RFC-111 PR-A: runtime/opencode/spawn.ts) must
@@ -16,10 +17,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
 
-const RUNNER_SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
-  'utf-8',
-)
+const RUNNER_SRC = readTaskAgentSources()
 // RFC-111 PR-A: the opencode spawn env (incl. the RFC-067 GIT_* injection) moved
 // into the opencode runtime driver. RunNodeOptions still declares the fields in
 // runner.ts; the env-key injection now lives in spawn.ts.

@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-047 — grep guard. Locks structural invariants of the eager-write that
 // the dynamic test (`runner-inject-snapshot-eager-write.test.ts`) can't
 // reach directly without racing the SQL pipeline:
@@ -13,11 +14,7 @@
 //      from runner-specific JSON fields, but the eager write remains layered
 //      on top of RFC-046, NOT a replacement.
 
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import { describe, expect, test } from 'bun:test'
-
-const RUNNER_PATH = resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts')
 
 function countOccurrences(haystack: string, needle: string): number {
   let i = 0
@@ -32,7 +29,7 @@ function countOccurrences(haystack: string, needle: string): number {
 }
 
 describe('RFC-047 source-level grep guard', () => {
-  const src = readFileSync(RUNNER_PATH, 'utf-8')
+  const src = readTaskAgentSources()
 
   test('log tag for success appears exactly once', () => {
     expect(countOccurrences(src, "'inject-snapshot-eager-write'")).toBe(1)

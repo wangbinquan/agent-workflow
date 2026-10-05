@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // POSITIVE GUARD (flipped) — design/scheduler-audit-2026-06-10.md S-15, fixed
 // by RFC-098 WP-8 (design/RFC-098-scheduler-closeout, survey §wp8-wp9).
 //
@@ -32,7 +33,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 const BACKEND_SRC = resolve(import.meta.dir, '..', 'src')
-const RUNNER = resolve(BACKEND_SRC, 'services', 'runner.ts')
+
 const MANAGED_PROCESS = resolve(BACKEND_SRC, 'platform', 'execution', 'local', 'managedProcess.ts')
 const ORPHANS = resolve(BACKEND_SRC, 'services', 'orphans.ts')
 const STUCK = resolve(BACKEND_SRC, 'services', 'stuckTaskDetector.ts')
@@ -75,7 +76,7 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.
   // behavioral oracles (stubborn child, group kill reaches the grandchild,
   // bounded wall clock) still live in tests/rfc098-process-governance.test.ts.
   const mpSrc = readFileSync(MANAGED_PROCESS, 'utf8')
-  const runnerSrc = readFileSync(RUNNER, 'utf8')
+  const runnerSrc = readTaskAgentSources()
   const nativeExecutionSrc = readFileSync(
     resolve(
       import.meta.dir,

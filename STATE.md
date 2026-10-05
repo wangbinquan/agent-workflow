@@ -1,3 +1,15 @@
+## 2026-10-06 RFC-370 完整 Task 核心匹配登记续批
+
+META16-R1 有效有限 FAIL97 的唯一 P2 是 C2 严格薄门面名单少 Runner；原回执保留。只在原排序位置补一项，完整逆向恢复原测试全文，所有原判据和预算保持，目标 format/lint 通过。SOURCE-R2 PASS108 和全部54 owned字节未变，不重复源码门。原 bfe27e75 Task census 保留；并行 65431b1d 已提交两生产单元、三测试和文档，未改 Task 候选，使用完整已提交新人口与冻结 Task 内容作一次必要匹配投影，原四个规则文件字节不变；未提交 backup/upgrade 测试及 migration metadata 保留并排除。当前 sourceDigest sha256:8131f7030ec6c84b435654153e44f9e543edf90c4a5f5a2f8baa8aad71ed9200；13 matching、350债、129有序库存/why、40SPI/69targets、原值级SCC与空implementation SCC保持，owners实际26945（新提交观测人口+2），其余原计数一致。以下第一批记录保留为历史证据。本批仅增加真实 C2 登记并同步当前提交人口，未跑本机 tests/typecheck/build/service；生产Task五入口和全部根、A-G、CS M0及M1～M4仍继续，RFC未完成、AW尚未部署到CS。
+
+## 2026-10-06 RFC-370 完整 Task 共同核心第一批实现
+
+原完整 Task 算法迁入 application，native compatibility 保留 51 个原 options 成员、全部 result/helper/plugin decoder 和 14 个 legacy 出口；正常 policy 保留 43 个业务成员，完整 purpose 在原 nonce、mount、compile、bind、receipt、validation/archive 位置提供选中能力。正常 preparation 一次 compile/bind，使用有序内容引用并保留 optional/getter receiver。SOURCE10-TEST43-DOC1-R1 有效有限 FAIL 的资源对象展开 P2 留证；R2 仅显式转发 skills/plugins、补 private class getter/读取顺序/MCP identity 回归，独立有限 PASS108，首末指纹 35b93deae48cdda140c4c5594aad5c997affe363853f9a50f56139091235cc47。完整原函数有限逆向、声明/helpers/exports、native participant 颁发函数体与 39 个旧测试机械地址迁移纯 AST 对拍保持原断言和预算。14 个新用例正式执行交 hosted CI；Windows 原对称触发增十二地址、原 platform suites 增三测试，旧配置完整逆向保持。
+
+原 scoped census 只运行一次，完整已提交 bfe27e75 加 54 个冻结 owned 内容（10 production），排除并保留并行 RFC371 complete-working-scope WIP；sourceDigest sha256:63265ca9803df585465e2e52f1226c299745b224349df087da7065cd369735f0。13 matching 保留 329 个仍存在的原债，九个消失地址仅属于本批被拆出的 Runner，新增 21 个实际地址至 350。129 库存/顺序/why、其他 guard、40 SPI/69 targets、原值级 SCC 与空 implementation SCC 保持。前批四个许可正常退役，本批原 counter 实增 mutation1894→1897、imports6484→6547、exceptions5733→5777、owners26921→26943；四个具名许可下一普通后继退役，未改原 classifier/counter/validator 或断言预算。
+
+owned format/lint 和纯源文/AST 验证通过，无本机 AW tests/typecheck/build/service。4bb78e49 Windows37365764280成功、主37365764307无执行jobs即cancelled；eef1e3ad主37366048964两个实际失败是旧RFC080/prefix-swap源码地址，前者本批迁真实policy/core、后者并行bfe27e75已保留修复，正式后继CI另验。既有PG question-set stash失败原因仍未证实，不宣告已修复。全部共享旧正文与并行输出保留。五个Task真实入口/全根尚未接线，System/smoke/retention/RC-MCP/脚本authority恢复、A-T7/AC00/A-G、CS必要adapters/M0部署与M1～M4继续；RFC未完成，AW尚未部署到CS。
+
 ## 2026-10-06 RFC-370 输出校验 Windows 源码锁地址修复
 
 77017a67 Windows 37362639406 的原 portable relative-path 源码锁仍读取旧 envelope，完整 native IO 已迁到 Task local adapter。本次只更新一个 reader 地址，两个原断言、完整其余用例、预算和生产源码保持；纯完整 AST 逆向与 scoped format/lint 通过。上一批四个 matching 许可在本普通后继退役，129 行原顺序/why/实际 baseline 与全部生产人口、债/SPI/SCC 不变，复用原一次 scoped census，sourceDigest sha256:f888632c511a6cd2cd5f205280681aca5c71cbc6e68e133f47404c0a57e6d7b9，不重扫。纯证明首轮 synthetic quote FAIL 和 exact-call inverse PASS 保留。

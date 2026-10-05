@@ -65,7 +65,7 @@ function importsSharedFencing(text: string): boolean {
  * 这不是豁免表，是分类表：产出侧必须用共享内核，消费/校验侧不需要。
  */
 const NON_PRODUCERS: Readonly<Record<string, string>> = {
-  'packages/backend/src/services/runner.ts':
+  'packages/backend/src/modules/task-execution/application/taskAgentRun.ts':
     "消费/校验侧：`injectedMemoryBlock?.includes('<aw-input ')` 是在断言注入块**确实带上了**围栏（配合 envelopeNonce 长度判断），不是在产出围栏。真正的产出走 memoryInject 的共享内核路径。",
 }
 

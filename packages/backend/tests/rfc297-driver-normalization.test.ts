@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-297 T8/T9 —— 两个运行时把各自的原始观测**规范化**成同一种事件载荷。
 //
 // 这是「driver 只做规范化、消费只写一份」的 driver 半边。锁三件事：
@@ -11,9 +12,9 @@
 //     恒不出现——放松的条目类型靠这条测试收紧（design §2.2）。
 
 import { describe, expect, test } from 'bun:test'
-import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { getRuntimeDriver } from '@/services/runtime'
 import { parseEvent } from '@/services/runtime/claudeCode/events'
 import type { InventorySnapshotCaptured } from '@agent-workflow/shared'
@@ -219,10 +220,7 @@ describe('AC-10 单次解析（本 RFC 的核心收益，必须有锁）', () =>
   })
 
   test('runner 的 pump 不再对同一行做清单相关的二次解析（源码锁）', () => {
-    const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
-      'utf-8',
-    )
+    const src = readTaskAgentSources()
     // 锁**调用形式**而不是词——文件里那两个名字仍出现在解释历史的注释里
     // （反引号引用），锁词会把说明文字也判红，反而逼人删掉解释。
     expect(src).not.toMatch(/\.parseStartupInventory\(/)

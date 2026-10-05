@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // LOCKS: RFC-165 T8b (F12) — the OPTIONAL clarify directive, end to end.
 //
 //   O1 runner accepts EITHER envelope under directive='optional': a
@@ -328,10 +329,7 @@ describe('RFC-165 O4b — followup renderer dual-choice for optional (P2 fix)', 
 
 describe('RFC-165 O4 — followup keeps clarify alive for optional (source lock)', () => {
   test('runner threads mandatory OR optional into the followup renderer', () => {
-    const runnerSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
-      'utf8',
-    )
+    const runnerSrc = readTaskAgentSources()
     const norm = (x: string) => x.replace(/\s+/g, ' ')
     // RFC-183: the projection derives from the shared clarifyDispositionFor
     // classifier (invite⟺accept single source) instead of a directive literal.

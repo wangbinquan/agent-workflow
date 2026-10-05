@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // Regression: every Bun.spawn that launches opencode must set `PWD = cwd` in
 // the child env. opencode 1.14.51+ (upstream commit 7f2b5ee8c, the Effect-TS
 // rewrite of `packages/opencode/src/cli/cmd/run.ts`) resolves its root via
@@ -73,7 +74,7 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
   // inline env block. Its isolated worktreeDir is the single cwd handed to both
   // plan construction and Bun.spawn, so buildOpencodeEnv sets the same PWD.
   test('runner.ts hands opts.worktreePath + the driver env straight to the executor', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src/services/runner.ts'), 'utf-8')
+    const src = readTaskAgentSources()
     // RFC-370: the selected native binding keeps cwd = the task worktree and
     // env = the original early snapshot of the driver-assembled plan env.
     expect(src).toContain('await localExecution.effect.submit({')

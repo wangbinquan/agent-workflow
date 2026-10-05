@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-281 T1 — locks the opencode workspace-boundary permission synthesis.
 //
 // Why this file exists (do not delete on refactor): RFC-281 confines an agent's
@@ -312,7 +313,7 @@ describe('§0 guard — the agent’s own cwd is always inside the boundary', ()
   })
 
   test('the runner wires this function (source lock, not a re-implementation)', () => {
-    const src = readFileSync(resolve(import.meta.dir, '../src/services/runner.ts'), 'utf-8')
+    const src = readTaskAgentSources()
     expect(src).toContain('resolveBoundaryMounts(')
     expect(src).toContain('opts.worktreePath,')
   })

@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-066 PR-B — source-layer guards locking wrapper mechanics / runner / diff /
 // rollback wiring against silent regressions. Targets:
 //
@@ -49,10 +50,7 @@ const NODE_MECHANICS_SRC = readFileSync(
   ),
   'utf-8',
 )
-const RUNNER_SRC = readFileSync(
-  resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
-  'utf-8',
-)
+const RUNNER_SRC = readTaskAgentSources()
 const TASK_SRC = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'task.ts'), 'utf-8')
 // RFC-359 AC-1：PB-G5 盯的那段搬了家——纯读三件两个引擎合一之后，任务 diff 的拼装是
 // `taskDiffProjection`，住在 task-execution 的共用实现文件里（文件名带 `postgresql` 前缀是

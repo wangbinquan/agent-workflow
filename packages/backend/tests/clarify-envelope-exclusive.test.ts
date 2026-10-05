@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-023 PR-B C1 — locks in the exclusive-or contract between
 // <workflow-output> and <workflow-clarify> in any single agent stdout.
 //
@@ -15,8 +16,7 @@
 // without renaming the helper would silently bypass the guard.
 
 import { describe, expect, test } from 'bun:test'
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
+
 import { detectEnvelopeKind } from '../src/services/envelope'
 
 describe('clarify ↔ output envelopes are exclusive-or per reply', () => {
@@ -37,8 +37,8 @@ describe('clarify ↔ output envelopes are exclusive-or per reply', () => {
     // Source-level guard: runner.ts MUST import & call detectEnvelopeKind on
     // the agent stdout. If somebody refactors the call site away, this fails
     // with a clear pointer to the missing wiring.
-    const runnerPath = join(__dirname, '..', 'src', 'services', 'runner.ts')
-    const src = readFileSync(runnerPath, 'utf8')
+
+    const src = readTaskAgentSources()
     expect(src).toContain('detectEnvelopeKind')
     expect(src).toContain('extractClarifyEnvelopeBody')
   })

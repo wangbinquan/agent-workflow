@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-202 — source-text locks for wiring that is impractical to drive in a
 // unit harness (scheduler abort checkpoints, runner persist branch, frontend
 // inline judgments). Per CLAUDE.md's test policy these are the minimum
@@ -37,7 +38,7 @@ describe('RFC-202 source locks', () => {
   })
 
   test('runner persists shutdown-aborted node_runs as interrupted (resume rollback eligibility)', () => {
-    const src = read('packages/backend/src/services/runner.ts')
+    const src = readTaskAgentSources()
     expect(src).toContain('DAEMON_SHUTDOWN_ABORT_REASON')
     expect(src).toMatch(/persistedStatus\s*=/)
     // resume's rollback-target selection only covers failed/interrupted; a

@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-108 T9 (AR-14) — fail-safe stale-process reaping via persisted spawn identity.
 //
 // 为什么这条测试存在：killStaleRunProcessTree 旧版用 `/opencode|bun/` 模糊正则 +
@@ -135,7 +136,7 @@ describe('RFC-108 T9 (AR-14) — spawn-binary identity gate', () => {
 
 describe('RFC-108 T9 — refuse-on-survivor wiring (source-text)', () => {
   const taskSrc = readFileSync(join(import.meta.dir, '../src/services/task.ts'), 'utf8')
-  const runnerSrc = readFileSync(join(import.meta.dir, '../src/services/runner.ts'), 'utf8')
+  const runnerSrc = readTaskAgentSources()
 
   test('resumeKick + retryNode escalate (409 refuse) on kill-failed', () => {
     const calls = (taskSrc.match(/escalateLiveChildSurvived\(/g) ?? []).length

@@ -26,7 +26,7 @@ const KERNEL = 'packages/backend/src/modules/memory/domain/injectionRendering.ts
 const LEGACY_NONCE_CALLERS: Readonly<Record<string, string>> = {
   'modules/memory/application/injection/injectMemory.ts':
     'buildMemoryBlock 入口——deps.envelopeNonce 可能来自历史调用方（RFC-352 从 services/memoryInject.ts 平移过来）。',
-  'services/runner.ts':
+  'modules/task-execution/application/taskAgentRun.ts':
     'RFC-042 同会话追问会重建首轮的注入片段；首轮若是 pre-RFC-200 的行则没有 nonce。',
 }
 

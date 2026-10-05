@@ -1,13 +1,13 @@
 {
   "baseline": {
-    "inboundEdges": 302,
-    "outboundEdges": 36,
+    "inboundEdges": 298,
+    "outboundEdges": 52,
     "recordedAt": "2026-09-04",
-    "recordedAtShaNote": "RFC-366（2026-09-21）：inbound 边 252→253。执行结束记忆提炼把 agent 运行结束观察者装进 task-execution 自己的 composition，由 legacy `services/task.ts` 的 runtimeConfigOpts 消费；条目文本由 RFC-366 作者提供。\n\nRFC-367（2026-09-21）：outbound 边 27→31。记忆蒸馏器改用共享的 `runSystemAgent` 运行原语，让候选解析与会话页记录同源于一条规范化事件流（此前两条 reader 各解析一次同一段输出，漂移过两次、静默丢光候选）。四条新边分别是 memory→`@/services/systemAgentRun`（type+value）、memory 的 distill 端口→`@/services/sessionEventSink`（type）、以及候选解析改用公共 envelope 解析件带来的 memory→`@/services/envelope`（value）。三个目标都仍在 legacy `services/` 下，本 RFC 只做最小扩展不顺手迁位；随 RFC-294 W4-C / W4-E1 归位时一并销账。\n\nRFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged.\n\nRFC-360 T3: register eight exact temporary forwarding imports/exports for the relocated single registry. Remove these with the named compatibility consumers in T6; no directory or scanner exemption is added.\n\nRFC-370 H2：auth/session 兼容门面指向 identity-access composition 的 type/value import/export 四条边精确登记；WS 传输和两个 HTTP bootstrap 已注入 participant，剩余兼容调用者在 A-T7 逐项收口。\n\nRFC-370 H1：五条配置 local composition 的 exact compatibility 入边补记，255→260；selected query 与 policy 从 public 出口消费，默认兼容边于 A-T7 逐入口收口，原 scanner/fixtures 不变。\n\nRFC-370 H1（2026-10-02）：installation seed completion 兼容默认仅由 SO composition 选择，services/demoSeed 新增一条 exact value/static-import 入边，260→261；原 owner native seed 顺序不变，所选完成事实无本机 fallback，A-T7 root injection 收口后退役。TE composition→SC composition 的所选 presence 默认属于实际 temporary-internal-debt，owner task-execution，随 A-T7 完整依赖注入后删除该默认内部边；不是 R1 legacy 口径，未虚增本账本。\n\nRFC-370 A2（2026-10-02）：插件安装和 generation GC 原物理主体下沉 RC independent local adapter，service 只保留原准确兼容出口及 worker 业务。两条实际目标路径按原 R1 的 type/value 与 import/export 口径登记六项（261→267），owner resource-catalog，随 A-T7 bootstrap selected effect 贯穿及旧调用者收口退役。原边界算法、public 规则与 scanner 未改。\n\nRFC-370 A1（2026-10-02）：原 pendingRestore 物理主体完整移到 SO independent local，旧 service 仅10项准确 value/type 转出口；pre-open history/generation/restore 接所选中立效果。按真实目标登记两项 type/value export 的 R1（267→269），owner system-operations，随 A-T7 selected restore roots/legacy callers退役，原算法与规则不变。\n\nRFC-370 A1 (2026-10-02): manual migration now selects the existing configuration/installation ports through a narrow SO composition. The actual CLI type/value R1 entries replace its retired direct preparation entry, inbound 269 -> 270; owner system-operations, retirement A-T7 bootstrap/CLI convergence. All original clauses, scanner rules and other entries remain unchanged.\n\nRFC-370 A1 (2026-10-02): config CLI consumes the existing SO persistence contract through one purpose composition, adding only its actual type/value R1 pair. Inbound 270 -> 272; SO owns the existing behavior and A-T7 bootstrap/CLI convergence retires both. The original bootstrap list, clauses, reasons, scanner rules and all old entries are unchanged.\n\nRFC-370 A1 (2026-10-02): the independently reviewed doctor query binding adds only its actual purpose-composition value R1. Inbound 272 -> 273, owner SO and retirement A-T7 bootstrap/CLI convergence; the original public query type is accepted without a new clause. Every prior record, original rule and bootstrap list remains unchanged.\n\nRFC-370 H4/H5 (2026-10-05): register the four exact compatibility driver value import/export edges to the two actual native material owners, inbound 270 -> 274. Original physical implementations and assembly API remain intact; A-T7 selected material/evidence root convergence retires these entries. The original boundary scanner and every previous debt clause remain unchanged.\n\nRFC-370 H4 Agent execution native compatibility: register eight exact value/type static imports from the three real agent consumers and runtime material gateway; inbound276→284, original309 rows/outbound33 retained. Retirement requires A-T7 full selected bundle and true roots; no directory/classifier/guard exemption.\n\nRFC-370 native material directory lifecycle: register the single actual R1 value/export compatibility group to the native material directory owner, inbound284→285. Outbound33 and all original317 debt records retained; the infrastructure util dependency is an observed canonical edge but is outside the original R2 boundary predicate and does not add a fictitious R2 debt. A-T7 selected roots retire the exact compatibility group.\n\nRFC-370 SOURCE14-R2 (2026-10-05): original R1/R2 predicates on only the eight reviewed production units register four exact native invocation compatibility groups and two pure legacy type groups. The original projector retires the two absent System/Smoke direct native executor groups; Task retains its native owner participant group. Net inbound 285 -> 287, outbound 33 -> 35. Every retained ordered prior row, reason and authored field remains intact; full selected roots retire the six named groups in A-T7. The native infrastructure imports and TE util Logger are outside the original R2 predicate and are not invented as R2 rows.\n\nRFC-370 invocation ownership SOURCE17-DOC1-R2 (2026-10-05): whole joint contract and native pairing leave RM; pure protocol stays RM. Original predicates retire four deleted native inbound groups and two deleted joint-port outbound groups, and register six actual split native caller groups plus two relocated pure type groups. Net inbound 287 -> 289; outbound 35 stays 35. All surviving original ordered rows and reasons remain; selected factory/root/A-T7 and CS deployment remain open.\n\nRFC-370 System common core SOURCE19-DOC1-R2 (2026-10-05): original whole System algorithm moves to TE application; native facade retains the complete old options/results/compile and plan receiver. Session event contract moves unchanged to RM application with compatibility re-exports. Actual original predicates retire absent owned edges and register only actual candidate edges. Every retained original ordered row and reason remains. Full roots, retention consumers, Task/smoke, A-G and CS deployment remain open.\n\nRFC-370 smoke common core SOURCE9-DOC1-R2 (2026-10-06): reuse the one valid ad446763 original census because successor 5d016e74 changes matching metadata only. Preserve all concurrent committed metadata rows and reasons, register the exact original smoke facade addresses and the already committed native Task lifecycle address, and retain all original inventory/why and classifiers. Full true roots, Task selected invocation, retention consumers, A-G and CS deployment remain open.\n\nRFC-370 observation ownership SOURCE4-DOC1-R1 (2026-10-06): move all five complete neutral observation declarations into RM application, retain every legacy type name and all original members/comments, and remove the actual public-to-legacy edge without changing original classifiers or the application-only rule. One actual sessionEventSink facade address follows the unchanged classifier. Matching generation reads complete committed b386d310 source and the five reviewed files; all future WIP is excluded. Full roots, retention consumers, A-G and CS deployment remain open.\n\nRFC-370 Task Git control SOURCE8-DOC2-R2 (2026-10-06): preserve the complete six semantic Git observations and their real before/after Task triggers behind a bound purpose. Historical generation fixture uses the same real coordinator for its accepting-writes/finalized checks; all four cases, original strict assertions and five-second budget remain. One original census reads frozen ten files plus complete committed 4ff95e5e source; peer guard registration and all surviving authored rows remain. Full Task roots, A-G, CS adapters, deployment and RFC remain open.\n\nRFC-370 port output validation SOURCE16-DOC1-R1 (2026-10-06): preserve complete path/list/resolver/native IO bodies, original dispatch/codecs/errors/declarations/exports, all other statements and comments, and every existing assertion/budget. Sync and async interpret the same policy; normal content uses opaque references and requires one complete receiver. The original negative type fixture only adds the new required well-typed policy. One original census reads frozen seventeen files plus complete committed 0fd982ff source and concurrent frontend output; peer guard registration and all surviving authored debt remain. Normal Task wiring, full roots/A-G, CS adapters/deployment and RFC remain open.",
+    "recordedAtShaNote": "RFC-366（2026-09-21）：inbound 边 252→253。执行结束记忆提炼把 agent 运行结束观察者装进 task-execution 自己的 composition，由 legacy `services/task.ts` 的 runtimeConfigOpts 消费；条目文本由 RFC-366 作者提供。\n\nRFC-367（2026-09-21）：outbound 边 27→31。记忆蒸馏器改用共享的 `runSystemAgent` 运行原语，让候选解析与会话页记录同源于一条规范化事件流（此前两条 reader 各解析一次同一段输出，漂移过两次、静默丢光候选）。四条新边分别是 memory→`@/services/systemAgentRun`（type+value）、memory 的 distill 端口→`@/services/sessionEventSink`（type）、以及候选解析改用公共 envelope 解析件带来的 memory→`@/services/envelope`（value）。三个目标都仍在 legacy `services/` 下，本 RFC 只做最小扩展不顺手迁位；随 RFC-294 W4-C / W4-E1 归位时一并销账。\n\nRFC-359 W4-B3a（2026-09-05）：inbound 边 288→287。collaboration 六对适配器合一后，PostgreSQL daemon 改经 `modules/collaboration/composition` 的具名绑定装配任务可见性端口，`cli/postgresqlDaemonApplication.ts -> collaboration/infrastructure/postgresqlCollaborationTaskAccess` 这条债随该文件删除一并还清。\n\nRFC-355 T6（2026-09-04）：inbound 边 313→312。技能工件的补偿原语归 resource-catalog 后，PostgreSQL daemon 不再直连 `modules/intent/infrastructure/postgresqlIntentApplyArtifactOwners`（该文件已迁入 RC），这条债还清；`services/intent/applyChangeset.ts` 那条不增不减，只把目标从 intent infrastructure 换成 intent composition。\\n\\nRFC-355 T2（2026-09-04）：outbound 边 23→25，两条均为 `application/intentResourcePlan.ts` 的**纯类型**出边，随 T7 消失。\\n\\n历史：RFC-353 T12（2026-09-04）在 `7f16fd99f` 的 `git archive` 导出树上重采，inbound 边 309→313：两条是 bootstrap 挂载 KE 的 inbound 路由（T8/T9 的路由归位结果），一条是 PostgreSQL bootstrap 装配来源追溯时按 memory 的类型标注形参，一条是删掉 `services/skillVersion.ts` 门面后 intent 的类型标注改指 RC 实现。四条逐条带 why / removeAfterWave。\n\n历史：采数在本地 SHA efc1bdb01 上跑；该提交经 rebase 后以 b04cf0eb0 发布到 origin/main，efc1bdb01 本身从未进远端。此处记**已发布**的 b04cf0eb0：两者在采数相关内容上逐字一致（git diff efc1bdb01 b04cf0eb0 -- packages/backend/src packages/backend/tests packages/frontend/tests packages/shared 为空），差异只在 f57394d82 带来的一行 e2e 改动。\n\nRFC-359 W12（2026-09-08）：恢复第二批中因目标改名而被投影器漏掉的13条存量 inbound 记录；逐条只同步已有目标名，保留原 why 与退役波次。行为收敛不能通过遗漏实际入边虚减账本。\n\nRFC-359 W17（2026-09-08）：补记 W16 共享 taskLifecycleWriteSequence 后真实新增的 type/value 两条 legacy 入边，inbound 285→287；保留同步公共 API 迁移债，R1 判据与扫描语料不变。\n\nRFC-359 W18 (2026-09-08): inbound 287 -> 288. The existing manual migrate entry now delegates schema preparation and historical-copy recovery to the system-operations composition. Register exactly this CLI edge with its W4-E7 owner; the bootstrap exemption list and R1 scanner remain unchanged.\n\nRFC-360 T3: register eight exact temporary forwarding imports/exports for the relocated single registry. Remove these with the named compatibility consumers in T6; no directory or scanner exemption is added.\n\nRFC-370 H2：auth/session 兼容门面指向 identity-access composition 的 type/value import/export 四条边精确登记；WS 传输和两个 HTTP bootstrap 已注入 participant，剩余兼容调用者在 A-T7 逐项收口。\n\nRFC-370 H1：五条配置 local composition 的 exact compatibility 入边补记，255→260；selected query 与 policy 从 public 出口消费，默认兼容边于 A-T7 逐入口收口，原 scanner/fixtures 不变。\n\nRFC-370 H1（2026-10-02）：installation seed completion 兼容默认仅由 SO composition 选择，services/demoSeed 新增一条 exact value/static-import 入边，260→261；原 owner native seed 顺序不变，所选完成事实无本机 fallback，A-T7 root injection 收口后退役。TE composition→SC composition 的所选 presence 默认属于实际 temporary-internal-debt，owner task-execution，随 A-T7 完整依赖注入后删除该默认内部边；不是 R1 legacy 口径，未虚增本账本。\n\nRFC-370 A2（2026-10-02）：插件安装和 generation GC 原物理主体下沉 RC independent local adapter，service 只保留原准确兼容出口及 worker 业务。两条实际目标路径按原 R1 的 type/value 与 import/export 口径登记六项（261→267），owner resource-catalog，随 A-T7 bootstrap selected effect 贯穿及旧调用者收口退役。原边界算法、public 规则与 scanner 未改。\n\nRFC-370 A1（2026-10-02）：原 pendingRestore 物理主体完整移到 SO independent local，旧 service 仅10项准确 value/type 转出口；pre-open history/generation/restore 接所选中立效果。按真实目标登记两项 type/value export 的 R1（267→269），owner system-operations，随 A-T7 selected restore roots/legacy callers退役，原算法与规则不变。\n\nRFC-370 A1 (2026-10-02): manual migration now selects the existing configuration/installation ports through a narrow SO composition. The actual CLI type/value R1 entries replace its retired direct preparation entry, inbound 269 -> 270; owner system-operations, retirement A-T7 bootstrap/CLI convergence. All original clauses, scanner rules and other entries remain unchanged.\n\nRFC-370 A1 (2026-10-02): config CLI consumes the existing SO persistence contract through one purpose composition, adding only its actual type/value R1 pair. Inbound 270 -> 272; SO owns the existing behavior and A-T7 bootstrap/CLI convergence retires both. The original bootstrap list, clauses, reasons, scanner rules and all old entries are unchanged.\n\nRFC-370 A1 (2026-10-02): the independently reviewed doctor query binding adds only its actual purpose-composition value R1. Inbound 272 -> 273, owner SO and retirement A-T7 bootstrap/CLI convergence; the original public query type is accepted without a new clause. Every prior record, original rule and bootstrap list remains unchanged.\n\nRFC-370 H4/H5 (2026-10-05): register the four exact compatibility driver value import/export edges to the two actual native material owners, inbound 270 -> 274. Original physical implementations and assembly API remain intact; A-T7 selected material/evidence root convergence retires these entries. The original boundary scanner and every previous debt clause remain unchanged.\n\nRFC-370 H4 Agent execution native compatibility: register eight exact value/type static imports from the three real agent consumers and runtime material gateway; inbound276→284, original309 rows/outbound33 retained. Retirement requires A-T7 full selected bundle and true roots; no directory/classifier/guard exemption.\n\nRFC-370 native material directory lifecycle: register the single actual R1 value/export compatibility group to the native material directory owner, inbound284→285. Outbound33 and all original317 debt records retained; the infrastructure util dependency is an observed canonical edge but is outside the original R2 boundary predicate and does not add a fictitious R2 debt. A-T7 selected roots retire the exact compatibility group.\n\nRFC-370 SOURCE14-R2 (2026-10-05): original R1/R2 predicates on only the eight reviewed production units register four exact native invocation compatibility groups and two pure legacy type groups. The original projector retires the two absent System/Smoke direct native executor groups; Task retains its native owner participant group. Net inbound 285 -> 287, outbound 33 -> 35. Every retained ordered prior row, reason and authored field remains intact; full selected roots retire the six named groups in A-T7. The native infrastructure imports and TE util Logger are outside the original R2 predicate and are not invented as R2 rows.\n\nRFC-370 invocation ownership SOURCE17-DOC1-R2 (2026-10-05): whole joint contract and native pairing leave RM; pure protocol stays RM. Original predicates retire four deleted native inbound groups and two deleted joint-port outbound groups, and register six actual split native caller groups plus two relocated pure type groups. Net inbound 287 -> 289; outbound 35 stays 35. All surviving original ordered rows and reasons remain; selected factory/root/A-T7 and CS deployment remain open.\n\nRFC-370 System common core SOURCE19-DOC1-R2 (2026-10-05): original whole System algorithm moves to TE application; native facade retains the complete old options/results/compile and plan receiver. Session event contract moves unchanged to RM application with compatibility re-exports. Actual original predicates retire absent owned edges and register only actual candidate edges. Every retained original ordered row and reason remains. Full roots, retention consumers, Task/smoke, A-G and CS deployment remain open.\n\nRFC-370 smoke common core SOURCE9-DOC1-R2 (2026-10-06): reuse the one valid ad446763 original census because successor 5d016e74 changes matching metadata only. Preserve all concurrent committed metadata rows and reasons, register the exact original smoke facade addresses and the already committed native Task lifecycle address, and retain all original inventory/why and classifiers. Full true roots, Task selected invocation, retention consumers, A-G and CS deployment remain open.\n\nRFC-370 observation ownership SOURCE4-DOC1-R1 (2026-10-06): move all five complete neutral observation declarations into RM application, retain every legacy type name and all original members/comments, and remove the actual public-to-legacy edge without changing original classifiers or the application-only rule. One actual sessionEventSink facade address follows the unchanged classifier. Matching generation reads complete committed b386d310 source and the five reviewed files; all future WIP is excluded. Full roots, retention consumers, A-G and CS deployment remain open.\n\nRFC-370 Task Git control SOURCE8-DOC2-R2 (2026-10-06): preserve the complete six semantic Git observations and their real before/after Task triggers behind a bound purpose. Historical generation fixture uses the same real coordinator for its accepting-writes/finalized checks; all four cases, original strict assertions and five-second budget remain. One original census reads frozen ten files plus complete committed 4ff95e5e source; peer guard registration and all surviving authored rows remain. Full Task roots, A-G, CS adapters, deployment and RFC remain open.\n\nRFC-370 port output validation SOURCE16-DOC1-R1 (2026-10-06): preserve complete path/list/resolver/native IO bodies, original dispatch/codecs/errors/declarations/exports, all other statements and comments, and every existing assertion/budget. Sync and async interpret the same policy; normal content uses opaque references and requires one complete receiver. The original negative type fixture only adds the new required well-typed policy. One original census reads frozen seventeen files plus complete committed 0fd982ff source and concurrent frontend output; peer guard registration and all surviving authored debt remain. Normal Task wiring, full roots/A-G, CS adapters/deployment and RFC remain open.\n\nRFC-370 Task common core SOURCE10-TEST43-DOC1-R2 (2026-10-06): complete original Task algorithm, native options/results/helpers/exports and independent mount/compile error boundaries retained. Normal purpose uses one complete selected material invocation and opaque task receipt/content references. Source gate covers ten production files, 39 mechanical old source-reader migrations with all original assertions/budgets retained, 14 new cases and one implementation journal. One original scoped census reads complete committed base plus all frozen owned content; preserve every surviving authored debt, existing inventory/why, SPI/targets/SCC and all committed concurrent output. The five real Task calls, all roots, retention, A-G and CS deployment/RFC remain open.",
     "registeredFindings": 79
   },
   "canonicalProjection": {
-    "sourceDigest": "sha256:0d3560a35017f51a1076bafcace3232e20901b1187a102bf243c396868717198",
+    "sourceDigest": "sha256:8131f7030ec6c84b435654153e44f9e543edf90c4a5f5a2f8baa8aad71ed9200",
     "importManifest": "architecture/cross-context-imports.json",
     "facadeManifest": "architecture/facades.json",
     "ownerManifest": "architecture/module-symbol-owners.json"
@@ -4389,52 +4389,6 @@
     },
     {
       "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:c6c1a3eab289cb08185f"
-      ],
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/application/ports/nodeExecutionPersistence.ts#NodeExecutionEventWrite"
-      ],
-      "edgeKind": "type",
-      "findingId": "G-01",
-      "from": "packages/backend/src/services/runner.ts",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "owner": "task-execution",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "rule": "R1-inbound-module-internals",
-      "specifier": "@/modules/task-execution/application/ports/nodeExecutionPersistence",
-      "syntax": "static-import",
-      "to": "packages/backend/src/modules/task-execution/application/ports/nodeExecutionPersistence",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
-    },
-    {
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
-      "canonicalImportEdgeIds": [
-        "import:ef6d239c3d1ca57471ef"
-      ],
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/application/ports/taskExecutionPersistence.ts#TaskExecutionPersistence"
-      ],
-      "edgeKind": "type",
-      "findingId": "G-01",
-      "from": "packages/backend/src/services/runner.ts",
-      "introducedByRFC": "RFC-349（provider cutover current-source census）",
-      "owner": "task-execution",
-      "removeAfterWave": "RFC-294 W4-E（owner public/composition vertical-slice convergence）",
-      "rule": "R1-inbound-module-internals",
-      "specifier": "@/modules/task-execution/application/ports/taskExecutionPersistence",
-      "syntax": "static-import",
-      "to": "packages/backend/src/modules/task-execution/application/ports/taskExecutionPersistence",
-      "why": "RFC-349 provider cutover 保留的精确兼容边仍由 legacy transport/service 直接消费 owner 内部实现；数据库选择已由 provider-neutral guard 封住，但该调用仍须继续收敛到 owner public/composition 合同。"
-    },
-    {
-      "canonicalFacadeIds": [
         "facade:packages/backend/src/services/runtime/claudeCode/sessionCapture.ts"
       ],
       "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/sessionCapture.ts#$file",
@@ -7298,84 +7252,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/runner.ts",
-      "specifier": "@/modules/task-execution/application/processEffectObserver",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "why": "RFC-370 H4: this exact native compatibility consumer selects the actual neutral execution port, selected process observer/projection or same compiled material reference. The single original native mechanism, receipt facts and logical resource resolver remain active. Full selected material/evidence/execution bundle and true composition roots retire this named compatibility edge in A-T7.",
-      "removeAfterWave": "RFC-370 A-T7 selected material and evidence roots",
-      "canonicalImportEdgeIds": [
-        "import:a7c32bef082cd461eebc"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/application/processEffectObserver.ts#createProcessEffectAttemptObserver"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/runner.ts",
-      "specifier": "@/modules/task-execution/application/processEffectObserver",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "why": "RFC-370 H4: this exact native compatibility consumer selects the actual neutral execution port, selected process observer/projection or same compiled material reference. The single original native mechanism, receipt facts and logical resource resolver remain active. Full selected material/evidence/execution bundle and true composition roots retire this named compatibility edge in A-T7.",
-      "removeAfterWave": "RFC-370 A-T7 selected material and evidence roots",
-      "canonicalImportEdgeIds": [
-        "import:e572ac07448d3e20981a"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/application/processEffectObserver.ts#ProcessEffectAttemptObserver"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/runner.ts",
-      "specifier": "@/modules/task-execution/application/ports/executionEffect",
-      "edgeKind": "type",
-      "syntax": "static-import",
-      "why": "RFC-370 H4: this exact native compatibility consumer selects the actual neutral execution port, selected process observer/projection or same compiled material reference. The single original native mechanism, receipt facts and logical resource resolver remain active. Full selected material/evidence/execution bundle and true composition roots retire this named compatibility edge in A-T7.",
-      "removeAfterWave": "RFC-370 A-T7 selected material and evidence roots",
-      "canonicalImportEdgeIds": [
-        "import:3236e5a6d1bd7a30b325",
-        "import:b61a529357a48372edc9"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/application/ports/executionEffect.ts#ExecutionEffectResult",
-        "owner:packages/backend/src/modules/task-execution/application/ports/executionEffect.ts#ExecutionStartReceipt"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/runner.ts",
-      "specifier": "@/modules/task-execution/infrastructure/local/agentExecutionEffect",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "why": "RFC-370 H4: this exact native compatibility consumer selects the actual neutral execution port, selected process observer/projection or same compiled material reference. The single original native mechanism, receipt facts and logical resource resolver remain active. Full selected material/evidence/execution bundle and true composition roots retire this named compatibility edge in A-T7.",
-      "removeAfterWave": "RFC-370 A-T7 selected material and evidence roots",
-      "canonicalImportEdgeIds": [
-        "import:6b9905a2553872fcfec0"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts#bindLocalAgentExecutionParticipants"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/runtime/index.ts",
       "specifier": "@/modules/runtime-management/infrastructure/local/agentMaterialCompiler",
       "edgeKind": "value",
@@ -7416,50 +7292,6 @@
       ],
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/runtime/index.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/runner.ts",
-      "to": "modules/runtime-management/infrastructure/local/agentProtocol",
-      "specifier": "@/modules/runtime-management/infrastructure/local/agentProtocol",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "runtime-management",
-      "introducedByRFC": "RFC-370 A-T5 invocation ownership SOURCE17-DOC1-R2",
-      "why": "RFC-370 preserves the complete native pairing in TE composition and the pure protocol in RM infrastructure for the actual Task/System/Smoke callers. The original algorithms, exact compiled plan, owner receipt, native timing and all tests remain unchanged. Normal selected factory and true roots remain open; retire this actual compatibility group in A-T7 without changing any boundary/public classifier.",
-      "removeAfterWave": "RFC-370 A-T7 selected material protocol and true roots",
-      "canonicalImportEdgeIds": [
-        "import:c88fc44a99a98d580503"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentProtocol.ts#bindNativeAgentProtocol"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/runner.ts",
-      "to": "modules/task-execution/composition/agentInvocation",
-      "specifier": "@/modules/task-execution/composition/agentInvocation",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "task-execution",
-      "introducedByRFC": "RFC-370 A-T5 invocation ownership SOURCE17-DOC1-R2",
-      "why": "RFC-370 preserves the complete native pairing in TE composition and the pure protocol in RM infrastructure for the actual Task/System/Smoke callers. The original algorithms, exact compiled plan, owner receipt, native timing and all tests remain unchanged. Normal selected factory and true roots remain open; retire this actual compatibility group in A-T7 without changing any boundary/public classifier.",
-      "removeAfterWave": "RFC-370 A-T7 selected material protocol and true roots",
-      "canonicalImportEdgeIds": [
-        "import:07b177300be85056ef4a"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/task-execution/composition/agentInvocation.ts#bindNativeAgentInvocation"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
       ]
     },
     {
@@ -7764,28 +7596,6 @@
     },
     {
       "rule": "R1-inbound-module-internals",
-      "from": "packages/backend/src/services/runner.ts",
-      "to": "modules/source-control/composition/agentWorkspaceGitControl",
-      "specifier": "@/modules/source-control/composition/agentWorkspaceGitControl",
-      "edgeKind": "value",
-      "syntax": "static-import",
-      "owner": "source-control",
-      "introducedByRFC": "RFC-370 Task Git control SOURCE8-DOC2-R2",
-      "why": "The unchanged original classifier records this exact Task Git observation address. Preserve all six semantic observations, digest and receiver behavior, actual Task triggers, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
-      "removeAfterWave": "RFC-370 A-T7 complete source-control roots",
-      "canonicalImportEdgeIds": [
-        "import:d29deadaed350aaa4533"
-      ],
-      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
-      "canonicalToOwnerEntryIds": [
-        "owner:packages/backend/src/modules/source-control/composition/agentWorkspaceGitControl.ts#$file"
-      ],
-      "canonicalFacadeIds": [
-        "facade:packages/backend/src/services/runner.ts"
-      ]
-    },
-    {
-      "rule": "R1-inbound-module-internals",
       "from": "packages/backend/src/services/envelope.ts",
       "to": "modules/task-execution/application/portOutputValidation",
       "specifier": "@/modules/task-execution/application/portOutputValidation",
@@ -7937,6 +7747,493 @@
       "canonicalFacadeIds": [
         "facade:packages/backend/src/services/envelope.ts"
       ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/runner.ts",
+      "to": "modules/task-execution/application/ports/taskAgentRun",
+      "specifier": "@/modules/task-execution/application/ports/taskAgentRun",
+      "edgeKind": "type",
+      "syntax": "export",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:a25045d4909b7552e5ac",
+        "import:ee176df359198c8c415a"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts#RunFinalStatus",
+        "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts#RunResult"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/runner.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/runner.ts",
+      "to": "modules/task-execution/application/taskAgentRun",
+      "specifier": "@/modules/task-execution/application/taskAgentRun",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:0e72464bd92e60966f5f",
+        "import:219557f207cda2e8238a",
+        "import:55ed9421ce11cd3124c6",
+        "import:62106c4b94ab47d09b1d",
+        "import:9469298f1d8c19e6862d",
+        "import:b3687b266bacc4ea2e3a"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#MAX_AGENT_TEXT_CHARS",
+        "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#MAX_STDERR_TAIL_CHARS",
+        "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#MAX_STDERR_TAIL_LINE_CHARS",
+        "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#MAX_STREAM_LINE_CHARS",
+        "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#appendBoundedTail",
+        "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#clampTailLine"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/runner.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/runner.ts",
+      "to": "modules/task-execution/infrastructure/local/nativeTaskAgentPluginLoadDiagnostics",
+      "specifier": "@/modules/task-execution/infrastructure/local/nativeTaskAgentPluginLoadDiagnostics",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:87c673262e895a463947"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentPluginLoadDiagnostics.ts#detectPluginLoadFailure"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/runner.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/runner.ts",
+      "to": "modules/task-execution/infrastructure/local/nativeTaskAgentRun",
+      "specifier": "@/modules/task-execution/infrastructure/local/nativeTaskAgentRun",
+      "edgeKind": "value",
+      "syntax": "export",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:6a895204248d6507f361"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts#runNativeTaskAgent"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/runner.ts"
+      ]
+    },
+    {
+      "rule": "R1-inbound-module-internals",
+      "from": "packages/backend/src/services/runner.ts",
+      "to": "modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions",
+      "specifier": "@/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions",
+      "edgeKind": "type",
+      "syntax": "export",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:fe03b21954ad00a6a922"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts#RunNodeOptions"
+      ],
+      "canonicalFacadeIds": [
+        "facade:packages/backend/src/services/runner.ts"
+      ]
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts",
+      "to": "@/services/runtimeSessionLease",
+      "specifier": "@/services/runtimeSessionLease",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:175b6de4632f599b8097"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/runtimeSessionLease.ts#$file"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/envelope",
+      "specifier": "@/services/envelope",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:0949c70eab77a8d6ddd5",
+        "import:4c424e663d87e494394e",
+        "import:4c6ae9e27d40d98fba84",
+        "import:5e6091f0e26ef599010a",
+        "import:85dee064552f5f2f765d",
+        "import:a9d9c84df21038b3dc3a",
+        "import:b2d19b21d13432411317",
+        "import:b84ea71240d96393cf83",
+        "import:c3c3086fbb779bd151b7",
+        "import:f283b7729153aef516d6",
+        "import:fd54d9a9572eb50e0147"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/envelope.ts#$file",
+        "owner:packages/backend/src/services/envelope.ts#BRANCH_MARKER_MALFORMED_PREFIX",
+        "owner:packages/backend/src/services/envelope.ts#BRANCH_PORT_NOT_DECLARED_PREFIX",
+        "owner:packages/backend/src/services/envelope.ts#CLARIFY_FORBIDDEN_PREFIX",
+        "owner:packages/backend/src/services/envelope.ts#CLARIFY_REQUIRED_PREFIX",
+        "owner:packages/backend/src/services/envelope.ts#ENVELOPE_PORT_MALFORMED_PREFIX",
+        "owner:packages/backend/src/services/envelope.ts#detectEnvelopeKind",
+        "owner:packages/backend/src/services/envelope.ts#extractClarifyEnvelopeBody",
+        "owner:packages/backend/src/services/envelope.ts#extractLastEnvelope",
+        "owner:packages/backend/src/services/envelope.ts#parseEnvelope",
+        "owner:packages/backend/src/services/envelope.ts#serializePortValidationFailures"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/envelope",
+      "specifier": "@/services/envelope",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:06ba260990f97983328c"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/envelope.ts#$file"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/execution/agentInjection",
+      "specifier": "@/services/execution/agentInjection",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:537871ccfb897af979ec"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/execution/agentInjection.ts#EMPTY_RUNTIME_PROFILE"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/execution/inventoryObservation",
+      "specifier": "@/services/execution/inventoryObservation",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:979ea08fb6f5ffabfffd"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/execution/inventoryObservation.ts#buildRuntimeInventoryObservation"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/execution/managedProcess",
+      "specifier": "@/services/execution/managedProcess",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:8ba1c8249feca47d9878",
+        "import:c610a40ee57a389b46ec"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/execution/managedProcess.ts#$file"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/execution/startupVerification",
+      "specifier": "@/services/execution/startupVerification",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:2336edf349078afbda97",
+        "import:42c591f50dda68aa294c",
+        "import:9a8fa4097be3c7526615"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/execution/startupVerification.ts#declaredHasContent",
+        "owner:packages/backend/src/services/execution/startupVerification.ts#observationForVerification",
+        "owner:packages/backend/src/services/execution/startupVerification.ts#verifyStartup"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/execution/startupVerification",
+      "specifier": "@/services/execution/startupVerification",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:d3e040569d1b1fd55777"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/execution/startupVerification.ts#$file"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/protocol",
+      "specifier": "@/services/protocol",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:f6fff929e1b6d2f9d30b"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/protocol.ts#$file"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/runtime",
+      "specifier": "@/services/runtime",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:d98eada297d0a956485e"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/runtime/index.ts#$file"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/runtime",
+      "specifier": "@/services/runtime",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:e476ae62c20624ad3827"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/runtime/index.ts#$file"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/runtime/types",
+      "specifier": "@/services/runtime/types",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:57e5709740865a8fbe44",
+        "import:95b10de073b3a49cb39d",
+        "import:f7b1795ce0d56f998073"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/runtime/types.ts#$file",
+        "owner:packages/backend/src/services/runtime/types.ts#NormalizedEvent",
+        "owner:packages/backend/src/services/runtime/types.ts#PersistedEventKind"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/runtime/usage",
+      "specifier": "@/services/runtime/usage",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:73e38b90cec8dc8a7732"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/runtime/usage.ts#createInvocationUsageCapture"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/runtimeSessionLease",
+      "specifier": "@/services/runtimeSessionLease",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:3fa7f15f2688e09bb9c8",
+        "import:5ef2e9488a928d7701b9",
+        "import:c5923f4ad7662a3f8d59",
+        "import:cc041719df5808709c36",
+        "import:d3a8a9d9a42b73c62a02",
+        "import:d4a9aeffddac59f8bf54",
+        "import:d865f3cb35e5ba624517",
+        "import:f4c730ae04dc9eb37ff4"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/runtimeSessionLease.ts#claimNewRuntimeSession",
+        "owner:packages/backend/src/services/runtimeSessionLease.ts#confirmRuntimeSessionResume",
+        "owner:packages/backend/src/services/runtimeSessionLease.ts#discardRuntimeSessionLease",
+        "owner:packages/backend/src/services/runtimeSessionLease.ts#getRuntimeSessionLease",
+        "owner:packages/backend/src/services/runtimeSessionLease.ts#markRuntimeSessionResetPending",
+        "owner:packages/backend/src/services/runtimeSessionLease.ts#preclaimRuntimeSessionResume",
+        "owner:packages/backend/src/services/runtimeSessionLease.ts#releaseRuntimeSessionLease",
+        "owner:packages/backend/src/services/runtimeSessionLease.ts#rotateRuntimeSessionLease"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/services/runtimeSessionLease",
+      "specifier": "@/services/runtimeSessionLease",
+      "edgeKind": "type",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:f4476433c1b17ea26dce"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/services/runtimeSessionLease.ts#$file"
+      ],
+      "canonicalFacadeIds": []
+    },
+    {
+      "rule": "R2-outbound-module-to-legacy",
+      "from": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+      "to": "@/ws/broadcaster",
+      "specifier": "@/ws/broadcaster",
+      "edgeKind": "value",
+      "syntax": "static-import",
+      "owner": "task-execution",
+      "introducedByRFC": "RFC-370 Task common core SOURCE10-TEST43-DOC1-R2",
+      "why": "The unchanged original classifier records this exact complete Task algorithm/native compatibility address. Preserve the complete original Task algorithm, native compatibility API, late reads, receiver and mount/compile error boundaries, every surviving authored debt row and all concurrent committed output. Only the actual address is registered; no rule or generic exemption changes.",
+      "removeAfterWave": "RFC-370 A-T5 complete Task family wiring and A-T7 real roots",
+      "canonicalImportEdgeIds": [
+        "import:262403177a046737fa65",
+        "import:bfc7f149518348f25d87"
+      ],
+      "canonicalFromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#$file",
+      "canonicalToOwnerEntryIds": [
+        "owner:packages/backend/src/ws/broadcaster.ts#TASK_CHANNEL",
+        "owner:packages/backend/src/ws/broadcaster.ts#taskBroadcaster"
+      ],
+      "canonicalFacadeIds": []
     }
   ],
   "note": "RFC-317 精确债务账本。entries 由 packages/backend/tests/architecture/census.ts 逐条复算，只减不增；registeredFindings 与 design/RFC-317-*/findings.md 的 P3 gid 两向钉死。",
@@ -9120,8 +9417,8 @@
   "schemaVersion": 1,
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "eef1e3ad12435d9d4192a6ca214153d641a6a3a4",
-    "contentDigest": "sha256:556b0aad63190b03f333442d74faf421c5979bb6402766f8c48e30159ba949ad",
+    "currentSnapshotSha": "65431b1de2bf664bfb24065e96e26e00a981d63b",
+    "contentDigest": "sha256:407ed0a466d127b04cc139bed19a5826e05e5fd71d727c0d38a965a4ab3f0a43",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

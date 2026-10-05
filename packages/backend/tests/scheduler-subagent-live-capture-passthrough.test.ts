@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-048 — scheduler/runner passthrough source-level guard.
 //
 // Locks the data path that carries `config.subagentLiveCapture` from the
@@ -113,7 +114,7 @@ describe('RFC-048 subagentLiveCapture passthrough', () => {
   })
 
   test('runner declares the option and falls back to compile-time defaults when omitted', () => {
-    const src = read('packages/backend/src/services/runner.ts')
+    const src = readTaskAgentSources()
     expect(src).toContain(
       'subagentLiveCapture?: { pollMs: number; consecutiveFailureLimit: number }',
     )

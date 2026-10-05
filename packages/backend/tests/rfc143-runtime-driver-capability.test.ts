@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-143 — runtime 能力对象收口的 PR-1 验收锁。
 //
 // 两组锁：
@@ -218,7 +219,7 @@ describe('RFC-143 (C) PR-3 optional 能力 + live poller 空转 bug 修复', () 
   })
 
   it('runner live poller 走 driver.startLiveCapture? + NOOP fallback（不再无条件启动）', () => {
-    const src = SRC('services/runner.ts')
+    const src = readTaskAgentSources()
     expect(src).toContain('materialEvidence.startLiveCapture?.(')
     expect(src).toContain('?? NOOP_HANDLE')
     // 无条件启动的旧形态不得复活。
@@ -226,7 +227,7 @@ describe('RFC-143 (C) PR-3 optional 能力 + live poller 空转 bug 修复', () 
   })
 
   it('runner 会话捕获 / inventory 回读走 driver（消 capture 的 runtime 分支）', () => {
-    const src = SRC('services/runner.ts')
+    const src = readTaskAgentSources()
     expect(src).toContain('materialEvidence.captureSessions(')
     expect(src).toContain('materialEvidence.readInventory?.(')
     // capture 不再按 runtime 二选一 captureClaudeSessions/captureChildSessions。
@@ -328,7 +329,7 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
   })
 
   it('runner 业务 spawn 走 driver.buildSpawn（RFC-282 B1b 统一装配；不再直调两个 spawn 自由函数）', () => {
-    const src = SRC('services/runner.ts')
+    const src = readTaskAgentSources()
     expect(src).toContain('driver.buildSpawn(')
     expect(src).toContain('cwd: opts.worktreePath')
     expect(src).toContain('runRoot,')

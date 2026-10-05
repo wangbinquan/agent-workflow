@@ -12,8 +12,14 @@ import { join } from 'node:path'
 
 const FILES: Record<string, string> = {
   'shared/src/prompt.ts': join(import.meta.dir, '../../shared/src/prompt.ts'),
-  'backend/src/services/envelope.ts': join(import.meta.dir, '../src/services/envelope.ts'),
-  'backend/src/services/runner.ts': join(import.meta.dir, '../src/services/runner.ts'),
+  'backend/src/services/envelope.ts': join(
+    import.meta.dir,
+    '../src/modules/task-execution/application/portOutputValidation.ts',
+  ),
+  'backend/src/services/runner.ts': join(
+    import.meta.dir,
+    '../src/modules/task-execution/application/taskAgentRun.ts',
+  ),
 }
 
 describe('RFC-080 runtime migration source guard', () => {

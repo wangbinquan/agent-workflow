@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-148 T3 — promptMode / clarifyChannel 判别联合契约。
 //
 // 为什么这条测试存在：八个散装字段（envelopeFollowup 四件套 + clarify 四
@@ -16,8 +17,7 @@
 
 import type { ClarifyChannel, ClarifyChannelDirective, PromptMode } from '@agent-workflow/shared'
 import { clarifyDispositionFor, renderUserPrompt } from '@agent-workflow/shared'
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+
 import { describe, expect, test } from 'bun:test'
 
 const BASE = {
@@ -180,10 +180,7 @@ describe('RFC-148 — 存量模板兼容（实现门 high 采纳）', () => {
 })
 
 describe('RFC-148 — runner 源码形态锁（cap 随接线族、门随 directive）', () => {
-  const runnerSrc = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
-    'utf8',
-  )
+  const runnerSrc = readTaskAgentSources()
 
   test('解析 cap 判定锚 kind===cross（不看 directive——RFC-183 后进入解析的是邀请态 cross）', () => {
     expect(runnerSrc).toMatch(

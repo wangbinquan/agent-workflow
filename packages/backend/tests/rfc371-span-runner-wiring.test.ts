@@ -1,9 +1,10 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import ts from 'typescript'
 
-const text = readFileSync(resolve(import.meta.dir, '../src/services/runner.ts'), 'utf8')
+const text = readTaskAgentSources()
 const source = ts.createSourceFile('runner.ts', text, ts.ScriptTarget.Latest, true)
 const walk = (node: ts.Node, visit: (node: ts.Node) => void) => {
   visit(node)

@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-193 T3 — archive-at-emit 归档制（design.md §4.3/§4.4，case 1/2/3/3b/3c/3d/3f/8）。
 //
 // 为什么存在：path 形端口的值只是路径字符串，RFC-130 后它是「悬挂指针」——
@@ -667,7 +668,7 @@ describe('RFC-193 e2e — runner archive-at-emit', () => {
 // 归档 gate 的 persistDeclaredOutputs 防御以文本断言锁定）。
 describe('RFC-193 source guards', () => {
   test('runner archival gate carries the persistDeclaredOutputs defence (D14)', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'), 'utf8')
+    const src = readTaskAgentSources()
     const gate = src.slice(src.indexOf('pathishArchives.size > 0'))
     expect(gate.slice(0, 400)).toContain('persistDeclaredOutputs !== false')
   })

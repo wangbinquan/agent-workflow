@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-123 follow-up — enforce STOP CLARIFYING against a disobedient agent.
 //
 // 用户报（2026-06-29，RFC-123 之后）：「一个节点被跨节点反问了，但是没有自动切换为
@@ -230,10 +231,7 @@ describe('RFC-123 D: stop-enforcement wiring guards', () => {
     ),
     'utf8',
   )
-  const runnerSrc = readFileSync(
-    resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
-    'utf8',
-  )
+  const runnerSrc = readTaskAgentSources()
   const norm = (s: string) => s.replace(/\s+/g, ' ')
 
   test('node mechanics computes clarifyStopped from EXPLICIT stop only + folds it into the channel directive', () => {

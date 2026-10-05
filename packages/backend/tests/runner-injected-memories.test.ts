@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-046 — locks the runner's persistence path for
 // `node_runs.injected_memories_json`:
 //   - Normal agent run with approved memories present → JSON array written.
@@ -342,7 +343,7 @@ describeEachProvider('RFC-046 — runner persists injected_memories_json', (harn
 
 describe('RFC-046 — runner.ts source-code grep guards', () => {
   test('R5: runner.ts wires injectedMemoriesJson into the final node_runs UPDATE', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'), 'utf8')
+    const src = readTaskAgentSources()
     expect(src).toContain('injectedMemoriesJson')
     // The runner consumes the Promise query participant; provider adapters
     // own the actual memory reads.

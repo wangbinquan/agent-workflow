@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-313 T10 — 源码层兜底锁。
 //
 // 为什么这条测试存在：本 RFC 引入的是**预算**类逻辑，而预算最容易在后续 RFC 里被
@@ -66,7 +67,7 @@ describe('RFC-313 源码层锁', () => {
   test('会话升级告知只有一个渲染出口', () => {
     const shared = read(SHARED_SRC, 'prompt.ts')
     expect(occurrences(shared, 'export function renderSessionRestartNotice')).toBe(1)
-    const runner = read(BACKEND_SRC, 'services', 'runner.ts')
+    const runner = readTaskAgentSources()
     // runner 只透传结构化的 reason，不许自己拼文案。
     expect(runner).not.toContain('Note on an earlier attempt')
     expect(occurrences(runner, 'priorSessionAbandoned:')).toBe(1)

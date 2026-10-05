@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-041 PR3 — runtime memory inject service.
 //
 // Locks the invariants the runner depends on:
@@ -631,7 +632,7 @@ describeEachProvider('injectMemoryForRun', (harness) => {
 
 describe('source-code grep guards', () => {
   test('runner.ts must call the provider-neutral injection participant', () => {
-    const src = readFileSync(resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'), 'utf8')
+    const src = readTaskAgentSources()
     expect(src).toContain('memoryInjectionQueries.injectForRun(')
     expect(src).not.toContain("from '@/modules/memory/application/injection/injectMemory'")
   })

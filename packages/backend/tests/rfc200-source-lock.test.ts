@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-200 §8.4 — source-level wiring locks for the nonce/fence chain. The
 // behavioral tests exercise the real runner; these assertions keep future
 // refactors from bypassing the shared prompt choke point on less common paths
@@ -22,7 +23,7 @@ describe('RFC-200 source wiring locks', () => {
       'envelopeNonce: overrides.envelopeNonce ?? generateNodeRunEnvelopeNonce()',
     )
 
-    const runner = read('packages/backend/src/services/runner.ts')
+    const runner = readTaskAgentSources()
     expect(runner).toContain(
       'const envelopeNonce = await opts.persistence.nodeRuns.loadEnvelopeNonce(opts.nodeRunId)',
     )

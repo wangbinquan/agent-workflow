@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-031 T10 — detectPluginLoadFailure recognises opencode's plugin error
 // log lines and maps the file:// spec back to a plugin record's name so the
 // UI can render an actionable warning chip instead of opaque stderr.
@@ -62,7 +63,7 @@ describe('detectPluginLoadFailure', () => {
   })
 
   test('source contains rfc031 tag literal (regression guard)', async () => {
-    const src = await Bun.file(new URL('../src/services/runner.ts', import.meta.url)).text()
+    const src = await readTaskAgentSources()
     expect(src).toContain('[rfc031/plugin-load-failed]')
   })
 })

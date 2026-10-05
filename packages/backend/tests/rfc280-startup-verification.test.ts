@@ -291,8 +291,7 @@ describe('applyPlaygroundVerification (RFC-280 T6 strict playground verdict)', (
 })
 
 // ── RFC-284 T14（D9）—— drainTimedOut 观测面 ────────────────────────────────
-import { readFileSync as readSrcFile } from 'node:fs'
-import { resolve as resolveSrcPath } from 'node:path'
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 import {
   startupVerificationHasFindings,
   StartupVerificationRecordSchema,
@@ -339,10 +338,7 @@ describe('RFC-284 T14 — outputTailTruncated 观测面', () => {
   })
 
   test('runner 接线源码锁：旗标取自 runResult、record 仅真值附加、envelope 文案带前缀、NULL 列 run 只 warn', () => {
-    const src = readSrcFile(
-      resolveSrcPath(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
-      'utf8',
-    )
+    const src = readTaskAgentSources()
     expect(src).toContain('const outputTailTruncated = runResult.drainTimedOut === true')
     expect(src).toContain("log.warn('runtime-output-tail-truncated'")
     // 仅在真丢失时附加（不合成占位 record——设计门裁决）；两处 envelope-missing

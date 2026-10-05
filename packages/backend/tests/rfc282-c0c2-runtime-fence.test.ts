@@ -12,6 +12,7 @@
 //     The P2-E followup guard survives: observationRequiresFreshRun comes
 //     FIRST, so an opencode followup still records NO verification row.
 
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
@@ -52,7 +53,8 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
 
   test('the readInventory proxy predicate is gone from both consumers', () => {
     for (const rel of [
-      'services/runner.ts',
+      'modules/task-execution/application/taskAgentRun.ts',
+      'modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
       'modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
     ]) {
       const text = read(rel)
@@ -76,7 +78,8 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
     expect(text).toContain("reason: 'runtime-has-no-observation'")
     // 两个消费方都不得再自己判——包括「换个写法判同一件事」。
     for (const rel of [
-      'services/runner.ts',
+      'modules/task-execution/application/taskAgentRun.ts',
+      'modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
       'modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts',
     ]) {
       const consumer = read(rel)
@@ -93,7 +96,7 @@ describe('RFC-282 C2 — capability-driven dispatch', () => {
   })
 
   test('runner keeps the fresh-run guard BEFORE taking the observation (P1-7 / P2-E)', () => {
-    const text = read('services/runner.ts')
+    const text = readTaskAgentSources()
     const guardIdx = text.indexOf('caps.observationRequiresFreshRun && !freshAgentRun')
     const takeIdx = text.indexOf('observationForVerification(caps')
     expect(guardIdx).toBeGreaterThan(0)

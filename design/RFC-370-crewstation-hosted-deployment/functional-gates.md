@@ -938,3 +938,14 @@ META15-R1 有限 PASS，51 项首末指纹 4519c6a5469ffc556cb021debd93cd2759398
 - 同一 production sourceDigest sha256:f888632c511a6cd2cd5f205280681aca5c71cbc6e68e133f47404c0a57e6d7b9 与原一次有效 census 复用；仅退役前批 mutation/imports/exceptions/owners 四个 matching allowGrowth，129 ordered rows/why/counts 和所有其他事实保持，不重扫。
 - TASK-AGENT-COMMON-CORE-DESIGN-R2 独立有限 PASS30，指纹 c0c47f9a0573b4ed36e309ff88b99cd0678b4e007f3b33ebf9f19bf25c859b5c。原 mount 参数读取/计算在 try 外的拒绝身份、lease与failed-write边界保留；材料读取/compile仍在原catch。R1一项P2与全文保持，源码未实施，五处Task调用点/真实根继续。
 - 0fd982ff 主CI cancelled、PostgreSQL question-set stash失败和frontend runner shutdown各自留证，后端另行归因，不用本次地址修复宣告解决。77017a67主CI和后继exact-SHA/Windows分别验收。完整Task/retention/A-G/CS首次部署及RFC开放，全部共享旧正文与并行内容保持。
+
+## 2026-10-06 A-T5 完整 Task 共同核心第一批有限门
+
+- TASK-AGENT-COMMON-CORE-SOURCE10-TEST43-DOC1-R1：有效有限 FAIL94 首末指纹 ddf441c5af882db533331094eb0c1c123e6f77f61dd9b4adb4164727db44ae56，五项直接 DB/Agent/fixture 补充绑定稳定，一项资源对象展开 P2 保留。R2 仅修显式 optional plugins/skills 投影及 private class getter/读取顺序/MCP identity 回归，其余51 owned全文不变。
+- SOURCE10-TEST43-DOC1-R2：独立有限 PASS108=54 owned/20 control/34 evidence，首末指纹35b93deae48cdda140c4c5594aad5c997affe363853f9a50f56139091235cc47；完整算法/原51options和43business成员/results/helpers/14exports/native plugin decoder与participant颁发函数体保持，39旧测试有限地址迁移原断言预算完整保留。14新例正式执行交CI，Windows对称trigger十二地址及原platform suite增三例的完整逆向保持。
+- 有效原 scoped census 一次，完整 committed bfe27e75 加冻结 owned，10 production，sourceDigest sha256:63265ca9803df585465e2e52f1226c299745b224349df087da7065cd369735f0。13 matching 保留329 surviving authored债，九个原Runner真实旧地址退役，新增21实际地址至350；129有序库存/why、其他guard、40SPI/69targets、原值级SCC与空implementation SCC保持，无新增public→legacy出边。原规则/计数器/validator不变，未提交并行RFC371 WIP保持并排除。
+- 前批四个matching许可正常退役，本批四个原counter实增mutation1894→1897/imports6484→6547/exceptions5733→5777/owners26921→26943具名许可下一普通后继退役。Source、metadata与hosted exact-SHA CI分列验收；既有失败/cancelled、未解决PG question-set stash和所有共享正文保持。五个生产Task入口/全根、retention/A-G、CS首次部署与完整RFC继续开放。
+
+## 2026-10-06 完整 Task 核心 META17-R2 匹配候选
+
+META16-R1 有效有限 FAIL97（指纹78b5ab3805ef86785ba946a42ad32c2dfce5b2f6a916aea32504a3cd6c59ac15）唯一P2仅是C2薄门面精确名单缺Runner。正常名单增一项，完整测试逆向保持原正文、所有判据和预算；SOURCE-R2 PASS108及54 owned字节保持。原Task census不覆盖或删除；并行已提交65431b1d的两生产单元和三个测试改变当前完整人口，进行一次必要原规则匹配投影，新sourceDigest sha256:8131f7030ec6c84b435654153e44f9e543edf90c4a5f5a2f8baa8aad71ed9200；原规则全字节未变，13 matching、350债、129有序库存/why、40SPI/69targets和原SCC保持，owner原counter26945。全部旧STATE/gates全文及并行内容保留；新peer未提交内容不纳入。仅检视登记和匹配，不重启Task源码门，不宣告CI、五真实入口/全部根、A-G或部署完成。

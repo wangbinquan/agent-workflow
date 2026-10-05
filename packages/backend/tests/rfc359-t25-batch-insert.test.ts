@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-359 W6-T25 —— 批量写：矩阵给出 `batchInsertMax`，逐行 INSERT 的热路径改按批。
 //
 // 这条文件为什么存在（改动前后要证明的三件事）：
@@ -83,10 +84,7 @@ const eventsBatchMax = (h: { capabilities: { batchInsertMax(n: number): number }
 // 切批的唯一出口是能力矩阵。
 describe('RFC-359 W6-T25 —— 行数上限只有矩阵一处', () => {
   test('runner 不再自带「一批多少行」的常量，整批交给 appendEvents', () => {
-    const runner = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
-      'utf8',
-    )
+    const runner = readTaskAgentSources()
     // 只看代码行：整行注释里**故意**留着这个名字，解释它为什么被删（去掉那段说明反而更差）。
     const code = runner
       .split('\n')

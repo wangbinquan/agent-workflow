@@ -1,3 +1,4 @@
+import { readTaskAgentSources } from './helpers/taskAgentSource'
 // RFC-314 D3 —— 事件落库按 chunk 合并。
 //
 // 这条测试为什么存在：`runner.ts` 原本每读到一行 stdout/stderr 就发一条 autocommit
@@ -18,7 +19,7 @@
 import type { Agent } from '@agent-workflow/shared'
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test'
 import { asc, eq } from 'drizzle-orm'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ulid } from 'ulid'
@@ -302,10 +303,7 @@ describeEachProvider('RFC-314 D3 —— 端到端', (harness) => {
   //    缓冲行晚于它落库就会带着旧 sessionId 落进孤儿桶）；
   // ③ 进程返回后兜底冲刷（取消 / kill 走 `cancel()`，拿不到 EOF 的 chunk-end）。
   test('runner 的三个冲刷点都在（源代码层地板）', () => {
-    const src = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runner.ts'),
-      'utf-8',
-    )
+    const src = readTaskAgentSources()
     expect(src).toContain('await flushEventsBeforeThrow()')
     const rotateIdx = src.indexOf("persistRunnerWrite('runtime-session-lease/rotate'")
     expect(rotateIdx).toBeGreaterThan(0)
