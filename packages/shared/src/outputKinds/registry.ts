@@ -32,6 +32,7 @@
 import { splitListItems } from '../listWire'
 import { tryParseKind, stringifyKind, REGISTERED_BASE_KINDS, type ParsedKind } from '../kindParser'
 import type { ValidateIO, ValidateResult } from './types'
+import type { OutputValidationEffects, OutputValidationPolicy } from './validationPolicy'
 
 export interface ParametricValidateCtx {
   /** Port name (matches envelope `<port name=…>` attribute). */
@@ -123,6 +124,13 @@ export interface ParametricOutputKindHandler {
   joinItems?(parsed: ParsedKind, items: readonly string[]): string
   /** Validate one port's raw content. Same contract as RFC-049 ValidateResult. */
   validate(rawContent: string, ctx: ParametricValidateCtx, io: ValidateIO): ValidateResult
+
+  /** The same validation rules, interpreted against the selected content effects. */
+  validationPolicy(
+    rawContent: string,
+    ctx: ParametricValidateCtx,
+    io: OutputValidationEffects,
+  ): OutputValidationPolicy
   /** Followup repair-prompt segment for failed ports of this handler.
    *  Same contract as RFC-049 buildRepairBlock; return null to skip. */
   buildRepairBlock(input: {

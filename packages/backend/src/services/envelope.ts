@@ -24,49 +24,15 @@
 // resolution + traversal hardening before the content lands in
 // node_run_outputs.
 
-import { toPortableRelativePath } from '@/util/platformExec'
-import { checkLexicalThenRealpath } from '@/util/safePath'
-import { readFileSync } from 'node:fs'
-import { isAbsolute, relative } from 'node:path'
-import {
-  getHandlerForParsedKind,
-  formatPortValidationErrCode,
-  parseKind,
-  type AgentOutputKind,
-  type ValidateIO,
-} from '@agent-workflow/shared'
-import { ValidationError } from '@/util/errors'
+import type { AgentOutputKind } from '@agent-workflow/shared'
+import type { PortValidationFailure } from '@/modules/task-execution/application/portOutputValidation'
+import type { ResolvePortContentOptions } from '@/modules/task-execution/application/ports/portOutputValidation'
+import { resolveNativePortContentDetailed } from '@/modules/task-execution/composition/portOutputValidation'
 
-/**
- * RFC-049 — structured failure payload attached to PortValidationError when
- * port content fails an OutputKindHandler.validate call. The runner catches
- * PortValidationError specifically, serializes `failure` into the
- * `port_validation_failures_json` column, and the scheduler reads it back to
- * drive same-session followup.
- */
-export interface PortValidationFailure {
-  port: string
-  kind: AgentOutputKind
-  subReason: string
-  detail?: string
-}
-
-/**
- * ValidationError subclass carrying a structured `failure` payload so the
- * runner can persist it to `node_runs.port_validation_failures_json` without
- * re-parsing the human-readable errorMessage. Test code catching this class
- * gets a precise narrowed type instead of a stringly-typed `code` match.
- */
-export class PortValidationError extends ValidationError {
-  constructor(
-    code: string,
-    message: string,
-    public readonly failure: PortValidationFailure,
-  ) {
-    super(code, message, { ...failure })
-    this.name = 'PortValidationError'
-  }
-}
+export { PortValidationError } from '@/modules/task-execution/application/portOutputValidation'
+export type { PortValidationFailure } from '@/modules/task-execution/application/portOutputValidation'
+export type { ResolvePortContentOptions } from '@/modules/task-execution/application/ports/portOutputValidation'
+export { NODE_VALIDATE_IO } from '@/modules/task-execution/composition/portOutputValidation'
 
 /**
  * Convenience for callers that want to write a batch of port failures to the
@@ -117,47 +83,6 @@ export function parsePortValidationFailuresJson(
     out.push(entry)
   }
   return out
-}
-
-/**
- * Node-backed ValidateIO supplied to RFC-049 OutputKindHandler.validate.
- * Centralized here so the same fs / path semantics back every handler call;
- * the handlers themselves stay pure JS and can be exercised in tests with a
- * stub IO that doesn't touch disk.
- */
-// RFC-284 T6：导出供四象限行为锁直测（rfc284-containment-quadrants.test.ts）——
-// resolveWorktreePath 的分支语义（不存在回退词法 / RFC-193 绝对路径同位重写）
-// 是安全关键面，迁移到共享骨架前后必须逐字节同判。
-export const NODE_VALIDATE_IO: ValidateIO = {
-  resolveWorktreePath(worktreeAbsPath, rawContent) {
-    // RFC-284 T6：双查骨架收敛到 util/safePath.checkLexicalThenRealpath，
-    // 本适配层只保留 envelope 的**判定策略**（与迁移前逐字节同判，由
-    // rfc284-containment-quadrants.test.ts 锁定）：
-    //   - RFC-103 T7：词法 containment 先行，词法内再 realpath 收紧（根内
-    //     symlink 指根外不得读穿）；目标不存在 → 回退词法判定（存在性由
-    //     handler 另报）。
-    //   - RFC-193：词法根外的**绝对**输入，双 realpath 同位证明可翻转放行，
-    //     并把 targetAbs/relativePath 重写为 real 形（macOS /var→/private/var
-    //     前缀差异；纯同位证明，读穿保护不受影响）。
-    const v = checkLexicalThenRealpath(worktreeAbsPath, rawContent)
-    let targetAbs = v.targetAbs
-    let insideWorktree = v.lexicalInside
-    // Portable spelling: this value is persisted, interpolated into prompts and
-    // read by downstream nodes, so it must not vary by host separator.
-    let relativePath = toPortableRelativePath(relative(v.rootAbs, targetAbs))
-    if (v.lexicalInside) {
-      if (v.realpath.resolved) insideWorktree = v.realpath.realInside
-      // unresolved（目标或根尚不存在）→ keep the lexical verdict.
-    } else if (isAbsolute(rawContent) && v.realpath.resolved && v.realpath.realInside) {
-      insideWorktree = true
-      targetAbs = v.realpath.realTarget
-      relativePath = toPortableRelativePath(relative(v.realpath.realRoot, v.realpath.realTarget))
-    }
-    return { targetAbs, relativePath, insideWorktree }
-  },
-  readFileUtf8(absPath) {
-    return readFileSync(absPath, 'utf8')
-  },
 }
 
 function escapeRe(s: string): string {
@@ -580,30 +505,6 @@ export function parseEnvelope(
   }
 }
 
-// ---------------------------------------------------------------------------
-// RFC-005 port-content resolution.
-// ---------------------------------------------------------------------------
-
-export interface ResolvePortContentOptions {
-  /** The literal envelope content for this port (already trimmed). */
-  rawContent: string
-  /** Per-port kind hint from agent.outputKinds (undefined → forgiveness path). */
-  kind?: AgentOutputKind
-  /**
-   * Worktree root (absolute). All `markdown_file` paths must resolve inside
-   * this directory; traversal attempts (`../`, absolute paths, symlinks
-   * landing outside) raise ValidationError before any read happens.
-   */
-  worktreePath: string
-  /**
-   * RFC-049: the port name this content belongs to. Optional for
-   * backwards-compat with existing callers; threaded through to the handler
-   * ctx so future per-port error context (e.g. structured failures payload
-   * in PR-B) has it. Defaults to '' when omitted.
-   */
-  port?: string
-}
-
 /**
  * Detailed variant of {@link resolvePortContent} that ALSO reports the
  * worktree-relative path the body was read from, when one was used. Callers
@@ -630,48 +531,7 @@ export function resolvePortContentDetailed(opts: ResolvePortContentOptions): {
   /** RFC-193: list<T> per-item validate outputs (see ValidateResult.items). */
   items?: Array<{ body: string; sourcePath?: string }>
 } {
-  const { rawContent, kind, worktreePath } = opts
-  if (kind === undefined) {
-    // Undeclared kind → raw passthrough. Forgiveness path was removed in
-    // RFC-049 PR-B; emit the content verbatim so legitimate string ports
-    // that happen to look path-shaped don't get accidentally read as files.
-    return { body: rawContent }
-  }
-
-  // RFC-049 PR-B: route through the registered handler. Handler's `validate`
-  // returns either `{ ok: true, body, sourcePath? }` or `{ ok: false,
-  // subReason, detail }`; failures translate into a
-  // `port-validation-<kind>-<sub>` errCode at the wire (kind namespace so a
-  // future kind's subReasons can't collide with markdown_file's codes).
-  // RFC-080: dispatch through the parametric registry (parseKind → matches),
-  // so path<ext> / list<T> / signal validate correctly. `markdown_file` folds
-  // to path<md> at parse time → identical containment / ext / existence /
-  // non-empty checks as the legacy markdownFile handler. The errCode namespace
-  // is the handler's displayName (D2: `port-validation-path-*`, never `<>`).
-  const parsed = parseKind(kind)
-  const handler = getHandlerForParsedKind(parsed)
-  const result = handler.validate(
-    rawContent,
-    { port: opts.port ?? '', kind: parsed, worktreePath },
-    NODE_VALIDATE_IO,
-  )
-  if (result.ok) {
-    const out: {
-      body: string
-      sourcePath?: string
-      items?: Array<{ body: string; sourcePath?: string }>
-    } = { body: result.body }
-    if (result.sourcePath !== undefined) out.sourcePath = result.sourcePath
-    if (result.items !== undefined) out.items = result.items
-    return out
-  }
-  const errCode = formatPortValidationErrCode(handler.displayName, result.subReason)
-  throw new PortValidationError(errCode, `${errCode}: ${result.detail}`, {
-    port: opts.port ?? '',
-    kind,
-    subReason: result.subReason,
-    ...(result.detail !== undefined ? { detail: result.detail } : {}),
-  })
+  return resolveNativePortContentDetailed(opts)
 }
 
 /**

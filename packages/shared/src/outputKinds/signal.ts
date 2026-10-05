@@ -22,6 +22,23 @@
 import type { ParsedKind } from '../kindParser'
 import type { ParametricOutputKindHandler } from './registry'
 
+import type { ValidateResult } from './types'
+
+function validate(rawContent: string): ValidateResult {
+  // Always "ok" — signal ports never fail the run. If the agent wrote
+  // non-empty content, the body is normalized to empty string and a
+  // soft subReason is attached for telemetry (consumer chooses whether
+  // to log a warning).
+  if (rawContent.trim().length === 0) {
+    return { ok: true, body: '' }
+  }
+  // Non-empty content: still valid (ok: true), body forced to empty.
+  // Callers that want to log the warning can detect this by comparing
+  // rawContent vs result.body. PR-B may upgrade this to a structured
+  // warning channel; PR-A keeps it as a soft passthrough.
+  return { ok: true, body: '' }
+}
+
 const handler: ParametricOutputKindHandler = {
   displayName: 'signal',
   subReasons: new Set<string>(['signal-non-empty']),
@@ -48,19 +65,10 @@ const handler: ParametricOutputKindHandler = {
     )
   },
 
-  validate(rawContent) {
-    // Always "ok" — signal ports never fail the run. If the agent wrote
-    // non-empty content, the body is normalized to empty string and a
-    // soft subReason is attached for telemetry (consumer chooses whether
-    // to log a warning).
-    if (rawContent.trim().length === 0) {
-      return { ok: true, body: '' }
-    }
-    // Non-empty content: still valid (ok: true), body forced to empty.
-    // Callers that want to log the warning can detect this by comparing
-    // rawContent vs result.body. PR-B may upgrade this to a structured
-    // warning channel; PR-A keeps it as a soft passthrough.
-    return { ok: true, body: '' }
+  validate,
+  *validationPolicy(rawContent) {
+    yield* []
+    return validate(rawContent)
   },
 
   buildRepairBlock: () => null,

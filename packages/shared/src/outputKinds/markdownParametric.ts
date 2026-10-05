@@ -5,6 +5,10 @@ import { isReviewableBodyKind, type ParsedKind } from '../kindParser'
 import { joinMarkdownDocs, splitMarkdownDocs } from '../listWire'
 import type { ParametricOutputKindHandler } from './registry'
 
+import type { ValidateResult } from './types'
+
+const validate = (rawContent: string): ValidateResult => ({ ok: true, body: rawContent })
+
 const handler: ParametricOutputKindHandler = {
   displayName: 'markdown',
   subReasons: new Set<string>(),
@@ -24,7 +28,11 @@ const handler: ParametricOutputKindHandler = {
   // 而不是由 `ListHandler.validate` 里一句无条件的按行切决定。
   splitItems: (_parsed, rawContent) => splitMarkdownDocs(rawContent),
   joinItems: (_parsed, items) => joinMarkdownDocs(items),
-  validate: (rawContent) => ({ ok: true, body: rawContent }),
+  validate,
+  *validationPolicy(rawContent) {
+    yield* []
+    return validate(rawContent)
+  },
   buildRepairBlock: () => null,
 }
 

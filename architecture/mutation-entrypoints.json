@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1893,
+    "entries": 1894,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -30832,6 +30832,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/filePortOutputValidation.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/local/filePortOutputValidation.ts#createFilePortOutputValidationContent",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/filePortOutputValidation.ts#createFilePortOutputValidationContent",
+      "symbol": "createFilePortOutputValidationContent",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/task-execution/infrastructure/local/fileTaskArchiveContent.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/local/fileTaskArchiveContent.ts#createFileTaskArchiveContent",
@@ -45282,7 +45307,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2f9da6919c9eebab26f881d811992595fd62efb46598e021826df46181ac6dc9",
+  "sourceDigest": "sha256:f888632c511a6cd2cd5f205280681aca5c71cbc6e68e133f47404c0a57e6d7b9",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

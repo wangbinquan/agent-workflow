@@ -136,6 +136,10 @@ describe('RFC-080 — drift guard layer 1 (handler capability methods)', () => {
       matches: () => false,
       buildPromptGuidance: () => null,
       validate: () => ({ ok: true, body: '' }),
+      *validationPolicy() {
+        yield* []
+        return { ok: true, body: '' }
+      },
       buildRepairBlock: () => null,
     }
     expect(incomplete.displayName).toBe('incomplete')

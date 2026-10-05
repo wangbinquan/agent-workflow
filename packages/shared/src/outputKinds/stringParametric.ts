@@ -6,6 +6,10 @@
 import type { ParsedKind } from '../kindParser'
 import type { ParametricOutputKindHandler } from './registry'
 
+import type { ValidateResult } from './types'
+
+const validate = (rawContent: string): ValidateResult => ({ ok: true, body: rawContent })
+
 const handler: ParametricOutputKindHandler = {
   displayName: 'string',
   subReasons: new Set<string>(),
@@ -16,7 +20,11 @@ const handler: ParametricOutputKindHandler = {
   examplePlaceholder: () => '...',
   isReviewableBody: () => false,
   buildPromptGuidance: () => null,
-  validate: (rawContent) => ({ ok: true, body: rawContent }),
+  validate,
+  *validationPolicy(rawContent) {
+    yield* []
+    return validate(rawContent)
+  },
   buildRepairBlock: () => null,
 }
 

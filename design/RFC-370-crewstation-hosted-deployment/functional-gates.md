@@ -924,3 +924,10 @@ ab30 主 CI37296573386 正式 completed/cancelled（21 success／7 failure／20 
 ## 2026-10-06 Task Git matching 对共享 147ade45 的原摘要合成
 
 META15-R1 有限 PASS，51 项首末指纹 4519c6a5469ffc556cb021debd93cd27593980180976b2a22e0429ccd934b67c，旧候选全文稳定。SOURCE8-DOC2-R2 PASS 与原 census 一次均复用。共享前端 147ade45 的已有原生成与 committed 4ff95e5e 八 canonical 除摘要外逐项相等；旧/base、前端和十自有冻结候选的摘要均由同一原 sourceDigest 函数复原，合成已提交 147ade45 后为 sha256:2f9da6919c9eebab26f881d811992595fd62efb46598e021826df46181ac6dc9。没有 AST/scanner/generator 重跑，13 数值/shape、旧债/库存/why、SPI/targets/SCC 与原四个 matching 许可保持。原 R1 metadata 和全部共享 STATE/gates 原文保留；R2 有限门仅审摘要/snapshot 合成，完整 Task/A-G/CS/RFC 继续。
+
+## 2026-10-06 A-T5 Task 输出内容校验有限门
+
+- TASK-OUTPUT-VALIDATION-SOURCE16-DOC1-R1：独立有限 PASS，48 项=17 owned/14 control/17 evidence，首末指纹 7a58bc42221791f2e7d701614ccf3f277e6d0456d5c4745e4ab38d2d2de254fc。完整原 resolver、path/list 算法和 native IO、全部原 handler 规则／编码／注释及 legacy 同步 API 保持；同一必选 policy 由同步或异步解释器运行，内容引用由 selected purpose 解释，receiver、错误位置、列表顺序保持。新 15 用例和既有用例待 hosted CI；负类型 fixture 仍只缺原五种方法。
+- 原有效 scoped census 一次，完整 0fd982ff 已提交人口及 17 冻结文件，13 production=5 backend/8 shared，sourceDigest sha256:f888632c511a6cd2cd5f205280681aca5c71cbc6e68e133f47404c0a57e6d7b9。13 matching 完整保留 331 原债，七个真实 legacy envelope→Task 地址登记至 338，129 顺序/why、40 SPI/69 targets、原值级 SCC 和空 implementation SCC 保持，无新增 public→legacy 出边。
+- 四个上一批 matching 许可完整退役；本批原 counter 实增 mutation 1893→1894、imports 6469→6479、exceptions 5719→5729、owners 26891→26915，四个具名许可下一普通后继退役。纯治理第一轮 backend 文件计数 FAIL 与同数据计数修复分别留证；最后只对齐七条新增债的 A-T5 退役说明，未重扫、未改原规则、断言或预算。
+- SOURCE、metadata 和 hosted exact-SHA CI 分列验收；共享 STATE/gates 全文与并行已提交成果保持。0fd982ff Windows success/主 CI 待终态，后继 exact-SHA 验证另记。正常 Task 主核心和五个调用点接线、全根/retention、A-G、CS adapter/首次部署以及完整 RFC 均未关闭。

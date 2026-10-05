@@ -1089,10 +1089,17 @@
         "import:237027e65851bf907a0e",
         "import:30c979fb8114e7c45873",
         "import:3bdd0a3f60f431a57790",
+        "import:418c2731619192fbd49d",
         "import:5cd2429ca9f560a06c20",
+        "import:81b36bcfd937dc8102e8",
+        "import:857744f91ea3df8c150b",
         "import:9cd1ecd28bee8f231dc8",
+        "import:adfee2c9182d3bcca25a",
         "import:d37c9f82789cf492db72",
-        "import:e49c91328fdbaa749ab7"
+        "import:e49c91328fdbaa749ab7",
+        "import:e4a6d01939efe9f5f405",
+        "import:f580e75fb7569dcfb61a",
+        "import:f58e18bf6fc0ed8c4efe"
       ],
       "exportedSymbols": [
         "BRANCH_MARKER_MALFORMED_PREFIX",
@@ -1102,10 +1109,6 @@
         "DetectedEnvelopeKind",
         "ENVELOPE_PORT_MALFORMED_PREFIX",
         "EnvelopeParseResult",
-        "NODE_VALIDATE_IO",
-        "PortValidationError",
-        "PortValidationFailure",
-        "ResolvePortContentOptions",
         "detectEnvelopeKind",
         "extractClarifyEnvelopeBody",
         "extractLastEnvelope",
@@ -6464,5 +6467,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2f9da6919c9eebab26f881d811992595fd62efb46598e021826df46181ac6dc9"
+  "sourceDigest": "sha256:f888632c511a6cd2cd5f205280681aca5c71cbc6e68e133f47404c0a57e6d7b9"
 }

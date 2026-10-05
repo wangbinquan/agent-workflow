@@ -150,3 +150,5 @@ export * from './registry'
 // RFC-080 PR-B — frontend-facing kind UI descriptor table (cycle-safe: imports
 // only kindParser). Drives KindSelect / i18n labels / download / canvas styling.
 export * from './uiCatalog'
+
+export * from './validationPolicy'

@@ -1,3 +1,11 @@
+## 2026-10-06 RFC-370 Task 输出内容校验适配切面
+
+完整原 output resolver、path/list 校验与 native IO 已移入 Task application／local infrastructure；旧同步 API 仍运行同一 policy。五个原 handler 保留解析、匹配、编码和既有行为，新增必选 validationPolicy；同步／异步解释器保持 receiver、错误位置、列表串行顺序和聚合细节。内容 resolve/read purpose 使用不透明引用；正常 Task 主核心的接线仍待实施。SOURCE16-DOC1-R1 独立有限 PASS，48 项=17 owned/14 control/17 evidence，首末指纹 7a58bc42221791f2e7d701614ccf3f277e6d0456d5c4745e4ab38d2d2de254fc。15 项新回归待 hosted CI，原 RFC-080 负类型 fixture 仅补齐新的必选 policy，继续缺失原五种方法，原断言和预算保持。
+
+有效原 scoped census 仅一次，完整已提交 0fd982ff 人口和 17 冻结文件（13 production=5 backend/8 shared），sourceDigest sha256:f888632c511a6cd2cd5f205280681aca5c71cbc6e68e133f47404c0a57e6d7b9。13 matching 保留全部 331 原债，新增七个真实 legacy envelope→Task 地址至 338；129 有序库存/why、40 SPI/69 targets、原值级 SCC 与空 implementation SCC 保持，无新增 public→legacy 出边。退役上一批四个 matching 许可；原 counter 实增 mutation 1893→1894、imports 6469→6479、exceptions 5719→5729、owners 26891→26915，本批四个具名许可由下一普通后继退役。纯治理第一轮 backend 文件计数 FAIL 保留，后继只纠正 5 backend/8 shared 计数；最后只将七个新增债的退役说明对齐 A-T5，原算法、规则和全部数字事实不变，不重扫 SOURCE。
+
+本批 format/lint 与完整纯 AST/字节逆向对拍已通过，无本机 AW tests/typecheck/build/service。0fd982ff Windows 37359218674 已 success，主 CI 37359218532 尚待终态；新确切 SHA CI 另验。共享 STATE 与并行内容完整保留。完整 Task 主入口和五个实际调用点、所有正常根、retention、脚本及执行权恢复、A-G、CS adapters、M0 首次部署和 M1～M4 继续开放，RFC 未完成，尚无 AW-in-CS 部署。
+
 ## 2026-10-06 RFC-370 Task Git matching 与共享前端提交合成
 
 共享 main 新提交 147ade45 只增加前端焦点恢复的原调用及用例。Task SOURCE8-DOC2-R2 与 META15-R1 的已审内容完整保持，源码门和原有效 census 不重跑。对其已有独立原生成 8 canonical 的数值/shape 与完整已提交 4ff95e5e 逐项比较，只有 sourceDigest 改变；完整三份旧/base、前端和自有候选摘要分别复原，再由原 sourceDigest 函数合成已提交 147ade45 与十冻结候选。最终 sha256:2f9da6919c9eebab26f881d811992595fd62efb46598e021826df46181ac6dc9，13 matching 的全部原数值/shape、331 债/330 旧 authored 行、129 库存/why、40 SPI/69 targets、SCC 和四个尚未发布的实际 matching 许可不变。只推进当前 snapshot 与对应摘要，未改分类器或断言。

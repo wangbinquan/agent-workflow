@@ -39,6 +39,78 @@ const SUB_REASON_DESCRIPTIONS: Record<string, string> = {
   'list-item-validate-failed': 'one or more list items failed item-kind validation',
 }
 
+import type { ParametricValidateCtx } from './registry'
+import {
+  runNativeOutputValidationPolicy,
+  type OutputValidationEffects,
+  type OutputValidationPolicy,
+} from './validationPolicy'
+
+function* listValidationPolicy(
+  rawContent: string,
+  ctx: ParametricValidateCtx,
+  io: OutputValidationEffects,
+): OutputValidationPolicy {
+  if (ctx.kind.kind !== 'list') {
+    return {
+      ok: false,
+      subReason: 'list-item-validate-failed',
+      detail: 'internal: ListHandler.validate called with non-list kind',
+    }
+  }
+  // RFC-317 T57（findings NK-01）—— codec 由 **item kind** 决定，不再无条件按行切。
+  // 改造前这里是 `splitListItems(rawContent)`：它 trim 每一行、丢掉所有空行，
+  // 于是 `list<markdown>` 的文档正文在落库前就被改写（段落间距、缩进、代码块缩进全没）。
+  // 同一个文件的 `bulletSuffix` / `buildPromptGuidance` 却是按 item kind 分支的，
+  // 还告诉 agent「你的文档是多行的、用边界行分隔」——协议这一半知道，校验那一半不知道。
+  const itemCodecKind = ctx.kind.item
+  const items = splitPortItems(ctx.kind, rawContent)
+  if (items.length === 0) {
+    // Empty list is valid wire content (the producer simply emitted no
+    // items). Downstream fan-out scheduler will see 0 shards. This is
+    // intentional — equivalent to the historical fanout-empty path.
+    return { ok: true, body: '' }
+  }
+
+  const itemKind = itemCodecKind
+  const itemHandler = getHandlerForParsedKind(itemKind)
+  const failures: { idx: number; subReason: string; detail?: string }[] = []
+  // RFC-193: keep each item's validate output (body + sourcePath for path
+  // items) so archive-at-emit can reuse this pass's file reads.
+  const itemResults: Array<{ body: string; sourcePath?: string }> = []
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]!
+    const result: ValidateResult = yield* itemHandler.validationPolicy(
+      item,
+      { port: ctx.port, kind: itemKind, worktreePath: ctx.worktreePath },
+      io,
+    )
+    if (!result.ok) {
+      failures.push({ idx: i, subReason: result.subReason, detail: result.detail })
+    } else {
+      itemResults.push({
+        body: result.body,
+        ...(result.sourcePath !== undefined ? { sourcePath: result.sourcePath } : {}),
+      })
+    }
+  }
+  if (failures.length > 0) {
+    const summary = failures
+      .map((f) => `[${f.idx}] ${f.subReason}${f.detail ? `: ${f.detail}` : ''}`)
+      .join('; ')
+    return {
+      ok: false,
+      subReason: 'list-item-validate-failed',
+      detail: summary,
+    }
+  }
+  // Body wire form: caller still reads `rawContent` for shard splitting /
+  // promptRender. 归一化形式用**该 item kind 自己的 codec** 连接回去——
+  // 用 `items.join('\n')` 会把 list<markdown> 的文档边界行丢掉，
+  // 于是落库的内容再也切不回原来的文档数（RFC-317 T57）。
+  return { ok: true, body: joinPortItems(ctx.kind, items), items: itemResults }
+}
+
 const handler: ParametricOutputKindHandler = {
   displayName: 'list',
   subReasons: new Set<string>(['list-empty-item', 'list-item-validate-failed']),
@@ -138,65 +210,10 @@ const handler: ParametricOutputKindHandler = {
     return out
   },
 
-  validate(rawContent, ctx, io) {
-    if (ctx.kind.kind !== 'list') {
-      return {
-        ok: false,
-        subReason: 'list-item-validate-failed',
-        detail: 'internal: ListHandler.validate called with non-list kind',
-      }
-    }
-    // RFC-317 T57（findings NK-01）—— codec 由 **item kind** 决定，不再无条件按行切。
-    // 改造前这里是 `splitListItems(rawContent)`：它 trim 每一行、丢掉所有空行，
-    // 于是 `list<markdown>` 的文档正文在落库前就被改写（段落间距、缩进、代码块缩进全没）。
-    // 同一个文件的 `bulletSuffix` / `buildPromptGuidance` 却是按 item kind 分支的，
-    // 还告诉 agent「你的文档是多行的、用边界行分隔」——协议这一半知道，校验那一半不知道。
-    const itemCodecKind = ctx.kind.item
-    const items = splitPortItems(ctx.kind, rawContent)
-    if (items.length === 0) {
-      // Empty list is valid wire content (the producer simply emitted no
-      // items). Downstream fan-out scheduler will see 0 shards. This is
-      // intentional — equivalent to the historical fanout-empty path.
-      return { ok: true, body: '' }
-    }
+  validationPolicy: listValidationPolicy,
 
-    const itemKind = itemCodecKind
-    const itemHandler = getHandlerForParsedKind(itemKind)
-    const failures: { idx: number; subReason: string; detail?: string }[] = []
-    // RFC-193: keep each item's validate output (body + sourcePath for path
-    // items) so archive-at-emit can reuse this pass's file reads.
-    const itemResults: Array<{ body: string; sourcePath?: string }> = []
-    for (let i = 0; i < items.length; i++) {
-      const item = items[i]!
-      const result: ValidateResult = itemHandler.validate(
-        item,
-        { port: ctx.port, kind: itemKind, worktreePath: ctx.worktreePath },
-        io,
-      )
-      if (!result.ok) {
-        failures.push({ idx: i, subReason: result.subReason, detail: result.detail })
-      } else {
-        itemResults.push({
-          body: result.body,
-          ...(result.sourcePath !== undefined ? { sourcePath: result.sourcePath } : {}),
-        })
-      }
-    }
-    if (failures.length > 0) {
-      const summary = failures
-        .map((f) => `[${f.idx}] ${f.subReason}${f.detail ? `: ${f.detail}` : ''}`)
-        .join('; ')
-      return {
-        ok: false,
-        subReason: 'list-item-validate-failed',
-        detail: summary,
-      }
-    }
-    // Body wire form: caller still reads `rawContent` for shard splitting /
-    // promptRender. 归一化形式用**该 item kind 自己的 codec** 连接回去——
-    // 用 `items.join('\n')` 会把 list<markdown> 的文档边界行丢掉，
-    // 于是落库的内容再也切不回原来的文档数（RFC-317 T57）。
-    return { ok: true, body: joinPortItems(ctx.kind, items), items: itemResults }
+  validate(rawContent, ctx, io) {
+    return runNativeOutputValidationPolicy(listValidationPolicy(rawContent, ctx, io))
   },
 
   buildRepairBlock({ failures, ports }) {

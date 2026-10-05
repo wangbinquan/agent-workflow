@@ -51,6 +51,81 @@ function endsWithAny(path: string, suffixes: readonly string[]): boolean {
   return false
 }
 
+import type { ParametricValidateCtx } from './registry'
+import {
+  outputValidationEffect,
+  runNativeOutputValidationPolicy,
+  type OutputValidationEffects,
+  type OutputValidationPolicy,
+} from './validationPolicy'
+
+function* pathValidationPolicy(
+  rawContent: string,
+  ctx: ParametricValidateCtx,
+  io: OutputValidationEffects,
+): OutputValidationPolicy {
+  if (ctx.kind.kind !== 'path') {
+    // Defensive: matches() should have prevented this.
+    return {
+      ok: false,
+      subReason: 'wrong-extension',
+      detail: `internal: PathHandler.validate called with non-path kind`,
+    }
+  }
+  const ext = ctx.kind.ext
+  const trimmed = rawContent.trim()
+  if (trimmed.length === 0) {
+    return {
+      ok: false,
+      subReason: 'empty-path',
+      detail: 'path port content must be a worktree-relative path, got empty string',
+    }
+  }
+
+  const resolved = yield* outputValidationEffect(() =>
+    io.resolveWorktreePath(ctx.worktreePath, trimmed),
+  )
+  if (!resolved.insideWorktree) {
+    return {
+      ok: false,
+      subReason: 'escapes-worktree',
+      detail: `path port content '${trimmed}' resolves outside the task worktree`,
+    }
+  }
+
+  if (ext !== '*') {
+    const suffixes = allowedExtensions(ext)
+    if (!endsWithAny(resolved.relativePath, suffixes)) {
+      return {
+        ok: false,
+        subReason: 'wrong-extension',
+        detail: `path<${ext}> port content '${trimmed}': extension must be ${suffixes.join(' or ')}`,
+      }
+    }
+  }
+
+  let body: string
+  try {
+    body = yield* outputValidationEffect(() => io.readFileUtf8(resolved.targetAbs))
+  } catch (err) {
+    return {
+      ok: false,
+      subReason: 'missing-file',
+      detail: `path '${trimmed}': ${(err as Error).message}`,
+    }
+  }
+
+  if (body.trim().length === 0) {
+    return {
+      ok: false,
+      subReason: 'empty-file',
+      detail: `path '${trimmed}': file exists but its content is empty after trim`,
+    }
+  }
+
+  return { ok: true, body, sourcePath: resolved.relativePath }
+}
+
 const handler: ParametricOutputKindHandler = {
   displayName: 'path',
   subReasons: new Set<string>([
@@ -90,65 +165,10 @@ const handler: ParametricOutputKindHandler = {
     )
   },
 
+  validationPolicy: pathValidationPolicy,
+
   validate(rawContent, ctx, io) {
-    if (ctx.kind.kind !== 'path') {
-      // Defensive: matches() should have prevented this.
-      return {
-        ok: false,
-        subReason: 'wrong-extension',
-        detail: `internal: PathHandler.validate called with non-path kind`,
-      }
-    }
-    const ext = ctx.kind.ext
-    const trimmed = rawContent.trim()
-    if (trimmed.length === 0) {
-      return {
-        ok: false,
-        subReason: 'empty-path',
-        detail: 'path port content must be a worktree-relative path, got empty string',
-      }
-    }
-
-    const resolved = io.resolveWorktreePath(ctx.worktreePath, trimmed)
-    if (!resolved.insideWorktree) {
-      return {
-        ok: false,
-        subReason: 'escapes-worktree',
-        detail: `path port content '${trimmed}' resolves outside the task worktree`,
-      }
-    }
-
-    if (ext !== '*') {
-      const suffixes = allowedExtensions(ext)
-      if (!endsWithAny(resolved.relativePath, suffixes)) {
-        return {
-          ok: false,
-          subReason: 'wrong-extension',
-          detail: `path<${ext}> port content '${trimmed}': extension must be ${suffixes.join(' or ')}`,
-        }
-      }
-    }
-
-    let body: string
-    try {
-      body = io.readFileUtf8(resolved.targetAbs)
-    } catch (err) {
-      return {
-        ok: false,
-        subReason: 'missing-file',
-        detail: `path '${trimmed}': ${(err as Error).message}`,
-      }
-    }
-
-    if (body.trim().length === 0) {
-      return {
-        ok: false,
-        subReason: 'empty-file',
-        detail: `path '${trimmed}': file exists but its content is empty after trim`,
-      }
-    }
-
-    return { ok: true, body, sourcePath: resolved.relativePath }
+    return runNativeOutputValidationPolicy(pathValidationPolicy(rawContent, ctx, io))
   },
 
   buildRepairBlock({ failures, ports }) {
