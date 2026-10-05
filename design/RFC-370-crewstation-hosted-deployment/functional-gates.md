@@ -863,3 +863,10 @@ fb7a27bd 的精确 CI37264298394 已终态 failure，45 success／5 failure；�
 本片范围仅五份测试、专属说明及共享STATE／本记录追加。旧源码定位迁到实际 selected submit／beforeStart／onStarted、native receipt 构造及 workingDirectory／environment 转交；原101项expect、用例名与预算保留，仅地址按真实API映射，额外九项补完整native chain。原rfc328四函数完整AST不变，完整文件除精确act名单与同语义负例可逆恢复。SOURCE11／META16／growth-retirement旧门、原FAIL及取消证据不改；不重新运行不变的production census，13canonical／Windows workflow／生产源码字节保持。
 
 ad1主CI37268055252终态cancelled（返回46jobs：13success／30cancelled／3failure）；Windows37268055262正式failure：平台271pass／3skip／1fail，新12项执行用例PASS只代表其证据。native pages revision失败不收编，本批有限门与新exact-SHA CI分别记录。没有本机AW tests/typecheck/build/service。仍在A-T5，完整selected组合／所有实际roots、脚本、执行权恢复及A-G继续；CS adapters、M0首次部署与M1～M4仍开放。原全文逐字保留，只追加本段。
+
+
+### 2026-10-05 RFC-370 execution CI fidelity 修复
+
+b3dbcdda9453cf545f07dc80684b52bce4974f4a 主CI37270989081正式cancelled（50jobs：25success／7failure／18cancelled），Windows37270989104正式failure；platform272pass／3skip／0fail和shared2295pass／0fail只是对应证据。新夹具readonly类型、S15/RFC108旧源码定位、macOS direct rejection错误断言窗口分别修复。原native拒绝后的abort/drain保留，零output/input检查移到拒绝前；aborted、原预算及其余11项整项AST不变，并补拒绝后回调、pumpError和原buffered raw/line一致检查。详情见design/RFC-370-crewstation-hosted-deployment/execution-ci-fidelity.md。
+
+只修改三份测试及追加记录；原生产/workflow七项控制字节不变，不重新census。有限独立功能门、精确发布与新exact-SHA CI分别留证，旧FAIL/cancelled及并行RFC371失败保留。没有本机AW tests/typecheck/build/service。完整selected材料／取证／生命周期／执行／回执与所有真根、脚本、执行权恢复及A-G继续；CS adapters、M0首次部署及M1～M4未开始，RFC仍在A-T5。原共享正文逐字保留，仅追加此段。

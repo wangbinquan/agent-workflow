@@ -76,6 +76,13 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.
   // bounded wall clock) still live in tests/rfc098-process-governance.test.ts.
   const mpSrc = readFileSync(MANAGED_PROCESS, 'utf8')
   const runnerSrc = readFileSync(RUNNER, 'utf8')
+  const nativeExecutionSrc = readFileSync(
+    join(
+      import.meta.dir,
+      '../src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts',
+    ),
+    'utf8',
+  )
 
   test('spawn uses POSIX groups, keeps Windows flat, and delegates tree kill', () => {
     // POSIX needs a process-group leader for `-pid`; Windows has no such group
@@ -118,8 +125,13 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.
     expect(countNonCommentMatches(mpSrc, /Promise\.race/g)).toBeGreaterThanOrEqual(1)
     expect(mpSrc).toContain("outcome = 'child-unkillable'")
     expect(countNonCommentMatches(mpSrc, /\.cancel\(\)/g)).toBeGreaterThanOrEqual(2)
-    // The runner still surfaces the child-unkillable terminal state (with pid).
-    expect(countNonCommentMatches(runnerSrc, /child-unkillable/g)).toBeGreaterThanOrEqual(1)
+    // RFC-370: only the native participant formats the original PID diagnostic;
+    // the runner still reports it for the same unreaped terminal outcome.
+    expect(countNonCommentMatches(nativeExecutionSrc, /child-unkillable/g)).toBeGreaterThanOrEqual(
+      1,
+    )
+    expect(runnerSrc).toContain('localExecution.reportUnreaped(runResult, {')
+    expect(runnerSrc).toContain('localExecution.unreapedMessage(runResult,')
     expect(runnerSrc).toContain("runResult.outcome === 'unreaped'")
   })
 })

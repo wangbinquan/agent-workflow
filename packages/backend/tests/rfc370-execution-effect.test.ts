@@ -198,7 +198,9 @@ describe('RFC-370 selected native execution binding', () => {
   test('execution consumes the material reference from the actual single compilation, including a derived system plan', async () => {
     let builds = 0
     const plan: AgentSpawnPlan = Object.freeze({
-      cmd: Object.freeze(['selected-native']),
+      // This immutable fixture keeps the original array identity; the legacy
+      // native plan's mutable annotation is not a change to runtime behavior.
+      cmd: Object.freeze(['selected-native']) as AgentSpawnPlan['cmd'],
       env: { SELECTED: 'original' },
       declared: emptyDeclaredManifest(),
     })
@@ -676,12 +678,13 @@ describe('RFC-370 selected native execution binding', () => {
     expect(result.rawStdout).toBe('before-ack\nafter-ack\n')
   }, 30000)
 
-  test('real direct owner receipt rejection aborts the original process without pumping buffered output', async () => {
+  test('real direct owner receipt rejection keeps output held until rejection and preserves the original abort drain', async () => {
     const workspace = root(),
       started = join(workspace, 'started'),
       stdinRead = join(workspace, 'stdin-read')
     const activated = waitForFile(workspace, started)
     const lines: string[] = []
+    let receiptRejected = false
     const selected = bindLocalAgentExecutionEffect({
       materialRef: 'system-material',
       command: () => [
@@ -701,11 +704,18 @@ describe('RFC-370 selected native execution binding', () => {
           termGraceMs: 100,
           onStarted: async () => {
             await activated.promise
+            expect(lines).toEqual([])
+            expect(existsSync(stdinRead)).toBe(false)
+            // The original direct process already exists. Once the owner
+            // callback rejects, its abort/reap path may drain buffered output;
+            // no successful result or pre-rejection consumption is permitted.
+            receiptRejected = true
             throw new Error('original-owner-no-longer-deliverable')
           },
           capture: {
             rawStdout: true,
             onStdoutLine: (line) => {
+              expect(receiptRejected).toBe(true)
               lines.push(line)
             },
           },
@@ -717,7 +727,10 @@ describe('RFC-370 selected native execution binding', () => {
     expect(result.outcome).toBe('aborted')
     expect(readFileSync(started, 'utf8')).toBe('started')
     expect(existsSync(stdinRead)).toBe(false)
-    expect(lines).toEqual([])
+    expect(receiptRejected).toBe(true)
+    expect(result.pumpError).toBeUndefined()
+    expect(lines.every((line) => line === 'buffered')).toBe(true)
+    expect(result.rawStdout).toBe(lines.map((line) => `${line}\n`).join(''))
   }, 30000)
 
   test('native unreaped identity stays in original diagnostics while the neutral result remains opaque', async () => {

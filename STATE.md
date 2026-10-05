@@ -10142,3 +10142,10 @@ fb7a27bd 的精确 CI37264298394 已终态 failure，45 success／5 failure；�
 H4 实际 submit 接线后，Windows 的旧 runner 等待定位和 Ubuntu 的两条 PWD 地址检查失败；同类 span receipt、进程委托和 effect act 精确地址一并跟随真实调用。只修五份测试，不改任何生产机制、原 predicate／预算、canonical 或 Windows workflow。原 101 项 expect 保留或仅映射实际 API，补九项 native cwd／env 和 receipt 构造检查；原用例与完整 rfc328 predicate AST 保持。详情见 design/RFC-370-crewstation-hosted-deployment/execution-source-oracle-ci-repair.md。
 
 ad1 主 CI37268055252 正式 cancelled（返回46 jobs：13 success／30 cancelled／3 failure），Windows37268055262 正式 failure，平台271 pass／3 skip／1 fail；新12项执行回归全部通过只是对应证据。原 native pages revision 失败留证，新精确SHA全仓CI另验收。有限独立功能门、精确上库另留回执；只做 owned format／lint、纯AST／字节，没有本机AW tests／typecheck／build／service，也不重跑不变的production census。仍在A-T5，完整组合与真根、脚本、执行权／恢复、A-G和CS adapters／M0～M4继续，尚无AW-in-CS部署，不关闭RFC。原共享正文逐字保持，仅追加本段。
+
+
+### 2026-10-05 RFC-370 execution CI fidelity 修复
+
+b3dbcdda9453cf545f07dc80684b52bce4974f4a 主CI37270989081正式cancelled（50jobs：25success／7failure／18cancelled），Windows37270989104正式failure；platform272pass／3skip／0fail和shared2295pass／0fail只是对应证据。新夹具readonly类型、S15/RFC108旧源码定位、macOS direct rejection错误断言窗口分别修复。原native拒绝后的abort/drain保留，零output/input检查移到拒绝前；aborted、原预算及其余11项整项AST不变，并补拒绝后回调、pumpError和原buffered raw/line一致检查。详情见design/RFC-370-crewstation-hosted-deployment/execution-ci-fidelity.md。
+
+只修改三份测试及追加记录；原生产/workflow七项控制字节不变，不重新census。有限独立功能门、精确发布与新exact-SHA CI分别留证，旧FAIL/cancelled及并行RFC371失败保留。没有本机AW tests/typecheck/build/service。完整selected材料／取证／生命周期／执行／回执与所有真根、脚本、执行权恢复及A-G继续；CS adapters、M0首次部署及M1～M4未开始，RFC仍在A-T5。原共享正文逐字保留，仅追加此段。

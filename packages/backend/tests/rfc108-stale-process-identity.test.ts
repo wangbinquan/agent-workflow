@@ -145,10 +145,30 @@ describe('RFC-108 T9 — refuse-on-survivor wiring (source-text)', () => {
   })
 
   test('runner persists the spawn binary path at spawn (via the executor onSpawned receipt)', () => {
-    // RFC-280 T7: the pid + binary path are persisted in runAgentProcess's
-    // onSpawned receipt (fired before any output is read), replacing the old
-    // inline `spawnBinaryPath: cmd[0]` write after Bun.spawn.
-    expect(runnerSrc).toContain('spawnBinaryPath: receipt.spawnBinaryPath')
-    expect(runnerSrc).toContain('pid: receipt.pid')
+    // RFC-370: Task consumes the opaque started receipt; its selected native
+    // projection persists the original PID/binary before output activation.
+    const nativeExecutionSrc = readFileSync(
+      join(
+        import.meta.dir,
+        '../src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts',
+      ),
+      'utf8',
+    )
+    const projectionSrc = readFileSync(
+      join(
+        import.meta.dir,
+        '../src/modules/task-execution/infrastructure/local/processEffectProjection.ts',
+      ),
+      'utf8',
+    )
+    expect(runnerSrc).toContain('await activeProcessEffect.recordSpawnReceipt(receipt)')
+    expect(runnerSrc).toContain(
+      'await localExecution.recordLegacyTaskReceipt(receipt, opts.nodeRunId)',
+    )
+    expect(nativeExecutionSrc).toContain('receipt: nativeReceipt(identity.receipt)')
+    expect(nativeExecutionSrc).toContain('spawnBinaryPath: native.spawnBinaryPath')
+    expect(nativeExecutionSrc).toContain('pid: native.pid')
+    expect(projectionSrc).toContain('spawnBinaryPath: receipt.spawnBinaryPath')
+    expect(projectionSrc).toContain('pid: receipt.pid')
   })
 })
