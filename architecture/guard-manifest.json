@@ -2169,6 +2169,18 @@
     {
       "assertsAbsence": true,
       "classified": true,
+      "corpusScanner": false,
+      "file": "packages/backend/tests/rfc371-native-participant-boundary.test.ts",
+      "id": "rfc371-native-participant-boundary",
+      "lines": 17,
+      "mechanism": "source-text",
+      "minCorpusFiles": null,
+      "negativeFixture": false,
+      "runner": "bun"
+    },
+    {
+      "assertsAbsence": true,
+      "classified": true,
       "corpusScanner": true,
       "file": "packages/frontend/tests/runtime-parameter-ratchet.test.ts",
       "id": "runtime-parameter-ratchet",
@@ -2567,8 +2579,8 @@
   "schemaVersion": 1,
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "1d287eddfd1992f8ff9d5ba4cbcc65ff281d6986",
-    "contentDigest": "sha256:143878468faa19228b417feabdd46bfd0f9df0d3492730362c986d4c27d164ac",
+    "currentSnapshotSha": "119b59c78717e3e64ee0ccc53acbdf4a43d48591",
+    "contentDigest": "sha256:c1e8b241e07d7416943579beecf2713ab6df904d703c2a37ac285ed3a7c39211",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

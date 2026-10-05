@@ -10263,3 +10263,7 @@ CS自有测试分层修复已直接提交远端be7e9d3584a15b0fcbcf85162d736d749
 ## 2026-10-06 RFC-371 原 before 快照 matching 登记
 
 自有16源码／测试／文档已独立推送b386d3108，完整共享STATE已由前提交ef4019c6c原样保留，没有跨会话消息。SOURCE13及补充SOURCE4有限功能PASS，所有候选与必要控制保持。原官方AST在完整已提交b386d3108生成13matching；此前5d加候选生成作为原子范围证据保留，随后真正整合的RFC370源码改变完整输入，本次明确刷新原committed delta，不读取未提交并行源码。129原有序库存/why、332旧债中仅退役SOURCE4真正消除的Runner私有入边，剩余331条原顺序与why保持、原规则/目标/SPI/SCC保持，四个已消费RFC370许可正常退役；原before快照真实imports/exceptions/public/owner及两个外部SQLite测试行的实际增长按原parser具名登记。新许可下一普通匹配退役，属于架构库存，不是Task/Token限制。原child数量/四桶/complete/oracle/预算与原类型修复和WAL回归保持；实现门与原静态validator通过，新确切SHA hosted CI另验。无本机AW tests/types/build/service、无跨会话消息、无foreign源码提交，两RFC余项继续。
+
+## 2026-10-06 RFC-371 Task public 回归守卫补登
+
+自有 SOURCE16 与 META14／COUNT 修正已分别推送 b386d3108、1d287eddf，远端同步，其他会话源码未提交。旧确切 CI 的完整失败日志确认新增 native-participant-boundary 守卫漏登；使用原 census 单文件纯解析补登记第214条，原213条逐字保留，原 corpus／absence／negative-fixture 判据不动。129库存基线、顺序与why保持，119b59c78已消费的4条一次增长声明按原规则退役；保留原官方生产sourceDigest，不重跑完整AST。原META2有限FAIL确认退役后ledger provenance未刷新，修正用原withArtifactProvenance；旧失败留证。有限补充检视与新确切SHA CI另验，默认producer／CS v2／规模及两RFC余项继续。
