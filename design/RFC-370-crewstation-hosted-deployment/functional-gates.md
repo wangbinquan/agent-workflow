@@ -814,3 +814,12 @@ SOURCE10-R4 独立有限功能 PASS：10 owned／18 controls／12 evidence，共
 原 scoped census 仅一次，6441非自有源取 c83bf750 committed blobs，其他 WIP排除并保留。digest `sha256:76d7d0051a4f025db4c8149c7bc6370d26231d1aac7c74035bd8659b8a88a908`；原13产物和129完整有序库存／why及原counter对拍。entry+1／imports+10／exceptions+10／owners+20四项实际增长分别具名登记，正常后继退役；public -2，四个 native compatibility 旧边补入304债。原4规则、40 SPI／69 targets／空 implementation SCC 保持，生成不含并行未来源码。
 
 Windows SOURCE10 内的既有 proof 已验证 push／PR 对称新增六个真实路径与三项实际 suite，保留原全部步骤和预算；metadata 不重新修改 YAML。有限 matching metadata／发布与新 exact-SHA CI各自留证，原 c83主CI failure／Windows cancelled不改为绿。本机没有AW tests／typecheck／build／service；SOURCE PASS与纯静态 proof不替代hosted行为。完整H4/H5、A5/A-G、CS adapters与M0～M4仍开放。前面共享全文逐字保持。
+
+
+## 2026-10-05 H4/H5 AGENT-MATERIAL-EVIDENCE15-R2
+
+SOURCE15-R2 独立有限功能 PASS；15 owned／11 control／14 evidence，首末指纹9733b649c8f7ed0dd21796b558a97abd865c70e90be669d23b2268de8afb0887一致。R1 SOURCE PASS及owner登记导致的原一次生成INCOMPLETE保留；修正只是把同一binder归入既有runtime gateway，原registry/native/Task/System完整算法AST和原case/expect/budget保持。功能回归涵盖真实OpenCode富inventory、Claude transcript、原final env/optional时机、继承字段、同步异常/Promise/callback/sink/dedupe；实际执行只交hosted CI。
+
+原静态规则对committed0cb05ac9加冻结SOURCE15有效执行一次，13产物digest sha256:a1ae054d5539aa95885e53a945687f6f9c057fe1b6493c9935c42c174954a085；非自有6442源码均读committed，排除并保留其他WIP。原validator、129完整有序库存/why、40SPI/69targets/空implementation SCC不变；实际退役1旧debt并登记3兼容分组（304→306），原303row完整保留。四项实际entry/import/exception/owner matching增长和正常后继退役分列留证，public真实减1。Windows新增10watch/3suite，完整原workflow逆变换逐字保持。
+
+基线主CI37252344342正式failure44success/6failure、Windows37252344340 failure原记录保持；span孤儿导出与nullable matcher修复属于本批，native pages并行失败不归入本批。匹配metadata独立回执、发布SHA及新双OS/双数据库CI分别留证；SOURCE或静态证明均不是整套CI/A-G/RFC Done。没有CS adapter或部署；完整H4/H5、全部真根、脚本/H7/A-G和M0～M4继续。

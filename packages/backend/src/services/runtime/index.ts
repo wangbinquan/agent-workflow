@@ -101,3 +101,19 @@ export function normalizeRuntimeUsage(
     }
   )
 }
+
+import {
+  createLocalAgentMaterialEvidence,
+  type NativeAgentMaterialEvidenceHooks,
+  type NativeAgentMaterialEvidenceScope,
+} from '@/modules/runtime-management/infrastructure/local/agentMaterialEvidence'
+
+/** Existing native service APIs retain their compatibility scope here.
+ * Normal selected material composition supplies the same neutral evidence
+ * contract from its own binding; it never receives these physical callbacks. */
+export function bindNativeAgentMaterialEvidence(
+  hooks: NativeAgentMaterialEvidenceHooks,
+  scope: NativeAgentMaterialEvidenceScope,
+) {
+  return createLocalAgentMaterialEvidence({ hooks, scope })
+}

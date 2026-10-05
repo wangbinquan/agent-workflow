@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:65f91c47f1d655a21914973d8c78ba25f9b2efad4ae02ea7989e6313b2fde3a7",
+    "sourceDigest": "sha256:a1ae054d5539aa95885e53a945687f6f9c057fe1b6493c9935c42c174954a085",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -821,8 +821,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1875,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1876,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 Agent evidence: the actual selected native evidence binding in the existing runtime gateway is a new explicit entrypoint. All original Task/System/native capture algorithms and registry remain; no new process, timer or CS dependency. Full selected execution/material/evidence and roots remain open. Original count 1875 to 1876; this matching candidate consumes the bounded growth and a normal successor retires this permit."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -856,8 +859,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6283,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6300,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 Agent evidence: exact neutral evidence/live-capture types, native local participant and Task/System wiring are recorded by the unchanged classifier. One dead public export is retired. Three exact native compatibility import groups are registered and one obsolete legacy capture type edge is removed; no broad exception. Full selected bundle and roots remain open. Original count 6283 to 6300; this matching candidate consumes the bounded growth and a normal successor retires this permit."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -877,8 +883,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5577,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5594,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 Agent evidence: actual remaining private type/native primitive and compatibility references are recorded under the original owner rules. No classifier, threshold or expiry relaxation. Full native execution/evidence composition and true-root convergence still have to retire these links. Original count 5577 to 5594; this matching candidate consumes the bounded growth and a normal successor retires this permit."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -891,7 +900,7 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1148,
+      "baseline": 1147,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -912,16 +921,19 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26718,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26730,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 Agent evidence: three real runtime-management port/local binding files and the existing native gateway definition receive their explicit symbol owners. Original native poller/Claude implementations retain complete AST. No additional CS adapter or deployment is claimed. Original count 26718 to 26730; this matching candidate consumes the bounded growth and a normal successor retires this permit."
+      }
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
   "schemaVersion": 1,
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "003afab7e940fd8d35ff7a102716b40984b83766",
-    "contentDigest": "sha256:15e6155ca10c84fb743ad5986a4afce4977b34f01a770550830745f519f8f6c1",
+    "currentSnapshotSha": "0cb05ac928d5df5368fcbad36dc70b09323657d2",
+    "contentDigest": "sha256:6120e419a9135fece0296b307c6ddad8f1e5c30291683a29143acc0dfd44a5c4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

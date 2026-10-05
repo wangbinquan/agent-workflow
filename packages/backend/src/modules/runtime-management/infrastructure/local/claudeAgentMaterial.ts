@@ -1,7 +1,7 @@
 import { compileLegacyNativeAgentMaterial } from './legacyAgentMaterialBinding'
 import { isAbsolute, resolve } from 'node:path'
 import { sha256Hex } from '@/util/hash'
-import { createRuntimeStreamSpanCapture } from '@/modules/runtime-management/public/participants'
+import { createRuntimeStreamSpanCapture } from '../../composition/nativeSpanCapture'
 import { normalizeClaudeSpans } from '@/services/runtime/claudeCode/spanFacts'
 // RFC-111 PR-B — the Claude Code RuntimeDriver.
 //

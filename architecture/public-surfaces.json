@@ -3,10 +3,10 @@
     "consumers": 1154,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1351,
+    "methods": 1350,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 25173,
-    "symbols": 1148
+    "recursiveFields": 25164,
+    "symbols": 1147
   },
   "entries": [
     {
@@ -130834,90 +130834,6 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
-      "context": "runtime-management",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.accepted",
-          "type": "z.infer<typeof AcceptedObservationInvocationSchema>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.limit",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.rootSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.sourceNamespace",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lookupOwners.$return.complete",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lookupOwners.$return.issues",
-          "type": "readonly string[]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lookupOwners.$return.owners",
-          "type": "readonly ObservationSpanOwnerProof[]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.resumeSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.sourceNamespace",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
-      "id": "public:runtime-management:participants:createRuntimeStreamSpanCapture",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:737a6118873769e6795421e95f9db07787e4570c290fbb2f7070561dfa7b8720"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:40ea5a815c2751069d132459dc0e19151e109a3a1bd2fd00b94fc4da3f7e5f28",
-      "status": "target-context-current-surface",
-      "symbol": "createRuntimeStreamSpanCapture",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "z.infer"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
       "consumerEdgeIds": [
         "import:ac46b2eb947020756815"
       ],
@@ -131525,9 +131441,7 @@
           "ownerEntryId": "owner:packages/backend/src/services/runtime/spanCapture.ts#$file"
         }
       ],
-      "publicTypeConsumerIds": [
-        "public:runtime-management:participants:createRuntimeStreamSpanCapture"
-      ],
+      "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:01cb1087e658215469df70629e2eb3048515da675b9333fe97045b8de8e82503",
@@ -197039,7 +196953,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:65f91c47f1d655a21914973d8c78ba25f9b2efad4ae02ea7989e6313b2fde3a7",
+  "sourceDigest": "sha256:a1ae054d5539aa95885e53a945687f6f9c057fe1b6493c9935c42c174954a085",
   "targetContexts": [
     "collaboration",
     "development-automation",

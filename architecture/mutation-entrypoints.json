@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1875,
+    "entries": 1876,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -22750,6 +22750,29 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialEvidence.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialEvidence.ts#createLocalAgentMaterialEvidence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialEvidence.ts#createLocalAgentMaterialEvidence",
+      "symbol": "createLocalAgentMaterialEvidence",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -44845,7 +44868,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:65f91c47f1d655a21914973d8c78ba25f9b2efad4ae02ea7989e6313b2fde3a7",
+  "sourceDigest": "sha256:a1ae054d5539aa95885e53a945687f6f9c057fe1b6493c9935c42c174954a085",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

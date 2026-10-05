@@ -104,14 +104,27 @@ test('usage capture receives the effective resume identity used by the process',
 test('native model preparation uses final spawn env and local numeric retries avoid replaying stdout', () => {
   const file = source('services/runner.ts')
   let env: string | undefined,
+    normalizers = 0,
     retries = 0
   const walk = (node: ts.Node) => {
     if (
       ts.isCallExpression(node) &&
-      node.expression.getText() === 'driver.prepareUsageNormalizer'
+      node.expression.getText() === 'bindNativeAgentMaterialEvidence'
     ) {
-      const input = node.arguments[0]!
-      if (ts.isObjectLiteralExpression(input)) env = properties(input).get('env')?.getText()
+      expect(node.arguments[0]?.getText()).toBe('driver')
+      const input = node.arguments[1]!
+      if (ts.isObjectLiteralExpression(input)) {
+        const environment = properties(input).get('environment')
+        expect(environment && ts.isArrowFunction(environment)).toBe(true)
+        if (environment && ts.isArrowFunction(environment)) env = environment.body.getText()
+      }
+    }
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText() === 'materialEvidence.prepareUsageNormalizer'
+    ) {
+      expect(node.arguments).toHaveLength(0)
+      normalizers++
     }
     if (
       ts.isCallExpression(node) &&
@@ -143,13 +156,14 @@ test('native model preparation uses final spawn env and local numeric retries av
   }
   walk(file)
   expect(env).toBe('plan.env')
+  expect(normalizers).toBe(1)
   expect(retries).toBe(1)
 })
 
 test('native child capture freezes its contract before spawn and starts only after local acceptance', () => {
   const file = source('services/runner.ts'),
     text = file.getFullText()
-  expect(text).toContain('driver.prepareNativeUsageCapture?.({')
+  expect(text).toContain('materialEvidence.prepareNativeUsageCapture?.({')
   expect(text).toContain('nativeCaptureContract: nativeUsageCapture.contract')
   const accepted = text.indexOf("localObservationAccepted = accepted.authority.kind === 'local'")
   const begin = text.indexOf('nativeUsageCapture?.begin()')

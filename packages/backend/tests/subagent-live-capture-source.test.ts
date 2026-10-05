@@ -24,11 +24,11 @@ describe('RFC-048 source-layout guards', () => {
   test('runner.ts spins up the poller exactly once and stops it after child.exited', () => {
     // RFC-143: the poller start + post-run capture are now driver capability
     // methods (opencode implements; claude omits → NOOP_HANDLE), so the anchors
-    // moved from the free fns to `driver.startLiveCapture?.(` / `driver.captureSessions({`.
+    // moved from free fns to the selected material evidence participant.
     // The lifecycle contract this guards (poller started once, stopped after the
     // bounded exit wait and BEFORE the post-run capture) is unchanged.
     const src = read('packages/backend/src/services/runner.ts')
-    const startCount = (src.match(/driver\.startLiveCapture\?\.\(/g) ?? []).length
+    const startCount = (src.match(/materialEvidence\.startLiveCapture\?\.\(/g) ?? []).length
     expect(startCount).toBe(1)
     const stmtPattern = /liveCtrl\.abort\(\)\n\s+livePoller\.stop\(\)/
     const stmtMatch = stmtPattern.exec(src)
@@ -38,7 +38,7 @@ describe('RFC-048 source-layout guards', () => {
     // contract is unchanged — poller stopped AFTER the run returns and BEFORE
     // the post-run capture.
     const exitedIdx = src.indexOf('await runAgentProcess({')
-    const captureIdx = src.indexOf('await driver.captureSessions({')
+    const captureIdx = src.indexOf('await materialEvidence.captureSessions({')
     expect(exitedIdx).toBeGreaterThan(-1)
     expect(captureIdx).toBeGreaterThan(-1)
     expect(stmtMatch!.index).toBeGreaterThan(exitedIdx)
@@ -48,7 +48,7 @@ describe('RFC-048 source-layout guards', () => {
   test('runner.ts captures subagent sessions post-run via the driver (RFC-027 fail-safe preserved)', () => {
     const src = read('packages/backend/src/services/runner.ts')
     // RFC-143: was `await captureChildSessions({` — now the driver capability.
-    expect(src).toContain('await driver.captureSessions({')
+    expect(src).toContain('await materialEvidence.captureSessions({')
     // Must forward the live poller's partId dedupe Map so post-run BFS
     // doesn't double-write rows the poller already inserted.
     expect(src).toContain('alreadyInsertedPartIds: livePoller.stats().insertedPartIdsBySession')

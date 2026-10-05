@@ -24,7 +24,11 @@
 import { lstatSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, isAbsolute, join, resolve } from 'node:path'
 import { randomBytes } from 'node:crypto'
-import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
+import {
+  getRuntimeDriver,
+  bindNativeAgentMaterialEvidence,
+  type RuntimeKind,
+} from '@/services/runtime'
 import type { AgentSpawnContext, AgentSpawnPlan } from '@/services/runtime/types'
 import { runAgentProcess } from '@/services/execution/agentProcess'
 import type {
@@ -510,6 +514,12 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         })
       }
 
+      const materialEvidence = bindNativeAgentMaterialEvidence(driver, {
+        environment: () => plan.env,
+        runContent: () => runDir,
+        sessionLocation: () => ({ worktreePath: worktreeDir }),
+      })
+
       // RFC-280 T4 — the child's whole lifecycle (spawn / stdin / timers /
       // TERM→KILL / reap / bounded drain) lives in the unified agent executor;
       // this function keeps only what is system-agent-specific: the event
@@ -763,9 +773,9 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
         !sinkFailed &&
         opts.eventSink !== undefined &&
         sessionId !== undefined &&
-        driver.captureSessionsToSink !== undefined
+        materialEvidence.captureSessionsToSink !== undefined
       ) {
-        const captured = await driver.captureSessionsToSink({
+        const captured = await materialEvidence.captureSessionsToSink({
           rootSessionId: sessionId,
           sink: opts.eventSink,
           log,

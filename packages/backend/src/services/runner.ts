@@ -87,7 +87,12 @@ import { renderUserPrompt } from './protocol'
 // runtime/opencode + runtime/claudeCode). The event helpers, buildCommand and
 // the inline-config surface are re-exported at the bottom so existing importers
 // (tests, memoryDistiller) keep resolving from './runner'.
-import { getRuntimeDriver, pluginFileSpec, type RuntimeKind } from './runtime'
+import {
+  getRuntimeDriver,
+  pluginFileSpec,
+  bindNativeAgentMaterialEvidence,
+  type RuntimeKind,
+} from './runtime'
 import type {
   RuntimeProfile,
   RuntimeObservationIdentity,
@@ -1171,6 +1176,15 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     }
   }
   const { cmd, env } = plan
+  const materialEvidence = bindNativeAgentMaterialEvidence(driver, {
+    environment: () => plan.env,
+    runContent: () => runRoot,
+    sessionLocation: () => ({
+      worktreePath: opts.worktreePath,
+      configDirEnv: configDir.env,
+      configDirName: configDir.name,
+    }),
+  })
   // RFC-282 B1b — the declared manifest is a FIELD of the assembly result now
   // (same computation, not a second render). §7-9: a defensive render failure
   // inside the driver degrades it to an empty manifest + warn, never fails
@@ -1365,8 +1379,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     const stdoutEvents = makeEventBuffer('node-run-event/stdout')
     const stderrEvents = makeEventBuffer('node-run-event/stderr')
     let localObservationAccepted = false
-    const usageNormalizer =
-      driver.prepareUsageNormalizer?.({ env: plan.env }) ?? driver.normalizeUsage
+    const usageNormalizer = materialEvidence.prepareUsageNormalizer?.() ?? driver.normalizeUsage
     const captureUsage = createInvocationUsageCapture({
       ...(usageNormalizer ? { normalize: usageNormalizer } : {}),
       invocationId,
@@ -1376,8 +1389,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       resumeSessionId: effectiveResumeSessionId,
       includeMeasurement: (row) => nativeUsageCapture?.includesRecord(row.recordId) ?? true,
     })
-    const nativeUsageCapture = driver.prepareNativeUsageCapture?.({
-      env: plan.env,
+    const nativeUsageCapture = materialEvidence.prepareNativeUsageCapture?.({
       invocationId,
       taskId: opts.taskId,
       nodeRunId: opts.nodeRunId,
@@ -1385,7 +1397,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       resumeSessionId: effectiveResumeSessionId,
       nextRevision: captureUsage.nextRevision,
     })
-    const preparedSpans = driver.prepareSpanCapture?.({ env: plan.env, invocationId })
+    const preparedSpans = materialEvidence.prepareSpanCapture?.({ invocationId })
     let nativeSpanCapture: NativeSpanCapture | undefined
     let observationSpawnedAt: number | null = null
     const observationRoots: NativeSpanRootBinding[] = []
@@ -1735,7 +1747,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // driver omits `startLiveCapture` → NOOP_HANDLE (was an UNCONDITIONAL start
     // that spun uselessly against opencode's SQLite on every claude run).
     const livePoller =
-      driver.startLiveCapture?.({
+      materialEvidence.startLiveCapture?.({
         nodeRunId: opts.nodeRunId,
         taskId: opts.taskId,
         nodeId: opts.nodeId,
@@ -2080,16 +2092,13 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     if (!childUnkillable && sessionId !== undefined) {
       for (const epochSessionId of [...new Set(nativeSessionEpochIds)]) {
         try {
-          await driver.captureSessions({
+          await materialEvidence.captureSessions({
             rootSessionId: epochSessionId,
             logicalRootSessionId: sessionId,
             nodeRunId: opts.nodeRunId,
             taskId: opts.taskId,
             persistence: opts.persistence.runtimeSessionCapture,
             log,
-            worktreePath: opts.worktreePath,
-            configDirEnv: configDir.env,
-            configDirName: configDir.name,
             alreadyInsertedPartIds: livePoller.stats().insertedPartIdsBySession,
           })
         } catch (err) {
@@ -2592,8 +2601,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // column stays null.
     if (freshAgentRun) {
       try {
-        const snapshot = await driver.readInventory?.({
-          runRoot,
+        const snapshot = await materialEvidence.readInventory?.({
           nodeKind: inventoryNodeKind,
         })
         if (snapshot !== undefined && snapshot !== null) {
@@ -2613,8 +2621,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
     // 补发失败只丢观测，绝不改节点成败——清单是呈现面。
     try {
       const finalEvents =
-        (await driver.drainFinalEvents?.({
-          runRoot,
+        (await materialEvidence.drainFinalEvents?.({
           nodeKind: inventoryNodeKind,
           freshRun: freshAgentRun,
         })) ?? []

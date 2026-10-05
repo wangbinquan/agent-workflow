@@ -219,7 +219,7 @@ describe('RFC-143 (C) PR-3 optional 能力 + live poller 空转 bug 修复', () 
 
   it('runner live poller 走 driver.startLiveCapture? + NOOP fallback（不再无条件启动）', () => {
     const src = SRC('services/runner.ts')
-    expect(src).toContain('driver.startLiveCapture?.(')
+    expect(src).toContain('materialEvidence.startLiveCapture?.(')
     expect(src).toContain('?? NOOP_HANDLE')
     // 无条件启动的旧形态不得复活。
     expect(src).not.toMatch(/const livePoller = startLiveSubagentCapture\(/)
@@ -227,8 +227,8 @@ describe('RFC-143 (C) PR-3 optional 能力 + live poller 空转 bug 修复', () 
 
   it('runner 会话捕获 / inventory 回读走 driver（消 capture 的 runtime 分支）', () => {
     const src = SRC('services/runner.ts')
-    expect(src).toContain('driver.captureSessions(')
-    expect(src).toContain('driver.readInventory?.(')
+    expect(src).toContain('materialEvidence.captureSessions(')
+    expect(src).toContain('materialEvidence.readInventory?.(')
     // capture 不再按 runtime 二选一 captureClaudeSessions/captureChildSessions。
     expect(src).not.toContain('captureClaudeSessions(')
     expect(src).not.toContain('captureChildSessions(')

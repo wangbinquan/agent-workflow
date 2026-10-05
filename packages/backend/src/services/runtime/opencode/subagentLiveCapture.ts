@@ -22,8 +22,12 @@
 // This keeps the live capture testable without booting the ws server.
 
 import { existsSync } from 'node:fs'
-import type { RuntimeSessionCapturePersistence } from '@/modules/task-execution/application/ports/runtimeSessionCapturePersistence'
-import { createLogger, type Logger } from '@/util/log'
+import type {
+  AgentLiveCaptureRequest,
+  AgentLiveCaptureStats,
+  AgentLiveCaptureHandle,
+} from '@/modules/runtime-management/application/ports/agentLiveCapture'
+import { createLogger } from '@/util/log'
 import {
   loadSiblingsCapturedSessionIds,
   resolveOpencodeDbPath,
@@ -35,55 +39,10 @@ import {
   type ReadonlySqliteDatabase,
 } from '@/platform/persistence/sqlite/readonlySqliteDatabase'
 
-export interface LivePollOptions {
-  nodeRunId: string
-  taskId: string
-  /** Workflow node id (canvas-level). Forwarded to onInsert payloads. */
-  nodeId: string
-  /**
-   * Root opencode session id resolver. Returns null until stdoutPump observes
-   * the first `sessionID` event from the child process; the poller short-
-   * circuits its tick while this is null (no point BFS'ing nothing).
-   */
-  getRootSessionId: () => string | null
-  persistence: RuntimeSessionCapturePersistence
-  log?: Logger
-  /** Override the opencode SQLite path (tests). */
-  opencodeDbPath?: string
-  /** Cadence between ticks. `0` disables the poller — startLive returns a no-op handle. */
-  pollMs: number
-  /** Auto-disable after this many back-to-back failing ticks. */
-  consecutiveFailureLimit: number
-  /** When aborted, the poller stops itself. The runner pipes child.exited in here. */
-  signal?: AbortSignal
-  /**
-   * Fired once per tick that actually inserted at least one row. The runner
-   * uses this to broadcast a `node.status: running` re-ping so the frontend
-   * `useTaskSync` invalidates `['tasks', taskId, 'node-runs']`. Tests can
-   * pass a spy here.
-   */
-  onInsert?: (info: { insertedRows: number; sessionIds: string[] }) => void
-}
-
-export interface LivePollerStats {
-  ticks: number
-  insertedRows: number
-  failedTicks: number
-  disabled: boolean
-  /** Snapshot of internal partId dedupe state — runner.ts forwards into post-run capture. */
-  insertedPartIdsBySession: Map<string, Set<string>>
-}
-
-export interface LivePollerHandle {
-  stop(): void
-  /**
-   * Test-only: run a single tick synchronously. The production timer just
-   * invokes the same function on a setInterval cadence; exposing it lets
-   * unit tests seed the SQLite fixture between ticks without sleeping.
-   */
-  tickOnce(): Promise<number>
-  stats(): LivePollerStats
-}
+/** Native fixture compatibility; callers use the logical live capture contract. */
+export type LivePollOptions = AgentLiveCaptureRequest & { opencodeDbPath?: string }
+export type LivePollerStats = AgentLiveCaptureStats
+export type LivePollerHandle = AgentLiveCaptureHandle
 
 /** RFC-143: exported so runner's `driver.startLiveCapture?.(ctx) ?? NOOP_HANDLE`
  *  falls back cleanly when a runtime (claude) doesn't implement live capture. */

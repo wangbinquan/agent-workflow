@@ -229,7 +229,7 @@ describe('RFC-371 original process observations', () => {
     expect(result.outcome).toBe('ok')
     expect(result.rawStdout).toContain('original-output')
     expect(result.stderrTail).toContain('original-error')
-    expect(result.lifecycle?.spawnedAt).toBe(spawnedAt)
+    expect(Object.is(result.lifecycle?.spawnedAt, spawnedAt)).toBe(true)
     expect(result.lifecycle?.reapedAt).not.toBeNull()
     expect(result.lifecycle?.drainedAt).not.toBeNull()
     expect(result.lifecycle!.reapedAt!).toBeGreaterThanOrEqual(result.lifecycle!.spawnedAt!)

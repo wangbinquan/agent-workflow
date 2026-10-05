@@ -3740,7 +3740,9 @@
         "import:05fe4f6fbe5724b98381",
         "import:079166cc8e49ffebb3e4",
         "import:0d84849979600beb3392",
+        "import:26fe0c0ce3c7def7d032",
         "import:28490b02663597eaeebe",
+        "import:39ddda7a36b8ec55d9e0",
         "import:3b0939b8480fceab955a",
         "import:508585b40e2cf04f1432",
         "import:55f7c3a1e3e1628e4302",
@@ -3748,10 +3750,12 @@
         "import:70fef04c52ff0c283a17",
         "import:9b40bf959bd20a789e88",
         "import:9b54bbf2ad1b84de8700",
+        "import:ea97292b0b4cff7fc31f",
         "import:ed4eeb7ac1111ebf2f6e"
       ],
       "exportedSymbols": [
         "RUNTIME_KINDS",
+        "bindNativeAgentMaterialEvidence",
         "getRuntimeDriver",
         "isKnownRuntimeKind",
         "normalizeRuntimeUsage",
@@ -4045,10 +4049,12 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:19ed56fc31647ebae7c8",
+        "import:29a652509c3f890e4973",
         "import:2c3fe1803047219ba4e6",
-        "import:517a610b8e739c564949",
         "import:6c80f1c9db5be28957aa",
-        "import:b5d99d635a14a4eb3ada"
+        "import:b5d99d635a14a4eb3ada",
+        "import:d8f8a8ebbfcea7e8490f"
       ],
       "exportedSymbols": [
         "LivePollOptions",
@@ -4128,6 +4134,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:15453fccce1fc656d583",
         "import:15723441b28ca0566236",
         "import:3fbaf72709184ea25ffa",
         "import:c8c3946c2415ba7280d7"
@@ -4193,17 +4200,21 @@
         "import:22e2a3e43b9aded6811d",
         "import:25d6e3fda5a55ab36a5d",
         "import:2c57d5f26601e387e86e",
+        "import:32c6ecba0c3967af4295",
         "import:34e73078dce98fbb8063",
         "import:47cc33988e1b2a35ecf4",
         "import:5b628f6136e3b8310324",
         "import:5f13ba9cdabe85fd2703",
         "import:64cce34581a2c498d55f",
         "import:668e88a4c0f34dfa5f36",
+        "import:6cd1ab696b243d253d1f",
+        "import:6ecb2676c50da644e98d",
         "import:78b1446894fbeba3bf7c",
         "import:7af33829e520bd6a97b6",
         "import:7e35a4d0936147f04ed8",
         "import:7ebd2695d0ca6170e289",
         "import:84369c5691cec1b9fbcd",
+        "import:86bcfc72d0b503706527",
         "import:878817dd026ba03d55c6",
         "import:89330d2b30e8e7d95530",
         "import:8a8e77f2ad8c648b04a1",
@@ -4212,6 +4223,7 @@
         "import:9866049aeb621599bb0f",
         "import:9b3b731a2da3052932b3",
         "import:a99307c8c8debf377c51",
+        "import:ad7b42c7d621553136df",
         "import:b234142f2b81b77760e6",
         "import:b2ab14f8e45292d8b3f7",
         "import:b2f9ab2d2a56ded2ee87",
@@ -4220,8 +4232,10 @@
         "import:b7d325a8d761ddf10b9f",
         "import:bc66a63defffbd003625",
         "import:d70a8f2b0aab923f89f4",
+        "import:dc3c32ec5d84e4835f82",
         "import:deaf92636d39c1f1d373",
         "import:e6f1c034a5c2c26ed0b1",
+        "import:f0ec5f08b0efbd70f987",
         "import:f620beb601baa671cb51",
         "import:fb0f31957433ff147406",
         "import:fff3516f6ab19099a34d"
@@ -4273,7 +4287,10 @@
       "targetLayer": "application"
     },
     {
-      "boundaryEdgeIds": [],
+      "boundaryEdgeIds": [
+        "import:24e348f91bc98bf33e1c",
+        "import:f5eef367e6cf5c4cb039"
+      ],
       "exportedSymbols": [
         "JsonObject",
         "RuntimeUsageContext",
@@ -6412,5 +6429,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:65f91c47f1d655a21914973d8c78ba25f9b2efad4ae02ea7989e6313b2fde3a7"
+  "sourceDigest": "sha256:a1ae054d5539aa95885e53a945687f6f9c057fe1b6493c9935c42c174954a085"
 }

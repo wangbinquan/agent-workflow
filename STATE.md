@@ -10071,3 +10071,12 @@ SOURCE10-R4 独立有限功能 PASS，指纹 `77adb25e531e2dcc4e34db8971d1ab461d
 官方原规则对 c83bf750 加冻结 SOURCE10 一次生成13产物；6441非自有源码读 committed blobs，排除并保留其他在制品。sourceDigest `sha256:76d7d0051a4f025db4c8149c7bc6370d26231d1aac7c74035bd8659b8a88a908`。原完整 validator、129有序库存／why、40SPI／69targets／空implementation SCC保持；四个实际已有 native compatibility 边具名补入304债务，不放宽分类器。实际 entry1874→1875／imports6255→6265／exceptions5551→5561／owners26690→26710四项 matching 增长后正常退役；移除两个无消费者的 public capture factory，public1150→1148，native 实现保持。
 
 本次修复旧扫描位置、inventory oracle、四个缺登记边和 Windows 对称六 watch／三个实际 suite。原 c83 主 CI37244977913为 failure（39 success／9 failure／2 cancelled），Windows37244977844为 cancelled；其 full／WebKit／visual 成功仅为各自证据，不替代全仓 verdict。新确切SHA hosted CI另验收；不提交其他会话的类型／归档 WIP。仅目标 format／lint、纯 AST／JSON／字节和原静态投影，无AW本机tests／typecheck／build／service。当前仍阶段A，完整执行／取证、全部真实 roots、A6／A7／A8及A-G继续；CS独立adapters、M0首次实际部署与M1～M4尚未开始，本批不关闭RFC。前面共享正文逐字保持。
+
+
+## 2026-10-05 RFC-370 中立 Agent 取证切面
+
+Task 和 System/MCP 的八项真实 material evidence 消费改接 RM application port 与 native local participant；最终 env、optional lookup 时机、receiver、同步异常／Promise／结果、sink/callback/dedupe、原 stop/post-capture 与 terminal intent 保持。SOURCE15-R2 独立有限 PASS，指纹9733b649c8f7ed0dd21796b558a97abd865c70e90be669d23b2268de8afb0887；R1 PASS／一次生成 INCOMPLETE 保留，同一 binder 归入现有 runtime gateway 后原 API／registry／native 算法 AST 保持。详见 design/RFC-370-crewstation-hosted-deployment/agent-material-evidence.md。
+
+有效原规则只生成一次13产物，6442非自有源码读 committed0cb05ac9，排除并保留 native pages 与六份并行 native usage WIP；digest sha256:a1ae054d5539aa95885e53a945687f6f9c057fe1b6493c9935c42c174954a085。原129库存／why／40SPI／69targets／空implementation SCC保持，commons304只退役实际1边并具名补3分组为306；实际entry1875→1876／imports6283→6300／exceptions5577→5594／owners26718→26730四项匹配增长正常后继退役，public1148→1147清除实际死导出。Windows原watch对称补10路径、原suite加3真实测试，原workflow逐字逆变换保持。
+
+基线0cb05ac9主CI37252344342正式failure（44success／6failure），Windows37252344340正式failure；本批修复nullable matcher类型和span dead export，不混入并行native pages失败／实现。有限metadata门、精确发布与新hosted CI分别留证；没有本机AW tests/typecheck/build/service。仍在A-T5，完整材料／执行／取证组合、全部真根、脚本、执行权恢复与A-G继续；独立CS adapters和M0首次部署／M1～M4尚未开始，不关闭RFC。
