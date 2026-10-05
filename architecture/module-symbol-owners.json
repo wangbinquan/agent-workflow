@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2196,
+    "backendFiles": 2200,
     "frontendFiles": 654,
     "legacyFiles": 587,
-    "moduleFiles": 1609,
-    "productionFiles": 3017,
+    "moduleFiles": 1613,
+    "productionFiles": 3021,
     "sharedFiles": 167,
-    "symbolsIncludingFileRoots": 26730
+    "symbolsIncludingFileRoots": 26744
   },
   "entries": [
     {
@@ -147002,6 +147002,78 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts#describe",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "describe",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts#DrizzleNativeUsageCompletion",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DrizzleNativeUsageCompletion",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts#head",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "head",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts#Pass",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Pass",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts#SealPort",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SealPort",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageEmission.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageEmission.ts#$file",
       "removeAfterWave": null,
@@ -149246,6 +149318,30 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageEmissionVerification.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageEmissionVerification.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageEmissionVerification.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageEmissionVerification.ts#verifyNativeUsageEmissions",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "verifyNativeUsageEmissions",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageMeasurementEvidence.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageMeasurementEvidence.ts#$file",
       "removeAfterWave": null,
@@ -149263,6 +149359,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "verifyNativeUsageMeasurementEvidence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageNumericCoverage.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageNumericCoverage.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageNumericCoverage.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageNumericCoverage.ts#verifyNativeUsageNumericCoverage",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "verifyNativeUsageNumericCoverage",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -149371,6 +149491,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "verifyNativeUsagePass",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts#Meter",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Meter",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts#scopePath",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "scopePath",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageReconciliationVerification.ts#verifyNativeUsageReconciliation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "verifyNativeUsageReconciliation",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -321495,5 +321663,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a1ae054d5539aa95885e53a945687f6f9c057fe1b6493c9935c42c174954a085"
+  "sourceDigest": "sha256:4718145c6d8530ab026d6311ca2506f9497c9279360d22ddc0fe4abd7aaf8a56"
 }

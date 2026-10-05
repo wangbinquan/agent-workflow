@@ -18,6 +18,7 @@ import {
   nativeUsageEmissions,
   nativeUsageRevisionHeads,
   taskExecutionOwners,
+  observationUsageCurrent,
 } from '@/db/schema'
 import { createProviderTaskExecutionModule } from '@/modules/task-execution/composition'
 import { createTaskExecutionPersistence } from '@/modules/task-execution/composition/taskExecutionPersistence'
@@ -25,10 +26,15 @@ import { createTaskExecutionContext } from '@/modules/task-execution/application
 import { createObservationInvocationStore } from '@/modules/run-observability/infrastructure/invocationPersistence'
 import { DrizzleNativeUsagePages } from '@/modules/task-execution/infrastructure/drizzleNativeUsagePages'
 import { DrizzleNativeUsageEmission } from '@/modules/task-execution/infrastructure/drizzleNativeUsageEmission'
+import { DrizzleNativeUsageCompletion } from '@/modules/task-execution/infrastructure/drizzleNativeUsageCompletion'
 import { verifyNativeUsagePass } from '@/modules/task-execution/infrastructure/nativeUsagePassVerification'
 import { withNativeUsageOwner } from '@/modules/task-execution/infrastructure/nativeUsageOwnerTransaction'
 import { createUsageLedgerStore } from '@/modules/run-observability/infrastructure/usageLedgerPersistence'
 import { createUsageIngestion } from '@/modules/run-observability/application/usageIngestion'
+import { createUsageSourceProjection } from '@/modules/run-observability/application/usageSourceProjection'
+import { createObservationUsageSource } from '@/modules/task-execution/infrastructure/observationUsageSource'
+import { createNativeUsageCapture } from '@/modules/runtime-management/application/nativeUsageCapture'
+import { readOpencodeUsageSnapshot } from '@/modules/runtime-management/infrastructure/opencodeUsageSnapshot'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
 import { insertInBatches } from '@/platform/persistence/batchInsert'
 import type { ObservationMeasurement } from '@agent-workflow/shared'
@@ -483,7 +489,7 @@ describeEachProvider('RFC-371 original native pages and membership', (harness) =
         native.bornAt + 1,
         JSON.stringify({
           type: 'step-finish',
-          tokens: { input: 8, output: 3, cache: { read: 5, write: 7 } },
+          tokens: { input: 8, output: 3, reasoning: 0, cache: { read: 5, write: 7 } },
         }),
       ])
     })
@@ -1033,5 +1039,599 @@ describeEachProvider('RFC-371 original native pages and membership', (harness) =
     ])
     expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(2)
     expect(await f.db.select().from(nativeUsageEmissions)).toHaveLength(2)
+  })
+
+  async function originalSpawn(f: Awaited<ReturnType<typeof fixture>>) {
+    const nativeProcess = {
+      contract: 'native-process-facts-v2' as const,
+      phase: 'spawned' as const,
+      pid: process.pid,
+      launchNonce: randomUUID(),
+      spawnedAt: Date.now(),
+      reapedAt: null,
+      drainedAt: null,
+      outcome: null,
+      drainTimedOut: false,
+      pumpError: false,
+    }
+    const emission = new DrizzleNativeUsageEmission(f.db)
+    await emission.emit({
+      binding: f.binding,
+      eventId: 'original-spawn',
+      evidence: {
+        invocationId: f.binding.invocationId,
+        measurements: [],
+        diagnostics: [],
+        nativeProcess,
+      },
+    })
+    return nativeProcess
+  }
+  async function originalSettle(
+    f: Awaited<ReturnType<typeof fixture>>,
+    spawn: Awaited<ReturnType<typeof originalSpawn>>,
+  ) {
+    await new DrizzleNativeUsageEmission(f.db).emit({
+      binding: f.binding,
+      eventId: 'original-settled',
+      evidence: {
+        invocationId: f.binding.invocationId,
+        measurements: [],
+        diagnostics: [],
+        nativeProcess: {
+          ...spawn,
+          phase: 'settled',
+          reapedAt: Date.now(),
+          drainedAt: Date.now(),
+          outcome: 'success',
+        },
+      },
+    })
+  }
+
+  test('complete original seal verifies every one of1001 numbers and frozen source ACK', async () => {
+    const f = await fixture('fresh', true)
+    const spawn = await originalSpawn(f)
+    const native = nativeFixture(1001, 81)
+    const ack = await persistNativeUsagePass(
+      f.open(native.path, f.identity('final'), 81),
+      f.owner(),
+    )
+    await originalSettle(f, spawn)
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    const proof = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    expect(proof.state).toBe('complete')
+    expect(proof.issues).toEqual([])
+    expect(proof.final?.ack).toEqual(ack)
+    expect(proof.final?.ack.counts).toEqual({ sessions: '81', parts: '1001', steps: '1001' })
+    expect(proof.emissions.records).toBe('1001')
+    expect(proof.reconciliation.examined).toBe('0')
+    expect(proof.process).toEqual({
+      spawnedAt: spawn.spawnedAt,
+      reapedAt: expect.any(Number),
+      drainedAt: expect.any(Number),
+    })
+    const sourceCount = (await f.db.select().from(taskExecutionObservationSources)).length
+    const seal = await completion.seal({ binding: f.binding, completion: proof })
+    expect(seal.measurements).toEqual([])
+    expect(BigInt(seal.sourceWatermark)).toBeGreaterThan(BigInt(proof.emissions.sourceWatermark))
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(sourceCount + 1)
+    expect(
+      await new DrizzleNativeUsageCompletion(f.db).seal({ binding: f.binding, completion: proof }),
+    ).toEqual(seal)
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(sourceCount + 1)
+    expect((await f.db.select().from(nativeUsagePreparations))[0]?.state).toBe('sealed')
+  }, 60_000)
+
+  test('complete empty native tree is verified from original EOF and process, never a missing scan', async () => {
+    const f = await fixture('fresh', true)
+    const spawn = await originalSpawn(f)
+    const native = nativeFixture(0, 1)
+    await persistNativeUsagePass(f.open(native.path, f.identity('final'), 37), f.owner())
+    await originalSettle(f, spawn)
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    const proof = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    expect(proof.state).toBe('complete')
+    expect(proof.emissions.records).toBe('0')
+    expect(proof.final?.ack.counts.steps).toBe('0')
+    expect(proof.final?.ack.eof).not.toBeNull()
+    expect(proof.emissions.frames).toBe('2')
+    expect((await completion.seal({ binding: f.binding, completion: proof })).measurements).toEqual(
+      [],
+    )
+  })
+
+  test('unknown model and step time retain complete actual Token proof without a CNY quote', async () => {
+    const f = await fixture('fresh', true)
+    const spawn = await originalSpawn(f)
+    const native = nativeFixture()
+    native.mutate((db) => {
+      db.run('UPDATE message SET data=?', [JSON.stringify({ role: 'assistant' })])
+      db.run('UPDATE part SET time_created=NULL')
+    })
+    await persistNativeUsagePass(f.open(native.path, f.identity('final'), 37), f.owner())
+    await originalSettle(f, spawn)
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    const proof = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    expect(proof.state).toBe('complete')
+    expect(proof.issues).toEqual([])
+    expect(proof.emissions.records).toBe('3')
+    const sources = await f.db.select().from(taskExecutionObservationSources)
+    const numbers = sources.flatMap((row) => JSON.parse(row.evidenceJson).measurements)
+    expect(numbers).toHaveLength(3)
+    expect(numbers.every((row) => row.model === null && row.occurredAt === null)).toBe(true)
+    expect(numbers[0]?.usage).toEqual({
+      input: '1',
+      cacheRead: '11',
+      cacheWrite: '13',
+      output: '7',
+    })
+    await completion.seal({ binding: f.binding, completion: proof })
+  })
+
+  test('missing final and process remain partial and preserve the actual empty emission population', async () => {
+    const f = await fixture('fresh', true)
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    const proof = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    expect(proof.state).toBe('partial')
+    expect(proof.final).toBeNull()
+    expect(proof.rootSessionId).toBeNull()
+    expect(proof.baseline.kind === 'fresh' && proof.baseline.rootCreatedAt).toBeNull()
+    expect(proof.emissions.records).toBe('0')
+    expect(proof.emissions.frames).toBe('0')
+    expect(proof.emissions.sourceWatermark).toBe('0')
+    expect(proof.issues).toContain('native-final-unavailable')
+    expect(proof.issues).toContain('native-process-incomplete')
+    const ack = await completion.seal({ binding: f.binding, completion: proof })
+    expect(ack.measurements).toEqual([])
+    expect((await f.db.select().from(nativeUsagePreparations))[0]?.state).toBe('open')
+  })
+
+  test('partial completion retries verify earlier original seals before a later complete seal', async () => {
+    const f = await fixture('fresh', true)
+    const spawn = await originalSpawn(f)
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    const first = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    expect(first.state).toBe('partial')
+    const firstAck = await completion.seal({ binding: f.binding, completion: first })
+    const native = nativeFixture()
+    await persistNativeUsagePass(f.open(native.path, f.identity('final'), 37), f.owner())
+    await originalSettle(f, spawn)
+    const final = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    expect(final.state).toBe('complete')
+    expect(final.emissions.records).toBe('3')
+    const finalAck = await completion.seal({ binding: f.binding, completion: final })
+    expect(BigInt(finalAck.sourceWatermark)).toBeGreaterThan(BigInt(firstAck.sourceWatermark))
+    expect(await completion.seal({ binding: f.binding, completion: first })).toEqual(firstAck)
+    expect(await completion.seal({ binding: f.binding, completion: final })).toEqual(finalAck)
+  })
+
+  test('completion rejects invented numeric counts and preserves every actual source row', async () => {
+    const f = await fixture('fresh', true)
+    const spawn = await originalSpawn(f)
+    const native = nativeFixture()
+    await persistNativeUsagePass(f.open(native.path, f.identity('final'), 37), f.owner())
+    await originalSettle(f, spawn)
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    const proof = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    const before = await f.db.select().from(taskExecutionObservationSources)
+    await expect(
+      completion.seal({
+        binding: f.binding,
+        completion: { ...proof, emissions: { ...proof.emissions, records: '4' } },
+      }),
+    ).rejects.toThrow('complete original evidence')
+    expect(await f.db.select().from(taskExecutionObservationSources)).toEqual(before)
+    expect((await f.db.select().from(nativeUsagePreparations))[0]?.state).toBe('open')
+  })
+
+  test('completion rejects missing original numeric source even when the frozen frame survives', async () => {
+    const f = await fixture('fresh', true)
+    const spawn = await originalSpawn(f)
+    const native = nativeFixture()
+    await persistNativeUsagePass(f.open(native.path, f.identity('final'), 37), f.owner())
+    await originalSettle(f, spawn)
+    const frame = (await f.db.select().from(nativeUsageEmissions)).find((row) =>
+      JSON.parse(row.document).request.includes('opencode:step:'),
+    )!
+    await f.db
+      .delete(taskExecutionObservationSources)
+      .where(eq(taskExecutionObservationSources.id, frame.sourceRowId))
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    await expect(
+      completion.describeCompletion({ binding: f.binding, observedAt: Date.now() }),
+    ).rejects.toThrow('original source or frozen ACK')
+    expect((await f.db.select().from(nativeUsagePreparations))[0]?.state).toBe('open')
+  })
+
+  test('completion cannot be observed before its real source measurement watermark', async () => {
+    const f = await fixture('fresh', true)
+    const spawn = await originalSpawn(f)
+    const native = nativeFixture()
+    await persistNativeUsagePass(f.open(native.path, f.identity('final'), 37), f.owner())
+    await originalSettle(f, spawn)
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    await expect(
+      completion.describeCompletion({ binding: f.binding, observedAt: f.before.preparedAt - 1 }),
+    ).rejects.toThrow('precedes its actual original evidence')
+    expect((await f.db.select().from(nativeUsagePreparations))[0]?.state).toBe('open')
+  })
+
+  async function originalLegacyHistory(native: ReturnType<typeof nativeFixture>) {
+    const original = await fixture('fresh')
+    const invocationId = original.binding.invocationId + '-legacy'
+    const binding = { ...original.binding, invocationId }
+    await createObservationInvocationStore(original.db).accept({
+      invocationId,
+      taskId: binding.taskId,
+      nodeRunId: binding.nodeRunId,
+      agentId: null,
+      agentRevision: null,
+      purpose: 'task',
+      authority: { kind: 'local', runtime: null },
+      nativeCaptureContract: 'opencode-child-steps-v1',
+      nativeCaptureSource: 'actual-native-store',
+    })
+    const capture = createNativeUsageCapture({
+      ...binding,
+      agentId: null,
+      nativeSource: 'actual-native-store',
+      read: (root) => readOpencodeUsageSnapshot(native.path, root),
+    })
+    capture.begin()
+    const frames = capture.finish('root', Date.now())
+    expect(frames.at(-1)?.capture?.state).toBe('complete')
+    for (const frame of frames)
+      await original.db.insert(taskExecutionObservationSources).values({
+        taskId: binding.taskId,
+        nodeRunId: binding.nodeRunId,
+        evidenceJson: JSON.stringify(frame),
+      })
+    const store = createUsageLedgerStore(original.db)
+    const project = createUsageSourceProjection({
+      source: createObservationUsageSource(original.db),
+      store,
+      invocations: createObservationInvocationStore(original.db),
+    })
+    while (await project(binding.nodeRunId)) {
+      // Consume the actual original source until its persisted cursor reaches EOF.
+    }
+    return { binding, sourceId: 'local-node:' + binding.nodeRunId, store }
+  }
+
+  test('resume verifies every actual historical baseline and emits only new invocation usage', async () => {
+    const native = nativeFixture()
+    const history = await originalLegacyHistory(native)
+    const f = await fixture('resume', true)
+    const before = await persistNativeUsagePass(f.open(native.path, f.identity(), 37), f.owner())
+    const spawn = await originalSpawn(f)
+    native.mutate((db) =>
+      db.run('INSERT INTO part VALUES (?,?,?,?,?)', [
+        'step-000003',
+        'root',
+        'message',
+        Date.now(),
+        JSON.stringify({
+          type: 'step-finish',
+          tokens: { input: 19, output: 5, reasoning: 2, cache: { read: 11, write: 13 } },
+        }),
+      ]),
+    )
+    await persistNativeUsagePass(f.open(native.path, f.identity('final'), 37), f.owner())
+    await originalSettle(f, spawn)
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    const proof = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    expect(proof.state).toBe('complete')
+    expect(proof.baseline.kind === 'resume' && proof.baseline.pass?.ack).toEqual(before)
+    expect(proof.reconciliation).toEqual({
+      examined: '3',
+      resolved: '3',
+      unresolved: '0',
+      digest: expect.any(String),
+    })
+    expect(proof.emissions.records).toBe('1')
+    expect(proof.final?.ack.counts.steps).toBe('4')
+    const originals = await f.db.select().from(observationUsageCurrent)
+    expect(originals).toHaveLength(3)
+    expect(
+      originals.every(
+        (row) => JSON.parse(row.document).measurement.invocationId === history.binding.invocationId,
+      ),
+    ).toBe(true)
+    const sourceRows = await f.db
+      .select()
+      .from(taskExecutionObservationSources)
+      .where(eq(taskExecutionObservationSources.nodeRunId, f.binding.nodeRunId))
+    const records = sourceRows.flatMap((row) => JSON.parse(row.evidenceJson).measurements)
+    expect(records.map((row) => row.recordId)).toEqual(['opencode:step:step-000003'])
+    await completion.seal({ binding: f.binding, completion: proof })
+  }, 30_000)
+
+  test('unresolved original historical change blocks completeness until its real ledger correction', async () => {
+    const native = nativeFixture()
+    const history = await originalLegacyHistory(native)
+    const f = await fixture('resume', true)
+    await persistNativeUsagePass(f.open(native.path, f.identity(), 37), f.owner())
+    const spawn = await originalSpawn(f)
+    native.mutate((db) =>
+      db.run('UPDATE part SET data=? WHERE id=?', [
+        JSON.stringify({
+          type: 'step-finish',
+          tokens: { input: 42, output: 5, reasoning: 2, cache: { read: 11, write: 13 } },
+        }),
+        'step-000000',
+      ]),
+    )
+    const final = await persistNativeUsagePass(
+      f.open(native.path, f.identity('final'), 37),
+      f.owner(),
+    )
+    await originalSettle(f, spawn)
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    const before = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    expect(before.state).toBe('partial')
+    expect(before.emissions.records).toBe('0')
+    expect(before.reconciliation).toEqual({
+      examined: '3',
+      resolved: '2',
+      unresolved: '1',
+      digest: expect.any(String),
+    })
+    expect(before.issues).toContain('native-prior-revision-unresolved')
+    await completion.seal({ binding: f.binding, completion: before })
+    const current = (await f.db.select().from(observationUsageCurrent))
+      .map((row) => JSON.parse(row.document))
+      .find((row) => row.measurement.recordId === 'opencode:step:step-000000')!
+    const ingest = createUsageIngestion(history.store)
+    const outcome = await ingest.ingest({
+      sourceId: history.sourceId,
+      expectedCursor: await ingest.cursor(history.sourceId),
+      nextCursor: 'node-event:' + final.sourceWatermark,
+      nativeSource: 'actual-native-store',
+      nativeWatermark: Number(final.sourceWatermark),
+      events: [
+        {
+          eventId: 'original-historical-correction',
+          measurement: {
+            ...current.measurement,
+            revision: current.observedRevision + 1,
+            observedAt: Date.now(),
+            usage: { ...current.measurement.usage, input: '42' },
+            validity: 'correction',
+          },
+        },
+      ],
+    })
+    expect(outcome.applied).toBe(1)
+    const closed = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    expect(closed.state).toBe('complete')
+    expect(closed.reconciliation.resolved).toBe('3')
+    expect(closed.reconciliation.unresolved).toBe('0')
+    expect(closed.reconciliation.digest).not.toBe(before.reconciliation.digest)
+    expect(closed.emissions.records).toBe('0')
+    await completion.seal({ binding: f.binding, completion: closed })
+  }, 30_000)
+
+  test('missing resume before never turns old native parts into new Task numbers', async () => {
+    const native = nativeFixture()
+    const f = await fixture('resume', true)
+    const spawn = await originalSpawn(f)
+    await persistNativeUsagePass(f.open(native.path, f.identity('final'), 37), f.owner())
+    await originalSettle(f, spawn)
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    const proof = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    expect(proof.state).toBe('partial')
+    expect(proof.baseline).toEqual({ kind: 'resume', pass: null })
+    expect(proof.issues).toContain('native-baseline-unavailable')
+    expect(proof.emissions.records).toBe('0')
+    expect(proof.final?.ack.counts.steps).toBe('3')
+    const records = (await f.db.select().from(taskExecutionObservationSources)).flatMap(
+      (row) => JSON.parse(row.evidenceJson).measurements,
+    )
+    expect(records).toEqual([])
+    await completion.seal({ binding: f.binding, completion: proof })
+  })
+
+  test('known buckets with a partial original coverage receipt remain partial without losing numbers', async () => {
+    const f = await fixture('fresh', true)
+    const spawn = await originalSpawn(f)
+    const native = nativeFixture()
+    await persistNativeUsagePass(f.open(native.path, f.identity('final'), 37), f.owner())
+    await originalSettle(f, spawn)
+    const source = (await f.db.select().from(taskExecutionObservationSources)).find(
+      (row) => JSON.parse(row.evidenceJson).measurements.length > 0,
+    )!
+    const measured = JSON.parse(source.evidenceJson).measurements[0]
+    const ack = await new DrizzleNativeUsageEmission(f.db).emit({
+      binding: f.binding,
+      eventId: 'original-partial-coverage',
+      evidence: {
+        invocationId: f.binding.invocationId,
+        measurements: [{ ...measured, coverage: 'partial' }],
+        diagnostics: [],
+      },
+    })
+    expect(ack.measurements[0]?.usage).toEqual(measured.usage)
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    const proof = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    expect(proof.state).toBe('partial')
+    expect(proof.issues).toContain('native-numeric-coverage-incomplete')
+    expect(proof.issues).not.toContain('native-token-bucket-unknown')
+    expect(proof.emissions.records).toBe('4')
+    await completion.seal({ binding: f.binding, completion: proof })
+  })
+
+  test('completion uses the latest allocated revision when one actual frame revises a record twice', async () => {
+    for (const coverage of ['partial', 'complete'] as const) {
+      const f = await fixture('fresh', true)
+      const spawn = await originalSpawn(f)
+      const native = nativeFixture()
+      await persistNativeUsagePass(f.open(native.path, f.identity('final'), 37), f.owner())
+      await originalSettle(f, spawn)
+      const source = (await f.db.select().from(taskExecutionObservationSources)).find(
+        (row) =>
+          row.taskId === f.binding.taskId && JSON.parse(row.evidenceJson).measurements.length > 0,
+      )!
+      const measured = JSON.parse(source.evidenceJson).measurements[0]
+      const ack = await new DrizzleNativeUsageEmission(f.db).emit({
+        binding: f.binding,
+        eventId: 'actual-two-revisions-' + coverage,
+        evidence: {
+          invocationId: f.binding.invocationId,
+          measurements: [
+            { ...measured, coverage: coverage === 'partial' ? 'complete' : 'partial' },
+            { ...measured, coverage },
+          ],
+          diagnostics: [],
+        },
+      })
+      expect(ack.measurements.map((row) => row.revision)).toEqual([
+        measured.revision + 1,
+        measured.revision + 2,
+      ])
+      expect(
+        ack.measurements.every(
+          (row) => JSON.stringify(row.usage) === JSON.stringify(measured.usage),
+        ),
+      ).toBe(true)
+      const completion = new DrizzleNativeUsageCompletion(f.db)
+      const proof = await completion.describeCompletion({
+        binding: f.binding,
+        observedAt: Date.now(),
+      })
+      expect(proof.state).toBe(coverage)
+      expect(proof.issues.includes('native-numeric-coverage-incomplete')).toBe(
+        coverage === 'partial',
+      )
+      expect(proof.issues).not.toContain('native-token-bucket-unknown')
+      expect(proof.emissions.records).toBe('5')
+      await completion.seal({ binding: f.binding, completion: proof })
+      expect(
+        (
+          await f.db
+            .select()
+            .from(nativeUsagePreparations)
+            .where(eq(nativeUsagePreparations.invocationId, f.binding.invocationId))
+        )[0]?.state,
+      ).toBe(coverage === 'complete' ? 'sealed' : 'open')
+    }
+  })
+
+  test('completion accepts an early original step at a later actual ACK and rejects missing or earlier pages', async () => {
+    const f = await fixture('fresh', true)
+    const spawn = await originalSpawn(f)
+    const native = nativeFixture()
+    const final = await persistNativeUsagePass(
+      f.open(native.path, f.identity('final'), 1),
+      f.owner(),
+    )
+    await originalSettle(f, spawn)
+    const sources = await f.db.select().from(taskExecutionObservationSources)
+    const numbers = sources.flatMap((row) => JSON.parse(row.evidenceJson).measurements)
+    const first = numbers.find((row) => row.recordId === 'opencode:step:step-000000')!
+    const last = numbers.find((row) => row.recordId === 'opencode:step:step-000002')!
+    expect(BigInt(first.scope.ancestry.pageOrdinal)).toBeLessThan(BigInt(final.ordinal))
+    expect(BigInt(last.scope.ancestry.pageOrdinal)).toBeGreaterThan(
+      BigInt(first.scope.ancestry.pageOrdinal),
+    )
+    const measured = {
+      ...first,
+      scope: {
+        ...first.scope,
+        ancestry: {
+          ...first.scope.ancestry,
+          identity: final.identity,
+          ownerReceiptId: final.ownerReceiptId,
+          pageOrdinal: final.ordinal,
+          cumulativeDigest: final.cumulativeDigest,
+        },
+      },
+    }
+    const emission = new DrizzleNativeUsageEmission(f.db)
+    const ack = await emission.emit({
+      binding: f.binding,
+      eventId: 'actual-later-page-reference',
+      evidence: { invocationId: f.binding.invocationId, measurements: [measured], diagnostics: [] },
+    })
+    expect(ack.measurements[0]?.scope).toEqual(measured.scope)
+    expect(ack.measurements[0]?.usage).toEqual(first.usage)
+    const countSources = (await f.db.select().from(taskExecutionObservationSources)).length
+    const countMappings = (await f.db.select().from(nativeUsageEmissions)).length
+    for (const [eventId, changed, message] of [
+      [
+        'missing-page-reference',
+        {
+          ...measured,
+          scope: {
+            ...measured.scope,
+            ancestry: {
+              ...measured.scope.ancestry,
+              pageOrdinal: String(BigInt(final.ordinal) + 1n),
+            },
+          },
+        },
+        'changed its persisted page',
+      ],
+      ['step-outside-earlier-page', { ...last, scope: first.scope }, 'step is absent or outside'],
+    ] as const) {
+      await expect(
+        emission.emit({
+          binding: f.binding,
+          eventId,
+          evidence: {
+            invocationId: f.binding.invocationId,
+            measurements: [changed],
+            diagnostics: [],
+          },
+        }),
+      ).rejects.toThrow(message)
+      expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(countSources)
+      expect(await f.db.select().from(nativeUsageEmissions)).toHaveLength(countMappings)
+    }
+    const completion = new DrizzleNativeUsageCompletion(f.db)
+    const proof = await completion.describeCompletion({
+      binding: f.binding,
+      observedAt: Date.now(),
+    })
+    expect(proof.state).toBe('complete')
+    expect(proof.issues).toEqual([])
+    expect(proof.final?.ack).toEqual(final)
+    await completion.seal({ binding: f.binding, completion: proof })
   })
 })

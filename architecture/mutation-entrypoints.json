@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1876,
+    "entries": 1877,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -30135,6 +30135,31 @@
     {
       "controls": {
         "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts#SealPort",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageCompletion.ts#SealPort",
+      "symbol": "SealPort",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "request",
         "authorization": true,
         "event": false,
@@ -44868,7 +44893,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a1ae054d5539aa95885e53a945687f6f9c057fe1b6493c9935c42c174954a085",
+  "sourceDigest": "sha256:4718145c6d8530ab026d6311ca2506f9497c9279360d22ddc0fe4abd7aaf8a56",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

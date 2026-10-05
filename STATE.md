@@ -1,3 +1,15 @@
+## 2026-10-05 RFC-371 原完整回执与最新修订资格
+
+原 Task claim／accepted invocation／node 事务从全部真实持久页、数字 source／冻结 ACK、spawn／reap／drain与唯一历史 meter 核对完成资格，扫描持续至实际 EOF。seal 原回执与原 source 同事务保存，真实提交后确认；partial允许后续补全，complete才封住 preparation。模型／时刻／人民币费率缺失不代替 Token资格，未知桶与 partial coverage独立保留已收到四桶数字。SOURCE8 v2 的两项 P2／FAIL保留，后继 v3／v4有限PASS；同帧取最高实际allocated revision，原 step可引用覆盖它的后续真实ACK，补双 provider双修订／后续页／缺页及早页回归。原1001步骤／80层、空EOF、历史修订前后和原全部断言预算保持。
+
+确切0cb05ac9的主CI／Windows失败，full E2E／WebKit／visual三定时CI成功，原终态与日志保持。只补原resume fixture reasoning:0以兑现既有output=3断言、必需时刻Object.is等价相等断言和并行原便捷public re-export删除；内部原span capture不变。共享participant提交包含并行的一行删除，其他在制品未收编。
+
+8确切源码候选的原scoped静态投影只运行一次，按已提交5083d73c完整并行源码与其canonical原行调和，sourceDigest sha256:4718145c6d8530ab026d6311ca2506f9497c9279360d22ddc0fe4abd7aaf8a56。13 matching保留129有序库存／why、306债、40SPI／69targets、原值级SCC及空implementation SCC；实际matching entry+1／imports+25／exception+21／owner+14具名增长，原便捷export删除及fixture类型补正已随并行6c3c7baa提交，本次不重复提交，四许可在对应源码提交后普通后继退役。匹配元数据／发布／新exact-SHA CI各自留证，不以源码门代替CI。
+
+仅目标format／lint及原纯AST／JSON，没有AW本机tests／typecheck／build／新服务或更换原daemon。页面泳道与已收到分类Token／CNY维持。producer numericPages仍OFF；原v2 captured／ledger／scope投影接线在制品及baseline snapshot原型均排除并保留，历史修订writer、长baseline性能、CS journal／Pod owner、实际100K Task／10M usage与两个RFC完成仍开放，未记Done。以下完整共享正文与并行输出逐字保留。
+
+原META v1有限PASS及v2两P2／FAIL保持；有限v3仅补原配置摘要输入与本前缀实际306债，原行调和、SOURCE8内容、规则／预算不变。原META v1有限PASS保留；本有限后继只使用其冻结JSON与实际5083d73c完整committed canonical逐行合成，原完整source bytes到EOF计算新digest，未重新跑AST扫描。两个已在6c3c7baa提交的SOURCE8文件逐字等同，余六文件保持原SOURCE8 v4内容；下一批在制品不收编。
+
 ## 2026-10-05 RFC-371 原生页与数字同事务及完整页验核
 
 原页 writer 在同一 Task claim／accepted invocation／node 事务内保存原 page／parent／step、追加真实数字 source、冻结实际水位 ACK，真实提交后才确认原 reader 页面。修订与原 source locator 按有界 SQL 批处理，但原 pending／已投影／observed 行持续到实际 EOF，没有总量阈值。完整 pass verifier 遍历每个原页、全部 parent／step membership、摘要／游标／精确 decimal 计数，最后持久页与冻结末 ACK 准确联校；resume 数字归属前先确认全部原 before 及实际成员。原 SOURCE13 v1 两 P2／FAIL 留证，新增真实双 provider 索引缺失／末 ACK 矛盾负例后，有限 SOURCE14 v2 PASS。
