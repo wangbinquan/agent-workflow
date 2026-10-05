@@ -1,5 +1,10 @@
 import { expect, test } from 'bun:test'
 import { ObservationNativeCaptureSchema } from '@agent-workflow/shared'
+import type {
+  ObservationNativeCompletion,
+  ObservationNativeMeasurement,
+  ObservationNativeScopeReference,
+} from '@agent-workflow/shared'
 import {
   ObservationNativeBeforeSpawnAckSchema,
   ObservationNativeCompletionSchema,
@@ -38,7 +43,7 @@ const ack = {
   sourceWatermark: '41',
   eof: { fingerprint: digest, counts },
 }
-const fresh = () => ({
+const fresh = (): ObservationNativeCompletion => ({
   contract: 'opencode-child-pages-v2',
   nativeSource: identity.nativeSource,
   rootSessionId: identity.rootSessionId,
@@ -56,7 +61,7 @@ const fresh = () => ({
   reconciliation: { examined: '0', resolved: '0', unresolved: '0', digest },
   issues: [],
 })
-const scope = {
+const scope: ObservationNativeScopeReference = {
   root: identity.rootSessionId,
   session: 'original-child',
   parentSession: identity.rootSessionId,
@@ -71,7 +76,7 @@ const scope = {
   turnIndex: 0,
   level: 'request',
 }
-const measurement = {
+const measurement: ObservationNativeMeasurement = {
   schemaVersion: 1,
   invocationId: identity.invocationId,
   recordId: 'opencode:step:original-part',

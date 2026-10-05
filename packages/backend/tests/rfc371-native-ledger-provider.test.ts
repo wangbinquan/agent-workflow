@@ -332,7 +332,8 @@ describeEachProvider('RFC-371 original native ledger projection and complete rep
       cacheRead: '6',
       cacheWrite: '10',
       output: null,
-      total: null,
+      // Recorded totals retain all received buckets even when one actual bucket is unknown.
+      total: '19',
     })
     await processFacts(f, true, spawn)
     const next = await seal(f)

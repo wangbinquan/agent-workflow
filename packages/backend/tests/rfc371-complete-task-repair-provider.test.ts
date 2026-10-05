@@ -117,6 +117,8 @@ describeEachProvider('RFC-371 complete statistics original repair and coverage',
     const capture = (await store.captures([resumed.invocationId]))[0]!
     expect(capture.priorRevisionGap).toBe(false)
     expect(capture.capture.state).toBe('partial')
+    if (capture.capture.contract !== 'opencode-child-steps-v1')
+      throw new Error('Original legacy repair changed contract')
     expect(capture.capture.priorRevisions).toEqual(resumed.capture!.priorRevisions)
     expect(capture.resolutions).toMatchObject([
       {

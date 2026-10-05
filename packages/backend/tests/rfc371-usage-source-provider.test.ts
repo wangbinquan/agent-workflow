@@ -241,9 +241,10 @@ describeEachProvider('RFC-371 committed numeric source projection', (harness) =>
       'invocation-other',
     ])
     expect(rows.every((row) => row.priorRevisionGap)).toBe(true)
-    expect(
-      rows.find((row) => row.invocationId === 'invocation-other')!.capture.priorRevisions[0],
-    ).toMatchObject({
+    const original = rows.find((row) => row.invocationId === 'invocation-other')!.capture
+    if (original.contract !== 'opencode-child-steps-v1')
+      throw new Error('Original legacy source changed contract')
+    expect(original.priorRevisions[0]).toMatchObject({
       before: { usage: { input: '100' } },
       after: { usage: { input: '200' } },
     })
