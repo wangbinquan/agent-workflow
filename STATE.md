@@ -10122,3 +10122,6 @@ SOURCE10-R1 原功能门 FAIL 保留；R2 通过实际可消费的逻辑 resourc
 fb7a27bd 的精确 CI37264298394 已终态 failure，45 success／5 failure；此前本会话额外格式化生成状态所致逐字失败已消除，原 status oracle 在 Ubuntu12／macOS4 通过。剩余失败为 RFC371 TS2322／latest revision 用例、SQLite lease 用例5000ms超时及 required 汇总；不以此前 PG／E2E 本次通过替代旧失败修复证明，也不削弱任何原断言或预算。新源码批次 matching metadata 门、精确上库与新 exact-SHA CI 分别验收。
 
 只做自有 format／lint、纯 AST／JSON／字节与原静态投影，无本机 AW tests／typecheck／build／service。完整 selected material／evidence／lifecycle／execution／receipt 组合、所有真根、脚本／专用命令、A-T6 执行权／恢复、A-T7／A-G 继续；独立 CS adapters、M0 首次实际部署和 M1～M4 尚未开始，本增量不关闭 A-T5 或 RFC。共享原正文逐字保留，仅追加本段。
+
+
+- 2026-10-05 RFC-370 H4 执行接口已精确发布：SOURCE11-R2／META16-R1 独立有限 PASS，提交 ad1da74c0463f2f77e0e93e2df127e5e3412b07a，post-fetch main／origin 同步0/0、shared index空、并行源码未纳入。此正常后继只退役本批已消费的三条实际增长许可，129原库存／数值／why与源码／分类器／status raw字节不变，provenance由原helper刷新；不重新census。hosted新精确SHA CI另验收，未把有限源码门当成A-T5／A-G或部署完成；CS adapters、M0首次部署和M1～M4继续开放。两份共享记录原正文逐字保留，只追加本行。
