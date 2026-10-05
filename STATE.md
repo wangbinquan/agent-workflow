@@ -10202,3 +10202,9 @@ ab30 主 CI37296573386 正式 completed/cancelled（21 success／7 failure／20 
 修正源码只运行一次 matching 原静态 census，非 owned 源码和四规则只读已提交 62c00f516f58f63e84bf047deee9252c58ee1c4c；排除并保留两份并行 nativeUsageBaseline WIP。sourceDigest sha256:1a809232890dcdb7874963bc5e596bc8402d1be500da74eda7a16abe5d578425。原 helper 退役六组已删除的真实 import 债、保留316旧 authored 行并登记八组真实新 import，最终324（inbound289／outbound35）；offered DAG 两条旧 RM→TE 债实际消失，39→37，原 predicate／预算／全部其余行保持。129原有序 ledger／why、40 SPI／69 targets、空 implementation SCC 及原值级 SCC 保持；actual imports6400→6402、public1154→1156、owners26829→26833 三项匹配许可须对应源码发布后的正常后继退役；exceptions5678→5675。纯投影 helper 首轮未同步 offered39 的诊断保留，修正仅投影 original counter 的真实37，不重跑 census或改 classifier。
 
 3cade 主 CI37301196167 正式 cancelled；a476主CI37302620817正式 failure，实际剩余旧 receipt oracle 已随并行62c源修复完整提交，新确切 SHA CI仍需终态。此增量仅 owner 归属及 readonly 正常接口，尚未实现 two-phase selected factory／全部真根，不能关闭A-T5／A-G／RFC。脚本／执行权恢复、CS独立 adapters、M0真实部署和M1～M4继续；AW未部署CS。仅自有格式／lint、纯AST／字节／JSON及原静态生成；无本机AW tests／typecheck／build／service。共享原全文逐字保留，只追加本段。
+
+### 2026-10-05 RFC-370 readonly live evidence CI 后继
+
+联合绑定归属与只读视图已精确发布9d74a1e1db0c3cfb795aab4f71f064525dda39f5的33路径，SOURCE17-DOC1-R2／META15-R1独立有限PASS，post-fetch main／origin同步0/0、index空，全部并行输出保持。Windows37311325395正式failure，287 pass／3 skip／1 fail；唯一旧Map类型文本预言现映射到真实ReadonlyMap／ReadonlySet，原五用例／其余断言／预算和全部生产算法保留。正常后继同时退役已消费三许可（imports6402／public1156／owners26833），129原有序库存、数值／why／其余字段保持，由原provenance helper刷新，无 census／源码门重跑。详情见 design/RFC-370-crewstation-hosted-deployment/agent-invocation-readonly-ci-repair.md。
+
+原失败和commit前停止回执完整保留，新确切SHA CI另验收；无本机AW tests／typecheck／build／service。后续工厂在制品、观测WIP不纳入本片提交，完整工厂／入口／脚本／执行权恢复／A-G及CS M0～M4继续，未部署AW、不关闭RFC。共享旧全文逐字保持，仅追加本段。

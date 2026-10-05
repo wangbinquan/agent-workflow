@@ -70,7 +70,7 @@ describe('RFC-048 source-layout guards', () => {
 
   test('sessionCapture.ts captureChildSessions exposes alreadyInsertedPartIds + still loads sibling sessionIds', () => {
     const src = read('packages/backend/src/services/runtime/opencode/sessionCapture.ts')
-    expect(src).toContain('alreadyInsertedPartIds?: Map<string, Set<string>>')
+    expect(src).toContain('alreadyInsertedPartIds?: ReadonlyMap<string, ReadonlySet<string>>')
     expect(src).toContain('export async function loadSiblingsCapturedSessionIds(')
   })
 })
