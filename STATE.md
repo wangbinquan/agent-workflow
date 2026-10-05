@@ -10231,3 +10231,7 @@ CS自有测试分层修复已直接提交远端be7e9d3584a15b0fcbcf85162d736d749
 ## 2026-10-05 RFC-371 原 Task 生命周期独立发布接续
 
 按用户要求只提交本会话的19个相关文件，不联系其他会话。原 SOURCE v2 的18份候选及before字节不变；e3e3bb518 后继仅改变两个受影响依赖，新增type-only出口及原材料函数export，函数体与既有出口保留，追加有限兼容性核对。并行canonical已提交，下一片只生成与本批源码匹配的登记。CS be7e9d35六项CI已通过；本机部署在读取当前镜像与344回执不同处停止，尚未修改资源，正在核对实际OCI来源。原失败与在制品全部保留，本片不宣称producer默认激活或两个RFC完成。
+
+## 2026-10-05 RFC-371 原 Task 生命周期 matching 登记
+
+自有19文件已独立提交推送 ad44676318f1e5835d1ffdb2da3ea751126b65e9，main/origin同步，未联系其他会话、未提交其源码。原SOURCE v2与两个additive export补充均有限PASS；只读取该完整已提交源码运行一次原官方AST，排除在制prototype及并行Smoke源码。13 matching产物、129原有序库存及why、329原债、规则/目标/SPI/SCC保留；四项真实库存增长具名登记，原六个已消费许可在正常后继退役，新的四许可在下一普通登记提交退役。静态生成、有限门及hosted精确SHA CI分别验收；未运行本机AW tests/types/build/service，生产producer默认选择、恢复/多root/规模和CS平台v2仍继续，不关闭两RFC。

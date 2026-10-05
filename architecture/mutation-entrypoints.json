@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1885,
+    "entries": 1888,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -21681,6 +21681,30 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/application/nativePageCapture.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/application/nativePageCapture.ts#createNativePageCapture",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/application/nativePageCapture.ts#createNativePageCapture",
+      "symbol": "createNativePageCapture",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": true,
         "event": false,
         "fenceOrOcc": true,
@@ -22837,6 +22861,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts#opencodeLocalAgentMaterial",
       "symbol": "opencodeLocalAgentMaterial",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts#opencodeNativeStoreGeneration",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts#opencodeNativeStoreGeneration",
+      "symbol": "opencodeNativeStoreGeneration",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -28197,6 +28246,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/localAgentInvocationPreparation.ts#createLocalAgentInvocationPreparation",
       "symbol": "createLocalAgentInvocationPreparation",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts#createNativeUsageInvocationPersistence",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts#createNativeUsageInvocationPersistence",
+      "symbol": "createNativeUsageInvocationPersistence",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -45086,7 +45159,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2e04978b5cbd31ea4b1eddb81de8e1cb9432418a6f252df9869f9f988a5d5309",
+  "sourceDigest": "sha256:1a38238408f7bce0be47440130f4f71a79934492f80acff9185cb735ffcffd00",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

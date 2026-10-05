@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2225,
+    "backendFiles": 2230,
     "frontendFiles": 654,
     "legacyFiles": 588,
-    "moduleFiles": 1637,
-    "productionFiles": 3046,
+    "moduleFiles": 1642,
+    "productionFiles": 3051,
     "sharedFiles": 167,
-    "symbolsIncludingFileRoots": 26855
+    "symbolsIncludingFileRoots": 26866
   },
   "entries": [
     {
@@ -113714,6 +113714,30 @@
       "currentContext": "runtime-management",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/application/nativePageCapture.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/nativePageCapture.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/application/nativePageCapture.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/nativePageCapture.ts#createNativePageCapture",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createNativePageCapture",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/application/nativeSpanCapture.ts#$file",
       "removeAfterWave": null,
@@ -114343,6 +114367,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "NativeUsageCaptureIdentity",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/nativeUsageCapture.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/nativeUsageCapture.ts#NativeUsageDurableOwner",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NativeUsageDurableOwner",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -116167,6 +116203,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "isRuntimeMcpTestEligible",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts#opencodeNativeStoreGeneration",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "opencodeNativeStoreGeneration",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -130804,6 +130864,30 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts#finalizeNativeUsageInvocation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "finalizeNativeUsageInvocation",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/frameBackfillJob.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/frameBackfillJob.ts#$file",
       "removeAfterWave": null,
@@ -132573,6 +132657,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "MergeStateProjectionPatch",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts#NativeUsageInvocationPersistence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NativeUsageInvocationPersistence",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -139053,6 +139161,30 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "createLocalAgentInvocationPreparation",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts#createNativeUsageInvocationPersistence",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "createNativeUsageInvocationPersistence",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -322997,5 +323129,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2e04978b5cbd31ea4b1eddb81de8e1cb9432418a6f252df9869f9f988a5d5309"
+  "sourceDigest": "sha256:1a38238408f7bce0be47440130f4f71a79934492f80acff9185cb735ffcffd00"
 }

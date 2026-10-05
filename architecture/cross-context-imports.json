@@ -10711,6 +10711,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/nativeUsageCapture.ts#$file",
+      "fromPath": "packages/backend/src/modules/runtime-management/composition/nativeUsageCapture.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:1b1eb1370604ac313025",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/background/nativeUsagePassWorkerHost.ts#openNativeUsagePassWorker",
+      "toPath": "packages/backend/src/platform/background/nativeUsagePassWorkerHost.ts",
+      "toSymbol": "openNativeUsagePassWorker",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/webhook/webhookDispatch.ts#$file",
@@ -17785,6 +17802,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
+      "fromPath": "packages/backend/src/services/runner.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:2d38ed85f6c3509249cc",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "platform",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts#finalizeNativeUsageInvocation",
+      "toPath": "packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts",
+      "toSymbol": "finalizeNativeUsageInvocation",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "fromSymbol": "$file",
@@ -23815,6 +23849,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/auth/application/authRuntime.ts#hashAuthToken",
       "toPath": "packages/backend/src/auth/application/authRuntime.ts",
       "toSymbol": "hashAuthToken",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts#$file",
+      "fromPath": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:3d25e585e890254daa7c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -69414,6 +69465,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:ba3f629854cc60efe256",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/reviewMutationScope.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/reviewMutationScope.ts",
       "fromSymbol": "$file",
@@ -93280,6 +93348,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:f785aff1631de6dd620b",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/code-capability/infrastructure/capabilityTemplatePersistence.ts#$file",
@@ -96749,9 +96834,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5691,
+    "architectureExceptions": 5696,
     "implementationSccs": 0,
-    "observedEdges": 6434,
+    "observedEdges": 6442,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -100838,6 +100923,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/logicalDatabaseRestore.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/logicalDatabaseRestore.ts#LogicalTargetTableVerification"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts#$file",
+      "id": "import:09d34d5e5d190d2dee8b",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "NativeUsageCapture",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -107862,6 +107963,22 @@
       "toContext": "development-automation",
       "toFile": "packages/backend/src/modules/development-automation/composition/activityOperations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/development-automation/composition/activityOperations.ts#composeDevelopmentActivityOperations"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "runtime-management",
+      "fromFile": "packages/backend/src/modules/runtime-management/composition/nativeUsageCapture.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/composition/nativeUsageCapture.ts#$file",
+      "id": "import:1b1eb1370604ac313025",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/background/nativeUsagePassWorkerHost",
+      "syntax": "static-import",
+      "targetSymbol": "openNativeUsagePassWorker",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/background/nativeUsagePassWorkerHost.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/background/nativeUsagePassWorkerHost.ts#openNativeUsagePassWorker"
     },
     {
       "edgeKind": "type",
@@ -115497,6 +115614,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/services/runner.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/services/runner.ts#$file",
+      "id": "import:2d38ed85f6c3509249cc",
+      "owner": "platform",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/task-execution/application/finalizeNativeUsageInvocation",
+      "syntax": "static-import",
+      "targetSymbol": "finalizeNativeUsageInvocation",
+      "toContext": "task-execution",
+      "toFile": "packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts#finalizeNativeUsageInvocation"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
@@ -120153,6 +120286,22 @@
     },
     {
       "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts#$file",
+      "id": "import:38a2389d52c40734c406",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/runtime-management/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "NativeUsageCaptureIdentity",
+      "toContext": "runtime-management",
+      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
+    },
+    {
+      "edgeKind": "type",
       "fromContext": "identity-access",
       "fromFile": "packages/backend/src/modules/identity-access/public/operations.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/operations.ts#$file",
@@ -121814,6 +121963,22 @@
       "toContext": "source-control",
       "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#RepositoryScopeTarget"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "runtime-management",
+      "fromFile": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts#$file",
+      "id": "import:3d25e585e890254daa7c",
+      "owner": "runtime-management",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
       "edgeKind": "value",
@@ -158712,6 +158877,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/resourceAcl.ts#composeForeignResourceAclFor"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts#$file",
+      "id": "import:9bad4b8cb2daa032226d",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "offered-consumption",
+      "specifier": "@/modules/run-observability/public/participants",
+      "syntax": "static-import",
+      "targetSymbol": "ObservationInvocationParticipant",
+      "toContext": "run-observability",
+      "toFile": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationInvocationParticipant"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/server.ts",
@@ -170966,6 +171147,22 @@
       "toContext": "source-control",
       "toFile": "packages/backend/src/modules/source-control/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/source-control/public/participants.ts#$file"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts#$file",
+      "id": "import:ba3f629854cc60efe256",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
       "edgeKind": "value",
@@ -196072,6 +196269,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/reviewMutationCoordinator.ts#withReviewNodeMutationLock"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nativeUsageInvocation.ts#$file",
+      "id": "import:f785aff1631de6dd620b",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "code-capability",
       "fromFile": "packages/backend/src/modules/code-capability/infrastructure/capabilityTemplatePersistence.ts",
@@ -200594,7 +200807,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2e04978b5cbd31ea4b1eddb81de8e1cb9432418a6f252df9869f9f988a5d5309",
+  "sourceDigest": "sha256:1a38238408f7bce0be47440130f4f71a79934492f80acff9185cb735ffcffd00",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

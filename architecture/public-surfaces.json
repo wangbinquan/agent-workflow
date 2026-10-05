@@ -1,11 +1,11 @@
 {
   "denominator": {
-    "consumers": 1188,
+    "consumers": 1191,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1469,
+    "methods": 1499,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 26223,
+    "recursiveFields": 26442,
     "symbols": 1163
   },
   "entries": [
@@ -124721,6 +124721,7 @@
       },
       "consumerEdgeIds": [
         "import:198402857a3c440266f9",
+        "import:9bad4b8cb2daa032226d",
         "import:a7270198332e68bb8ccf",
         "import:d31343f538211997c46a"
       ],
@@ -124737,6 +124738,7 @@
         {
           "consumerEdgeIds": [
             "import:198402857a3c440266f9",
+            "import:9bad4b8cb2daa032226d",
             "import:a7270198332e68bb8ccf",
             "import:d31343f538211997c46a"
           ],
@@ -124775,6 +124777,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:9bad4b8cb2daa032226d",
             "import:a7270198332e68bb8ccf"
           ],
           "fieldPath": "$method:spanOwners.$parameter:input.invocationId",
@@ -124789,6 +124792,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:9bad4b8cb2daa032226d",
             "import:a7270198332e68bb8ccf"
           ],
           "fieldPath": "$method:spanOwners.$parameter:input.rootSessionId",
@@ -124841,12 +124845,16 @@
           "signatureDigest": "sha256:51f1122fb98bcd3720f825076e03d5fbb85cc5869c62dba69c0f6316871bc355"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:9bad4b8cb2daa032226d"
+          ],
           "name": "reconcile",
           "signatureDigest": "sha256:57b2bffa5fdbe8e6f5e37849477ced82da80914122b563577ac59ef42d0b7b14"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:9bad4b8cb2daa032226d"
+          ],
           "name": "reconcileNativeHistory",
           "signatureDigest": "sha256:826c95c86367e878a3d02ce8059d14720e012492e388117eedddcfddd16bdccb"
         },
@@ -124865,6 +124873,12 @@
           "edgeId": "import:198402857a3c440266f9",
           "file": "packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskEngineRuntimeOptions.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:9bad4b8cb2daa032226d",
+          "file": "packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts#$file"
         },
         {
           "context": "legacy",
@@ -132593,10 +132607,10 @@
     {
       "authority": "context-bound",
       "budget": {
-        "maxMethods": 31,
+        "maxMethods": 41,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 200,
-        "maxUnionVariants": 64
+        "maxTransitiveLeafFields": 273,
+        "maxUnionVariants": 82
       },
       "consumerEdgeIds": [
         "import:26adc1d83d57369c678b"
@@ -132898,6 +132912,331 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$parameter:before",
+          "type": "z.infer<typeof ObservationNativeBeforeSpawnAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.epoch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.lineage",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.passId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.phase.$variant:0",
+          "type": "'baseline'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.phase.$variant:1",
+          "type": "'final'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:initialCursor",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:rootCreatedAt.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:rootCreatedAt.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$return",
+          "type": "z.infer<typeof ObservationNativePassAdmissionSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.epoch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.lineage",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.passId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.phase.$variant:0",
+          "type": "'baseline'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.phase.$variant:1",
+          "type": "'final'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:reason",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.counts.parts",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.counts.sessions",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.counts.steps",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.cumulativeDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.cursor",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:0.counts.parts",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:0.counts.sessions",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:0.counts.steps",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:0.fingerprint",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.epoch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.lineage",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.passId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.phase.$variant:0",
+          "type": "'baseline'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.phase.$variant:1",
+          "type": "'final'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.nextCursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.ordinal",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.payloadDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.previousDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.scannedRawRows",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.scanPositionAfter",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.scanPositionBefore",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.sessions",
+          "type": "readonly NativeUsagePassSession[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.steps",
+          "type": "readonly NativeUsagePassStep[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$return",
+          "type": "z.infer<typeof ObservationNativePassAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.resumeRootSessionId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.resumeRootSessionId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$return",
+          "type": "z.infer<typeof ObservationNativeBeforeSpawnAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:recordProcess.$parameter:fact",
+          "type": "z.infer<typeof ObservationNativeProcessFactSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:recordProcess.$return",
+          "type": "z.infer<typeof ObservationNativeSourceAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:seal.$parameter:observedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:seal.$return",
+          "type": "z.infer<typeof ObservationNativeSourceAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.invocationId",
           "type": "string"
         },
@@ -132928,6 +133267,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$return.$method:beginDurable.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:prepareNativeUsageCapture.$return.$method:finish.$parameter:issues",
           "type": "readonly string[]"
         },
@@ -132953,6 +133297,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$return.$method:finishDurable.$parameter:rootSessionId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$return.$method:finishDurable.$parameter:rootSessionId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$return.$method:finishDurable.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:prepareNativeUsageCapture.$return.$method:includesRecord.$parameter:recordId",
           "type": "string"
         },
@@ -132963,8 +133322,28 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:prepareNativeUsageCapture.$return.contract",
+          "fieldPath": "$method:prepareNativeUsageCapture.$return.$method:recordProcess.$parameter:fact",
+          "type": "z.infer<typeof ObservationNativeProcessFactSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$return.$method:recordProcess.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$return.$method:sealDurable.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$return.contract.$variant:0",
           "type": "'opencode-child-steps-v1'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$return.contract.$variant:1",
+          "type": "'opencode-child-pages-v2'"
         },
         {
           "consumerEdgeIds": [],
@@ -133613,6 +133992,11 @@
       "methods": [
         {
           "consumerEdgeIds": [],
+          "name": "admit",
+          "signatureDigest": "sha256:6f2d6465cf27b90e23e36faaf76c14a9ec23ed252124e294ad3ae0f78b590b65"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "append",
           "signatureDigest": "sha256:26ae1b4fd131ea1918a850daf2d252a19e35c81275001ca05e980b63e825cbaa"
         },
@@ -133625,6 +134009,11 @@
           "consumerEdgeIds": [],
           "name": "begin",
           "signatureDigest": "sha256:1bb2f630373b98064235fa7c4129e6d40d0f271a5d035a9a883d0b36e134af7d"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "beginDurable",
+          "signatureDigest": "sha256:6bd592b9ccd22b8c1fd574f89877f3996fe5508b052eaa1cd29386864f9d161d"
         },
         {
           "consumerEdgeIds": [],
@@ -133673,6 +134062,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "finishDurable",
+          "signatureDigest": "sha256:b4f77fa91632e4b5e090bbfe88718036ad2d021aaa6b4cb594ac3c6e882ff37b"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "flush",
           "signatureDigest": "sha256:58b7e79b34c16eb8a7e96f329a0140c55afa7dc222a802ca1421f067039a0958"
         },
@@ -133685,6 +134079,11 @@
           "consumerEdgeIds": [],
           "name": "info",
           "signatureDigest": "sha256:8b43a7a5a66e4db411b0c228f7556ec6c585330c68a3902c66cac1cbb819e323"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "interrupt",
+          "signatureDigest": "sha256:015a124a403225a08ae0e23f02fa198da8d93a7cfbd7fa3a52fd149b0f9e84f9"
         },
         {
           "consumerEdgeIds": [],
@@ -133713,6 +134112,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "passOwner",
+          "signatureDigest": "sha256:f1ee131681cf3b95cc21c7baefbc22faedb1c40e316461573afa3769b52b2444"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "persist",
+          "signatureDigest": "sha256:9f5da29c78b89a0c9825a55fac7b3e99ed2c0be54ebc1e208c494b895f722eb4"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "prepare",
+          "signatureDigest": "sha256:21afc51d2a036ab93fb0d55e13c72d3de062ad4f1ddb1879505878f93df6d3ca"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "prepareNativeUsageCapture",
           "signatureDigest": "sha256:ec70ee33c703853685e95625ae2fced26b56eed6ef56671253389c35b248cdf7"
         },
@@ -133733,8 +134147,23 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "recordProcess",
+          "signatureDigest": "sha256:d745680fbc8765113a0ae6de598bc7fdf644d167c5bb8c731db0599f92a05b1e"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "resolveTaskId",
           "signatureDigest": "sha256:425280933bffaf9ecd1f0883f4fee9a1f3807a0fb0c01016b2d42d62328ef8a5"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "seal",
+          "signatureDigest": "sha256:d1115798842ed0af0e0533a23a37249d607dc77999c3d10697f822800226b58c"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "sealDurable",
+          "signatureDigest": "sha256:907acf9852700016a2238fdab82d3a8f8e0a063587eaf97ec9b38020d9120ad4"
         },
         {
           "consumerEdgeIds": [],
@@ -135183,12 +135612,13 @@
     {
       "authority": "context-bound",
       "budget": {
-        "maxMethods": 5,
+        "maxMethods": 7,
         "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:09d34d5e5d190d2dee8b",
         "import:25d6e3fda5a55ab36a5d"
       ],
       "context": "runtime-management",
@@ -135199,6 +135629,11 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:begin.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:beginDurable.$return",
           "type": "void"
         },
         {
@@ -135228,6 +135663,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "$method:finishDurable.$parameter:rootSessionId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:finishDurable.$parameter:rootSessionId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:finishDurable.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "$method:includesRecord.$parameter:recordId",
           "type": "string"
         },
@@ -135237,11 +135687,29 @@
           "type": "boolean"
         },
         {
-          "consumerEdgeIds": [
-            "import:25d6e3fda5a55ab36a5d"
-          ],
-          "fieldPath": "contract",
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recordProcess.$parameter:fact",
+          "type": "z.infer<typeof ObservationNativeProcessFactSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:recordProcess.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:sealDurable.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "contract.$variant:0",
           "type": "'opencode-child-steps-v1'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "contract.$variant:1",
+          "type": "'opencode-child-pages-v2'"
         },
         {
           "consumerEdgeIds": [],
@@ -135260,17 +135728,47 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "beginDurable",
+          "signatureDigest": "sha256:6bd592b9ccd22b8c1fd574f89877f3996fe5508b052eaa1cd29386864f9d161d"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "finish",
           "signatureDigest": "sha256:7a23713809b1216c45145e6bdafea42fd65a2b9971830059f21ca1ff00c69c2d"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:09d34d5e5d190d2dee8b"
+          ],
+          "name": "finishDurable",
+          "signatureDigest": "sha256:b4f77fa91632e4b5e090bbfe88718036ad2d021aaa6b4cb594ac3c6e882ff37b"
         },
         {
           "consumerEdgeIds": [],
           "name": "includesRecord",
           "signatureDigest": "sha256:d0aca65d70ba0ecfe11f06380d95a00c25548a3fc610230187f57167dcef03f3"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "recordProcess",
+          "signatureDigest": "sha256:d745680fbc8765113a0ae6de598bc7fdf644d167c5bb8c731db0599f92a05b1e"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:09d34d5e5d190d2dee8b"
+          ],
+          "name": "sealDurable",
+          "signatureDigest": "sha256:907acf9852700016a2238fdab82d3a8f8e0a063587eaf97ec9b38020d9120ad4"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
       "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:09d34d5e5d190d2dee8b",
+          "file": "packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/finalizeNativeUsageInvocation.ts#$file"
+        },
         {
           "context": "legacy",
           "edgeId": "import:25d6e3fda5a55ab36a5d",
@@ -135296,12 +135794,13 @@
     {
       "authority": "context-bound",
       "budget": {
-        "maxMethods": 5,
+        "maxMethods": 7,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
+        "maxTransitiveLeafFields": 72,
+        "maxUnionVariants": 16
       },
       "consumerEdgeIds": [
+        "import:38a2389d52c40734c406",
         "import:d70a8f2b0aab923f89f4"
       ],
       "context": "runtime-management",
@@ -135320,7 +135819,366 @@
           "type": "null"
         },
         {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$parameter:before",
+          "type": "z.infer<typeof ObservationNativeBeforeSpawnAckSchema>"
+        },
+        {
           "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.epoch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:38a2389d52c40734c406",
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.lineage",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.passId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.phase.$variant:0",
+          "type": "'baseline'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.phase.$variant:1",
+          "type": "'final'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$parameter:initialCursor",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$parameter:rootCreatedAt.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$parameter:rootCreatedAt.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:admit.$return",
+          "type": "z.infer<typeof ObservationNativePassAdmissionSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.epoch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:38a2389d52c40734c406",
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.lineage",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.passId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.phase.$variant:0",
+          "type": "'baseline'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.phase.$variant:1",
+          "type": "'final'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:reason",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:interrupt.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.counts.parts",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.counts.sessions",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.counts.steps",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.cumulativeDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.cursor",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:0.counts.parts",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:0.counts.sessions",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:0.counts.steps",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:0.fingerprint",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.epoch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:38a2389d52c40734c406",
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.lineage",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.passId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.phase.$variant:0",
+          "type": "'baseline'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.phase.$variant:1",
+          "type": "'final'"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.nextCursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.ordinal",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.payloadDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.previousDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.scannedRawRows",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.scanPositionAfter",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.scanPositionBefore",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.sessions",
+          "type": "readonly NativeUsagePassSession[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.steps",
+          "type": "readonly NativeUsagePassStep[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:passOwner.$return.$method:persist.$return",
+          "type": "z.infer<typeof ObservationNativePassAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:prepare.$parameter:input.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:prepare.$parameter:input.resumeRootSessionId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:prepare.$parameter:input.resumeRootSessionId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:prepare.$parameter:input.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:prepare.$return",
+          "type": "z.infer<typeof ObservationNativeBeforeSpawnAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:recordProcess.$parameter:fact",
+          "type": "z.infer<typeof ObservationNativeProcessFactSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:recordProcess.$return",
+          "type": "z.infer<typeof ObservationNativeSourceAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:seal.$parameter:observedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:seal.$return",
+          "type": "z.infer<typeof ObservationNativeSourceAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:38a2389d52c40734c406",
             "import:d70a8f2b0aab923f89f4"
           ],
           "fieldPath": "invocationId",
@@ -135333,6 +136191,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:38a2389d52c40734c406",
             "import:d70a8f2b0aab923f89f4"
           ],
           "fieldPath": "nodeRunId",
@@ -135347,6 +136206,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:38a2389d52c40734c406",
             "import:d70a8f2b0aab923f89f4"
           ],
           "fieldPath": "taskId",
@@ -135356,9 +136216,53 @@
       "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
       "id": "public:runtime-management:participants:NativeUsageCaptureIdentity",
       "members": [],
-      "methods": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "admit",
+          "signatureDigest": "sha256:6f2d6465cf27b90e23e36faaf76c14a9ec23ed252124e294ad3ae0f78b590b65"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "interrupt",
+          "signatureDigest": "sha256:015a124a403225a08ae0e23f02fa198da8d93a7cfbd7fa3a52fd149b0f9e84f9"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "passOwner",
+          "signatureDigest": "sha256:f1ee131681cf3b95cc21c7baefbc22faedb1c40e316461573afa3769b52b2444"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:d70a8f2b0aab923f89f4"
+          ],
+          "name": "persist",
+          "signatureDigest": "sha256:9f5da29c78b89a0c9825a55fac7b3e99ed2c0be54ebc1e208c494b895f722eb4"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "prepare",
+          "signatureDigest": "sha256:21afc51d2a036ab93fb0d55e13c72d3de062ad4f1ddb1879505878f93df6d3ca"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "recordProcess",
+          "signatureDigest": "sha256:e32e576cce3722c83f0a4f6b0e12cdbf9cb1bd19bf56ffcc52922ec4ea9e5aa9"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "seal",
+          "signatureDigest": "sha256:d1115798842ed0af0e0533a23a37249d607dc77999c3d10697f822800226b58c"
+        }
+      ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
       "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:38a2389d52c40734c406",
+          "file": "packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/nativeUsageInvocation.ts#$file"
+        },
         {
           "context": "legacy",
           "edgeId": "import:d70a8f2b0aab923f89f4",
@@ -135376,7 +136280,9 @@
       "status": "target-context-current-surface",
       "symbol": "NativeUsageCaptureIdentity",
       "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
       "version": 1
     },
     {
@@ -135462,9 +136368,12 @@
         }
       ],
       "publicTypeConsumerIds": [
+        "public:runtime-management:participants:AgentMaterialEvidence",
+        "public:runtime-management:participants:NativeUsageCaptureIdentity",
         "public:runtime-management:participants:NativeUsagePassPage",
         "public:runtime-management:participants:NativeUsagePassReader",
-        "public:runtime-management:participants:openOpencodeUsagePass"
+        "public:runtime-management:participants:openOpencodeUsagePass",
+        "public:task-execution:participants:AgentInvocationBinding"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -135671,8 +136580,11 @@
         }
       ],
       "publicTypeConsumerIds": [
+        "public:runtime-management:participants:AgentMaterialEvidence",
+        "public:runtime-management:participants:NativeUsageCaptureIdentity",
         "public:runtime-management:participants:NativeUsagePassReader",
-        "public:runtime-management:participants:openOpencodeUsagePass"
+        "public:runtime-management:participants:openOpencodeUsagePass",
+        "public:task-execution:participants:AgentInvocationBinding"
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
@@ -176377,10 +177289,10 @@
     {
       "authority": "context-bound",
       "budget": {
-        "maxMethods": 46,
+        "maxMethods": 55,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 431,
-        "maxUnionVariants": 161
+        "maxTransitiveLeafFields": 504,
+        "maxUnionVariants": 179
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24"
@@ -177382,6 +178294,331 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$parameter:before",
+          "type": "z.infer<typeof ObservationNativeBeforeSpawnAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.epoch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.lineage",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.passId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.phase.$variant:0",
+          "type": "'baseline'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.phase.$variant:1",
+          "type": "'final'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:identity.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:initialCursor",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:rootCreatedAt.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$parameter:rootCreatedAt.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:admit.$return",
+          "type": "z.infer<typeof ObservationNativePassAdmissionSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.epoch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.lineage",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.passId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.phase.$variant:0",
+          "type": "'baseline'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.phase.$variant:1",
+          "type": "'final'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:identity.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$parameter:reason",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:interrupt.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.counts.parts",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.counts.sessions",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.counts.steps",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.cumulativeDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.cursor",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:0.counts.parts",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:0.counts.sessions",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:0.counts.steps",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:0.fingerprint",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.eof.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.epoch",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.lineage",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.passId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.phase.$variant:0",
+          "type": "'baseline'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.phase.$variant:1",
+          "type": "'final'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.rootSessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.identity.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.issues",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.nextCursor.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.nextCursor.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.ordinal",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.payloadDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.previousDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.scannedRawRows",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.scanPositionAfter",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.scanPositionBefore",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.sessions",
+          "type": "readonly NativeUsagePassSession[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$parameter:page.steps",
+          "type": "readonly NativeUsagePassStep[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:passOwner.$return.$method:persist.$return",
+          "type": "z.infer<typeof ObservationNativePassAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.resumeRootSessionId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.resumeRootSessionId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$return",
+          "type": "z.infer<typeof ObservationNativeBeforeSpawnAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:recordProcess.$parameter:fact",
+          "type": "z.infer<typeof ObservationNativeProcessFactSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:recordProcess.$return",
+          "type": "z.infer<typeof ObservationNativeSourceAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:seal.$parameter:observedAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:seal.$return",
+          "type": "z.infer<typeof ObservationNativeSourceAckSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.invocationId",
           "type": "string"
         },
@@ -177412,6 +178649,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.$method:beginDurable.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.$method:finish.$parameter:issues",
           "type": "readonly string[]"
         },
@@ -177437,6 +178679,21 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.$method:finishDurable.$parameter:rootSessionId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.$method:finishDurable.$parameter:rootSessionId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.$method:finishDurable.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.$method:includesRecord.$parameter:recordId",
           "type": "string"
         },
@@ -177447,8 +178704,28 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.contract",
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.$method:recordProcess.$parameter:fact",
+          "type": "z.infer<typeof ObservationNativeProcessFactSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.$method:recordProcess.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.$method:sealDurable.$return",
+          "type": "void"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.contract.$variant:0",
           "type": "'opencode-child-steps-v1'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$return.contract.$variant:1",
+          "type": "'opencode-child-pages-v2'"
         },
         {
           "consumerEdgeIds": [],
@@ -178557,6 +179834,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "admit",
+          "signatureDigest": "sha256:6f2d6465cf27b90e23e36faaf76c14a9ec23ed252124e294ad3ae0f78b590b65"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "append",
           "signatureDigest": "sha256:26ae1b4fd131ea1918a850daf2d252a19e35c81275001ca05e980b63e825cbaa"
         },
@@ -178569,6 +179851,11 @@
           "consumerEdgeIds": [],
           "name": "begin",
           "signatureDigest": "sha256:1bb2f630373b98064235fa7c4129e6d40d0f271a5d035a9a883d0b36e134af7d"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "beginDurable",
+          "signatureDigest": "sha256:6bd592b9ccd22b8c1fd574f89877f3996fe5508b052eaa1cd29386864f9d161d"
         },
         {
           "consumerEdgeIds": [],
@@ -178632,6 +179919,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "finishDurable",
+          "signatureDigest": "sha256:b4f77fa91632e4b5e090bbfe88718036ad2d021aaa6b4cb594ac3c6e882ff37b"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "flush",
           "signatureDigest": "sha256:58b7e79b34c16eb8a7e96f329a0140c55afa7dc222a802ca1421f067039a0958"
         },
@@ -178644,6 +179936,11 @@
           "consumerEdgeIds": [],
           "name": "info",
           "signatureDigest": "sha256:8b43a7a5a66e4db411b0c228f7556ec6c585330c68a3902c66cac1cbb819e323"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "interrupt",
+          "signatureDigest": "sha256:015a124a403225a08ae0e23f02fa198da8d93a7cfbd7fa3a52fd149b0f9e84f9"
         },
         {
           "consumerEdgeIds": [],
@@ -178692,8 +179989,18 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "passOwner",
+          "signatureDigest": "sha256:f1ee131681cf3b95cc21c7baefbc22faedb1c40e316461573afa3769b52b2444"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "persist",
+          "signatureDigest": "sha256:9f5da29c78b89a0c9825a55fac7b3e99ed2c0be54ebc1e208c494b895f722eb4"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "prepare",
-          "signatureDigest": "sha256:b1d33a2ebce64cfaa0ea97ff0b5e165644fc273cd7536c1261b8451359e1c90d"
+          "signatureDigest": "sha256:21afc51d2a036ab93fb0d55e13c72d3de062ad4f1ddb1879505878f93df6d3ca"
         },
         {
           "consumerEdgeIds": [],
@@ -178717,6 +180024,11 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "recordProcess",
+          "signatureDigest": "sha256:d745680fbc8765113a0ae6de598bc7fdf644d167c5bb8c731db0599f92a05b1e"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "recordSpawnReceipt",
           "signatureDigest": "sha256:7490bc4d6ff1f49d0d8fe3c2c714d56d115045617da93fdd5e2673a6acc181e8"
         },
@@ -178734,6 +180046,16 @@
           "consumerEdgeIds": [],
           "name": "resolveTaskId",
           "signatureDigest": "sha256:425280933bffaf9ecd1f0883f4fee9a1f3807a0fb0c01016b2d42d62328ef8a5"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "seal",
+          "signatureDigest": "sha256:d1115798842ed0af0e0533a23a37249d607dc77999c3d10697f822800226b58c"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "sealDurable",
+          "signatureDigest": "sha256:907acf9852700016a2238fdab82d3a8f8e0a063587eaf97ec9b38020d9120ad4"
         },
         {
           "consumerEdgeIds": [],
@@ -203871,7 +205193,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:2e04978b5cbd31ea4b1eddb81de8e1cb9432418a6f252df9869f9f988a5d5309",
+  "sourceDigest": "sha256:1a38238408f7bce0be47440130f4f71a79934492f80acff9185cb735ffcffd00",
   "targetContexts": [
     "collaboration",
     "development-automation",
