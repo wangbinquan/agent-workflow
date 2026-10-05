@@ -10125,3 +10125,10 @@ fb7a27bd 的精确 CI37264298394 已终态 failure，45 success／5 failure；�
 
 
 - 2026-10-05 RFC-370 H4 执行接口已精确发布：SOURCE11-R2／META16-R1 独立有限 PASS，提交 ad1da74c0463f2f77e0e93e2df127e5e3412b07a，post-fetch main／origin 同步0/0、shared index空、并行源码未纳入。此正常后继只退役本批已消费的三条实际增长许可，129原库存／数值／why与源码／分类器／status raw字节不变，provenance由原helper刷新；不重新census。hosted新精确SHA CI另验收，未把有限源码门当成A-T5／A-G或部署完成；CS adapters、M0首次部署和M1～M4继续开放。两份共享记录原正文逐字保留，只追加本行。
+
+
+## 2026-10-05 RFC-370 执行切面旧源码检查修复
+
+H4 实际 submit 接线后，Windows 的旧 runner 等待定位和 Ubuntu 的两条 PWD 地址检查失败；同类 span receipt、进程委托和 effect act 精确地址一并跟随真实调用。只修五份测试，不改任何生产机制、原 predicate／预算、canonical 或 Windows workflow。原 101 项 expect 保留或仅映射实际 API，补九项 native cwd／env 和 receipt 构造检查；原用例与完整 rfc328 predicate AST 保持。详情见 design/RFC-370-crewstation-hosted-deployment/execution-source-oracle-ci-repair.md。
+
+ad1 主 CI37268055252 正式 cancelled（返回46 jobs：13 success／30 cancelled／3 failure），Windows37268055262 正式 failure，平台271 pass／3 skip／1 fail；新12项执行回归全部通过只是对应证据。原 native pages revision 失败留证，新精确SHA全仓CI另验收。有限独立功能门、精确上库另留回执；只做 owned format／lint、纯AST／字节，没有本机AW tests／typecheck／build／service，也不重跑不变的production census。仍在A-T5，完整组合与真根、脚本、执行权／恢复、A-G和CS adapters／M0～M4继续，尚无AW-in-CS部署，不关闭RFC。原共享正文逐字保持，仅追加本段。

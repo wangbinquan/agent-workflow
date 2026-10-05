@@ -68,9 +68,10 @@ function countNonCommentMatches(content: string, re: RegExp): number {
 
 describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.ts)', () => {
   // RFC-280 T7: the kill-escalation + bounded-reap mechanism moved OUT of
-  // runner.ts into the unified process primitive (services/execution/
+  // runner.ts into the unified process primitive (platform/execution/local/
   // managedProcess.ts). The runner now delegates the whole child lifecycle to
-  // runAgentProcess; these guards follow the mechanism to its new home. The
+  // the selected execution participant; its native implementation still uses
+  // runAgentProcess. These guards follow the mechanism to its new home. The
   // behavioral oracles (stubborn child, group kill reaches the grandchild,
   // bounded wall clock) still live in tests/rfc098-process-governance.test.ts.
   const mpSrc = readFileSync(MANAGED_PROCESS, 'utf8')
@@ -87,7 +88,7 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.
     expect(mpSrc).toContain("child.kill(signal === 'SIGKILL' ? 9 : 15)")
     // The runner no longer spawns or kills directly — it hands the child to the
     // unified executor.
-    expect(runnerSrc).toContain('await runAgentProcess({')
+    expect(runnerSrc).toContain('await localExecution.effect.submit({')
     expect(countNonCommentMatches(runnerSrc, /Bun\.spawn\(/g)).toBe(0)
   })
 

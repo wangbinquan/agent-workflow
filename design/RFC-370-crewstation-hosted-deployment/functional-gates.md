@@ -856,3 +856,10 @@ fb7a27bd 的精确 CI37264298394 已终态 failure，45 success／5 failure；�
 
 
 - 2026-10-05 RFC-370 H4 执行接口已精确发布：SOURCE11-R2／META16-R1 独立有限 PASS，提交 ad1da74c0463f2f77e0e93e2df127e5e3412b07a，post-fetch main／origin 同步0/0、shared index空、并行源码未纳入。此正常后继只退役本批已消费的三条实际增长许可，129原库存／数值／why与源码／分类器／status raw字节不变，provenance由原helper刷新；不重新census。hosted新精确SHA CI另验收，未把有限源码门当成A-T5／A-G或部署完成；CS adapters、M0首次部署和M1～M4继续开放。两份共享记录原正文逐字保留，只追加本行。
+
+
+### 2026-10-05 Execution source-oracle CI fix
+
+本片范围仅五份测试、专属说明及共享STATE／本记录追加。旧源码定位迁到实际 selected submit／beforeStart／onStarted、native receipt 构造及 workingDirectory／environment 转交；原101项expect、用例名与预算保留，仅地址按真实API映射，额外九项补完整native chain。原rfc328四函数完整AST不变，完整文件除精确act名单与同语义负例可逆恢复。SOURCE11／META16／growth-retirement旧门、原FAIL及取消证据不改；不重新运行不变的production census，13canonical／Windows workflow／生产源码字节保持。
+
+ad1主CI37268055252终态cancelled（返回46jobs：13success／30cancelled／3failure）；Windows37268055262正式failure：平台271pass／3skip／1fail，新12项执行用例PASS只代表其证据。native pages revision失败不收编，本批有限门与新exact-SHA CI分别记录。没有本机AW tests/typecheck/build/service。仍在A-T5，完整selected组合／所有实际roots、脚本、执行权恢复及A-G继续；CS adapters、M0首次部署与M1～M4仍开放。原全文逐字保留，只追加本段。

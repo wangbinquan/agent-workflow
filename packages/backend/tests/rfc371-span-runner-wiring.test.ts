@@ -16,24 +16,42 @@ const properties = (value: ts.ObjectLiteralExpression) =>
       .map((item) => [item.name.getText(source), item.initializer]),
   )
 test('real spawn admission precedes span baseline and actual spawn receipt precedes fresh-root binding', () => {
+  // RFC-370 moved the native receipt requirement into the selected binding;
+  // admission and actual-start facts remain in this invocation's submit call.
   let process: ts.CallExpression | undefined
+  let binding: ts.CallExpression | undefined
   walk(source, (node) => {
-    if (ts.isCallExpression(node) && node.expression.getText(source) === 'runAgentProcess')
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText(source) === 'localExecution.effect.submit'
+    )
       process = node
+    if (
+      ts.isVariableDeclaration(node) &&
+      node.name.getText(source) === 'localExecution' &&
+      node.initializer !== undefined &&
+      ts.isCallExpression(node.initializer) &&
+      node.initializer.expression.getText(source) === 'bindLocalAgentExecutionEffect'
+    )
+      binding = node.initializer
   })
   expect(process).toBeDefined()
+  expect(binding).toBeDefined()
   const argument = process!.arguments[0]!
   if (!ts.isObjectLiteralExpression(argument))
     throw new Error('Agent process input must remain reviewable')
   const fields = properties(argument),
-    admission = fields.get('beforeSpawn')!.getText(source),
-    spawned = fields.get('onSpawned')!.getText(source)
+    admission = fields.get('beforeStart')!.getText(source),
+    spawned = fields.get('onStarted')!.getText(source)
   expect(admission.indexOf('observationInvocations.accept')).toBeLessThan(
     admission.indexOf('nativeSpanCapture.begin'),
   )
   expect(admission).toContain('accepted.spanCaptureSource === preparedSpans.sourceNamespace')
-  expect(fields.get('requireSpawnReceipt')?.getText(source)).toBe('true')
-  expect(spawned).toContain('observationSpawnedAt = receipt.spawnedAt')
+  const nativeArgument = binding!.arguments[0]!
+  if (!ts.isObjectLiteralExpression(nativeArgument))
+    throw new Error('Native execution binding must remain reviewable')
+  expect(properties(nativeArgument).get('requireSpawnReceipt')?.getText(source)).toBe('true')
+  expect(spawned).toContain('observationSpawnedAt = receipt.startedAt')
   const boundCalls: ts.CallExpression[] = []
   walk(source, (node) => {
     if (ts.isCallExpression(node) && node.expression.getText(source) === 'bindObservationRoot')

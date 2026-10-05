@@ -25,8 +25,8 @@ import { resolve } from 'node:path'
 
 // RFC-111 PR-A: the opencode spawn ENV literal (the `const env = {...}` block
 // carrying `PWD = cwd`) moved out of runner.ts into the runtime driver
-// (runtime/opencode/spawn.ts, `PWD: ctx.worktreePath`). runner.ts still owns the
-// `Bun.spawn({ cwd, env })` call.
+// (runtime/opencode/spawn.ts, `PWD: ctx.worktreePath`). RFC-280 / RFC-370 route
+// the runner through the selected execution participant and the one native spawn.
 // RFC-117: memoryDistiller.ts no longer assembles its own env block — it routes
 // through the runtime driver's buildSpawn, so PWD is set by buildOpencodeEnv
 // (locked by the driver site below). RFC-224 gives the system invocation its
@@ -43,7 +43,7 @@ const SPAWN_CWD_SITES = [
   // system / smoke / distiller / playground) goes through the unified
   // executor, whose managedProcess core is the ONE spawn site keeping cwd/env
   // in lock-step. The runner's own PWD contract is verified below (it passes
-  // opts.worktreePath + the driver env straight into runAgentProcess).
+  // opts.worktreePath + the driver env into the selected native participant).
   ['src/platform/execution/local/managedProcess.ts', 'req.cwd', 'req.env'],
 ] as const
 
@@ -74,12 +74,26 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
   // plan construction and Bun.spawn, so buildOpencodeEnv sets the same PWD.
   test('runner.ts hands opts.worktreePath + the driver env straight to the executor', () => {
     const src = readFileSync(resolve(import.meta.dir, '..', 'src/services/runner.ts'), 'utf-8')
-    // RFC-280 T7: no direct Bun.spawn; the child runs through runAgentProcess
-    // with cwd = the task worktree and env = the driver-assembled plan env.
-    expect(src).toContain('await runAgentProcess({')
+    // RFC-370: the selected native binding keeps cwd = the task worktree and
+    // env = the driver-assembled plan env, read only when execution submits.
+    expect(src).toContain('await localExecution.effect.submit({')
+    expect(src).toContain('workingDirectory: () => opts.worktreePath,')
+    expect(src).toContain('environment: () => env,')
     expect(src).toContain('cwd: opts.worktreePath,')
     expect(src).toContain('env,')
     expect(src).not.toContain('Bun.spawn(')
+    const native = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts',
+      ),
+      'utf-8',
+    )
+    expect(native).toContain('const runNative = input.runNative ?? runAgentProcess')
+    expect(native).toContain('const result = await runNative({')
+    expect(native).toContain('cwd: input.workingDirectory(),')
+    expect(native).toContain('env: input.environment(),')
   })
 
   // RFC-367: the distiller stopped assembling its own spawn. It hands a scratch
@@ -115,8 +129,10 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
     // PWD (ENV_PWD_SITES above) and managedProcess spawns with it (SPAWN_CWD_SITES).
     expect(src).toContain("const worktreeDir = join(scratchDir, 'worktree')")
     expect(src).toContain('cwd: worktreeDir,')
-    expect(src).toContain('runAgentProcess({')
-    expect(src).toContain('env: plan.env,')
+    expect(src).toContain('await localExecution.effect.submit({')
+    expect(src).toContain('workingDirectory: () => worktreeDir,')
+    expect(src).toContain('const nativePlan = plan')
+    expect(src).toContain('environment: () => nativePlan.env,')
   })
 
   for (const [rel, cwdExpr, envExpr] of SPAWN_CWD_SITES) {

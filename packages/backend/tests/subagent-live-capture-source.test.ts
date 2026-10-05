@@ -33,11 +33,11 @@ describe('RFC-048 source-layout guards', () => {
     const stmtPattern = /liveCtrl\.abort\(\)\n\s+livePoller\.stop\(\)/
     const stmtMatch = stmtPattern.exec(src)
     expect(stmtMatch).not.toBeNull()
-    // RFC-280 T7: the bounded exit wait moved into the unified executor; the
-    // runner's anchor is now the `await runAgentProcess({` call. The lifecycle
+    // RFC-280 T7 / RFC-370: the bounded exit wait stays in the unified native
+    // executor, reached through the selected execution participant. The lifecycle
     // contract is unchanged — poller stopped AFTER the run returns and BEFORE
     // the post-run capture.
-    const exitedIdx = src.indexOf('await runAgentProcess({')
+    const exitedIdx = src.indexOf('await localExecution.effect.submit({')
     const captureIdx = src.indexOf('await materialEvidence.captureSessions({')
     expect(exitedIdx).toBeGreaterThan(-1)
     expect(captureIdx).toBeGreaterThan(-1)

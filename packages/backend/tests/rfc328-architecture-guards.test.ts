@@ -121,7 +121,9 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     [
       {
         callable: 'runNode',
-        actCallees: new Set(['runAgentProcess']),
+        // RFC-370: runNode's actual act is the selected execution submission;
+        // the original native primitive remains inside its local participant.
+        actCallees: new Set(['submit']),
         observerCallees: new Set(['createProcessEffectAttemptObserver']),
       },
     ],
@@ -648,7 +650,7 @@ describe('RFC-328 architecture guards', () => {
       rfc328GuardViolations(
         fixture(
           'packages/backend/src/services/runner.ts',
-          'async function runNode() { await runAgentProcess({}) }',
+          'async function runNode() { await localExecution.effect.submit({}) }',
         ),
       ),
     ).toContain(
