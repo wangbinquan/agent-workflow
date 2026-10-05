@@ -147,7 +147,13 @@ export type {
   PreparedAgentMaterial,
 } from '../application/ports/agentMaterial'
 
-export type { StartupInventory, SystemAgentOutputEvidence } from '@/services/runtime/types'
+export type {
+  StartupInventory,
+  SystemAgentOutputEvidence,
+  DeclaredRuntimeCapabilities,
+  NormalizedEventKind,
+  TerminalResultObservation,
+} from '../application/ports/agentObservations'
 export type {
   SessionCaptureIncompleteReason,
   SystemAgentEventSinkV1,

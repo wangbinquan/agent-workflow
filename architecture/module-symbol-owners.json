@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2235,
+    "backendFiles": 2236,
     "frontendFiles": 654,
     "legacyFiles": 588,
-    "moduleFiles": 1647,
-    "productionFiles": 3056,
+    "moduleFiles": 1648,
+    "productionFiles": 3057,
     "sharedFiles": 167,
-    "symbolsIncludingFileRoots": 26884
+    "symbolsIncludingFileRoots": 26885
   },
   "entries": [
     {
@@ -114170,6 +114170,78 @@
       "currentContext": "runtime-management",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentObservations.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentObservations.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentObservations.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentObservations.ts#DeclaredRuntimeCapabilities",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "DeclaredRuntimeCapabilities",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentObservations.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentObservations.ts#NormalizedEventKind",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NormalizedEventKind",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentObservations.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentObservations.ts#StartupInventory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "StartupInventory",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentObservations.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentObservations.ts#SystemAgentOutputEvidence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "SystemAgentOutputEvidence",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentObservations.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentObservations.ts#TerminalResultObservation",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TerminalResultObservation",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/runtime-management/application/ports/agentProtocol.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentProtocol.ts#$file",
       "removeAfterWave": null,
@@ -202591,18 +202663,6 @@
       "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/runtime/types.ts",
-      "id": "owner:packages/backend/src/services/runtime/types.ts#DeclaredRuntimeCapabilities",
-      "removeAfterWave": "W9-D",
-      "status": "legacy-target",
-      "symbol": "DeclaredRuntimeCapabilities",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/runtime/types.ts",
       "id": "owner:packages/backend/src/services/runtime/types.ts#FinalEventContext",
       "removeAfterWave": "W9-D",
       "status": "legacy-target",
@@ -202655,18 +202715,6 @@
       "removeAfterWave": "W9-D",
       "status": "legacy-target",
       "symbol": "NormalizedEventData",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/runtime/types.ts",
-      "id": "owner:packages/backend/src/services/runtime/types.ts#NormalizedEventKind",
-      "removeAfterWave": "W9-D",
-      "status": "legacy-target",
-      "symbol": "NormalizedEventKind",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -202867,30 +202915,6 @@
       "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/runtime/types.ts",
-      "id": "owner:packages/backend/src/services/runtime/types.ts#StartupInventory",
-      "removeAfterWave": "W9-D",
-      "status": "legacy-target",
-      "symbol": "StartupInventory",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/runtime/types.ts",
-      "id": "owner:packages/backend/src/services/runtime/types.ts#SystemAgentOutputEvidence",
-      "removeAfterWave": "W9-D",
-      "status": "legacy-target",
-      "symbol": "SystemAgentOutputEvidence",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/runtime/types.ts",
       "id": "owner:packages/backend/src/services/runtime/types.ts#SystemAgentSessionSweepContext",
       "removeAfterWave": "W9-D",
       "status": "legacy-target",
@@ -202931,18 +202955,6 @@
       "removeAfterWave": "W9-D",
       "status": "legacy-target",
       "symbol": "SystemEventObservation",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/runtime/types.ts",
-      "id": "owner:packages/backend/src/services/runtime/types.ts#TerminalResultObservation",
-      "removeAfterWave": "W9-D",
-      "status": "legacy-target",
-      "symbol": "TerminalResultObservation",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -323346,5 +323358,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:db2a0778469353b10cd7e3d02b440a9fe28a9e06095c216bad0cafadcc708bfb"
+  "sourceDigest": "sha256:86b1823937eda09be7e2a015190702f4f9c69f3cd8884a692137c0e83861b7eb"
 }

@@ -1,3 +1,11 @@
+## 2026-10-06 RFC-370 原完整观测类型归属与 CI 修复
+
+五份完整观测声明及注释迁入RM application port，legacy保留全部原名称，public从自身application导出；原算法、成员与其他出口保持。原canonical薄facade清单仅补sessionEventSink实际地址，规则／断言／预算不变。SOURCE4-DOC1-R1独立有限PASS，21项首末指纹f01f2dfe70b8de534d3ab8f2829e7ccdc547a0d838364625a0568295bdcd99c2；完整AST／注释／其他源码对拍及目标format／lint通过。
+
+有效原scoped census仅一次，冻结五候选与完整b386d310已提交人口，sourceDigest sha256:86b1823937eda09be7e2a015190702f4f9c69f3cd8884a692137c0e83861b7eb。1d287edd只推进测试与登记，无生产源码变化，原SOURCE与扫描复用；13 matching合成完整保留其输出、129有序库存／why、40SPI／69targets、原值级SCC及空implementation SCC。最新331债只退役public到legacy的实际消失地址至330，无新债；并行已清掉的runner地址和四smoke许可保持，不重复销账。五个已消费RFC371 matching许可正常退役，外部SQLite fixture328不变；实际imports6459→6464／exceptions5709→5714／public1164→1167／owners26884→26885具名匹配，四个新许可下个普通后继退役。原纯治理计数失败保留，后继只使用原counter／JSON合成，不重扫、不放宽规则。
+
+ef4019c6主CI37341344485／Windows37341344219均cancelled；b386d310 Windows37341993802 success／主CI37341993640 failure分列留证，新确切SHA CI另验核。共享STATE旧全文及全部并行内容逐字保留，提交含已提交并行源码的匹配登记，不接管producer功能。无AW本机tests／typecheck／build／service。实际Task／全部正常根／retention、脚本／执行权恢复、A-T5／A-G继续；随后CS独立adapter先M0部署，再M1～M4。尚无AW-in-CS部署，RFC仍进行中。
+
 ## 2026-10-06 RFC-370 smoke 共同核心与原生选择 CI 修复
 
 原完整 smoke 算法归 TE application；native facade 保留三份完整合同、原 material builder 与前置读取顺序，正常 selected composition 使用必需 preparation，完整 intent 只编译和绑定一次。nonce／session reset／分类顺序／超时／释放与保留规则均保持。新增14个实际选中入口用例随源码交 hosted CI；SOURCE R1 的 model 类型缺失 P2／FAIL保留，补原可选 model 与两项默认模型诊断后 SOURCE9-DOC1-R2 独立有限PASS，42项首末指纹 af220040c23c4082a6b9fde2a197fa71812e3c29c54f0fcd62d6469a4238dfe4。

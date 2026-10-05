@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1196,
+    "consumers": 1203,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
     "methods": 1502,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 26616,
-    "symbols": 1164
+    "recursiveFields": 26630,
+    "symbols": 1167
   },
   "entries": [
     {
@@ -135201,6 +135201,67 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:47b606aacb3f97b34dc0"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:47b606aacb3f97b34dc0"
+          ],
+          "fieldPath": "agents",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:47b606aacb3f97b34dc0"
+          ],
+          "fieldPath": "skills",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "tools",
+          "type": "readonly string[]"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:DeclaredRuntimeCapabilities",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:47b606aacb3f97b34dc0",
+          "file": "packages/backend/src/services/runtime/types.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:participants:StartupInventory"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:b2acb5c82668982609426037113ed8e9c9542f19ac8c5730d4aaf0c1e5f4064f",
+      "status": "target-context-current-surface",
+      "symbol": "DeclaredRuntimeCapabilities",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:ac46b2eb947020756815"
       ],
       "context": "runtime-management",
@@ -137648,6 +137709,99 @@
       "signatureDigest": "sha256:e817638f0743559e76631b8716a07d9adc301d222009b0b07cca1d8f49c8c5b6",
       "status": "target-context-current-surface",
       "symbol": "NodeRunRuntimeSelectionCapabilityInTx",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:245a680b074fc5b0ab8a",
+        "import:5235722d4d845e5cd372"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0",
+          "type": "'tool_use'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1",
+          "type": "'text'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2",
+          "type": "'reasoning'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:3",
+          "type": "'permission_asked'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:4",
+          "type": "'error'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:5",
+          "type": "'step_start'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:6",
+          "type": "'step_finish'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:7",
+          "type": "'startup_inventory'"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:NormalizedEventKind",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:245a680b074fc5b0ab8a",
+          "file": "packages/backend/src/services/runtime/types.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:5235722d4d845e5cd372",
+          "file": "packages/backend/src/services/runtime/types.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:participants:AgentInvocationProtocol",
+        "public:runtime-management:participants:AgentMaterialEvidence",
+        "public:runtime-management:participants:SystemAgentEventSinkV1",
+        "public:runtime-management:participants:SystemAgentOutputEvidence",
+        "public:task-execution:participants:AgentInvocationBinding"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:18a6a2a8942d56e42f5302da1ce9aff1232a3d0ad6df8c6fd0e810e9816e211b",
+      "status": "target-context-current-surface",
+      "symbol": "NormalizedEventKind",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -141012,6 +141166,7 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:713d25d47903a43f3aef",
         "import:7251b3c401fda1d61f89",
         "import:86c06e4da1e68c926d14"
       ],
@@ -141022,6 +141177,7 @@
       "fields": [
         {
           "consumerEdgeIds": [
+            "import:713d25d47903a43f3aef",
             "import:7251b3c401fda1d61f89",
             "import:86c06e4da1e68c926d14"
           ],
@@ -141030,6 +141186,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:713d25d47903a43f3aef",
             "import:7251b3c401fda1d61f89"
           ],
           "fieldPath": "mcpServers",
@@ -141037,6 +141194,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:713d25d47903a43f3aef",
             "import:7251b3c401fda1d61f89",
             "import:86c06e4da1e68c926d14"
           ],
@@ -141058,6 +141216,12 @@
       "methods": [],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
       "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:713d25d47903a43f3aef",
+          "file": "packages/backend/src/services/runtime/types.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file"
+        },
         {
           "context": "task-execution",
           "edgeId": "import:7251b3c401fda1d61f89",
@@ -141346,6 +141510,7 @@
       },
       "consumerEdgeIds": [
         "import:15d26bba00d71e9a225b",
+        "import:6eba970e7a7e5c359e94",
         "import:c14cfe5dba7fe6511f23"
       ],
       "context": "runtime-management",
@@ -141472,6 +141637,12 @@
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/systemAgentRun.ts#$file"
         },
         {
+          "context": "legacy",
+          "edgeId": "import:6eba970e7a7e5c359e94",
+          "file": "packages/backend/src/services/runtime/types.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file"
+        },
+        {
           "context": "task-execution",
           "edgeId": "import:c14cfe5dba7fe6511f23",
           "file": "packages/backend/src/modules/task-execution/application/systemAgentRun.ts",
@@ -141484,6 +141655,70 @@
       "signatureDigest": "sha256:06819c4991ea9974d957cbe080ad28fe3da049431e773bec1dda76436669714a",
       "status": "target-context-current-surface",
       "symbol": "SystemAgentOutputEvidence",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:22dac30375c049c459e3",
+        "import:94e62c590b11471f8c45"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:0",
+          "type": "'success'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:1",
+          "type": "'error'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$variant:2",
+          "type": "'not-observed'"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:TerminalResultObservation",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:22dac30375c049c459e3",
+          "file": "packages/backend/src/services/runtime/types.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:94e62c590b11471f8c45",
+          "file": "packages/backend/src/services/runtime/types.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:participants:SystemAgentOutputEvidence"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:a37b1c815eafce86db0f1b8f020c10fafe868fd153b819e5fb290bd73653492a",
+      "status": "target-context-current-surface",
+      "symbol": "TerminalResultObservation",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -206184,7 +206419,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:db2a0778469353b10cd7e3d02b440a9fe28a9e06095c216bad0cafadcc708bfb",
+  "sourceDigest": "sha256:86b1823937eda09be7e2a015190702f4f9c69f3cd8884a692137c0e83861b7eb",
   "targetContexts": [
     "collaboration",
     "development-automation",

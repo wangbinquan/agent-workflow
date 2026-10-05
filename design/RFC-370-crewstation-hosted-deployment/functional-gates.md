@@ -906,3 +906,10 @@ ab30 主 CI37296573386 正式 completed/cancelled（21 success／7 failure／20 
 - SMOKE-AD446-DEPENDENCY-COMPAT-R1：独立有限PASS，8项首末指纹58f05e9d2d41b60c3bb5389657affafb3808c217035d08753ce60e4c43ae9058。原参数／返回／receiver／惰性环境／ownerless与direct receipt／cleanup合同兼容；不评价新Task observer producer，不重跑SOURCE42或扫描。
 - 原ad446的一次scoped生成13产物，sourceDigest sha256:5cc7f81577140480e3f820cb8eeba7651545241585391cadd03ef88f59e494b8；5d016e74仅matching元数据前进，纯JSON合成保持其完整输出与原329债，新增三真实地址至332。原129顺序／why、40SPI／69targets、SCC保持；entry1888→1893／imports6442→6451／exceptions5696→5702／owners26866→26878四实际许可具名匹配。四个已消费RFC371许可正常退役，新四许可下个普通后继退役。源代码与census不重跑。
 - e3主CI cancelled／Windows failure与22实际Windows新用例通过分别保留；ad446主CI／Windows正式failure保留，新exact-SHA CI另验核。metadata有限门只核这一合成候选，不代替运行CI。完整真根／Task／retention、A-G、CS首次部署与完整RFC仍开放。
+
+## 2026-10-06 A-T5 原完整观测类型归属与 matching 有限门
+
+- AGENT-OBSERVATION-OWNERSHIP-SOURCE4-DOC1-R1：独立有限PASS，21项=5 owned／10 control／6 evidence，首末指纹f01f2dfe70b8de534d3ab8f2829e7ccdc547a0d838364625a0568295bdcd99c2。原五声明／成员／注释完整迁入RM application，legacy原名称兼容导出，其余AST／public字节完整保持。原facade清单仅补sessionEventSink实际地址，规则／断言／预算不变；原诊断FAIL和最终PASS分别保存。
+- 原有效scoped census一次，b386d310完整已提交人口＋五冻结候选，sourceDigest sha256:86b1823937eda09be7e2a015190702f4f9c69f3cd8884a692137c0e83861b7eb。1d287edd只改测试／登记，不变的SOURCE21与原扫描复用。13 matching完整保留其129顺序／why、其他guard行、40SPI／69targets、原值级SCC及空implementation SCC。
+- 最新331债仅退役实际public到legacy地址至330，无新债；并行已退役runner地址／四smoke许可结果保持，不重复销账。五个RFC371 matching许可普通退役，外部SQLite fixture328不变。imports6459→6464／exceptions5709→5714／public1164→1167／owners26884→26885四项实际原counter增长具名登记，新四许可在下个普通后继退役。原326／328纯投影FAIL保留，规则／scanner／assertions／预算完整保持。
+- 目标format／lint通过，源码门、metadata有限门与确切SHA hosted CI分别验核。ef双run cancelled、b386 Windows success／主CI failure各自保持。无AW本机tests／typecheck／build／service，不评价并行producer功能。Task／完整根／retention、A-G、CS首次部署和RFC继续开放。
