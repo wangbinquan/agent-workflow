@@ -60,7 +60,7 @@ export interface CaptureChildSessionsOptions {
    * path, `pollMs = 0`) get byte-level identical behavior because
    * the filter step is skipped entirely.
    */
-  alreadyInsertedPartIds?: Map<string, Set<string>>
+  alreadyInsertedPartIds?: ReadonlyMap<string, ReadonlySet<string>>
 }
 
 export interface CaptureChildSessionsResult {

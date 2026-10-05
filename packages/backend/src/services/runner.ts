@@ -59,10 +59,8 @@ import type {
   ExecutionEffectResult,
   ExecutionStartReceipt,
 } from '@/modules/task-execution/application/ports/executionEffect'
-import {
-  bindNativeAgentInvocation,
-  bindNativeAgentProtocol,
-} from '@/modules/runtime-management/infrastructure/local/agentInvocationBinding'
+import { bindNativeAgentInvocation } from '@/modules/task-execution/composition/agentInvocation'
+import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
 import { bindLocalAgentExecutionParticipants } from '@/modules/task-execution/infrastructure/local/agentExecutionEffect'
 import { createLogger, type Logger } from '@/util/log'
 import {

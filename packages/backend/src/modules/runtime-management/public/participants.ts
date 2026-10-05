@@ -133,3 +133,8 @@ export type {
   NativeUsagePassPage,
   NativeUsagePassReader,
 } from '../application/ports/nativeUsagePass'
+
+/** Runtime-owned offered members consumed by task invocation composition. */
+export type { AgentInvocationProtocol } from '../application/ports/agentProtocol'
+export type { AgentMaterialEvidence } from '../application/ports/agentMaterialEvidence'
+export type { AgentMaterialWorkspace } from '../application/ports/agentMaterialWorkspace'

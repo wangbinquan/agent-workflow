@@ -356,7 +356,7 @@ export interface SessionCaptureContext {
   configDirEnv?: string
   configDirName?: string
   /** opencode: partId-level dedupe from the live poller (skip already-written rows). */
-  alreadyInsertedPartIds?: Map<string, Set<string>>
+  alreadyInsertedPartIds?: ReadonlyMap<string, ReadonlySet<string>>
   /** opencode: override SQLite path (tests). */
   opencodeDbPath?: string
 }

@@ -370,8 +370,5 @@ export type {
   MergeSettleOutcome,
 } from '../infrastructure/isolatedAgentRun'
 
-/** Runtime material composition supplies the implementation for these attempts. */
-export type {
-  AgentExecutionBinding,
-  AgentExecutionParticipants,
-} from '../application/ports/agentExecutionBinding'
+/** The execution demand owns the joint invocation consumed by system runs. */
+export type { AgentInvocationBinding } from '../application/ports/agentInvocation'

@@ -292,6 +292,54 @@ describe('RFC-370 selected material evidence', () => {
     ).toBe(NOOP_HANDLE)
   })
 
+  test('the normal readonly live dedupe view retains owner updates and is forwarded unchanged after capture', async () => {
+    const dedupe = new Map([['child', new Set(['original-part'])]])
+    const handle = {
+      stop() {},
+      tickOnce: async () => 0,
+      stats: () => ({
+        ticks: 1,
+        insertedRows: 1,
+        failedTicks: 0,
+        disabled: false,
+        insertedPartIdsBySession: dedupe,
+      }),
+    }
+    let received: SessionCaptureContext | undefined
+    const hooks: NativeAgentMaterialEvidenceHooks = {
+      startLiveCapture: () => handle,
+      captureSessions: async (input) => {
+        received = input
+      },
+    }
+    const evidence = bindNativeAgentMaterialEvidence(hooks, scope)
+    const live = evidence.startLiveCapture!({
+      nodeRunId: 'n',
+      taskId: 't',
+      nodeId: 'node',
+      getRootSessionId: () => 'root',
+      persistence,
+      pollMs: 0,
+      consecutiveFailureLimit: 3,
+    })
+    expect(live).toBe(handle)
+    const view: ReadonlyMap<string, ReadonlySet<string>> = live.stats().insertedPartIdsBySession
+    expect(view).toBe(dedupe)
+    dedupe.get('child')!.add('owner-committed-part')
+    expect(view.get('child')!.has('owner-committed-part')).toBe(true)
+    await evidence.captureSessions({
+      rootSessionId: 'root',
+      nodeRunId: 'n',
+      taskId: 't',
+      persistence,
+      log,
+      alreadyInsertedPartIds: view,
+    })
+    expect(received?.alreadyInsertedPartIds).toBe(view)
+    expect(received?.alreadyInsertedPartIds?.get('child')?.has('original-part')).toBe(true)
+    expect(received?.alreadyInsertedPartIds?.get('child')?.has('owner-committed-part')).toBe(true)
+  })
+
   test('system sink keeps original two lookups, request, callbacks and failed evidence', async () => {
     let lookups = 0
     const reason = new Error('child sweep failed')

@@ -28,12 +28,10 @@ import {
   type RuntimeKind,
 } from '@/services/runtime'
 import type { AgentSpawnContext, AgentSpawnPlan } from '@/services/runtime/types'
-import {
-  bindNativeAgentInvocation,
-  bindNativeAgentProtocol,
-} from '@/modules/runtime-management/infrastructure/local/agentInvocationBinding'
+import { bindNativeAgentInvocation } from '@/modules/task-execution/composition/agentInvocation'
+import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
 import type { ExecutionStartReceipt } from '@/modules/task-execution/application/ports/executionEffect'
-import type { AgentInvocationBinding } from '@/modules/runtime-management/application/ports/agentInvocationBinding'
+import type { AgentInvocationBinding } from '@/modules/task-execution/public/participants'
 import type {
   RuntimeDriver,
   SpawnPlan,

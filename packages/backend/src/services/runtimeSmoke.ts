@@ -23,10 +23,8 @@ import type { SpawnPlan } from '@/services/runtime/types'
 import { createLogger, type Logger } from '@/util/log'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
 import { outputTail } from '@/util/spawnDiagnostics'
-import {
-  bindNativeAgentInvocation,
-  bindNativeAgentProtocol,
-} from '@/modules/runtime-management/infrastructure/local/agentInvocationBinding'
+import { bindNativeAgentInvocation } from '@/modules/task-execution/composition/agentInvocation'
+import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
 import { Paths } from '@/util/paths'
 
 export type SmokeOutcome =

@@ -875,3 +875,11 @@ ab30 主 CI37296573386 正式 completed/cancelled（21 success／7 failure／20 
 有限独立功能门、精确发布与新 exact-SHA CI 分别验收；仅 owned format／lint、纯AST／字节／JSON和原provenance helper，无本机AW test／typecheck／build／service，不重跑不变生产census。旧FAIL／cancelled留证，完整selected factory／真根、脚本／执行权恢复与A-G、独立CS adapters及M0～M4继续开放，尚无AW-in-CS部署，不关闭RFC。原共享正文逐字保留，只追加本段。
 
 - 2026-10-05 RFC-370 同材料入口 CI 检查补正已精确发布：CI-REPAIR6-R1 独立有限 PASS，3cade06f56d566d633e08e83ed994e9a100129d2 提交6个相关文件，post-fetch main／origin同步0/0、index空，全部并行输出保留。正式主CI37301196167排队，尚无全仓绿结论。本正常后继只退役已消费的一条 matching37→39增长许可；129原有序库存、所有why／数值与其余字段保持，两个实际debt pair保留，由原provenance helper刷新，不重跑census或源码门。完整selected factory／真根、脚本／执行权恢复与A-G、CS独立adapters及M0～M4继续开放，未部署AW、不关闭RFC。共享旧全文逐字保留，仅追加本行。
+
+### 2026-10-05 RFC-370 invocation ownership 与只读取证视图
+
+整体 joint contract／native pairing 从 RM 移到 TE application／composition；RM 保留 pure protocol、material、workspace、evidence。三处实际 caller 及旧完整算法／测试 AST 保持。原 SOURCE13-DOC1-R1 有限 PASS 与随后 census 在产物生成前的 opaque Map 失败均留证；SOURCE17-DOC1-R2 通过三份 erased-JS-identical 只读类型投影及一个新增 identity／owner late-update 回归修正正常公开切面，原 native Map／Set 与 handle 身份及全部66旧断言保持。R2 独立有限 PASS，18 owned／14 control／26 evidence 共58项，FP 9a224c2287000f23f29da36c8ebd32e983835966be630a46fa5af42c7e9f10eb。
+
+修正源码只运行一次 matching 原静态 census，非 owned 源码和四规则只读已提交 62c00f516f58f63e84bf047deee9252c58ee1c4c；排除并保留两份并行 nativeUsageBaseline WIP。sourceDigest sha256:1a809232890dcdb7874963bc5e596bc8402d1be500da74eda7a16abe5d578425。原 helper 退役六组已删除的真实 import 债、保留316旧 authored 行并登记八组真实新 import，最终324（inbound289／outbound35）；offered DAG 两条旧 RM→TE 债实际消失，39→37，原 predicate／预算／全部其余行保持。129原有序 ledger／why、40 SPI／69 targets、空 implementation SCC 及原值级 SCC 保持；actual imports6400→6402、public1154→1156、owners26829→26833 三项匹配许可须对应源码发布后的正常后继退役；exceptions5678→5675。纯投影 helper 首轮未同步 offered39 的诊断保留，修正仅投影 original counter 的真实37，不重跑 census或改 classifier。
+
+3cade 主 CI37301196167 正式 cancelled；a476主CI37302620817正式 failure，实际剩余旧 receipt oracle 已随并行62c源修复完整提交，新确切 SHA CI仍需终态。此增量仅 owner 归属及 readonly 正常接口，尚未实现 two-phase selected factory／全部真根，不能关闭A-T5／A-G／RFC。脚本／执行权恢复、CS独立 adapters、M0真实部署和M1～M4继续；AW未部署CS。仅自有格式／lint、纯AST／字节／JSON及原静态生成；无本机AW tests／typecheck／build／service。共享原全文逐字保留，只追加本段。

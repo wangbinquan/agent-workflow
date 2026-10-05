@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2215,
+    "backendFiles": 2217,
     "frontendFiles": 654,
     "legacyFiles": 588,
-    "moduleFiles": 1627,
-    "productionFiles": 3036,
+    "moduleFiles": 1629,
+    "productionFiles": 3038,
     "sharedFiles": 167,
-    "symbolsIncludingFileRoots": 26829
+    "symbolsIncludingFileRoots": 26833
   },
   "entries": [
     {
@@ -113906,42 +113906,6 @@
       "currentContext": "runtime-management",
       "currentLayer": "application",
       "exported": false,
-      "file": "packages/backend/src/modules/runtime-management/application/ports/agentInvocationBinding.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentInvocationBinding.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/runtime-management/application/ports/agentInvocationBinding.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentInvocationBinding.ts#AgentInvocationBinding",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "AgentInvocationBinding",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "application",
-      "exported": true,
-      "file": "packages/backend/src/modules/runtime-management/application/ports/agentInvocationBinding.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentInvocationBinding.ts#AgentInvocationProtocol",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "AgentInvocationProtocol",
-      "targetContext": "runtime-management",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "application",
-      "exported": false,
       "file": "packages/backend/src/modules/runtime-management/application/ports/agentLiveCapture.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentLiveCapture.ts#$file",
       "removeAfterWave": null,
@@ -114111,6 +114075,30 @@
       "currentLayer": "application",
       "exported": true,
       "file": "packages/backend/src/modules/runtime-management/application/ports/agentMaterialEvidence.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialLiveCaptureHandle",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AgentMaterialLiveCaptureHandle",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentMaterialEvidence.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentMaterialLiveCaptureStats",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AgentMaterialLiveCaptureStats",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentMaterialEvidence.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentMaterialEvidence.ts#AgentSessionCaptureRequest",
       "removeAfterWave": null,
       "status": "current-module",
@@ -114151,6 +114139,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "AgentMaterialWorkspace",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentProtocol.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentProtocol.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/application/ports/agentProtocol.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/application/ports/agentProtocol.ts#AgentInvocationProtocol",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AgentInvocationProtocol",
       "targetContext": "runtime-management",
       "targetLayer": "application"
     },
@@ -115562,42 +115574,6 @@
       "currentContext": "runtime-management",
       "currentLayer": "infrastructure",
       "exported": false,
-      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts#$file",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "$file",
-      "targetContext": "runtime-management",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts#bindNativeAgentInvocation",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "bindNativeAgentInvocation",
-      "targetContext": "runtime-management",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "infrastructure",
-      "exported": true,
-      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts",
-      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts#bindNativeAgentProtocol",
-      "removeAfterWave": null,
-      "status": "current-module",
-      "symbol": "bindNativeAgentProtocol",
-      "targetContext": "runtime-management",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "runtime-management",
-      "currentLayer": "infrastructure",
-      "exported": false,
       "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts#$file",
       "removeAfterWave": null,
@@ -115771,6 +115747,30 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "releaseSystemAgentScratch",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentProtocol.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentProtocol.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentProtocol.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentProtocol.ts#bindNativeAgentProtocol",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "bindNativeAgentProtocol",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -131644,6 +131644,30 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/agentInvocation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/agentInvocation.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/agentInvocation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/agentInvocation.ts#AgentInvocationBinding",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AgentInvocationBinding",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/ports/agentLaunchResourceOperations.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/ports/agentLaunchResourceOperations.ts#$file",
       "removeAfterWave": null,
@@ -137661,6 +137685,30 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "composeAgentActionExecution",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/agentInvocation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/agentInvocation.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/agentInvocation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/agentInvocation.ts#bindNativeAgentInvocation",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "bindNativeAgentInvocation",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -322685,5 +322733,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:59552a6bd7a33d42a3936c8418f7388dc88e788c664a174f9e7362240a653743"
+  "sourceDigest": "sha256:1a809232890dcdb7874963bc5e596bc8402d1be500da74eda7a16abe5d578425"
 }
