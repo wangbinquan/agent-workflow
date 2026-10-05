@@ -1,3 +1,11 @@
+## 2026-10-05 RFC-371 自有 CI 修复已上库与 matching 登记
+
+按用户要求，自有8文件已独立提交并推送 a0117acb4157f594f5528c9a7833e7362de653f0，远端同步，其他会话文件完整保留，没有发送跨会话协调消息。原057e1c6d主CI37287891777与Windows37287891770正式failure保留；首次无previous的v1采集、实际parent类型、unused新public出口、原provider实际fork登记、完整PG装配快照、原101步骤历史空页与重放、Windows started落盘等待均有限功能PASS。新a0117acb的Windows37295155669通过，主CI37295155695仍待最终结果。
+
+本片只读已提交完整 a0117acb4157f594f5528c9a7833e7362de653f0 执行一次原官方AST生成；后继 ab30bc10fafd26f76a075bd2b4a034ca9e4748e1 仅改共享STATE与原登记退役，源码完全相同，原结果复用，sourceDigest sha256:c03d71d9315b8090320a921ab7fba13aa84813b871115e07ff7f950b69edc2f9；不使用未提交prototype或并行源码，不运行本机AW测试／类型／build／service。核对13 matching产物、129原有序库存与why、322原债、规则／目标／SPI／SCC和原断言。实际差额[{"id":"rfc294-public-surfaces","before":1155,"after":1154}]，仅实增登记matching许可；前一提交4个实际RFC370增量许可在正常后继退役，并保留当前共享ledger既有退役内容。此次共享正文与并行输出全部原样保留，未提交源码不收编。
+
+正式页面2026/10/5 17:46:37重新刷新结束：8任务／14运行时执行／28尝试／13数字记录；输入96095、缓存读取21120、缓存写入0、输出6023，共123238 Token，已收到人民币¥0.16583。缺1调用和5未定价记录分别提示；总览、任务追踪、Agent、Token成本、性能五页签均结束加载。UI结果不等于完整采集，原before/final/native producer、CS平台v2与seal、100K Task／10M usage和两个RFC仍进行中。
+
 ## 2026-10-05 RFC-371 历史原生用量修订与确切CI回归修复
 
 原 dd4fefbb 主CI37276736493 failure／Windows37276917286 success各自留证。本片修复原页 ACK 四桶对象次序误报、公共 participant 的原 DB 类型边界、历史轮次两个实际 status 区域和直接拒绝 stdin EOF 空文件断言，原功能预言、历史只读和未交付 stdin 保持。历史原生修订在原 Task 快照读取后释放原 reader，再复用实际数字账本写事务核对原页／ACK／父链／水位；保留任务、Agent、模型、用途、原时间与四桶归属，未知分类保持原已知下界并明确不完整。任意历史页到 EOF、原数量／摘要／修订幂等与真实双provider／PG poolMax1回归随源码交付，未启用正式 producer。

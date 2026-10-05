@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:565b595c3ee4bde39cef71bd68b3170e1d89c6ffa9446a67a2bb0c957a80e027",
+    "sourceDigest": "sha256:c03d71d9315b8090320a921ab7fba13aa84813b871115e07ff7f950b69edc2f9",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -891,7 +891,7 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1155,
+      "baseline": 1154,
       "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
@@ -920,8 +920,8 @@
   "schemaVersion": 1,
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a0117acb4157f594f5528c9a7833e7362de653f0",
-    "contentDigest": "sha256:7f38c1da40e3df993e87c43518ffadad15f9795158415c2653027d64601cf4bf",
+    "currentSnapshotSha": "ab30bc10fafd26f76a075bd2b4a034ca9e4748e1",
+    "contentDigest": "sha256:ab3f6edc8815e863c2c1bc4aafe4cd1af8f1a6ba52da5b11d08c14688a9c78e7",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

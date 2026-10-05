@@ -5,8 +5,8 @@
     "governedFieldSurfaces": 5,
     "methods": 1384,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 25417,
-    "symbols": 1155
+    "recursiveFields": 25411,
+    "symbols": 1154
   },
   "entries": [
     {
@@ -124719,67 +124719,6 @@
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
-      "consumerEdgeIds": [],
-      "context": "run-observability",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "before",
-          "type": "ObservationNativePassPage['steps'][number]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "beforePath",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "final.$variant:0",
-          "type": "ObservationNativePassPage['steps'][number]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "final.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "finalPath.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "finalPath.$variant:1",
-          "type": "null"
-        }
-      ],
-      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
-      "id": "public:run-observability:participants:NativeHistoryStep",
-      "members": [],
-      "methods": [],
-      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:6ac0defcedb7aadefa97bbf1476c81787b23620263d48d319f4ede29549bde9d",
-      "status": "target-context-current-surface",
-      "symbol": "NativeHistoryStep",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
       "consumerEdgeIds": [
         "import:198402857a3c440266f9",
         "import:a7270198332e68bb8ccf",
@@ -198946,7 +198885,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:565b595c3ee4bde39cef71bd68b3170e1d89c6ffa9446a67a2bb0c957a80e027",
+  "sourceDigest": "sha256:c03d71d9315b8090320a921ab7fba13aa84813b871115e07ff7f950b69edc2f9",
   "targetContexts": [
     "collaboration",
     "development-automation",

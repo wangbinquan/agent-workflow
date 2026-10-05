@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:565b595c3ee4bde39cef71bd68b3170e1d89c6ffa9446a67a2bb0c957a80e027`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:c03d71d9315b8090320a921ab7fba13aa84813b871115e07ff7f950b69edc2f9`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -38,7 +38,7 @@
 | `moduleSymbolOwners` | 26829 |
 | `mutationEntrypoints` | 1881 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1155 |
+| `publicSurfaces` | 1154 |
 | `transactionExternalEffects` | 267 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -270,11 +270,11 @@
 | event-center | 21 |
 | code-capability | 19 |
 | integration | 14 |
-| run-observability | 13 |
+| run-observability | 12 |
 | intent | 10 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 137 / 1155）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1154）
 
 | context | 数量 |
 | --- | --- |
@@ -289,7 +289,6 @@
 | identity-access | 6 |
 | integration | 5 |
 | execution-contract | 3 |
-| run-observability | 1 |
 | task-catalog | 1 |
 
 ## 7. Required ports（`cross-context-imports.json` → `requiredPorts`）
