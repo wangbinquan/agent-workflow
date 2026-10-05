@@ -17,7 +17,11 @@ export function createUsageSourceProjection(input: {
   readonly store: UsageLedgerStore
   readonly invocations: ObservationInvocationStore
 }) {
-  const ingest = createUsageIngestion(input.store, input.source.nativeScopes)
+  const ingest = createUsageIngestion(
+    input.store,
+    input.source.nativeScopes,
+    input.source.nativeHistory,
+  )
   let afterNodeRunId: string | undefined
   let afterCaptureId: string | undefined
   let active: Promise<number> | null = null

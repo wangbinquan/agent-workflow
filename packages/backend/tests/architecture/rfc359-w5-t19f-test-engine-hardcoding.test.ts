@@ -387,6 +387,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // Its PG protocol fixture is synthetic; real-PG parity is retained as explicit debt below.
   'rfc370-workgroup-commit-queue.test.ts: 1',
   'rfc371-native-child-capture.test.ts: 1',
+  // RFC-371：原 OpenCode 外部文件格式夹具；历史原 owner/ledger/cursor 用双 provider，PG另验poolMax1。
+  'rfc371-native-history-provider.test.ts: 1',
   // RFC-371：唯一原生 SQLite 文件是 OpenCode 外部数据格式；原 Task／账本／报告仍走双 provider，另验 PG poolMax1。
   'rfc371-native-ledger-provider.test.ts: 1',
   // RFC-371：原生 OpenCode 固定 SQLite 文件夹具（建库/修改各一处），不属于 AW 持久 provider。

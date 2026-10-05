@@ -78,7 +78,11 @@ export function createObservationNativeScopes(
     return retain(parents, key, actual)
   }
   return {
-    onReader: (reader) => createObservationNativeScopes(reader),
+    onReader: (reader) => {
+      if (!('select' in reader) || typeof reader.select !== 'function')
+        throw new Error('Original native scope reader is unavailable')
+      return createObservationNativeScopes(reader as ProviderNeutralDatabase)
+    },
     qualify: (value) => qualifyOriginalNativeUsage(db, value),
     async verify(input) {
       checked.clear()

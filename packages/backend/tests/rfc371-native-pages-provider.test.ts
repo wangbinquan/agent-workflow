@@ -1601,11 +1601,7 @@ describeEachProvider('RFC-371 original native pages and membership', (harness) =
         measured.revision + 1,
         measured.revision + 2,
       ])
-      expect(
-        ack.measurements.every(
-          (row) => JSON.stringify(row.usage) === JSON.stringify(measured.usage),
-        ),
-      ).toBe(true)
+      expect(ack.measurements.map((row) => row.usage)).toEqual([measured.usage, measured.usage])
       const completion = new DrizzleNativeUsageCompletion(f.db)
       const proof = await completion.describeCompletion({
         binding: f.binding,

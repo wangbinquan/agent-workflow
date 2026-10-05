@@ -35,6 +35,7 @@ import type { RuntimeProfileConfigurationCommands } from '@/modules/runtime-mana
 import { composeObservationPricing } from '@/modules/run-observability/composition/pricing'
 import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
 import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
+import { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'
 import { composeTaskObservations } from '@/modules/run-observability/composition/taskObservations'
 import { createTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
 import { composeLocalHttpAuthentication } from '@/modules/identity-access/composition/authentication'
@@ -1117,7 +1118,10 @@ export async function composePostgresqlApplication(
       workspacePresence,
       observationInvocations: composeLocalInvocationObservations(
         input.db,
-        composeObservationUsageSource(input.db),
+        composeObservationUsageSource(
+          input.db,
+          nativeHistoryRead({ provider: 'postgresql', runtime: input.provider.runtime }),
+        ),
       ),
       runtimeRegistry: core.runtimeRegistry,
       nodeRunRuntime: composeNodeRunRuntimePersistence(

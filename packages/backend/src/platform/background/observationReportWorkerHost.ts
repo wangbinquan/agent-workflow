@@ -1,9 +1,15 @@
-import type { CompleteObservationBuildResult } from '@/modules/run-observability/public/participants'
+import type {
+  CompleteObservationBuildResult,
+  NativeHistoryPreparation,
+} from '@/modules/run-observability/public/participants'
 import type { OriginalReportSnapshot } from '../persistence/reportSnapshotTypes'
 import type {
   ObservationReportRequest,
   ObservationReportWorkerEvent,
   ObservationReportWorkerStart,
+  NativeHistoryWorkerStart,
+  OriginalObservationWorkerStart,
+  OriginalObservationWorkerResult,
 } from './observationReportProtocol'
 
 declare const AW_COMPILED_BUILD: boolean | undefined
@@ -28,11 +34,11 @@ async function execute(snapshot: OriginalReportSnapshot, request: ObservationRep
   }
 }
 /** No pool/URL crosses IPC. In-flight native reads finish before the original reservation is released. */
-export async function runObservationReportWorker(
-  input: ObservationReportWorkerStart,
+async function runOriginalObservationWorker(
+  input: OriginalObservationWorkerStart,
   signal: AbortSignal,
   snapshot?: OriginalReportSnapshot,
-): Promise<CompleteObservationBuildResult> {
+): Promise<OriginalObservationWorkerResult> {
   signal.throwIfAborted()
   const worker = new Worker(entry)
   const pending = new Set<Promise<void>>()
@@ -42,8 +48,8 @@ export async function runObservationReportWorker(
   const cancel = () =>
     worker.postMessage({ kind: 'cancel', reason: 'Original report build cancelled' })
   try {
-    return await new Promise<CompleteObservationBuildResult>((resolve, reject) => {
-      const finish = (result: CompleteObservationBuildResult | Error) => {
+    return await new Promise<OriginalObservationWorkerResult>((resolve, reject) => {
+      const finish = (result: OriginalObservationWorkerResult | Error) => {
         if (completed) return
         accepting = false
         completed = true
@@ -57,8 +63,8 @@ export async function runObservationReportWorker(
       }
       worker.onmessage = (event: MessageEvent<ObservationReportWorkerEvent>) => {
         const message = event.data
-        if (message.kind === 'result') {
-          finish(message.result)
+        if (message.kind === 'result' || message.kind === 'native-history-result') {
+          finish(message)
           return
         }
         if (message.kind === 'failed') {
@@ -109,4 +115,25 @@ export async function runObservationReportWorker(
     // A result/failure is emitted after SQLite finally closes its original file channel.
     worker.terminate()
   }
+}
+
+/** The original report entrypoint keeps its exact result and snapshot contract. */
+export async function runObservationReportWorker(
+  input: ObservationReportWorkerStart,
+  signal: AbortSignal,
+  snapshot?: OriginalReportSnapshot,
+): Promise<CompleteObservationBuildResult> {
+  const result = await runOriginalObservationWorker(input, signal, snapshot)
+  if (result.kind !== 'result') throw new Error('Original Worker returned a different operation')
+  return result.result
+}
+export async function runNativeHistoryWorker(
+  input: NativeHistoryWorkerStart,
+  signal: AbortSignal,
+  snapshot?: OriginalReportSnapshot,
+): Promise<NativeHistoryPreparation | null> {
+  const result = await runOriginalObservationWorker(input, signal, snapshot)
+  if (result.kind !== 'native-history-result')
+    throw new Error('Original Worker returned a different operation')
+  return result.result
 }

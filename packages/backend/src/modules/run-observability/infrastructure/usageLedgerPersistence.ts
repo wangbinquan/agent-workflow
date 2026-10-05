@@ -14,7 +14,10 @@ import {
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 import type { UsageLedgerRecord } from '../domain/usageLedger'
-import type { ObservationNativeScopeSource } from '../public/participants'
+import type {
+  ObservationNativeScopeSource,
+  ObservationNativeHistorySource,
+} from '../public/participants'
 import type { NativeUsageOwnership, UsageLedgerScope, UsageLedgerStore } from '../ports/usageLedger'
 import {
   commitUsageCapture,
@@ -28,6 +31,10 @@ const decode = (document: string): UsageLedgerRecord => JSON.parse(document) as 
 
 function scope(tx: DatabaseTransaction, sourceId: string): UsageLedgerScope {
   const nativeReaders = new WeakMap<ObservationNativeScopeSource, ObservationNativeScopeSource>()
+  const historyReaders = new WeakMap<
+    ObservationNativeHistorySource,
+    ObservationNativeHistorySource
+  >()
   const recordKey = (invocationId: string, recordId: string) =>
     key(sourceId, invocationId, recordId)
   return {
@@ -39,9 +46,17 @@ function scope(tx: DatabaseTransaction, sourceId: string): UsageLedgerScope {
       }
       return reader
     },
+    bindNativeHistory(source) {
+      let reader = historyReaders.get(source)
+      if (!reader) {
+        reader = source.onReader(tx)
+        historyReaders.set(source, reader)
+      }
+      return reader
+    },
     capture: (invocationId) => readUsageCapture(tx, invocationId),
-    commitCapture: (value, cursor, resolutions) =>
-      commitUsageCapture(tx, sourceId, cursor, value, resolutions),
+    commitCapture: (value, cursor, resolutions, history) =>
+      commitUsageCapture(tx, sourceId, cursor, value, resolutions, history),
     lockNativeRoot: async (nativeSource, root) => {
       const id = 'native-root:' + key(nativeSource, root)
       await tx.insert(observationUsageSources).values({ sourceId: id }).onConflictDoNothing().run()

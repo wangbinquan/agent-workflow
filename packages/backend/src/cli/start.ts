@@ -27,6 +27,7 @@ import { composeObservationUsageSource } from '@/modules/task-execution/composit
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeCompleteObservationReports } from '@/modules/run-observability/composition/completeObservationReports'
 import { observationReportBuild } from '@/platform/persistence/observationReportBuild'
+import { nativeHistoryRead } from '@/platform/persistence/nativeHistoryRead'
 import {
   composeApplicationConfigurationBinding,
   type ApplicationConfigurationBinding,
@@ -2027,7 +2028,14 @@ async function composeSqliteProviderSession(
         workspacePresence,
         observationInvocations: composeLocalInvocationObservations(
           db,
-          composeObservationUsageSource(db),
+          composeObservationUsageSource(
+            db,
+            nativeHistoryRead({
+              provider: 'sqlite',
+              db,
+              generationId: databaseProvider.generation.payload.generationId,
+            }),
+          ),
         ),
         memoryInjectionQueries,
         collaborationRuntime: createCollaborationRuntimeMechanics(db, {

@@ -3,9 +3,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
-      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:692",
+      "id": "ambient:packages/backend/src/cli/postgresqlDaemonApplication.ts#registerTerminalWorkspacePrunePolicy:693",
       "kind": "register-call",
-      "line": 692,
+      "line": 693,
       "ownerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#composePostgresqlApplication",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlApplication",
@@ -14,9 +14,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3010",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3018",
       "kind": "register-call",
-      "line": 3010,
+      "line": 3018,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -25,9 +25,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3016",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:3024",
       "kind": "register-call",
-      "line": 3016,
+      "line": 3024,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -36,9 +36,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:884",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:885",
       "kind": "register-call",
-      "line": 884,
+      "line": 885,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -47,9 +47,9 @@
     {
       "callee": "registerAfterCommitEventPump",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:890",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerAfterCommitEventPump:891",
       "kind": "register-call",
-      "line": 890,
+      "line": 891,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -58,9 +58,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1061",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:1062",
       "kind": "register-call",
-      "line": 1061,
+      "line": 1062,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -69,9 +69,9 @@
     {
       "callee": "registerConfigAppliedListener",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3384",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerConfigAppliedListener:3392",
       "kind": "register-call",
-      "line": 3384,
+      "line": 3392,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -80,9 +80,9 @@
     {
       "callee": "registerTerminalWorkspacePrunePolicy",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1810",
+      "id": "ambient:packages/backend/src/cli/start.ts#registerTerminalWorkspacePrunePolicy:1811",
       "kind": "register-call",
-      "line": 1810,
+      "line": 1811,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -91,9 +91,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3436",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:3444",
       "kind": "global-setter",
-      "line": 3436,
+      "line": 3444,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composeSqliteProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composeSqliteProviderSession",
@@ -102,9 +102,9 @@
     {
       "callee": "setMemoryDistillPolicyProvider",
       "file": "packages/backend/src/cli/start.ts",
-      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:912",
+      "id": "ambient:packages/backend/src/cli/start.ts#setMemoryDistillPolicyProvider:913",
       "kind": "global-setter",
-      "line": 912,
+      "line": 913,
       "ownerEntryId": "owner:packages/backend/src/cli/start.ts#composePostgresqlProviderSession",
       "removeAfterWave": "W6/W9",
       "symbol": "composePostgresqlProviderSession",
@@ -5564,9 +5564,9 @@
   "denominator": {
     "ambientWiring": 504,
     "disabled": 9,
-    "entries": 359,
+    "entries": 361,
     "executionLocal": 41,
-    "longRunning": 96,
+    "longRunning": 98,
     "managed": 11,
     "periodic": 213
   },
@@ -10448,7 +10448,49 @@
       "dependencies": [],
       "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
       "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/background/observationReportWorkerHost.ts#runNativeHistoryWorker",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runNativeHistoryWorker",
+      "phase": "unknown",
+      "symbol": "runNativeHistoryWorker",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
+      "finalCriterion": "W9-B registry",
       "id": "background:packages/backend/src/platform/background/observationReportWorkerHost.ts#runObservationReportWorker",
+      "kind": "long-running",
+      "lifecycle": {
+        "health": false,
+        "readiness": false,
+        "run": false,
+        "start": false,
+        "state": false,
+        "stop": true
+      },
+      "lifetime": "daemon",
+      "managed": false,
+      "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runObservationReportWorker",
+      "phase": "unknown",
+      "symbol": "runObservationReportWorker",
+      "targetContext": "platform"
+    },
+    {
+      "dependencies": [],
+      "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
+      "finalCriterion": "W9-B registry",
+      "id": "background:packages/backend/src/platform/background/observationReportWorkerHost.ts#runOriginalObservationWorker",
       "kind": "long-running",
       "lifecycle": {
         "health": false,
@@ -10460,9 +10502,9 @@
       },
       "lifetime": "daemon",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runObservationReportWorker",
+      "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runOriginalObservationWorker",
       "phase": "unknown",
-      "symbol": "runObservationReportWorker",
+      "symbol": "runOriginalObservationWorker",
       "targetContext": "platform"
     },
     {
@@ -13462,5 +13504,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a139a9620d7ce1f050e4f0eecbf7cc6ae19aa5b570d693c37fcead03b0476246"
+  "sourceDigest": "sha256:44ea54dd61eb8cea7505f717517a6d824218595504f69b58e2262f1e276d6880"
 }

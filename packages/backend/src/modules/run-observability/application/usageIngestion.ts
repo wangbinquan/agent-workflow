@@ -5,7 +5,11 @@ import type { UsageLedgerScope, UsageLedgerStore } from '../ports/usageLedger'
 import type { UsageCaptureReceipt } from '../ports/usageLedger'
 import { reconcileNativeUsageRevisions } from './nativeUsageRevisions'
 import { isNativeUsageScope } from '../domain/nativeUsageScope'
-import type { ObservationNativeScopeSource } from '../public/participants'
+import type {
+  ObservationNativeScopeSource,
+  ObservationNativeHistorySource,
+} from '../public/participants'
+import { repairNativeUsageHistory } from './nativeUsageHistory'
 
 async function fold(
   sourceId: string,
@@ -94,6 +98,7 @@ async function appendEvent(
 export function createUsageIngestion(
   store: UsageLedgerStore,
   nativeScopes?: ObservationNativeScopeSource,
+  nativeHistory?: ObservationNativeHistorySource,
 ) {
   const append: typeof appendEvent = (sourceId, event, scope, nativeSource, nativeWatermark) =>
     appendEvent(
@@ -107,7 +112,10 @@ export function createUsageIngestion(
   return {
     cursor: (sourceId: string) => store.cursor(sourceId),
     async repairCapture(receipt: UsageCaptureReceipt) {
-      if (receipt.capture.contract === 'opencode-child-pages-v2') return
+      if (receipt.capture.contract === 'opencode-child-pages-v2')
+        return nativeHistory
+          ? repairNativeUsageHistory({ receipt, store, nativeHistory, nativeScopes, append })
+          : undefined
       return store.change(receipt.sourceId, async (scope) => {
         const current = await scope.capture(receipt.invocationId)
         if (!current || current.sourceCursor !== receipt.sourceCursor) return

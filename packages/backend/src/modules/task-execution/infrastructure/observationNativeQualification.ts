@@ -16,11 +16,11 @@ import type { ObservationNativeScopeSource } from '@/modules/run-observability/p
 import { verifyNativeUsagePass } from './nativeUsagePassVerification'
 import { verifyNativeUsageNumericCoverage } from './nativeUsageNumericCoverage'
 
-/** Same original report snapshot; never a new claim, mutable supplier scan or caller count. */
-export async function qualifyOriginalNativeUsage(
+/** Original source/preparation/ACK binding, shared by qualification and bounded history reads. */
+export async function readOriginalNativeCaptureBinding(
   db: ProviderNeutralDatabase,
   value: Parameters<ObservationNativeScopeSource['qualify']>[0],
-): Promise<Awaited<ReturnType<ObservationNativeScopeSource['qualify']>>> {
+) {
   const proof = value.capture
   if (proof.contract !== 'opencode-child-pages-v2')
     throw new Error('Original page qualification received a different native contract')
@@ -99,6 +99,21 @@ export async function qualifyOriginalNativeUsage(
     taskId: value.taskId,
     nodeRunId: prepared.nodeRunId,
   }
+  return {
+    proof,
+    binding,
+    before,
+    sourceFingerprint: emission.fingerprint,
+    beforeSpawnFingerprint: sha256Hex(prepared.document),
+  }
+}
+
+/** Same original report snapshot; never a new claim, mutable supplier scan or caller count. */
+export async function qualifyOriginalNativeUsage(
+  db: ProviderNeutralDatabase,
+  value: Parameters<ObservationNativeScopeSource['qualify']>[0],
+): Promise<Awaited<ReturnType<ObservationNativeScopeSource['qualify']>>> {
+  const { proof, binding, before } = await readOriginalNativeCaptureBinding(db, value)
   const final = proof.final
   if (!final) return { records: null, complete: false }
   for (const reference of [final, proof.baseline.kind === 'resume' ? proof.baseline.pass : null]) {

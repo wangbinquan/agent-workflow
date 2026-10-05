@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1157,
+    "consumers": 1166,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1365,
+    "methods": 1371,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 25248,
-    "symbols": 1148
+    "recursiveFields": 25278,
+    "symbols": 1153
   },
   "entries": [
     {
@@ -124578,6 +124578,209 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:dc8082ba7881acad51ee"
+      ],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "public:run-observability:participants:nativeHistoryFingerprint",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:dc8082ba7881acad51ee",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/observationNativeHistory.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/observationNativeHistory.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:60f82251901f4a48ff85a7baaffcedd640b09c553b3199c603c84dff9b349148",
+      "status": "target-context-current-surface",
+      "symbol": "nativeHistoryFingerprint",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:3b5daf8d074d5f166ec3",
+        "import:4031612556202266022f",
+        "import:98c2284cf94645f30f94"
+      ],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$value",
+          "type": "z.infer<typeof NativeHistoryPreparationSchema>"
+        }
+      ],
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "public:run-observability:participants:NativeHistoryPreparation",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:3b5daf8d074d5f166ec3",
+          "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:4031612556202266022f",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/observationNativeHistory.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/observationNativeHistory.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:98c2284cf94645f30f94",
+          "file": "packages/backend/src/platform/background/observationReportProtocol.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportProtocol.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:run-observability:participants:ObservationNativeHistorySource",
+        "public:run-observability:participants:ObservationUsageSource"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:5f6b61347cc3828cc36fc9a9daa79065bfccc3f90835961f8c142122756696e6",
+      "status": "target-context-current-surface",
+      "symbol": "NativeHistoryPreparation",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:15ee790c3476865f44bb"
+      ],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [],
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "public:run-observability:participants:NativeHistoryPreparationSchema",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:15ee790c3476865f44bb",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/observationNativeHistory.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/observationNativeHistory.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:664159e9782f16fca6c0c481ccc14bc14e1a14d7bf044ed15bb951d9be6220bc",
+      "status": "target-context-current-surface",
+      "symbol": "NativeHistoryPreparationSchema",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "before",
+          "type": "ObservationNativePassPage['steps'][number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "beforePath",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "final.$variant:0",
+          "type": "ObservationNativePassPage['steps'][number]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "final.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "finalPath.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "finalPath.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "public:run-observability:participants:NativeHistoryStep",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:6ac0defcedb7aadefa97bbf1476c81787b23620263d48d319f4ede29549bde9d",
+      "status": "target-context-current-surface",
+      "symbol": "NativeHistoryStep",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:198402857a3c440266f9",
         "import:a7270198332e68bb8ccf",
         "import:d31343f538211997c46a"
@@ -124615,6 +124818,21 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:reconcile.$return",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reconcileNativeHistory.$parameter:invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reconcileNativeHistory.$return.$variant:0",
+          "type": "z.infer<typeof NativeHistoryProgressSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:reconcileNativeHistory.$return.$variant:1",
+          "type": "undefined"
         },
         {
           "consumerEdgeIds": [
@@ -124672,6 +124890,7 @@
       "members": [
         "accept",
         "reconcile",
+        "reconcileNativeHistory",
         "spanOwners"
       ],
       "methods": [
@@ -124686,6 +124905,11 @@
           "consumerEdgeIds": [],
           "name": "reconcile",
           "signatureDigest": "sha256:57b2bffa5fdbe8e6f5e37849477ced82da80914122b563577ac59ef42d0b7b14"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "reconcileNativeHistory",
+          "signatureDigest": "sha256:826c95c86367e878a3d02ce8059d14720e012492e388117eedddcfddd16bdccb"
         },
         {
           "consumerEdgeIds": [
@@ -124719,7 +124943,7 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:bc0458b1f42949f77bf21ab1173516085a124b72bdcbcd1aa70d40c5cd6b108e",
+      "signatureDigest": "sha256:b7f410a0500dac7c67ef04734ad671e85f8eeba5e7dd62e02a38051af57675c6",
       "status": "target-context-current-surface",
       "symbol": "ObservationInvocationParticipant",
       "transaction": "caller-tx",
@@ -124779,6 +125003,152 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:8f537028aba061194803",
+        "import:a14efd8529eebd7b0c7a",
+        "import:a58cc53f4d83e488068c",
+        "import:b1e3564294c84c4ae832"
+      ],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:onReader.$parameter:reader",
+          "type": "object"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:onReader.$return",
+          "type": "ObservationNativeHistorySource"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:page.$parameter:after.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:page.$parameter:after.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:page.$parameter:preparation",
+          "type": "z.infer<typeof NativeHistoryPreparationSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:page.$return",
+          "type": "readonly NativeHistoryStep[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepare.$parameter:signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepare.$parameter:value",
+          "type": "NativeHistoryPreparation['value']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepare.$return.$variant:0",
+          "type": "z.infer<typeof NativeHistoryPreparationSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepare.$return.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "public:run-observability:participants:ObservationNativeHistorySource",
+      "members": [
+        "onReader",
+        "page",
+        "prepare"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:b1e3564294c84c4ae832"
+          ],
+          "name": "onReader",
+          "signatureDigest": "sha256:e5cb7fe6b224d1464f07cc406a5c529a5b9adad9b14479d100234be6579546b5"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:8f537028aba061194803",
+            "import:b1e3564294c84c4ae832"
+          ],
+          "name": "page",
+          "signatureDigest": "sha256:929eb1005179148fca782bb73fd689969f92de5fc09bd6d545105a193ffb3615"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:8f537028aba061194803",
+            "import:a14efd8529eebd7b0c7a",
+            "import:a58cc53f4d83e488068c",
+            "import:b1e3564294c84c4ae832"
+          ],
+          "name": "prepare",
+          "signatureDigest": "sha256:7e8c3da0000c646f204026cf009343089462ead573c3c38644bae1cce7ad4129"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationNativeHistorySource",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:8f537028aba061194803",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/observationUsageSource.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/observationUsageSource.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:a14efd8529eebd7b0c7a",
+          "file": "packages/backend/src/platform/persistence/nativeHistoryRead.ts",
+          "ownerEntryId": "owner:packages/backend/src/platform/persistence/nativeHistoryRead.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:a58cc53f4d83e488068c",
+          "file": "packages/backend/src/modules/task-execution/composition/observationUsageSource.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/observationUsageSource.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:b1e3564294c84c4ae832",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/observationNativeHistory.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/observationNativeHistory.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:run-observability:participants:ObservationUsageSource"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:61555e8e9235ec9cf67def8ec9727ef265d70fc9c948d48be080b8b70987aa9b",
+      "status": "target-context-current-surface",
+      "symbol": "ObservationNativeHistorySource",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "AbortSignal",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 28,
         "maxUnionVariants": 12
       },
@@ -124795,7 +125165,7 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:onReader.$parameter:reader",
-          "type": "BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>"
+          "type": "object"
         },
         {
           "consumerEdgeIds": [],
@@ -124989,7 +125359,7 @@
             "import:698e58dac6490f04405b"
           ],
           "name": "onReader",
-          "signatureDigest": "sha256:7b9c1b0c81697bae168c14f5df8d48ad1fc99d5ace7a90966c250e2a773cf1f9"
+          "signatureDigest": "sha256:2d3ae96c101ed19944072828f7f9e05801a023e2a9036dba208fe8350fecc85d"
         },
         {
           "consumerEdgeIds": [
@@ -125048,13 +125418,12 @@
       ],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:91c3eb8cbbfbf87adb3bd0f4c009179adf55b308904e35501fadb507822284a7",
+      "signatureDigest": "sha256:026838a9c621dc884af1ca16095685db911e67e5a2691761eeb8a8771ed0ebdb",
       "status": "target-context-current-surface",
       "symbol": "ObservationNativeScopeSource",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [
         "AsyncIterable",
-        "BaseSQLiteDatabase",
         "z.infer"
       ],
       "version": 1
@@ -125062,10 +125431,10 @@
     {
       "authority": "context-bound",
       "budget": {
-        "maxMethods": 8,
+        "maxMethods": 10,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 50,
-        "maxUnionVariants": 12
+        "maxTransitiveLeafFields": 60,
+        "maxUnionVariants": 16
       },
       "consumerEdgeIds": [
         "import:cb3f33c8bd86f7d491a3"
@@ -125197,8 +125566,58 @@
         },
         {
           "consumerEdgeIds": [],
+          "fieldPath": "nativeHistory.$method:onReader.$parameter:reader",
+          "type": "object"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeHistory.$method:onReader.$return",
+          "type": "ObservationNativeHistorySource"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeHistory.$method:page.$parameter:after.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeHistory.$method:page.$parameter:after.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeHistory.$method:page.$parameter:preparation",
+          "type": "z.infer<typeof NativeHistoryPreparationSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeHistory.$method:page.$return",
+          "type": "readonly NativeHistoryStep[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeHistory.$method:prepare.$parameter:signal",
+          "type": "AbortSignal"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeHistory.$method:prepare.$parameter:value",
+          "type": "NativeHistoryPreparation['value']"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeHistory.$method:prepare.$return.$variant:0",
+          "type": "z.infer<typeof NativeHistoryPreparationSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeHistory.$method:prepare.$return.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
           "fieldPath": "nativeScopes.$method:onReader.$parameter:reader",
-          "type": "BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>"
+          "type": "object"
         },
         {
           "consumerEdgeIds": [],
@@ -125348,6 +125767,7 @@
       "id": "public:run-observability:participants:ObservationUsageSource",
       "members": [
         "acknowledge",
+        "nativeHistory",
         "nativeScopes",
         "pending",
         "spanSources"
@@ -125363,7 +125783,14 @@
         {
           "consumerEdgeIds": [],
           "name": "onReader",
-          "signatureDigest": "sha256:7b9c1b0c81697bae168c14f5df8d48ad1fc99d5ace7a90966c250e2a773cf1f9"
+          "signatureDigest": "sha256:e5cb7fe6b224d1464f07cc406a5c529a5b9adad9b14479d100234be6579546b5"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "name": "page",
+          "signatureDigest": "sha256:929eb1005179148fca782bb73fd689969f92de5fc09bd6d545105a193ffb3615"
         },
         {
           "consumerEdgeIds": [],
@@ -125376,6 +125803,13 @@
           ],
           "name": "pending",
           "signatureDigest": "sha256:c9bc98e5fb3c53203dc9a5e4cc7fff10315936c0f7f8ea73c3ae50cfd06017a1"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "name": "prepare",
+          "signatureDigest": "sha256:7e8c3da0000c646f204026cf009343089462ead573c3c38644bae1cce7ad4129"
         },
         {
           "consumerEdgeIds": [],
@@ -125412,13 +125846,13 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:8877ab9df873214957e87a9011308dcdac6e47916fb2118c9d262f0c41bfc1fd",
+      "signatureDigest": "sha256:93427b1866db35854395ad0f5fafb8239cda1809df72728847d4e45ac186537d",
       "status": "target-context-current-surface",
       "symbol": "ObservationUsageSource",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [
+        "AbortSignal",
         "AsyncIterable",
-        "BaseSQLiteDatabase",
         "z.infer"
       ],
       "version": 1
@@ -189034,7 +189468,7 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "nativeScopes.$method:onReader.$parameter:reader",
-          "type": "BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>"
+          "type": "object"
         },
         {
           "consumerEdgeIds": [],
@@ -189224,7 +189658,7 @@
         {
           "consumerEdgeIds": [],
           "name": "onReader",
-          "signatureDigest": "sha256:7b9c1b0c81697bae168c14f5df8d48ad1fc99d5ace7a90966c250e2a773cf1f9"
+          "signatureDigest": "sha256:2d3ae96c101ed19944072828f7f9e05801a023e2a9036dba208fe8350fecc85d"
         },
         {
           "consumerEdgeIds": [
@@ -189289,7 +189723,6 @@
       "transaction": "none",
       "unresolvedTypeRefs": [
         "AsyncIterable",
-        "BaseSQLiteDatabase",
         "z.infer"
       ],
       "version": 1
@@ -197605,7 +198038,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a139a9620d7ce1f050e4f0eecbf7cc6ae19aa5b570d693c37fcead03b0476246",
+  "sourceDigest": "sha256:44ea54dd61eb8cea7505f717517a6d824218595504f69b58e2262f1e276d6880",
   "targetContexts": [
     "collaboration",
     "development-automation",

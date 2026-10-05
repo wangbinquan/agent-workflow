@@ -1,3 +1,11 @@
+## 2026-10-05 RFC-371 历史原生用量修订与确切CI回归修复
+
+原 dd4fefbb 主CI37276736493 failure／Windows37276917286 success各自留证。本片修复原页 ACK 四桶对象次序误报、公共 participant 的原 DB 类型边界、历史轮次两个实际 status 区域和直接拒绝 stdin EOF 空文件断言，原功能预言、历史只读和未交付 stdin 保持。历史原生修订在原 Task 快照读取后释放原 reader，再复用实际数字账本写事务核对原页／ACK／父链／水位；保留任务、Agent、模型、用途、原时间与四桶归属，未知分类保持原已知下界并明确不完整。任意历史页到 EOF、原数量／摘要／修订幂等与真实双provider／PG poolMax1回归随源码交付，未启用正式 producer。
+
+SOURCE28 后继有限PASS，目标26文件 format／lint通过。原静态生成首个未传 write 的只读报告未形成13产物，明确无效留证；有效原候选只运行一次原官方生成，sourceDigest sha256:44ea54dd61eb8cea7505f717517a6d824218595504f69b58e2262f1e276d6880，保留原129有序库存／why、318债、原SCC与全部规则／目标／SPI／断言；七项具名实际增长只匹配本提交，后继正常退役。原工作树两份未提交 baseline prototype 和其他会话在制品不进入本片源码人口。
+
+本机正式页面已重新刷新完成，8任务／28尝试／14运行时执行／13记录，已收到123238 Token（96095输入／21120缓存读取／0缓存写入／6023输出）及人民币¥0.16583，7任务完整／1任务明确缺口。失败状态已保持终态、只有明确刷新重试，不再持续加载；本次真实刷新截图另留证。没有本机AW tests／typecheck／build／新服务，没有更换原 daemon；确切SHA hosted CI继续。原 native producer／before-baseline-seal 接线、CS journal生产接线、100K Task／10M usage实际验收和两个RFC仍开放，未记Done。下方共享正文与全部并行输出逐字保持。
+
 ## 2026-10-05 RFC-371 hosted 原生账本类型与已记录总量回归修复
 
 原 SOURCE44 与加载修复已精确上库79231ae62／670e8483d。Windows37272334390明确typecheck失败，主CI37272334371在并行后继430e推送后cancelled，原终态保留、不冒充绿。本片四份观测测试显式v2合同类型与v1 contract判别，保留原用例／预算／原断言；partial输入3＋缓存读6＋缓存写10的已记录total期望纠正为19，输出仍未知且完整统计state仍not-ready，与用户缺口保留已知数字的要求和原求和一致。详见 design/RFC-371-run-observability/native-ledger-ci-repair.md。生产／canonical与在制history writer不纳入，本机仅精确format/lint；后继新精确SHA CI另验收。两RFC仍进行中。原共享STATE全文逐字保留。

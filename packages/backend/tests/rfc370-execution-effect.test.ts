@@ -726,7 +726,9 @@ describe('RFC-370 selected native execution binding', () => {
     }
     expect(result.outcome).toBe('aborted')
     expect(readFileSync(started, 'utf8')).toBe('started')
-    expect(existsSync(stdinRead)).toBe(false)
+    // Reaping may close the still-held pipe, allowing the child to persist EOF.
+    // The original rejected receipt must never deliver the supplied stdin bytes.
+    expect(existsSync(stdinRead) ? readFileSync(stdinRead, 'utf8') : '').toBe('')
     expect(receiptRejected).toBe(true)
     expect(result.pumpError).toBeUndefined()
     expect(lines.every((line) => line === 'buffered')).toBe(true)

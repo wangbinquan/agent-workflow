@@ -1,4 +1,5 @@
 import { createCompleteTaskObservationFacts } from '@/modules/task-execution/composition/taskObservationFacts'
+import { prepareObservationNativeHistory } from '@/modules/task-execution/composition/observationNativeHistory'
 import { composeCompleteObservationSnapshot } from '@/modules/run-observability/composition/completeObservationSnapshot'
 import { completeObservationFileSpool } from '@/modules/run-observability/composition/completeObservationSpool'
 import { originalSqliteFileReportSnapshot } from '../persistence/reportSqliteSnapshot'
@@ -9,7 +10,8 @@ import type { OriginalReportSnapshot } from '../persistence/reportSnapshotTypes'
 import type {
   ObservationReportWorkerInput,
   ObservationReportWorkerEvent,
-  ObservationReportWorkerStart,
+  OriginalObservationWorkerStart,
+  OriginalObservationWorkerResult,
 } from './observationReportProtocol'
 
 const scope = globalThis as unknown as {
@@ -20,15 +22,26 @@ const scope = globalThis as unknown as {
 const stop = new AbortController()
 const channel = observationReportChannel((event) => scope.postMessage(event), stop.signal)
 let started = false
-async function run(input: ObservationReportWorkerStart) {
-  const build = (snapshot: OriginalReportSnapshot) =>
-    composeCompleteObservationSnapshot({
-      snapshot,
-      tasks: createCompleteTaskObservationFacts(snapshot.executor, input.report.request.taskId),
-      report: input.report,
-      spool: completeObservationFileSpool(input.appHome),
-      signal: stop.signal,
-    })
+async function run(input: OriginalObservationWorkerStart) {
+  const build = async (
+    snapshot: OriginalReportSnapshot,
+  ): Promise<OriginalObservationWorkerResult> => {
+    if (input.kind === 'native-history')
+      return {
+        kind: 'native-history-result',
+        result: await prepareObservationNativeHistory(snapshot.executor, input.value, snapshot),
+      }
+    return {
+      kind: 'result',
+      result: await composeCompleteObservationSnapshot({
+        snapshot,
+        tasks: createCompleteTaskObservationFacts(snapshot.executor, input.report.request.taskId),
+        report: input.report,
+        spool: completeObservationFileSpool(input.appHome),
+        signal: stop.signal,
+      }),
+    }
+  }
   try {
     stop.signal.throwIfAborted()
     selectDatabaseSchemaProvider(input.source.kind === 'original-channel' ? 'postgresql' : 'sqlite')
@@ -42,7 +55,7 @@ async function run(input: ObservationReportWorkerStart) {
             generationId: input.source.generationId,
             asOf: input.source.asOf,
           })
-    scope.postMessage({ kind: 'result', result })
+    scope.postMessage(result)
   } catch (error) {
     scope.postMessage({
       kind: 'failed',

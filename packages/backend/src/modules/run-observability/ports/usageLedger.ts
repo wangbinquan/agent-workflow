@@ -4,7 +4,11 @@ import type {
   ObservationNativeRevisionResolution,
 } from '@agent-workflow/shared'
 import type { UsageLedgerRecord } from '../domain/usageLedger'
-import type { ObservationNativeScopeSource } from '../public/participants'
+import type {
+  ObservationNativeScopeSource,
+  ObservationNativeHistorySource,
+} from '../public/participants'
+import type { NativeHistoryProgress } from '../domain/nativeUsageHistory'
 
 export interface UsageRevisionReceipt {
   readonly fingerprint: string
@@ -16,6 +20,7 @@ export interface UsageCaptureReceipt extends ObservationUsageCaptureCommit {
   readonly sourceId: string
   readonly resolutions: readonly NativeRevisionResolution[]
   readonly priorRevisionGap: boolean
+  readonly history?: NativeHistoryProgress
 }
 /** Exact ownership over the entire original native index, reduced to one bounded batch. */
 export interface NativeUsageOwnership {
@@ -26,6 +31,7 @@ export interface NativeUsageOwnership {
 export interface UsageLedgerScope {
   /** Bind original Task evidence reads to this transaction, never a root pool connection. */
   bindNativeScopes?(source: ObservationNativeScopeSource): ObservationNativeScopeSource
+  bindNativeHistory?(source: ObservationNativeHistorySource): ObservationNativeHistorySource
   cursor(): Promise<string | null>
   event(eventId: string): Promise<string | undefined>
   revision(invocationId: string, recordId: string, revision: number): Promise<string | undefined>
@@ -49,6 +55,7 @@ export interface UsageLedgerScope {
     value: ObservationUsageCaptureCommit,
     cursor: string,
     resolutions: readonly NativeRevisionResolution[],
+    history?: NativeHistoryProgress,
   ): Promise<void>
   lockNativeRoot(nativeSource: string, root: string): Promise<void>
   nativeOwners(

@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1878,
+    "entries": 1881,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -30845,6 +30845,30 @@
     },
     {
       "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/observationNativeHistory.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/observationNativeHistory.ts#createObservationNativeHistory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/observationNativeHistory.ts#createObservationNativeHistory",
+      "symbol": "createObservationNativeHistory",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
         "audit": true,
         "authority": "none-observed",
         "authorization": false,
@@ -34116,8 +34140,33 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
-        "event": true,
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/observationReportWorkerHost.ts#runNativeHistoryWorker",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runNativeHistoryWorker",
+      "symbol": "runNativeHistoryWorker",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
         "fenceOrOcc": false,
         "transaction": false
       },
@@ -34127,11 +34176,36 @@
       "missingControls": [
         "audit",
         "authority",
+        "authorization",
+        "event",
         "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runObservationReportWorker",
       "symbol": "runObservationReportWorker",
+      "targetContext": "platform",
+      "targetLayer": "background"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/platform/background/observationReportWorkerHost.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/platform/background/observationReportWorkerHost.ts#runOriginalObservationWorker",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/platform/background/observationReportWorkerHost.ts#runOriginalObservationWorker",
+      "symbol": "runOriginalObservationWorker",
       "targetContext": "platform",
       "targetLayer": "background"
     },
@@ -44915,7 +44989,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:a139a9620d7ce1f050e4f0eecbf7cc6ae19aa5b570d693c37fcead03b0476246",
+  "sourceDigest": "sha256:44ea54dd61eb8cea7505f717517a6d824218595504f69b58e2262f1e276d6880",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

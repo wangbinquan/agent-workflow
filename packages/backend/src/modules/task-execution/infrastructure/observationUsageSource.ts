@@ -2,14 +2,24 @@ import { and, asc, eq, inArray, gt } from 'drizzle-orm'
 import { parseObservationCapturedUsage } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { taskExecutionObservationSources } from '@/db/schema'
-import type { ObservationUsageSource } from '@/modules/run-observability/public/participants'
+import type {
+  ObservationUsageSource,
+  ObservationNativeHistorySource,
+} from '@/modules/run-observability/public/participants'
 import { createObservationSpanSources } from './observationSpanSources'
 import { createObservationNativeScopes } from './observationNativeScopes'
+import { createObservationNativeHistory } from './observationNativeHistory'
 
 /** Acks change delivery metadata only; runtime evidence and execution ownership stay intact. */
-export function createObservationUsageSource(db: ProviderNeutralDatabase): ObservationUsageSource {
+export function createObservationUsageSource(
+  db: ProviderNeutralDatabase,
+  historyPrepare?: ObservationNativeHistorySource['prepare'],
+): ObservationUsageSource {
   return {
     nativeScopes: createObservationNativeScopes(db),
+    ...(historyPrepare
+      ? { nativeHistory: createObservationNativeHistory(db, historyPrepare) }
+      : {}),
     spanSources: createObservationSpanSources(db),
     async pending(input) {
       if (!Number.isInteger(input.limit) || input.limit < 1 || input.limit > 500)

@@ -8,6 +8,11 @@ import { observationUsageCaptures } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import { ObservationIngestError } from '../domain/ingestError'
 import type { NativeRevisionResolution, UsageCaptureReceipt } from '../ports/usageLedger'
+import {
+  NativeHistoryProgressSchema,
+  nativeHistoryFingerprint,
+  type NativeHistoryProgress,
+} from '../domain/nativeUsageHistory'
 
 function decode(row: {
   document: string
@@ -18,6 +23,7 @@ function decode(row: {
   const value = JSON.parse(row.document) as {
     evidence: unknown
     resolutions: NativeRevisionResolution[]
+    history?: unknown
   }
   return {
     ...ObservationUsageCaptureCommitSchema.parse(value.evidence),
@@ -25,6 +31,9 @@ function decode(row: {
     sourceId: row.sourceId,
     resolutions: value.resolutions,
     priorRevisionGap: row.priorRevisionGap === 1,
+    ...(value.history === undefined
+      ? {}
+      : { history: NativeHistoryProgressSchema.parse(value.history) }),
   }
 }
 export async function readUsageCapture(db: ProviderNeutralDatabase, invocationId: string) {
@@ -102,6 +111,7 @@ export async function commitUsageCapture(
   sourceCursor: string,
   value: ObservationUsageCaptureCommit,
   resolutions: readonly NativeRevisionResolution[],
+  history?: NativeHistoryProgress,
 ) {
   const previous = await readUsageCapture(db, value.invocationId)
   const paged = value.capture.contract === 'opencode-child-pages-v2'
@@ -147,6 +157,20 @@ export async function commitUsageCapture(
       (value.capture.issues.includes('native-prior-revision-gap') && resolutions.length === 0),
   )
   const previousResolutions = new Map(previous?.resolutions.map((row) => [row.stepId, row]) ?? [])
+  const valueFingerprint = paged
+    ? nativeHistoryFingerprint({ ...value, sourceId, sourceCursor })
+    : undefined
+  const retainedHistory =
+    history ??
+    (previous?.history?.preparation.valueFingerprint === valueFingerprint
+      ? previous.history
+      : undefined)
+  if (retainedHistory && retainedHistory.preparation.valueFingerprint !== valueFingerprint)
+    throw new ObservationIngestError(
+      'event-conflict',
+      'Native history progress changed its original source',
+    )
+  if (retainedHistory) NativeHistoryProgressSchema.parse(retainedHistory)
   const retained = resolutions.map((row) => {
     const prior = previousResolutions.get(row.stepId)
     return row.status === 'resolved' &&
@@ -167,6 +191,7 @@ export async function commitUsageCapture(
     resolutions: retained
       .filter((row) => row.status === 'unresolved' || row.previous !== undefined)
       .slice(0, 100),
+    ...(retainedHistory === undefined ? {} : { history: retainedHistory }),
   }
   const row = {
     invocationId: value.invocationId,
@@ -175,8 +200,21 @@ export async function commitUsageCapture(
     sourceCursor,
     nativeRootKey,
     priorRevisionGap,
-    repairPending: Number(resolutions.some((row) => row.status === 'unresolved')),
-    document: JSON.stringify({ evidence: value, resolutions: retained }),
+    repairPending: Number(
+      resolutions.some((row) => row.status === 'unresolved') ||
+        (value.capture.contract === 'opencode-child-pages-v2' &&
+          value.capture.baseline.kind === 'resume' &&
+          (retainedHistory
+            ? retainedHistory.state !== 'resolved'
+            : value.capture.reconciliation.unresolved !== '0' ||
+              value.capture.reconciliation.examined !==
+                value.capture.baseline.pass?.ack.counts.steps)),
+    ),
+    document: JSON.stringify({
+      evidence: value,
+      resolutions: retained,
+      ...(retainedHistory === undefined ? {} : { history: retainedHistory }),
+    }),
     summary: JSON.stringify(summary),
   }
   await db

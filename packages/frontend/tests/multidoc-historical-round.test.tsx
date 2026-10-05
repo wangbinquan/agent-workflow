@@ -270,8 +270,12 @@ describe('MultiDocReviewView — historical round (?round=)', () => {
     expect(screen.getByText('Hist B v1')).toBeTruthy()
     expect(screen.queryByText('Case A v2')).toBeNull()
     // 只读横幅 + 回到当前轮。
-    expect(screen.getByRole('status').textContent).toContain('Read-only')
-    expect(screen.getByRole('status').textContent).toContain('round 1')
+    const readonlyBanner = screen
+      .getByText(/Read-only · viewing round 1/)
+      .closest('[role="status"]')
+    expect(readonlyBanner).toBeTruthy()
+    expect(readonlyBanner?.textContent).toContain('Read-only')
+    expect(readonlyBanner?.textContent).toContain('round 1')
     expect(screen.getByText('Back to current round')).toBeTruthy()
     // 决策信息块（轮级 iterated → chip + 决策人，无原因行）。
     expect(screen.getByTestId('review-decision-info')).toBeTruthy()

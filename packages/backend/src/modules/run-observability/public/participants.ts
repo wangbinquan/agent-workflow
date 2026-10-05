@@ -10,12 +10,36 @@ import type {
   ObservationUsageCaptureCommit,
 } from '@agent-workflow/shared'
 import type { NativeUsageScopeFacts } from '../domain/nativeUsageScope'
-import type { ProviderNeutralDatabase } from '@/db/query'
+import type {
+  NativeHistoryPreparation,
+  NativeHistoryStep,
+  NativeHistoryProgress,
+} from '../domain/nativeUsageHistory'
+export type { NativeHistoryPreparation, NativeHistoryStep } from '../domain/nativeUsageHistory'
+export {
+  nativeHistoryFingerprint,
+  NativeHistoryPreparationSchema,
+} from '../domain/nativeUsageHistory'
+
+/** Task owns original history evidence; the unique ledger owns all numeric revisions. */
+export interface ObservationNativeHistorySource {
+  onReader(reader: object): ObservationNativeHistorySource
+  /** Full original read closes before any ledger write; bootstrap selects the actual Worker/channel. */
+  prepare(
+    value: NativeHistoryPreparation['value'],
+    signal?: AbortSignal,
+  ): Promise<NativeHistoryPreparation | null>
+  /** One transport packet on the actual writer transaction; only an empty original query is EOF. */
+  page(
+    preparation: NativeHistoryPreparation,
+    after: string | null,
+  ): Promise<readonly NativeHistoryStep[]>
+}
 
 /** Task supplies actual immutable page/source facts on the original database reader. */
 export interface ObservationNativeScopeSource {
-  /** Infrastructure binds all original reads to the actual ledger/report transaction handle. */
-  onReader(reader: ProviderNeutralDatabase): ObservationNativeScopeSource
+  /** Opaque owner handle; infrastructure alone resolves the actual ledger/report reader. */
+  onReader(reader: object): ObservationNativeScopeSource
   verify(input: ObservationIngest): Promise<void>
   qualify(
     value: ObservationUsageCaptureCommit & {
@@ -64,6 +88,8 @@ export interface ObservationInvocationParticipant {
   accept(input: ObservationInvocationStart): Promise<AcceptedObservationInvocation>
   /** Bounded projection of committed evidence; failures leave the durable source pending. */
   reconcile?(nodeRunId?: string): Promise<number>
+  /** One committed original history packet for this accepted invocation, without scanning other Tasks. */
+  reconcileNativeHistory?(invocationId: string): Promise<NativeHistoryProgress | undefined>
   /** Frozen creation proofs only; missing capability is explicit partial coverage. */
   spanOwners?(input: {
     readonly invocationId: string
@@ -80,6 +106,7 @@ export interface ObservationInvocationParticipant {
 /** The execution owner supplies numeric-only committed facts and delivery acknowledgements. */
 export interface ObservationUsageSource {
   readonly nativeScopes?: ObservationNativeScopeSource
+  readonly nativeHistory?: ObservationNativeHistorySource
   spanSources?(input: ObservationSpanSourceInput): Promise<ObservationSpanSourcePage>
   pending(input: {
     readonly limit: number

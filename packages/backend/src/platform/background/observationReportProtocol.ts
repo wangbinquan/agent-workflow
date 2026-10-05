@@ -1,6 +1,7 @@
 import type {
   CompleteObservationBuildResult,
   CompleteObservationStoredReport,
+  NativeHistoryPreparation,
 } from '@/modules/run-observability/public/participants'
 import type { OriginalReportReadChannel } from '../persistence/reportSnapshotTypes'
 import type { ReportWorkingRow } from '../persistence/reportWorkspace'
@@ -19,6 +20,15 @@ export interface ObservationReportWorkerStart {
   readonly source: ObservationReportWorkerSource
   readonly report: CompleteObservationStoredReport
 }
+export interface NativeHistoryWorkerStart {
+  readonly kind: 'native-history'
+  readonly source: ObservationReportWorkerSource
+  readonly value: NativeHistoryPreparation['value']
+}
+export type OriginalObservationWorkerStart = ObservationReportWorkerStart | NativeHistoryWorkerStart
+export type OriginalObservationWorkerResult =
+  | { readonly kind: 'result'; readonly result: CompleteObservationBuildResult }
+  | { readonly kind: 'native-history-result'; readonly result: NativeHistoryPreparation | null }
 export type ObservationReportRequest =
   | {
       readonly kind: 'read'
@@ -42,10 +52,11 @@ export type ObservationReportRequest =
   | { readonly kind: 'clear-working'; readonly namespace: string }
 export type ObservationReportWorkerEvent =
   | { readonly kind: 'request'; readonly id: string; readonly request: ObservationReportRequest }
-  | { readonly kind: 'result'; readonly result: CompleteObservationBuildResult }
+  | OriginalObservationWorkerResult
   | { readonly kind: 'failed'; readonly error: string }
 export type ObservationReportWorkerInput =
   | ObservationReportWorkerStart
+  | NativeHistoryWorkerStart
   | { readonly kind: 'cancel'; readonly reason: string }
   | { readonly kind: 'response'; readonly id: string; readonly ok: true; readonly value: unknown }
   | { readonly kind: 'response'; readonly id: string; readonly ok: false; readonly error: string }
