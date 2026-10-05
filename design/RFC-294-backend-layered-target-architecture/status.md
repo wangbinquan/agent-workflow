@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:76d7d0051a4f025db4c8149c7bc6370d26231d1aac7c74035bd8659b8a88a908`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:65f91c47f1d655a21914973d8c78ba25f9b2efad4ae02ea7989e6313b2fde3a7`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2191 |
+| backend production TS 文件 | 2193 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1604 / 18 |
+| `modules/**` 文件 / 非空 context | 1606 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5561 |
+| `architectureExceptions` | 5577 |
 | `backgroundJobs` | 359 |
-| `crossContextImports` | 6265 |
+| `crossContextImports` | 6283 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 26710 |
+| `moduleSymbolOwners` | 26718 |
 | `mutationEntrypoints` | 1875 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1148 |
@@ -47,7 +47,7 @@
 
 | context / layer | 数量 |
 | --- | --- |
-| task-execution / infrastructure | 131 |
+| task-execution / infrastructure | 133 |
 | resource-catalog / infrastructure | 129 |
 | task-execution / application | 116 |
 | resource-catalog / application | 77 |
@@ -208,9 +208,9 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3577 |
+| legacy-outbound | 3593 |
 | legacy-inbound | 1799 |
-| infrastructure-external | 306 |
+| infrastructure-external | 308 |
 | offered-consumption | 254 |
 | temporary-internal-debt | 90 |
 | off-dag-offered | 83 |
@@ -223,7 +223,7 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3577 |
+| legacy-outbound | 3593 |
 | legacy-inbound | 1799 |
 | temporary-internal-debt | 90 |
 | off-dag-offered | 83 |
@@ -235,7 +235,7 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3010 |
+| W9 | 3026 |
 | W9-D | 976 |
 | W4-E1 | 715 |
 | W5 | 202 |

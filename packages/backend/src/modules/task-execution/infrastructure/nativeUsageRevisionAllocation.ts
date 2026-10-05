@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, max } from 'drizzle-orm'
+import { and, asc, eq, gt, inArray, max, sql } from 'drizzle-orm'
 import {
   nativeUsageRevisionHeads,
   observationUsageEvents,
@@ -6,7 +6,9 @@ import {
   taskExecutionObservationSources,
 } from '@/db/schema'
 import { engineOf } from '@/platform/persistence/databaseTransaction'
+import { insertInBatches } from '@/platform/persistence/batchInsert'
 import { sha256Hex } from '@/util/hash'
+import { chunkedAll } from '@/util/sqlChunk'
 import type {
   NativeUsageEvidence,
   NativeUsageOwnerBinding,
@@ -15,30 +17,53 @@ import type { TaskExecutionTransaction } from './ownedTaskExecution'
 
 // These are allocation keys, never native record identities or a second numeric ledger.
 const recordKey = (recordId: string) => 'record:' + sha256Hex(recordId)
+export const nativeUsageRecordSourceKey = (recordId: string) => 'source:' + sha256Hex(recordId)
 const sourceCheckpoint = 'source-watermark'
 
-async function rememberRevision(
+async function rememberRevisions(
   tx: TaskExecutionTransaction,
   invocationId: string,
-  id: string,
-  revision: number,
+  values: ReadonlyMap<string, number>,
 ): Promise<void> {
-  if (!Number.isSafeInteger(revision) || revision < 0)
-    throw new Error('Original native revision is not exact')
-  const where = and(
-    eq(nativeUsageRevisionHeads.invocationId, invocationId),
-    eq(nativeUsageRevisionHeads.recordId, id),
+  const rows = [...values].map(([recordId, revision]) => {
+    if (!Number.isSafeInteger(revision) || revision < 0)
+      throw new Error('Original native revision is not exact')
+    return { invocationId, recordId, revision }
+  })
+  await insertInBatches(tx, nativeUsageRevisionHeads, rows, (batch) =>
+    tx
+      .insert(nativeUsageRevisionHeads)
+      .values([...batch])
+      .onConflictDoUpdate({
+        target: [nativeUsageRevisionHeads.invocationId, nativeUsageRevisionHeads.recordId],
+        set: {
+          revision: sql`CASE WHEN ${nativeUsageRevisionHeads.revision} < excluded.revision
+        THEN excluded.revision ELSE ${nativeUsageRevisionHeads.revision} END`,
+        },
+      })
+      .run(),
   )
-  const prior = (await tx.select().from(nativeUsageRevisionHeads).where(where).limit(1))[0]
-  if (prior && prior.revision >= revision) return
-  await tx
-    .insert(nativeUsageRevisionHeads)
-    .values({ invocationId, recordId: id, revision })
-    .onConflictDoUpdate({
-      target: [nativeUsageRevisionHeads.invocationId, nativeUsageRevisionHeads.recordId],
-      set: { revision },
-    })
-    .run()
+}
+
+/** Original source row locators only; numeric authority remains the original source/ledger. */
+export async function rememberOriginalNativeSources(
+  tx: TaskExecutionTransaction,
+  invocationId: string,
+  measurements: NativeUsageEvidence['measurements'],
+  sourceRowId: number,
+): Promise<void> {
+  if (!Number.isSafeInteger(sourceRowId) || sourceRowId < 1)
+    throw new Error('Original native source row is not exact')
+  await rememberRevisions(
+    tx,
+    invocationId,
+    new Map(
+      measurements.map((measurement) => [
+        nativeUsageRecordSourceKey(measurement.recordId),
+        sourceRowId,
+      ]),
+    ),
+  )
 }
 
 /** Serialize with the original projection and historical repair, after the Task/node locks. */
@@ -101,6 +126,7 @@ async function indexOriginalNativeRevisions(
         throw new Error('Original native revision source did not advance')
       const evidence = JSON.parse(row.document) as NativeUsageEvidence
       if (evidence.invocationId === binding.invocationId) {
+        const revisions = new Map<string, number>()
         for (const measurement of evidence.measurements) {
           if (
             measurement.invocationId !== binding.invocationId ||
@@ -109,18 +135,16 @@ async function indexOriginalNativeRevisions(
             measurement.revision < 1
           )
             throw new Error('Original native pending revision changed its binding')
-          await rememberRevision(
-            tx,
-            binding.invocationId,
-            recordKey(measurement.recordId),
-            measurement.revision,
-          )
+          const key = recordKey(measurement.recordId)
+          revisions.set(key, Math.max(revisions.get(key) ?? 0, measurement.revision))
         }
+        await rememberRevisions(tx, binding.invocationId, revisions)
+        await rememberOriginalNativeSources(tx, binding.invocationId, evidence.measurements, row.id)
       }
       after = row.id
     }
   }
-  await rememberRevision(tx, binding.invocationId, sourceCheckpoint, after)
+  await rememberRevisions(tx, binding.invocationId, new Map([[sourceCheckpoint, after]]))
 }
 
 /** Caller holds the original source lock; observed, pending and frozen originals all participate. */
@@ -133,7 +157,45 @@ export async function allocateOriginalNativeRevisions(
   if (sourceId !== 'local-node:' + binding.nodeRunId)
     throw new Error('Original native revision source changed')
   await indexOriginalNativeRevisions(tx, binding)
+  const keys = [...new Set(measurements.map((measurement) => recordKey(measurement.recordId)))]
+  const heads = new Map(
+    (
+      await chunkedAll(keys, (ids) =>
+        tx
+          .select()
+          .from(nativeUsageRevisionHeads)
+          .where(
+            and(
+              eq(nativeUsageRevisionHeads.invocationId, binding.invocationId),
+              inArray(nativeUsageRevisionHeads.recordId, ids),
+            ),
+          ),
+      )
+    ).map((row) => [row.recordId, row.revision]),
+  )
+  const observedKeys = [
+    ...new Set(
+      measurements.map((measurement) =>
+        sha256Hex(JSON.stringify([sourceId, binding.invocationId, measurement.recordId])),
+      ),
+    ),
+  ]
+  const observed = new Map(
+    (
+      await chunkedAll(observedKeys, (ids) =>
+        tx
+          .select({
+            key: observationUsageEvents.recordKey,
+            revision: max(observationUsageEvents.revision),
+          })
+          .from(observationUsageEvents)
+          .where(inArray(observationUsageEvents.recordKey, ids))
+          .groupBy(observationUsageEvents.recordKey),
+      )
+    ).map((row) => [row.key, row.revision ?? 0]),
+  )
   const allocated: NativeUsageEvidence['measurements'][number][] = []
+  const revisions = new Map<string, number>()
   for (const measurement of measurements) {
     if (
       measurement.invocationId !== binding.invocationId ||
@@ -144,35 +206,17 @@ export async function allocateOriginalNativeRevisions(
     )
       throw new Error('Original native emission changed its binding')
     const id = recordKey(measurement.recordId)
-    const frozen = (
-      await tx
-        .select({ revision: nativeUsageRevisionHeads.revision })
-        .from(nativeUsageRevisionHeads)
-        .where(
-          and(
-            eq(nativeUsageRevisionHeads.invocationId, binding.invocationId),
-            eq(nativeUsageRevisionHeads.recordId, id),
-          ),
-        )
-        .limit(1)
-    )[0]
-    const observed = (
-      await tx
-        .select({ revision: max(observationUsageEvents.revision) })
-        .from(observationUsageEvents)
-        .where(
-          eq(
-            observationUsageEvents.recordKey,
-            sha256Hex(JSON.stringify([sourceId, binding.invocationId, measurement.recordId])),
-          ),
-        )
-    )[0]
-    const highWater = Math.max(frozen?.revision ?? 0, observed?.revision ?? 0)
+    const observedKey = sha256Hex(
+      JSON.stringify([sourceId, binding.invocationId, measurement.recordId]),
+    )
+    const highWater = Math.max(heads.get(id) ?? 0, observed.get(observedKey) ?? 0)
     const revision = Math.max(measurement.revision, highWater + 1)
     if (!Number.isSafeInteger(revision) || revision < 1)
       throw new Error('Original native revision exhausted its exact integer representation')
-    await rememberRevision(tx, binding.invocationId, id, revision)
+    heads.set(id, revision)
+    revisions.set(id, revision)
     allocated.push({ ...measurement, revision })
   }
+  await rememberRevisions(tx, binding.invocationId, revisions)
   return allocated
 }

@@ -22,6 +22,7 @@ import {
 } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import { chunkedAll } from '@/util/sqlChunk'
+import { insertInBatches } from '@/platform/persistence/batchInsert'
 import type {
   NativeUsageOwnerBinding,
   NativeUsagePersistence,
@@ -32,6 +33,7 @@ import {
   withNativeUsageOwner,
   type NativeUsageOwnerFacts,
 } from './nativeUsageOwnerTransaction'
+import { emitNativeUsagePage } from './nativeUsagePageEmission'
 
 type Pass = typeof nativeUsagePasses.$inferSelect
 type Preparation = typeof nativeUsagePreparations.$inferSelect
@@ -89,7 +91,10 @@ function completePass(row: Pass, phase?: 'baseline'): void {
 
 /** Durable pages are original evidence; the numeric usage ledger remains the only total. */
 export class DrizzleNativeUsagePages implements PagesPort {
-  constructor(private readonly db: ProviderNeutralDatabase) {}
+  constructor(
+    private readonly db: ProviderNeutralDatabase,
+    private readonly numericPages = false,
+  ) {}
 
   async prepare(input: Parameters<PagesPort['prepare']>[0]) {
     return withNativeUsageOwner(this.db, input.binding, async (tx, facts) => {
@@ -353,9 +358,14 @@ export class DrizzleNativeUsagePages implements PagesPort {
         if (!parent || parent.parentSessionId !== step.parentSessionId)
           throw new Error('Original native step changed its persisted parent')
       }
-      if (additions.length) await tx.insert(nativeUsageSessionParents).values(additions)
+      if (additions.length)
+        await insertInBatches(tx, nativeUsageSessionParents, additions, (batch) =>
+          tx.insert(nativeUsageSessionParents).values([...batch]),
+        )
       if (page.steps.length)
-        await tx.insert(nativeUsageStepMembers).values(
+        await insertInBatches(
+          tx,
+          nativeUsageStepMembers,
           page.steps.map((step) => ({
             passId: pass.passId,
             stepId: step.stepId,
@@ -363,8 +373,9 @@ export class DrizzleNativeUsagePages implements PagesPort {
             ordinal: page.ordinal,
             document: JSON.stringify(step),
           })),
+          (batch) => tx.insert(nativeUsageStepMembers).values([...batch]),
         )
-      const ack = ObservationNativePassAckSchema.parse({
+      let ack = ObservationNativePassAckSchema.parse({
         contract: 'native-usage-page-ack-v2',
         identity: page.identity,
         ownerReceiptId: pass.ownerReceiptId,
@@ -385,6 +396,29 @@ export class DrizzleNativeUsagePages implements PagesPort {
         document,
         ack: JSON.stringify(ack),
       })
+      if (this.numericPages) {
+        await emitNativeUsagePage(
+          tx,
+          facts,
+          input.binding,
+          page,
+          ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document)),
+          pass.ownerReceiptId,
+        )
+        ack = ObservationNativePassAckSchema.parse({
+          ...ack,
+          sourceWatermark: await nativeUsageSourceWatermark(tx, input.binding.nodeRunId),
+        })
+        await tx
+          .update(nativeUsagePassPages)
+          .set({ ack: JSON.stringify(ack) })
+          .where(
+            and(
+              eq(nativeUsagePassPages.passId, pass.passId),
+              eq(nativeUsagePassPages.ordinal, page.ordinal),
+            ),
+          )
+      }
       await tx
         .update(nativeUsagePasses)
         .set({

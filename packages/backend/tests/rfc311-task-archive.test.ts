@@ -735,10 +735,7 @@ describeEachProvider('RFC-371 native evidence archive', (harness) => {
       document: JSON.stringify({ stepId: n, original: document }),
     }))
     await insertInBatches(db, schema.nativeUsageStepMembers, members, (batch) =>
-      db
-        .insert(schema.nativeUsageStepMembers)
-        .values([...batch])
-        .run(),
+      db.insert(schema.nativeUsageStepMembers).values([...batch]),
     )
     const [source] = await db
       .insert(schema.taskExecutionObservationSources)

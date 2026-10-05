@@ -48,7 +48,7 @@ export async function verifyNativeUsageScope(
   let child: typeof nativeUsageSessionParents.$inferSelect | undefined
   let depth: string | undefined
   while (session !== null) {
-    const link = (
+    const link: typeof nativeUsageSessionParents.$inferSelect | undefined = (
       await tx
         .select()
         .from(nativeUsageSessionParents)

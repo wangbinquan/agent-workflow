@@ -24,7 +24,11 @@ interface NativeArchiveTable {
 }
 function spec<Row>(
   name: string,
-  read: (db: Reader, ids: readonly string[], after: Cursor | null) => Promise<readonly Row[]>,
+  read: (
+    db: Reader,
+    ids: readonly string[],
+    after: Cursor | null,
+  ) => PromiseLike<readonly Row[]> | readonly Row[],
   key: (row: Row) => Cursor,
 ): NativeArchiveTable {
   return {

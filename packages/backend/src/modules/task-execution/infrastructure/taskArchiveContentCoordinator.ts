@@ -518,7 +518,7 @@ async function archiveClaimed(
     counts[table.name] = 0
     for await (const batch of table.batches(db, taskIds)) {
       await content.appendText(reference, batch.map((row) => JSON.stringify(row) + '\n').join(''))
-      counts[table.name] += batch.length
+      counts[table.name] = counts[table.name]! + batch.length
     }
   }
   // runs / logs 整体**挪入**（而不是复制+删除：大目录复制会把归档变成一次长 IO）。

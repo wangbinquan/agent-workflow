@@ -86,7 +86,7 @@ function fixture() {
     token: { taskId: 'original-task' },
   } as TaskExecutionContext
   return {
-    persistence: persistence as TaskExecutionEffectPersistence,
+    persistence: persistence as unknown as TaskExecutionEffectPersistence,
     context,
     preparations,
     settlements,
@@ -232,12 +232,21 @@ describe('RFC-370 selected process-effect projection', () => {
       .then(() => {
         acknowledged = true
       })
-    const rejected = expect(pending).rejects.toBe(originalError)
+    // Attach an ordinary Promise observer before releasing the held receipt.
+    // The Windows Bun asynchronous matcher must not await this receipt before
+    // the same test has reached release.resolve(). Keep the original rejection
+    // identity assertion after the real dependency is released.
+    const settlement = pending.then(
+      () => ({ status: 'fulfilled' as const }),
+      (reason: unknown) => ({ status: 'rejected' as const, reason }),
+    )
     await entered.promise
     expect(acknowledged).toBe(false)
     expect(f.settlements).toEqual([])
     release.resolve()
-    await rejected
+    const settled = await settlement
+    expect(settled.status).toBe('rejected')
+    expect('reason' in settled ? settled.reason : undefined).toBe(originalError)
     expect(acknowledged).toBe(false)
   })
 

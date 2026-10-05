@@ -25,6 +25,8 @@ import { createTaskExecutionContext } from '@/modules/task-execution/application
 import { createObservationInvocationStore } from '@/modules/run-observability/infrastructure/invocationPersistence'
 import { DrizzleNativeUsagePages } from '@/modules/task-execution/infrastructure/drizzleNativeUsagePages'
 import { DrizzleNativeUsageEmission } from '@/modules/task-execution/infrastructure/drizzleNativeUsageEmission'
+import { verifyNativeUsagePass } from '@/modules/task-execution/infrastructure/nativeUsagePassVerification'
+import { withNativeUsageOwner } from '@/modules/task-execution/infrastructure/nativeUsageOwnerTransaction'
 import { createUsageLedgerStore } from '@/modules/run-observability/infrastructure/usageLedgerPersistence'
 import { createUsageIngestion } from '@/modules/run-observability/application/usageIngestion'
 import { databaseSessionFor } from '@/platform/persistence/databaseTransaction'
@@ -85,11 +87,11 @@ function nativeFixture(steps = 3, sessions = 2) {
         }),
       ])
   })()
-  return { path, bornAt }
+  return { path, bornAt, mutate: (run: (db: Database) => void) => run(db) }
 }
 
 describeEachProvider('RFC-371 original native pages and membership', (harness) => {
-  async function fixture(mode: 'fresh' | 'resume' = 'resume') {
+  async function fixture(mode: 'fresh' | 'resume' = 'resume', numericPages = false) {
     const db = harness.db
     const taskId = 'native-owner-' + randomUUID()
     const nodeRunId = taskId + '-node'
@@ -155,7 +157,7 @@ describeEachProvider('RFC-371 original native pages and membership', (harness) =
       nativeCaptureContract: 'opencode-child-pages-v2',
       nativeCaptureSource: 'actual-native-store',
     })
-    const pages = new DrizzleNativeUsagePages(db)
+    const pages = new DrizzleNativeUsagePages(db, numericPages)
     const prepareInput = {
       binding,
       nativeSource: 'actual-native-store',
@@ -260,6 +262,21 @@ describeEachProvider('RFC-371 original native pages and membership', (harness) =
     const pass = f.identity()
     const final = await persistNativeUsagePass(f.open(native.path, pass), f.owner())
     expect(final.eof?.counts).toEqual({ sessions: '1025', parts: '10001', steps: '10001' })
+    expect(
+      await withNativeUsageOwner(f.db, f.binding, (tx) =>
+        verifyNativeUsagePass(
+          tx,
+          f.binding,
+          { ack: final, pageCount: String(BigInt(final.ordinal) + 1n) },
+          true,
+        ),
+      ),
+    ).toEqual({
+      counts: final.counts,
+      rootCreatedAt: native.bornAt,
+      hasIssues: false,
+      hasPopulationIssues: false,
+    })
     expect((await f.db.select({ n: count() }).from(nativeUsageStepMembers))[0]?.n).toBe(10001)
     expect((await f.db.select({ n: count() }).from(nativeUsageSessionParents))[0]?.n).toBe(1025)
     const deep = (
@@ -310,6 +327,294 @@ describeEachProvider('RFC-371 original native pages and membership', (harness) =
     expect(records).toBe(10001n)
     expect(input).toBe((10001n * 10002n) / 2n)
   }, 60000)
+
+  test('interrupted progress verifies every received page without claiming original EOF', async () => {
+    const f = await fixture('fresh')
+    const native = nativeFixture()
+    const reader = f.open(native.path, f.identity('final'), 1)
+    await f.owner().admit(reader.identity, reader.initialCursor, reader.rootCreatedAt)
+    const page = await reader.next(reader.initialCursor)
+    const ack = await f.owner().persist(page)
+    await f.owner().interrupt(reader.identity, 'actual reader interruption')
+    const reference = { ack, pageCount: '1' }
+    expect(
+      await withNativeUsageOwner(f.db, f.binding, (tx) =>
+        verifyNativeUsagePass(tx, f.binding, reference, false),
+      ),
+    ).toEqual({
+      counts: ack.counts,
+      rootCreatedAt: native.bornAt,
+      hasIssues: false,
+      hasPopulationIssues: false,
+    })
+    await expect(
+      withNativeUsageOwner(f.db, f.binding, (tx) =>
+        verifyNativeUsagePass(tx, f.binding, reference, true),
+      ),
+    ).rejects.toThrow('original progress')
+  })
+
+  test('all 1001 native steps are original numeric sources before the last page ACK', async () => {
+    const f = await fixture('fresh', true)
+    const native = nativeFixture(1001, 81)
+    const identity = f.identity('final')
+    const ack = await persistNativeUsagePass(f.open(native.path, identity, 1000), f.owner())
+    const sources = await f.db.select().from(taskExecutionObservationSources)
+    const records = sources.flatMap((row) => JSON.parse(row.evidenceJson).measurements)
+    expect(records).toHaveLength(1001)
+    expect(new Set(records.map((record) => record.recordId)).size).toBe(1001)
+    expect(sources.every((row) => JSON.parse(row.evidenceJson).measurements.length <= 500)).toBe(
+      true,
+    )
+    expect(ack.sourceWatermark).toBe(String(Math.max(...sources.map((row) => row.id))))
+    expect(records.reduce((sum, record) => sum + BigInt(record.usage.input), 0n)).toBe(
+      (1001n * 1002n) / 2n,
+    )
+    expect(
+      records.every(
+        (record) =>
+          record.usage.cacheRead === '11' &&
+          record.usage.cacheWrite === '13' &&
+          record.usage.output === '7',
+      ),
+    ).toBe(true)
+    const last = (
+      await f.db
+        .select()
+        .from(nativeUsagePassPages)
+        .where(
+          and(
+            eq(nativeUsagePassPages.passId, identity.passId),
+            eq(nativeUsagePassPages.ordinal, ack.ordinal),
+          ),
+        )
+    )[0]!
+    expect(await f.pages.persist({ binding: f.binding, page: JSON.parse(last.document) })).toEqual(
+      ack,
+    )
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(sources.length)
+  }, 30_000)
+
+  test('an incomplete resume baseline never attributes pre-existing steps as new usage', async () => {
+    const f = await fixture('resume', true)
+    const native = nativeFixture()
+    await persistNativeUsagePass(f.open(native.path, f.identity('final')), f.owner())
+    expect(await f.db.select().from(nativeUsageStepMembers)).toHaveLength(3)
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(0)
+  })
+
+  test('a baseline header with missing original membership cannot misattribute old steps', async () => {
+    for (const missing of ['step', 'page'] as const) {
+      const f = await fixture('resume', true)
+      const native = nativeFixture()
+      const baseline = f.identity('baseline')
+      await persistNativeUsagePass(f.open(native.path, baseline, 1), f.owner())
+      if (missing === 'step')
+        await f.db
+          .delete(nativeUsageStepMembers)
+          .where(
+            and(
+              eq(nativeUsageStepMembers.passId, baseline.passId),
+              eq(nativeUsageStepMembers.stepId, 'step-000000'),
+            ),
+          )
+      else
+        await f.db
+          .delete(nativeUsagePassPages)
+          .where(
+            and(
+              eq(nativeUsagePassPages.passId, baseline.passId),
+              eq(nativeUsagePassPages.ordinal, '1'),
+            ),
+          )
+      const final = f.identity('final')
+      await expect(persistNativeUsagePass(f.open(native.path, final), f.owner())).rejects.toThrow(
+        'Native pass verification',
+      )
+      expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(0)
+      expect(await f.db.select().from(nativeUsageEmissions)).toHaveLength(0)
+      expect(
+        await f.db
+          .select()
+          .from(nativeUsagePassPages)
+          .where(eq(nativeUsagePassPages.passId, final.passId)),
+      ).toHaveLength(0)
+      expect(
+        await f.db
+          .select()
+          .from(nativeUsageStepMembers)
+          .where(eq(nativeUsageStepMembers.passId, final.passId)),
+      ).toHaveLength(0)
+    }
+  })
+
+  test('the final persisted page ACK must exactly equal the original frozen pass ACK', async () => {
+    const f = await fixture('fresh')
+    const native = nativeFixture()
+    const identity = f.identity('final')
+    const original = await persistNativeUsagePass(f.open(native.path, identity, 1), f.owner())
+    const ack = { ...original, sourceWatermark: '1' }
+    await f.db
+      .update(nativeUsagePasses)
+      .set({ lastAck: JSON.stringify(ack) })
+      .where(eq(nativeUsagePasses.passId, identity.passId))
+    await expect(
+      withNativeUsageOwner(f.db, f.binding, (tx) =>
+        verifyNativeUsagePass(
+          tx,
+          f.binding,
+          { ack, pageCount: String(BigInt(ack.ordinal) + 1n) },
+          true,
+        ),
+      ),
+    ).rejects.toThrow('original final ACK')
+  })
+
+  test('a complete resume baseline excludes every prior step while retaining new original numbers', async () => {
+    const f = await fixture('resume', true)
+    const native = nativeFixture()
+    await persistNativeUsagePass(f.open(native.path, f.identity('baseline'), 1), f.owner())
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(0)
+    native.mutate((external) => {
+      external.run('INSERT INTO part VALUES (?,?,?,?,?)', [
+        'step-new',
+        'root',
+        'message',
+        native.bornAt + 1,
+        JSON.stringify({
+          type: 'step-finish',
+          tokens: { input: 8, output: 3, cache: { read: 5, write: 7 } },
+        }),
+      ])
+    })
+    const ack = await persistNativeUsagePass(f.open(native.path, f.identity('final'), 2), f.owner())
+    const sources = await f.db.select().from(taskExecutionObservationSources)
+    const records = sources.flatMap((row) => JSON.parse(row.evidenceJson).measurements)
+    expect(records.map((record) => record.recordId)).toEqual(['opencode:step:step-new'])
+    expect(records[0]?.usage).toEqual({ input: '8', cacheRead: '5', cacheWrite: '7', output: '3' })
+    expect(ack.sourceWatermark).toBe(String(sources[0]!.id))
+  })
+
+  test('a numeric source failure rolls the entire received page back before any positive ACK', async () => {
+    const f = await fixture('fresh', true)
+    const native = nativeFixture(1, 1)
+    native.mutate((external) => external.run('UPDATE part SET id = ?', ['x'.repeat(512)]))
+    const reader = f.open(native.path, f.identity('final'), 1)
+    await f.owner().admit(reader.identity, reader.initialCursor, reader.rootCreatedAt)
+    const root = await reader.next(reader.initialCursor)
+    await f.owner().persist(root)
+    await reader.acknowledge(root.ordinal, root.payloadDigest)
+    const page = await reader.next(root.nextCursor!)
+    expect(page.steps).toHaveLength(1)
+    await expect(f.owner().persist(page)).rejects.toThrow()
+    expect(await f.db.select().from(taskExecutionObservationSources)).toHaveLength(0)
+    expect(await f.db.select().from(nativeUsageStepMembers)).toHaveLength(0)
+    expect(await f.db.select().from(nativeUsagePassPages)).toHaveLength(1)
+    expect((await f.db.select().from(nativeUsagePasses))[0]?.nextOrdinal).toBe('1')
+    expect(await f.db.select().from(nativeUsageRevisionHeads)).toHaveLength(0)
+  })
+
+  test('missing native model or time never discards the four known Token buckets', async () => {
+    const f = await fixture('fresh', true)
+    const native = nativeFixture(1, 1)
+    native.mutate((external) => {
+      external.run('UPDATE message SET data = ?', [JSON.stringify({ role: 'assistant' })])
+      external.run('UPDATE part SET time_created = NULL')
+    })
+    const ack = await persistNativeUsagePass(f.open(native.path, f.identity('final'), 1), f.owner())
+    const sources = await f.db.select().from(taskExecutionObservationSources)
+    const records = sources.flatMap((row) => JSON.parse(row.evidenceJson).measurements)
+    expect(records).toHaveLength(1)
+    expect(records[0]?.occurredAt).toBeNull()
+    expect(records[0]?.model).toBeNull()
+    expect(records[0]?.usage).toEqual({
+      input: '1',
+      cacheRead: '11',
+      cacheWrite: '13',
+      output: '7',
+    })
+    expect(ack.sourceWatermark).toBe(String(sources[0]!.id))
+  })
+
+  test('an unchanged last ACK never hides a missing earlier page or original member', async () => {
+    for (const changed of [
+      'page',
+      'parent',
+      'step',
+      'step-document',
+      'extra-step',
+      'header',
+    ] as const) {
+      const f = await fixture('fresh')
+      const native = nativeFixture()
+      const identity = f.identity('final')
+      const ack = await persistNativeUsagePass(f.open(native.path, identity, 1), f.owner())
+      expect(BigInt(ack.ordinal)).toBeGreaterThan(1n)
+      const reference = { ack, pageCount: String(BigInt(ack.ordinal) + 1n) }
+      expect(
+        (
+          await withNativeUsageOwner(f.db, f.binding, (tx) =>
+            verifyNativeUsagePass(tx, f.binding, reference, true),
+          )
+        ).counts,
+      ).toEqual(ack.counts)
+      if (changed === 'page')
+        await f.db
+          .delete(nativeUsagePassPages)
+          .where(
+            and(
+              eq(nativeUsagePassPages.passId, identity.passId),
+              eq(nativeUsagePassPages.ordinal, '1'),
+            ),
+          )
+      else if (changed === 'parent')
+        await f.db
+          .delete(nativeUsageSessionParents)
+          .where(
+            and(
+              eq(nativeUsageSessionParents.passId, identity.passId),
+              eq(nativeUsageSessionParents.sessionId, 'root'),
+            ),
+          )
+      else if (changed === 'step')
+        await f.db
+          .delete(nativeUsageStepMembers)
+          .where(
+            and(
+              eq(nativeUsageStepMembers.passId, identity.passId),
+              eq(nativeUsageStepMembers.stepId, 'step-000000'),
+            ),
+          )
+      else if (changed === 'step-document')
+        await f.db
+          .update(nativeUsageStepMembers)
+          .set({ document: '{}' })
+          .where(
+            and(
+              eq(nativeUsageStepMembers.passId, identity.passId),
+              eq(nativeUsageStepMembers.stepId, 'step-000000'),
+            ),
+          )
+      else if (changed === 'extra-step')
+        await f.db.insert(nativeUsageStepMembers).values({
+          passId: identity.passId,
+          stepId: 'unreceived-step',
+          sessionId: 'root',
+          ordinal: '0',
+          document: '{}',
+        })
+      else
+        await f.db
+          .update(nativeUsagePasses)
+          .set({ position: '0' })
+          .where(eq(nativeUsagePasses.passId, identity.passId))
+      await expect(
+        withNativeUsageOwner(f.db, f.binding, (tx) =>
+          verifyNativeUsagePass(tx, f.binding, reference, true),
+        ),
+      ).rejects.toThrow('Native pass verification')
+    }
+  })
 
   test('a lost snapshot preserves its pages and requires explicit replacement, never old-pass continuation', async () => {
     const f = await fixture()

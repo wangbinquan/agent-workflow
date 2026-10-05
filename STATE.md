@@ -1,3 +1,13 @@
+## 2026-10-05 RFC-371 原生页与数字同事务及完整页验核
+
+原页 writer 在同一 Task claim／accepted invocation／node 事务内保存原 page／parent／step、追加真实数字 source、冻结实际水位 ACK，真实提交后才确认原 reader 页面。修订与原 source locator 按有界 SQL 批处理，但原 pending／已投影／observed 行持续到实际 EOF，没有总量阈值。完整 pass verifier 遍历每个原页、全部 parent／step membership、摘要／游标／精确 decimal 计数，最后持久页与冻结末 ACK 准确联校；resume 数字归属前先确认全部原 before 及实际成员。原 SOURCE13 v1 两 P2／FAIL 留证，新增真实双 provider 索引缺失／末 ACK 矛盾负例后，有限 SOURCE14 v2 PASS。
+
+原 c83bf750 主CI failure、Windows cancelled，full E2E／WebKit／visual 各 success，完整终态和原日志保留。仅修本批原 archive callback 的同步／异步查询类型、scope 推断、已初始化归档计数、必需进程时刻断言、实际 HTTP fixture 的 provider 查询终端；原 held receipt 用例先挂普通 Promise 监听、释放原回执再断言同一原错误，保留接收者／ACK／settlement 断言及所有预算。Windows 根因和修复效果仍需新 SHA 验证，旧取消不改为绿。已提交的并行 native Agent compiler 源码和登记完整保留，后续在制品未收编。
+
+只运行一次有效原 scoped 静态生成，原基准 c83bf750 加14确切候选的 SOURCE14 和旧 matching META PASS 均保持。共享主干 003afab7 已提交完整 RFC-370 compiler 及正常退役；对其实际26路径增量只做三方原行合并及原 sourceDigest 字节重算，排除未来 completion／coverage／baseline helper，没有再跑 AST 全仓生成或源码门。原和并行摘要均从真实已提交源码逐字重现，组合 sourceDigest `sha256:65f91c47f1d655a21914973d8c78ba25f9b2efad4ae02ea7989e6313b2fde3a7`。13 matching 产物保留129有序库存／why、304债、40 SPI／69 targets、原值级 SCC及空 implementation SCC；实际 imports6265→6283／exceptions5561→5577／owners26710→26718各具名登记，匹配源码提交后普通后继退役。原 fixture 读取错误与旧 matching FAIL／PASS 均留证；本次首轮静态投影在原 runtime binding 仅JSON表示与函数身份校验处失败，复用原 buildCodeHostRecoveryBindingManifest 身份后所有原JSON／129库存校验通过，旧失败记录不覆写。
+
+仅目标 format／lint 和原纯 AST／JSON generator，未跑 AW 本机 tests／typecheck／build／新服务，未更换原 daemon。正式泳道及已收到分类 Token／CNY 的页面验收保持。numericPages 继续默认 OFF、尚未接生产；每 final 页全检 before 的长 resume 性能、native seal／历史配对／正式接线、CS journal／Pod owner、实际100K Task／10M usage和两个RFC闭合仍开放，不记 Done。以下完整共享正文及并行输出逐字保留。
+
 ## 2026-10-05 RFC-371 原生数字回执与证据归档
 
 原数字帧在原 Task claim／accepted invocation／node 事务内分配真实高水位修订、追加原 source、冻结原 ACK，再在真实提交后返回。来源修订沿全部 pending／已投影记录持续到 EOF，不形成第二套 Token 账本；真实 v2 step 的 session／引用页进度／模型／原时间和四桶联校，80层正向使用原 child step。原进程在 spawn／reap／output EOF 当时保留时刻，cleanup 不重写；八张原证据表实际分页写入 Task 原归档，全量 JSONL 与原删除闭包对账，非归档豁免。旧v1与v2功能门FAIL及其数字／fixture修复各自留证。

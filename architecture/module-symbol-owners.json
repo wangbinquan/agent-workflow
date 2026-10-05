@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2191,
+    "backendFiles": 2193,
     "frontendFiles": 654,
     "legacyFiles": 587,
-    "moduleFiles": 1604,
-    "productionFiles": 3012,
+    "moduleFiles": 1606,
+    "productionFiles": 3014,
     "sharedFiles": 167,
-    "symbolsIncludingFileRoots": 26710
+    "symbolsIncludingFileRoots": 26718
   },
   "entries": [
     {
@@ -146905,6 +146905,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageEmission.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsageEmission.ts#emitNativeUsageEvidence",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "emitNativeUsageEvidence",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsagePages.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/drizzleNativeUsagePages.ts#$file",
@@ -149174,6 +149186,66 @@
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsagePageEmission.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsagePageEmission.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsagePageEmission.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsagePageEmission.ts#emitNativeUsagePage",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "emitNativeUsagePage",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsagePassVerification.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsagePassVerification.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsagePassVerification.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsagePassVerification.ts#ObservationNativePassCounts",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ObservationNativePassCounts",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsagePassVerification.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsagePassVerification.ts#verifyNativeUsagePass",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "verifyNativeUsagePass",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageRevisionAllocation.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageRevisionAllocation.ts#$file",
       "removeAfterWave": null,
@@ -149221,6 +149293,18 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageRevisionAllocation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageRevisionAllocation.ts#nativeUsageRecordSourceKey",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "nativeUsageRecordSourceKey",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
       "exported": false,
       "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageRevisionAllocation.ts",
       "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageRevisionAllocation.ts#recordKey",
@@ -149233,12 +149317,24 @@
     {
       "currentContext": "task-execution",
       "currentLayer": "infrastructure",
-      "exported": false,
+      "exported": true,
       "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageRevisionAllocation.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageRevisionAllocation.ts#rememberRevision",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageRevisionAllocation.ts#rememberOriginalNativeSources",
       "removeAfterWave": null,
       "status": "current-module",
-      "symbol": "rememberRevision",
+      "symbol": "rememberOriginalNativeSources",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageRevisionAllocation.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageRevisionAllocation.ts#rememberRevisions",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "rememberRevisions",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -321255,5 +321351,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:76d7d0051a4f025db4c8149c7bc6370d26231d1aac7c74035bd8659b8a88a908"
+  "sourceDigest": "sha256:65f91c47f1d655a21914973d8c78ba25f9b2efad4ae02ea7989e6313b2fde3a7"
 }
