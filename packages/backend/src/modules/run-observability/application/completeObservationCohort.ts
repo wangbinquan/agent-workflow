@@ -26,6 +26,7 @@ import type {
 import type { CompleteObservationUnallocatedQuality } from '../ports/completeObservationTask'
 import { consumeCompleteSource } from './completePageTraversal'
 import { completeWorkingCache } from './completeWorkingCache'
+import { completeWorkingScope } from './completeWorkingScope'
 import { completeWorkingTraversal } from './completeWorkingTraversal'
 import { completeExternalSort } from './completeExternalSort'
 import { buildCompleteObservationTask } from './completeObservationTask'
@@ -101,218 +102,227 @@ export async function buildCompleteObservationCohort(
   )) {
     const task = row.document,
       taskSpace = space('task-' + input.keyOf(task.id))
-    const taskInput = { ...input, task, namespace: taskSpace, trace: input.task !== undefined }
-    const original = await buildCompleteObservationTask(taskInput)
-    sourceTasks++
-    for (const receipt of original.sourceReceipts)
-      await input.rows.insert(space('receipts'), [
-        { key: completeOrdinalKey(receiptOrdinal++), document: receipt },
-      ])
-    if (original.trace?.receipt)
-      await input.rows.insert(space('receipts'), [
-        { key: completeOrdinalKey(receiptOrdinal++), document: original.trace.receipt },
-      ])
-    for await (const state of completeWorkingTraversal<PlatformSyncState>(
-      input.rows,
-      taskSpace + '/platform-states',
-      input.signal,
-    )) {
-      const document = state.document,
-        sourceKey = input.keyOf(
-          JSON.stringify([
-            document.binding.sourceId,
-            document.binding.projectId,
-            document.binding.taskId,
-          ]),
-        )
-      await input.rows.put(space('receipts'), {
-        key: 'visibility/' + sourceKey,
-        document: {
-          kind: 'cost-visibility',
-          sourceKey,
-          costVisibility: document.costVisibility,
-          visibilityRevision: document.visibilityRevision,
-        },
-      })
-    }
-    const build = await selectCompleteObservationTask(taskInput, original, selection)
-    if (build === null) continue
-    inventory.tasks++
-    if (build.summary.metrics.state === 'ready') usageCoverage.readyTasks++
-    else if (build.summary.metrics.state === 'not-ready') usageCoverage.missingTasks++
-    else usageCoverage.notApplicableTasks++
-    inventory.attempts += BigInt(build.summary.attemptCount)
-    inventory.invocations += BigInt(build.fold.invocations)
-    inventory.numericRecords += BigInt(build.originalNumericRecords)
-    mergeCompleteObservationFold(fold, build.fold)
-    statuses[task.status] = String(BigInt(statuses[task.status] ?? '0') + 1n)
-    await input.rows.insert(space('task-summaries'), [{ key: task.id, document: build.summary }])
-    await input.rows.insert(space('task-quality'), [
-      { key: task.id, document: [...build.fold.gaps] },
-    ])
-    await durations.add(build.summary)
-    const day = date.format(task.startedAt),
-      trend = (await trends.get(day)) ?? {
-        key: day,
-        from: task.startedAt,
-        to: task.startedAt + 1,
-        tasks: '0',
-        fold: emptyCompleteObservationFold(),
+    await completeWorkingScope(input.rows, taskSpace).run(async (taskRows) => {
+      const taskInput = {
+        ...input,
+        rows: taskRows,
+        task,
+        namespace: taskSpace,
+        trace: input.task !== undefined,
       }
-    trend.tasks = String(BigInt(trend.tasks) + 1n)
-    trend.from = Math.min(trend.from, task.startedAt)
-    trend.to = Math.max(trend.to, task.startedAt + 1)
-    mergeCompleteObservationFold(trend.fold, build.fold)
-    await trends.put(day, trend)
-    for (const reason of build.fold.gaps) {
-      await quality.put(reason, String(BigInt((await quality.get(reason)) ?? '0') + 1n))
-    }
-    for await (const item of completeWorkingTraversal<InvocationRow>(
-      input.rows,
-      build.invocationsNamespace,
-      input.signal,
-    )) {
-      const invocation = {
-        ...item.document,
-        taskName: task.name,
-        agentName: (await input.agentName?.(item.document.agentId)) ?? null,
+      const original = await buildCompleteObservationTask(taskInput)
+      sourceTasks++
+      for (const receipt of original.sourceReceipts)
+        await input.rows.insert(space('receipts'), [
+          { key: completeOrdinalKey(receiptOrdinal++), document: receipt },
+        ])
+      if (original.trace?.receipt)
+        await input.rows.insert(space('receipts'), [
+          { key: completeOrdinalKey(receiptOrdinal++), document: original.trace.receipt },
+        ])
+      for await (const state of completeWorkingTraversal<PlatformSyncState>(
+        input.rows,
+        taskSpace + '/platform-states',
+        input.signal,
+      )) {
+        const document = state.document,
+          sourceKey = input.keyOf(
+            JSON.stringify([
+              document.binding.sourceId,
+              document.binding.projectId,
+              document.binding.taskId,
+            ]),
+          )
+        await input.rows.put(space('receipts'), {
+          key: 'visibility/' + sourceKey,
+          document: {
+            kind: 'cost-visibility',
+            sourceKey,
+            costVisibility: document.costVisibility,
+            visibilityRevision: document.visibilityRevision,
+          },
+        })
       }
-      await dimensions.addInvocation(task, invocation, completeMetricsFold(invocation.metrics))
-      await output.append('invocations', task.id, invocation.invocationId, invocation)
-      await output.append('invocations', null, invocation.invocationId, invocation)
-      if (invocation.nodeRunId !== null)
-        await output.append(
-          'invocations',
-          JSON.stringify(['invocation', invocation.nodeRunId, invocation.invocationId]),
-          invocation.invocationId,
-          invocation,
-        )
-      if (invocation.nodeRunId !== null)
-        await output.append(
-          'invocations',
-          JSON.stringify(['attempt', invocation.nodeRunId]),
-          invocation.invocationId,
-          invocation,
-        )
-      if (input.task)
-        await output.append(
-          'invocations',
-          JSON.stringify(['task-tree', input.task.id]),
-          invocation.invocationId,
-          invocation,
-        )
-    }
-    let allocationPopulation = 0n,
-      qualityPopulation = 0n
-    for await (const item of completeWorkingTraversal<CompleteObservationAllocation>(
-      input.rows,
-      build.allocationsNamespace,
-      input.signal,
-    )) {
-      allocationPopulation++
-      const invocation = await input.rows.get<InvocationRow>(
+      const build = await selectCompleteObservationTask(taskInput, original, selection)
+      if (build === null) return
+      inventory.tasks++
+      if (build.summary.metrics.state === 'ready') usageCoverage.readyTasks++
+      else if (build.summary.metrics.state === 'not-ready') usageCoverage.missingTasks++
+      else usageCoverage.notApplicableTasks++
+      inventory.attempts += BigInt(build.summary.attemptCount)
+      inventory.invocations += BigInt(build.fold.invocations)
+      inventory.numericRecords += BigInt(build.originalNumericRecords)
+      mergeCompleteObservationFold(fold, build.fold)
+      statuses[task.status] = String(BigInt(statuses[task.status] ?? '0') + 1n)
+      await input.rows.insert(space('task-summaries'), [{ key: task.id, document: build.summary }])
+      await input.rows.insert(space('task-quality'), [
+        { key: task.id, document: [...build.fold.gaps] },
+      ])
+      await durations.add(build.summary)
+      const day = date.format(task.startedAt),
+        trend = (await trends.get(day)) ?? {
+          key: day,
+          from: task.startedAt,
+          to: task.startedAt + 1,
+          tasks: '0',
+          fold: emptyCompleteObservationFold(),
+        }
+      trend.tasks = String(BigInt(trend.tasks) + 1n)
+      trend.from = Math.min(trend.from, task.startedAt)
+      trend.to = Math.max(trend.to, task.startedAt + 1)
+      mergeCompleteObservationFold(trend.fold, build.fold)
+      await trends.put(day, trend)
+      for (const reason of build.fold.gaps) {
+        await quality.put(reason, String(BigInt((await quality.get(reason)) ?? '0') + 1n))
+      }
+      for await (const item of completeWorkingTraversal<InvocationRow>(
+        input.rows,
         build.invocationsNamespace,
-        input.keyOf(item.document.invocation.invocationId),
-      )
-      if (!invocation) throw new Error('Complete original allocation invocation missing')
-      await dimensions.addModel(task, item.document, invocation.metrics)
-      await output.append('allocations', task.id, item.key, item.document)
-      await output.append(
-        'allocations',
-        null,
-        input.keyOf(JSON.stringify([task.id, item.key])),
-        item.document,
-      )
-      await output.append(
-        'allocations',
-        JSON.stringify(['invocation', invocation.invocationId]),
-        item.key,
-        item.document,
-      )
-      if (input.task)
+        input.signal,
+      )) {
+        const invocation = {
+          ...item.document,
+          taskName: task.name,
+          agentName: (await input.agentName?.(item.document.agentId)) ?? null,
+        }
+        await dimensions.addInvocation(task, invocation, completeMetricsFold(invocation.metrics))
+        await output.append('invocations', task.id, invocation.invocationId, invocation)
+        await output.append('invocations', null, invocation.invocationId, invocation)
+        if (invocation.nodeRunId !== null)
+          await output.append(
+            'invocations',
+            JSON.stringify(['invocation', invocation.nodeRunId, invocation.invocationId]),
+            invocation.invocationId,
+            invocation,
+          )
+        if (invocation.nodeRunId !== null)
+          await output.append(
+            'invocations',
+            JSON.stringify(['attempt', invocation.nodeRunId]),
+            invocation.invocationId,
+            invocation,
+          )
+        if (input.task)
+          await output.append(
+            'invocations',
+            JSON.stringify(['task-tree', input.task.id]),
+            invocation.invocationId,
+            invocation,
+          )
+      }
+      let allocationPopulation = 0n,
+        qualityPopulation = 0n
+      for await (const item of completeWorkingTraversal<CompleteObservationAllocation>(
+        input.rows,
+        build.allocationsNamespace,
+        input.signal,
+      )) {
+        allocationPopulation++
+        const invocation = await input.rows.get<InvocationRow>(
+          build.invocationsNamespace,
+          input.keyOf(item.document.invocation.invocationId),
+        )
+        if (!invocation) throw new Error('Complete original allocation invocation missing')
+        await dimensions.addModel(task, item.document, invocation.metrics)
+        await output.append('allocations', task.id, item.key, item.document)
         await output.append(
           'allocations',
-          JSON.stringify(['task-tree', input.task.id]),
+          null,
+          input.keyOf(JSON.stringify([task.id, item.key])),
+          item.document,
+        )
+        await output.append(
+          'allocations',
+          JSON.stringify(['invocation', invocation.invocationId]),
           item.key,
           item.document,
         )
-    }
-    for await (const item of completeWorkingTraversal<CompleteObservationUnallocatedQuality>(
-      input.rows,
-      build.unallocatedQualityNamespace,
-      input.signal,
-    )) {
-      qualityPopulation++
-      const invocation = await input.rows.get<InvocationRow>(
-        build.invocationsNamespace,
-        input.keyOf(item.document.invocation.invocationId),
+        if (input.task)
+          await output.append(
+            'allocations',
+            JSON.stringify(['task-tree', input.task.id]),
+            item.key,
+            item.document,
+          )
+      }
+      for await (const item of completeWorkingTraversal<CompleteObservationUnallocatedQuality>(
+        input.rows,
+        build.unallocatedQualityNamespace,
+        input.signal,
+      )) {
+        qualityPopulation++
+        const invocation = await input.rows.get<InvocationRow>(
+          build.invocationsNamespace,
+          input.keyOf(item.document.invocation.invocationId),
+        )
+        if (!invocation) throw new Error('Complete original quality invocation missing')
+        await dimensions.addModel(task, item.document, invocation.metrics)
+      }
+      if (
+        allocationPopulation !== BigInt(build.selectedAllocationCount) ||
+        qualityPopulation !== BigInt(build.unallocatedQualityCount)
       )
-      if (!invocation) throw new Error('Complete original quality invocation missing')
-      await dimensions.addModel(task, item.document, invocation.metrics)
-    }
-    if (
-      allocationPopulation !== BigInt(build.selectedAllocationCount) ||
-      qualityPopulation !== BigInt(build.unallocatedQualityCount)
-    )
-      throw new Error('Complete original model contribution population changed')
-    for (const [section, namespace] of [
-      ['attempts', build.attemptsNamespace],
-      ['native-captures', build.nativeCapturesNamespace],
-      ['platform-captures', build.platformCapturesNamespace],
-    ] as const) {
-      for await (const item of completeWorkingTraversal(input.rows, namespace, input.signal)) {
-        await output.append(section, task.id, item.key, item.document)
-        if (section !== 'attempts') {
-          inventory.nativeCaptures++
-          await output.append(section, null, input.keyOf(JSON.stringify([task.id, item.key])), {
-            ...(item.document as object),
-            taskId: task.id,
-            taskName: task.name,
-          })
-        } else {
-          const attempt = { ...(item.document as object), taskId: task.id, taskName: task.name }
-          await input.rows.insert(space('all-attempts'), [{ key: item.key, document: attempt }])
-          await output.append('attempts', null, item.key, attempt)
+        throw new Error('Complete original model contribution population changed')
+      for (const [section, namespace] of [
+        ['attempts', build.attemptsNamespace],
+        ['native-captures', build.nativeCapturesNamespace],
+        ['platform-captures', build.platformCapturesNamespace],
+      ] as const) {
+        for await (const item of completeWorkingTraversal(input.rows, namespace, input.signal)) {
+          await output.append(section, task.id, item.key, item.document)
+          if (section !== 'attempts') {
+            inventory.nativeCaptures++
+            await output.append(section, null, input.keyOf(JSON.stringify([task.id, item.key])), {
+              ...(item.document as object),
+              taskId: task.id,
+              taskName: task.name,
+            })
+          } else {
+            const attempt = { ...(item.document as object), taskId: task.id, taskName: task.name }
+            await input.rows.insert(space('all-attempts'), [{ key: item.key, document: attempt }])
+            await output.append('attempts', null, item.key, attempt)
+          }
         }
       }
-    }
-    if (build.trace) {
-      for (const [section, namespace] of [
-        ['span-facts', build.trace.spansNamespace],
-        ['span-captures', build.trace.capturesNamespace],
-        ['span-statuses', build.trace.statusesNamespace],
-      ] as const)
-        for await (const item of completeWorkingTraversal<{
-          readonly nodeRunId: string
-          readonly detail?: ObservationSpanDetail
-        }>(input.rows, namespace, input.signal)) {
-          const parent = JSON.stringify(['attempt', item.document.nodeRunId]),
-            document = section === 'span-facts' ? item.document.detail : item.document
-          await output.append(
-            section,
-            parent,
-            input.keyOf(JSON.stringify([task.id, item.key])),
-            document,
-          )
-          await output.append(
-            section,
-            null,
-            input.keyOf(JSON.stringify([task.id, item.key])),
-            document,
-          )
-          if (section === 'span-facts' && item.document.detail)
+      if (build.trace) {
+        for (const [section, namespace] of [
+          ['span-facts', build.trace.spansNamespace],
+          ['span-captures', build.trace.capturesNamespace],
+          ['span-statuses', build.trace.statusesNamespace],
+        ] as const)
+          for await (const item of completeWorkingTraversal<{
+            readonly nodeRunId: string
+            readonly detail?: ObservationSpanDetail
+          }>(input.rows, namespace, input.signal)) {
+            const parent = JSON.stringify(['attempt', item.document.nodeRunId]),
+              document = section === 'span-facts' ? item.document.detail : item.document
             await output.append(
               section,
-              JSON.stringify([
-                'invocation',
-                item.document.nodeRunId,
-                item.document.detail.fact.invocationId,
-              ]),
+              parent,
               input.keyOf(JSON.stringify([task.id, item.key])),
               document,
             )
-        }
-    }
+            await output.append(
+              section,
+              null,
+              input.keyOf(JSON.stringify([task.id, item.key])),
+              document,
+            )
+            if (section === 'span-facts' && item.document.detail)
+              await output.append(
+                section,
+                JSON.stringify([
+                  'invocation',
+                  item.document.nodeRunId,
+                  item.document.detail.fact.invocationId,
+                ]),
+                input.keyOf(JSON.stringify([task.id, item.key])),
+                document,
+              )
+          }
+      }
+      await output.flush()
+    })
   }
   if (sourceTasks !== BigInt(taskSource.rows))
     throw new Error('Complete original Task population changed')

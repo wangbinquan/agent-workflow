@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { originalReportSnapshotSession } from '@/platform/persistence/reportSnapshot'
+import type { ReportSnapshotSession } from '@/platform/persistence/reportSnapshotTypes'
 import { describeEachProvider } from './helpers/eachProvider'
 import { scaleOriginalCounts, seedScaleCorpus } from './helpers/rfc371ScaleCorpus'
 import {
@@ -38,10 +39,66 @@ describeEachProvider('RFC-371 original full-scale qualification entry', (harness
     })
     const source = binding(),
       directory = mkdtempSync(join(tmpdir(), 'aw-scale-original-'))
+    const originalSnapshots = originalReportSnapshotSession(source)
+    const liveTasks = new Map<string, Set<string>>(),
+      seenTasks = new Set<string>()
+    let releasedTasks = 0
+    const taskScope = (namespace: string) =>
+      /^report\/[^/]+\/(task-[a-f0-9]{64})(?:\/|$)/.exec(namespace)?.[1]
+    const written = (namespace: string) => {
+      const task = taskScope(namespace)
+      if (!task) return
+      if (!seenTasks.has(task)) {
+        expect(liveTasks.size).toBe(0)
+        seenTasks.add(task)
+      }
+      const spaces = liveTasks.get(task) ?? new Set<string>()
+      spaces.add(namespace)
+      liveTasks.set(task, spaces)
+    }
+    const snapshots: ReportSnapshotSession = {
+      run: (work, signal, lease) =>
+        originalSnapshots.run(
+          (snapshot) =>
+            work({
+              ...snapshot,
+              workspace: {
+                ...snapshot.workspace,
+                insert: async (namespace, rows) => {
+                  written(namespace)
+                  await snapshot.workspace.insert(namespace, rows)
+                },
+                upsert: async (namespace, rows) => {
+                  written(namespace)
+                  await snapshot.workspace.upsert(namespace, rows)
+                },
+                put: async (namespace, row) => {
+                  written(namespace)
+                  await snapshot.workspace.put(namespace, row)
+                },
+                clear: async (namespace) => {
+                  expect(namespace.endsWith('/report-rows')).toBe(false)
+                  await snapshot.workspace.clear(namespace)
+                  const task = taskScope(namespace),
+                    spaces = task ? liveTasks.get(task) : undefined
+                  if (spaces) {
+                    spaces.delete(namespace)
+                    if (spaces.size === 0) {
+                      liveTasks.delete(task!)
+                      releasedTasks++
+                    }
+                  }
+                },
+              },
+            }),
+          signal,
+          lease,
+        ),
+    }
     try {
       const result = await qualifyScaleReport({
         db: harness.db,
-        snapshots: originalReportSnapshotSession(source),
+        snapshots,
         generation:
           source.provider === 'sqlite' ? source.generationId : source.runtime.generationId,
         directory,
@@ -64,6 +121,9 @@ describeEachProvider('RFC-371 original full-scale qualification entry', (harness
         tokens: { input: '6', cacheRead: '18', cacheWrite: '30', output: '42', total: '96' },
         cost: { currency: 'CNY', state: 'complete', amount: '0.0003' },
       })
+      expect(seenTasks.size).toBe(3)
+      expect(liveTasks.size).toBe(0)
+      expect(releasedTasks).toBeGreaterThanOrEqual(3)
       expect(result.taskRows).toBe(3)
       expect(result.allocationRows).toBe(6)
       expect(Object.keys(result.readyLatency).sort()).toEqual(['first-page', 'last-page', 'status'])

@@ -52,6 +52,7 @@ async function build(
   harness: ProviderHarness,
   selection: ObservationDimensionSelection,
   rootId?: string,
+  inspectTask?: string,
 ) {
   const binding = harness.applicationBinding
   const source =
@@ -95,7 +96,27 @@ async function build(
       result.rowsNamespace,
     ))
       if (row.document.parent === null) rows.push(row.document)
-    return { ...result, rows }
+    const retainedTaskInputs =
+      inspectTask === undefined
+        ? undefined
+        : await Promise.all(
+            [
+              'usage/input',
+              'captures',
+              'allocations',
+              'selected/candidates',
+              'ready-invocations',
+            ].map(
+              async (suffix) =>
+                (
+                  await workspace.page(
+                    'selected-cohort/task-' + sha256Hex(inspectTask) + '/' + suffix,
+                    null,
+                  )
+                ).items.length,
+            ),
+          )
+    return { ...result, rows, retainedTaskInputs }
   })
 }
 
@@ -351,9 +372,16 @@ describeEachProvider('RFC-371 complete dimension selection on original source', 
     })
   test('a complete excluded model has no matching population and does not become a numeric zero', async () => {
     await seedCompleteTask(harness, 1, 2)
-    const report = await build(harness, {
-      model: { authority: 'local', sourceId: null, provider: 'native', model: 'other' },
-    })
+    const report = await build(
+      harness,
+      {
+        model: { authority: 'local', sourceId: null, provider: 'native', model: 'other' },
+      },
+      undefined,
+      'complete-original-task',
+    )
+    // Excluded Tasks still reach original EOF, then release all intermediate input/material.
+    expect(report.retainedTaskInputs).toEqual([0, 0, 0, 0, 0])
     expect(report.summary.inventory.tasks).toBe('0')
     expect(report.summary.metrics).toEqual({ state: 'not-applicable' })
     expect(report.rows.filter((row) => row.section === 'tasks')).toEqual([])
