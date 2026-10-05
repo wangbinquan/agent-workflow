@@ -162,7 +162,7 @@ import type {
 
 // RFC-143 PR-4: SkillSource / ResolvedSkill moved to runtime/types.ts (drivers
 // type their skill inputs there); re-exported so scheduler/tests keep resolving.
-import type { TaskAgentRunPolicy, RunResult } from './ports/taskAgentRun'
+import type { TaskAgentRunPolicy, RunResult, RunFinalStatus } from './ports/taskAgentRun'
 import type { TaskAgentRunPurpose, TaskCompiledAgentInvocation } from './ports/taskAgentMaterial'
 
 function changedGitControlFields(before: GitControlSnapshot, after: GitControlSnapshot): string[] {

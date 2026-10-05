@@ -953,3 +953,7 @@ META16-R1 有效有限 FAIL97（指纹78b5ab3805ef86785ba946a42ad32c2dfce5b2f6a9
 ## 2026-10-06 Task selected 成功用例分支声明修复
 
 Windows 37380867203 在 a69d71bea1e7cce219295e7700846c5e9e33f18c 上两个正常执行用例失败。fixture 的 closed inactive 输出未配原必需 branchPorts；仅增加声明一行，完整逆向证明其余测试、原断言和预算未变，生产算法不变。CI-FIX-BRANCH-DECLARATION-R1 是有限功能修复门，候选/证据在 /tmp/aw-rfc370-task-agent-ci-branch-declaration-*，不重启完整 Task 核心门或 census。a69 主 CI cancelled、integration-opencode success；修复提交 CI 另验。六个实际生产调用点与根接线、A-G、CS 部署和完整 RFC 继续。
+
+## 2026-10-06 Task 核心 CI 类型修复及匹配
+
+Windows bbbe exact-SHA CI37383152628/job112009886282 的三个自有 Typecheck 错误只以一个原类型导入与两个不存在的 fixture schema 键修正。SOURCE2-DOC1-R1 独立有限 PASS9，首末指纹 2dfd6637309fa58cf518f15768001622d8cf06291265ea14e8fe4f2949a67700；完整 runtime body 和旧 fixture 断言/预算保持，branchPorts 声明保留。其他 RFC371 错误不混称已修复。一次原规则 scoped census 读取完整 committed bbbe 加冻结候选，排除所有 family WIP；sourceDigest sha256:89265e267cc6ea6967895fda93c339a56a2c4ffe48d5ca86d7c6b9f42f903013，350原债、129顺序/why、40SPI/69targets、原SCC和原counter保持，四个前批许可正常退役且无新增长许可。此15路径匹配与共享增量仅交有限功能复核，不重启已通过源码门。全部旧共享正文/并行输出保持，无本机AW tests/typecheck/build/service；六调用/全根/A-G/CS部署和RFC未完成，正式CI仍待后继确切SHA。

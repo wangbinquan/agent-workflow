@@ -1,3 +1,9 @@
+## 2026-10-06 RFC-370 Task 核心 CI 类型修复
+
+bbbef9f Windows CI37383152628/job112009886282 的 Typecheck 报本批三个错误：原 status 类型漏导入、selected fixture 两个不存在的 nodeRuns.agentName 字段。只补 RunFinalStatus type import、删除两键，完整 runtime core 与 fixture 全断言/预算不变，前批 branchPorts 声明保持；有限 SOURCE2-DOC1-R1 PASS9，指纹 2dfd6637309fa58cf518f15768001622d8cf06291265ea14e8fe4f2949a67700。其他 RFC371 类型失败继续单独归因。
+
+一次原 scoped census 仅纳入完整已提交 bbbef9f 人口与三个冻结文件（一个 production type-only），sourceDigest sha256:89265e267cc6ea6967895fda93c339a56a2c4ffe48d5ca86d7c6b9f42f903013。13 matching 保留350债、129有序库存/why、40SPI/69targets及原SCC，原counter无增长；正常退役前批四个具名许可。本机无AW tests/typecheck/build/service，正式结果等待发布后 exact-SHA hosted CI。六个实际Task调用与全根接线仍是未发布在制内容，排除且保持；A-G、CS首次部署、M1～M4与RFC继续，AW尚未部署到CS。以下共享正文与并行输出完整保留。
+
 ## 2026-10-06 RFC-370 Task 正常执行用例分支声明 CI 修复
 
 完整 Task 核心 a69d71bea1e7cce219295e7700846c5e9e33f18c 的 Windows 37380867203 实际失败两个 selected success 用例；测试输出 closed active="false" 却未声明 branchPorts，完整原核心会按 branch-port-not-declared 原规则拒绝。本批只在 fixture 补 branchPorts: [closed]；完整逆向恢复原测试，生产源码、原断言与预算不变，不放宽分支规则。主 CI 37380867057 终态 cancelled，不能计通过；独立 integration-opencode 37380867069 success 分列记录。功能有限门与修复提交 exact-SHA CI 分别验收，无本机 AW tests/typecheck/build/service。六个真实 Task 调用点（nodeMechanics 三处、wrapperMechanics 两处、scheduler commit-message 一处）及全根仍待接线；完整 RFC、A-G、CS 首部署与逐步收编继续开放。以下共享正文完整保留。
