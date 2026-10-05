@@ -77,7 +77,7 @@ describe('S-15 guard: SIGTERM→SIGKILL escalation + group kill (managedProcess.
   const mpSrc = readFileSync(MANAGED_PROCESS, 'utf8')
   const runnerSrc = readFileSync(RUNNER, 'utf8')
   const nativeExecutionSrc = readFileSync(
-    join(
+    resolve(
       import.meta.dir,
       '../src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts',
     ),
