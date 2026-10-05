@@ -35,6 +35,7 @@ import {
 } from './nativeUsageOwnerTransaction'
 import { emitNativeUsagePage } from './nativeUsagePageEmission'
 import type { NativeUsageBaselineReadView } from '../application/ports/nativeUsageBaseline'
+import { bindOriginalNativeUsageStore } from './nativeUsageStoreBinding'
 
 type Pass = typeof nativeUsagePasses.$inferSelect
 type Preparation = typeof nativeUsagePreparations.$inferSelect
@@ -102,6 +103,32 @@ export class DrizzleNativeUsagePages implements PagesPort {
     return withNativeUsageOwner(this.db, input.binding, async (tx, facts) => {
       if (input.nativeSource !== facts.nativeSource)
         throw new Error('Original native preparation changed its accepted source')
+      const preparedAt = Date.now()
+      const absent =
+        input.sourceAbsentAt === undefined ? {} : { sourceAbsentAt: input.sourceAbsentAt }
+      const receiptFields = [
+        'prepare',
+        input.binding.taskId,
+        input.binding.nodeRunId,
+        input.binding.invocationId,
+        facts.fence,
+        input.sourceGeneration,
+        input.resumeRootSessionId,
+        ...(input.sourceGeneration === null ? ['absent', input.sourceAbsentAt] : []),
+      ]
+      const candidate = ObservationNativeBeforeSpawnAckSchema.parse({
+        contract: 'native-usage-before-spawn-v2',
+        invocationId: input.binding.invocationId,
+        nativeSource: facts.nativeSource,
+        sourceGeneration: input.sourceGeneration,
+        ...absent,
+        lineage: facts.lineage,
+        epoch: facts.epoch,
+        ownerReceiptId: sha256Hex(JSON.stringify(receiptFields)),
+        preparedAt,
+        mode: input.resumeRootSessionId === null ? 'fresh' : 'resume',
+        rootSessionId: input.resumeRootSessionId,
+      })
       const existing = (
         await tx
           .select()
@@ -120,28 +147,7 @@ export class DrizzleNativeUsagePages implements PagesPort {
           throw new Error('Original native before-spawn operation changed on replay')
         return ack
       }
-      const ack = ObservationNativeBeforeSpawnAckSchema.parse({
-        contract: 'native-usage-before-spawn-v2',
-        invocationId: input.binding.invocationId,
-        nativeSource: facts.nativeSource,
-        sourceGeneration: input.sourceGeneration,
-        lineage: facts.lineage,
-        epoch: facts.epoch,
-        ownerReceiptId: sha256Hex(
-          JSON.stringify([
-            'prepare',
-            input.binding.taskId,
-            input.binding.nodeRunId,
-            input.binding.invocationId,
-            facts.fence,
-            input.sourceGeneration,
-            input.resumeRootSessionId,
-          ]),
-        ),
-        preparedAt: Date.now(),
-        mode: input.resumeRootSessionId === null ? 'fresh' : 'resume',
-        rootSessionId: input.resumeRootSessionId,
-      })
+      const ack = candidate
       await tx.insert(nativeUsagePreparations).values({
         invocationId: input.binding.invocationId,
         taskId: input.binding.taskId,
@@ -151,6 +157,8 @@ export class DrizzleNativeUsagePages implements PagesPort {
         document: JSON.stringify(ack),
         state: 'open',
       })
+      if (ack.sourceGeneration !== null)
+        await bindOriginalNativeUsageStore(tx, ack, ack.sourceGeneration)
       return ack
     })
   }
@@ -172,7 +180,8 @@ export class DrizzleNativeUsagePages implements PagesPort {
         input.beforeSpawnReceiptId !== before.ownerReceiptId ||
         identity.invocationId !== input.binding.invocationId ||
         identity.nativeSource !== before.nativeSource ||
-        identity.sourceGeneration !== before.sourceGeneration ||
+        (before.sourceGeneration !== null &&
+          identity.sourceGeneration !== before.sourceGeneration) ||
         identity.lineage !== facts.lineage ||
         identity.epoch !== facts.epoch ||
         (before.mode === 'resume' && identity.rootSessionId !== before.rootSessionId) ||
@@ -180,6 +189,7 @@ export class DrizzleNativeUsagePages implements PagesPort {
         input.initialCursor !== JSON.stringify([identity.passId, '0', seed])
       )
         throw new Error('Original native admission changed the before-spawn binding')
+      await bindOriginalNativeUsageStore(tx, before, identity.sourceGeneration)
       const existing = (
         await tx
           .select()

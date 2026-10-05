@@ -5205,6 +5205,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:0cad0ed7fc0eb5b82ae1",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nativeUsageStoreBindings",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "nativeUsageStoreBindings",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/nodeMechanics.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "fromSymbol": "$file",
@@ -35040,6 +35057,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageArchive.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageArchive.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:5b384b97a4449066c29a",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nativeUsageStoreBindings",
+      "toPath": "packages/backend/src/db/schema.ts",
+      "toSymbol": "nativeUsageStoreBindings",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/taskCollab.ts#$file",
       "fromPath": "packages/backend/src/services/taskCollab.ts",
       "fromSymbol": "$file",
@@ -43774,6 +43808,23 @@
       "toPath": "packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts",
       "toSymbol": "DaemonHostLifecyclePort",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:73211230e44dc8080693",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase",
+      "toPath": "packages/backend/src/db/query.ts",
+      "toSymbol": "ProviderNeutralDatabase",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -84559,6 +84610,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#$file",
+      "fromPath": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:df274b5ec8fb34f15d13",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction",
+      "toPath": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toSymbol": "DatabaseTransaction",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceSqlStore.ts#$file",
@@ -97395,9 +97463,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5729,
+    "architectureExceptions": 5733,
     "implementationSccs": 0,
-    "observedEdges": 6479,
+    "observedEdges": 6484,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -102620,6 +102688,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
       "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#engineOf"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#$file",
+      "id": "import:0cad0ed7fc0eb5b82ae1",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "nativeUsageStoreBindings",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nativeUsageStoreBindings"
     },
     {
       "edgeKind": "value",
@@ -125344,6 +125428,22 @@
     {
       "edgeKind": "value",
       "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#$file",
+      "id": "import:43d3f11d1b5266f00488",
+      "owner": "task-execution",
+      "removeAfterWave": null,
+      "role": "infrastructure-external",
+      "specifier": "drizzle-orm",
+      "syntax": "static-import",
+      "targetSymbol": "*",
+      "toContext": "external",
+      "toFile": "external:drizzle-orm",
+      "toOwnerEntryId": "owner:external:drizzle-orm#$package"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskDecisionParticipant.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskDecisionParticipant.ts#$file",
       "id": "import:43d560320c981433118c",
@@ -134460,6 +134560,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageArchive.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageArchive.ts#$file",
+      "id": "import:5b384b97a4449066c29a",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/schema",
+      "syntax": "static-import",
+      "targetSymbol": "nativeUsageStoreBindings",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/schema.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#nativeUsageStoreBindings"
     },
     {
       "edgeKind": "value",
@@ -144124,6 +144240,22 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts#$file"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#$file",
+      "id": "import:73211230e44dc8080693",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/db/query",
+      "syntax": "static-import",
+      "targetSymbol": "ProviderNeutralDatabase",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/db/query.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/db/query.ts#ProviderNeutralDatabase"
     },
     {
       "edgeKind": "value",
@@ -187630,6 +187762,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/services/taskCollab.ts#$file"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "task-execution",
+      "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#$file",
+      "id": "import:df274b5ec8fb34f15d13",
+      "owner": "task-execution",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/persistence/databaseTransaction",
+      "syntax": "static-import",
+      "targetSymbol": "DatabaseTransaction",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/persistence/databaseTransaction.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/persistence/databaseTransaction.ts#DatabaseTransaction"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "source-control",
       "fromFile": "packages/backend/src/modules/source-control/infrastructure/repositoryWorkspaceSqlStore.ts",
@@ -201960,7 +202108,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f888632c511a6cd2cd5f205280681aca5c71cbc6e68e133f47404c0a57e6d7b9",
+  "sourceDigest": "sha256:0d3560a35017f51a1076bafcace3232e20901b1187a102bf243c396868717198",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

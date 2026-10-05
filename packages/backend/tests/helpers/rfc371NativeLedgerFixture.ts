@@ -18,7 +18,8 @@ export async function originalNativeLedgerFixture(
   numericPages = true,
   nativeStore: {
     readonly source?: string
-    readonly generation?: string
+    readonly generation?: string | null
+    readonly sourceAbsentAt?: number
     readonly producer?: true
   } = {},
 ) {
@@ -93,20 +94,28 @@ export async function originalNativeLedgerFixture(
   const prepareInput = {
     binding,
     nativeSource: nativeStore.source ?? 'actual-native-store',
-    sourceGeneration: nativeStore.generation ?? 'original-sqlite-generation',
+    sourceGeneration:
+      nativeStore.generation === undefined ? 'original-sqlite-generation' : nativeStore.generation,
+    ...(nativeStore.sourceAbsentAt === undefined
+      ? {}
+      : { sourceAbsentAt: nativeStore.sourceAbsentAt }),
     resumeRootSessionId: mode === 'resume' ? 'root' : null,
   }
   const before = await pages.prepare(prepareInput)
-  const identity = (phase: 'baseline' | 'final' = 'baseline'): ObservationNativePassIdentity => ({
-    passId: randomUUID(),
-    invocationId,
-    nativeSource: before.nativeSource,
-    sourceGeneration: before.sourceGeneration,
-    rootSessionId: 'root',
-    lineage: before.lineage,
-    epoch: before.epoch,
-    phase,
-  })
+  const identity = (phase: 'baseline' | 'final' = 'baseline'): ObservationNativePassIdentity => {
+    if (before.sourceGeneration === null)
+      throw new Error('First-store fixture requires its actual admitted generation')
+    return {
+      passId: randomUUID(),
+      invocationId,
+      nativeSource: before.nativeSource,
+      sourceGeneration: before.sourceGeneration,
+      rootSessionId: 'root',
+      lineage: before.lineage,
+      epoch: before.epoch,
+      phase,
+    }
+  }
   const owner = (supersedes?: string): NativeUsagePassOwner => ({
     admit: (identity, initialCursor, rootCreatedAt) =>
       pages.admit({

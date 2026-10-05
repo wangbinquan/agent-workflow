@@ -5,6 +5,8 @@ import { Database } from 'bun:sqlite'
 import { mkdtempSync, rmSync, writeFileSync, renameSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { eq } from 'drizzle-orm'
+import { nativeUsagePreparations, nativeUsageStoreBindings } from '@/db/schema'
 import { createOpencodeNativeUsageCapture } from '@/modules/runtime-management/composition/nativeUsageCapture'
 import { opencodeNativeStoreGeneration } from '@/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration'
 import { runWithTaskExecutionContext } from '@/modules/task-execution/application/taskExecutionContext'
@@ -33,6 +35,7 @@ const child = `import { Database } from 'bun:sqlite';
 const db = new Database(process.argv[2]);
 const resume = process.argv[3] === 'resume', unknown = process.argv[3] === 'unknown';
 db.exec('PRAGMA journal_mode=WAL');
+db.exec('CREATE TABLE IF NOT EXISTS session(id TEXT PRIMARY KEY,parent_id TEXT,time_created INTEGER); CREATE INDEX IF NOT EXISTS session_parent ON session(parent_id,id); CREATE TABLE IF NOT EXISTS message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE IF NOT EXISTS part(id TEXT PRIMARY KEY,session_id TEXT,message_id TEXT,time_created INTEGER,data TEXT); CREATE INDEX IF NOT EXISTS part_session ON part(session_id,id);');
 db.transaction(() => {
  if (!resume) {
   db.run('INSERT INTO session VALUES (?,?,?)', ['root', null, Date.now()]);
@@ -47,16 +50,18 @@ db.transaction(() => {
 })();
 db.close();process.stdout.write('original root: root\\n');`
 
-function store() {
+function store(precreate = true) {
   const directory = mkdtempSync(join(tmpdir(), 'aw-native-producer-'))
   cleanups.push(() => rmSync(directory, { recursive: true, force: true }))
   const path = join(directory, 'original.db'),
     script = join(directory, 'agent.ts')
-  const db = new Database(path)
-  db.exec(
-    'PRAGMA journal_mode=WAL; CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,time_created INTEGER); CREATE INDEX session_parent ON session(parent_id,id); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,session_id TEXT,message_id TEXT,time_created INTEGER,data TEXT); CREATE INDEX part_session ON part(session_id,id);',
-  )
-  db.close()
+  if (precreate) {
+    const db = new Database(path)
+    db.exec(
+      'PRAGMA journal_mode=WAL; CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,time_created INTEGER); CREATE INDEX session_parent ON session(parent_id,id); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,session_id TEXT,message_id TEXT,time_created INTEGER,data TEXT); CREATE INDEX part_session ON part(session_id,id);',
+    )
+    db.close()
+  }
   writeFileSync(script, child)
   return {
     directory,
@@ -99,7 +104,7 @@ async function observations(harness: ProviderHarness) {
 
 describeEachProvider('RFC-371 original Task native page producer', (harness) => {
   async function execution(native: ReturnType<typeof store>, mode: 'fresh' | 'resume' | 'unknown') {
-    const generation = (await opencodeNativeStoreGeneration(native.path))!
+    const generation = await opencodeNativeStoreGeneration(native.path)
     const f = await originalNativeLedgerFixture(
       harness,
       mode === 'resume' ? 'resume' : 'fresh',
@@ -107,6 +112,7 @@ describeEachProvider('RFC-371 original Task native page producer', (harness) => 
       {
         source: native.source,
         generation,
+        ...(generation === null ? { sourceAbsentAt: Date.now() } : {}),
         producer: true,
       },
     )
@@ -183,6 +189,59 @@ describeEachProvider('RFC-371 original Task native page producer', (harness) => 
     })
     return { f, capture, participant, ledger: createUsageLedgerStore(harness.db) }
   }
+
+  test('first actual child creates its previously absent store and all 1001 steps retain an immutable before and actual generation', async () => {
+    const native = store(false)
+    expect(await opencodeNativeStoreGeneration(native.path)).toBeNull()
+    const first = await execution(native, 'fresh')
+    expect(first.f.before.sourceGeneration).toBeNull()
+    expect(first.f.before.sourceAbsentAt).toEqual(expect.any(Number))
+    expect(first.f.before.sourceAbsentAt!).toBeLessThanOrEqual(first.f.before.preparedAt)
+    const [prepared] = await harness.db
+      .select()
+      .from(nativeUsagePreparations)
+      .where(eq(nativeUsagePreparations.invocationId, first.f.binding.invocationId))
+    expect(prepared!.document).toBe(JSON.stringify(first.f.before))
+    expect(prepared!.state).toBe('sealed')
+    const generation = await opencodeNativeStoreGeneration(native.path)
+    expect(generation).toEqual(expect.any(String))
+    const [binding] = await harness.db
+      .select()
+      .from(nativeUsageStoreBindings)
+      .where(eq(nativeUsageStoreBindings.invocationId, first.f.binding.invocationId))
+    expect(binding).toEqual({
+      invocationId: first.f.binding.invocationId,
+      beforeOwnerReceiptId: first.f.before.ownerReceiptId,
+      sourceGeneration: generation,
+    })
+    const rows = await allRecords(first.ledger, first.f.binding.taskId)
+    expect(rows).toHaveLength(1001)
+    expect(rows.reduce((v, r) => v + BigInt(r.measurement.usage.input!), 0n)).toBe(501501n)
+    expect(rows.reduce((v, r) => v + BigInt(r.measurement.usage.output!), 0n)).toBe(5005n)
+    expect(rows.reduce((v, r) => v + BigInt(r.measurement.usage.cacheRead!), 0n)).toBe(7007n)
+    expect(rows.reduce((v, r) => v + BigInt(r.measurement.usage.cacheWrite!), 0n)).toBe(13013n)
+    expect(rows.every((r) => r.measurement.invocationId === first.f.binding.invocationId)).toBe(
+      true,
+    )
+    const proof = (await first.ledger.captures([first.f.binding.invocationId]))[0]!.capture
+    expect(proof.contract).toBe('opencode-child-pages-v2')
+    if (proof.contract !== 'opencode-child-pages-v2') throw new Error('Wrong native contract')
+    expect(proof.state).toBe('complete')
+    expect(proof.final!.ack.identity.sourceGeneration).toBe(generation)
+    expect(proof.final!.ack.counts.steps).toBe('1001')
+    expect(proof.process.spawnedAt!).toBeGreaterThanOrEqual(first.f.before.preparedAt)
+    expect(proof.baseline.kind).toBe('fresh')
+    if (proof.baseline.kind !== 'fresh') throw new Error('Wrong actual first-store baseline')
+    expect(proof.baseline.rootCreatedAt!).toBeGreaterThanOrEqual(proof.process.spawnedAt!)
+    await finalizeNativeUsageInvocation({
+      capture: first.capture,
+      observations: first.participant,
+      invocationId: first.f.binding.invocationId,
+      nodeRunId: first.f.binding.nodeRunId,
+      rootSessionId: 'root',
+    })
+    expect(await allRecords(first.ledger, first.f.binding.taskId)).toEqual(rows)
+  }, 120000)
 
   test('1001 actual child steps reach the unique four-bucket ledger; resume revises their original Task and emits only four new steps', async () => {
     const native = store(),

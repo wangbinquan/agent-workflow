@@ -5,7 +5,7 @@
     "governedFieldSurfaces": 5,
     "methods": 1503,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 26642,
+    "recursiveFields": 26648,
     "symbols": 1169
   },
   "entries": [
@@ -132609,8 +132609,8 @@
       "budget": {
         "maxMethods": 42,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 331,
-        "maxUnionVariants": 94
+        "maxTransitiveLeafFields": 333,
+        "maxUnionVariants": 96
       },
       "consumerEdgeIds": [
         "import:26adc1d83d57369c678b"
@@ -133207,8 +133207,18 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.sourceGeneration",
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.sourceAbsentAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.sourceGeneration.$variant:0",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.sourceGeneration.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -134413,7 +134423,7 @@
         {
           "consumerEdgeIds": [],
           "name": "prepare",
-          "signatureDigest": "sha256:21afc51d2a036ab93fb0d55e13c72d3de062ad4f1ddb1879505878f93df6d3ca"
+          "signatureDigest": "sha256:48a103ea313c80320db89b799ca20f1aadca7bb6393babcf7baf8da275472abd"
         },
         {
           "consumerEdgeIds": [],
@@ -136172,8 +136182,8 @@
       "budget": {
         "maxMethods": 8,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 130,
-        "maxUnionVariants": 28
+        "maxTransitiveLeafFields": 132,
+        "maxUnionVariants": 30
       },
       "consumerEdgeIds": [
         "import:38a2389d52c40734c406",
@@ -136524,8 +136534,18 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "durableOwner.$method:prepare.$parameter:input.sourceGeneration",
+          "fieldPath": "durableOwner.$method:prepare.$parameter:input.sourceAbsentAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:prepare.$parameter:input.sourceGeneration.$variant:0",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "durableOwner.$method:prepare.$parameter:input.sourceGeneration.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -136941,7 +136961,7 @@
         {
           "consumerEdgeIds": [],
           "name": "prepare",
-          "signatureDigest": "sha256:21afc51d2a036ab93fb0d55e13c72d3de062ad4f1ddb1879505878f93df6d3ca"
+          "signatureDigest": "sha256:48a103ea313c80320db89b799ca20f1aadca7bb6393babcf7baf8da275472abd"
         },
         {
           "consumerEdgeIds": [],
@@ -178334,8 +178354,8 @@
       "budget": {
         "maxMethods": 56,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 562,
-        "maxUnionVariants": 191
+        "maxTransitiveLeafFields": 564,
+        "maxUnionVariants": 193
       },
       "consumerEdgeIds": [
         "import:075f63d0c44a4eb0cc24"
@@ -179632,8 +179652,18 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.sourceGeneration",
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.sourceAbsentAt",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.sourceGeneration.$variant:0",
           "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "evidence.$method:prepareNativeUsageCapture.$parameter:identity.durableOwner.$method:prepare.$parameter:input.sourceGeneration.$variant:1",
+          "type": "null"
         },
         {
           "consumerEdgeIds": [],
@@ -181333,7 +181363,7 @@
         {
           "consumerEdgeIds": [],
           "name": "prepare",
-          "signatureDigest": "sha256:21afc51d2a036ab93fb0d55e13c72d3de062ad4f1ddb1879505878f93df6d3ca"
+          "signatureDigest": "sha256:48a103ea313c80320db89b799ca20f1aadca7bb6393babcf7baf8da275472abd"
         },
         {
           "consumerEdgeIds": [],
@@ -206577,7 +206607,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f888632c511a6cd2cd5f205280681aca5c71cbc6e68e133f47404c0a57e6d7b9",
+  "sourceDigest": "sha256:0d3560a35017f51a1076bafcace3232e20901b1187a102bf243c396868717198",
   "targetContexts": [
     "collaboration",
     "development-automation",

@@ -33,7 +33,8 @@ export interface NativeUsagePersistence {
   prepare(input: {
     readonly binding: NativeUsageOwnerBinding
     readonly nativeSource: string
-    readonly sourceGeneration: string
+    readonly sourceGeneration: string | null
+    readonly sourceAbsentAt?: number
     readonly resumeRootSessionId: string | null
   }): Promise<ObservationNativeBeforeSpawnAck>
   admit(input: {

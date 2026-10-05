@@ -691,6 +691,11 @@ describeEachProvider('RFC-371 native evidence archive', (harness) => {
       document,
       state: 'sealed',
     })
+    await db.insert(schema.nativeUsageStoreBindings).values({
+      invocationId,
+      beforeOwnerReceiptId: 'original-before-spawn',
+      sourceGeneration: 'original-native-generation',
+    })
     await db.insert(schema.nativeUsagePasses).values({
       passId,
       invocationId,
@@ -760,6 +765,7 @@ describeEachProvider('RFC-371 native evidence archive', (harness) => {
     })
     const tables = [
       schema.nativeUsagePreparations,
+      schema.nativeUsageStoreBindings,
       schema.nativeUsagePasses,
       schema.nativeUsagePassHeads,
       schema.nativeUsagePassPages,
@@ -794,6 +800,7 @@ describeEachProvider('RFC-371 native evidence archive', (harness) => {
       expect(await db.select().from(tables[n]!)).toHaveLength(0)
     }
     expect(archive.rows.task_execution_native_usage_step_members).toBe(1001)
+    expect(archive.rows.task_execution_native_usage_store_bindings).toBe(1)
     expect(await taskCount(db)).toBe(0)
   }, 30_000)
 })

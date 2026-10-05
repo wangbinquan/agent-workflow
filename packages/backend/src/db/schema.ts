@@ -8559,6 +8559,7 @@ export const maintenanceRuns = sqliteTable(
 // RFC-371: bind each native evidence relation to this exact original Task table.
 export const {
   nativeUsagePreparations,
+  nativeUsageStoreBindings,
   nativeUsagePasses,
   nativeUsagePassHeads,
   nativeUsagePassPages,

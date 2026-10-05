@@ -28,6 +28,7 @@ import { verifyNativeUsagePass } from './nativeUsagePassVerification'
 import { verifyNativeUsageEmissions } from './nativeUsageEmissionVerification'
 import { verifyNativeUsageNumericCoverage } from './nativeUsageNumericCoverage'
 import { verifyNativeUsageReconciliation } from './nativeUsageReconciliationVerification'
+import { originalNativeUsageStoreGeneration } from './nativeUsageStoreBinding'
 
 type SealPort = Pick<NativeUsagePersistence, 'seal'>
 type Pass = typeof nativeUsagePasses.$inferSelect
@@ -89,6 +90,7 @@ async function describe(
   )
     throw new Error('Native completion has no actual original preparation')
   const beforeSpawn = ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document))
+  const sourceGeneration = await originalNativeUsageStoreGeneration(tx, beforeSpawn)
   const issues = new Set<string>()
   const finalRow = await head(tx, binding, 'final')
   const beforeRow = beforeSpawn.mode === 'resume' ? await head(tx, binding, 'baseline') : undefined
@@ -97,7 +99,8 @@ async function describe(
     if (
       identity.invocationId !== binding.invocationId ||
       identity.nativeSource !== facts.nativeSource ||
-      identity.sourceGeneration !== beforeSpawn.sourceGeneration ||
+      sourceGeneration === null ||
+      identity.sourceGeneration !== sourceGeneration ||
       identity.lineage !== facts.lineage ||
       identity.epoch !== facts.epoch ||
       (beforeSpawn.mode === 'resume' && identity.rootSessionId !== beforeSpawn.rootSessionId)

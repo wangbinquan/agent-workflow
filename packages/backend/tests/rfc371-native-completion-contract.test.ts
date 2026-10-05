@@ -336,6 +336,7 @@ test('the before-spawn receipt explicitly separates an unborn fresh root from th
     rootSessionId: null,
   }
   expect(ObservationNativeBeforeSpawnAckSchema.safeParse(value).success).toBe(true)
+  expect(ObservationNativeBeforeSpawnAckSchema.parse(value)).toEqual(value)
   expect(
     ObservationNativeBeforeSpawnAckSchema.safeParse({ ...value, mode: 'resume' }).success,
   ).toBe(false)
@@ -346,4 +347,16 @@ test('the before-spawn receipt explicitly separates an unborn fresh root from th
       rootSessionId: identity.rootSessionId,
     }).success,
   ).toBe(true)
+  const absent = { ...value, sourceGeneration: null, sourceAbsentAt: 4 }
+  expect(ObservationNativeBeforeSpawnAckSchema.parse(absent)).toEqual(absent)
+  for (const invalid of [
+    { ...absent, sourceAbsentAt: undefined },
+    { ...absent, sourceAbsentAt: 6 },
+    { ...absent, sourceAbsentAt: -1 },
+    { ...absent, sourceAbsentAt: NaN },
+    { ...absent, sourceAbsentAt: Infinity },
+    { ...absent, mode: 'resume', rootSessionId: identity.rootSessionId },
+    { ...value, sourceAbsentAt: 4 },
+  ])
+    expect(ObservationNativeBeforeSpawnAckSchema.safeParse(invalid).success).toBe(false)
 })

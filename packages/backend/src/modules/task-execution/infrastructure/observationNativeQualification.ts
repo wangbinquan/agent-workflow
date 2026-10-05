@@ -15,6 +15,7 @@ import { sha256Hex } from '@/util/hash'
 import type { ObservationNativeScopeSource } from '@/modules/run-observability/public/participants'
 import { verifyNativeUsagePass } from './nativeUsagePassVerification'
 import { verifyNativeUsageNumericCoverage } from './nativeUsageNumericCoverage'
+import { originalNativeUsageStoreGeneration } from './nativeUsageStoreBinding'
 
 /** Original source/preparation/ACK binding, shared by qualification and bounded history reads. */
 export async function readOriginalNativeCaptureBinding(
@@ -116,13 +117,16 @@ export async function qualifyOriginalNativeUsage(
   const { proof, binding, before } = await readOriginalNativeCaptureBinding(db, value)
   const final = proof.final
   if (!final) return { records: null, complete: false }
+  const sourceGeneration = await originalNativeUsageStoreGeneration(db, before)
+  if (sourceGeneration === null)
+    throw new Error('Native completion has no original admitted store generation')
   for (const reference of [final, proof.baseline.kind === 'resume' ? proof.baseline.pass : null]) {
     if (!reference) continue
     const identity = reference.ack.identity
     if (
       identity.invocationId !== value.invocationId ||
       identity.nativeSource !== before.nativeSource ||
-      identity.sourceGeneration !== before.sourceGeneration ||
+      identity.sourceGeneration !== sourceGeneration ||
       identity.lineage !== before.lineage ||
       identity.epoch !== before.epoch ||
       identity.rootSessionId !== proof.rootSessionId

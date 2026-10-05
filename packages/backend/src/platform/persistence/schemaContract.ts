@@ -200,6 +200,7 @@ export const RFC349_SOURCE_TABLES = [
   'task_execution_native_usage_revision_heads',
   'task_execution_native_usage_session_parents',
   'task_execution_native_usage_step_members',
+  'task_execution_native_usage_store_bindings',
   'task_execution_observation_sources',
   'task_execution_owners',
   'task_feedback',

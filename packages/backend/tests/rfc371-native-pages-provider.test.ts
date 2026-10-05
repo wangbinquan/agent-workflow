@@ -171,16 +171,20 @@ describeEachProvider('RFC-371 original native pages and membership', (harness) =
       resumeRootSessionId: mode === 'resume' ? 'root' : null,
     }
     const before = await pages.prepare(prepareInput)
-    const identity = (phase: 'baseline' | 'final' = 'baseline'): ObservationNativePassIdentity => ({
-      passId: randomUUID(),
-      invocationId,
-      nativeSource: before.nativeSource,
-      sourceGeneration: before.sourceGeneration,
-      rootSessionId: 'root',
-      lineage: before.lineage,
-      epoch: before.epoch,
-      phase,
-    })
+    const identity = (phase: 'baseline' | 'final' = 'baseline'): ObservationNativePassIdentity => {
+      if (before.sourceGeneration === null)
+        throw new Error('Existing-store fixture requires its original generation')
+      return {
+        passId: randomUUID(),
+        invocationId,
+        nativeSource: before.nativeSource,
+        sourceGeneration: before.sourceGeneration,
+        rootSessionId: 'root',
+        lineage: before.lineage,
+        epoch: before.epoch,
+        phase,
+      }
+    }
     const owner = (supersedes?: string): NativeUsagePassOwner => ({
       admit: (identity, initialCursor, rootCreatedAt) =>
         pages.admit({

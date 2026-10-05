@@ -1,0 +1,198 @@
+{
+  "contractRow": {
+    "after": {
+      "kind": "metadata",
+      "logicalId": "contract-row",
+      "sql": "INSERT INTO \"agent_workflow_meta\".\"schema_contract\" (singleton, contract_digest, active_table_count, archive_only_table_count) VALUES (TRUE, 'sha256:e9073431b301f4759a5130406a6df904c69fe1dfdf4a96be6be82ee62fce4ee2', 211, 6)"
+    },
+    "beforeDigest": "sha256:0baf07f5084879a85e451c6ccd66161644e638c444ef8a70244b8c09de2133ee"
+  },
+  "digest": "sha256:f817225448abe40233342cf5d118139c09e2a29fca9626d72b90be9a81e6890c",
+  "executableStatements": [
+    {
+      "kind": "table",
+      "logicalId": "task_execution_native_usage_store_bindings",
+      "sql": "CREATE TABLE \"agent_workflow\".\"task_execution_native_usage_store_bindings\" (\n  \"invocation_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"before_owner_receipt_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_generation\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"task_execution_native_usage_store_bindings_pkey\" PRIMARY KEY (\"invocation_id\")\n)"
+    },
+    {
+      "kind": "constraint",
+      "logicalId": "task_execution_native_usage_store_bindings:fk:task_execution_native_usage_store_bindings_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+      "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_store_bindings\" ADD CONSTRAINT \"task_execution_native_usage_store_bindings_invocat_645ed6f86ac2\" FOREIGN KEY (\"invocation_id\") REFERENCES \"agent_workflow\".\"task_execution_native_usage_preparations\" (\"invocation_id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+    },
+    {
+      "kind": "metadata",
+      "logicalId": "advance-contract-row",
+      "sql": "UPDATE \"agent_workflow_meta\".\"schema_contract\" SET contract_digest = 'sha256:e9073431b301f4759a5130406a6df904c69fe1dfdf4a96be6be82ee62fce4ee2', active_table_count = 211, archive_only_table_count = 6 WHERE singleton = TRUE AND contract_digest = 'sha256:84d3103ed75deab383bbed787f018a9ae0d79fdc7b33ec205075f1cffdb3c2c4' RETURNING contract_digest"
+    }
+  ],
+  "from": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:84d3103ed75deab383bbed787f018a9ae0d79fdc7b33ec205075f1cffdb3c2c4",
+    "planDigest": "sha256:d262c29bf12fe0f6cf866f57858ecc93ca313a5d8857de1f21ba88932cbfcad0"
+  },
+  "id": "0015_rfc371_native_first_store",
+  "indexAdditions": [
+    {
+      "position": 184,
+      "statement": {
+        "kind": "table",
+        "logicalId": "task_execution_native_usage_store_bindings",
+        "sql": "CREATE TABLE \"agent_workflow\".\"task_execution_native_usage_store_bindings\" (\n  \"invocation_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"before_owner_receipt_id\" TEXT COLLATE \"C\" NOT NULL,\n  \"source_generation\" TEXT COLLATE \"C\" NOT NULL,\n  CONSTRAINT \"task_execution_native_usage_store_bindings_pkey\" PRIMARY KEY (\"invocation_id\")\n)"
+      }
+    },
+    {
+      "position": 877,
+      "statement": {
+        "kind": "constraint",
+        "logicalId": "task_execution_native_usage_store_bindings:fk:task_execution_native_usage_store_bindings_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+        "sql": "ALTER TABLE \"agent_workflow\".\"task_execution_native_usage_store_bindings\" ADD CONSTRAINT \"task_execution_native_usage_store_bindings_invocat_645ed6f86ac2\" FOREIGN KEY (\"invocation_id\") REFERENCES \"agent_workflow\".\"task_execution_native_usage_preparations\" (\"invocation_id\") ON UPDATE NO ACTION ON DELETE CASCADE"
+      }
+    }
+  ],
+  "logicalIndexes": [],
+  "logicalTables": [
+    {
+      "position": 180,
+      "table": {
+        "checks": [],
+        "columns": [
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "invocation_id",
+            "nullable": false,
+            "primary": true,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text-identity",
+            "name": "before_owner_receipt_id",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          },
+          {
+            "defaultKind": "none",
+            "defaultValue": null,
+            "enumValues": [],
+            "hasDefault": false,
+            "identity": false,
+            "logicalCodec": "text",
+            "name": "source_generation",
+            "nullable": false,
+            "primary": false,
+            "providerDefault": {
+              "postgresql": null,
+              "sqlite": null
+            },
+            "providerType": {
+              "postgresql": "text",
+              "sqlite": "text"
+            },
+            "uniqueName": null
+          }
+        ],
+        "consumers": {
+          "backgroundRecoveryDiagnostic": "owner-reviewed",
+          "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+          "productionReader": "owner-required",
+          "productionWriter": "owner-required-or-immutable"
+        },
+        "disposition": "KEEP",
+        "foreignKeys": [
+          {
+            "columns": ["invocation_id"],
+            "foreignColumns": ["invocation_id"],
+            "foreignTable": "task_execution_native_usage_preparations",
+            "name": "task_execution_native_usage_store_bindings_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+            "onDelete": "cascade",
+            "onUpdate": "no action"
+          }
+        ],
+        "id": "task_execution_native_usage_store_bindings",
+        "indexes": [],
+        "migrationKey": ["invocation_id"],
+        "ownerContext": "task-execution",
+        "primaryKey": ["invocation_id"],
+        "providerTables": {
+          "postgresql": "task_execution_native_usage_store_bindings",
+          "sqlite": "task_execution_native_usage_store_bindings"
+        },
+        "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+        "retention": {
+          "class": "owner-managed-business",
+          "owner": "task-execution",
+          "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+        },
+        "schemaSymbol": "nativeUsageStoreBindings",
+        "sourceTable": "task_execution_native_usage_store_bindings",
+        "unique": []
+      }
+    }
+  ],
+  "previousEntryDigest": "sha256:db787d8915a3b2fdc10cabd68bbe0d8cfe5d27c21159b3776342df24be6d070e",
+  "sequence": 15,
+  "sqlDigest": "sha256:dcc20098efc0b06eef53c9f48f4b96e2abd75f488741115bd37bb50120ea9fdd",
+  "sqlFile": "0015_rfc371_native_first_store.sql",
+  "sqliteMigration": {
+    "appended": [
+      {
+        "folderMillis": 1791232099052,
+        "hash": "4e9d1c3ba01b4d13a1afc0ecd30e3a00e24228bd81a8d1682fd79467322993d0",
+        "index": 238,
+        "tag": "0239_rfc371_native_first_store"
+      }
+    ],
+    "from": {
+      "chainDigest": "sha256:ce4140bd4da819637910e9397c14218e339a30feb092dc039a48058b61ecbba2",
+      "count": 238,
+      "last": {
+        "folderMillis": 1791146351685,
+        "hash": "dea35a1a9fb36e30658854a03296a54a3e335a1db476c3161606215fc0c51a2f",
+        "index": 237,
+        "tag": "0238_rfc371_native_owner_pages"
+      }
+    },
+    "to": {
+      "chainDigest": "sha256:ae477e94b9b126f97042af49541b40a0ddfdd004e91fd720896b196755bb8f96",
+      "count": 239,
+      "last": {
+        "folderMillis": 1791232099052,
+        "hash": "4e9d1c3ba01b4d13a1afc0ecd30e3a00e24228bd81a8d1682fd79467322993d0",
+        "index": 238,
+        "tag": "0239_rfc371_native_first_store"
+      }
+    }
+  },
+  "to": {
+    "baselineId": "0000_rfc349_baseline_v1",
+    "contractDigest": "sha256:e9073431b301f4759a5130406a6df904c69fe1dfdf4a96be6be82ee62fce4ee2",
+    "planDigest": "sha256:3811ebcefc09dcccded601e2d0c0cfb9d015f13a26b2e78259e5c0c57d077e46"
+  },
+  "version": 2
+}

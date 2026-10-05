@@ -58,7 +58,9 @@ export const ObservationNativeBeforeSpawnAckSchema = z
     contract: z.literal('native-usage-before-spawn-v2'),
     invocationId: key,
     nativeSource: key,
-    sourceGeneration: key,
+    sourceGeneration: key.nullable(),
+    /** Only fresh ENOENT preparation records this actual observation time. */
+    sourceAbsentAt: time.optional(),
     lineage: key,
     epoch: key,
     ownerReceiptId: key,
@@ -72,6 +74,17 @@ export const ObservationNativeBeforeSpawnAckSchema = z
       ctx.addIssue({
         code: 'custom',
         message: 'Original before-spawn receipt changed its resume root',
+      })
+    if (
+      value.sourceGeneration === null
+        ? value.mode !== 'fresh' ||
+          value.sourceAbsentAt === undefined ||
+          value.sourceAbsentAt > value.preparedAt
+        : value.sourceAbsentAt !== undefined
+    )
+      ctx.addIssue({
+        code: 'custom',
+        message: 'Absent native store requires its actual fresh before-spawn observation',
       })
   })
 

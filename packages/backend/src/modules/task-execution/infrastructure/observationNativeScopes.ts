@@ -17,6 +17,7 @@ import { sha256Hex } from '@/util/hash'
 import type { ObservationNativeScopeSource } from '@/modules/run-observability/public/participants'
 import { verifyNativeUsageScope } from './nativeUsageScopeReference'
 import { qualifyOriginalNativeUsage } from './observationNativeQualification'
+import { originalNativeUsageStoreGeneration } from './nativeUsageStoreBinding'
 
 /** No second connection or claims are synthesized; bootstrap supplies the original reader. */
 export function createObservationNativeScopes(
@@ -48,9 +49,11 @@ export function createObservationNativeScopes(
     if (!original || original.taskId !== binding.taskId || original.nodeRunId !== binding.nodeRunId)
       throw new Error('Original native scope changed its accepted Task or attempt')
     const preparation = ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(original.document))
+    const sourceGeneration = await originalNativeUsageStoreGeneration(db, preparation)
     if (
       preparation.nativeSource !== scope.ancestry.identity.nativeSource ||
-      preparation.sourceGeneration !== scope.ancestry.identity.sourceGeneration ||
+      sourceGeneration === null ||
+      sourceGeneration !== scope.ancestry.identity.sourceGeneration ||
       preparation.lineage !== scope.ancestry.identity.lineage ||
       preparation.epoch !== scope.ancestry.identity.epoch
     )

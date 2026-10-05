@@ -1,10 +1,10 @@
 {
-  "activeTableCount": 210,
+  "activeTableCount": 211,
   "archiveOnlyTableCount": 6,
   "contractVersion": 2,
-  "digest": "sha256:84d3103ed75deab383bbed787f018a9ae0d79fdc7b33ec205075f1cffdb3c2c4",
+  "digest": "sha256:e9073431b301f4759a5130406a6df904c69fe1dfdf4a96be6be82ee62fce4ee2",
   "sourceProjection": "sqlite",
-  "sourceTableCount": 216,
+  "sourceTableCount": 217,
   "tables": [
     {
       "checks": [],
@@ -54993,6 +54993,114 @@
       },
       "schemaSymbol": "nativeUsageStepMembers",
       "sourceTable": "task_execution_native_usage_step_members",
+      "unique": []
+    },
+    {
+      "checks": [],
+      "columns": [
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "invocation_id",
+          "nullable": false,
+          "primary": true,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text-identity",
+          "name": "before_owner_receipt_id",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        },
+        {
+          "defaultKind": "none",
+          "defaultValue": null,
+          "enumValues": [],
+          "hasDefault": false,
+          "identity": false,
+          "logicalCodec": "text",
+          "name": "source_generation",
+          "nullable": false,
+          "primary": false,
+          "providerDefault": {
+            "postgresql": null,
+            "sqlite": null
+          },
+          "providerType": {
+            "postgresql": "text",
+            "sqlite": "text"
+          },
+          "uniqueName": null
+        }
+      ],
+      "consumers": {
+        "backgroundRecoveryDiagnostic": "owner-reviewed",
+        "evidence": "RFC-349 keeps this table in the active parity set; removal requires a new exact consumer ledger and approval.",
+        "productionReader": "owner-required",
+        "productionWriter": "owner-required-or-immutable"
+      },
+      "disposition": "KEEP",
+      "foreignKeys": [
+        {
+          "columns": [
+            "invocation_id"
+          ],
+          "foreignColumns": [
+            "invocation_id"
+          ],
+          "foreignTable": "task_execution_native_usage_preparations",
+          "name": "task_execution_native_usage_store_bindings_invocation_id_task_execution_native_usage_preparations_invocation_id_fk",
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        }
+      ],
+      "id": "task_execution_native_usage_store_bindings",
+      "indexes": [],
+      "migrationKey": [
+        "invocation_id"
+      ],
+      "ownerContext": "task-execution",
+      "primaryKey": [
+        "invocation_id"
+      ],
+      "providerTables": {
+        "postgresql": "task_execution_native_usage_store_bindings",
+        "sqlite": "task_execution_native_usage_store_bindings"
+      },
+      "rationale": "The owning bounded context currently requires this table for live, audit, or recovery semantics.",
+      "retention": {
+        "class": "owner-managed-business",
+        "owner": "task-execution",
+        "rule": "Retain as live business or recovery state until the owning bounded context approves a replacement contract."
+      },
+      "schemaSymbol": "nativeUsageStoreBindings",
+      "sourceTable": "task_execution_native_usage_store_bindings",
       "unique": []
     },
     {

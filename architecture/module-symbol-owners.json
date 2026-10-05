@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2244,
+    "backendFiles": 2245,
     "frontendFiles": 654,
     "legacyFiles": 588,
-    "moduleFiles": 1656,
-    "productionFiles": 3066,
+    "moduleFiles": 1657,
+    "productionFiles": 3067,
     "sharedFiles": 168,
-    "symbolsIncludingFileRoots": 26915
+    "symbolsIncludingFileRoots": 26921
   },
   "entries": [
     {
@@ -7255,6 +7255,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "nativeUsageStepMembers",
+      "targetContext": "platform",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/schema.ts",
+      "id": "owner:packages/backend/src/db/schema.ts#nativeUsageStoreBindings",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "nativeUsageStoreBindings",
       "targetContext": "platform",
       "targetLayer": "domain"
     },
@@ -151665,6 +151677,66 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "verifyNativeUsageScope",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#bindOriginalNativeUsageStore",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "bindOriginalNativeUsageStore",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#originalBinding",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "originalBinding",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#originalNativeUsageStoreGeneration",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "originalNativeUsageStoreGeneration",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageStoreBinding.ts#Reader",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "Reader",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -323718,5 +323790,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:f888632c511a6cd2cd5f205280681aca5c71cbc6e68e133f47404c0a57e6d7b9"
+  "sourceDigest": "sha256:0d3560a35017f51a1076bafcace3232e20901b1187a102bf243c396868717198"
 }

@@ -3,6 +3,7 @@ import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import {
   nativeUsagePreparations,
+  nativeUsageStoreBindings,
   nativeUsagePasses,
   nativeUsagePassHeads,
   nativeUsagePassPages,
@@ -69,7 +70,7 @@ const passes = (db: Reader, ids: readonly string[]) =>
     .from(nativeUsagePasses)
     .where(inArray(nativeUsagePasses.invocationId, invocations(db, ids)))
 
-/** All eight original evidence relations, streamed through their real primary keys to EOF. */
+/** All original evidence relations, streamed through their real primary keys to EOF. */
 export const NATIVE_USAGE_ARCHIVE: readonly NativeArchiveTable[] = [
   spec(
     'task_execution_native_usage_preparations',
@@ -84,6 +85,23 @@ export const NATIVE_USAGE_ARCHIVE: readonly NativeArchiveTable[] = [
           ),
         )
         .orderBy(asc(nativeUsagePreparations.invocationId))
+        .limit(PAGE_ROWS)
+        .all(),
+    (row) => [row.invocationId, ''],
+  ),
+  spec(
+    'task_execution_native_usage_store_bindings',
+    (db, ids, after) =>
+      db
+        .select()
+        .from(nativeUsageStoreBindings)
+        .where(
+          and(
+            inArray(nativeUsageStoreBindings.invocationId, invocations(db, ids)),
+            afterKey(nativeUsageStoreBindings.invocationId, after),
+          ),
+        )
+        .orderBy(asc(nativeUsageStoreBindings.invocationId))
         .limit(PAGE_ROWS)
         .all(),
     (row) => [row.invocationId, ''],

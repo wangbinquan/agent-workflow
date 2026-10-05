@@ -30,7 +30,15 @@ import { describe, expect, test } from 'bun:test'
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 
-const ENVELOPE_SRC = readFileSync(join(import.meta.dir, '../src/services/envelope.ts'), 'utf8')
+// RFC-370 moved the complete validation policy and file effects out of the
+// compatibility facade. Keep every original assertion over those actual owners.
+const ENVELOPE_SRC = [
+  '../src/services/envelope.ts',
+  '../src/modules/task-execution/application/portOutputValidation.ts',
+  '../src/modules/task-execution/infrastructure/local/filePortOutputValidation.ts',
+]
+  .map((file) => readFileSync(join(import.meta.dir, file), 'utf8'))
+  .join('\n')
 
 describe('RFC-049 envelope.ts source-level prefix swap guard', () => {
   test('legacy `markdown-file-*` errCode literals are gone', () => {

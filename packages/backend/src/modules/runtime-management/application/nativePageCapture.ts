@@ -24,13 +24,17 @@ export function createNativePageCapture(
   let baselineReady = false
   const read = async (phase: 'baseline' | 'final', rootSessionId: string) => {
     if (!before) throw new Error('Original native before-spawn receipt is unavailable')
-    if ((await input.generation()) !== before.sourceGeneration)
+    const sourceGeneration = await input.generation()
+    if (
+      sourceGeneration === null ||
+      (before.sourceGeneration !== null && sourceGeneration !== before.sourceGeneration)
+    )
       throw new Error('Original native store generation changed')
     const identity: NativeUsagePassIdentity = {
       passId: input.passId(),
       invocationId: input.invocationId,
       nativeSource: before.nativeSource,
-      sourceGeneration: before.sourceGeneration,
+      sourceGeneration,
       rootSessionId,
       lineage: before.lineage,
       epoch: before.epoch,
@@ -56,10 +60,12 @@ export function createNativePageCapture(
     beginDurable() {
       return (begin ??= (async () => {
         const sourceGeneration = await input.generation()
-        if (sourceGeneration === null) throw new Error('Original native store is unavailable')
+        if (sourceGeneration === null && input.resumeSessionId)
+          throw new Error('Original native resume store is unavailable')
         const original = await input.durableOwner.prepare({
           nativeSource: input.nativeSource,
           sourceGeneration,
+          ...(sourceGeneration === null ? { sourceAbsentAt: input.now() } : {}),
           resumeRootSessionId: input.resumeSessionId ?? null,
         })
         before = ObservationNativeBeforeSpawnAckSchema.parse(original)

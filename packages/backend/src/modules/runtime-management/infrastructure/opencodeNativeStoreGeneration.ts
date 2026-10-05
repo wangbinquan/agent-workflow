@@ -5,7 +5,7 @@ import { sha256Hex } from '@/util/hash'
 export async function opencodeNativeStoreGeneration(path: string): Promise<string | null> {
   try {
     const original = await stat(path, { bigint: true })
-    if (!original.isFile()) return null
+    if (!original.isFile()) throw new Error('Original native store is not a regular file')
     return sha256Hex(
       JSON.stringify([
         'opencode-native-store-generation-v2',

@@ -32,6 +32,14 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
       check('native_usage_preparation_state_ck', sql`${t.state} IN ('open','sealed')`),
     ],
   )
+  /** Original owner source identity only, including a store first created after spawn. */
+  const nativeUsageStoreBindings = table('task_execution_native_usage_store_bindings', {
+    invocationId: text('invocation_id')
+      .primaryKey()
+      .references(() => nativeUsagePreparations.invocationId, { onDelete: 'cascade' }),
+    beforeOwnerReceiptId: text('before_owner_receipt_id').notNull(),
+    sourceGeneration: text('source_generation').notNull(),
+  })
   const nativeUsagePasses = table(
     'task_execution_native_usage_passes',
     {
@@ -141,6 +149,7 @@ export function createNativeUsageTables(taskTable: typeof tasks) {
   )
   return {
     nativeUsagePreparations,
+    nativeUsageStoreBindings,
     nativeUsagePasses,
     nativeUsagePassHeads,
     nativeUsagePassPages,

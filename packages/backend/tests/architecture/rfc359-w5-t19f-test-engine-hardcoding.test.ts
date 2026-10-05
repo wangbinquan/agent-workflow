@@ -389,6 +389,8 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-371：外部 OpenCode SQLite 格式与真实 WAL 快照；baseline/membership 同时走双 provider。
   'rfc371-native-baseline-snapshot.test.ts: 1',
   'rfc371-native-child-capture.test.ts: 1',
+  // RFC-371：首次创建／替换的外部 OpenCode SQLite 文件一处构造；原 Task owner/回滚/ACK 用双 provider。
+  'rfc371-native-first-store-provider.test.ts: 1',
   // RFC-371：原 OpenCode 外部文件格式夹具；历史原 owner/ledger/cursor 用双 provider，PG另验poolMax1。
   'rfc371-native-history-provider.test.ts: 1',
   // RFC-371：真实子进程使用的 OpenCode 外部 SQLite，四处建库/改库/替换；Task/账本/恢复走双 provider。

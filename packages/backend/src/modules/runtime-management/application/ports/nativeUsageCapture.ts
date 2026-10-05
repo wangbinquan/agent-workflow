@@ -46,7 +46,8 @@ export interface NativeUsageCapture {
 export interface NativeUsageDurableOwner {
   prepare(input: {
     readonly nativeSource: string
-    readonly sourceGeneration: string
+    readonly sourceGeneration: string | null
+    readonly sourceAbsentAt?: number
     readonly resumeRootSessionId: string | null
   }): Promise<ObservationNativeBeforeSpawnAck>
   passOwner(before: ObservationNativeBeforeSpawnAck): NativeUsagePassOwner
