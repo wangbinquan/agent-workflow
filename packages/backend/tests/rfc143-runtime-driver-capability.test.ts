@@ -25,6 +25,12 @@ import { BUILTIN_RUNTIMES, RUNTIME_PROTOCOLS } from './helpers/runtimeRegistryAp
 const RUNTIME_DRIVER_DIRS = RUNTIME_KINDS.map(
   (kind) => `services/runtime/${kind === 'claude-code' ? 'claudeCode' : kind}/`,
 )
+// RFC-370: these two exact files own the relocated protocol implementations.
+// Neighboring compiler/application/common files remain in the original scan.
+const RUNTIME_DRIVER_MATERIAL_FILES = new Set([
+  'modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts',
+  'modules/runtime-management/infrastructure/local/claudeAgentMaterial.ts',
+])
 import { emptyDeclaredManifest } from '@/services/execution/agentInjection'
 import { assembleOpencodePersonaSpawn } from '../src/services/runtime/opencode/driver'
 import type { AgentSpawnContext } from '../src/services/runtime/types'
@@ -283,6 +289,7 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
           continue
         }
         if (!name.endsWith('.ts')) continue
+        if (RUNTIME_DRIVER_MATERIAL_FILES.has(rp)) continue
         if (rp.startsWith('services/runtime/')) scannedRuntimeCommons.push(rp)
         if (kindDiscriminationAllowlist.has(rp)) continue
         const src = readFileSync(p, 'utf8')
@@ -496,7 +503,13 @@ describe('RFC-317 T19 —— kind 判别豁免表无死条目', () => {
       resolve(import.meta.dir, 'rfc143-runtime-driver-capability.test.ts'),
       'utf8',
     )
-    const declared = [...source.matchAll(/^\s{6}'([^']+\.ts)',$/gm)].map((m) => m[1]!)
+    // Match the original declaration itself. Relocated source-oracle paths
+    // elsewhere in this test are not additional allowlist entries.
+    const declaration = source.match(
+      /const kindDiscriminationAllowlist = new Set\(\[([\s\S]*?)\]\)/,
+    )?.[1]
+    expect(declaration).toBeString()
+    const declared = [...declaration!.matchAll(/^\s{6}'([^']+\.ts)',$/gm)].map((m) => m[1]!)
     expect(declared, '扫描体里的豁免条目与本 describe 的 ALLOWLIST 不一致').toEqual([...ALLOWLIST])
   })
 

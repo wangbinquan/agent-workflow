@@ -1,3 +1,4 @@
+import { compileLegacyNativeAgentMaterial } from './legacyAgentMaterialBinding'
 import { isAbsolute, resolve } from 'node:path'
 import { sha256Hex } from '@/util/hash'
 import { createRuntimeStreamSpanCapture } from '@/modules/runtime-management/public/participants'
@@ -425,6 +426,28 @@ export async function assembleClaudeBusinessSpawn(
 }
 
 /** Native-only compatibility implementation. Neutral material inputs are a separate contract. */
+async function buildClaudeNativeMaterial(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
+  // §7-9 — see the opencode twin: declared render degrades, assembly fails
+  // (incl. the P3-5 system-face caveat noted there).
+  let rendered: RenderedInjectionV1
+  try {
+    rendered = renderClaudeInjection(ctx.injection)
+  } catch (err) {
+    ctx.log.warn('startup-declaration-failed', {
+      nodeRunId: ctx.nodeRunId,
+      err: err instanceof Error ? err.message : String(err),
+    })
+    rendered = { mcpEntries: null, declared: emptyDeclaredManifest() }
+  }
+  const head = ctx.binaryOverride !== undefined ? { runtimeCmd: [...ctx.binaryOverride] } : {}
+  if (ctx.taskMounts === undefined) {
+    const plan = await assembleClaudePersonaSpawn(toSystemCtx(ctx, rendered, head))
+    return { ...plan, declared: rendered.declared }
+  }
+  const plan = await assembleClaudeBusinessSpawn(toBusinessCtx(ctx, head))
+  return { ...plan, declared: rendered.declared }
+}
+
 export const claudeLocalAgentMaterial = {
   prepareSpanCapture: ({ env, invocationId }) => {
     const root =
@@ -473,24 +496,20 @@ export const claudeLocalAgentMaterial = {
   // RFC-282 B1a — unified assembly facade (see the opencode twin for the
   // contract; parity suite rfc282-b1a is live while both paths exist).
   async buildSpawn(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
-    // §7-9 — see the opencode twin: declared render degrades, assembly fails
-    // (incl. the P3-5 system-face caveat noted there).
-    let rendered: RenderedInjectionV1
-    try {
-      rendered = renderClaudeInjection(ctx.injection)
-    } catch (err) {
-      ctx.log.warn('startup-declaration-failed', {
-        nodeRunId: ctx.nodeRunId,
-        err: err instanceof Error ? err.message : String(err),
-      })
-      rendered = { mcpEntries: null, declared: emptyDeclaredManifest() }
-    }
-    const head = ctx.binaryOverride !== undefined ? { runtimeCmd: [...ctx.binaryOverride] } : {}
-    if (ctx.taskMounts === undefined) {
-      const plan = await assembleClaudePersonaSpawn(toSystemCtx(ctx, rendered, head))
-      return { ...plan, declared: rendered.declared }
-    }
-    const plan = await assembleClaudeBusinessSpawn(toBusinessCtx(ctx, head))
-    return { ...plan, declared: rendered.declared }
+    return compileLegacyNativeAgentMaterial({
+      protocol: 'claude-code',
+      context: ctx,
+      buildNative: buildClaudeNativeMaterial,
+      evidenceCapabilities: {
+        usageNormalizer: false,
+        nativeUsageCapture: false,
+        spanCapture: true,
+        sessionCapture: true,
+        inventory: false,
+        finalEvents: false,
+        liveCapture: false,
+        sessionSinkCapture: false,
+      },
+    })
   },
 } satisfies Required<Pick<RuntimeDriver, 'prepareSpanCapture' | 'captureSessions' | 'buildSpawn'>>

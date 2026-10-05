@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1874,
+    "entries": 1875,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -22729,6 +22729,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts#createLocalAgentMaterialCompiler",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts#createLocalAgentMaterialCompiler",
+      "symbol": "createLocalAgentMaterialCompiler",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/runtime-management/infrastructure/local/fileRuntimeLegacyConfiguration.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/fileRuntimeLegacyConfiguration.ts#createFileRuntimeLegacyConfiguration",
@@ -44820,7 +44845,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:838ede05504198c6789afb9e8069fae751a4326a4d79ceaf7c9430afd03efd54",
+  "sourceDigest": "sha256:76d7d0051a4f025db4c8149c7bc6370d26231d1aac7c74035bd8659b8a88a908",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

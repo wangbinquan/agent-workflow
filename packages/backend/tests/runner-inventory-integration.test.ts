@@ -361,7 +361,16 @@ describe('runner.ts source: dump plugin wiring lock', () => {
     // 里长出了 `startupObservation === 'inventory-file'` 这种判据。新名只陈述业务
     // 事实，据此做什么由各 driver 自己决定。grep 锁跟着改名走。
     const driverSrc = readFileSync(
-      resolve(import.meta.dir, '..', 'src', 'services', 'runtime', 'opencode', 'driver.ts'),
+      resolve(
+        import.meta.dir,
+        '..',
+        'src',
+        'modules',
+        'runtime-management',
+        'infrastructure',
+        'local',
+        'opencodeAgentMaterial.ts',
+      ),
       'utf-8',
     )
     // materializeInventoryPlugin replaced the older awInventoryDumpSourcePath

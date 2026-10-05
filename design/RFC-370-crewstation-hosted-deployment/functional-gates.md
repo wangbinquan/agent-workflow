@@ -805,3 +805,12 @@ NATIVE-AGENT-MATERIAL11 有限功能 PASS，候选指纹 `95a8580c1f73a9baec8fac
 Windows原workflow仅对称追加12真实watch路径及原golden／import boundary／single-implementation三个suite；保留所有既有step、预算、runner、Bun版本和SQLite配置。本批source已有限PASS；matching metadata／workflow及新exact-SHA CI另留证。原私有import-proof R1把inline exported declarations误当成forwarded public exports的失败完整保留；R2按原classifier的inline projection与实际AST re-export分别核对，未改生产或原生成规则。
 
 仍未关闭完整AgentMaterialIntent、execution/evidence participant、三真实入口／bootstrap、A5/A-G、CS adapters或M0～M4。当前没有AW-in-CS部署。本机未跑AW test/typecheck/build/service；新hosted实际行为仍待发布SHA验收。
+
+
+## 2026-10-05 AGENT-MATERIAL-COMPILER10-R4
+
+SOURCE10-R4 独立有限功能 PASS：10 owned／18 controls／12 evidence，共40项首末字节稳定，FP `77adb25e531e2dcc4e34db8971d1ab461d3ca06b8b39c5fa05304be8fc255fe3`。R1 三个 P2、R2 两个 P2、R3 symbol iterator P2／FAIL 保留。已选中立 compiler 与原 native builder 的兼容路径分别验收；原声明 catch、所有旧 native 定义与130 ordered expect、未知 ref／错误 identity／lazy receiver保持。实际双 runtime 回归包含完整技能附件和原persona降级／business致命分流。详见 [材料 compiler 记录](./agent-material-compiler.md)。
+
+原 scoped census 仅一次，6441非自有源取 c83bf750 committed blobs，其他 WIP排除并保留。digest `sha256:76d7d0051a4f025db4c8149c7bc6370d26231d1aac7c74035bd8659b8a88a908`；原13产物和129完整有序库存／why及原counter对拍。entry+1／imports+10／exceptions+10／owners+20四项实际增长分别具名登记，正常后继退役；public -2，四个 native compatibility 旧边补入304债。原4规则、40 SPI／69 targets／空 implementation SCC 保持，生成不含并行未来源码。
+
+Windows SOURCE10 内的既有 proof 已验证 push／PR 对称新增六个真实路径与三项实际 suite，保留原全部步骤和预算；metadata 不重新修改 YAML。有限 matching metadata／发布与新 exact-SHA CI各自留证，原 c83主CI failure／Windows cancelled不改为绿。本机没有AW tests／typecheck／build／service；SOURCE PASS与纯静态 proof不替代hosted行为。完整H4/H5、A5/A-G、CS adapters与M0～M4仍开放。前面共享全文逐字保持。

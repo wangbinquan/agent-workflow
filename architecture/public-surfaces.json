@@ -3,10 +3,10 @@
     "consumers": 1154,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1353,
+    "methods": 1351,
     "opaqueTypeRefs": 14,
-    "recursiveFields": 25192,
-    "symbols": 1150
+    "recursiveFields": 25173,
+    "symbols": 1148
   },
   "entries": [
     {
@@ -130877,177 +130877,6 @@
         },
         {
           "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.path.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.path.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.resumeSessionId",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
-      "id": "public:runtime-management:participants:createOpencodeNativeSpanCapture",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:83dd0a604bef1853002b41be2f6b18aab5787bff541808f0b1ce7409c4165080"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:e51322cfd46eb3309c57dedde83f7e1557609ec6063a2009c4e3499f6f71c17e",
-      "status": "target-context-current-surface",
-      "symbol": "createOpencodeNativeSpanCapture",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [
-        "z.infer"
-      ],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "runtime-management",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.agentId.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.agentId.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.invocationId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.nextRevision.$return",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.nodeRunId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.path.$variant:0",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.path.$variant:1",
-          "type": "null"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.resumeSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.taskId",
-          "type": "string"
-        }
-      ],
-      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
-      "id": "public:runtime-management:participants:createOpencodeNativeUsageCapture",
-      "members": [],
-      "methods": [
-        {
-          "consumerEdgeIds": [],
-          "name": "$call",
-          "signatureDigest": "sha256:3c75a13a8d5a871dfaf293ebb8d8b4029ef6f50e2e65fb9544a1782bb954a4a2"
-        }
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
-      "productionConsumers": [],
-      "publicTypeConsumerIds": [],
-      "removeAfterWave": null,
-      "serialization": "ephemeral",
-      "signatureDigest": "sha256:1d2246dfcb7e9a5c01e2ba9f68f32da3f505e57d5611d16ceae1aff865664d18",
-      "status": "target-context-current-surface",
-      "symbol": "createOpencodeNativeUsageCapture",
-      "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
-      "version": 1
-    },
-    {
-      "authority": "context-bound",
-      "budget": {
-        "maxMethods": 5,
-        "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
-        "maxUnionVariants": 12
-      },
-      "consumerEdgeIds": [],
-      "context": "runtime-management",
-      "dataClass": "metadata",
-      "direction": "offered",
-      "entrypoint": "participants",
-      "fields": [
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.accepted",
-          "type": "z.infer<typeof AcceptedObservationInvocationSchema>"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.limit",
-          "type": "number"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.rootSessionId",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lookupOwners.$parameter:input.sourceNamespace",
-          "type": "string"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lookupOwners.$return.complete",
-          "type": "boolean"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lookupOwners.$return.issues",
-          "type": "readonly string[]"
-        },
-        {
-          "consumerEdgeIds": [],
-          "fieldPath": "$call.$parameter:input.lookupOwners.$return.owners",
-          "type": "readonly ObservationSpanOwnerProof[]"
-        },
-        {
-          "consumerEdgeIds": [],
           "fieldPath": "$call.$parameter:input.resumeSessionId",
           "type": "string"
         },
@@ -131697,7 +131526,6 @@
         }
       ],
       "publicTypeConsumerIds": [
-        "public:runtime-management:participants:createOpencodeNativeSpanCapture",
         "public:runtime-management:participants:createRuntimeStreamSpanCapture"
       ],
       "removeAfterWave": null,
@@ -131989,9 +131817,7 @@
           "ownerEntryId": "owner:packages/backend/src/services/runtime/types.ts#$file"
         }
       ],
-      "publicTypeConsumerIds": [
-        "public:runtime-management:participants:createOpencodeNativeUsageCapture"
-      ],
+      "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
       "signatureDigest": "sha256:965d96f2efd521d3aa94981d5c445e7bc264e0ba29269a7737373fb217d175ce",
@@ -197213,7 +197039,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:838ede05504198c6789afb9e8069fae751a4326a4d79ceaf7c9430afd03efd54",
+  "sourceDigest": "sha256:76d7d0051a4f025db4c8149c7bc6370d26231d1aac7c74035bd8659b8a88a908",
   "targetContexts": [
     "collaboration",
     "development-automation",

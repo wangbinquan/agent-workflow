@@ -1,11 +1,10 @@
+import { compileLegacyNativeAgentMaterial } from './legacyAgentMaterialBinding'
 import {
   createOpencodeUsageNormalizer,
   opencodeUsageDatabasePath,
 } from '@/services/runtime/opencode/nativeUsage'
-import {
-  createOpencodeNativeUsageCapture,
-  createOpencodeNativeSpanCapture,
-} from '@/modules/runtime-management/public/participants'
+import { createOpencodeNativeUsageCapture } from '../../composition/nativeUsageCapture'
+import { createOpencodeNativeSpanCapture } from '../../composition/nativeSpanCapture'
 import { sha256Hex } from '@/util/hash'
 import { normalizeOpencodeSpans } from '@/services/runtime/opencode/spanFacts'
 // RFC-111 PR-A — the opencode RuntimeDriver.
@@ -318,6 +317,34 @@ export async function assembleOpencodeBusinessSpawn(
 }
 
 /** Native-only compatibility implementation. Neutral material inputs are a separate contract. */
+async function buildOpencodeNativeMaterial(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
+  // §7-9 — the declared render keeps its own degrade path: a (defensive-
+  // only) render failure downgrades the manifest to empty + warn instead of
+  // failing the node; the assembly below re-renders internally and remains
+  // the spawn-failing path, exactly as before the unification.
+  // ⚠️ 实现门 P3-5 — on the SYSTEM face `rendered` is also the actual MCP
+  // injection (toSystemCtx): if a future render gains a throwing validation,
+  // this degrade would turn the playground's fail-closed into a silent
+  // no-MCP run. Add a system-face carve-out here before adding such a throw.
+  let rendered: RenderedInjectionV1
+  try {
+    rendered = renderOpencodeInjection(ctx.injection)
+  } catch (err) {
+    ctx.log.warn('startup-declaration-failed', {
+      nodeRunId: ctx.nodeRunId,
+      err: err instanceof Error ? err.message : String(err),
+    })
+    rendered = { mcpEntries: null, declared: emptyDeclaredManifest() }
+  }
+  const head = ctx.binaryOverride !== undefined ? { opencodeCmd: [...ctx.binaryOverride] } : {}
+  if (ctx.taskMounts === undefined) {
+    const plan = await assembleOpencodePersonaSpawn(toSystemCtx(ctx, rendered, head))
+    return { ...plan, declared: rendered.declared }
+  }
+  const plan = await assembleOpencodeBusinessSpawn(toBusinessCtx(ctx, head))
+  return { ...plan, declared: rendered.declared }
+}
+
 export const opencodeLocalAgentMaterial = {
   prepareSpanCapture: ({ env }) => {
     const path = opencodeUsageDatabasePath(env)
@@ -356,31 +383,21 @@ export const opencodeLocalAgentMaterial = {
   // Byte parity with the legacy paths is the contract; the parity suite
   // (rfc282-b1a) is live while both paths exist.
   async buildSpawn(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
-    // §7-9 — the declared render keeps its own degrade path: a (defensive-
-    // only) render failure downgrades the manifest to empty + warn instead of
-    // failing the node; the assembly below re-renders internally and remains
-    // the spawn-failing path, exactly as before the unification.
-    // ⚠️ 实现门 P3-5 — on the SYSTEM face `rendered` is also the actual MCP
-    // injection (toSystemCtx): if a future render gains a throwing validation,
-    // this degrade would turn the playground's fail-closed into a silent
-    // no-MCP run. Add a system-face carve-out here before adding such a throw.
-    let rendered: RenderedInjectionV1
-    try {
-      rendered = renderOpencodeInjection(ctx.injection)
-    } catch (err) {
-      ctx.log.warn('startup-declaration-failed', {
-        nodeRunId: ctx.nodeRunId,
-        err: err instanceof Error ? err.message : String(err),
-      })
-      rendered = { mcpEntries: null, declared: emptyDeclaredManifest() }
-    }
-    const head = ctx.binaryOverride !== undefined ? { opencodeCmd: [...ctx.binaryOverride] } : {}
-    if (ctx.taskMounts === undefined) {
-      const plan = await assembleOpencodePersonaSpawn(toSystemCtx(ctx, rendered, head))
-      return { ...plan, declared: rendered.declared }
-    }
-    const plan = await assembleOpencodeBusinessSpawn(toBusinessCtx(ctx, head))
-    return { ...plan, declared: rendered.declared }
+    return compileLegacyNativeAgentMaterial({
+      protocol: 'opencode',
+      context: ctx,
+      buildNative: buildOpencodeNativeMaterial,
+      evidenceCapabilities: {
+        usageNormalizer: true,
+        nativeUsageCapture: true,
+        spanCapture: true,
+        sessionCapture: true,
+        inventory: true,
+        finalEvents: true,
+        liveCapture: true,
+        sessionSinkCapture: true,
+      },
+    })
   },
 
   // —— optional capabilities (opencode implements; claude omits) ——

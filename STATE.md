@@ -10052,3 +10052,12 @@ H4/H5 设计 R3、NATIVE-PROCESS12-R2 与 WINDOWS-COVERAGE1 已分别独立有�
 
 
 - 2026-10-05 RFC-370 双 runtime 本机材料／取证有限候选：NATIVE-AGENT-MATERIAL11 独立 PASS 95a8580c1f73a9baec8fac675503d2f6dafc8099d1a4ab823bdb9baca316b8e3；7个完整helper与12个physical member移入RM-owned两local实现，原协议／purpose成员、registry singleton与全部477原expect AST保持。原scoped生成一次，排除并行WIP；digest sha256:0395d9f636a678230c6e3835f9fce854ec7c943e9b9ee522be196272374d3d05。原规则记录mutation1873→1874、owners26651→26655，79个原依赖新可见＋8条显式兼容入口替代3条旧capture入站（observed6138→6222／exceptions5439→5523）；原依赖名和目标均对拍，公开合同无新增，遗留helper链接仍有记录。Windows push/PR对称补12真实路径、原suite补3项既有golden／boundary回归，原预算／runner／版本／SQLite与步骤保留。完整neutral materials/execution/evidence、三入口真根、脚本／purpose／authority恢复和A-G仍开放；没有CS adapter或部署。旧126e788 CI/Windows取消记录保留，含本批projection/coverage且十文件原字节一致的1f0a2dc exact CI/Windows继续观察。本机仅目标格式／lint、纯AST/JSON/字节、原静态生成，无AW tests/typecheck/build/service。
+
+
+## 2026-10-05 RFC-370 中立材料 compiler 与 native 兼容接线
+
+SOURCE10-R4 独立有限功能 PASS，指纹 `77adb25e531e2dcc4e34db8971d1ab461d3ca06b8b39c5fa05304be8fc255fe3`；首末40项字节稳定。材料应用端口保存完整 AW 逻辑声明和内容版本引用，本机 compiler 只消费选定的内容 binding。旧 native API 保持原 builder／persona catch／business fatal 边界，string／symbol accessor 不提前执行，已知 locator 单次读取与 lazy reader receiver／时机保持。R1 三项、R2 两项、R3 一项 P2／FAIL 原回执均保留；实际双 runtime 回归加入原型声明容器、一次有效 locator、空 MCP iterator getter 与完整技能附件。详见 design/RFC-370-crewstation-hosted-deployment/agent-material-compiler.md。
+
+官方原规则对 c83bf750 加冻结 SOURCE10 一次生成13产物；6441非自有源码读 committed blobs，排除并保留其他在制品。sourceDigest `sha256:76d7d0051a4f025db4c8149c7bc6370d26231d1aac7c74035bd8659b8a88a908`。原完整 validator、129有序库存／why、40SPI／69targets／空implementation SCC保持；四个实际已有 native compatibility 边具名补入304债务，不放宽分类器。实际 entry1874→1875／imports6255→6265／exceptions5551→5561／owners26690→26710四项 matching 增长后正常退役；移除两个无消费者的 public capture factory，public1150→1148，native 实现保持。
+
+本次修复旧扫描位置、inventory oracle、四个缺登记边和 Windows 对称六 watch／三个实际 suite。原 c83 主 CI37244977913为 failure（39 success／9 failure／2 cancelled），Windows37244977844为 cancelled；其 full／WebKit／visual 成功仅为各自证据，不替代全仓 verdict。新确切SHA hosted CI另验收；不提交其他会话的类型／归档 WIP。仅目标 format／lint、纯 AST／JSON／字节和原静态投影，无AW本机tests／typecheck／build／service。当前仍阶段A，完整执行／取证、全部真实 roots、A6／A7／A8及A-G继续；CS独立adapters、M0首次实际部署与M1～M4尚未开始，本批不关闭RFC。前面共享正文逐字保持。

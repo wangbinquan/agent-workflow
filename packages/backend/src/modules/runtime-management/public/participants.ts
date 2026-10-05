@@ -115,11 +115,7 @@ export interface RuntimeSelectionParticipantInTx {
     input: NodeRunRuntimeSelection,
   ): Promise<FrozenRuntimeRef>
 }
-export { createOpencodeNativeUsageCapture } from '../composition/nativeUsageCapture'
-export {
-  createOpencodeNativeSpanCapture,
-  createRuntimeStreamSpanCapture,
-} from '../composition/nativeSpanCapture'
+export { createRuntimeStreamSpanCapture } from '../composition/nativeSpanCapture'
 export type {
   NativeSpan,
   NativeSpanCapture,
