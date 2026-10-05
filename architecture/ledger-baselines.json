@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:1a38238408f7bce0be47440130f4f71a79934492f80acff9185cb735ffcffd00",
+    "sourceDigest": "sha256:5cc7f81577140480e3f820cb8eeba7651545241585391cadd03ef88f59e494b8",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -821,10 +821,10 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1888,
+      "baseline": 1893,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
-        "why": "RFC-371 original Task native invocation lifecycle, source ad4467631; actual original official census 1885 -> 1888. SOURCE v2 and additive-export compatibility finite PASS. Preserve original 129 inventories/why, classifiers, existing debts, targets, SPI, SCC and assertions; the next ordinary matching receipt retires this one-commit declaration."
+        "why": "RFC-370 smoke common core SOURCE9-DOC1-R2: actual original counter 1888 -> 1893 for rfc294-mutation-entrypoints. Reuse the one valid original ad446763 census; 5d016e74 has no production source delta. Preserve the complete old smoke behavior, native contracts, all concurrent committed metadata, 129 ordered inventories/why, classifiers, SPI/targets/SCC and surviving debt. Four preceding RFC-371 matching permits retire in this ordinary successor. Full true roots, A-G and CS deployment remain open. Retire this new one-commit permit in the next ordinary successor."
       }
     },
     {
@@ -859,10 +859,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6442,
+      "baseline": 6451,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-371 original Task native invocation lifecycle, source ad4467631; actual original official census 6434 -> 6442. SOURCE v2 and additive-export compatibility finite PASS. Preserve original 129 inventories/why, classifiers, existing debts, targets, SPI, SCC and assertions; the next ordinary matching receipt retires this one-commit declaration."
+        "why": "RFC-370 smoke common core SOURCE9-DOC1-R2: actual original counter 6442 -> 6451 for rfc294-cross-context-observed-imports. Reuse the one valid original ad446763 census; 5d016e74 has no production source delta. Preserve the complete old smoke behavior, native contracts, all concurrent committed metadata, 129 ordered inventories/why, classifiers, SPI/targets/SCC and surviving debt. Four preceding RFC-371 matching permits retire in this ordinary successor. Full true roots, A-G and CS deployment remain open. Retire this new one-commit permit in the next ordinary successor."
       }
     },
     {
@@ -883,10 +883,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5696,
+      "baseline": 5702,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-371 original Task native invocation lifecycle, source ad4467631; actual original official census 5691 -> 5696. SOURCE v2 and additive-export compatibility finite PASS. Preserve original 129 inventories/why, classifiers, existing debts, targets, SPI, SCC and assertions; the next ordinary matching receipt retires this one-commit declaration."
+        "why": "RFC-370 smoke common core SOURCE9-DOC1-R2: actual original counter 5696 -> 5702 for rfc294-architecture-exceptions. Reuse the one valid original ad446763 census; 5d016e74 has no production source delta. Preserve the complete old smoke behavior, native contracts, all concurrent committed metadata, 129 ordered inventories/why, classifiers, SPI/targets/SCC and surviving debt. Four preceding RFC-371 matching permits retire in this ordinary successor. Full true roots, A-G and CS deployment remain open. Retire this new one-commit permit in the next ordinary successor."
       }
     },
     {
@@ -921,10 +921,10 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26866,
+      "baseline": 26878,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-371 original Task native invocation lifecycle, source ad4467631; actual original official census 26855 -> 26866. SOURCE v2 and additive-export compatibility finite PASS. Preserve original 129 inventories/why, classifiers, existing debts, targets, SPI, SCC and assertions; the next ordinary matching receipt retires this one-commit declaration."
+        "why": "RFC-370 smoke common core SOURCE9-DOC1-R2: actual original counter 26866 -> 26878 for rfc294-module-symbol-owners. Reuse the one valid original ad446763 census; 5d016e74 has no production source delta. Preserve the complete old smoke behavior, native contracts, all concurrent committed metadata, 129 ordered inventories/why, classifiers, SPI/targets/SCC and surviving debt. Four preceding RFC-371 matching permits retire in this ordinary successor. Full true roots, A-G and CS deployment remain open. Retire this new one-commit permit in the next ordinary successor."
       }
     }
   ],
@@ -932,8 +932,8 @@
   "schemaVersion": 1,
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ad44676318f1e5835d1ffdb2da3ea751126b65e9",
-    "contentDigest": "sha256:ef39d9e1d7f82fcbb7b7e5b4ea6aabf91b9d9c9d6780ba791e238525242a073b",
+    "currentSnapshotSha": "5d016e74288533ca15016b43443fd1fadea5e58c",
+    "contentDigest": "sha256:bc6727652876ab3a00b5836b5b2972a2bf50a69c4e1b217ada24fcaf35339472",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

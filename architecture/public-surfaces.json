@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "consumers": 1191,
+    "consumers": 1194,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
     "methods": 1499,
@@ -134233,7 +134233,8 @@
       },
       "consumerEdgeIds": [
         "import:5def1e5186b344765004",
-        "import:5e0775217682517ba6b0"
+        "import:5e0775217682517ba6b0",
+        "import:600a8a2e72f85a1ce99d"
       ],
       "context": "runtime-management",
       "dataClass": "metadata",
@@ -134256,7 +134257,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:600a8a2e72f85a1ce99d"
+          ],
           "fieldPath": "extraArgs",
           "type": "readonly string[]"
         },
@@ -134328,7 +134331,9 @@
           "type": "null"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:600a8a2e72f85a1ce99d"
+          ],
           "fieldPath": "injection.profile.isSandbox",
           "type": "boolean"
         },
@@ -134475,7 +134480,9 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:600a8a2e72f85a1ce99d"
+          ],
           "fieldPath": "prompt",
           "type": "string"
         },
@@ -134671,6 +134678,12 @@
           "edgeId": "import:5e0775217682517ba6b0",
           "file": "packages/backend/src/modules/task-execution/application/ports/agentInvocationPreparation.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/agentInvocationPreparation.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:600a8a2e72f85a1ce99d",
+          "file": "packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -134698,6 +134711,7 @@
       },
       "consumerEdgeIds": [
         "import:02e6c2248e8228903e0f",
+        "import:2096ae35028f45b4528d",
         "import:70ad56e3786b4ac9c979",
         "import:a9f5b601e21f2008ea96",
         "import:aa9ed96dda00a1c183e4",
@@ -134839,6 +134853,12 @@
           "edgeId": "import:02e6c2248e8228903e0f",
           "file": "packages/backend/src/modules/task-execution/application/ports/agentInvocation.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/agentInvocation.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:2096ae35028f45b4528d",
+          "file": "packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#$file"
         },
         {
           "context": "task-execution",
@@ -142250,6 +142270,7 @@
       },
       "consumerEdgeIds": [
         "import:19ddf6478b7589118284",
+        "import:6c18f52e82a79a51acd6",
         "import:a2b50384b7bb21ab2616",
         "import:a3ea8a05247a8c94cfc7"
       ],
@@ -142280,6 +142301,12 @@
           "edgeId": "import:19ddf6478b7589118284",
           "file": "packages/backend/src/server.ts",
           "ownerEntryId": "owner:packages/backend/src/server.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:6c18f52e82a79a51acd6",
+          "file": "packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#$file"
         },
         {
           "context": "memory",
@@ -205193,7 +205220,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1a38238408f7bce0be47440130f4f71a79934492f80acff9185cb735ffcffd00",
+  "sourceDigest": "sha256:5cc7f81577140480e3f820cb8eeba7651545241585391cadd03ef88f59e494b8",
   "targetContexts": [
     "collaboration",
     "development-automation",

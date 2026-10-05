@@ -135,7 +135,7 @@ describe('spawn catches route through explainSpawnEnoent (source-level wiring lo
     // managedProcess core owns the ENOENT translation; the smoke result must
     // still carry it (spawnError → detail), so lock both halves of the wiring.
     expect(src('platform/execution/local/managedProcess.ts')).toContain('explainSpawnEnoent(')
-    expect(src('services/runtimeSmoke.ts')).toContain('run.spawnError')
+    expect(src('modules/task-execution/application/runtimeSmoke.ts')).toContain('run.spawnError')
   })
 
   test('systemAgentRun.ts surfaces the executor-translated system-spawn ENOENT', () => {

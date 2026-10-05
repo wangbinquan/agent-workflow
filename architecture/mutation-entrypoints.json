@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1888,
+    "entries": 1893,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -27465,6 +27465,81 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeCompiledInvocation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeCompiledInvocation",
+      "symbol": "RuntimeSmokeCompiledInvocation",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeCoreInput",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeCoreInput",
+      "symbol": "RuntimeSmokeCoreInput",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeCorePolicy",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#RuntimeSmokeCorePolicy",
+      "symbol": "RuntimeSmokeCorePolicy",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/task-execution/application/ports/taskArchiveMaintenanceCommand.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/application/ports/taskArchiveMaintenanceCommand.ts#ArchivedTaskTreeReceipt",
@@ -27572,6 +27647,29 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/processEffectObserver.ts#createProcessEffectAttemptObserver",
       "symbol": "createProcessEffectAttemptObserver",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/runtimeSmoke.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/runtimeSmoke.ts#runRuntimeSmokeCore",
+      "missingControls": [
+        "audit",
+        "authority",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/runtimeSmoke.ts#runRuntimeSmokeCore",
+      "symbol": "runRuntimeSmokeCore",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -28836,6 +28934,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/providerRuntime.ts#createTaskArchiveMaintenanceCommand",
       "symbol": "createTaskArchiveMaintenanceCommand",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/runtimeSmoke.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/runtimeSmoke.ts#runPreparedRuntimeSmoke",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/runtimeSmoke.ts#runPreparedRuntimeSmoke",
+      "symbol": "runPreparedRuntimeSmoke",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -45159,7 +45282,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1a38238408f7bce0be47440130f4f71a79934492f80acff9185cb735ffcffd00",
+  "sourceDigest": "sha256:5cc7f81577140480e3f820cb8eeba7651545241585391cadd03ef88f59e494b8",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

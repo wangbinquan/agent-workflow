@@ -25,6 +25,7 @@ import {
 import type { RuntimeProfile } from '../src/modules/runtime-management/public/types'
 import { emptyDeclaredManifest, type RuntimePlugin } from '../src/services/execution/agentInjection'
 import { getRuntimeDriver } from '../src/services/runtime'
+import { selectLocalAgentMaterialDefinition } from '../src/modules/runtime-management/infrastructure/local/localAgentMaterialDefinition'
 import type {
   AgentSpawnContext,
   AgentSpawnPlan,
@@ -641,11 +642,19 @@ describe('RFC-370 selected material compiler', () => {
           evidenceCapabilities: capabilities,
           buildNative: (value) => driver.buildSpawn(value),
         })
+        const definition = selectLocalAgentMaterialDefinition(kind)
+        expect(definition.protocol.kind).toBe(kind)
+        expect(definition.evidenceHooks).toBe(driver)
+        const rootSelected = definition.createCompiler(bound.contents, bound.fixture)
         const preparations = [
           () => driver.buildSpawn(original),
           async () => {
             const prepared = await selected.compiler.compile(bound.intent)
             return selected.nativePlan(prepared.materialRef)
+          },
+          async () => {
+            const prepared = await rootSelected.compiler.compile(bound.intent)
+            return rootSelected.nativePlan(prepared.materialRef)
           },
         ]
         for (const prepare of preparations) {
@@ -874,6 +883,20 @@ describe('RFC-370 selected material compiler', () => {
       } finally {
         rmSync(root, { recursive: true, force: true })
       }
+    })
+  }
+})
+
+// RFC-370: native supplier lookup keeps the original unknown-kind error before
+// opening any content or execution scope. Both real native bodies run above.
+describe('RFC-370 native material supplier selection', () => {
+  for (const kind of ['unregistered', '__proto__', '']) {
+    test(`unknown native material kind ${JSON.stringify(kind)} retains its original error`, () => {
+      expect(() =>
+        selectLocalAgentMaterialDefinition(
+          kind as Parameters<typeof selectLocalAgentMaterialDefinition>[0],
+        ),
+      ).toThrow(`unknown runtime kind '${String(kind)}' — no registered driver (RFC-282 决策 13)`)
     })
   }
 })

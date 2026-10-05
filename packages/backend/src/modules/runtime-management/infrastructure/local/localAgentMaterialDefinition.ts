@@ -24,16 +24,23 @@ export interface LocalAgentMaterialDefinition {
   ): ReturnType<typeof createLocalAgentMaterialCompiler>
 }
 
+// The native root owns the complete protocol-to-material pairing.
+const nativeMaterialBuilders: ReadonlyMap<RuntimeKind, typeof buildOpencodeNativeMaterial> =
+  new Map<RuntimeKind, typeof buildOpencodeNativeMaterial>([
+    ['opencode', buildOpencodeNativeMaterial],
+    ['claude-code', buildClaudeNativeMaterial],
+  ])
+
 export function selectLocalAgentMaterialDefinition(
   kind: RuntimeKind,
 ): LocalAgentMaterialDefinition {
-  if (kind !== 'opencode' && kind !== 'claude-code') {
+  const buildNative = nativeMaterialBuilders.get(kind)
+  if (buildNative === undefined) {
     throw new Error(
       `unknown runtime kind '${String(kind)}' — no registered driver (RFC-282 决策 13)`,
     )
   }
   const driver = getRuntimeDriver(kind)
-  const buildNative = kind === 'opencode' ? buildOpencodeNativeMaterial : buildClaudeNativeMaterial
   return {
     protocol: bindNativeAgentProtocol(driver),
     evidenceHooks: driver,

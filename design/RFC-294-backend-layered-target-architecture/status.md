@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:1a38238408f7bce0be47440130f4f71a79934492f80acff9185cb735ffcffd00`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:5cc7f81577140480e3f820cb8eeba7651545241585391cadd03ef88f59e494b8`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2230 |
+| backend production TS 文件 | 2233 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1642 / 18 |
+| `modules/**` 文件 / 非空 context | 1645 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 361 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 293 / 37 |
+| RFC-317 boundary census（inbound / outbound） | 295 / 37 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5696 |
+| `architectureExceptions` | 5702 |
 | `backgroundJobs` | 361 |
-| `crossContextImports` | 6442 |
+| `crossContextImports` | 6451 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 26866 |
-| `mutationEntrypoints` | 1888 |
+| `moduleSymbolOwners` | 26878 |
+| `mutationEntrypoints` | 1893 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1163 |
 | `transactionExternalEffects` | 267 |
@@ -49,9 +49,9 @@
 | --- | --- |
 | task-execution / infrastructure | 141 |
 | resource-catalog / infrastructure | 129 |
-| task-execution / application | 124 |
+| task-execution / application | 126 |
 | resource-catalog / application | 77 |
-| task-execution / composition | 74 |
+| task-execution / composition | 75 |
 | development-automation / application | 61 |
 | collaboration / infrastructure | 47 |
 | development-automation / infrastructure | 44 |
@@ -208,10 +208,10 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3672 |
-| legacy-inbound | 1834 |
+| legacy-outbound | 3675 |
+| legacy-inbound | 1837 |
 | infrastructure-external | 315 |
-| offered-consumption | 287 |
+| offered-consumption | 290 |
 | temporary-internal-debt | 95 |
 | off-dag-offered | 83 |
 | authority-type-only | 78 |
@@ -223,8 +223,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3672 |
-| legacy-inbound | 1834 |
+| legacy-outbound | 3675 |
+| legacy-inbound | 1837 |
 | temporary-internal-debt | 95 |
 | off-dag-offered | 83 |
 | no-circular | 6 |
@@ -235,9 +235,9 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3085 |
+| W9 | 3088 |
 | W9-D | 1017 |
-| W4-E1 | 734 |
+| W4-E1 | 737 |
 | W5 | 202 |
 | W4 | 201 |
 | W4-B | 187 |

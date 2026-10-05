@@ -897,3 +897,12 @@ ab30 主 CI37296573386 正式 completed/cancelled（21 success／7 failure／20 
 - CI源码oracle只跟随实际TE binding/System core；Windows两事件四旧地址同步，原整份逆映射字节相同。原rfc328精确inventory只补已在committed cross-context imports登记的两native pairing地址，其余整份字节保持；原classifier/等式/断言/预算不变。
 - 一次有效原scoped生成：c835052b＋20冻结候选，非自有6475源码按committed blob取值，所有并行WIP排除。sourceDigest sha256:2e04978b5cbd31ea4b1eddb81de8e1cb9432418a6f252df9869f9f988a5d5309，13 matching/129有序库存与why/40SPI/69targets/原值级SCC/空implementation SCC保持。真实commons旧组退役1、新组6，计329；六实际counter的matching许可在源码/清单提交后普通后继退役，不改变规则或泛化例外。
 - c835主CI failure与三定时E2E/visual success分开保留；后继新exact-SHA正式CI待发布后验收。本机无AW测试/类型/构建/服务。只有本增量有限门；真根、retention消费者、Task/smoke、A-T5/A-G、CS首次部署及完整RFC继续，未记完成。详情见 design/RFC-370-crewstation-hosted-deployment/system-agent-common-core.md。
+
+## 2026-10-06 A-T5 smoke common core 与 native selector 有限门
+
+- SMOKE-COMMON-CORE-SOURCE R1：FAIL，一个model类型缺失P2；原回执与全部冻结证据保留。R2追加原model合同和两个默认模型诊断，核心算法字节不变。
+- SMOKE-COMMON-CORE-SOURCE9-DOC1-R2：独立有限PASS，42项=10 owned／21 control／11 evidence，指纹af220040c23c4082a6b9fde2a197fa71812e3c29c54f0fcd62d6469a4238dfe4。完整原算法、native前置顺序、三合同、原buildSmokePlan与Windows／workspace源码预言逆向对拍PASS；14个新selected case的正式运行交确切SHA CI。
+- 原生材料selector以完整builder表选择；旧两臂／全部断言与错误文本保留，新增双协议selected第三臂及三个未知种类回归。原kind守卫／classifier／断言／预算不放宽。仅目标format／lint，不运行AW本机tests／types／build／service。
+- SMOKE-AD446-DEPENDENCY-COMPAT-R1：独立有限PASS，8项首末指纹58f05e9d2d41b60c3bb5389657affafb3808c217035d08753ce60e4c43ae9058。原参数／返回／receiver／惰性环境／ownerless与direct receipt／cleanup合同兼容；不评价新Task observer producer，不重跑SOURCE42或扫描。
+- 原ad446的一次scoped生成13产物，sourceDigest sha256:5cc7f81577140480e3f820cb8eeba7651545241585391cadd03ef88f59e494b8；5d016e74仅matching元数据前进，纯JSON合成保持其完整输出与原329债，新增三真实地址至332。原129顺序／why、40SPI／69targets、SCC保持；entry1888→1893／imports6442→6451／exceptions5696→5702／owners26866→26878四实际许可具名匹配。四个已消费RFC371许可正常退役，新四许可下个普通后继退役。源代码与census不重跑。
+- e3主CI cancelled／Windows failure与22实际Windows新用例通过分别保留；ad446主CI／Windows正式failure保留，新exact-SHA CI另验核。metadata有限门只核这一合成候选，不代替运行CI。完整真根／Task／retention、A-G、CS首次部署与完整RFC仍开放。

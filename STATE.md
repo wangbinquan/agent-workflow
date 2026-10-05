@@ -1,3 +1,13 @@
+## 2026-10-06 RFC-370 smoke 共同核心与原生选择 CI 修复
+
+原完整 smoke 算法归 TE application；native facade 保留三份完整合同、原 material builder 与前置读取顺序，正常 selected composition 使用必需 preparation，完整 intent 只编译和绑定一次。nonce／session reset／分类顺序／超时／释放与保留规则均保持。新增14个实际选中入口用例随源码交 hosted CI；SOURCE R1 的 model 类型缺失 P2／FAIL保留，补原可选 model 与两项默认模型诊断后 SOURCE9-DOC1-R2 独立有限PASS，42项首末指纹 af220040c23c4082a6b9fde2a197fa71812e3c29c54f0fcd62d6469a4238dfe4。
+
+e3e3bb51 的Windows37331383474 failure、主CI37331383416 cancelled分别保留，22个新System／preparation用例在Windows实际通过不当全仓绿。ad446763 的主CI37333383574与Windows37333383392 failure各自留证。实际原生材料选择改为完整 builder 表，未知种类保持原错误；双协议的原两种材料编译和全部断言不变，新增真实 selected第三臂与三个未知种类回归，原kind检查不改规则／例外／预算。ad446已提交依赖只做8项有限相容性PASS，未审新observer producer或未提交并行源码。
+
+一份有效原scoped census使用冻结10候选与完整已提交ad446763源码；sourceDigest sha256:5cc7f81577140480e3f820cb8eeba7651545241585391cadd03ef88f59e494b8。5d016e74只前进14个匹配登记／STATE文件，没有生产源码增量，原扫描与源码门复用。13 matching合成完整保留并行已提交元数据、129有序库存与why、329旧债、40 SPI／69 targets、原值级SCC与空implementation SCC，精确新增两smoke地址与一已提交native Task地址，计332债。实际entry1888→1893／imports6442→6451／exceptions5696→5702／owners26866→26878具名登记；四个已消费RFC371许可在此普通后继退役，新的四许可在下个普通后继退役。
+
+本机只有自有format／lint、纯AST／字节／JSON及一次原静态生成，无AW本机tests／typecheck／build／service。共享STATE旧全文与并行输出逐字保留，独立metadata门、精确发布与新确切SHA CI另验核。实际Task、RM management和全部启动根、retention生产与消费者、脚本／执行权恢复、A-T5／A-G继续；随后独立CS adapters，M0先部署，再逐步M1～M4。尚无AW-in-CS部署，不关闭RFC。
+
 ## 2026-10-05 RFC-370 System 共同核心与选中准备增量
 
 原完整 System 执行算法归 TE application，原 native options/result、编译/wrap、回执和路径投影 API 保持；所有原 System 调用经同一核心。正常 composition 必须接收两阶段选中准备，compile一次、late bind一次，无原生回退。原 session 事件合同整体归 RM application。新八项准备与十四项 System 回归交 hosted CI；原 SOURCE18-DOC1 R1 一个 prototype/scope P2/FAIL 保留，SOURCE19-DOC1 R2独立有限PASS，53项首末稳定，指纹59d6dbc5d73c17acb5f64991761861ca409e98283bc52b5492824c2158db0524。
@@ -10235,3 +10245,9 @@ CS自有测试分层修复已直接提交远端be7e9d3584a15b0fcbcf85162d736d749
 ## 2026-10-05 RFC-371 原 Task 生命周期 matching 登记
 
 自有19文件已独立提交推送 ad44676318f1e5835d1ffdb2da3ea751126b65e9，main/origin同步，未联系其他会话、未提交其源码。原SOURCE v2与两个additive export补充均有限PASS；只读取该完整已提交源码运行一次原官方AST，排除在制prototype及并行Smoke源码。13 matching产物、129原有序库存及why、329原债、规则/目标/SPI/SCC保留；四项真实库存增长具名登记，原六个已消费许可在正常后继退役，新的四许可在下一普通登记提交退役。静态生成、有限门及hosted精确SHA CI分别验收；未运行本机AW tests/types/build/service，生产producer默认选择、恢复/多root/规模和CS平台v2仍继续，不关闭两RFC。
+
+## 2026-10-06 RFC-371 原 before 索引快照与 CI 补正
+
+原19源码后继 matching14已推送5d016e742，main/origin同步；有限metadata PASS、原静态validator PASS与精确hosted CI分开留证。没有联系或收编其他会话源码。ad4467631的SQLite/PG真实1001 child用量数量及四桶已通过，新增验收用例遗漏原requireSpawnReceipt导致实际nonce缺失、完整proof为partial；后继选择原真实机制并增加nonce断言，完整资格、原数值oracle及预算不放宽。Task port到Drizzle页边界复制三份readonly数组，保留原字段及JSON顺序，修复TS2322。
+
+恢复final可选使用平台独立原read snapshot，全部before页/ACK/父关系/membership一次核验后按包查冻结索引，避免每页重复全人口读取；真实文件WAL在final写入和live旧成员丢失后仍只计新增step。双provider2501原成员与实际SQL行数、缺索引负例及WAL1001+2四桶回归随实现；单连接内存和PG poolMax1保留原完整逐页路径。测试引擎登记仅增加真实外部SQLite格式调用点，不改分类器、旧oracle或预算。实现审阅、matching与新exact-SHA hosted CI另验；无本机AW tests/types/build/service。CS be7e9d35六项CI全绿、八组件本机部署成功及原250迁移/存储身份保持。正式页面仍待本机解锁。默认producer、恢复/多root、CS数值v2和规模及完整两RFC余项继续，不宣称完成。
