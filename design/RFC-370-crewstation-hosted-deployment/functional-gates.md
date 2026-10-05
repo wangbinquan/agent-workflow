@@ -840,3 +840,16 @@ System 修复只在既有 lazy env 回调保留非空事实，类型擦除后的
 - `96bacdbff8632c62d4770d8d8c6b557f9fb08b91`：主 CI `37261849345` failure，42 success／8 failure；Windows `37261849350` failure。Windows platform 260 pass／3 skip／0 fail，shared 2295 pass／0 fail；Ubuntu 9/16 success，原 System TS18047 与三条 R2 缺登记不再失败。
 - 原 status.md 被本会话在生成后额外 Prettier，导致 Ubuntu 12/16 job `111610635147`、macOS 4/6 job `111610635103` 的 RFC-294 §A2 逐字相等断言失败。修复使用原 `scripts/architecture-status.ts` 和当前 committed 12 JSON，只恢复原渲染字节；原 renderer、全部三个 oracle、JSON 和账本无变化，不重跑 AST census。原 META16 PASS、旧格式证明和失败日志保持原样，此修复单独有限审阅及新 exact-SHA CI。
 - 其他 latest revision 原生页、nativeUsageReconciliationVerification TS2322、PG launch deadlock、workgroup gate E2E 失败保留；本小片不宣称全 CI 转绿、A-T5／A-G／RFC 完成。执行接口十路径及并行 WIP 未纳入提交；STATE 和本文件原正文逐字保留，只追加本段。
+
+
+## 2026-10-05 RFC-370 H4 中立 Agent 执行接口
+
+Task、System Agent 和 runtime smoke 三条实际 native 调用链改接 task-execution application 的中立 submit 接口，本机 adapter 保留原单一进程机制、PID／nonce／v1 回执投影、timeout／取消／stream pump／cleanup。真实一次材料编译得到的 materialRef 被复用，System 派生 plan 保留同一来源；legacy fallback 只在原分支惰性读 nodeExecution。Task gated 与 System direct 的 ACK 时序、owner receiver 和原完整结算规则保持。详情见 design/RFC-370-crewstation-hosted-deployment/agent-execution-effect.md。
+
+SOURCE10-R1 原功能门 FAIL 保留；R2 通过实际可消费的逻辑 resourceKeys resolver 补齐 runner policy，原 describe 在资源认领时点只执行一次。SOURCE11-R2 独立有限功能 PASS，指纹 f1e93fb5c900664b92d5b785490f3a0aff8e6e52645ae82dbe205054f6ad46fb，首末 31 项稳定。12 个新增功能用例含五个真实 native 进程用例，Windows 原 push／PR 对称补四个路径、原 platform suite 补新测试，所有旧断言、预算和步骤保持；真实执行仍只交 hosted CI。
+
+原 scoped census 在 committed fb7a27bd 加冻结11路径上生成一次，非自有源码和规则只读原提交，排除且保留并行 RFC371 WIP，包括正在修改的 rfc294Canonical；原 classifier／counter／validator 不变。sourceDigest sha256:3214e2700604b4d1a74728b6928a694a5158477cba10dd8354697cd70e100baa，13 匹配产物保持原 raw status renderer 字节。129 原有序库存／why 保留，imports6325→6339／exceptions5615→5629／owners26744→26758 三项实际增长具名许可后正常后继退役。309 条原导入债完整保留，新增8个实际 R1 兼容分组，总数317，仍在 A-T7 退役。
+
+fb7a27bd 的精确 CI37264298394 已终态 failure，45 success／5 failure；此前本会话额外格式化生成状态所致逐字失败已消除，原 status oracle 在 Ubuntu12／macOS4 通过。剩余失败为 RFC371 TS2322／latest revision 用例、SQLite lease 用例5000ms超时及 required 汇总；不以此前 PG／E2E 本次通过替代旧失败修复证明，也不削弱任何原断言或预算。新源码批次 matching metadata 门、精确上库与新 exact-SHA CI 分别验收。
+
+只做自有 format／lint、纯 AST／JSON／字节与原静态投影，无本机 AW tests／typecheck／build／service。完整 selected material／evidence／lifecycle／execution／receipt 组合、所有真根、脚本／专用命令、A-T6 执行权／恢复、A-T7／A-G 继续；独立 CS adapters、M0 首次实际部署和 M1～M4 尚未开始，本增量不关闭 A-T5 或 RFC。共享原正文逐字保留，仅追加本段。

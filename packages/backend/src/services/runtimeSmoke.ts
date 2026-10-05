@@ -16,12 +16,16 @@
 import { mkdirSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { randomBytes } from 'node:crypto'
-import { getRuntimeDriver, type RuntimeKind } from '@/services/runtime'
+import {
+  getRuntimeDriver,
+  getNativeAgentMaterialReference,
+  type RuntimeKind,
+} from '@/services/runtime'
 import type { SpawnPlan } from '@/services/runtime/types'
 import { createLogger, type Logger } from '@/util/log'
 import { maskDiagnosticsText } from '@agent-workflow/shared'
 import { outputTail } from '@/util/spawnDiagnostics'
-import { runAgentProcess } from '@/services/execution/agentProcess'
+import { bindLocalAgentExecutionEffect } from '@/modules/task-execution/infrastructure/local/agentExecutionEffect'
 import { Paths } from '@/util/paths'
 
 export type SmokeOutcome =
@@ -243,14 +247,20 @@ export async function smokeRuntime(opts: SmokeOptions): Promise<SmokeResult> {
   // RFC-280 T4 — process reliability is the unified executor's job
   // (managedProcess adapter): spawn/stdin/timeout/TERM→KILL/reap/drain all live
   // there; this probe only classifies what came back.
-  const run = await runAgentProcess({
-    cmd: plan.cmd,
-    cwd: worktreeDir,
-    env: plan.env,
+  const localExecution = bindLocalAgentExecutionEffect({
+    materialRef: getNativeAgentMaterialReference(plan),
+    command: () => plan.cmd,
+    workingDirectory: () => worktreeDir,
+    environment: () => plan.env,
+    stdin: () => plan.stdin,
+  })
+  const run = await localExecution.effect.submit({
+    executionRef: localExecution.executionRef,
+    materialRef: localExecution.materialRef,
+    workspaceRef: localExecution.workspaceRef,
     timeoutMs,
     termGraceMs: CHILD_TERM_GRACE_MS,
-    ...(plan.stdin?.mode === 'pipe' ? { stdin: plan.stdin } : {}),
-    ...(plan.beforeSpawn !== undefined ? { beforeSpawn: plan.beforeSpawn } : {}),
+    ...(plan.beforeSpawn !== undefined ? { beforeStart: plan.beforeSpawn } : {}),
     ...(plan.cleanup !== undefined ? { cleanup: plan.cleanup } : {}),
     capture: {
       onStdoutLine: (line) => {

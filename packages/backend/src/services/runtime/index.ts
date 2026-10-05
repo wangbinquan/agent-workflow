@@ -15,6 +15,10 @@ export type { RuntimeUsageContext, RuntimeUsageFrame } from './usage'
 import type { RuntimeDriver, RuntimeKind } from './types'
 import { opencodeDriver } from './opencode/driver'
 import { claudeCodeDriver } from './claudeCode/driver'
+import { bindNativeAgentMaterialReference } from '@/modules/runtime-management/infrastructure/local/agentMaterialCompiler'
+
+/** Explicit native compatibility material, including wrap-only lifecycle plans. */
+export const getNativeAgentMaterialReference = bindNativeAgentMaterialReference
 
 export type { RuntimeKind, RuntimeDriver } from './types'
 

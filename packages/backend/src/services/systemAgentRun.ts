@@ -27,10 +27,12 @@ import { randomBytes } from 'node:crypto'
 import {
   getRuntimeDriver,
   bindNativeAgentMaterialEvidence,
+  getNativeAgentMaterialReference,
   type RuntimeKind,
 } from '@/services/runtime'
 import type { AgentSpawnContext, AgentSpawnPlan } from '@/services/runtime/types'
-import { runAgentProcess } from '@/services/execution/agentProcess'
+import { bindLocalAgentExecutionEffect } from '@/modules/task-execution/infrastructure/local/agentExecutionEffect'
+import type { ExecutionStartReceipt } from '@/modules/task-execution/application/ports/executionEffect'
 import type {
   RuntimeDriver,
   SpawnPlan,
@@ -451,13 +453,15 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
                 // Compose wrap-only slots over the driver's plan — the plan
                 // itself is structurally out of the adapter's reach (§2.1b).
                 const wrapped = await opts.wrapPlan(base, seamArgs)
-                return {
+                const composed = {
                   ...base,
                   ...(wrapped.beforeSpawn !== undefined
                     ? { beforeSpawn: wrapped.beforeSpawn }
                     : {}),
                   ...(wrapped.cleanup !== undefined ? { cleanup: wrapped.cleanup } : {}),
                 }
+                getNativeAgentMaterialReference(composed, base)
+                return composed
               })()
         function defaultUnifiedCtx(): AgentSpawnContext {
           return {
@@ -538,28 +542,28 @@ export async function runSystemAgent(opts: SystemAgentRunOptions): Promise<Syste
       let receiptError: unknown
       let capturedStartupInventory: StartupInventory | null = null
 
-      const run = await runAgentProcess({
-        cmd: plan.cmd,
-        cwd: worktreeDir,
-        env: plan.env,
+      const nativePlan = plan
+      const localExecution = bindLocalAgentExecutionEffect({
+        materialRef: getNativeAgentMaterialReference(nativePlan),
+        command: () => nativePlan.cmd,
+        workingDirectory: () => worktreeDir,
+        environment: () => nativePlan.env,
+        stdin: () => nativePlan.stdin,
+        nativeStartOwner: opts,
+      })
+      const run = await localExecution.effect.submit({
+        executionRef: localExecution.executionRef,
+        materialRef: localExecution.materialRef,
+        workspaceRef: localExecution.workspaceRef,
         timeoutMs,
         termGraceMs: CHILD_TERM_GRACE_MS,
         ...(opts.abortSignal !== undefined ? { abortSignal: opts.abortSignal } : {}),
-        ...(plan.stdin?.mode === 'pipe' ? { stdin: plan.stdin } : {}),
-        ...(plan.beforeSpawn !== undefined ? { beforeSpawn: plan.beforeSpawn } : {}),
+        ...(plan.beforeSpawn !== undefined ? { beforeStart: plan.beforeSpawn } : {}),
         ...(opts.onSpawned !== undefined
           ? {
-              onSpawned: async (receipt: {
-                pid: number
-                spawnedAt: number
-                spawnBinaryPath: string
-              }) => {
+              onStarted: async (receipt: ExecutionStartReceipt) => {
                 try {
-                  await opts.onSpawned?.({
-                    pid: receipt.pid,
-                    spawnedAt: receipt.spawnedAt,
-                    spawnBinaryPath: receipt.spawnBinaryPath,
-                  })
+                  await localExecution.acknowledgeNativeOwner(receipt)
                 } catch (err) {
                   // Historical contract: a failed spawn receipt is a SPAWN
                   // failure (mcp playground admission fence) — remember the

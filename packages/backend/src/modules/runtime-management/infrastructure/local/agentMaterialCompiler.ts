@@ -15,6 +15,21 @@ import type {
 } from '@/services/runtime/types'
 import type { RuntimePlugin } from '@/services/execution/agentInjection'
 
+// Native compatibility plans keep the reference from their actual compilation.
+// A fixture/legacy raw plan gets an opaque binding to that explicit object;
+// this map never resolves an execution target or reads a registry/Paths.
+const nativeMaterialReferences = new WeakMap<object, string>()
+
+export function bindNativeAgentMaterialReference(plan: object, sourcePlan?: object): string {
+  const existing = nativeMaterialReferences.get(plan)
+  if (existing !== undefined) return existing
+  const materialRef =
+    (sourcePlan === undefined ? undefined : nativeMaterialReferences.get(sourcePlan)) ??
+    `aw-agent-material:${ulid()}`
+  nativeMaterialReferences.set(plan, materialRef)
+  return materialRef
+}
+
 /** Native-only H6 binding. A hosted compiler has its own content binding and
  * never implements this physical projection. Skill readers are obtained here
  * without invoking them; the original staging operation keeps its read timing. */
@@ -128,6 +143,7 @@ export function createLocalAgentMaterialCompiler(input: {
       const plan = await input.buildNative(context)
       const materialRef = `aw-agent-material:${ulid()}`
       plans.set(materialRef, plan)
+      nativeMaterialReferences.set(plan, materialRef)
       return {
         materialRef,
         declared: plan.declared,

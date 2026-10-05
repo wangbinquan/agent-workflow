@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2200,
+    "backendFiles": 2202,
     "frontendFiles": 654,
     "legacyFiles": 587,
-    "moduleFiles": 1613,
-    "productionFiles": 3021,
+    "moduleFiles": 1615,
+    "productionFiles": 3023,
     "sharedFiles": 167,
-    "symbolsIncludingFileRoots": 26744
+    "symbolsIncludingFileRoots": 26758
   },
   "entries": [
     {
@@ -115213,6 +115213,18 @@
       "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts#bindNativeAgentMaterialReference",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "bindNativeAgentMaterialReference",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts",
       "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts#createLocalAgentMaterialCompiler",
       "removeAfterWave": null,
       "status": "current-module",
@@ -115241,6 +115253,18 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "NativeAgentMaterialFixture",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "runtime-management",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts",
+      "id": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/agentMaterialCompiler.ts#nativeMaterialReferences",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "nativeMaterialReferences",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -131527,6 +131551,90 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "DynamicWorkflowTaskSnapshot",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/executionEffect.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/executionEffect.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/executionEffect.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/executionEffect.ts#ExecutionCapture",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ExecutionCapture",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/executionEffect.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/executionEffect.ts#ExecutionEffectPort",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ExecutionEffectPort",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/executionEffect.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/executionEffect.ts#ExecutionEffectRequest",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ExecutionEffectRequest",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/executionEffect.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/executionEffect.ts#ExecutionEffectResult",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ExecutionEffectResult",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/executionEffect.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/executionEffect.ts#ExecutionOutcome",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ExecutionOutcome",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/executionEffect.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/executionEffect.ts#ExecutionStartReceipt",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ExecutionStartReceipt",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -148891,6 +148999,54 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "SkillsResolution",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts#bindLocalAgentExecutionEffect",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "bindLocalAgentExecutionEffect",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts#NativeAgentStartReceiptOwner",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NativeAgentStartReceiptOwner",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/agentExecutionEffect.ts#NativeStartReceipt",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "NativeStartReceipt",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -198862,6 +199018,18 @@
       "symbol": "DRIVERS",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "services",
+      "exported": true,
+      "file": "packages/backend/src/services/runtime/index.ts",
+      "id": "owner:packages/backend/src/services/runtime/index.ts#getNativeAgentMaterialReference",
+      "removeAfterWave": "W9-D",
+      "status": "legacy-target",
+      "symbol": "getNativeAgentMaterialReference",
+      "targetContext": "runtime-management",
+      "targetLayer": "application"
     },
     {
       "currentContext": "legacy",
@@ -321663,5 +321831,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:68671bf7bb79b244f46d0da2dd3a5f6c6ab8ae85552712f08c7a7d7f6daeb920"
+  "sourceDigest": "sha256:3214e2700604b4d1a74728b6928a694a5158477cba10dd8354697cd70e100baa"
 }

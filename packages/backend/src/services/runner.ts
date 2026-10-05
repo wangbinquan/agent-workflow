@@ -55,8 +55,12 @@ import { selectNodeRunPromptOperations } from '@/modules/task-execution/public/p
 import {
   createProcessEffectAttemptObserver,
   type ProcessEffectAttemptObserver,
-  type ProcessSettlement,
-} from '@/services/taskExecutionParticipants'
+} from '@/modules/task-execution/application/processEffectObserver'
+import type {
+  ExecutionEffectResult,
+  ExecutionStartReceipt,
+} from '@/modules/task-execution/application/ports/executionEffect'
+import { bindLocalAgentExecutionEffect } from '@/modules/task-execution/infrastructure/local/agentExecutionEffect'
 import { createLogger, type Logger } from '@/util/log'
 import {
   BRANCH_MARKER_MALFORMED_PREFIX,
@@ -91,6 +95,7 @@ import {
   getRuntimeDriver,
   pluginFileSpec,
   bindNativeAgentMaterialEvidence,
+  getNativeAgentMaterialReference,
   type RuntimeKind,
 } from './runtime'
 import type {
@@ -120,7 +125,6 @@ import {
 } from './execution/startupVerification'
 // RFC-297 T18 —— 结算时构造统一清单观测（与 verifyStartup 共用同一套对账语义）。
 import { buildRuntimeInventoryObservation } from './execution/inventoryObservation'
-import { runAgentProcess } from './execution/agentProcess'
 import { FINAL_REAP_MARGIN_MS, MANAGED_PROCESS_MAX_LINE_CHARS } from './execution/managedProcess'
 
 /** SIGTERM → SIGKILL grace for a node's process group. */
@@ -1252,8 +1256,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
   // parsing, live subagent capture, and final status resolution.
   let preserveLiveRuntimeState = false
   let postSpawnFailed = false
-  let processEffect: ProcessEffectAttemptObserver | undefined
-  let processSettlement: ProcessSettlement | null = null
+  let processEffect:
+    | ProcessEffectAttemptObserver<ExecutionStartReceipt, ExecutionEffectResult>
+    | undefined
+  let processSettlement: ExecutionEffectResult | null = null
   // Survives the outer catch so even a second DB failure while stamping the
   // terminal row cannot erase the durable breadcrumb boot repair uses to
   // discard (rather than neutralize) a contradicted native resume id.
@@ -1819,28 +1825,41 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       opts.gitMutationPolicy === 'read-only'
         ? await captureGitControlSnapshot(opts.worktreePath)
         : undefined
+    const taskEffects = opts.persistence.effects
+    const localExecution = bindLocalAgentExecutionEffect({
+      materialRef: getNativeAgentMaterialReference(plan),
+      command: () => cmd,
+      workingDirectory: () => opts.worktreePath,
+      environment: () => env,
+      stdin: () => plan.stdin,
+      requireSpawnReceipt: true,
+      taskEffect: {
+        persistence: taskEffects,
+        nodeExecution: () => opts.persistence.nodeExecution,
+        argv: cmd,
+        cwd: opts.worktreePath,
+        // Preserve the exact original writer resource fingerprint.
+        resourceKeys:
+          opts.gitMutationPolicy === 'read-only' ? [] : { writerWorkspace: opts.worktreePath },
+      },
+    })
     processEffect = createProcessEffectAttemptObserver({
-      persistence: opts.persistence.effects,
+      persistence: taskEffects,
       taskId: opts.taskId,
       nodeRunId: opts.nodeRunId,
       processKind: 'agent',
-      argv: cmd,
-      cwd: opts.worktreePath,
-      // Read-only executions keep their existing concurrency. Writer agents
-      // additionally fence the exact isolation/workspace path, never the task.
-      resourceKeys:
-        opts.gitMutationPolicy === 'read-only' ? [] : { writerWorkspace: opts.worktreePath },
+      projection: localExecution.projection!,
+      resourceKeys: (description) => description.resourceKeys,
     })
     const activeProcessEffect = processEffect
-    const runResult = await runAgentProcess({
-      cmd,
-      cwd: opts.worktreePath,
-      env,
+    const runResult = await localExecution.effect.submit({
+      executionRef: localExecution.executionRef,
+      materialRef: localExecution.materialRef,
+      workspaceRef: localExecution.workspaceRef,
       ...(opts.timeoutMs !== undefined ? { timeoutMs: opts.timeoutMs } : {}),
       termGraceMs: graceMs,
       ...(opts.signal !== undefined ? { abortSignal: opts.signal } : {}),
-      ...(plan.stdin?.mode === 'pipe' ? { stdin: plan.stdin } : {}),
-      beforeSpawn: async () => {
+      beforeStart: async () => {
         await activeProcessEffect?.beforeSpawn()
         const accepted = await opts.observationInvocations.accept({
           invocationId,
@@ -1896,27 +1915,14 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
           }
         }
       },
-      requireSpawnReceipt: true,
-      onSpawned: async (receipt: {
-        pid: number
-        spawnedAt: number
-        spawnBinaryPath: string
-        launchNonce?: string
-      }) => {
-        observationSpawnedAt = receipt.spawnedAt
+      onStarted: async (receipt: ExecutionStartReceipt) => {
+        observationSpawnedAt = receipt.startedAt
         // RFC-108 T9 (AR-14): persist the spawned binary path (cmd[0]) alongside
         // pid so the stale-process reaper can match a live pid against THIS
         // specific binary, not a fuzzy regex.
         //
         if (activeProcessEffect === undefined) {
-          await opts.persistence.nodeExecution.patch({
-            nodeRunId: opts.nodeRunId,
-            values: {
-              pid: receipt.pid,
-              spawnBinaryPath: receipt.spawnBinaryPath,
-              spawnLaunchNonce: receipt.launchNonce ?? null,
-            },
-          })
+          await localExecution.recordLegacyTaskReceipt(receipt, opts.nodeRunId)
         } else {
           await activeProcessEffect.recordSpawnReceipt(receipt)
         }
@@ -2015,7 +2021,6 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
         })
       }
     }
-    const spawnedPid = runResult.pid
     const childUnkillable = runResult.outcome === 'unreaped'
     const spawnFailed = runResult.outcome === 'spawn-failed'
     aborted = runResult.outcome === 'aborted'
@@ -2082,10 +2087,10 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       }
     }
     if (childUnkillable) {
-      log.error('child survived SIGKILL escalation past reap deadline; abandoning', {
+      localExecution.reportUnreaped(runResult, {
         nodeRunId: opts.nodeRunId,
-        pid: spawnedPid,
         deadlineMs: graceMs + FINAL_REAP_MARGIN_MS,
+        log,
       })
     }
 
@@ -2145,7 +2150,7 @@ export async function runNode(opts: RunNodeOptions): Promise<RunResult> {
       if (nativeSessionProtocolFailure !== undefined) {
         failureCode = 'runtime-session-identity-invalid'
       }
-      errorMessage = `child-unkillable: pid ${spawnedPid} survived SIGTERM→SIGKILL escalation past ${graceMs + FINAL_REAP_MARGIN_MS}ms; abandoned (detached process group left running)`
+      errorMessage = localExecution.unreapedMessage(runResult, graceMs + FINAL_REAP_MARGIN_MS)
     } else if (gitMutationViolation !== undefined) {
       status = 'failed'
       errorMessage = `agent-git-mutation-forbidden: ${gitMutationViolation}`

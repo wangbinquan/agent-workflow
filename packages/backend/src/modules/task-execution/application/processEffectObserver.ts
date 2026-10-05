@@ -28,6 +28,10 @@ export function createProcessEffectAttemptObserver<
   nodeRunId: string
   processKind: 'agent' | 'script'
   projection: ProcessEffectProjection<TReceipt, TResult>
+  /** Explicit logical resolver consumed at the original acquisition point. */
+  resourceKeys?: (
+    description: ReturnType<ProcessEffectProjection<TReceipt, TResult>['describe']>,
+  ) => readonly string[]
   context?: TaskExecutionContext
 }): ProcessEffectAttemptObserver<TReceipt, TResult> | undefined {
   const context = input.context ?? currentTaskExecutionContext(input.taskId)
@@ -98,7 +102,10 @@ export function createProcessEffectAttemptObserver<
           classifierVersion: description.classifierVersion,
           transportPolicyVersion: description.transportPolicyVersion,
           retryAuthority: 'none',
-          resourceKeys: [`process:${input.taskId}:${input.nodeRunId}`, ...description.resourceKeys],
+          resourceKeys: [
+            `process:${input.taskId}:${input.nodeRunId}`,
+            ...(input.resourceKeys?.(description) ?? description.resourceKeys),
+          ],
         })
       })
     },

@@ -167,11 +167,29 @@ test('native child capture freezes its contract before spawn and starts only aft
   expect(text).toContain('nativeCaptureContract: nativeUsageCapture.contract')
   const accepted = text.indexOf("localObservationAccepted = accepted.authority.kind === 'local'")
   const begin = text.indexOf('nativeUsageCapture?.begin()')
-  const spawnReceipt = text.indexOf('requireSpawnReceipt: true', accepted)
+  const spawnReceipt = text.indexOf('onStarted: async', accepted)
   expect(accepted).toBeGreaterThan(0)
   expect(begin).toBeGreaterThan(accepted)
   expect(begin).toBeLessThan(spawnReceipt)
   expect(text.slice(accepted, begin)).toContain('if (localObservationAccepted)')
+  let requiredReceipts = 0
+  const checkRequiredReceipt = (node: ts.Node) => {
+    if (
+      ts.isCallExpression(node) &&
+      node.expression.getText() === 'bindLocalAgentExecutionEffect'
+    ) {
+      const input = node.arguments[0]!
+      expect(ts.isObjectLiteralExpression(input)).toBe(true)
+      if (ts.isObjectLiteralExpression(input)) {
+        expect(properties(input).get('requireSpawnReceipt')?.kind).toBe(ts.SyntaxKind.TrueKeyword)
+        requiredReceipts++
+      }
+    }
+    ts.forEachChild(node, checkRequiredReceipt)
+  }
+  checkRequiredReceipt(file)
+  expect(requiredReceipts).toBe(1)
+
   const finalCapture = text.indexOf('nativeUsageCapture?.finish(')
   expect(finalCapture).toBeGreaterThan(
     text.indexOf("localObservationAccepted && runResult.outcome !== 'unreaped'"),
