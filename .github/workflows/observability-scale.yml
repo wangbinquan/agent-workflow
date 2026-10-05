@@ -1,0 +1,76 @@
+# RFC-371: two fixed full populations, separate from the ordinary CI budget.
+name: observability-scale
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_sha:
+        description: Exact 40-character commit to qualify (empty uses this workflow commit)
+        required: false
+        type: string
+
+concurrency:
+  group: observability-scale-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  qualify:
+    name: Original full scale (${{ matrix.scenario }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    strategy:
+      fail-fast: false
+      matrix:
+        scenario: [full-report, self-total]
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.target_sha || github.sha }}
+
+      - name: Verify exact source
+        env:
+          REQUESTED_SHA: ${{ inputs.target_sha }}
+          DEFAULT_SHA: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import os, re, subprocess
+          actual = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          expected = os.environ['REQUESTED_SHA'] or os.environ['DEFAULT_SHA']
+          assert re.fullmatch('[a-f0-9]{40}', expected), 'An exact full commit is required'
+          assert actual == expected, 'Checkout does not match the requested candidate'
+          with open(os.environ['GITHUB_ENV'], 'a') as target:
+              target.write('AW_OBSERVABILITY_SCALE_SHA=' + actual + '\n')
+          PY
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.4.0'
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify actual interrupted Bun resource receipts
+        env:
+          AW_OBSERVABILITY_SCALE_MODE: ${{ matrix.scenario }}
+        run: python3 scripts/observe-observability-scale.py --verify-interruptions --output test-results/rfc371-interruption-${{ matrix.scenario }}
+
+      - name: Qualify the complete original population
+        env:
+          AW_OBSERVABILITY_SCALE_MODE: ${{ matrix.scenario }}
+        run: python3 scripts/observe-observability-scale.py --output test-results/rfc371-scale-${{ matrix.scenario }}
+
+      - name: Upload actual measurements and failure evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: rfc371-full-scale-${{ matrix.scenario }}-${{ github.run_id }}
+          path: |
+            test-results/rfc371-scale-${{ matrix.scenario }}/observer.json
+            test-results/rfc371-scale-${{ matrix.scenario }}/disk-samples.jsonl
+            test-results/rfc371-scale-${{ matrix.scenario }}/process-time.txt
+            test-results/rfc371-scale-${{ matrix.scenario }}/qualification.log
+            test-results/rfc371-scale-${{ matrix.scenario }}/case/qualification.json
+            test-results/rfc371-interruption-${{ matrix.scenario }}/*
+          if-no-files-found: error

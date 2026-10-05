@@ -75,7 +75,11 @@ export const completeTaskRecord = (n: number, attempts: number): UsageLedgerReco
   }
 }
 
-export async function seedCompleteTask(harness: ProviderHarness, attempts = 1001, records = 10001) {
+export async function seedCompleteTask(
+  harness: Pick<ProviderHarness, 'db'>,
+  attempts = 1001,
+  records = 10001,
+) {
   await harness.db
     .insert(users)
     .values({
