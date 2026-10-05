@@ -34,6 +34,7 @@ import {
   type NativeUsageOwnerFacts,
 } from './nativeUsageOwnerTransaction'
 import { emitNativeUsagePage } from './nativeUsagePageEmission'
+import type { NativeUsageBaselineReadView } from '../application/ports/nativeUsageBaseline'
 
 type Pass = typeof nativeUsagePasses.$inferSelect
 type Preparation = typeof nativeUsagePreparations.$inferSelect
@@ -94,6 +95,7 @@ export class DrizzleNativeUsagePages implements PagesPort {
   constructor(
     private readonly db: ProviderNeutralDatabase,
     private readonly numericPages = false,
+    private readonly originalBeforeIndex?: NativeUsageBaselineReadView | null,
   ) {}
 
   async prepare(input: Parameters<PagesPort['prepare']>[0]) {
@@ -404,6 +406,7 @@ export class DrizzleNativeUsagePages implements PagesPort {
           page,
           ObservationNativeBeforeSpawnAckSchema.parse(JSON.parse(prepared.document)),
           pass.ownerReceiptId,
+          this.originalBeforeIndex,
         )
         ack = ObservationNativePassAckSchema.parse({
           ...ack,

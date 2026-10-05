@@ -4,6 +4,7 @@ import type {
   ObservationNativeBeforeSpawnAck,
   ObservationNativeProcessFact,
   ObservationNativeSourceAck,
+  ObservationNativePassAck,
 } from '@agent-workflow/shared'
 import type { NativeUsagePassOwner } from './nativeUsageOwner'
 
@@ -49,6 +50,11 @@ export interface NativeUsageDurableOwner {
     readonly resumeRootSessionId: string | null
   }): Promise<ObservationNativeBeforeSpawnAck>
   passOwner(before: ObservationNativeBeforeSpawnAck): NativeUsagePassOwner
+  /** A resume may keep one verified original before snapshot alive for every final page. */
+  withFinalOwner?(
+    before: ObservationNativeBeforeSpawnAck,
+    read: (owner: NativeUsagePassOwner) => Promise<ObservationNativePassAck>,
+  ): Promise<ObservationNativePassAck>
   recordProcess(fact: ObservationNativeProcessFact): Promise<ObservationNativeSourceAck>
   seal(observedAt: number): Promise<ObservationNativeSourceAck>
 }

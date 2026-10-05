@@ -26,7 +26,7 @@ export function createNativePageCapture(
     if (!before) throw new Error('Original native before-spawn receipt is unavailable')
     if ((await input.generation()) !== before.sourceGeneration)
       throw new Error('Original native store generation changed')
-    const reader = await input.open({
+    const identity: NativeUsagePassIdentity = {
       passId: input.passId(),
       invocationId: input.invocationId,
       nativeSource: before.nativeSource,
@@ -35,8 +35,15 @@ export function createNativePageCapture(
       lineage: before.lineage,
       epoch: before.epoch,
       phase,
-    })
-    await persistNativeUsagePass(reader, input.durableOwner.passOwner(before))
+    }
+    const receipt = before
+    const persist = async (owner: ReturnType<typeof input.durableOwner.passOwner>) => {
+      const reader = await input.open(identity)
+      return persistNativeUsagePass(reader, owner)
+    }
+    if (phase === 'final' && input.durableOwner.withFinalOwner)
+      await input.durableOwner.withFinalOwner(receipt, persist)
+    else await persist(input.durableOwner.passOwner(receipt))
   }
   return {
     contract: 'opencode-child-pages-v2',

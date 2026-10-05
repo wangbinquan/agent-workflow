@@ -13,7 +13,7 @@ import type { NativeUsagePassOwner } from '@/modules/runtime-management/applicat
 import type { ObservationNativePassIdentity } from '@agent-workflow/shared'
 import type { ProviderHarness } from './eachProvider'
 export async function originalNativeLedgerFixture(
-  harness: ProviderHarness,
+  harness: Pick<ProviderHarness, 'db'>,
   mode: 'fresh' | 'resume' = 'fresh',
   numericPages = true,
   nativeStore: {

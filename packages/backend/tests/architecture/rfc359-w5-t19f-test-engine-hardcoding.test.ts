@@ -386,9 +386,13 @@ export const TEST_ENGINE_HARDCODING_DEBT: readonly string[] = [
   // RFC-370: one native SQLite client records real writer-lease/transaction ACKs.
   // Its PG protocol fixture is synthetic; real-PG parity is retained as explicit debt below.
   'rfc370-workgroup-commit-queue.test.ts: 1',
+  // RFC-371：外部 OpenCode SQLite 格式与真实 WAL 快照；baseline/membership 同时走双 provider。
+  'rfc371-native-baseline-snapshot.test.ts: 1',
   'rfc371-native-child-capture.test.ts: 1',
   // RFC-371：原 OpenCode 外部文件格式夹具；历史原 owner/ledger/cursor 用双 provider，PG另验poolMax1。
   'rfc371-native-history-provider.test.ts: 1',
+  // RFC-371：真实子进程使用的 OpenCode 外部 SQLite，四处建库/改库/替换；Task/账本/恢复走双 provider。
+  'rfc371-native-invocation-producer.test.ts: 4',
   // RFC-371：唯一原生 SQLite 文件是 OpenCode 外部数据格式；原 Task／账本／报告仍走双 provider，另验 PG poolMax1。
   'rfc371-native-ledger-provider.test.ts: 1',
   // RFC-371：原生 OpenCode 固定 SQLite 文件夹具（建库/修改各一处），不属于 AW 持久 provider。

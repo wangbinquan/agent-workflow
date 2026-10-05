@@ -5,14 +5,21 @@ import type { NativeUsageInvocationPersistence } from '../application/ports/nati
 import { DrizzleNativeUsagePages } from '../infrastructure/drizzleNativeUsagePages'
 import { DrizzleNativeUsageEmission } from '../infrastructure/drizzleNativeUsageEmission'
 import { DrizzleNativeUsageCompletion } from '../infrastructure/drizzleNativeUsageCompletion'
+import {
+  originalNativeUsageBaseline,
+  withNativeUsageBaselineSnapshot,
+} from '../infrastructure/nativeUsageBaselineSnapshot'
+import type { ReportSnapshotSession } from '@/platform/persistence/reportSnapshotTypes'
 import type {
   ObservationNativeCompletion,
   ObservationNativeSourceAck,
+  ObservationNativeBeforeSpawnAck,
 } from '@agent-workflow/shared'
 
 /** No caller-created claim or alternate usage ledger: all callbacks retain this exact owner. */
 export function createNativeUsageInvocationPersistence(
   db: ProviderNeutralDatabase,
+  options: { readonly baselineSnapshots?: ReportSnapshotSession } = {},
 ): NativeUsageInvocationPersistence {
   return {
     forInvocation(input) {
@@ -24,20 +31,49 @@ export function createNativeUsageInvocationPersistence(
       const completion = new DrizzleNativeUsageCompletion(db)
       let retryProof: ObservationNativeCompletion | undefined
       let completeAck: ObservationNativeSourceAck | undefined
+      const passOwner = (
+        before: ObservationNativeBeforeSpawnAck,
+        writer = pages,
+      ): ReturnType<
+        NonNullable<ReturnType<NativeUsageInvocationPersistence['forInvocation']>>['passOwner']
+      > => ({
+        admit: (identity, initialCursor, rootCreatedAt) =>
+          writer.admit({
+            binding,
+            identity,
+            initialCursor,
+            rootCreatedAt,
+            beforeSpawnReceiptId: before.ownerReceiptId,
+          }),
+        persist: (page) =>
+          writer.persist({
+            binding,
+            page: {
+              ...page,
+              sessions: [...page.sessions],
+              steps: [...page.steps],
+              issues: [...page.issues],
+            },
+          }),
+        interrupt: (identity, reason) => writer.interrupt({ binding, identity, reason }),
+      })
       return {
         prepare: (request) => pages.prepare({ binding, ...request }),
-        passOwner: (before) => ({
-          admit: (identity, initialCursor, rootCreatedAt) =>
-            pages.admit({
-              binding,
-              identity,
-              initialCursor,
-              rootCreatedAt,
-              beforeSpawnReceiptId: before.ownerReceiptId,
-            }),
-          persist: (page) => pages.persist({ binding, page }),
-          interrupt: (identity, reason) => pages.interrupt({ binding, identity, reason }),
-        }),
+        passOwner,
+        async withFinalOwner(before, read) {
+          // Only the platform can supply an independent original read channel.
+          // The original single-connection memory/PG path keeps its per-page verification.
+          if (!options.baselineSnapshots || before.mode !== 'resume') return read(passOwner(before))
+          const original = await originalNativeUsageBaseline({ db, binding, before })
+          if (!original) return read(passOwner(before, new DrizzleNativeUsagePages(db, true, null)))
+          return withNativeUsageBaselineSnapshot({
+            snapshots: options.baselineSnapshots,
+            binding,
+            original,
+            run: (baseline) =>
+              read(passOwner(before, new DrizzleNativeUsagePages(db, true, baseline))),
+          })
+        },
         recordProcess: (nativeProcess) =>
           emissions.emit({
             binding,

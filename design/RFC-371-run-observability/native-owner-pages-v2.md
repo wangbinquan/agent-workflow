@@ -46,3 +46,15 @@ before baseline 的所有原页及最终 EOF 回执持久且确认后，才完�
 先冻结并检视 v2 page/completion/scope 引用合同及原 owner 肯定 ACK 接口；再实现原 owner 持久页、完整索引、同事务 emission/source 和真实双 provider 回归。随后接入实际 before-spawn、worker final、reap/drain 与原投影；源缺失、丢 ACK、写满、重启、scope/revision 变化、深树及历史补全均保留明确失败语义。最后逐项移除正式 producer 的旧总量分支并验证实际 consumer 使用 v2。
 
 验收必须包括每条原始身份与四桶的大规模比对、超过所有旧上限的真实 SQLite/PG、100K Task 与 10M usage 的 RSS／磁盘／延迟记录，以及真实模型任务、人民币验收费率、项目／系统／AW 页面核对。已有 reader 或纯 display fixture 的 PASS 不能代替这些结果。两个 RFC 保持 In Progress。
+
+## 2026-10-06 恢复执行的原 before 索引快照
+
+原 Task 生命周期已在 `ad4467631` 提交为显式可选 participant，尚未由生产默认装配选择。第一次 CI 的 1001 条真实 child 用量在 SQLite 与 PostgreSQL 均通过完整记录数及四桶数值断言，完整资格仍是 partial：该新增验收用例没有选择原进程机制的 `requireSpawnReceipt`，因此实际 spawn 没有原 launch nonce。后继用例选择既有肯定收据机制，并断言两份真实进程事实都有 nonce；不放宽完整资格，不补造进程证据，保留原 complete、数量及预算断言。
+
+resume 的 final 旧路径每提交一包都重新核验整个原 before，人口增大时工作量成为平方关系。新可选装配使用平台提供的独立原 report read channel：取得已持久 EOF 的小引用，在同一实际原数据库快照中逐页核验全部页、ACK、membership 和父关系一次，随后仅按每包 step 身份查询冻结索引。整个 final 读取期间快照保持；后来的 live membership 丢失不能把已有 step 分类为新消耗。没有有效原 before 就保留 raw final 页并停止数值分类，不能把缺失 before 当空集合。回调结束后 view 失效，不能继续使用。
+
+`baselineSnapshots` 由平台显式提供；真实文件 SQLite/WAL 和独立 PostgreSQL read channel 可以使用。原单连接内存库及 PostgreSQL poolMax1 保留既有每包完整校验，避免读快照持锁期间数值页写入等待自己。该选择不改变原唯一 source/ledger、page ACK 事务、历史修订及最终完整资格。单包 rows/bytes 控制传输，原人口持续到 EOF，没有 Task／调用／step 总量上限。
+
+新增双 provider 回归以 2501 原 step、31-row 原页和 97 个身份查询包核对全部精确成员，同时记录实际 SQL 返回的原页行数只读取一次；缺失原索引必须在回调前拒绝。真实文件 SQLite/WAL 用 1001 原 step 加两个新 step，快照内删除一个 live before member后仍只向原唯一 ledger 提交两个新 step及各自四桶。测试引擎库存只登记这些外部 OpenCode 固定 SQLite 格式和实际 WAL 机制的真实调用点，原机械分类器及旧判据保持。
+
+本片只完成快照实现及 CI 补正。默认 producer、所有实际入口、重启／多 root、CS 平台 v2 数值 consumer 和 100K Task／10M usage 实测仍开放。

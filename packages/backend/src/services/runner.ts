@@ -62,7 +62,7 @@ import type {
 import { bindNativeAgentInvocation } from '@/modules/task-execution/composition/agentInvocation'
 import { bindNativeAgentProtocol } from '@/modules/runtime-management/infrastructure/local/agentProtocol'
 import { bindLocalAgentExecutionParticipants } from '@/modules/task-execution/infrastructure/local/agentExecutionEffect'
-import { finalizeNativeUsageInvocation } from '@/modules/task-execution/application/finalizeNativeUsageInvocation'
+import { finalizeNativeUsageInvocation } from '@/modules/task-execution/public/participants'
 import { createLogger, type Logger } from '@/util/log'
 import {
   BRANCH_MARKER_MALFORMED_PREFIX,

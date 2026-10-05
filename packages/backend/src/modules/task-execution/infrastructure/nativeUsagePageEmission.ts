@@ -20,6 +20,7 @@ import type { TaskExecutionTransaction } from './ownedTaskExecution'
 import type { NativeUsageOwnerFacts } from './nativeUsageOwnerTransaction'
 import { emitNativeUsageEvidence } from './drizzleNativeUsageEmission'
 import { verifyNativeUsagePass } from './nativeUsagePassVerification'
+import type { NativeUsageBaselineReadView } from '../application/ports/nativeUsageBaseline'
 
 /** Emit only this invocation's new original steps, in the page owner's same transaction. */
 export async function emitNativeUsagePage(
@@ -29,61 +30,82 @@ export async function emitNativeUsagePage(
   page: ObservationNativePassPage,
   before: ObservationNativeBeforeSpawnAck,
   ownerReceiptId: string,
+  originalBeforeIndex?: NativeUsageBaselineReadView | null,
 ): Promise<void> {
   if (page.identity.phase !== 'final' || page.steps.length === 0) return
   let prior = new Set<string>()
   if (before.mode === 'resume') {
-    const key = JSON.stringify([
-      page.identity.invocationId,
-      page.identity.nativeSource,
-      page.identity.sourceGeneration,
-      page.identity.rootSessionId,
-      page.identity.lineage,
-      page.identity.epoch,
-      'baseline',
-    ])
-    const head = (
-      await tx.select().from(nativeUsagePassHeads).where(eq(nativeUsagePassHeads.key, key)).limit(1)
-    )[0]
-    const baseline =
-      head &&
-      (
+    if (originalBeforeIndex === null) return
+    if (originalBeforeIndex) {
+      const original = originalBeforeIndex.original.ack.identity
+      if (
+        original.invocationId !== binding.invocationId ||
+        original.nativeSource !== before.nativeSource ||
+        original.sourceGeneration !== before.sourceGeneration ||
+        original.rootSessionId !== before.rootSessionId ||
+        original.lineage !== before.lineage ||
+        original.epoch !== before.epoch ||
+        original.phase !== 'baseline'
+      )
+        throw new Error('Original native before index changed its accepted invocation')
+      prior = new Set(await originalBeforeIndex.members(page.steps.map((step) => step.stepId)))
+    } else {
+      const key = JSON.stringify([
+        page.identity.invocationId,
+        page.identity.nativeSource,
+        page.identity.sourceGeneration,
+        page.identity.rootSessionId,
+        page.identity.lineage,
+        page.identity.epoch,
+        'baseline',
+      ])
+      const head = (
         await tx
           .select()
-          .from(nativeUsagePasses)
-          .where(eq(nativeUsagePasses.passId, head.passId))
+          .from(nativeUsagePassHeads)
+          .where(eq(nativeUsagePassHeads.key, key))
           .limit(1)
       )[0]
-    // An absent before scan cannot turn pre-existing steps into this invocation's numbers.
-    if (!baseline || baseline.state !== 'eof' || baseline.lastAck === null) return
-    const identity = ObservationNativePassIdentitySchema.parse(JSON.parse(baseline.identity))
-    const ack = ObservationNativePassAckSchema.parse(JSON.parse(baseline.lastAck))
-    if (identity.phase !== 'baseline' || ack.eof === null || ack.nextCursor !== null)
-      throw new Error('Original native numeric page changed its baseline EOF')
-    const verified = await verifyNativeUsagePass(
-      tx,
-      binding,
-      { ack, pageCount: baseline.nextOrdinal },
-      true,
-    )
-    if (verified.hasPopulationIssues) return
-    prior = new Set(
-      (
-        await chunkedAll(
-          page.steps.map((step) => step.stepId),
-          (ids) =>
-            tx
-              .select({ stepId: nativeUsageStepMembers.stepId })
-              .from(nativeUsageStepMembers)
-              .where(
-                and(
-                  eq(nativeUsageStepMembers.passId, baseline.passId),
-                  inArray(nativeUsageStepMembers.stepId, ids),
+      const baseline =
+        head &&
+        (
+          await tx
+            .select()
+            .from(nativeUsagePasses)
+            .where(eq(nativeUsagePasses.passId, head.passId))
+            .limit(1)
+        )[0]
+      // An absent before scan cannot turn pre-existing steps into this invocation's numbers.
+      if (!baseline || baseline.state !== 'eof' || baseline.lastAck === null) return
+      const identity = ObservationNativePassIdentitySchema.parse(JSON.parse(baseline.identity))
+      const ack = ObservationNativePassAckSchema.parse(JSON.parse(baseline.lastAck))
+      if (identity.phase !== 'baseline' || ack.eof === null || ack.nextCursor !== null)
+        throw new Error('Original native numeric page changed its baseline EOF')
+      const verified = await verifyNativeUsagePass(
+        tx,
+        binding,
+        { ack, pageCount: baseline.nextOrdinal },
+        true,
+      )
+      if (verified.hasPopulationIssues) return
+      prior = new Set(
+        (
+          await chunkedAll(
+            page.steps.map((step) => step.stepId),
+            (ids) =>
+              tx
+                .select({ stepId: nativeUsageStepMembers.stepId })
+                .from(nativeUsageStepMembers)
+                .where(
+                  and(
+                    eq(nativeUsageStepMembers.passId, baseline.passId),
+                    inArray(nativeUsageStepMembers.stepId, ids),
+                  ),
                 ),
-              ),
-        )
-      ).map((member) => member.stepId),
-    )
+          )
+        ).map((member) => member.stepId),
+      )
+    }
   }
   const row = (
     await tx

@@ -28,6 +28,7 @@ import {
   runWithTaskExecutionContext as runWithTaskExecutionContextInternal,
 } from '../composition/sqliteTaskExecutionContext'
 import { TaskExecutionError as TaskExecutionErrorInternal } from '../application/taskExecutionError'
+import { finalizeNativeUsageInvocation as finalizeNativeUsageInvocationInternal } from '../application/finalizeNativeUsageInvocation'
 import { GateContinuationEffectStep as GateContinuationEffectStepInternal } from '../application/drive/gateContinuationEffectStep'
 import type {
   AcceptHumanGateDecisionInput,
@@ -115,6 +116,9 @@ export type {
   TaskSourceTerminationReceipt,
 } from '../application/applySourceTerminationEffect'
 export type { TaskRuntimeLifecyclePersistence } from '../application/ports/taskRuntimeLifecyclePersistence'
+
+/** Retain the exact original EOF finalizer behind the Task participant boundary. */
+export const finalizeNativeUsageInvocation = finalizeNativeUsageInvocationInternal
 
 /** Required runtime participants; production construction has no fallback. */
 export interface SchedulerRuntimeTopology {

@@ -130,6 +130,7 @@ describeEachProvider('RFC-371 original Task native page producer', (harness) => 
       workingDirectory: () => native.directory,
       environment: () => ({ ...process.env, OPENCODE_DB: native.path }) as Record<string, string>,
       stdin: () => undefined,
+      requireSpawnReceipt: true,
       taskEffect: {
         persistence: f.persistence.effects,
         nodeExecution: () => f.persistence.nodeExecution,
@@ -160,11 +161,13 @@ describeEachProvider('RFC-371 original Task native page producer', (harness) => 
     expect(facts[0]).toMatchObject({
       phase: 'spawned',
       pid: expect.any(Number),
+      launchNonce: expect.any(String),
       reapedAt: null,
       drainedAt: null,
     })
     expect(facts[1]).toMatchObject({
       phase: 'settled',
+      launchNonce: expect.any(String),
       reapedAt: expect.any(Number),
       drainedAt: expect.any(Number),
       outcome: 'ok',
