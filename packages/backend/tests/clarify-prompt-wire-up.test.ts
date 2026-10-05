@@ -73,7 +73,10 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
   })
 
   test('runner.ts threads the clarifyChannel ADT into renderUserPrompt', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'runner.ts'), 'utf8')
+    const src = readFileSync(
+      join(BACKEND_SRC, '../modules/task-execution/application/taskAgentRun.ts'),
+      'utf8',
+    )
     // RFC-148: the channel rides through whole — renderUserPrompt projects
     // mandatory ask-back / the stop notice from it (was: hasClarifyChannel).
     expect(src).toContain('clarifyChannel: opts.clarifyChannel')
@@ -103,14 +106,20 @@ describe('TaskExecution ↔ runner clarify prompt wire-up (RFC-023 T12)', () => 
   })
 
   test('runner.ts wires detectEnvelopeKind + extractClarifyEnvelopeBody for the envelope kind branch', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'runner.ts'), 'utf8')
+    const src = readFileSync(
+      join(BACKEND_SRC, '../modules/task-execution/application/taskAgentRun.ts'),
+      'utf8',
+    )
     expect(src).toContain('detectEnvelopeKind')
     expect(src).toContain('extractClarifyEnvelopeBody')
     expect(src).toContain('parseClarifyEnvelopeBody')
   })
 
   test('runner.ts threads clarifyContext through to renderUserPrompt', () => {
-    const src = readFileSync(join(BACKEND_SRC, 'runner.ts'), 'utf8')
+    const src = readFileSync(
+      join(BACKEND_SRC, '../modules/task-execution/application/taskAgentRun.ts'),
+      'utf8',
+    )
     expect(src).toContain('clarifyContext')
   })
 

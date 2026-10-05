@@ -957,3 +957,7 @@ Windows 37380867203 在 a69d71bea1e7cce219295e7700846c5e9e33f18c 上两个正常
 ## 2026-10-06 Task 核心 CI 类型修复及匹配
 
 Windows bbbe exact-SHA CI37383152628/job112009886282 的三个自有 Typecheck 错误只以一个原类型导入与两个不存在的 fixture schema 键修正。SOURCE2-DOC1-R1 独立有限 PASS9，首末指纹 2dfd6637309fa58cf518f15768001622d8cf06291265ea14e8fe4f2949a67700；完整 runtime body 和旧 fixture 断言/预算保持，branchPorts 声明保留。其他 RFC371 错误不混称已修复。一次原规则 scoped census 读取完整 committed bbbe 加冻结候选，排除所有 family WIP；sourceDigest sha256:89265e267cc6ea6967895fda93c339a56a2c4ffe48d5ca86d7c6b9f42f903013，350原债、129顺序/why、40SPI/69targets、原SCC和原counter保持，四个前批许可正常退役且无新增长许可。此15路径匹配与共享增量仅交有限功能复核，不重启已通过源码门。全部旧共享正文/并行输出保持，无本机AW tests/typecheck/build/service；六调用/全根/A-G/CS部署和RFC未完成，正式CI仍待后继确切SHA。
+
+## 2026-10-06 Task 迁移 SOURCE12-R1 与匹配候选
+
+SOURCE12-R1 独立有限 PASS27，首末指纹5c767604b52db228767d14d286ccceb4a146f73f18d980f3d8d2eb829e9f00a5：四reader、五真实迁移地址、单一原act-site目录修正、九type-only位置与JSON格式化。旧全断言、判据和预算保留，完整11文件逆向AST/JSON保持；两次纯证明失败留证。一次原 scoped census 在完整 committed b62b4c2 上读取冻结候选，373fb564仅提交与已冻结候选一致的snapshot格式，原人口与匹配来源不变，三原规则与一已复核的确切地址修正；sourceDigest sha256:89265e267cc6ea6967895fda93c339a56a2c4ffe48d5ca86d7c6b9f42f903013，真实effect8→9，350旧债/129顺序why/40SPI/69targets/原SCC保持。投影R1路径遗漏、R2外部测试库存原baseline37与真实40不一致的失败保留；R3仅以原counter匹配两个实际迁移库存37→40、19→21，许可下一普通后继退役。两自有guard来自原canonical输出，其他行保持。本15路径只复核匹配与共享增量，复用稳定SOURCE，不重扫、不跑本机AW tests/typecheck/build/service。全部family/root与peer在制内容保留排除；正式CI、A-G、CS部署与RFC开放。

@@ -212,7 +212,7 @@ describeEachProvider('RFC-371 original Task native page producer', (harness) => 
     expect(binding).toEqual({
       invocationId: first.f.binding.invocationId,
       beforeOwnerReceiptId: first.f.before.ownerReceiptId,
-      sourceGeneration: generation,
+      sourceGeneration: generation!,
     })
     const rows = await allRecords(first.ledger, first.f.binding.taskId)
     expect(rows).toHaveLength(1001)
@@ -227,7 +227,7 @@ describeEachProvider('RFC-371 original Task native page producer', (harness) => 
     expect(proof.contract).toBe('opencode-child-pages-v2')
     if (proof.contract !== 'opencode-child-pages-v2') throw new Error('Wrong native contract')
     expect(proof.state).toBe('complete')
-    expect(proof.final!.ack.identity.sourceGeneration).toBe(generation)
+    expect(proof.final!.ack.identity.sourceGeneration).toBe(generation!)
     expect(proof.final!.ack.counts.steps).toBe('1001')
     expect(proof.process.spawnedAt!).toBeGreaterThanOrEqual(first.f.before.preparedAt)
     expect(proof.baseline.kind).toBe('fresh')

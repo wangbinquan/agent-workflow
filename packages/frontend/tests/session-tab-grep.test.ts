@@ -21,7 +21,10 @@ const SESSION_CONVERSATION_PANEL = readFileSync(
   join(REPO_ROOT, 'packages/frontend/src/components/node-session/SessionConversationPanel.tsx'),
   'utf8',
 )
-const RUNNER = readFileSync(join(REPO_ROOT, 'packages/backend/src/services/runner.ts'), 'utf8')
+const RUNNER = readFileSync(
+  join(REPO_ROOT, 'packages/backend/src/modules/task-execution/application/taskAgentRun.ts'),
+  'utf8',
+)
 
 describe('RFC-027 source-code wiring', () => {
   test('NodeDetailDrawer keeps a stable Session panel and mounts its content only while active', () => {

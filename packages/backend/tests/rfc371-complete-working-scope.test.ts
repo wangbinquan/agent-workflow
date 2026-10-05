@@ -27,7 +27,9 @@ describeEachProvider('RFC-371 original Task TEMP lifetime', (harness) => {
       await first.rows.upsert('task/first/input', [{ key: 'a', document: { value: 'revised' } }])
       await first.rows.put('task/first/fold', { key: 'total', document: output })
       await other.rows.insert('task/other/input', [{ key: 'other', document: 'retained' }])
-      expect(await first.rows.get('task/first/input', 'a')).toEqual({ value: 'revised' })
+      expect(await first.rows.get<{ value: string }>('task/first/input', 'a')).toEqual({
+        value: 'revised',
+      })
       const initial = await first.rows.page('task/first/input', null, 1)
       expect(initial.items.map((row) => row.key)).toEqual(['a'])
       expect(initial.nextCursor).toBe('a')
@@ -39,8 +41,8 @@ describeEachProvider('RFC-371 original Task TEMP lifetime', (harness) => {
       await first.release()
       expect((await workspace.page('task/first/input', null)).items).toEqual([])
       expect((await workspace.page('task/first/fold', null)).items).toEqual([])
-      expect(await workspace.get('cohort/report-rows', 'allocation')).toEqual(output)
-      expect(await other.rows.get('task/other/input', 'other')).toBe('retained')
+      expect(await workspace.get<typeof output>('cohort/report-rows', 'allocation')).toEqual(output)
+      expect(await other.rows.get<string>('task/other/input', 'other')).toBe('retained')
       await expect(first.rows.get('task/first/input', 'a')).rejects.toThrow('scope is released')
       await expect(first.rows.insert('task/first/input', [])).rejects.toThrow('scope is released')
       await other.release()
@@ -73,7 +75,7 @@ describeEachProvider('RFC-371 original Task TEMP lifetime', (harness) => {
       }
       await scope.rows.put('task/a', { key: 'own', document: 'temporary' })
       await scope.release()
-      expect(await workspace.get('task/ab/input', 'other')).toBe('unchanged')
+      expect(await workspace.get<string>('task/ab/input', 'other')).toBe('unchanged')
       expect(await workspace.get('task/a', 'own')).toBeUndefined()
     })
   })
@@ -130,7 +132,7 @@ describeEachProvider('RFC-371 original Task TEMP lifetime', (harness) => {
           await workspace.put('cohort/report-rows', { key: 'allocation', document: output })
         }),
       ).rejects.toBe(reason)
-      expect(await workspace.get('cohort/report-rows', 'allocation')).toEqual(output)
+      expect(await workspace.get<typeof output>('cohort/report-rows', 'allocation')).toEqual(output)
       // The original snapshot owns final cleanup; a clear error cannot publish a ready report.
       await workspace.clear('task/clear-failure/input')
     })

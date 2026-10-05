@@ -1400,7 +1400,7 @@
   "schemaVersion": 1,
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "bbbef9f05b57f3afd0ed1a48f5fc27db325f3db3",
+    "currentSnapshotSha": "b62b4c2a18f90863900273ed8eeb4d8e5b84fc73",
     "contentDigest": "sha256:aee15b00aaa24d48ac1e3679df6a1c87479702c7e663d2010696e13e525255b2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"

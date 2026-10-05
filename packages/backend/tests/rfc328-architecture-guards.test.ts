@@ -258,6 +258,8 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   // in matching cross-context imports; retire with the selected A-T7 roots.
   'runtime-management/infrastructure/local/agentMaterialCompiler: packages/backend/src/modules/task-execution/composition/agentInvocation.ts',
   'runtime-management/infrastructure/local/agentMaterialEvidence: packages/backend/src/modules/task-execution/composition/agentInvocation.ts',
+  'runtime-management/infrastructure/local/agentProtocol: packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
+  'source-control/composition/agentWorkspaceGitControl: packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
   // RFC-357：两个 provider 的目录源适配收成一份，这条债随之只剩一条（两个装配文件不再
   // 各自 import task-catalog 的 required-ports）。
   // RFC-370 H3: standalone binds the neutral SC presence query at this composition.

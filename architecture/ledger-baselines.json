@@ -132,11 +132,14 @@
       "why": "RFC-294 review 2026-08-30 §B2：design §3 常驻规则 1～3 的存量违规（domain 导 adapter、application/engine 导 @/db/schema、fenced 层导 infrastructure/**），按 rule|file|specifier 逐条入账；只许降。"
     },
     {
-      "baseline": 37,
+      "baseline": 40,
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "id": "rfc294-review-off-dag-offered-edges",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。 （RFC-359 AC-1 第 13 刀收尾：`/api/tasks` 的两个 provider 绑定合成一个中立工厂 `createTaskRouteOperations`，两份 provider 命名文件退役，这一对随之销账。）基线 41 → 39。"
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。 （RFC-359 AC-1 第 13 刀收尾：`/api/tasks` 的两个 provider 绑定合成一个中立工厂 `createTaskRouteOperations`，两份 provider 命名文件退役，这一对随之销账。）基线 41 → 39。",
+      "allowGrowth": {
+        "why": "RFC-370 Task core CI address correction SOURCE12-R1: actual original counter 37 -> 40 for rfc294-review-off-dag-offered-edges. No production runtime source changes. Three actual moved memory offered addresses and two actual native compatibility bridge addresses are mechanically registered; all old rows, classifiers, assertions and budgets remain unchanged. The existing original effect collector only receives the exact moved Task production act-site again; effect classification and projection remain unchanged. Nine fixture type-only locations and JSON formatting retain original runtime inputs and assertions. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. The six real Task calls, all roots, A-G, CS adapters and deployment remain open and are excluded from this candidate. Retire this one-commit declaration in the next ordinary successor."
+      }
     },
     {
       "baseline": 136,
@@ -300,11 +303,14 @@
       "why": "RFC-328 私有 ownership/proof factory 的精确 production consumer 账本；新增调用点必须逐站审查，不能从 raw task id 或 JSON 构造 authority。"
     },
     {
-      "baseline": 19,
+      "baseline": 21,
       "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
       "id": "rfc328-cross-context-provider-bridge-debt",
       "symbol": "CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT",
-      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。"
+      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。",
+      "allowGrowth": {
+        "why": "RFC-370 Task core CI address correction SOURCE12-R1: actual original counter 19 -> 21 for rfc328-cross-context-provider-bridge-debt. No production runtime source changes. Three actual moved memory offered addresses and two actual native compatibility bridge addresses are mechanically registered; all old rows, classifiers, assertions and budgets remain unchanged. The existing original effect collector only receives the exact moved Task production act-site again; effect classification and projection remain unchanged. Nine fixture type-only locations and JSON formatting retain original runtime inputs and assertions. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. The six real Task calls, all roots, A-G, CS adapters and deployment remain open and are excluded from this candidate. Retire this one-commit declaration in the next ordinary successor."
+      }
     },
     {
       "baseline": 399,
@@ -920,8 +926,8 @@
   "schemaVersion": 1,
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "bbbef9f05b57f3afd0ed1a48f5fc27db325f3db3",
-    "contentDigest": "sha256:679750f6a7886bbbf151d3f644093b6d1d9077909743c7648398f8c83f2e583d",
+    "currentSnapshotSha": "b62b4c2a18f90863900273ed8eeb4d8e5b84fc73",
+    "contentDigest": "sha256:6c28b1cf8c0603302f3f5b8ccd5807a1655a01f47267ab21f64aa8f4d9aa1efe",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

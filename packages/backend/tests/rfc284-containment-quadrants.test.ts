@@ -155,13 +155,21 @@ describe('RFC-284 T6 — 双查骨架唯一性文本锁', () => {
   test('checkLexicalThenRealpath 在 src 恰好一处定义、三个迁移点全部消费', () => {
     const safePath = src('util/safePath.ts')
     expect(safePath.match(/export function checkLexicalThenRealpath\(/g)?.length).toBe(1)
-    expect(src('services/envelope.ts').includes('checkLexicalThenRealpath(')).toBe(true)
+    expect(
+      src('modules/task-execution/infrastructure/local/filePortOutputValidation.ts').includes(
+        'checkLexicalThenRealpath(',
+      ),
+    ).toBe(true)
     const pa = src('platform/content/local/rootFileQueries.ts')
     expect((pa.match(/checkLexicalThenRealpath\(/g) ?? []).length).toBeGreaterThanOrEqual(2)
   })
 
   test('envelope.ts 双查手写副本清零（realpathSync 零命中）', () => {
-    expect(src('services/envelope.ts').includes('realpathSync')).toBe(false)
+    expect(
+      src('modules/task-execution/infrastructure/local/filePortOutputValidation.ts').includes(
+        'realpathSync',
+      ),
+    ).toBe(false)
   })
 
   test('portArtifacts.ts 仅存归档 symlink warn 段的单查（非双查族，warn 不拒）', () => {

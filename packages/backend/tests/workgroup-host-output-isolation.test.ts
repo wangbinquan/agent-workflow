@@ -400,7 +400,7 @@ describe('RFC-184 — source wiring locks', () => {
   })
 
   test('runner persist block is guarded by persistDeclaredOutputs !== false', () => {
-    const src = read('runner.ts')
+    const src = read('../modules/task-execution/application/taskAgentRun.ts')
     expect(src).toContain('opts.persistDeclaredOutputs !== false')
   })
 })

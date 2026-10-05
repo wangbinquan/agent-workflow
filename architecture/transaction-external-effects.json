@@ -4230,11 +4230,29 @@
     ],
     "denominator": {
       "codeHostBindings": 68,
-      "registeredActSites": 8,
+      "registeredActSites": 9,
       "unknownActSites": 0,
       "unknownCodeHostBindings": 0
     },
     "entries": [
+      {
+        "attemptPolicy": "per-spawn",
+        "auditRetention": "effect-attempt-watermark-and-decision",
+        "effectKind": "process",
+        "file": "packages/backend/src/modules/task-execution/application/taskAgentRun.ts",
+        "generationPolicy": "intent-or-node-generation",
+        "id": "task-effect:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#1429:process",
+        "journaledBy": "createProcessEffectAttemptObserver",
+        "line": 1429,
+        "operationFamily": "lineage-slot-stable-action",
+        "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/taskAgentRun.ts#runNode",
+        "recoveryClass": "managed-process-preactivation",
+        "recoveryProbeOrActorReplay": "pid-nonce-binary-probe",
+        "resourceKeySetResolver": "explicit-multi-resource-set",
+        "responseClassifier": "spawn-receipt-exit-reap",
+        "symbol": "runNode",
+        "transportRetryPolicy": "no-hidden-respawn"
+      },
       {
         "attemptPolicy": "per-http-send",
         "auditRetention": "effect-attempt-watermark-and-decision",

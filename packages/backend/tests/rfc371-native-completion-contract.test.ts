@@ -324,7 +324,7 @@ test('complete EOF counts and page ordinals retain arbitrary precision with no p
 
 test('the before-spawn receipt explicitly separates an unborn fresh root from the actual resume root', () => {
   const value = {
-    contract: 'native-usage-before-spawn-v2',
+    contract: 'native-usage-before-spawn-v2' as const,
     invocationId: identity.invocationId,
     nativeSource: identity.nativeSource,
     sourceGeneration: identity.sourceGeneration,
@@ -332,7 +332,7 @@ test('the before-spawn receipt explicitly separates an unborn fresh root from th
     epoch: identity.epoch,
     ownerReceiptId: 'before-receipt',
     preparedAt: 5,
-    mode: 'fresh',
+    mode: 'fresh' as const,
     rootSessionId: null,
   }
   expect(ObservationNativeBeforeSpawnAckSchema.safeParse(value).success).toBe(true)

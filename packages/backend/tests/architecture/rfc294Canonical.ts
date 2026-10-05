@@ -3560,7 +3560,11 @@ function buildTaskOwnedEffectEntries(backend: readonly SourceUnit[]): {
   for (const unit of backend) {
     // Coordinator internals call one another; the denominator is production
     // act-site registration, not the coordinator's own adapter plumbing.
-    if (unit.path.startsWith(`${MODULE_PREFIX}task-execution/application/`)) continue
+    if (
+      unit.path.startsWith(`${MODULE_PREFIX}task-execution/application/`) &&
+      unit.path !== `${MODULE_PREFIX}task-execution/application/taskAgentRun.ts`
+    )
+      continue
     const visit = (node: ts.Node): void => {
       if (
         ts.isCallExpression(node) &&

@@ -569,6 +569,24 @@ export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
     why: 'RFC-349 provider cutover 新增了 owner-closed public participant 消费，但该 bounded-context 对尚未进入 design §3.1 目标 DAG；先逐文件精确锁定，待 ownership/DAG 正式收敛后销账。',
     removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
   },
+  {
+    from: 'packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts',
+    to: 'memory',
+    why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/application/taskAgentRun.ts',
+    to: 'memory',
+    why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
+  {
+    from: 'packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRunOptions.ts',
+    to: 'memory',
+    why: 'RFC-370 将原 Runner 完整业务合同、共同算法和 native options 迁入 Task owner，保留原 memory public 查询消费；逐文件登记真实迁移地址，不改变 offered 边分类或 DAG 判据。',
+    removeAfterWave: 'W4-E（RFC-294 provider-neutral bounded-context convergence）',
+  },
 ]
 
 const PAIRS = offeredPairs(TARGET_CONTEXT_EDGES)

@@ -1,3 +1,9 @@
+## 2026-10-06 RFC-370 Task 迁移 CI 配套地址、类型与格式修复
+
+bbbe 的正式 CI 失败按日志补正四个实际 reader、三条 memory offered 地址与两个 native bridge 地址；原判据和预算保持。canonical collector 仅恢复完整 Task core 的原 process act-site，原 >8 门槛保留。三个已提交 RFC371 fixtures 九处只补类型，snapshot JSON仅格式化、解析内容不变；完整11文件逆向 AST/JSON等价。SOURCE12-R1 独立有限 PASS27，指纹 5c767604b52db228767d14d286ccceb4a146f73f18d980f3d8d2eb829e9f00a5。全部 Task family/root 与 peer native-root-set 在制输出保留并排除。
+
+一次 scoped census 使用完整 committed b62b4c2 文档后继人口与冻结12候选；373fb564仅提交与冻结候选逐字相同的snapshot格式，无源码人口或配套清单增量，复用原门与一次扫描；三个原 committed rules 和一处已复核的确切 collector 地址修正，字段分类与投影不变。sourceDigest sha256:89265e267cc6ea6967895fda93c339a56a2c4ffe48d5ca86d7c6b9f42f903013；原 effect 登记恢复8→9。350原债、129有序库存/why、40SPI/69targets与原SCC保持；原counter对两具名迁移库存实测37→40、19→21，下一普通后继退役这两个许可。只匹配两自有 guard 的原 canonical 输出；其他行保持。投影R1缺少数据文件、R2发现外部测试库存未重计数的失败留证，R3使用原 counter 从冻结来源取真实计数，无重跑 census或源码门。本机无AW tests/typecheck/build/service，正式结果待发布后exact-SHA CI；A-T5/A-G/CS首次部署/M1～M4/RFC继续，尚无AW-in-CS部署。以下共享正文与并行内容完整保留。
+
 ## 2026-10-06 RFC-370 Task 核心 CI 类型修复
 
 bbbef9f Windows CI37383152628/job112009886282 的 Typecheck 报本批三个错误：原 status 类型漏导入、selected fixture 两个不存在的 nodeRuns.agentName 字段。只补 RunFinalStatus type import、删除两键，完整 runtime core 与 fixture 全断言/预算不变，前批 branchPorts 声明保持；有限 SOURCE2-DOC1-R1 PASS9，指纹 2dfd6637309fa58cf518f15768001622d8cf06291265ea14e8fe4f2949a67700。其他 RFC371 类型失败继续单独归因。
