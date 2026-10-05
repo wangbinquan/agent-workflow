@@ -19,7 +19,7 @@ import { nativeUsageRecordSourceKey } from './nativeUsageRevisionAllocation'
 /** Confirm one actual latest original numeric source for every new final step, through EOF. */
 export async function verifyNativeUsageNumericCoverage(
   tx: TaskExecutionTransaction,
-  binding: NativeUsageOwnerBinding,
+  binding: Pick<NativeUsageOwnerBinding, 'invocationId' | 'taskId' | 'nodeRunId'>,
   proof: ObservationNativeCompletion,
 ): Promise<{
   readonly records: string

@@ -23,6 +23,7 @@ export {
   readTaskCommitExcludePatterns,
 } from '../application/operationConfiguration'
 import type { Actor } from '@/auth/actor'
+import type { ObservationNativeScopeSource } from '@/modules/run-observability/public/participants'
 import { parseLoopExitCondition, type OverviewTasks } from '@agent-workflow/shared'
 import type { WorktreeTreeEntry } from '@agent-workflow/shared'
 import type {
@@ -36,6 +37,7 @@ import type {
 
 /** RFC-371: actor-filtered execution facts, without runtime payloads or private rows. */
 export interface TaskObservationFactsQuery {
+  readonly nativeScopes?: ObservationNativeScopeSource
   /** Retained span metadata, after the original actor-visible task lookup. */
   spanSources?(input: ObservationSpanSourceInput): Promise<ObservationSpanSourcePage>
   list(input: { readonly actor: Actor; readonly query: ObservationTaskPageQuery }): Promise<{

@@ -8,8 +8,9 @@ import { observationReasonKey } from './ObservationMetrics'
 
 type CaptureRow = NonNullable<ObservationTaskDetail['nativeCaptures']>[number]
 function revisions(row: CaptureRow) {
+  const proof = row.proof?.contract === 'opencode-child-steps-v1' ? row.proof : null
   const entries = new Map(
-    (row.proof?.priorRevisions ?? []).map((value) => [
+    (proof?.priorRevisions ?? []).map((value) => [
       value.stepId,
       { ...value, owner: null as string | null },
     ]),
@@ -45,6 +46,14 @@ export function ObservationNativeCapture({
   if (!rows.length) return null
   const count = (value: string | null | undefined) =>
     value == null ? t('runObservability.unknown') : BigInt(value).toLocaleString(i18n.language)
+  const scanSize = (row: CaptureRow) => {
+    const proof = row.proof
+    if (!proof) return '—'
+    if (proof.contract === 'opencode-child-steps-v1')
+      return `${count(String(proof.scannedSessions))} / ${count(String(proof.scannedSteps))}`
+    const counts = proof.final?.ack.counts ?? proof.finalProgress?.counts
+    return `${count(counts?.sessions)} / ${count(counts?.steps)}`
+  }
   const content = (
     <div className="stack--sm">
       <p className="muted">{t('runObservability.nativeCaptureHint')}</p>
@@ -67,9 +76,7 @@ export function ObservationNativeCapture({
                   <div className="muted">{row.invocationId}</div>
                 </th>
                 <td>{t('runObservability.nativeState_' + row.state)}</td>
-                <td>
-                  {row.proof ? `${row.proof.scannedSessions} / ${row.proof.scannedSteps}` : '—'}
-                </td>
+                <td>{scanSize(row)}</td>
                 <td>
                   {row.proof
                     ? new Date(row.proof.observedAt).toLocaleString(i18n.language)

@@ -1,11 +1,12 @@
 import type {
-  ObservationCaptureCommit,
+  ObservationUsageCaptureCommit,
   ObservationNativeBaselineStep,
   ObservationIngest,
 } from '@agent-workflow/shared'
 import type { UsageLedgerRecord } from '../domain/usageLedger'
 import { sha256Hex } from '@/util/hash'
 import type { NativeRevisionResolution, UsageLedgerScope } from '../ports/usageLedger'
+import { isNativeUsageScope } from '../domain/nativeUsageScope'
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 function compatibleModel(
@@ -22,7 +23,7 @@ function compatibleModel(
 
 /** The native store + root + stable part ID and full ancestry prove the original invocation. */
 export async function reconcileNativeUsageRevisions(input: {
-  readonly value: ObservationCaptureCommit
+  readonly value: ObservationUsageCaptureCommit
   readonly watermark: number | undefined
   readonly scope: UsageLedgerScope
   readonly append: (
@@ -35,6 +36,8 @@ export async function reconcileNativeUsageRevisions(input: {
 }): Promise<NativeRevisionResolution[]> {
   const { value, scope, watermark } = input,
     proof = value.capture
+  // Page histories are repaired from original bounded source frames, never a legacy array.
+  if (proof.contract === 'opencode-child-pages-v2') return []
   const references =
     proof.baselineSteps ??
     proof.priorRevisions.map((row) => ({
@@ -117,6 +120,7 @@ export async function reconcileNativeUsageRevisions(input: {
       if (
         !current ||
         !nativeScope ||
+        isNativeUsageScope(nativeScope) ||
         nativeScope.root !== proof.rootSessionId ||
         nativeScope.session !== reference.sessionId ||
         nativeScope.parentSession !== reference.parentSessionId ||

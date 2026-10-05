@@ -1,16 +1,17 @@
 import type {
   ObservationIngest,
-  ObservationCaptureCommit,
+  ObservationUsageCaptureCommit,
   ObservationNativeRevisionResolution,
 } from '@agent-workflow/shared'
 import type { UsageLedgerRecord } from '../domain/usageLedger'
+import type { ObservationNativeScopeSource } from '../public/participants'
 
 export interface UsageRevisionReceipt {
   readonly fingerprint: string
   readonly outcome: 'applied' | 'diagnostic' | 'stale'
 }
 export type NativeRevisionResolution = ObservationNativeRevisionResolution
-export interface UsageCaptureReceipt extends ObservationCaptureCommit {
+export interface UsageCaptureReceipt extends ObservationUsageCaptureCommit {
   readonly sourceCursor: string
   readonly sourceId: string
   readonly resolutions: readonly NativeRevisionResolution[]
@@ -23,6 +24,8 @@ export interface NativeUsageOwnership {
   readonly candidate: UsageLedgerRecord | null
 }
 export interface UsageLedgerScope {
+  /** Bind original Task evidence reads to this transaction, never a root pool connection. */
+  bindNativeScopes?(source: ObservationNativeScopeSource): ObservationNativeScopeSource
   cursor(): Promise<string | null>
   event(eventId: string): Promise<string | undefined>
   revision(invocationId: string, recordId: string, revision: number): Promise<string | undefined>
@@ -43,7 +46,7 @@ export interface UsageLedgerScope {
   advance(cursor: string): Promise<void>
   capture(invocationId: string): Promise<UsageCaptureReceipt | undefined>
   commitCapture(
-    value: ObservationCaptureCommit,
+    value: ObservationUsageCaptureCommit,
     cursor: string,
     resolutions: readonly NativeRevisionResolution[],
   ): Promise<void>

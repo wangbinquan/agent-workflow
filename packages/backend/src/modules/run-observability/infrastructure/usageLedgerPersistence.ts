@@ -1,5 +1,5 @@
 import { and, asc, eq, gt, inArray } from 'drizzle-orm'
-import { ObservationMeasurementSchema } from '@agent-workflow/shared'
+import { ObservationUsageMeasurementSchema } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { sha256Hex } from '@/util/hash'
 import {
@@ -14,6 +14,7 @@ import {
   type DatabaseTransaction,
 } from '@/platform/persistence/databaseTransaction'
 import type { UsageLedgerRecord } from '../domain/usageLedger'
+import type { ObservationNativeScopeSource } from '../public/participants'
 import type { NativeUsageOwnership, UsageLedgerScope, UsageLedgerStore } from '../ports/usageLedger'
 import {
   commitUsageCapture,
@@ -26,9 +27,18 @@ const key = (...parts: readonly string[]) => sha256Hex(JSON.stringify(parts))
 const decode = (document: string): UsageLedgerRecord => JSON.parse(document) as UsageLedgerRecord
 
 function scope(tx: DatabaseTransaction, sourceId: string): UsageLedgerScope {
+  const nativeReaders = new WeakMap<ObservationNativeScopeSource, ObservationNativeScopeSource>()
   const recordKey = (invocationId: string, recordId: string) =>
     key(sourceId, invocationId, recordId)
   return {
+    bindNativeScopes(source) {
+      let reader = nativeReaders.get(source)
+      if (!reader) {
+        reader = source.onReader(tx)
+        nativeReaders.set(source, reader)
+      }
+      return reader
+    },
     capture: (invocationId) => readUsageCapture(tx, invocationId),
     commitCapture: (value, cursor, resolutions) =>
       commitUsageCapture(tx, sourceId, cursor, value, resolutions),
@@ -130,7 +140,7 @@ function scope(tx: DatabaseTransaction, sourceId: string): UsageLedgerScope {
         .orderBy(asc(observationUsageEvents.revision))
         .limit(limit)
         .all()
-      return rows.map((row) => ObservationMeasurementSchema.parse(JSON.parse(row.document)))
+      return rows.map((row) => ObservationUsageMeasurementSchema.parse(JSON.parse(row.document)))
     },
     revision: async (invocationId, recordId, revision) =>
       (

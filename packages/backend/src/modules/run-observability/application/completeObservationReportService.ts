@@ -171,7 +171,10 @@ export function completeObservationReportService(input: {
       return report.report
     },
     async status(actor: Actor, id: string): Promise<CompleteObservationReport> {
-      const report = await claim(await readable(actor, id))
+      const original = await readable(actor, id)
+      // A read must expose a terminal failure. Only an explicit request retries it.
+      if (original.report.state === 'failed') return original.report
+      const report = await claim(original)
       schedule(report)
       return report.report
     },

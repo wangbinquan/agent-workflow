@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1877,
+    "entries": 1878,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -30845,6 +30845,28 @@
     },
     {
       "controls": {
+        "audit": true,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/observationNativeScopes.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/observationNativeScopes.ts#createObservationNativeScopes",
+      "missingControls": [
+        "authority",
+        "authorization",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/observationNativeScopes.ts#createObservationNativeScopes",
+      "symbol": "createObservationNativeScopes",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
         "audit": false,
         "authority": "none-observed",
         "authorization": true,
@@ -44893,7 +44915,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3214e2700604b4d1a74728b6928a694a5158477cba10dd8354697cd70e100baa",
+  "sourceDigest": "sha256:4d2de07179aaf057464eed6223b41c33adc1e6ab3b430a01fcdcf991b25d7b90",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

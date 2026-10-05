@@ -27,24 +27,12 @@ type Meter = {
   complete: boolean
   issues: readonly string[]
 }
-async function scopePath(
-  tx: TaskExecutionTransaction,
-  binding: NativeUsageOwnerBinding,
-  meter: Meter,
-) {
+async function scopePath(tx: TaskExecutionTransaction, meter: Meter) {
   const scope = meter.measurement.scope
   if (!scope) return null
   if ('ancestry' in scope) {
-    await verifyNativeUsageScope(
-      tx,
-      {
-        ...binding,
-        taskId: meter.measurement.taskId,
-        nodeRunId: meter.measurement.nodeRunId,
-        invocationId: meter.measurement.invocationId,
-      },
-      scope,
-    )
+    if (meter.measurement.nodeRunId === null) return null
+    await verifyNativeUsageScope(tx, { invocationId: meter.measurement.invocationId }, scope)
     const parent = (
       await tx
         .select()
@@ -238,11 +226,11 @@ export async function verifyNativeUsageReconciliation(
         const captured = captures.get(measured.invocationId)
         const originalCapture = captured && JSON.parse(captured.document).evidence
         const scope = measured.scope
-        const pathKey = JSON.stringify([measured.invocationId, scope])
+        const pathKey = JSON.stringify([measured.invocationId, measured.nodeRunId, scope])
         const path = () => {
           let original = paths.get(pathKey)
           if (!original) {
-            original = scopePath(tx, binding, meter)
+            original = scopePath(tx, meter)
             paths.set(pathKey, original)
           }
           return original

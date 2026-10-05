@@ -12,6 +12,7 @@ import type { CompleteWorkingRows } from './completeWorkingRows'
 import type { CompleteSourceReceipt } from './completeReport'
 import type { CompleteUsageWorkspace } from './completeUsageWorkspace'
 import type { CompleteSpanProjection } from './completeObservationSpans'
+import type { ObservationNativeScopeSource } from '../public/participants'
 
 export interface CompleteObservationContribution extends UsageContributionEvidence {
   readonly invocationId: string
@@ -27,6 +28,8 @@ export interface CompleteInvocationWorking {
   nativeCaptureCount: string
   knownZero: boolean
   emptyCostVisible: boolean
+  /** Original Task owner counts every new step against the complete baseline through EOF. */
+  expectedNativeRecords?: string | null
 }
 /** Original all-bucket quality exclusions, retained by the same ordered selection pass. */
 export interface CompleteObservationUnallocatedQuality {
@@ -53,6 +56,7 @@ export interface CompleteObservationTaskInput {
     readonly keyOf: (value: string) => string
     readonly identity: (record: CompleteObservationContribution) => string
     readonly signal?: AbortSignal
+    readonly nativeScopes?: ObservationNativeScopeSource
   }) => {
     readonly workspace: CompleteUsageWorkspace<CompleteObservationContribution>
     append(items: readonly CompleteObservationContribution[]): Promise<void>

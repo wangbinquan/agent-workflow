@@ -7,6 +7,11 @@ import {
   ObservationSpanCaptureSchema,
   ObservationSpanFactSchema,
 } from './observationSpans'
+import {
+  ObservationNativeCompletionSchema,
+  ObservationNativeMeasurementSchema,
+} from './observationNativeCompletion'
+import { ObservationNativeProcessFactSchema } from './observationNativeEmission'
 
 const identity = z.string().min(1).max(512)
 
@@ -96,6 +101,32 @@ export const ObservationCaptureCommitSchema = z
   .strict()
 export type ObservationCaptureCommit = z.infer<typeof ObservationCaptureCommitSchema>
 
+/** Internal evidence accepts original page references; the legacy SDK object keeps its shape. */
+export const ObservationUsageMeasurementSchema = z.union([
+  ObservationMeasurementSchema,
+  ObservationNativeMeasurementSchema,
+])
+export type ObservationUsageMeasurement = z.infer<typeof ObservationUsageMeasurementSchema>
+export const ObservationUsageCaptureSchema = z.union([
+  ObservationNativeCaptureSchema,
+  ObservationNativeCompletionSchema,
+])
+export type ObservationUsageCapture = z.infer<typeof ObservationUsageCaptureSchema>
+export const ObservationUsageCaptureCommitSchema = ObservationCaptureCommitSchema.extend({
+  capture: ObservationUsageCaptureSchema,
+}).superRefine((value, ctx) => {
+  const proof = value.capture
+  if (proof.contract !== 'opencode-child-pages-v2') return
+  const identities = [
+    proof.final?.ack.identity,
+    proof.finalProgress?.identity,
+    proof.baseline.kind === 'resume' ? proof.baseline.pass?.ack.identity : undefined,
+  ]
+  if (identities.some((identity) => identity && identity.invocationId !== value.invocationId))
+    ctx.addIssue({ code: 'custom', message: 'Native capture changed its original invocation' })
+})
+export type ObservationUsageCaptureCommit = z.infer<typeof ObservationUsageCaptureCommitSchema>
+
 /** An owner supplies a committed source page; cursors are opaque and never synthesized here. */
 export const ObservationIngestSchema = z
   .object({
@@ -103,17 +134,25 @@ export const ObservationIngestSchema = z
     expectedCursor: identity.nullable(),
     nextCursor: identity,
     events: z
-      .array(z.object({ eventId: identity, measurement: ObservationMeasurementSchema }).strict())
+      .array(
+        z.object({ eventId: identity, measurement: ObservationUsageMeasurementSchema }).strict(),
+      )
       .max(500),
-    capture: ObservationCaptureCommitSchema.optional(),
+    capture: ObservationUsageCaptureCommitSchema.optional(),
+    /** The original durable process frame advances delivery even when it has no numbers. */
+    nativeProcess: ObservationNativeProcessFactSchema.optional(),
     /** Frozen native store identity supplied by the accepted local invocation. */
     nativeSource: identity.optional(),
     nativeWatermark: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
   })
   .strict()
-  .refine((value) => value.events.length > 0 || value.capture !== undefined, {
-    message: 'A source page must contain numeric evidence or a capture proof',
-  })
+  .refine(
+    (value) =>
+      value.events.length > 0 || value.capture !== undefined || value.nativeProcess !== undefined,
+    {
+      message: 'A source page must contain numeric evidence or a capture proof',
+    },
+  )
 
 export type ObservationTokenUsage = z.infer<typeof ObservationTokenUsageSchema>
 export type ObservationMeasurement = z.infer<typeof ObservationMeasurementSchema>
@@ -123,11 +162,31 @@ export type ObservationIngest = z.infer<typeof ObservationIngestSchema>
 const capturedNumericUsage = z
   .object({
     invocationId: identity,
-    measurements: z.array(ObservationMeasurementSchema).max(500),
+    measurements: z.array(ObservationUsageMeasurementSchema).max(500),
     diagnostics: z.array(z.string().min(1).max(200)).max(100),
     capture: ObservationNativeCaptureSchema.optional(),
+    nativeCompletion: ObservationNativeCompletionSchema.optional(),
+    nativeProcess: ObservationNativeProcessFactSchema.optional(),
   })
   .strict()
+function validateNativeFrame(value: z.infer<typeof capturedNumericUsage>, ctx: z.RefinementCtx) {
+  if (value.capture && value.nativeCompletion)
+    ctx.addIssue({
+      code: 'custom',
+      message: 'A source cannot replace two native capture contracts',
+    })
+  if (value.nativeCompletion) {
+    const proof = value.nativeCompletion
+    const identities = [
+      proof.final?.ack.identity,
+      proof.finalProgress?.identity,
+      proof.baseline.kind === 'resume' ? proof.baseline.pass?.ack.identity : undefined,
+    ]
+    if (identities.some((identity) => identity && identity.invocationId !== value.invocationId))
+      ctx.addIssue({ code: 'custom', message: 'Native source changed its original invocation' })
+  }
+}
+const validatedNumericUsage = capturedNumericUsage.superRefine(validateNativeFrame)
 export const ObservationCapturedUsageSchema = capturedNumericUsage
   .extend({
     spanFacts: z.array(ObservationSpanFactSchema).max(200).optional(),
@@ -135,6 +194,7 @@ export const ObservationCapturedUsageSchema = capturedNumericUsage
     spanCapture: ObservationSpanCaptureSchema.optional(),
   })
   .superRefine((value, ctx) => {
+    validateNativeFrame(value, ctx)
     if ((value.spanFacts?.length ?? 0) + (value.priorSpanRevisions?.length ?? 0) > 200)
       ctx.addIssue({ code: 'custom', message: 'A frame contains at most 200 span records' })
     if (
@@ -150,10 +210,10 @@ export type ObservationCapturedUsage = z.infer<typeof ObservationCapturedUsageSc
 /** Preserve the original strict numeric write/rollback contract; isolate optional trace damage. */
 export function parseObservationCapturedUsage(value: unknown): ObservationCapturedUsage {
   if (value === null || typeof value !== 'object' || Array.isArray(value))
-    return capturedNumericUsage.parse(value)
+    return validatedNumericUsage.parse(value)
   const document = value as Record<string, unknown>
   const { spanFacts, priorSpanRevisions, spanCapture, ...numeric } = document
-  const parsed = capturedNumericUsage.parse(numeric)
+  const parsed = validatedNumericUsage.parse(numeric)
   if (
     !['spanFacts', 'priorSpanRevisions', 'spanCapture'].some((key) => Object.hasOwn(document, key))
   )

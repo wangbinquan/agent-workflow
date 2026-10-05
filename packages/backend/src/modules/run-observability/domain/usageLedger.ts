@@ -1,5 +1,6 @@
-import type { ObservationMeasurement } from '@agent-workflow/shared'
+import type { ObservationUsageMeasurement as ObservationMeasurement } from '@agent-workflow/shared'
 import { TOKEN_BUCKETS, subtractTokenBaseline, type TokenUsage } from './tokenUsage'
+import { sameNativeUsageScope, type NativeUsageScopeFacts } from './nativeUsageScope'
 
 export type UsageIssue =
   | 'unknown-inclusion'
@@ -14,6 +15,7 @@ export interface UsageLedgerRecord {
   /** Monotonic durable execution-source row proving the newest native snapshot. */
   readonly nativeWatermark?: number
   readonly measurement: ObservationMeasurement
+  readonly nativeScopeFacts?: NativeUsageScopeFacts
   /** Revision used for ordering; may be newer than the last usable measurement. */
   readonly observedRevision: number
   /** Native revision proving model metadata, independently of accepted numeric counters. */
@@ -64,7 +66,12 @@ function modelEvidence(next: ObservationMeasurement, previous?: UsageLedgerRecor
   return { model, ...(modelRevision === undefined ? {} : { modelRevision }) }
 }
 
-function sameIdentity(a: ObservationMeasurement, b: ObservationMeasurement): boolean {
+function sameIdentity(
+  a: ObservationMeasurement,
+  b: ObservationMeasurement,
+  previous?: NativeUsageScopeFacts,
+  next?: NativeUsageScopeFacts,
+): boolean {
   return (
     a.invocationId === b.invocationId &&
     a.recordId === b.recordId &&
@@ -73,7 +80,7 @@ function sameIdentity(a: ObservationMeasurement, b: ObservationMeasurement): boo
     a.agentId === b.agentId &&
     a.reporting === b.reporting &&
     a.inclusion === b.inclusion &&
-    JSON.stringify(a.scope) === JSON.stringify(b.scope) &&
+    sameNativeUsageScope(a.scope, b.scope, previous, next) &&
     compatibleModel(a.model, b.model) &&
     JSON.stringify(a.basis) === JSON.stringify(b.basis)
   )
@@ -84,6 +91,7 @@ function diagnostic(
   next: ObservationMeasurement,
   previous: UsageLedgerRecord | undefined,
   issue: UsageIssue,
+  nativeScopeFacts?: NativeUsageScopeFacts,
 ): UsageDecision {
   // Actual model evidence is independent of a rejected numeric decrease.
   // Identity conflicts and invalid finals cannot replace the proven metadata.
@@ -96,6 +104,9 @@ function diagnostic(
       sourceId,
       // Rejected first evidence supplies identity only, never reusable counters.
       measurement: evidence ? { ...measurement, model: evidence.model } : measurement,
+      ...((previous?.nativeScopeFacts ?? nativeScopeFacts) === undefined
+        ? {}
+        : { nativeScopeFacts: previous?.nativeScopeFacts ?? nativeScopeFacts }),
       observedRevision: next.revision,
       ...(evidence?.modelRevision !== undefined
         ? { modelRevision: evidence.modelRevision }
@@ -115,13 +126,18 @@ export function reconcileUsage(
   sourceId: string,
   next: ObservationMeasurement,
   previous?: UsageLedgerRecord,
+  nativeScopeFacts?: NativeUsageScopeFacts,
 ): UsageDecision {
   if (previous && next.revision <= previous.observedRevision)
     return { outcome: 'stale', record: previous }
-  if (previous && (previous.sourceId !== sourceId || !sameIdentity(previous.measurement, next)))
-    return diagnostic(sourceId, next, previous, 'identity-conflict')
+  if (
+    previous &&
+    (previous.sourceId !== sourceId ||
+      !sameIdentity(previous.measurement, next, previous.nativeScopeFacts, nativeScopeFacts))
+  )
+    return diagnostic(sourceId, next, previous, 'identity-conflict', nativeScopeFacts)
   if (next.validity === 'invalid-final')
-    return diagnostic(sourceId, next, previous, 'invalid-final')
+    return diagnostic(sourceId, next, previous, 'invalid-final', nativeScopeFacts)
   if (
     previous &&
     next.validity !== 'correction' &&
@@ -131,7 +147,7 @@ export function reconcileUsage(
       return before !== null && after !== null && BigInt(after) < BigInt(before)
     })
   )
-    return diagnostic(sourceId, next, previous, 'unexplained-decrease')
+    return diagnostic(sourceId, next, previous, 'unexplained-decrease', nativeScopeFacts)
   // A missing counter carries no correction evidence. Retain the known lower
   // bound, while completeness still describes the newest report.
   const usage: TokenUsage = {
@@ -150,7 +166,13 @@ export function reconcileUsage(
       try {
         contribution = subtractTokenBaseline(usage, next.basis.baseline)
       } catch {
-        return diagnostic(sourceId, next, previous, 'baseline-exceeds-observation')
+        return diagnostic(
+          sourceId,
+          next,
+          previous,
+          'baseline-exceeds-observation',
+          nativeScopeFacts,
+        )
       }
     }
   }
@@ -177,6 +199,7 @@ export function reconcileUsage(
         model: evidence.model,
         usage,
       },
+      ...(nativeScopeFacts === undefined ? {} : { nativeScopeFacts }),
       observedRevision: next.revision,
       ...(evidence.modelRevision === undefined ? {} : { modelRevision: evidence.modelRevision }),
       contribution,

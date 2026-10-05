@@ -4,12 +4,32 @@ import { reconcileUsage, type UsageDecision, type UsageLedgerRecord } from '../d
 import type { UsageLedgerScope, UsageLedgerStore } from '../ports/usageLedger'
 import type { UsageCaptureReceipt } from '../ports/usageLedger'
 import { reconcileNativeUsageRevisions } from './nativeUsageRevisions'
+import { isNativeUsageScope } from '../domain/nativeUsageScope'
+import type { ObservationNativeScopeSource } from '../public/participants'
+
+async function fold(
+  sourceId: string,
+  measurement: ObservationIngest['events'][number]['measurement'],
+  current: UsageLedgerRecord | undefined,
+  nativeScopes?: ObservationNativeScopeSource,
+) {
+  const nativeScopeFacts = isNativeUsageScope(measurement.scope)
+    ? await nativeScopes?.resolve(measurement, measurement.scope)
+    : undefined
+  if (isNativeUsageScope(measurement.scope) && nativeScopeFacts === undefined)
+    throw new ObservationIngestError(
+      'invalid-batch',
+      'Original native ancestry source is not installed',
+    )
+  return reconcileUsage(sourceId, measurement, current, nativeScopeFacts)
+}
 
 /** Late evidence is folded in revision order, including invalid/partial successors. */
 async function rebuild(
   sourceId: string,
   input: ObservationIngest['events'][number]['measurement'],
   scope: UsageLedgerScope,
+  nativeScopes?: ObservationNativeScopeSource,
 ): Promise<UsageDecision> {
   let current: UsageLedgerRecord | undefined,
     inserted = false,
@@ -18,15 +38,15 @@ async function rebuild(
     const page = await scope.revisions(input.invocationId, input.recordId, after, 200)
     for (const prior of page) {
       if (!inserted && input.revision < prior.revision) {
-        current = reconcileUsage(sourceId, input, current).record
+        current = (await fold(sourceId, input, current, nativeScopes)).record
         inserted = true
       }
-      current = reconcileUsage(sourceId, prior, current).record
+      current = (await fold(sourceId, prior, current, nativeScopes)).record
       after = prior.revision
     }
     if (page.length < 200) break
   }
-  if (!inserted) current = reconcileUsage(sourceId, input, current).record
+  if (!inserted) current = (await fold(sourceId, input, current, nativeScopes)).record
   return { outcome: current!.issues.length ? 'diagnostic' : 'applied', record: current! }
 }
 
@@ -36,6 +56,7 @@ async function appendEvent(
   scope: UsageLedgerScope,
   nativeSource?: string,
   nativeWatermark?: number,
+  nativeScopes?: ObservationNativeScopeSource,
 ): Promise<'applied' | 'diagnostic' | 'stale' | 'duplicate'> {
   const fingerprint = JSON.stringify(event.measurement)
   const priorEvent = await scope.event(event.eventId)
@@ -51,8 +72,8 @@ async function appendEvent(
   const current = await scope.current(input.invocationId, input.recordId)
   const decision =
     priorRevision === undefined && current && input.revision < current.observedRevision
-      ? await rebuild(sourceId, input, scope)
-      : reconcileUsage(sourceId, input, current)
+      ? await rebuild(sourceId, input, scope, nativeScopes)
+      : await fold(sourceId, input, current, nativeScopes)
   await scope.append(
     event,
     { fingerprint, outcome: decision.outcome },
@@ -70,10 +91,23 @@ async function appendEvent(
 }
 
 /** The source watermark and every accepted revision share one commit. */
-export function createUsageIngestion(store: UsageLedgerStore) {
+export function createUsageIngestion(
+  store: UsageLedgerStore,
+  nativeScopes?: ObservationNativeScopeSource,
+) {
+  const append: typeof appendEvent = (sourceId, event, scope, nativeSource, nativeWatermark) =>
+    appendEvent(
+      sourceId,
+      event,
+      scope,
+      nativeSource,
+      nativeWatermark,
+      nativeScopes ? scope.bindNativeScopes?.(nativeScopes) : undefined,
+    )
   return {
     cursor: (sourceId: string) => store.cursor(sourceId),
     async repairCapture(receipt: UsageCaptureReceipt) {
+      if (receipt.capture.contract === 'opencode-child-pages-v2') return
       return store.change(receipt.sourceId, async (scope) => {
         const current = await scope.capture(receipt.invocationId)
         if (!current || current.sourceCursor !== receipt.sourceCursor) return
@@ -88,7 +122,7 @@ export function createUsageIngestion(store: UsageLedgerStore) {
           value,
           watermark: Number.isSafeInteger(watermark) ? watermark : undefined,
           scope,
-          append: appendEvent,
+          append,
         })
         await scope.commitCapture(value, current.sourceCursor, resolutions)
       })
@@ -98,6 +132,18 @@ export function createUsageIngestion(store: UsageLedgerStore) {
       if (!parsed.success)
         throw new ObservationIngestError('invalid-batch', 'Observation source page is invalid')
       const input = parsed.data
+      if (
+        input.nativeProcess !== undefined ||
+        input.capture?.capture.contract === 'opencode-child-pages-v2' ||
+        input.events.some((event) => isNativeUsageScope(event.measurement.scope))
+      ) {
+        if (!nativeScopes)
+          throw new ObservationIngestError(
+            'invalid-batch',
+            'Original native source owner is not installed',
+          )
+        await nativeScopes.verify(input)
+      }
       if (input.nextCursor === input.expectedCursor)
         throw new ObservationIngestError('invalid-batch', 'Source page did not advance')
       return store.change(input.sourceId, async (scope) => {
@@ -108,18 +154,19 @@ export function createUsageIngestion(store: UsageLedgerStore) {
         const nativeSource = input.nativeSource ?? input.capture?.capture.nativeSource
         if (nativeSource) {
           const roots = [
-            ...new Set(
-              input.events.flatMap((event) =>
+            ...new Set([
+              ...input.events.flatMap((event) =>
                 event.measurement.scope ? [event.measurement.scope.root] : [],
               ),
-            ),
+              ...(input.capture?.capture.rootSessionId
+                ? [input.capture.capture.rootSessionId]
+                : []),
+            ]),
           ].sort()
           for (const root of roots) await scope.lockNativeRoot(nativeSource, root)
         }
         for (const event of input.events)
-          result[
-            await appendEvent(input.sourceId, event, scope, nativeSource, input.nativeWatermark)
-          ]++
+          result[await append(input.sourceId, event, scope, nativeSource, input.nativeWatermark)]++
         if (cursor === input.nextCursor && result.duplicate !== input.events.length)
           throw new ObservationIngestError('cursor-conflict', 'Replayed page changed its event set')
         if (input.capture) {
@@ -143,7 +190,7 @@ export function createUsageIngestion(store: UsageLedgerStore) {
               value: input.capture,
               watermark: input.nativeWatermark,
               scope,
-              append: appendEvent,
+              append,
             }))
           await scope.commitCapture(input.capture, input.nextCursor, resolutions)
         }

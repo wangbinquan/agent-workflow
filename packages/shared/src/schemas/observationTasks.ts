@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import type {
   ObservationTokenUsage,
-  ObservationNativeCapture,
+  ObservationUsageCapture,
   ObservationNativeRevisionResolution,
 } from './observationUsage'
 import { TaskStatusSchema } from './task'
@@ -216,7 +216,7 @@ export interface ObservationTaskDetail extends ObservationTaskSummary {
     readonly nodeRunId: string | null
     readonly state: 'pending' | 'partial' | 'complete' | 'unobserved'
     readonly priorRevisionGap: boolean
-    readonly proof: ObservationNativeCapture | null
+    readonly proof: ObservationUsageCapture | null
     readonly issues?: readonly string[]
     readonly revisions?: readonly ObservationNativeRevisionResolution[]
   }[]

@@ -297,12 +297,13 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
   test('business timeout starts after target readiness and launcher records stay private', async () => {
     const root = fixtureRoot()
     const stderrLines: string[] = []
+    // Hosted Windows can spend the short business budget starting a Bun timer fixture.
+    // Hold the real durable receipt beyond that same budget instead: the target must
+    // still exit normally, proving that pre-activation work is not business time.
+    const receiptDelayMs = 1_000
+    let receiptCommitted = false
     const result = await runManagedProcess({
-      argv: [
-        process.execPath,
-        '-e',
-        "await Bun.sleep(100); process.stderr.write('runtime-stderr\\n')",
-      ],
+      argv: [process.execPath, '-e', "process.stderr.write('runtime-stderr\\n')"],
       cwd: root,
       env: Object.fromEntries(
         Object.entries(process.env).filter((entry): entry is [string, string] => {
@@ -311,10 +312,14 @@ describe('RFC-328 managed-process pre-activation launcher', () => {
       ),
       timeoutMs: 750,
       requireSpawnReceipt: true,
-      onSpawned: () => {},
+      onSpawned: async () => {
+        await Bun.sleep(receiptDelayMs)
+        receiptCommitted = true
+      },
       onStderrLine: (line) => void stderrLines.push(line),
     })
 
+    expect(receiptCommitted).toBe(true)
     expect(result.outcome).toBe('exited')
     expect(result.exitCode).toBe(0)
     expect(stderrLines).toEqual(['runtime-stderr'])

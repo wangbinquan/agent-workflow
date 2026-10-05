@@ -11,9 +11,11 @@ import type {
 import type { Actor } from '@/auth/actor'
 import type { PlatformObservationStore } from './platformObservationStore'
 import type { UsageLedgerStore } from './usageLedger'
+import type { ObservationNativeScopeSource } from '../public/participants'
 
 /** Structurally supplied by the TaskExecution owner, only at bootstrap. */
 export interface ObservationTaskSource {
+  readonly nativeScopes?: ObservationNativeScopeSource
   spanSources?(input: ObservationSpanSourceInput): Promise<ObservationSpanSourcePage>
   list(input: { readonly actor: Actor; readonly query: ObservationTaskPageQuery }): Promise<{
     readonly items: readonly ObservationTaskFacts[]

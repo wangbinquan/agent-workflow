@@ -1,15 +1,17 @@
-import type { ObservationMeasurement } from '@agent-workflow/shared'
+import type { ObservationMeasurement, ObservationUsageMeasurement } from '@agent-workflow/shared'
 import type { TokenUsage } from './tokenUsage'
 import { summarizeTokenUsage, TOKEN_BUCKETS, type TokenBucket } from './tokenUsage'
+import { isNativeUsageScope, type NativeUsageScopeFacts } from './nativeUsageScope'
 
 export interface UsageContributionEvidence {
   readonly sourceId: string
   readonly measurement: Pick<
-    ObservationMeasurement,
+    ObservationUsageMeasurement,
     'invocationId' | 'recordId' | 'model' | 'scope' | 'coveredThroughTurn'
   >
   readonly contribution: TokenUsage
   readonly complete: boolean
+  readonly nativeScopeFacts?: NativeUsageScopeFacts
   readonly coveredThrough?: Readonly<Record<TokenBucket, number | null>>
 }
 type ScopedRecord<T extends UsageContributionEvidence> = T & {
@@ -139,6 +141,8 @@ export function selectUsageContributions<T extends UsageContributionEvidence>(
     ambiguousOverlaps = 0
   for (const record of records) {
     const m = record.measurement
+    if (isNativeUsageScope(m.scope))
+      throw new Error('Native page evidence requires the original complete ancestry workspace')
     if (!m.scope) {
       selected.push(record)
       continue

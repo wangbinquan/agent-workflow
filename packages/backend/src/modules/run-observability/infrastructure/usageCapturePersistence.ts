@@ -1,7 +1,7 @@
 import { and, asc, eq, gt, inArray } from 'drizzle-orm'
 import {
-  ObservationCaptureCommitSchema,
-  type ObservationCaptureCommit,
+  ObservationUsageCaptureCommitSchema,
+  type ObservationUsageCaptureCommit,
 } from '@agent-workflow/shared'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import { observationUsageCaptures } from '@/db/schema'
@@ -20,7 +20,7 @@ function decode(row: {
     resolutions: NativeRevisionResolution[]
   }
   return {
-    ...ObservationCaptureCommitSchema.parse(value.evidence),
+    ...ObservationUsageCaptureCommitSchema.parse(value.evidence),
     sourceCursor: row.sourceCursor,
     sourceId: row.sourceId,
     resolutions: value.resolutions,
@@ -100,18 +100,37 @@ export async function commitUsageCapture(
   db: ProviderNeutralDatabase,
   sourceId: string,
   sourceCursor: string,
-  value: ObservationCaptureCommit,
+  value: ObservationUsageCaptureCommit,
   resolutions: readonly NativeRevisionResolution[],
 ) {
   const previous = await readUsageCapture(db, value.invocationId)
+  const paged = value.capture.contract === 'opencode-child-pages-v2'
+  const originalWatermark = (cursor: string) => {
+    const match = /^node-event:([1-9]\d*)$/.exec(cursor)
+    if (!match)
+      throw new ObservationIngestError(
+        'invalid-batch',
+        'Native capture has no original source watermark',
+      )
+    return BigInt(match[1]!)
+  }
+  const advancingNative =
+    paged &&
+    previous?.capture.contract === 'opencode-child-pages-v2' &&
+    previous.taskId === value.taskId &&
+    previous.sourceId === sourceId &&
+    previous.capture.nativeSource === value.capture.nativeSource &&
+    originalWatermark(sourceCursor) > originalWatermark(previous.sourceCursor) &&
+    previous.capture.state !== 'complete'
   if (
     previous &&
     (previous.sourceId !== sourceId ||
-      JSON.stringify({
+      (JSON.stringify({
         invocationId: previous.invocationId,
         taskId: previous.taskId,
         capture: previous.capture,
-      }) !== JSON.stringify(value))
+      }) !== JSON.stringify(value) &&
+        !advancingNative))
   )
     throw new ObservationIngestError('event-conflict', 'Native capture proof changed')
   const nativeRootKey =
@@ -119,9 +138,12 @@ export async function commitUsageCapture(
       ? null
       : sha256Hex(JSON.stringify([value.capture.nativeSource, value.capture.rootSessionId]))
   const priorRevisionGap = Number(
-    resolutions.some(
-      (row) => row.status === 'unresolved' && row.reason !== 'native-owner-unseen',
-    ) ||
+    (paged &&
+      value.capture.contract === 'opencode-child-pages-v2' &&
+      value.capture.reconciliation.unresolved !== '0') ||
+      resolutions.some(
+        (row) => row.status === 'unresolved' && row.reason !== 'native-owner-unseen',
+      ) ||
       (value.capture.issues.includes('native-prior-revision-gap') && resolutions.length === 0),
   )
   const previousResolutions = new Map(previous?.resolutions.map((row) => [row.stepId, row]) ?? [])
@@ -136,7 +158,10 @@ export async function commitUsageCapture(
   })
   // List/overview queries never load thousands of baseline records. The full evidence remains
   // durable for projection retry, while the compact summary retains the first 100 explanations.
-  const { baselineSteps: _baseline, ...proof } = value.capture
+  const proof =
+    value.capture.contract === 'opencode-child-steps-v1'
+      ? (({ baselineSteps: _baseline, ...rest }) => rest)(value.capture)
+      : value.capture
   const summary = {
     evidence: { ...value, capture: proof },
     resolutions: retained

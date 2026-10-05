@@ -1,5 +1,4 @@
 import type { ObservationAttemptFacts } from '@agent-workflow/shared'
-import type { UsageCaptureReceipt } from '../ports/usageLedger'
 import {
   completeObservationGap,
   completeObservationMetrics,
@@ -65,12 +64,9 @@ export async function buildCompleteObservationTask(
     for (const row of page) {
       const entry = row.document
       if (entry.invocation.authority.kind === 'local') {
-        const capture = await input.rows.get<UsageCaptureReceipt>(space('captures'), row.key)
-        const proof = capture?.capture
         if (
-          proof &&
-          BigInt(proof.scannedSteps) - BigInt(proof.baselineSteps?.length ?? 0) !==
-            BigInt(entry.rawRecords)
+          entry.expectedNativeRecords != null &&
+          BigInt(entry.expectedNativeRecords) !== BigInt(entry.rawRecords)
         )
           completeObservationGap(entry.fold, 'native-capture-records-missing')
       }

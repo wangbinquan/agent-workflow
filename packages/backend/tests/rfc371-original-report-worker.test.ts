@@ -47,6 +47,68 @@ const idOf = (report: Awaited<ReturnType<ReturnType<typeof reports>['queries']['
   report.state === 'ready' ? report.header.reportId : report.reportId
 
 describeEachProvider('RFC-371 original live source through a real report Worker', (harness) => {
+  test('failed status stays terminal until an explicit retry rebuilds the original legacy Task and attempts', async () => {
+    const fixture = await originalWorkerFixture(harness, { attempts: 1, records: 2 })
+    const bound = observationReportBuild(fixture.binding, fixture.appHome)
+    let builds = 0
+    const service = composeCompleteObservationReports({
+      db: fixture.db,
+      generation:
+        fixture.binding.provider === 'sqlite'
+          ? fixture.binding.generationId
+          : fixture.binding.runtime.generationId,
+      appHome: fixture.appHome,
+      heartbeatDuringRead: bound.heartbeatDuringRead,
+      build: (report, _spool, signal) => {
+        if (++builds === 1) throw new Error('original build regression')
+        return bound.build(report, signal)
+      },
+    })
+    try {
+      const first = idOf(await service.queries.request(actor, filters, 'terminal-failure'))
+      await service.worker.drain()
+      for (let read = 0; read < 3; read++)
+        expect(await service.queries.status(actor, first)).toEqual({
+          state: 'failed',
+          reportId: first,
+          error: 'original build regression',
+          retryable: true,
+        })
+      await service.worker.drain()
+      expect(builds).toBe(1)
+      expect(idOf(await service.queries.request(actor, filters, 'terminal-failure'))).toBe(first)
+      await service.worker.drain()
+      const result = await service.queries.status(actor, first)
+      expect(builds).toBe(2)
+      expect(result.state).toBe('ready')
+      if (result.state !== 'ready') throw new Error(JSON.stringify(result))
+      expect(result.summary.inventory).toEqual({
+        tasks: '1',
+        attempts: '1',
+        invocations: '1',
+        numericRecords: '2',
+        nativeCaptures: '1',
+      })
+      expect(result.summary.metrics.state).toBe('ready')
+      if (result.summary.metrics.state !== 'ready') throw new Error('Original usage missing')
+      expect(result.summary.metrics.tokens).toEqual({
+        input: '3',
+        cacheRead: '9',
+        cacheWrite: '15',
+        output: '21',
+        total: '48',
+      })
+      expect(result.summary.metrics.cost).toEqual({
+        currency: 'CNY',
+        state: 'complete',
+        amount: '0.00015',
+      })
+    } finally {
+      await service.worker.stop()
+      await fixture.close()
+    }
+  }, 60000)
+
   test('all 1001 invocations and 10001 source records pass through the real Worker and retained pages', async () => {
     const fixture = await originalWorkerFixture(harness, { attempts: 1001, records: 10001 })
     const service = reports(fixture)

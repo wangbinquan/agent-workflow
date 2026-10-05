@@ -25,6 +25,7 @@ export function completeObservationEvidenceContext(input: CompleteObservationTas
     identity: (record: CompleteObservationContribution) =>
       JSON.stringify([record.sourceId, record.invocationId, record.measurement.recordId]),
     signal: input.signal,
+    nativeScopes: input.sources.nativeScopes,
   })
   const fold = emptyCompleteObservationFold()
   const traverse = <T>(
@@ -116,6 +117,22 @@ export function retainCompleteObservationCaptures(context: CompleteObservationEv
         invocation.nativeCaptureSource !== proof.nativeSource
       )
         throw new Error('Original native capture admission mismatch')
+      if (proof.contract === 'opencode-child-pages-v2') {
+        if (!input.sources.nativeScopes)
+          throw new Error('Original native completion source is not installed')
+        const qualified = await input.sources.nativeScopes.qualify(capture)
+        entry.nativeComplete =
+          invocation.nativeCaptureContract === proof.contract &&
+          qualified.complete &&
+          !capture.priorRevisionGap
+        entry.expectedNativeRecords = qualified.records
+        entry.knownZero = entry.nativeComplete && qualified.records === '0'
+        entry.nativeCaptureCount = '1'
+        entry.emptyCostVisible = entry.knownZero
+        if (!entry.nativeComplete) completeObservationGap(entry.fold, 'native-capture-incomplete')
+        await context.invocations.put(key, entry)
+        continue
+      }
       const repairedIssues = ['native-prior-revision-gap', 'native-prior-revision-budget']
       const currentIssues = proof.issues.filter(
         (issue) => capture.priorRevisionGap || !repairedIssues.includes(issue),
@@ -144,6 +161,7 @@ export function retainCompleteObservationCaptures(context: CompleteObservationEv
       if (!entry.nativeComplete) completeObservationGap(entry.fold, 'native-capture-incomplete')
       entry.knownZero =
         entry.nativeComplete && proof.scannedSteps === (proof.baselineSteps?.length ?? 0)
+      entry.expectedNativeRecords = String(proof.scannedSteps - (proof.baselineSteps?.length ?? 0))
       entry.nativeCaptureCount = '1'
       entry.emptyCostVisible = entry.knownZero
       await context.invocations.put(key, entry)
@@ -167,6 +185,13 @@ export function retainCompleteObservationUsage(context: CompleteObservationEvide
           m.agentId !== i.agentId
         )
           throw new Error('Original numeric usage admission mismatch')
+        if (m.scope && 'ancestry' in m.scope) {
+          if (!context.input.sources.nativeScopes)
+            throw new Error('Original native numeric source is not installed')
+          const facts = await context.input.sources.nativeScopes.resolve(m, m.scope)
+          if (JSON.stringify(facts) !== JSON.stringify(record.nativeScopeFacts))
+            throw new Error('Original native numeric ancestry changed after projection')
+        }
         entry.rawRecords = String(BigInt(entry.rawRecords) + 1n)
         records.push({
           ...record,

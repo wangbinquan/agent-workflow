@@ -5,7 +5,49 @@ import type {
   ObservationSpanOwnerProof,
   ObservationSpanSourceInput,
   ObservationSpanSourcePage,
+  ObservationIngest,
+  ObservationNativeScopeReference,
+  ObservationUsageCaptureCommit,
 } from '@agent-workflow/shared'
+import type { NativeUsageScopeFacts } from '../domain/nativeUsageScope'
+import type { ProviderNeutralDatabase } from '@/db/query'
+
+/** Task supplies actual immutable page/source facts on the original database reader. */
+export interface ObservationNativeScopeSource {
+  /** Infrastructure binds all original reads to the actual ledger/report transaction handle. */
+  onReader(reader: ProviderNeutralDatabase): ObservationNativeScopeSource
+  verify(input: ObservationIngest): Promise<void>
+  qualify(
+    value: ObservationUsageCaptureCommit & {
+      readonly sourceId: string
+      readonly sourceCursor: string
+    },
+  ): Promise<{
+    readonly records: string | null
+    readonly complete: boolean
+  }>
+  resolve(
+    binding: {
+      readonly invocationId: string
+      readonly taskId: string
+      readonly nodeRunId: string | null
+    },
+    scope: ObservationNativeScopeReference,
+  ): Promise<NativeUsageScopeFacts>
+  path(
+    binding: {
+      readonly invocationId: string
+      readonly taskId: string
+      readonly nodeRunId: string | null
+    },
+    scope: ObservationNativeScopeReference,
+  ): AsyncIterable<{
+    readonly session: string
+    readonly parentSession: string | null
+    readonly depth: string
+    readonly pathDigest: string
+  }>
+}
 
 export type {
   CompleteObservationBuildResult,
@@ -37,6 +79,7 @@ export interface ObservationInvocationParticipant {
 
 /** The execution owner supplies numeric-only committed facts and delivery acknowledgements. */
 export interface ObservationUsageSource {
+  readonly nativeScopes?: ObservationNativeScopeSource
   spanSources?(input: ObservationSpanSourceInput): Promise<ObservationSpanSourcePage>
   pending(input: {
     readonly limit: number

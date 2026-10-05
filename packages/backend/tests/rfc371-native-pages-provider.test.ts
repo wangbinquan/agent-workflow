@@ -1320,6 +1320,82 @@ describeEachProvider('RFC-371 original native pages and membership', (harness) =
     return { binding, sourceId: 'local-node:' + binding.nodeRunId, store }
   }
 
+  test('an original historical native meter without its attempt stays unresolved without crashing completion', async () => {
+    const original = await fixture('fresh', true)
+    const originalProcess = await originalSpawn(original)
+    const native = nativeFixture()
+    await persistNativeUsagePass(
+      original.open(native.path, original.identity('final'), 37),
+      original.owner(),
+    )
+    await originalSettle(original, originalProcess)
+    const priorCompletion = new DrizzleNativeUsageCompletion(original.db)
+    const priorProof = await priorCompletion.describeCompletion({
+      binding: original.binding,
+      observedAt: Date.now(),
+    })
+    expect(priorProof.state).toBe('complete')
+    await priorCompletion.seal({ binding: original.binding, completion: priorProof })
+    const project = createUsageSourceProjection({
+      source: createObservationUsageSource(original.db),
+      store: createUsageLedgerStore(original.db),
+      invocations: createObservationInvocationStore(original.db),
+    })
+    while (await project(original.binding.nodeRunId)) {
+      // Project every actual original numeric source and completion ACK before fault injection.
+    }
+    const originalRows = await original.db.select().from(observationUsageCurrent)
+    expect(originalRows).toHaveLength(3)
+    for (const missing of ['all', 'step-000000', 'step-000002']) {
+      for (const row of originalRows) {
+        const document = JSON.parse(row.document)
+        expect(document.measurement.scope.ancestry.kind).toBe('native-pass-v2')
+        const missingAttempt =
+          missing === 'all' || document.measurement.recordId === 'opencode:step:' + missing
+        await original.db
+          .update(observationUsageCurrent)
+          .set({
+            document: JSON.stringify({
+              ...document,
+              measurement: {
+                ...document.measurement,
+                nodeRunId: missingAttempt ? null : document.measurement.nodeRunId,
+              },
+            }),
+          })
+          .where(eq(observationUsageCurrent.id, row.id))
+      }
+      const f = await fixture('resume', true)
+      await persistNativeUsagePass(f.open(native.path, f.identity(), 37), f.owner())
+      const spawn = await originalSpawn(f)
+      await persistNativeUsagePass(f.open(native.path, f.identity('final'), 37), f.owner())
+      await originalSettle(f, spawn)
+      const proof = await new DrizzleNativeUsageCompletion(f.db).describeCompletion({
+        binding: f.binding,
+        observedAt: Date.now(),
+      })
+      expect(proof.state).toBe('partial')
+      expect(proof.reconciliation).toEqual({
+        examined: '3',
+        resolved: missing === 'all' ? '0' : '2',
+        unresolved: missing === 'all' ? '3' : '1',
+        digest: expect.any(String),
+      })
+      expect(proof.issues).toContain('native-prior-revision-unresolved')
+      expect(proof.emissions.records).toBe('0')
+    }
+    const retained = await original.db.select().from(observationUsageCurrent)
+    expect(
+      retained
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map((row) => JSON.parse(row.document).measurement.usage),
+    ).toEqual(
+      originalRows
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .map((row) => JSON.parse(row.document).measurement.usage),
+    )
+  }, 30000)
+
   test('resume verifies every actual historical baseline and emits only new invocation usage', async () => {
     const native = nativeFixture()
     const history = await originalLegacyHistory(native)

@@ -21,6 +21,7 @@ import { engineOf } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
 import type { TaskObservationFactsQuery } from '../public/queries'
 import { createObservationSpanSources } from './observationSpanSources'
+import { createObservationNativeScopes } from './observationNativeScopes'
 import { observationAttemptKinds } from './taskObservationKinds'
 
 const canRead = (actor: Actor) =>
@@ -107,6 +108,7 @@ export function createTaskObservationFacts(db: ProviderNeutralDatabase): TaskObs
       canReadAllTasks: actor.permissions.has('tasks:read:all'),
     })
   return {
+    nativeScopes: createObservationNativeScopes(db),
     spanSources: createObservationSpanSources(db),
     async sourceBacklog(taskIds) {
       if (taskIds.length > 200)

@@ -2,6 +2,32 @@ import type { UsageContributionEvidence } from '../domain/usageSelection'
 import { TOKEN_BUCKETS, tokenCount, type TokenBucket, type TokenUsage } from '../domain/tokenUsage'
 import { coveragePrefixMaximum, insertCoverageInterval } from '../domain/coverageIntervalIndex'
 import type { CompleteUsageWorkspace } from '../ports/completeUsageWorkspace'
+import { isNativeUsageScope } from '../domain/nativeUsageScope'
+
+function depthOf(record: UsageContributionEvidence): bigint {
+  const scope = record.measurement.scope
+  if (!scope) return 0n
+  if (!isNativeUsageScope(scope)) return BigInt(scope.ancestors.length)
+  if (!record.nativeScopeFacts) throw new Error('Original native scope depth is unverified')
+  return BigInt(record.nativeScopeFacts.depth)
+}
+async function* sessionsOf<T extends UsageContributionEvidence>(
+  workspace: CompleteUsageWorkspace<T>,
+  record: T,
+) {
+  const scope = record.measurement.scope!
+  if (!isNativeUsageScope(scope)) {
+    yield { id: scope.session, treeOnly: false }
+    for (const id of scope.ancestors) yield { id, treeOnly: true }
+    return
+  }
+  if (!workspace.nativePath) throw new Error('Original native ancestry source is not installed')
+  let first = true
+  for await (const link of workspace.nativePath(record)) {
+    yield { id: link.session, treeOnly: !first }
+    first = false
+  }
+}
 
 const rank = { 'tree-total': 0, 'self-total': 1, request: 2 }
 const groupOf = (record: UsageContributionEvidence) =>
@@ -38,7 +64,7 @@ export function compareCompleteUsage(a: UsageContributionEvidence, b: UsageContr
     )
   return (
     rank[x.level] - rank[y.level] ||
-    x.ancestors.length - y.ancestors.length ||
+    (depthOf(a) < depthOf(b) ? -1 : depthOf(a) > depthOf(b) ? 1 : 0) ||
     x.turnIndex - y.turnIndex ||
     a.measurement.recordId.localeCompare(b.measurement.recordId)
   )
@@ -61,6 +87,19 @@ export async function selectCompleteUsage<T extends UsageContributionEvidence>(
     signal?.throwIfAborted()
     const scope = record.measurement.scope
     if (!scope) continue
+    if (scope.level !== 'request') await workspace.markSummary?.(groupOf(record))
+    if (isNativeUsageScope(scope)) {
+      if (!workspace.nativePath || !workspace.bindNativeAncestry)
+        throw new Error('Original native ancestry source is not installed')
+      let seen = 0n
+      for await (const link of workspace.nativePath(record)) {
+        await workspace.bindNativeAncestry(groupOf(record), link)
+        seen++
+      }
+      if (seen !== depthOf(record) + 1n)
+        throw new Error('Original native ancestry did not reach root EOF')
+      continue
+    }
     const path = [...scope.ancestors, scope.session]
     if (new Set(path).size !== path.length) throw new Error('Cyclic observation session ancestry')
     if (path[0] !== scope.root || (scope.ancestors.at(-1) ?? null) !== scope.parentSession)
@@ -93,13 +132,10 @@ export async function selectCompleteUsage<T extends UsageContributionEvidence>(
     let allocated = false,
       ambiguous = false,
       unavailable = false
+    const summaries = scope && workspace.hasSummaries ? await workspace.hasSummaries(group) : true
     for (const bucket of TOKEN_BUCKETS) {
       const value = record.contribution[bucket]
-      if (scope) {
-        const sessions = [
-          { id: scope.session, treeOnly: false },
-          ...scope.ancestors.map((id) => ({ id, treeOnly: true })),
-        ]
+      if (scope && summaries) {
         const coverModels = [
           'null',
           ...(model === null ? [] : [modelPartition(model.id, model.provider)]),
@@ -117,7 +153,7 @@ export async function selectCompleteUsage<T extends UsageContributionEvidence>(
         const end = endOf(record, bucket)
         let covered = false,
           overlapping = false
-        for (const session of sessions) {
+        for await (const session of sessionsOf(workspace, record)) {
           for (const partition of coverModels) {
             const maximum = await coveragePrefixMaximum(
               workspace.coverage,

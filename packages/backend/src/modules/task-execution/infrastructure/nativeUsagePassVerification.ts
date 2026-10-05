@@ -23,7 +23,7 @@ type ObservationNativePassCounts = ObservationNativePassAck['counts']
 /** Verify every original page and index entry with bounded batches, including partial progress. */
 export async function verifyNativeUsagePass(
   tx: TaskExecutionTransaction,
-  binding: NativeUsageOwnerBinding,
+  binding: Pick<NativeUsageOwnerBinding, 'invocationId'>,
   reference: { readonly ack: ObservationNativePassAck; readonly pageCount: string },
   requireEof: boolean,
 ): Promise<{

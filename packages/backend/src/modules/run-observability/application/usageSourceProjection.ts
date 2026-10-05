@@ -17,7 +17,7 @@ export function createUsageSourceProjection(input: {
   readonly store: UsageLedgerStore
   readonly invocations: ObservationInvocationStore
 }) {
-  const ingest = createUsageIngestion(input.store)
+  const ingest = createUsageIngestion(input.store, input.source.nativeScopes)
   let afterNodeRunId: string | undefined
   let afterCaptureId: string | undefined
   let active: Promise<number> | null = null
@@ -38,19 +38,17 @@ export function createUsageSourceProjection(input: {
         if (!accepted || accepted.taskId !== row.taskId || accepted.nodeRunId !== row.nodeRunId)
           throw new Error('Observation source does not match accepted invocation')
         // Platform observations have a separate canonical source. Never ingest local duplicates.
+        const capture = row.evidence.nativeCompletion ?? row.evidence.capture
         if (
           accepted.authority.kind === 'local' &&
-          (row.evidence.measurements.length || row.evidence.capture)
+          (row.evidence.measurements.length || capture || row.evidence.nativeProcess)
         ) {
-          if (
-            row.evidence.capture &&
-            row.evidence.capture.contract !== accepted.nativeCaptureContract
-          )
+          if (capture && capture.contract !== accepted.nativeCaptureContract)
             throw new Error('Native capture does not match accepted contract')
           if (
-            row.evidence.capture &&
+            capture &&
             accepted.nativeCaptureSource !== undefined &&
-            row.evidence.capture.nativeSource !== accepted.nativeCaptureSource
+            capture.nativeSource !== accepted.nativeCaptureSource
           )
             throw new Error('Native capture source does not match accepted invocation')
           for (const m of row.evidence.measurements)
@@ -75,12 +73,13 @@ export function createUsageSourceProjection(input: {
                 eventId: `${row.id}:${index}`,
                 measurement,
               })),
-              ...(row.evidence.capture
+              ...(row.evidence.nativeProcess ? { nativeProcess: row.evidence.nativeProcess } : {}),
+              ...(capture
                 ? {
                     capture: {
                       invocationId: accepted.invocationId,
                       taskId: accepted.taskId,
-                      capture: row.evidence.capture,
+                      capture,
                     },
                   }
                 : {}),

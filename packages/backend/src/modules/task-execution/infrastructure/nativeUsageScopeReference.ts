@@ -10,7 +10,7 @@ import type { TaskExecutionTransaction } from './ownedTaskExecution'
 /** Verify the entire original parent chain without materializing a population-sized path. */
 export async function verifyNativeUsageScope(
   tx: TaskExecutionTransaction,
-  binding: NativeUsageOwnerBinding,
+  binding: Pick<NativeUsageOwnerBinding, 'invocationId'>,
   value: ObservationNativeScopeReference,
 ): Promise<string> {
   const reference = ObservationNativeScopeReferenceSchema.parse(value)

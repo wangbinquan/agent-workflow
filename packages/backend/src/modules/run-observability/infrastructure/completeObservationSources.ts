@@ -47,6 +47,7 @@ export function createCompleteObservationSources(input: {
     },
   })
   return {
+    nativeScopes: tasks.nativeScopes,
     snapshotId,
     tasks: (actor, query) => {
       const parent = sha256Hex(

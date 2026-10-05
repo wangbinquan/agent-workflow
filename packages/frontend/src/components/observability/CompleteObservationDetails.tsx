@@ -4,7 +4,7 @@ import type {
   CompleteObservationAllocation,
   CompleteObservationAttempt,
   CompleteObservationInvocation,
-  ObservationCaptureCommit,
+  ObservationUsageCaptureCommit,
   ObservationNativeRevisionResolution,
   ObservationTaskDetail,
 } from '@agent-workflow/shared'
@@ -22,7 +22,7 @@ import { ObservationPlatformCapture } from './ObservationPlatformCapture'
 import { CompleteObservationTrace } from './CompleteObservationTrace'
 
 type Attempt = CompleteObservationAttempt & { readonly taskId: string; readonly taskName: string }
-type NativeCapture = ObservationCaptureCommit & {
+type NativeCapture = ObservationUsageCaptureCommit & {
   readonly priorRevisionGap: boolean
   readonly resolutions: readonly ObservationNativeRevisionResolution[]
 }

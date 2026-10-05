@@ -1,3 +1,13 @@
+## 2026-10-05 RFC-371 修复正式观测页加载与原生分页账本
+
+实际原 daemon 的报告构建曾因把 nativeScopes 读取入口写入无 db 参数的 attemptFields 而报 db is not defined；GET 状态又反复把失败报告重新排队，形成长期加载。本片把入口装回 createTaskObservationFacts 原返回对象，失败状态保持终态，只有明确刷新才重试。同一正式数据库与正式页面已恢复：七天8任务、28执行尝试、14调用、13用量记录；已收到123238 Token（96095输入／21120缓存读取／0缓存写入／6023输出）与人民币¥0.16583，7任务完整、1任务有实际缺口。已知数字保留并准确标记缺口，不冒充完整供应商账单；实际 overview 与 Task 截图留证。
+
+原v2帧解析、唯一 usage ledger、原 Task/page/ACK/watermark、完整父链和各范围资格在实际原读句柄接线。单页和4096工作缓存只控制包／工作量，原人口到 EOF，落盘后无总量截断。原 ledger 写事务中的 scope 读取复用该同一原 transaction，真实 PostgreSQL poolMax1 的回归不另占根连接。失败重复 GET／明确刷新、真实双provider源→ledger→完整报告、未知分类／模型、空EOF、历史水位和双语捕获回归随源码交付；缺 nodeRunId 的历史 meter 保留原数字且 unresolved，缓存键同时含原 attempt，原两项P2 FAIL与后继v2 PASS分别保存。
+
+SOURCE39 v3、精确外部SQLite fixture登记、原Windows持久出生准备fixture、历史null-meter v2与实际AsyncIterable类型登记五门均有限PASS。本机只执行精确格式／lint和原纯AST／JSON投影，没有AW tests／typecheck／build／新服务。首轮纯census因缺少标准AsyncIterable登记在写入前失败，原回执保持；修复该精确登记后的原44候选单次有效扫描的13产物与并行已提交SOURCE11原扫描产物逐项合成，sourceDigest sha256:4d2de07179aaf057464eed6223b41c33adc1e6ab3b430a01fcdcf991b25d7b90，原129有序库存／why、317债务、40 SPI与69原targets保留，并完整保留并行已提交执行接口、原309及其实际新增8条导入债。实际七项增长许可只匹配本提交，普通后继退役；原规则、assertions、预算与scanner不放宽，status使用原renderer字节。
+
+原68be15主CI cancelled、Windows失败、visual／full E2E／WebKit success和96bac类型失败均保留，不当全套成功。本片按44源码／测试／设计及13匹配产物和共享STATE精确上库，新确切SHA hosted CI继续。正式native分页producer、完整before／历史修订writer、CS原journal生产接线与100K Task／10M usage实测仍开放，RFC不宣称完成。共享STATE下方原文和并行RFC-370状态逐字保持，整个status文件保留原renderer字节；刚发布的RFC-370执行接口及共享状态完整保留，两份生产源集合不重叠，不重新全仓扫描。
+
 ## 2026-10-05 RFC-371 原完整回执与最新修订资格
 
 原 Task claim／accepted invocation／node 事务从全部真实持久页、数字 source／冻结 ACK、spawn／reap／drain与唯一历史 meter 核对完成资格，扫描持续至实际 EOF。seal 原回执与原 source 同事务保存，真实提交后确认；partial允许后续补全，complete才封住 preparation。模型／时刻／人民币费率缺失不代替 Token资格，未知桶与 partial coverage独立保留已收到四桶数字。SOURCE8 v2 的两项 P2／FAIL保留，后继 v3／v4有限PASS；同帧取最高实际allocated revision，原 step可引用覆盖它的后续真实ACK，补双 provider双修订／后续页／缺页及早页回归。原1001步骤／80层、空EOF、历史修订前后和原全部断言预算保持。

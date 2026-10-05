@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1154,
+    "consumers": 1157,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1350,
-    "opaqueTypeRefs": 14,
-    "recursiveFields": 25164,
-    "symbols": 1147
+    "methods": 1365,
+    "opaqueTypeRefs": 15,
+    "recursiveFields": 25248,
+    "symbols": 1148
   },
   "entries": [
     {
@@ -124779,7 +124779,292 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 24,
+        "maxTransitiveLeafFields": 28,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:33b9e4a5b82f6aa2de63",
+        "import:698e58dac6490f04405b",
+        "import:8a18e32457158b604ba9"
+      ],
+      "context": "run-observability",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:onReader.$parameter:reader",
+          "type": "BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:onReader.$return",
+          "type": "ObservationNativeScopeSource"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63",
+            "import:698e58dac6490f04405b"
+          ],
+          "fieldPath": "$method:path.$parameter:binding.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:path.$parameter:binding.nodeRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:path.$parameter:binding.nodeRunId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63",
+            "import:698e58dac6490f04405b",
+            "import:8a18e32457158b604ba9"
+          ],
+          "fieldPath": "$method:path.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:path.$parameter:scope",
+          "type": "z.infer<typeof ObservationNativeScopeReferenceSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:path.$return",
+          "type": "AsyncIterable<{\n    readonly session: string\n    readonly parentSession: string | null\n    readonly depth: string\n    readonly pathDigest: string\n  }>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:qualify.$parameter:value",
+          "type": "z.infer<typeof ObservationUsageCaptureCommitSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63"
+          ],
+          "fieldPath": "$method:qualify.$parameter:value.sourceCursor",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63",
+            "import:698e58dac6490f04405b"
+          ],
+          "fieldPath": "$method:qualify.$parameter:value.sourceId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63"
+          ],
+          "fieldPath": "$method:qualify.$return.complete",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:qualify.$return.records.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:qualify.$return.records.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63",
+            "import:698e58dac6490f04405b"
+          ],
+          "fieldPath": "$method:resolve.$parameter:binding.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:binding.nodeRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:binding.nodeRunId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63",
+            "import:698e58dac6490f04405b",
+            "import:8a18e32457158b604ba9"
+          ],
+          "fieldPath": "$method:resolve.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:scope",
+          "type": "z.infer<typeof ObservationNativeScopeReferenceSchema>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:698e58dac6490f04405b"
+          ],
+          "fieldPath": "$method:resolve.$return.depth",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63",
+            "import:698e58dac6490f04405b"
+          ],
+          "fieldPath": "$method:resolve.$return.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63",
+            "import:698e58dac6490f04405b"
+          ],
+          "fieldPath": "$method:resolve.$return.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63",
+            "import:698e58dac6490f04405b"
+          ],
+          "fieldPath": "$method:resolve.$return.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:698e58dac6490f04405b"
+          ],
+          "fieldPath": "$method:resolve.$return.pathDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63",
+            "import:698e58dac6490f04405b"
+          ],
+          "fieldPath": "$method:resolve.$return.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63",
+            "import:698e58dac6490f04405b",
+            "import:8a18e32457158b604ba9"
+          ],
+          "fieldPath": "$method:resolve.$return.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:verify.$parameter:input",
+          "type": "z.infer<typeof ObservationIngestSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:verify.$return",
+          "type": "void"
+        }
+      ],
+      "file": "packages/backend/src/modules/run-observability/public/participants.ts",
+      "id": "public:run-observability:participants:ObservationNativeScopeSource",
+      "members": [
+        "onReader",
+        "path",
+        "qualify",
+        "resolve",
+        "verify"
+      ],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:698e58dac6490f04405b"
+          ],
+          "name": "onReader",
+          "signatureDigest": "sha256:7b9c1b0c81697bae168c14f5df8d48ad1fc99d5ace7a90966c250e2a773cf1f9"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:698e58dac6490f04405b"
+          ],
+          "name": "path",
+          "signatureDigest": "sha256:9ef3c7687f0b0cdbfb685f941a5370178a51bf03aa13c9e079d33e0000420a14"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:33b9e4a5b82f6aa2de63",
+            "import:698e58dac6490f04405b"
+          ],
+          "name": "qualify",
+          "signatureDigest": "sha256:d5e6e1ce9e10cc458e9e2a4f43fccb1499b69978bd76bf2f649577eb9aaaa99e"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:698e58dac6490f04405b"
+          ],
+          "name": "resolve",
+          "signatureDigest": "sha256:c136049eac74788d4244f1776f38fa142497c198c6a8f928239e3bfc4fad61a0"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:698e58dac6490f04405b"
+          ],
+          "name": "verify",
+          "signatureDigest": "sha256:37dc3d2e20b600655a709d9d5db7ee3180d308de1b08dc5389ba3328f2d489fc"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationNativeScopeSource",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:33b9e4a5b82f6aa2de63",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/observationNativeQualification.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/observationNativeQualification.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:698e58dac6490f04405b",
+          "file": "packages/backend/src/modules/task-execution/infrastructure/observationNativeScopes.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/observationNativeScopes.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:8a18e32457158b604ba9",
+          "file": "packages/backend/src/modules/task-execution/public/queries.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:run-observability:participants:ObservationUsageSource",
+        "public:task-execution:queries:TaskObservationFactsQuery"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:91c3eb8cbbfbf87adb3bd0f4c009179adf55b308904e35501fadb507822284a7",
+      "status": "target-context-current-surface",
+      "symbol": "ObservationNativeScopeSource",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "AsyncIterable",
+        "BaseSQLiteDatabase",
+        "z.infer"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 8,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 50,
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
@@ -124909,12 +125194,161 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:spanSources.$return.watermark",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:onReader.$parameter:reader",
+          "type": "BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:onReader.$return",
+          "type": "ObservationNativeScopeSource"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:path.$parameter:binding.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:path.$parameter:binding.nodeRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:path.$parameter:binding.nodeRunId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "fieldPath": "nativeScopes.$method:path.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:path.$parameter:scope",
+          "type": "z.infer<typeof ObservationNativeScopeReferenceSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:path.$return",
+          "type": "AsyncIterable<{\n    readonly session: string\n    readonly parentSession: string | null\n    readonly depth: string\n    readonly pathDigest: string\n  }>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:qualify.$parameter:value",
+          "type": "z.infer<typeof ObservationUsageCaptureCommitSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:qualify.$parameter:value.sourceCursor",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:qualify.$parameter:value.sourceId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:qualify.$return.complete",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:qualify.$return.records.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:qualify.$return.records.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$parameter:binding.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$parameter:binding.nodeRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$parameter:binding.nodeRunId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "fieldPath": "nativeScopes.$method:resolve.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$parameter:scope",
+          "type": "z.infer<typeof ObservationNativeScopeReferenceSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$return.depth",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$return.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$return.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "fieldPath": "nativeScopes.$method:resolve.$return.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$return.pathDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$return.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:cb3f33c8bd86f7d491a3"
+          ],
+          "fieldPath": "nativeScopes.$method:resolve.$return.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:verify.$parameter:input",
+          "type": "z.infer<typeof ObservationIngestSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:verify.$return",
+          "type": "void"
         }
       ],
       "file": "packages/backend/src/modules/run-observability/public/participants.ts",
       "id": "public:run-observability:participants:ObservationUsageSource",
       "members": [
         "acknowledge",
+        "nativeScopes",
         "pending",
         "spanSources"
       ],
@@ -124927,6 +125361,16 @@
           "signatureDigest": "sha256:b63a6273aa3e2c224eaa55620b7e93ac39821ab3b9472209c934bf2f115ae4c3"
         },
         {
+          "consumerEdgeIds": [],
+          "name": "onReader",
+          "signatureDigest": "sha256:7b9c1b0c81697bae168c14f5df8d48ad1fc99d5ace7a90966c250e2a773cf1f9"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "path",
+          "signatureDigest": "sha256:9ef3c7687f0b0cdbfb685f941a5370178a51bf03aa13c9e079d33e0000420a14"
+        },
+        {
           "consumerEdgeIds": [
             "import:cb3f33c8bd86f7d491a3"
           ],
@@ -124934,11 +125378,26 @@
           "signatureDigest": "sha256:c9bc98e5fb3c53203dc9a5e4cc7fff10315936c0f7f8ea73c3ae50cfd06017a1"
         },
         {
+          "consumerEdgeIds": [],
+          "name": "qualify",
+          "signatureDigest": "sha256:d5e6e1ce9e10cc458e9e2a4f43fccb1499b69978bd76bf2f649577eb9aaaa99e"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "resolve",
+          "signatureDigest": "sha256:c136049eac74788d4244f1776f38fa142497c198c6a8f928239e3bfc4fad61a0"
+        },
+        {
           "consumerEdgeIds": [
             "import:cb3f33c8bd86f7d491a3"
           ],
           "name": "spanSources",
           "signatureDigest": "sha256:ece4c4b618103219009bfafbe7e528d4ee174af2f758d3682e704b87b478b2e5"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "verify",
+          "signatureDigest": "sha256:37dc3d2e20b600655a709d9d5db7ee3180d308de1b08dc5389ba3328f2d489fc"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/run-observability/public/participants.ts#ObservationUsageSource",
@@ -124953,11 +125412,15 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "ephemeral",
-      "signatureDigest": "sha256:e2802a1b8d857f20f12a8d4ade6af3354a35868f3ccb2d0fede135ce7eae58bd",
+      "signatureDigest": "sha256:8877ab9df873214957e87a9011308dcdac6e47916fb2118c9d262f0c41bfc1fd",
       "status": "target-context-current-surface",
       "symbol": "ObservationUsageSource",
       "transaction": "caller-tx",
-      "unresolvedTypeRefs": [],
+      "unresolvedTypeRefs": [
+        "AsyncIterable",
+        "BaseSQLiteDatabase",
+        "z.infer"
+      ],
       "version": 1
     },
     {
@@ -128550,7 +129013,7 @@
         {
           "consumerEdgeIds": [],
           "fieldPath": "$method:detail.$return.$variant:0.nativeCaptures",
-          "type": "readonly {\n    readonly invocationId: string\n    readonly nodeRunId: string | null\n    readonly state: 'pending' | 'partial' | 'complete' | 'unobserved'\n    readonly priorRevisionGap: boolean\n    readonly proof: ObservationNativeCapture | null\n    readonly issues?: readonly string[]\n    readonly revisions?: readonly ObservationNativeRevisionResolution[]\n  }[]"
+          "type": "readonly {\n    readonly invocationId: string\n    readonly nodeRunId: string | null\n    readonly state: 'pending' | 'partial' | 'complete' | 'unobserved'\n    readonly priorRevisionGap: boolean\n    readonly proof: ObservationUsageCapture | null\n    readonly issues?: readonly string[]\n    readonly revisions?: readonly ObservationNativeRevisionResolution[]\n  }[]"
         },
         {
           "consumerEdgeIds": [],
@@ -188108,10 +188571,10 @@
     {
       "authority": "request-authority",
       "budget": {
-        "maxMethods": 6,
+        "maxMethods": 11,
         "maxTopLevelFields": 12,
-        "maxTransitiveLeafFields": 82,
-        "maxUnionVariants": 40
+        "maxTransitiveLeafFields": 110,
+        "maxUnionVariants": 46
       },
       "consumerEdgeIds": [
         "import:0f0f0c7c9b99f8905c51",
@@ -188567,6 +189030,158 @@
           "consumerEdgeIds": [],
           "fieldPath": "$method:spanSources.$return.watermark",
           "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:onReader.$parameter:reader",
+          "type": "BaseSQLiteDatabase<'sync' | 'async', unknown, typeof schema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:onReader.$return",
+          "type": "ObservationNativeScopeSource"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:path.$parameter:binding.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:path.$parameter:binding.nodeRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:path.$parameter:binding.nodeRunId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
+          "fieldPath": "nativeScopes.$method:path.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:path.$parameter:scope",
+          "type": "z.infer<typeof ObservationNativeScopeReferenceSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:path.$return",
+          "type": "AsyncIterable<{\n    readonly session: string\n    readonly parentSession: string | null\n    readonly depth: string\n    readonly pathDigest: string\n  }>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:qualify.$parameter:value",
+          "type": "z.infer<typeof ObservationUsageCaptureCommitSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:qualify.$parameter:value.sourceCursor",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:qualify.$parameter:value.sourceId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
+          "fieldPath": "nativeScopes.$method:qualify.$return.complete",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:qualify.$return.records.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:qualify.$return.records.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$parameter:binding.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$parameter:binding.nodeRunId.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$parameter:binding.nodeRunId.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
+          "fieldPath": "nativeScopes.$method:resolve.$parameter:binding.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$parameter:scope",
+          "type": "z.infer<typeof ObservationNativeScopeReferenceSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$return.depth",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$return.invocationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$return.nativeSource",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$return.nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$return.pathDigest",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:resolve.$return.sourceGeneration",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
+          "fieldPath": "nativeScopes.$method:resolve.$return.taskId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:verify.$parameter:input",
+          "type": "z.infer<typeof ObservationIngestSchema>"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "nativeScopes.$method:verify.$return",
+          "type": "void"
         }
       ],
       "file": "packages/backend/src/modules/task-execution/public/queries.ts",
@@ -188576,6 +189191,7 @@
         "attempts",
         "get",
         "list",
+        "nativeScopes",
         "sourceBacklog",
         "spanSources"
       ],
@@ -188607,6 +189223,32 @@
         },
         {
           "consumerEdgeIds": [],
+          "name": "onReader",
+          "signatureDigest": "sha256:7b9c1b0c81697bae168c14f5df8d48ad1fc99d5ace7a90966c250e2a773cf1f9"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
+          "name": "path",
+          "signatureDigest": "sha256:9ef3c7687f0b0cdbfb685f941a5370178a51bf03aa13c9e079d33e0000420a14"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "qualify",
+          "signatureDigest": "sha256:d5e6e1ce9e10cc458e9e2a4f43fccb1499b69978bd76bf2f649577eb9aaaa99e"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51",
+            "import:c82e310dedf362bdf079"
+          ],
+          "name": "resolve",
+          "signatureDigest": "sha256:c136049eac74788d4244f1776f38fa142497c198c6a8f928239e3bfc4fad61a0"
+        },
+        {
+          "consumerEdgeIds": [],
           "name": "sourceBacklog",
           "signatureDigest": "sha256:9394233bd4069959ed8580f694e2dbf2b3aeeaf7ed3f8581b00e8a1b4b1fe739"
         },
@@ -188614,6 +189256,13 @@
           "consumerEdgeIds": [],
           "name": "spanSources",
           "signatureDigest": "sha256:ece4c4b618103219009bfafbe7e528d4ee174af2f758d3682e704b87b478b2e5"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:0f0f0c7c9b99f8905c51"
+          ],
+          "name": "verify",
+          "signatureDigest": "sha256:37dc3d2e20b600655a709d9d5db7ee3180d308de1b08dc5389ba3328f2d489fc"
         }
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/queries.ts#TaskObservationFactsQuery",
@@ -188634,11 +189283,13 @@
       "publicTypeConsumerIds": [],
       "removeAfterWave": null,
       "serialization": "wire",
-      "signatureDigest": "sha256:ed1186977cf22aade84b148fdfcd9a56511996137f4d255c9a06b7e8417b741b",
+      "signatureDigest": "sha256:6b9233261f6528d63faecb5cf98a6b1db8da5b75e3dde5235d76791e6db6c270",
       "status": "target-context-current-surface",
       "symbol": "TaskObservationFactsQuery",
       "transaction": "none",
       "unresolvedTypeRefs": [
+        "AsyncIterable",
+        "BaseSQLiteDatabase",
         "z.infer"
       ],
       "version": 1
@@ -196938,6 +197589,7 @@
   "kind": "public-surfaces",
   "opaqueTypeRefAllowlist": [
     "AbortSignal",
+    "AsyncIterable",
     "BaseSQLiteDatabase",
     "Blob",
     "Exclude",
@@ -196953,7 +197605,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:3214e2700604b4d1a74728b6928a694a5158477cba10dd8354697cd70e100baa",
+  "sourceDigest": "sha256:4d2de07179aaf057464eed6223b41c33adc1e6ab3b430a01fcdcf991b25d7b90",
   "targetContexts": [
     "collaboration",
     "development-automation",

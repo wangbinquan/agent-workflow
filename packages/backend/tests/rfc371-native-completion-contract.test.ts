@@ -7,6 +7,10 @@ import {
   ObservationNativePassCompletionSchema,
   ObservationNativeScopeReferenceSchema,
   ObservationNativeSourceAckSchema,
+  ObservationCapturedUsageSchema,
+  ObservationMeasurementSchema,
+  ObservationUsageCaptureCommitSchema,
+  parseObservationCapturedUsage,
 } from '@agent-workflow/shared'
 
 const digest = 'a'.repeat(64)
@@ -87,6 +91,59 @@ const measurement = {
   basis: { kind: 'invocation' },
   usage: { input: '11', cacheRead: '13', cacheWrite: '17', output: '19' },
 }
+
+test('the durable parser retains original page references and isolates optional trace damage', () => {
+  const value = {
+    invocationId: identity.invocationId,
+    measurements: [measurement],
+    diagnostics: [],
+    nativeCompletion: fresh(),
+  }
+  const parsed = parseObservationCapturedUsage(value)
+  expect(parsed.measurements).toEqual([measurement])
+  expect(parsed.nativeCompletion).toEqual(fresh())
+  expect(ObservationMeasurementSchema.shape.scope).toBeDefined()
+  const damaged = parseObservationCapturedUsage({ ...value, spanFacts: [{ incomplete: true }] })
+  expect(damaged.measurements).toEqual(parsed.measurements)
+  expect(damaged.nativeCompletion).toEqual(parsed.nativeCompletion)
+  expect(damaged.diagnostics).toEqual(['span-metadata-invalid'])
+  expect(damaged.spanFacts).toBeUndefined()
+})
+
+test('invalid outer invocation or dual native contracts never bypass numeric parser rollback', () => {
+  const value = {
+    invocationId: identity.invocationId,
+    measurements: [measurement],
+    diagnostics: [],
+    nativeCompletion: fresh(),
+  }
+  const wrong = { ...value, invocationId: 'another-original-invocation', spanFacts: [{}] }
+  expect(ObservationCapturedUsageSchema.safeParse(wrong).success).toBe(false)
+  expect(() => parseObservationCapturedUsage(wrong)).toThrow('original invocation')
+  expect(
+    ObservationUsageCaptureCommitSchema.safeParse({
+      invocationId: wrong.invocationId,
+      taskId: measurement.taskId,
+      capture: fresh(),
+    }).success,
+  ).toBe(false)
+  const legacy = {
+    contract: 'opencode-child-steps-v1',
+    nativeSource: identity.nativeSource,
+    rootSessionId: identity.rootSessionId,
+    state: 'complete',
+    baseline: { kind: 'fresh', fingerprint: null },
+    snapshotFingerprint: 'original-legacy',
+    observedAt: 30,
+    scannedSessions: 2,
+    scannedSteps: 1,
+    issues: [],
+    priorRevisions: [],
+  }
+  expect(() =>
+    parseObservationCapturedUsage({ ...value, capture: legacy, spanFacts: [{}] }),
+  ).toThrow('two native capture contracts')
+})
 
 test('a valid source ACK parses; scope retains its own strict binding checks', () => {
   const value = {

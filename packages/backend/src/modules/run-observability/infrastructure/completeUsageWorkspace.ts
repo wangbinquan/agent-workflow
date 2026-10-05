@@ -9,6 +9,9 @@ import { completeOrdinalKey } from '../domain/completeOrdinal'
 import { completeExternalSort } from '../application/completeExternalSort'
 import { compareCompleteUsage } from '../application/completeUsageSelection'
 import { completeCoverageWorkspace } from './completeCoverageWorkspace'
+import { sha256Hex } from '@/util/hash'
+import { isNativeUsageScope } from '../domain/nativeUsageScope'
+import type { ObservationNativeScopeSource } from '../public/participants'
 
 async function* retainedInput<T>(input: {
   readonly rows: CompleteWorkingRows
@@ -49,11 +52,13 @@ export function completeUsageWorkspace<T extends UsageContributionEvidence>(inpu
   readonly keyOf: (value: string) => string
   readonly identity: (record: T) => string
   readonly signal?: AbortSignal
+  readonly nativeScopes?: ObservationNativeScopeSource
 }) {
   const space = (suffix: string) => `${input.namespace}/${suffix}`
   const coverage = completeCoverageWorkspace(input.rows, space('coverage'), input.keyOf)
   const ancestryCache = new Map<string, string>()
   const pendingAncestry = new Map<string, string>()
+  const summaryGroups = new Map<string, boolean>()
   const pendingAllocations: CompleteWorkingRow[] = []
   let count = 0n,
     sealed = false
@@ -79,9 +84,40 @@ export function completeUsageWorkspace<T extends UsageContributionEvidence>(inpu
       count: () => count,
       signal: input.signal,
     })
+  async function bind(group: string, session: string, path: string) {
+    const key = input.keyOf(JSON.stringify([group, session]))
+    const previous =
+      ancestryCache.get(key) ??
+      pendingAncestry.get(key) ??
+      (await input.rows.get<string>(space('ancestry'), key))
+    if (previous !== undefined && previous !== path)
+      throw new Error('Conflicting observation session ancestry')
+    if (previous === undefined) pendingAncestry.set(key, path)
+    ancestryCache.delete(key)
+    ancestryCache.set(key, path)
+    if (ancestryCache.size > 4096) ancestryCache.delete(ancestryCache.keys().next().value!)
+    if (pendingAncestry.size === 500) await flushAncestry()
+  }
   const workspace: CompleteUsageWorkspace<T> = {
     coverage: coverage.coverage,
     records,
+    async markSummary(group) {
+      const key = input.keyOf(group)
+      if (summaryGroups.get(key) !== true)
+        await input.rows.upsert(space('summary-groups'), [{ key, document: true }])
+      summaryGroups.delete(key)
+      summaryGroups.set(key, true)
+      if (summaryGroups.size > 4096) summaryGroups.delete(summaryGroups.keys().next().value!)
+    },
+    async hasSummaries(group) {
+      const key = input.keyOf(group),
+        cached = summaryGroups.get(key)
+      if (cached !== undefined) return cached
+      const value = (await input.rows.get<boolean>(space('summary-groups'), key)) === true
+      summaryGroups.set(key, value)
+      if (summaryGroups.size > 4096) summaryGroups.delete(summaryGroups.keys().next().value!)
+      return value
+    },
     orderedRecords: async function* () {
       sort ??= completeExternalSort({
         workspace: input.rows,
@@ -93,19 +129,34 @@ export function completeUsageWorkspace<T extends UsageContributionEvidence>(inpu
       yield* (await sort).records()
     },
     async bindAncestry(group, session, ancestors) {
-      const key = input.keyOf(JSON.stringify([group, session])),
-        path = JSON.stringify(ancestors)
-      const previous =
-        ancestryCache.get(key) ??
-        pendingAncestry.get(key) ??
-        (await input.rows.get<string>(space('ancestry'), key))
-      if (previous !== undefined && previous !== path)
-        throw new Error('Conflicting observation session ancestry')
-      if (previous === undefined) pendingAncestry.set(key, path)
-      ancestryCache.delete(key)
-      ancestryCache.set(key, path)
-      if (ancestryCache.size > 4096) ancestryCache.delete(ancestryCache.keys().next().value!)
-      if (pendingAncestry.size === 500) await flushAncestry()
+      let digest: string | null = null
+      for (const id of [...ancestors, session]) digest = sha256Hex(JSON.stringify([digest, id]))
+      await bind(
+        group,
+        session,
+        JSON.stringify({
+          depth: String(ancestors.length),
+          pathDigest: digest,
+          parentSession: ancestors.at(-1) ?? null,
+        }),
+      )
+    },
+    async bindNativeAncestry(group, link) {
+      await bind(
+        group,
+        link.session,
+        JSON.stringify({
+          depth: link.depth,
+          pathDigest: link.pathDigest,
+          parentSession: link.parentSession,
+        }),
+      )
+    },
+    nativePath: async function* (record) {
+      const scope = record.measurement.scope
+      if (!isNativeUsageScope(scope) || !record.nativeScopeFacts || !input.nativeScopes)
+        throw new Error('Original native ancestry source is not installed')
+      yield* input.nativeScopes.path(record.nativeScopeFacts, scope)
     },
     async allocate(record, contribution, quality) {
       pendingAllocations.push({

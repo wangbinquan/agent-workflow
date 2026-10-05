@@ -58,6 +58,8 @@ const BACKEND_PREFIX = 'packages/backend/src/'
 
 export const PUBLIC_SURFACE_OPAQUE_TYPE_ALLOWLIST = [
   'AbortSignal',
+  // RFC-371: original native ancestry is streamed through EOF on the bound reader.
+  'AsyncIterable',
   // RFC-359 W4-D28b：`ProviderNeutralDatabase` 的别名目标。名字里的 SQLite 是 drizzle 的历史
   // 命名，它恰恰是**两个引擎共用**的那一层（`BaseSQLiteDatabase<'sync' | 'async', …>`），
   // 随任务执行写事务网关（`withTaskExecutionWrite`）进入 public 面。

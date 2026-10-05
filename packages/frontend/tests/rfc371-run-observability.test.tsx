@@ -26,9 +26,11 @@ import {
 } from '../src/components/observability/formatObservations'
 import { ExecutionSwimlane } from '../src/components/ExecutionSwimlane'
 import { ObservationPlatformCapture } from '../src/components/observability/ObservationPlatformCapture'
+import { ObservationNativeCapture } from '../src/components/observability/ObservationNativeCapture'
 import { Metrics } from '../src/components/observability/ObservationMetrics'
 import { ObservationPlatformNativeCaptureSchema } from '@agent-workflow/shared'
 import { observationRuntimeKey } from '@agent-workflow/shared'
+import { ObservationNativeCompletionSchema } from '@agent-workflow/shared'
 import { validateObservationSearch } from '../src/routes/observability'
 import nativeCapture from '../../shared/tests/fixtures/crewstation-native-capture-v2.json'
 import i18n from '../src/i18n'
@@ -1248,4 +1250,66 @@ test('dimension URL validation and detail return preserve selection separately f
     q: 'name',
     tab: 'tasks',
   })
+})
+
+test('page-based native capture displays exact committed progress beyond legacy population bounds', async () => {
+  const digest = 'a'.repeat(64),
+    counts = { sessions: '100001', parts: '10000001', steps: '10000001' }
+  const proof = ObservationNativeCompletionSchema.parse({
+    contract: 'opencode-child-pages-v2',
+    nativeSource: 'original-store',
+    rootSessionId: 'root',
+    state: 'partial',
+    baseline: { kind: 'fresh', beforeSpawnReceiptId: 'before', preparedAt: 1, rootCreatedAt: 3 },
+    final: null,
+    finalProgress: {
+      contract: 'native-usage-page-ack-v2',
+      identity: {
+        passId: 'original-pass',
+        invocationId: 'original-call',
+        nativeSource: 'original-store',
+        sourceGeneration: 'original-generation',
+        rootSessionId: 'root',
+        lineage: 'original-task',
+        epoch: '1',
+        phase: 'final',
+      },
+      ownerReceiptId: 'owner',
+      ordinal: '50000',
+      payloadDigest: digest,
+      cumulativeDigest: digest,
+      scanPositionAfter: '10100002',
+      counts,
+      nextCursor: 'original-next',
+      sourceWatermark: '41',
+      eof: null,
+    },
+    observedAt: NOW,
+    process: { spawnedAt: 2, reapedAt: null, drainedAt: null },
+    emissions: { records: '10000001', frames: '50001', digest, sourceWatermark: '41' },
+    reconciliation: { examined: '0', resolved: '0', unresolved: '0', digest },
+    issues: ['native-final-unavailable'],
+  })
+  for (const language of ['zh', 'en']) {
+    await i18n.changeLanguage(language)
+    const mounted = render(
+      <ObservationNativeCapture
+        rows={[
+          {
+            invocationId: 'original-call',
+            nodeRunId: 'original-run',
+            state: 'partial',
+            priorRevisionGap: false,
+            proof,
+          },
+        ]}
+      />,
+    )
+    expect(screen.getByText('100,001 / 10,000,001')).toBeTruthy()
+    expect(screen.queryByText('undefined / undefined')).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: i18n.t('runObservability.nativeRevisionDetails') }),
+    ).toBeNull()
+    mounted.unmount()
+  }
 })

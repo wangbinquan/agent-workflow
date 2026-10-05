@@ -12,9 +12,11 @@ import type { PlatformObservation } from '../domain/platformObservation'
 import type { PlatformObservationBinding, PlatformSyncState } from '../domain/platformSync'
 import type { UsageCaptureReceipt } from './usageLedger'
 import type { CompleteSourceReader } from './completeReport'
+import type { ObservationNativeScopeSource } from '../public/participants'
 
 /** All readers are bound to one original snapshot. No method takes a total-record budget. */
 export interface CompleteObservationSources {
+  readonly nativeScopes?: ObservationNativeScopeSource
   readonly snapshotId: string
   tasks(
     actor: Actor,
