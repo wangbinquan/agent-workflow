@@ -833,3 +833,10 @@ System 修复只在既有 lazy env 回调保留非空事实，类型擦除后的
 三条实际 RM evidence application→legacy spanCapture／types／usage 类型出边按原判据具名登记，原306条有序记录及why保留，outbound30→33，总数309；退役目标仍为RFC-370 A-T7 selected material and evidence roots。原规则按 committed68be15bfd1ba7ce8ecb1de6a9d357db7232b6bbb 加 reviewed 两路径数据投影执行一次，13 private产物有效，sourceDigest为sha256:68671bf7bb79b244f46d0da2dd3a5f6c6ab8ae85552712f08c7a7d7f6daeb920。原129库存、全部计数、字段、why及permit不变，无新增长许可；原validator通过。其他共享WIP和未审execution内容排除并保留，不改scanner、断言、预算或旧失败记录。
 
 本机只做owned format／lint与纯AST／JSON／字节、原静态投影，没有AW test／typecheck／build／service。匹配metadata门、精确上库和新exact-SHA CI分别验收。仍在A-T5，完整执行／材料／取证组合、所有真根、脚本、H7与A-G继续；CS adapters、M0首次实际部署和M1～M4尚未完成，本批不关闭RFC。
+
+
+### 2026-10-05 EVIDENCE-CI 原始 status 投影修复
+
+- `96bacdbff8632c62d4770d8d8c6b557f9fb08b91`：主 CI `37261849345` failure，42 success／8 failure；Windows `37261849350` failure。Windows platform 260 pass／3 skip／0 fail，shared 2295 pass／0 fail；Ubuntu 9/16 success，原 System TS18047 与三条 R2 缺登记不再失败。
+- 原 status.md 被本会话在生成后额外 Prettier，导致 Ubuntu 12/16 job `111610635147`、macOS 4/6 job `111610635103` 的 RFC-294 §A2 逐字相等断言失败。修复使用原 `scripts/architecture-status.ts` 和当前 committed 12 JSON，只恢复原渲染字节；原 renderer、全部三个 oracle、JSON 和账本无变化，不重跑 AST census。原 META16 PASS、旧格式证明和失败日志保持原样，此修复单独有限审阅及新 exact-SHA CI。
+- 其他 latest revision 原生页、nativeUsageReconciliationVerification TS2322、PG launch deadlock、workgroup gate E2E 失败保留；本小片不宣称全 CI 转绿、A-T5／A-G／RFC 完成。执行接口十路径及并行 WIP 未纳入提交；STATE 和本文件原正文逐字保留，只追加本段。

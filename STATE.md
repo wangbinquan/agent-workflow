@@ -10102,3 +10102,10 @@ System 修复只在既有 lazy env 回调保留非空事实，类型擦除后的
 三条实际 RM evidence application→legacy spanCapture／types／usage 类型出边按原判据具名登记，原306条有序记录及why保留，outbound30→33，总数309；退役目标仍为RFC-370 A-T7 selected material and evidence roots。原规则按 committed68be15bfd1ba7ce8ecb1de6a9d357db7232b6bbb 加 reviewed 两路径数据投影执行一次，13 private产物有效，sourceDigest为sha256:68671bf7bb79b244f46d0da2dd3a5f6c6ab8ae85552712f08c7a7d7f6daeb920。原129库存、全部计数、字段、why及permit不变，无新增长许可；原validator通过。其他共享WIP和未审execution内容排除并保留，不改scanner、断言、预算或旧失败记录。
 
 本机只做owned format／lint与纯AST／JSON／字节、原静态投影，没有AW test／typecheck／build／service。匹配metadata门、精确上库和新exact-SHA CI分别验收。仍在A-T5，完整执行／材料／取证组合、所有真根、脚本、H7与A-G继续；CS adapters、M0首次实际部署和M1～M4尚未完成，本批不关闭RFC。
+
+
+## 2026-10-05 RFC-370 CI 架构投影原始字节修复
+
+`96bacdbff8632c62d4770d8d8c6b557f9fb08b91` 主 CI `37261849345` 已终态 failure（42 success／8 failure），Windows `37261849350` failure。原 System TS18047 和三条 R2 未登记类型边不再失败；Windows platform 260 pass／3 skip／0 fail、shared 2295 pass／0 fail，Ubuntu 9/16 success。新日志显示本批 status.md 在原生成后额外 Prettier 导致 Ubuntu 12/16、macOS 4/6 的原逐字投影失败；本修复只用未改动的 `scripts/architecture-status.ts` 重渲染原 committed 12 JSON，恢复原生成器字节，不改 renderer／oracle／预算，不重跑 AST census。原 META16 有限 PASS 和旧失败日志保留，不替代此回归的修复／新 exact-SHA CI。
+
+其他 CI 原生页 latest revision、nativeUsageReconciliationVerification TS2322、PG launch deadlock 和 workgroup gate E2E 失败各自留证，不将其记录为 success。执行接口十路径在制品及并行观测输出完整保留；本片只修生成投影和追加记录，源码、canonical JSON、库存、why／许可不变。RFC 仍在 A-T5，A-G、独立 CS adapters、M0～M4 及实际部署继续开放；只做纯 JSON 投影／字节校验，没有本机 AW tests／typecheck／build／新服务。
