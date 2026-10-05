@@ -1,3 +1,9 @@
+## 2026-10-05 RFC-371 原MCP清理时序后继
+
+自有19路径已推送62c00f516，Windows37306478427成功；主CI37306478315实际47success／Mac4 failure／Mac6 cancelled／required failure，终态cancelled不当绿。唯一Mac4原unreaped-child用例5秒超时，后继以同一原persistence真实finishCleanup／settleTurn返回通知替代DB轮询，两个原2秒检查点、5秒预算和全部原断言保持；finally关闭本用例应用timer，不修改生产逻辑。当前共享main自然推进9d74a1e1，原测试与必要控制未改；既有精确format／lint复用，有限功能检视和新确切CI另验核。没有本机AW测试／类型／构建／新服务，没有跨会话消息；当前13 matching和并行登记完整保留，不重扫census。
+
+CS3447104d确切六CI37307118380全部成功，固定镜像本机八组件Ready，248原锁迁移／原Pod／卷／数据库身份保持；下一片原页wire／Session接收端仍未发布，producer OFF。完整采集producer／before-final／platform v2／历史seal、100K Task／10M usage与两个RFC仍开放。下方全部原共享正文与并行输出逐字保留。
+
 ## 2026-10-05 RFC-371 原输入投递时序与确切 CI 后继修复
 
 本片修复原direct回执拒绝/取消期间仍可投递held stdin的真实CI失败；正常ACK、ownerless及原abort/reap/drain保持。原失败用例不改，增加实际direct取消回归；原PID/binary预言跟随已提交recordTaskReceipt，40K归档原PG用例明确id排序，所有原数值和JSONL边界断言保持。SOURCE5独立有限功能PASS、0 findings，原059a845f确切CI37298075490仍failure，后继新确切SHA CI继续。只运行自有format/lint，没有本机AW测试、类型、构建或服务。

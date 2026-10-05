@@ -39,3 +39,11 @@ bootstrap AST 原先只允许 composeObservationUsageSource 的单个 db 参数�
 另两处修正保留原断言：原spawn binary/PID文本预言跟随已提交调用recordTaskReceipt，仍核对实际native/projection字段；40K行归档原PG用例明确按id升序查询留存尾部首行，原35000归档/5000留存/JSONL边界与原数值预言全部保持，不能依赖PG无ORDER BY的任意物理行顺序。
 
 本机只运行这些自有文件的format/lint，测试/类型/构建继续只由hosted确切SHA CI验证；不会用重跑或删除断言把原失败当绿。完整原生v2 producer/before/final/platform/seal和100KTask/10Musage继续，两个RFC不关闭。
+
+## 62c00f516确切CI后继：原MCP清理检查点
+
+本会话19路径已推送62c00f516。Windows37306478427成功；主CI37306478315终态cancelled，实际47作业成功、Mac4 failure、Mac6 cancelled、required failure，不能记为全绿。Mac4唯一原失败是RFC-238 unreaped-child用例5秒超时，原日志保留；检查取消时远端尚未推进，不把它解释为后继推送。此后共享main正常推进9d74a1e1，包含本片全部19路径；原失败用例与必要MCP生产控制内容未变，已成功的精确format／lint复用。
+
+后继只修改该原用例：在同一原persistence.finishCleanup／settleTurn返回之后发测试内通知，替代重复DB终态轮询；两个原2秒检查点和Bun原5秒预算保持。quarantined、capture-incomplete、原PID、拒绝替换、实际reap恢复、替换执行的原断言全部保留，另明确原ended和inFlight=null。finally关闭本用例应用timer，不修改生产、不扩大预算，不把新通知当原写入成功证据；原DB断言仍执行。新确切SHA CI另验核，没有本机AW测试／类型／构建／新服务。当前已提交13 matching产物与全部共享登记保留，没有源码增量，不重扫census。
+
+CS3447104d六项确切CI37307118380全部成功，三固定镜像本机八组件Ready；248条原锁迁移校验，原项目Pod、卷、数据库和原生容器保持。下一片原页wire／Session接收端尚未发布，producer OFF；完整before/final/platform v2/seal、100K Task／10M usage与两个RFC仍开放。

@@ -161,6 +161,18 @@ async function waitFor(check: () => boolean | Promise<boolean>, timeoutMs = 2000
   }
 }
 
+async function committedWithin(promise: Promise<void>, timeoutMs = 2000): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => reject(new Error('condition timed out')), timeoutMs)
+  })
+  try {
+    await Promise.race([promise, deadline])
+  } finally {
+    if (timer !== undefined) clearTimeout(timer)
+  }
+}
+
 afterEach(() => {
   for (const dir of tempDirs.splice(0)) rmSync(dir, { recursive: true, force: true })
 })
@@ -959,8 +971,32 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
     const { db, mcp, root } = await seed(harness.db)
     let runs = 0
     let reapOutcome: 'kill-failed' | 'not-alive' = 'kill-failed'
+    // Preserve the original 2s checkpoints/5s test budget. Observe the real
+    // owner writes instead of repeatedly polling the shared DB on macOS CI.
+    let cleanupCommitted!: () => void
+    let replacementCommitted!: () => void
+    const cleanupReceipt = new Promise<void>((resolve) => {
+      cleanupCommitted = resolve
+    })
+    const replacementReceipt = new Promise<void>((resolve) => {
+      replacementCommitted = resolve
+    })
+    const dependencies = runtimeTestDependencies(db, root)
     const service = createMcpDiagnosticsApplication({
-      ...runtimeTestDependencies(db, root),
+      ...dependencies,
+      persistence: {
+        ...dependencies.persistence,
+        finishCleanup: async (input) => {
+          const result = await dependencies.persistence.finishCleanup(input)
+          if (input.cleanupState === 'quarantined') cleanupCommitted()
+          return result
+        },
+        settleTurn: async (input) => {
+          const result = await dependencies.persistence.settleTurn(input)
+          if (input.capturedSessionId === 'native-replacement') replacementCommitted()
+          return result
+        },
+      },
       runFn: async (opts) => {
         runs += 1
         await opts.onSpawned?.({
@@ -979,74 +1015,76 @@ describeEachProvider('RFC-238 MCP runtime test service', (harness) => {
       },
       killStaleRunProcessTree: async () => reapOutcome,
     })
-    const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
-      mcp,
-    )
-    const created = await service.create(actor, mcp, {
-      expectedMcpConfigHash: hash,
-      runtimeName: 'test-opencode',
-      message: 'leave a survivor',
-      clientCreateId: 'create-unreaped',
-      clientMessageId: 'message-unreaped',
-    })
-    await waitFor(
-      async () => (await service.get(actor, mcp.id, created.sessionId)).status === 'ended',
-    )
-    const ended = await service.get(actor, mcp.id, created.sessionId)
-    expect(ended.cleanupState).toBe('quarantined')
-    expect(ended.endReason).toBe('capture-incomplete')
-    expect(
-      (
-        await db
-          .select({ pid: mcpRuntimeTestTurns.pid })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, created.acceptedTurnId))
-      )[0]?.pid,
-    ).toBe(4242)
-    expect(
-      (
-        await db
-          .select({ cleanupErrorCode: mcpRuntimeTestSessions.cleanupErrorCode })
-          .from(mcpRuntimeTestSessions)
-          .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
-      )[0]?.cleanupErrorCode,
-    ).toBe('mcp-test-child-unreaped')
-
-    await expect(
-      service.create(actor, mcp, {
+    try {
+      const hash = (await import('../src/services/mcpOperationRevision')).mcpOperationConfigHashOf(
+        mcp,
+      )
+      const created = await service.create(actor, mcp, {
         expectedMcpConfigHash: hash,
         runtimeName: 'test-opencode',
-        message: 'replacement must be blocked',
-        clientCreateId: 'create-after-unreaped',
-        clientMessageId: 'message-after-unreaped',
-      }),
-    ).rejects.toMatchObject({ code: 'mcp-test-cleanup-quarantined' })
+        message: 'leave a survivor',
+        clientCreateId: 'create-unreaped',
+        clientMessageId: 'message-unreaped',
+      })
+      await committedWithin(cleanupReceipt)
+      const ended = await service.get(actor, mcp.id, created.sessionId)
+      expect(ended.status).toBe('ended')
+      expect(ended.cleanupState).toBe('quarantined')
+      expect(ended.endReason).toBe('capture-incomplete')
+      expect(
+        (
+          await db
+            .select({ pid: mcpRuntimeTestTurns.pid })
+            .from(mcpRuntimeTestTurns)
+            .where(eq(mcpRuntimeTestTurns.id, created.acceptedTurnId))
+        )[0]?.pid,
+      ).toBe(4242)
+      expect(
+        (
+          await db
+            .select({ cleanupErrorCode: mcpRuntimeTestSessions.cleanupErrorCode })
+            .from(mcpRuntimeTestSessions)
+            .where(eq(mcpRuntimeTestSessions.id, created.sessionId))
+        )[0]?.cleanupErrorCode,
+      ).toBe('mcp-test-child-unreaped')
 
-    reapOutcome = 'not-alive'
-    await service.reconcile()
-    const recovered = await service.get(actor, mcp.id, created.sessionId)
-    expect(recovered.cleanupState).toBe('complete')
-    expect(
-      (
-        await db
-          .select({ pid: mcpRuntimeTestTurns.pid })
-          .from(mcpRuntimeTestTurns)
-          .where(eq(mcpRuntimeTestTurns.id, created.acceptedTurnId))
-      )[0]?.pid,
-    ).toBeNull()
+      await expect(
+        service.create(actor, mcp, {
+          expectedMcpConfigHash: hash,
+          runtimeName: 'test-opencode',
+          message: 'replacement must be blocked',
+          clientCreateId: 'create-after-unreaped',
+          clientMessageId: 'message-after-unreaped',
+        }),
+      ).rejects.toMatchObject({ code: 'mcp-test-cleanup-quarantined' })
 
-    const replacement = await service.create(actor, mcp, {
-      expectedMcpConfigHash: hash,
-      runtimeName: 'test-opencode',
-      message: 'replacement after proven reap',
-      clientCreateId: 'create-after-proven-reap',
-      clientMessageId: 'message-after-proven-reap',
-    })
-    await waitFor(
-      async () => (await service.get(actor, mcp.id, replacement.sessionId)).inFlightTurnId === null,
-    )
-    expect(runs).toBe(2)
-    expect((await service.get(actor, mcp.id, replacement.sessionId)).status).toBe('active')
+      reapOutcome = 'not-alive'
+      await service.reconcile()
+      const recovered = await service.get(actor, mcp.id, created.sessionId)
+      expect(recovered.cleanupState).toBe('complete')
+      expect(
+        (
+          await db
+            .select({ pid: mcpRuntimeTestTurns.pid })
+            .from(mcpRuntimeTestTurns)
+            .where(eq(mcpRuntimeTestTurns.id, created.acceptedTurnId))
+        )[0]?.pid,
+      ).toBeNull()
+
+      const replacement = await service.create(actor, mcp, {
+        expectedMcpConfigHash: hash,
+        runtimeName: 'test-opencode',
+        message: 'replacement after proven reap',
+        clientCreateId: 'create-after-proven-reap',
+        clientMessageId: 'message-after-proven-reap',
+      })
+      await committedWithin(replacementReceipt)
+      expect((await service.get(actor, mcp.id, replacement.sessionId)).inFlightTurnId).toBeNull()
+      expect(runs).toBe(2)
+      expect((await service.get(actor, mcp.id, replacement.sessionId)).status).toBe('active')
+    } finally {
+      await service.dispose(2000)
+    }
   })
 
   test('boot recovery retains identity and scratch when the old child cannot be reaped', async () => {
