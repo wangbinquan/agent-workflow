@@ -138,3 +138,17 @@ export type {
 export type { AgentInvocationProtocol } from '../application/ports/agentProtocol'
 export type { AgentMaterialEvidence } from '../application/ports/agentMaterialEvidence'
 export type { AgentMaterialWorkspace } from '../application/ports/agentMaterialWorkspace'
+
+/** The execution-owned preparation consumes the complete material declaration
+ * and the metadata from that same selected compilation. */
+export type {
+  AgentMaterialCompiler,
+  AgentMaterialIntent,
+  PreparedAgentMaterial,
+} from '../application/ports/agentMaterial'
+
+export type { StartupInventory, SystemAgentOutputEvidence } from '@/services/runtime/types'
+export type {
+  SessionCaptureIncompleteReason,
+  SystemAgentEventSinkV1,
+} from '../application/ports/agentSessionEvents'

@@ -253,6 +253,11 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   'resource-catalog/composition/resourceAcl: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
   'resource-catalog/infrastructure/legacy/workgroup/launch: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
   'resource-catalog/infrastructure/legacy/workgroups: packages/backend/src/modules/task-execution/infrastructure/workgroupLaunchResourceOperations.ts',
+  // RFC-370 A-T5: the unchanged native pairing moved from RM into TE
+  // composition. These two actual compatibility addresses are already recorded
+  // in matching cross-context imports; retire with the selected A-T7 roots.
+  'runtime-management/infrastructure/local/agentMaterialCompiler: packages/backend/src/modules/task-execution/composition/agentInvocation.ts',
+  'runtime-management/infrastructure/local/agentMaterialEvidence: packages/backend/src/modules/task-execution/composition/agentInvocation.ts',
   // RFC-357：两个 provider 的目录源适配收成一份，这条债随之只剩一条（两个装配文件不再
   // 各自 import task-catalog 的 required-ports）。
   // RFC-370 H3: standalone binds the neutral SC presence query at this composition.

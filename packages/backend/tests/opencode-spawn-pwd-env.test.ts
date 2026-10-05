@@ -85,11 +85,7 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
     expect(src).toContain('const { cmd, env } = plan')
     expect(src).toContain('const invocation = bindNativeAgentInvocation({')
     const binding = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts',
-      ),
+      resolve(import.meta.dir, '..', 'src/modules/task-execution/composition/agentInvocation.ts'),
       'utf-8',
     )
     expect(binding).toContain(
@@ -155,16 +151,17 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
     expect(src).toContain("kind: 'system'")
     expect(src).toContain('parent: () => opts.scratchParent,')
     expect(src).toContain('cwd: worktreeDir,')
-    expect(src).toContain('await localExecution.effect.submit({')
+    const core = readFileSync(
+      resolve(import.meta.dir, '..', 'src/modules/task-execution/application/systemAgentRun.ts'),
+      'utf-8',
+    )
+    expect(src).toContain('runSystemAgentCore(opts, {')
+    expect(core).toContain('await localExecution.effect.submit({')
     expect(src).toContain('workingDirectory: () => worktreeDir,')
-    expect(src).toContain('invocation = bindNativeAgentInvocation({\n        plan,')
-    expect(src).toContain('environment: () => plan!.env,')
+    expect(src).toContain('return bindNativeAgentInvocation({\n              plan: prepared,')
+    expect(src).toContain('environment: () => prepared.env,')
     const binding = readFileSync(
-      resolve(
-        import.meta.dir,
-        '..',
-        'src/modules/runtime-management/infrastructure/local/agentInvocationBinding.ts',
-      ),
+      resolve(import.meta.dir, '..', 'src/modules/task-execution/composition/agentInvocation.ts'),
       'utf-8',
     )
     expect(binding).toContain(

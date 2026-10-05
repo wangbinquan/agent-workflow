@@ -426,7 +426,7 @@ export async function assembleClaudeBusinessSpawn(
 }
 
 /** Native-only compatibility implementation. Neutral material inputs are a separate contract. */
-async function buildClaudeNativeMaterial(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
+export async function buildClaudeNativeMaterial(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
   // §7-9 — see the opencode twin: declared render degrades, assembly fails
   // (incl. the P3-5 system-face caveat noted there).
   let rendered: RenderedInjectionV1

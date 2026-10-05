@@ -1,3 +1,10 @@
+## 2026-10-05 RFC-370 System 共同核心与选中准备增量
+
+原完整 System 执行算法归 TE application，原 native options/result、编译/wrap、回执和路径投影 API 保持；所有原 System 调用经同一核心。正常 composition 必须接收两阶段选中准备，compile一次、late bind一次，无原生回退。原 session 事件合同整体归 RM application。新八项准备与十四项 System 回归交 hosted CI；原 SOURCE18-DOC1 R1 一个 prototype/scope P2/FAIL 保留，SOURCE19-DOC1 R2独立有限PASS，53项首末稳定，指纹59d6dbc5d73c17acb5f64991761861ca409e98283bc52b5492824c2158db0524。
+
+本机只做自有format/lint、纯AST/byte/JSON与一次原scoped生成，没有AW本机tests/typecheck/build/service。sourceDigest sha256:2e04978b5cbd31ea4b1eddb81de8e1cb9432418a6f252df9869f9f988a5d5309；非自有6475源码取c835052b完整committed blob，所有并行原页producer/baseline/runner/取证在制品排除保留。13 matching保留129有序库存/why、40SPI/69targets、原值级SCC与空implementation SCC；清偿一个真正移走的旧入边并登记六个实际新组，329债维持原规则。实际六项计数增长按原counter登记：bridge地址17→19、entry1881→1885、imports6402→6434、exceptions5675→5691、public1156→1163、owners26833→26855，matching发布后普通后继退役。
+
+c835主CI37313859339正式failure保留；五功能作业的缺源文件/旧Windows四地址及实际native pairing两地址inventory后继修复。c835定时full E2E37318548076、WebKit37320628193、visual37320636702 success分别保留，不能代替新源码或主CI。源码门、matching metadata门、精确发布及新exact-SHA CI各自留证。完整A-T5/真根/retention reader、Task/smoke、脚本/执行权/恢复与A-G继续；随后独立CS adapters，M0先实际部署，再逐项M1～M4。尚无AW-in-CS部署，不关闭RFC。下方原共享正文与所有并行输出逐字保持。
 ## 2026-10-05 RFC-371 原MCP清理时序后继
 
 自有19路径已推送62c00f516，Windows37306478427成功；主CI37306478315实际47success／Mac4 failure／Mac6 cancelled／required failure，终态cancelled不当绿。唯一Mac4原unreaped-child用例5秒超时，后继以同一原persistence真实finishCleanup／settleTurn返回通知替代DB轮询，两个原2秒检查点、5秒预算和全部原断言保持；finally关闭本用例应用timer，不修改生产逻辑。当前共享main自然推进9d74a1e1，原测试与必要控制未改；既有精确format／lint复用，有限功能检视和新确切CI另验核。没有本机AW测试／类型／构建／新服务，没有跨会话消息；当前13 matching和并行登记完整保留，不重扫census。
@@ -10214,3 +10221,9 @@ ab30 主 CI37296573386 正式 completed/cancelled（21 success／7 failure／20 
 联合绑定归属与只读视图已精确发布9d74a1e1db0c3cfb795aab4f71f064525dda39f5的33路径，SOURCE17-DOC1-R2／META15-R1独立有限PASS，post-fetch main／origin同步0/0、index空，全部并行输出保持。Windows37311325395正式failure，287 pass／3 skip／1 fail；唯一旧Map类型文本预言现映射到真实ReadonlyMap／ReadonlySet，原五用例／其余断言／预算和全部生产算法保留。正常后继同时退役已消费三许可（imports6402／public1156／owners26833），129原有序库存、数值／why／其余字段保持，由原provenance helper刷新，无 census／源码门重跑。详情见 design/RFC-370-crewstation-hosted-deployment/agent-invocation-readonly-ci-repair.md。
 
 原失败和commit前停止回执完整保留，新确切SHA CI另验收；无本机AW tests／typecheck／build／service。后续工厂在制品、观测WIP不纳入本片提交，完整工厂／入口／脚本／执行权恢复／A-G及CS M0～M4继续，未部署AW、不关闭RFC。共享旧全文逐字保持，仅追加本段。
+
+## 2026-10-05 RFC-371 原 Task 原生生命周期候选
+
+本片新增原 Task 显式装配的 before/final、真实 native 进程事实、逐页 source 与历史修订收敛；默认生产装配不切换。不同 node 的 projection 请求不能复用 unrelated=0 当作自身 EOF，原唯一账本和全人口遍历保持。新增真实 SQLite/WAL／Bun子进程／Worker 与双 provider 四桶、1001条原步骤和后续原owner修订回归；本机只精确format/lint，未运行AW tests／types／build／服务。独立有限功能门、matching登记和新确切SHA CI分别验核，不声明尚未运行的用例通过。剩余全部入口／恢复／多root／规模与CS平台v2接线继续。
+
+CS自有测试分层修复已直接提交远端be7e9d3584a15b0fcbcf85162d736d74970dae7e，只迁移原逐字测试与追加原文档；新CI37328576055及固定源码镜像本机部署继续。AW c835052b5的full37318548076、WebKit37320628193、visual37320636702均终态success；主CI旧路径失败仍保留，不混为整仓通过。没有联系其他会话，全部共享正文与并行文件保持。

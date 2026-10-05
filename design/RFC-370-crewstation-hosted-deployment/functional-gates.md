@@ -889,3 +889,11 @@ ab30 主 CI37296573386 正式 completed/cancelled（21 success／7 failure／20 
 联合绑定归属与只读视图已精确发布9d74a1e1db0c3cfb795aab4f71f064525dda39f5的33路径，SOURCE17-DOC1-R2／META15-R1独立有限PASS，post-fetch main／origin同步0/0、index空，全部并行输出保持。Windows37311325395正式failure，287 pass／3 skip／1 fail；唯一旧Map类型文本预言现映射到真实ReadonlyMap／ReadonlySet，原五用例／其余断言／预算和全部生产算法保留。正常后继同时退役已消费三许可（imports6402／public1156／owners26833），129原有序库存、数值／why／其余字段保持，由原provenance helper刷新，无 census／源码门重跑。详情见 design/RFC-370-crewstation-hosted-deployment/agent-invocation-readonly-ci-repair.md。
 
 原失败和commit前停止回执完整保留，新确切SHA CI另验收；无本机AW tests／typecheck／build／service。后续工厂在制品、观测WIP不纳入本片提交，完整工厂／入口／脚本／执行权恢复／A-G及CS M0～M4继续，未部署AW、不关闭RFC。共享旧全文逐字保持，仅追加本段。
+
+## 2026-10-05 A-T5 System common core 与选中准备有限门
+
+- SYSTEM-COMMON-CORE-SOURCE18-DOC1-R1：FAIL，一个P2。完整 prototype binding/scope 被对象展开丢失；原回执与48项冻结证据保持。
+- SYSTEM-COMMON-CORE-SOURCE19-DOC1-R2：独立有限PASS，无新增功能findings。53项=20 owned/17 controls/16 evidence，首末指纹59d6dbc5d73c17acb5f64991761861ca409e98283bc52b5492824c2158db0524。完整显式转发保持原receiver/optional late lookup，新增实际local preparation/native binder两项class/private-field回归，累计8 preparation/14 System cases。原同材料/全算法/完整兼容合同/seed/receipt/terminal/capture/cleanup和错误规则保持。
+- CI源码oracle只跟随实际TE binding/System core；Windows两事件四旧地址同步，原整份逆映射字节相同。原rfc328精确inventory只补已在committed cross-context imports登记的两native pairing地址，其余整份字节保持；原classifier/等式/断言/预算不变。
+- 一次有效原scoped生成：c835052b＋20冻结候选，非自有6475源码按committed blob取值，所有并行WIP排除。sourceDigest sha256:2e04978b5cbd31ea4b1eddb81de8e1cb9432418a6f252df9869f9f988a5d5309，13 matching/129有序库存与why/40SPI/69targets/原值级SCC/空implementation SCC保持。真实commons旧组退役1、新组6，计329；六实际counter的matching许可在源码/清单提交后普通后继退役，不改变规则或泛化例外。
+- c835主CI failure与三定时E2E/visual success分开保留；后继新exact-SHA正式CI待发布后验收。本机无AW测试/类型/构建/服务。只有本增量有限门；真根、retention消费者、Task/smoke、A-T5/A-G、CS首次部署及完整RFC继续，未记完成。详情见 design/RFC-370-crewstation-hosted-deployment/system-agent-common-core.md。

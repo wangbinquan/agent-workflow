@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 504,
-    "architectureExceptions": 5675,
+    "architectureExceptions": 5691,
     "backgroundJobs": 361,
-    "crossContextImports": 6402,
+    "crossContextImports": 6434,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26833,
-    "mutationEntrypoints": 1881,
+    "moduleSymbolOwners": 26855,
+    "mutationEntrypoints": 1885,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1156,
+    "publicSurfaces": 1163,
     "transactionExternalEffects": 267
   },
   "metrics": {
     "ambientWiringEntries": 504,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2217,
+    "backendProductionFiles": 2225,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -49,7 +49,7 @@
     ],
     "directNativeIntervals": 22,
     "directNativeTimers": 78,
-    "inboundBoundaryEdges": 289,
+    "inboundBoundaryEdges": 292,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -106,7 +106,7 @@
       },
       {
         "context": "runtime-management",
-        "files": 58
+        "files": 60
       },
       {
         "context": "source-control",
@@ -122,10 +122,10 @@
       },
       {
         "context": "task-execution",
-        "files": 393
+        "files": 399
       }
     ],
-    "moduleFiles": 1629,
+    "moduleFiles": 1637,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -138,7 +138,7 @@
         "symbol": "nodeRunMintProgram"
       }
     ],
-    "outboundBoundaryEdges": 35,
+    "outboundBoundaryEdges": 37,
     "repoValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1a809232890dcdb7874963bc5e596bc8402d1be500da74eda7a16abe5d578425"
+  "sourceDigest": "sha256:2e04978b5cbd31ea4b1eddb81de8e1cb9432418a6f252df9869f9f988a5d5309"
 }

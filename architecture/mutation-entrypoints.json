@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1881,
+    "entries": 1885,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -27601,6 +27601,27 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/systemAgentRun.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/systemAgentRun.ts#runSystemAgentCore",
+      "missingControls": [
+        "audit",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/systemAgentRun.ts#runSystemAgentCore",
+      "symbol": "runSystemAgentCore",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
@@ -27942,6 +27963,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/task-execution/composition/agentInvocationPreparation.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/agentInvocationPreparation.ts#createAgentInvocationPreparation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/agentInvocationPreparation.ts#createAgentInvocationPreparation",
+      "symbol": "createAgentInvocationPreparation",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#createDaemonLockProof",
@@ -28127,6 +28173,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/isolationWorkspaceScene.ts#restoreTaskIsolation",
       "symbol": "restoreTaskIsolation",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/localAgentInvocationPreparation.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/localAgentInvocationPreparation.ts#createLocalAgentInvocationPreparation",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/localAgentInvocationPreparation.ts#createLocalAgentInvocationPreparation",
+      "symbol": "createLocalAgentInvocationPreparation",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -28717,6 +28787,30 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/sqliteTaskExecutionContext.ts#createTaskExecutionContext",
       "symbol": "createTaskExecutionContext",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/systemAgentRun.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/systemAgentRun.ts#runPreparedSystemAgent",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/systemAgentRun.ts#runPreparedSystemAgent",
+      "symbol": "runPreparedSystemAgent",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -42253,10 +42347,10 @@
     {
       "controls": {
         "audit": false,
-        "authority": "system",
-        "authorization": true,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
-        "fenceOrOcc": true,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/services/systemAgentRun.ts",
@@ -42264,6 +42358,9 @@
       "id": "mutation:packages/backend/src/services/systemAgentRun.ts#runSystemAgent",
       "missingControls": [
         "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/services/systemAgentRun.ts#runSystemAgent",
@@ -44989,7 +45086,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1a809232890dcdb7874963bc5e596bc8402d1be500da74eda7a16abe5d578425",
+  "sourceDigest": "sha256:2e04978b5cbd31ea4b1eddb81de8e1cb9432418a6f252df9869f9f988a5d5309",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -317,7 +317,7 @@ export async function assembleOpencodeBusinessSpawn(
 }
 
 /** Native-only compatibility implementation. Neutral material inputs are a separate contract. */
-async function buildOpencodeNativeMaterial(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
+export async function buildOpencodeNativeMaterial(ctx: AgentSpawnContext): Promise<AgentSpawnPlan> {
   // §7-9 — the declared render keeps its own degrade path: a (defensive-
   // only) render failure downgrades the manifest to empty + warn instead of
   // failing the node; the assembly below re-renders internally and remains

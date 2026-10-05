@@ -1,7 +1,7 @@
 {
   "denominator": {
     "serviceFiles": 298,
-    "thinFacades": 58
+    "thinFacades": 59
   },
   "entries": [
     {
@@ -3756,6 +3756,7 @@
         "import:508585b40e2cf04f1432",
         "import:55f7c3a1e3e1628e4302",
         "import:6086843b83980e7f72de",
+        "import:63fad3747b478edc6675",
         "import:70fef04c52ff0c283a17",
         "import:835ec062b66a4ad7e8a4",
         "import:9b40bf959bd20a789e88",
@@ -4210,6 +4211,7 @@
         "import:07f493e993272ff28864",
         "import:09343e76d76fa5dfed29",
         "import:0f471184ca5f65924937",
+        "import:133d538205bc8b8b581e",
         "import:228ffcdab62abfdbf95f",
         "import:22e2a3e43b9aded6811d",
         "import:25d6e3fda5a55ab36a5d",
@@ -4223,12 +4225,14 @@
         "import:64cce34581a2c498d55f",
         "import:668e88a4c0f34dfa5f36",
         "import:6cd1ab696b243d253d1f",
+        "import:6cf9c0a243ce3509c1c2",
         "import:6ecb2676c50da644e98d",
         "import:78b1446894fbeba3bf7c",
         "import:7af33829e520bd6a97b6",
         "import:7e35a4d0936147f04ed8",
         "import:7ebd2695d0ca6170e289",
         "import:84369c5691cec1b9fbcd",
+        "import:865179f7fc585ca586f8",
         "import:86bcfc72d0b503706527",
         "import:878817dd026ba03d55c6",
         "import:89330d2b30e8e7d95530",
@@ -4237,6 +4241,7 @@
         "import:971abb78211b75c4b3d3",
         "import:9866049aeb621599bb0f",
         "import:9b3b731a2da3052932b3",
+        "import:9b44be260792b133f917",
         "import:a99307c8c8debf377c51",
         "import:ad7b42c7d621553136df",
         "import:b234142f2b81b77760e6",
@@ -4651,23 +4656,22 @@
         "import:12d3f0f99705bcfcc7d3",
         "import:204e3b60ca1ec9b64fc8",
         "import:2a265061a5bc26fb13c3",
+        "import:379fb3b8e44b0b4dbd45",
         "import:44aa22593d2ee03168f2",
+        "import:47c07559fc96ec4ca9b6",
+        "import:507a856a4c0e96b48e37",
         "import:5bf61284b1538459ddf4",
         "import:71ce3d2a59f1295300bb",
         "import:7c317ccd0062d9910fdb",
-        "import:7e05b891a85932c9f44d"
+        "import:7e05b891a85932c9f44d",
+        "import:84b8375aa9802df2af8e"
       ],
-      "exportedSymbols": [
-        "SessionCaptureIncompleteReason",
-        "SessionCaptureTerminalState",
-        "SessionEventSource",
-        "SystemAgentEventSinkV1"
-      ],
+      "exportedSymbols": [],
       "file": "packages/backend/src/services/sessionEventSink.ts",
       "id": "facade:packages/backend/src/services/sessionEventSink.ts",
       "ownerEntryId": "owner:packages/backend/src/services/sessionEventSink.ts#$file",
       "removeAfterWave": "W4-E1",
-      "status": "legacy-implementation",
+      "status": "thin-facade",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -5266,35 +5270,36 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:20472fc8a38839e0ac62",
         "import:249d06f167e02a472939",
         "import:24a9c3ea3be7f83239db",
         "import:2711368a4665ccb332af",
         "import:36fa4c83d3ffdf9f5e25",
+        "import:37b233e9696dd3e72844",
         "import:3abac1ba429377dd6f6e",
         "import:48b3c18a0fdb0377aa32",
         "import:53e55db700007e9b1478",
         "import:57da0f6bd2cd1ce77e1c",
+        "import:5c2504b10485d92010d7",
         "import:61d4096cb57acaadd536",
-        "import:6c31bfcd76a30d2157dc",
+        "import:7cec6e21cb18ed78ac3f",
         "import:8d997d1153638cbf6d9e",
         "import:9f9ee23d0b828aefa094",
         "import:ab9070ad98812d5f5e5a",
+        "import:b02bc1c18361900ae408",
         "import:b46f36cab99cedaaf41c",
         "import:b81010afdf9fa4d0e839",
         "import:c13c8d8f055c8f38b277",
         "import:c35fd8f01b06d7380c8c",
         "import:c5a217a7da3a23f11087",
-        "import:cab426d1510e3863950c"
+        "import:cab426d1510e3863950c",
+        "import:d729fc6f9a345a2f20b5",
+        "import:fb7d00ee916b1814ca91"
       ],
       "exportedSymbols": [
-        "MissingEnvelopeReason",
         "SystemAgentRunOptions",
         "SystemAgentRunResult",
         "SystemAgentRunStatus",
         "SystemAgentSeedFile",
-        "classifyMissingEnvelope",
-        "emptySystemAgentOutputEvidence",
         "runSystemAgent"
       ],
       "file": "packages/backend/src/services/systemAgentRun.ts",
@@ -6453,5 +6458,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1a809232890dcdb7874963bc5e596bc8402d1be500da74eda7a16abe5d578425"
+  "sourceDigest": "sha256:2e04978b5cbd31ea4b1eddb81de8e1cb9432418a6f252df9869f9f988a5d5309"
 }

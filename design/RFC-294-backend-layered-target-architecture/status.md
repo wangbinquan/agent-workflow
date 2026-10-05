@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:1a809232890dcdb7874963bc5e596bc8402d1be500da74eda7a16abe5d578425`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:2e04978b5cbd31ea4b1eddb81de8e1cb9432418a6f252df9869f9f988a5d5309`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2217 |
+| backend production TS 文件 | 2225 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1629 / 18 |
+| `modules/**` 文件 / 非空 context | 1637 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 361 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 289 / 35 |
+| RFC-317 boundary census（inbound / outbound） | 292 / 37 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5675 |
+| `architectureExceptions` | 5691 |
 | `backgroundJobs` | 361 |
-| `crossContextImports` | 6402 |
+| `crossContextImports` | 6434 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 26833 |
-| `mutationEntrypoints` | 1881 |
+| `moduleSymbolOwners` | 26855 |
+| `mutationEntrypoints` | 1885 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1156 |
+| `publicSurfaces` | 1163 |
 | `transactionExternalEffects` | 267 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -49,9 +49,9 @@
 | --- | --- |
 | task-execution / infrastructure | 141 |
 | resource-catalog / infrastructure | 129 |
-| task-execution / application | 119 |
+| task-execution / application | 122 |
 | resource-catalog / application | 77 |
-| task-execution / composition | 70 |
+| task-execution / composition | 73 |
 | development-automation / application | 61 |
 | collaboration / infrastructure | 47 |
 | development-automation / infrastructure | 44 |
@@ -64,14 +64,14 @@
 | intent / application | 29 |
 | source-control / application | 28 |
 | system-operations / infrastructure | 27 |
+| runtime-management / application | 26 |
 | identity-access / application | 25 |
 | run-observability / domain | 25 |
-| runtime-management / application | 25 |
 | integration / application | 23 |
 | system-operations / application | 23 |
 | integration / infrastructure | 22 |
+| runtime-management / infrastructure | 22 |
 | run-observability / infrastructure | 21 |
-| runtime-management / infrastructure | 21 |
 | code-capability / application | 20 |
 | task-execution / engine | 20 |
 | integration / composition | 18 |
@@ -208,10 +208,10 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3660 |
-| legacy-inbound | 1825 |
+| legacy-outbound | 3668 |
+| legacy-inbound | 1833 |
 | infrastructure-external | 315 |
-| offered-consumption | 268 |
+| offered-consumption | 284 |
 | temporary-internal-debt | 95 |
 | off-dag-offered | 83 |
 | authority-type-only | 78 |
@@ -223,8 +223,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3660 |
-| legacy-inbound | 1825 |
+| legacy-outbound | 3668 |
+| legacy-inbound | 1833 |
 | temporary-internal-debt | 95 |
 | off-dag-offered | 83 |
 | no-circular | 6 |
@@ -235,9 +235,9 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3078 |
-| W9-D | 1008 |
-| W4-E1 | 729 |
+| W9 | 3081 |
+| W9-D | 1017 |
+| W4-E1 | 733 |
 | W5 | 202 |
 | W4 | 201 |
 | W4-B | 187 |
@@ -261,8 +261,8 @@
 | source-control | 99 |
 | system-operations | 69 |
 | identity-access | 65 |
+| runtime-management | 54 |
 | digital-employee | 51 |
-| runtime-management | 47 |
 | development-automation | 39 |
 | knowledge-evolution | 25 |
 | execution-contract | 22 |
@@ -274,7 +274,7 @@
 | intent | 10 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1156）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1163）
 
 | context | 数量 |
 | --- | --- |

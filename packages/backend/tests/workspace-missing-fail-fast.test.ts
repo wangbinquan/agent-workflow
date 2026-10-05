@@ -145,6 +145,6 @@ describe('spawn catches route through explainSpawnEnoent (source-level wiring lo
     // rfc234-system-agent-run 'spawn failure (missing binary) reports masked
     // diagnostics').
     expect(src('platform/execution/local/managedProcess.ts')).toContain('explainSpawnEnoent(')
-    expect(src('services/systemAgentRun.ts')).toContain('run.spawnError')
+    expect(src('modules/task-execution/application/systemAgentRun.ts')).toContain('run.spawnError')
   })
 })
