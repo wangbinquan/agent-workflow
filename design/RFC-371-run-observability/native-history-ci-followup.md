@@ -29,3 +29,13 @@ bootstrap AST 原先只允许 composeObservationUsageSource 的单个 db 参数�
 原 nativeHistoryRead 在平台的两个明确 provider 分支逐项登记为 fenced-dispatch，既有语料计数及未知 provider 的 never 汇断言保留。PG bootstrap 全相位快照沿已实际取得的9130fad6更新，仍核对原语句总数、排序和全部组合句；独立入口 AST继续精确验证原DB/generation/runtime，不用摘要变更遮住入口丢失。未改变 provider classifier、fixture债、测试筛选、断言预算或超时。
 
 本增量只做六个精确文件的format／lint。实际用例与类型交确切SHA hosted CI；原失败日志全部留存。必要的 matching 产物在共享发布窗口结束后按已提交基线和本批精确候选由原生成器计算，不覆盖其他会话的13份在制产物。正式页面已记录123,238分类Token／¥0.16583并可完成刷新，该页面事实不代替新的首次写入/重送验收，producer/全规模/RFC仍开放。
+
+## 059a845f 确切 CI 的后继修复
+
+原 CI 37298075490 的 lint/types/format、生产二进制构建、前端与静态作业已通过，整次运行仍 failure；原报告和7个后端失败日志保持。后继3cade06f已修正编译材料绑定后的 cwd/env文本预言和原offered DAG登记，但不能代替其尚未结束的CI。
+
+本批修复真实原direct receipt拒绝中的 stdin 时序：agentProcess 原callback捕获异常后会abort原signal，managedProcess 在await回来时仍按activationFailure=null投递stdin，CI实际收到must-not-deliver。现在同一原进程在投递前核对实际signal，拒绝后的TERM/KILL/reap/输出drain保持；原红用例原样保留，增加真实direct callback期间取消的回归。正常ACK与ownerless运行、Task launcher的原收据语义不变。
+
+另两处修正保留原断言：原spawn binary/PID文本预言跟随已提交调用recordTaskReceipt，仍核对实际native/projection字段；40K行归档原PG用例明确按id升序查询留存尾部首行，原35000归档/5000留存/JSONL边界与原数值预言全部保持，不能依赖PG无ORDER BY的任意物理行顺序。
+
+本机只运行这些自有文件的format/lint，测试/类型/构建继续只由hosted确切SHA CI验证；不会用重跑或删除断言把原失败当绿。完整原生v2 producer/before/final/platform/seal和100KTask/10Musage继续，两个RFC不关闭。

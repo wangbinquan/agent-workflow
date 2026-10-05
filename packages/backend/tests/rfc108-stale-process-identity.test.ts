@@ -162,9 +162,7 @@ describe('RFC-108 T9 — refuse-on-survivor wiring (source-text)', () => {
       'utf8',
     )
     expect(runnerSrc).toContain('await activeProcessEffect.recordSpawnReceipt(receipt)')
-    expect(runnerSrc).toContain(
-      'await localExecution.recordLegacyTaskReceipt(receipt, opts.nodeRunId)',
-    )
+    expect(runnerSrc).toContain('await localExecution.recordTaskReceipt(receipt, opts.nodeRunId)')
     expect(nativeExecutionSrc).toContain('receipt: nativeReceipt(identity.receipt)')
     expect(nativeExecutionSrc).toContain('spawnBinaryPath: native.spawnBinaryPath')
     expect(nativeExecutionSrc).toContain('pid: native.pid')

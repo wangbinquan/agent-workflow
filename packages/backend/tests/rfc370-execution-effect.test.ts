@@ -737,6 +737,46 @@ describe('RFC-370 selected native execution binding', () => {
     expect(result.rawStdout).toBe(lines.map((line) => `${line}\n`).join(''))
   }, 30000)
 
+  test('cancellation during a real direct receipt keeps supplied stdin held and preserves abort settlement', async () => {
+    const workspace = root(),
+      started = join(workspace, 'started'),
+      stdinRead = join(workspace, 'stdin-read')
+    const activated = waitForFile(workspace, started)
+    const controller = new AbortController()
+    const selected = bindLocalAgentExecutionEffect({
+      materialRef: 'system-material',
+      command: () => [
+        process.execPath,
+        '-e',
+        `await Bun.write(${JSON.stringify(started)}, 'started'); await Bun.write(${JSON.stringify(stdinRead)}, await Bun.stdin.text())`,
+      ],
+      workingDirectory: () => workspace,
+      environment,
+      stdin: () => ({ mode: 'pipe', data: 'cancelled-input-must-not-deliver' }),
+    })
+    let result: ExecutionEffectResult
+    try {
+      result = await selected.effect.submit(
+        request(selected, {
+          timeoutMs: 20000,
+          termGraceMs: 100,
+          abortSignal: controller.signal,
+          onStarted: async () => {
+            await activated.promise
+            expect(existsSync(stdinRead)).toBe(false)
+            controller.abort()
+          },
+        }),
+      )
+    } finally {
+      activated.close()
+    }
+    expect(result.outcome).toBe('aborted')
+    expect(readFileSync(started, 'utf8')).toBe('started')
+    expect(existsSync(stdinRead) ? readFileSync(stdinRead, 'utf8') : '').toBe('')
+    expect(result.pumpError).toBeUndefined()
+  }, 30000)
+
   test('native unreaped identity stays in original diagnostics while the neutral result remains opaque', async () => {
     const calls: unknown[][] = []
     const log = {

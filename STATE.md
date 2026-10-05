@@ -1,3 +1,11 @@
+## 2026-10-05 RFC-371 原输入投递时序与确切 CI 后继修复
+
+本片修复原direct回执拒绝/取消期间仍可投递held stdin的真实CI失败；正常ACK、ownerless及原abort/reap/drain保持。原失败用例不改，增加实际direct取消回归；原PID/binary预言跟随已提交recordTaskReceipt，40K归档原PG用例明确id排序，所有原数值和JSONL边界断言保持。SOURCE5独立有限功能PASS、0 findings，原059a845f确切CI37298075490仍failure，后继新确切SHA CI继续。只运行自有format/lint，没有本机AW测试、类型、构建或服务。
+
+同一冻结5候选与已提交原 a4764c57e727da34ad73963e0322a91680437e12 通过原官方AST写出13 matching产物，sourceDigest sha256:59552a6bd7a33d42a3936c8418f7388dc88e788c664a174f9e7362240a653743；129原有序库存/why/计数全部保持，322原债完整保留，无增长或许可变更。第一遍默认report模式未写出产物，保留原日志；补明确--write后只生成一次完整写包。私有v1校验未恢复不可序列化的原executable binding而FAIL，原结果保留；v2先证明原序列化binding完全相等，再恢复原函数对象验证，没有重扫AST或修改raw产物。两个未提交baseline prototype及并行输出排除，没有任何跨会话消息。
+
+原正式AW数据核对仍为8任务/14运行时执行/28尝试/13数字记录，123238=96095输入+21120缓存读取+0缓存写入+6023输出，已收到人民币¥0.16583；缺口与未定价覆盖保留。CS452d2fd2确切六CI通过且八组件本机Ready，原16148四桶/人民币¥0.011368/两Agent泳道刷新可见。CS本批原页历史入口仍在门禁/发布中。完整v2 producer、before/final/platform/seal与100KTask/10Musage继续，两个RFC不关闭。以下全部共享状态、并行输出和历史原样保留。
+
 ## 2026-10-05 RFC-371 自有 CI 修复已上库与 matching 登记
 
 按用户要求，自有8文件已独立提交并推送 a0117acb4157f594f5528c9a7833e7362de653f0，远端同步，其他会话文件完整保留，没有发送跨会话协调消息。原057e1c6d主CI37287891777与Windows37287891770正式failure保留；首次无previous的v1采集、实际parent类型、unused新public出口、原provider实际fork登记、完整PG装配快照、原101步骤历史空页与重放、Windows started落盘等待均有限功能PASS。新a0117acb的Windows37295155669通过，主CI37295155695仍待最终结果。

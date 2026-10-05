@@ -17,7 +17,7 @@ import { describeEachProvider } from './helpers/eachProvider'
 import { nodeRunEvents, nodeRuns, tasks, users, workflows } from '../src/db/schema'
 import { archiveEvents, readArchivedEvents } from '../src/services/eventsArchive'
 import { readMaintenanceNumber } from '../src/services/maintenanceState'
-import { count, max } from 'drizzle-orm'
+import { asc, count, max } from 'drizzle-orm'
 
 type Db = ProviderNeutralDatabase
 
@@ -206,6 +206,8 @@ describeEachProvider('RFC-311 — events archiver at backlog scale', (provider) 
         const remaining = await db
           .select({ payload: nodeRunEvents.payload })
           .from(nodeRunEvents)
+          // PostgreSQL has no implicit row order after a range delete.
+          .orderBy(asc(nodeRunEvents.id))
           .limit(1)
         expect(remaining[0]?.payload).toBe('line-35000')
       } finally {

@@ -575,7 +575,10 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
   // A gated launcher receives exactly one frame only AFTER the durable PID
   // receipt. Until then it cannot exec the real runtime or consume task stdin.
   // Non-task callers retain the historical direct one-shot stdin path.
-  if (activationFailure === null && launchNonce !== undefined) {
+  // The awaited receipt can abort the original signal without throwing here.
+  // In that case preserve reap/drain, but never deliver the held input.
+  const inputAllowed = activationFailure === null && req.signal?.aborted !== true
+  if (inputAllowed && launchNonce !== undefined) {
     const sink = child.stdin as { write: (s: string) => void; end: () => void } | undefined
     if (sink !== undefined) {
       try {
@@ -607,7 +610,7 @@ export async function runManagedProcess(req: ManagedProcessRequest): Promise<Man
         })
       }
     }
-  } else if (activationFailure === null && req.stdin?.mode === 'pipe') {
+  } else if (inputAllowed && req.stdin?.mode === 'pipe') {
     const sink = child.stdin as { write: (s: string) => void; end: () => void } | undefined
     if (sink !== undefined) {
       try {
