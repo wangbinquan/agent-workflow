@@ -59,6 +59,9 @@ export function useObservationReturn(
       // Portal/table mounting can finish after the parent query becomes ready.
       // Keep the saved position until the actual source row has returned.
       if (!target?.isConnected) return
+      // The shared Dialog may run initial focus after these frames. Give its
+      // existing autofocus resolver the same row so it cannot replace the return.
+      if (body) target.setAttribute('data-dialog-autofocus', '')
       if (retainNested) nested.current.delete(scope)
       else position.current = null
       observer.disconnect()
