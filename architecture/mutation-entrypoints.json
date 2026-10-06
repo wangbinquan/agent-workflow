@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1923,
+    "entries": 1926,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -27224,6 +27224,29 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/application/bootExecutionRecovery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/application/bootExecutionRecovery.ts#runBootExecutionRecovery",
+      "missingControls": [
+        "audit",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/bootExecutionRecovery.ts#runBootExecutionRecovery",
+      "symbol": "runBootExecutionRecovery",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
@@ -28741,7 +28764,7 @@
       "controls": {
         "audit": false,
         "authority": "system",
-        "authorization": true,
+        "authorization": false,
         "event": false,
         "fenceOrOcc": false,
         "transaction": false
@@ -28751,6 +28774,7 @@
       "id": "mutation:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#runTaskExecutionBootRecovery",
       "missingControls": [
         "audit",
+        "authorization",
         "event",
         "fenceOrOcc",
         "transaction"
@@ -31431,6 +31455,54 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/legacySqliteNodeRunOperations.ts#createLegacySqliteNodeRunOperations",
       "symbol": "createLegacySqliteNodeRunOperations",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/bootExecutionRecovery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/local/bootExecutionRecovery.ts#createLocalBootExecutionRecovery",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/bootExecutionRecovery.ts#createLocalBootExecutionRecovery",
+      "symbol": "createLocalBootExecutionRecovery",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "system",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/bootExecutionRecovery.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/infrastructure/local/bootExecutionRecovery.ts#createLocalBootExecutionRecoveryFactory",
+      "missingControls": [
+        "audit",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/local/bootExecutionRecovery.ts#createLocalBootExecutionRecoveryFactory",
+      "symbol": "createLocalBootExecutionRecoveryFactory",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -46024,7 +46096,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6e608ac1d70d72ef7e76776c49bf9ea42eb56242d255f41524c3bacea83d32d9",
+  "sourceDigest": "sha256:d05ef6a5d7e5bc34e3826afb624edc3390efa8fa11f79bd325b01261f4ba9a50",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

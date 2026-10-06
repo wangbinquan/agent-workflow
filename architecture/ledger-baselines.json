@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:6e608ac1d70d72ef7e76776c49bf9ea42eb56242d255f41524c3bacea83d32d9",
+    "sourceDigest": "sha256:d05ef6a5d7e5bc34e3826afb624edc3390efa8fa11f79bd325b01261f4ba9a50",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -821,10 +821,10 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1923,
+      "baseline": 1926,
       "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
       "allowGrowth": {
-        "why": "RFC-370 Doctor Diagnostic SOURCE16-R1: actual original counter 1920 -> 1923 for rfc294-mutation-entrypoints. The complete selected Doctor diagnostics factory and opaque runtime reference add only measured native owner/address inventory. Preserve the complete original native helpers, one shared Doctor policy, exact compatibility names and value identity, every original assertion and budget, five reader ASTs and main root. Keep all four original generation rules, actual authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed source, concurrent guard output, SPI/targets/SCC. Only actual matching growth is permitted. H7 execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
+        "why": "RFC-370 Boot Execution Recovery SOURCE12-R1: actual original counter 1923 -> 1926 for rfc294-mutation-entrypoints. The complete selected four-member boot recovery family and opaque paired references add only measured native owner/address inventory. Preserve four original mechanism bodies, the one common recovery sequence, exact compatibility names/signatures, complete CLI root AST inverses and every old assertion/budget/reader. Keep all four original generation rules, actual authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed Doctor source, concurrent guard output, SPI/targets/SCC. Only actual matching growth is permitted. Full H7 execution authority/background, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
       }
     },
     {
@@ -845,8 +845,11 @@
       "id": "rfc294-background-jobs",
       "file": "architecture/background-jobs.json",
       "symbol": "entries",
-      "baseline": 361,
-      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。"
+      "baseline": 365,
+      "why": "RFC-294 N1：periodic、long-running、execution-local 与 disabled 后台工作分母；W9 前保持 exact owner 与生命周期判据。",
+      "allowGrowth": {
+        "why": "RFC-370 Boot Execution Recovery SOURCE12-R1: actual original counter 361 -> 365 for rfc294-background-jobs. The complete selected four-member boot recovery family and opaque paired references add only measured native owner/address inventory. Preserve four original mechanism bodies, the one common recovery sequence, exact compatibility names/signatures, complete CLI root AST inverses and every old assertion/budget/reader. Keep all four original generation rules, actual authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed Doctor source, concurrent guard output, SPI/targets/SCC. Only actual matching growth is permitted. Full H7 execution authority/background, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
+      }
     },
     {
       "id": "rfc294-ambient-wiring",
@@ -859,10 +862,10 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6707,
+      "baseline": 6712,
       "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
       "allowGrowth": {
-        "why": "RFC-370 Doctor Diagnostic SOURCE16-R1: actual original counter 6667 -> 6707 for rfc294-cross-context-observed-imports. The complete selected Doctor diagnostics factory and opaque runtime reference add only measured native owner/address inventory. Preserve the complete original native helpers, one shared Doctor policy, exact compatibility names and value identity, every original assertion and budget, five reader ASTs and main root. Keep all four original generation rules, actual authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed source, concurrent guard output, SPI/targets/SCC. Only actual matching growth is permitted. H7 execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
+        "why": "RFC-370 Boot Execution Recovery SOURCE12-R1: actual original counter 6707 -> 6712 for rfc294-cross-context-observed-imports. The complete selected four-member boot recovery family and opaque paired references add only measured native owner/address inventory. Preserve four original mechanism bodies, the one common recovery sequence, exact compatibility names/signatures, complete CLI root AST inverses and every old assertion/budget/reader. Keep all four original generation rules, actual authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed Doctor source, concurrent guard output, SPI/targets/SCC. Only actual matching growth is permitted. Full H7 execution authority/background, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
       }
     },
     {
@@ -883,10 +886,10 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5906,
+      "baseline": 5911,
       "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
       "allowGrowth": {
-        "why": "RFC-370 Doctor Diagnostic SOURCE16-R1: actual original counter 5869 -> 5906 for rfc294-architecture-exceptions. The complete selected Doctor diagnostics factory and opaque runtime reference add only measured native owner/address inventory. Preserve the complete original native helpers, one shared Doctor policy, exact compatibility names and value identity, every original assertion and budget, five reader ASTs and main root. Keep all four original generation rules, actual authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed source, concurrent guard output, SPI/targets/SCC. Only actual matching growth is permitted. H7 execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
+        "why": "RFC-370 Boot Execution Recovery SOURCE12-R1: actual original counter 5906 -> 5911 for rfc294-architecture-exceptions. The complete selected four-member boot recovery family and opaque paired references add only measured native owner/address inventory. Preserve four original mechanism bodies, the one common recovery sequence, exact compatibility names/signatures, complete CLI root AST inverses and every old assertion/budget/reader. Keep all four original generation rules, actual authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed Doctor source, concurrent guard output, SPI/targets/SCC. Only actual matching growth is permitted. Full H7 execution authority/background, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
       }
     },
     {
@@ -921,10 +924,10 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 27157,
+      "baseline": 27169,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-370 Doctor Diagnostic SOURCE16-R1: actual original counter 27141 -> 27157 for rfc294-module-symbol-owners. The complete selected Doctor diagnostics factory and opaque runtime reference add only measured native owner/address inventory. Preserve the complete original native helpers, one shared Doctor policy, exact compatibility names and value identity, every original assertion and budget, five reader ASTs and main root. Keep all four original generation rules, actual authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed source, concurrent guard output, SPI/targets/SCC. Only actual matching growth is permitted. H7 execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
+        "why": "RFC-370 Boot Execution Recovery SOURCE12-R1: actual original counter 27157 -> 27169 for rfc294-module-symbol-owners. The complete selected four-member boot recovery family and opaque paired references add only measured native owner/address inventory. Preserve four original mechanism bodies, the one common recovery sequence, exact compatibility names/signatures, complete CLI root AST inverses and every old assertion/budget/reader. Keep all four original generation rules, actual authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed Doctor source, concurrent guard output, SPI/targets/SCC. Only actual matching growth is permitted. Full H7 execution authority/background, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
       }
     }
   ],
@@ -933,8 +936,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "9fa8c3d44bb9316388831833319165adf09e4a89",
-    "contentDigest": "sha256:955cc51c2d193bc3c9b5c1ae32f0a089f056103a443df8e9fb5a5e7bf0237d85",
+    "currentSnapshotSha": "a8ebb65189e3a1281bbd9af1bdd645abede80917",
+    "contentDigest": "sha256:a1793e048ad3154e57eecc2f70ef793a1bd9549803e68c9bd5913e57c670be45",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

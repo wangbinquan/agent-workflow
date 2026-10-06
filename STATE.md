@@ -1,3 +1,11 @@
+## 2026-10-06 RFC-370 启动恢复完整四步效果家族
+
+DESIGN-D1、SOURCE12-R1 有效有限 PASS，源码 27 项首末稳定，指纹 285089d51f9247295bbc979b524dd4e323e3e92c7203a5b5ab4ac73d8022d7be。共同 application 保持原 prepare／reap／repair／finalize 唯一顺序；完整所选家族与 opaque 配对由 adapter 解释。原四机制、两个 CLI 完整 SourceFile AST 逆向、兼容签名、全部 receiver／ACK／错误、getter 时点与结果 identity 保持，HTTP 不新增恢复。23 新功能场景、三原 reader 全部 163 expect／预算和原真实双 provider 回归交 hosted CI。Doctor 发布后独立 Windows1-R1 7 项有效 PASS：10 对称触发路径、4 suite，移除新增内容与 47041 bytes 前像完全一致，不重审未变 SOURCE12。
+
+一次原 scoped census 使用完整 committed a8ebb651 与冻结 8 production，四原规则不变；sourceDigest sha256:d05ef6a5d7e5bc34e3826afb624edc3390efa8fa11f79bd325b01261f4ba9a50。355 authored 债全部保留，四条真实 type 地址仍按原分类，共359；129有序库存／why、全部214 guard、40SPI／69targets、9Task effects和原SCC保持。实测 mutation1923→1926、background361→365、imports6707→6712、exceptions5906→5911、owners27157→27169，只登记五项真实增长，正常退役 Doctor 四项已消费许可。纯投影的 background 计数预期错误保留；同一原输出证明差额全部在冻结源，504 ambient 人口保持，仅原工具元数据修正，不重复 census、不声称新增四个业务后台任务。
+
+Doctor已正式a8ebb651上库并远端0／0；本片冻结CI快照为主37470083701 queued、Windows37470167361 in_progress，不记全仓绿。共享STATE全部旧正文／并行输出逐字保留；有限元数据门、发布和新exact-SHA CI分别验收。本机仅owned format／lint、纯AST字节JSON与一次原静态生成，无AW tests／typecheck／build／service。完整H7执行授权／后台生命周期、剩余purpose调用者及A-T7／A-G继续；CS adapters尚未开始，AW尚未部署CS，M0先部署再逐项M1～M4，RFC不记Done。详见[恢复家族](design/RFC-370-crewstation-hosted-deployment/boot-execution-recovery-family.md)、[发布配套](design/RFC-370-crewstation-hosted-deployment/boot-execution-recovery-family-publication.md)。以下全部旧共享正文原样保留。
+
 ## 2026-10-06 RFC-370 Doctor 元数据有限门与共享状态保留
 
 元数据R1仅在私有证据总体人口计数发现P2，已经准确改为两个人口各一次、当期一次；13 matching和生产候选不变。R2功能差额核对通过，但共享STATE新增909字节并行前缀，首末稳定而与冻结候选不符，回执INVALID完整保留，不冒称PASS。并行a1f已正常上库且保留全部Doctor在制进度；三生产root tree、四原规则、两个额外生成输入、canonical reader及全部13 committed seeds与生成基准9fa8逐字相同，复用原生成，不因SHA推进重跑census或SOURCE16。当前将完整a1f STATE作为旧正文，原样保留该909字节及所有共享输出，重新冻结有限R3；只追加本段，不剥离其他会话内容。H7在制品、CS adapters与部署仍另行推进，RFC未完成。

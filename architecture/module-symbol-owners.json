@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2310,
+    "backendFiles": 2314,
     "frontendFiles": 654,
     "legacyFiles": 589,
-    "moduleFiles": 1721,
-    "productionFiles": 3134,
+    "moduleFiles": 1725,
+    "productionFiles": 3138,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27157
+    "symbolsIncludingFileRoots": 27169
   },
   "entries": [
     {
@@ -131728,6 +131728,30 @@
       "currentContext": "task-execution",
       "currentLayer": "application",
       "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/bootExecutionRecovery.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/bootExecutionRecovery.ts#runBootExecutionRecovery",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "runBootExecutionRecovery",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
       "file": "packages/backend/src/modules/task-execution/application/branchTrace.ts",
       "id": "owner:packages/backend/src/modules/task-execution/application/branchTrace.ts#$file",
       "removeAfterWave": null,
@@ -133653,6 +133677,114 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "NOOP_AGENT_RUN_SETTLED_OBSERVER",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts#BootExecutionRecoveryFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "BootExecutionRecoveryFactory",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts#BootExecutionRecoveryFamily",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "BootExecutionRecoveryFamily",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts#BootExecutionRecoveryRef",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "BootExecutionRecoveryRef",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts#BootRecoveryLogger",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "BootRecoveryLogger",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts#MaybeAsync",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "MaybeAsync",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts#ReapResult",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "ReapResult",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts#TaskExecutionBootRecoveryInput",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskExecutionBootRecoveryInput",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "application",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/application/ports/bootExecutionRecovery.ts#TaskExecutionBootRecoveryReport",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "TaskExecutionBootRecoveryReport",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -140717,18 +140849,6 @@
       "currentLayer": "composition",
       "exported": true,
       "file": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#BootRecoveryLogger",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "BootRecoveryLogger",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
       "id": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#createDaemonLockProof",
       "removeAfterWave": "W4-E1",
       "status": "current-module",
@@ -140757,30 +140877,6 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "runTaskExecutionBootRecovery",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#TaskExecutionBootRecoveryInput",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "TaskExecutionBootRecoveryInput",
-      "targetContext": "task-execution",
-      "targetLayer": "engine"
-    },
-    {
-      "currentContext": "task-execution",
-      "currentLayer": "composition",
-      "exported": true,
-      "file": "packages/backend/src/modules/task-execution/composition/bootRecovery.ts",
-      "id": "owner:packages/backend/src/modules/task-execution/composition/bootRecovery.ts#TaskExecutionBootRecoveryReport",
-      "removeAfterWave": "W4-E1",
-      "status": "current-module",
-      "symbol": "TaskExecutionBootRecoveryReport",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -141633,6 +141729,30 @@
       "removeAfterWave": "W4-E1",
       "status": "current-module",
       "symbol": "createLocalAgentInvocationPreparation",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/composition/localBootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/localBootExecutionRecovery.ts#$file",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "composition",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/composition/localBootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/composition/localBootExecutionRecovery.ts#selectLocalBootExecutionRecoveryFactory",
+      "removeAfterWave": "W4-E1",
+      "status": "current-module",
+      "symbol": "selectLocalBootExecutionRecoveryFactory",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -153117,6 +153237,42 @@
       "removeAfterWave": null,
       "status": "current-module",
       "symbol": "resolveLocalAgentExecutionParticipants",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/bootExecutionRecovery.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/bootExecutionRecovery.ts#createLocalBootExecutionRecovery",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createLocalBootExecutionRecovery",
+      "targetContext": "task-execution",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/infrastructure/local/bootExecutionRecovery.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/infrastructure/local/bootExecutionRecovery.ts#createLocalBootExecutionRecoveryFactory",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "createLocalBootExecutionRecoveryFactory",
       "targetContext": "task-execution",
       "targetLayer": "infrastructure"
     },
@@ -198276,18 +198432,6 @@
       "removeAfterWave": "W4-E1",
       "status": "legacy-target",
       "symbol": "ReapOrphanRunsDependencies",
-      "targetContext": "task-execution",
-      "targetLayer": "application"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/orphans.ts",
-      "id": "owner:packages/backend/src/services/orphans.ts#ReapResult",
-      "removeAfterWave": "W4-E1",
-      "status": "legacy-target",
-      "symbol": "ReapResult",
       "targetContext": "task-execution",
       "targetLayer": "application"
     },
@@ -326623,5 +326767,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6e608ac1d70d72ef7e76776c49bf9ea42eb56242d255f41524c3bacea83d32d9"
+  "sourceDigest": "sha256:d05ef6a5d7e5bc34e3826afb624edc3390efa8fa11f79bd325b01261f4ba9a50"
 }

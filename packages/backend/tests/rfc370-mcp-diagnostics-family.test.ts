@@ -510,6 +510,49 @@ describeEachProvider('RFC-370 selected complete MCP diagnostics family', (harnes
 })
 
 describe('RFC-370 native MCP root completeness', () => {
+  // RFC-370: preserve complete original roots after the exact boot-family selection inverse.
+  function inverseBootRecoveryBindings(source: ts.SourceFile, body: ts.Block) {
+    let selections = 0
+    const transformed = ts.transform(body, [
+      (context) => {
+        const inverse: ts.Visitor = (node) => {
+          if (
+            ts.isObjectLiteralExpression(node) &&
+            ts.isCallExpression(node.parent) &&
+            node.parent.expression.getText(source) === 'runTaskExecutionBootRecovery'
+          ) {
+            const entries = node.properties.filter(
+              (property) =>
+                ts.isPropertyAssignment(property) &&
+                property.name.getText(source) === 'recoveryEffects',
+            ) as ts.PropertyAssignment[]
+            expect(entries).toHaveLength(1)
+            expect(entries[0]!.initializer.getText(source).replace(/\s/g, '')).toBe(
+              'selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery)',
+            )
+            selections++
+            return ts.factory.updateObjectLiteralExpression(
+              node,
+              ts.factory.createNodeArray(
+                node.properties
+                  .filter((property) => property !== entries[0])
+                  .map(
+                    (property) => ts.visitNode(property, inverse, ts.isObjectLiteralElementLike)!,
+                  ),
+                node.properties.hasTrailingComma,
+              ),
+            )
+          }
+          return ts.visitEachChild(node, inverse, context)
+        }
+        return (node) => ts.visitNode(node, inverse, ts.isBlock)!
+      },
+    ])
+    const original = transformed.transformed[0]!
+    transformed.dispose()
+    return { body: original, selections }
+  }
+
   // RFC-370: preserve the old complete roots after the exact verification binding inverse.
   function inverseVerificationBindings(source: ts.SourceFile, body: ts.Block) {
     let selections = 0
@@ -612,7 +655,8 @@ describe('RFC-370 native MCP root completeness', () => {
       visit(fn.body)
       expect(calls).toHaveLength(1)
       expect(hash(calls[0]!.arguments[0]!, source)).toBe(argumentHash)
-      const verification = inverseVerificationBindings(source, fn.body)
+      const bootRecovery = inverseBootRecoveryBindings(source, fn.body)
+      const verification = inverseVerificationBindings(source, bootRecovery.body)
       let scriptSelections = 0
       const transformed = ts.transform(verification.body, [
         (context) => {
@@ -659,6 +703,7 @@ describe('RFC-370 native MCP root completeness', () => {
       expect(hash(transformed.transformed[0]!, source)).toBe(bodyHash)
       expect(transformed.transformed[0]!.statements.length).toBe(statements)
       expect(scriptSelections).toBe(1)
+      expect(bootRecovery.selections).toBe(name === 'composeSqliteApplicationDeps' ? 0 : 1)
       expect(verification.selections).toBe(name === 'composeSqliteApplicationDeps' ? 0 : 1)
       expect(verification.forwards).toBe(name === 'composeSqliteProviderSession' ? 1 : 0)
       transformed.dispose()

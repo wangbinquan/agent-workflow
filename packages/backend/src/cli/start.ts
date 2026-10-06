@@ -158,6 +158,8 @@ import {
   createDaemonRecoveryAuthorityProof,
   runTaskExecutionBootRecovery,
 } from '@/modules/task-execution/composition/bootRecovery'
+import type { BootExecutionRecoveryFactory } from '@/modules/task-execution/application/ports/bootExecutionRecovery'
+import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
 import {
@@ -475,6 +477,7 @@ export interface StartOptions {
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   verificationCommands?: VerificationCommandEffectsFactory
+  bootExecutionRecovery?: BootExecutionRecoveryFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   actionWorkspaceEffects?: ActionWorkspaceEffects
   conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
@@ -671,6 +674,7 @@ async function composePostgresqlProviderSession(
     employeeCaseWorkspaceEffects: input.employeeCaseWorkspaceEffects,
     repositoryBaselines: input.repositoryBaselines,
     verificationCommands: input.verificationCommands,
+    bootExecutionRecovery: input.bootExecutionRecovery,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -1223,6 +1227,7 @@ interface DaemonProviderSessionComposeInput {
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly verificationCommands?: VerificationCommandEffectsFactory
+  readonly bootExecutionRecovery?: BootExecutionRecoveryFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly actionWorkspaceEffects?: ActionWorkspaceEffects
   readonly conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
@@ -1700,6 +1705,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       employeeCaseWorkspaceEffects: opts.employeeCaseWorkspaceEffects,
       repositoryBaselines: opts.repositoryBaselines,
       verificationCommands: opts.verificationCommands,
+      bootExecutionRecovery: opts.bootExecutionRecovery,
       maintenanceEffectsBootstrap: opts.maintenanceEffectsBootstrap,
       evidenceRead: opts.evidenceRead,
       evidenceDocumentCommands: opts.evidenceDocumentCommands,
@@ -2353,6 +2359,7 @@ async function composeSqliteProviderSession(
     await readDaemonStartupRecoveryAuthority(lock, DAEMON_GENERATION),
   )
   await runTaskExecutionBootRecovery({
+    recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),
     persistence: taskExecutionPersistence,
     runtimeSessionLeases,
     lockProof: taskExecutionLockProof,

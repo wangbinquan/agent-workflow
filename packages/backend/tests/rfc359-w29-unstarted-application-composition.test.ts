@@ -598,6 +598,57 @@ function oldMcpDiagnosticsFamilyBody(
   return restored
 }
 
+// RFC-370: inverse only the selected boot recovery family at the actual daemon call.
+function oldBootExecutionRecoveryBody(
+  source: ts.SourceFile,
+  name: string,
+  body: ts.Block,
+): ts.Block {
+  if (source !== pg || name !== 'composePostgresqlApplication') return body
+  let selections = 0
+  const transformed = ts.transform(body, [
+    (context) => {
+      const inverse: ts.Visitor = (node) => {
+        if (
+          ts.isObjectLiteralExpression(node) &&
+          ts.isCallExpression(node.parent) &&
+          node.parent.expression.getText(source) === 'runTaskExecutionBootRecovery'
+        ) {
+          const entries = node.properties.filter(
+            (property) =>
+              ts.isPropertyAssignment(property) &&
+              property.name.getText(source) === 'recoveryEffects',
+          ) as ts.PropertyAssignment[]
+          if (
+            entries.length !== 1 ||
+            compact(entries[0]!.initializer, source) !==
+              'selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery)'
+          )
+            throw new Error(
+              'the actual PostgreSQL daemon must select one complete boot recovery family',
+            )
+          selections++
+          return ts.factory.updateObjectLiteralExpression(
+            node,
+            ts.factory.createNodeArray(
+              node.properties
+                .filter((property) => property !== entries[0])
+                .map((property) => ts.visitNode(property, inverse, ts.isObjectLiteralElementLike)!),
+              node.properties.hasTrailingComma,
+            ),
+          )
+        }
+        return ts.visitEachChild(node, inverse, context)
+      }
+      return (node) => ts.visitNode(node, inverse, ts.isBlock)!
+    },
+  ])
+  if (selections !== 1) throw new Error('missing actual PostgreSQL boot recovery selection')
+  const original = transformed.transformed[0]!
+  transformed.dispose()
+  return original
+}
+
 // RFC-370: inverse only the new factory selection in the actual PostgreSQL DA root.
 function oldVerificationCommandsBody(
   source: ts.SourceFile,
@@ -657,7 +708,11 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
     oldRuntimeDiagnosticsFamilyBody(
       source,
       name,
-      oldVerificationCommandsBody(source, name, functionBody(source, name)),
+      oldVerificationCommandsBody(
+        source,
+        name,
+        oldBootExecutionRecoveryBody(source, name, functionBody(source, name)),
+      ),
     ),
   )
   if (

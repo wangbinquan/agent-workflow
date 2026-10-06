@@ -90,6 +90,8 @@ import {
   createDaemonRecoveryAuthorityProof,
   runTaskExecutionBootRecovery,
 } from '@/modules/task-execution/composition/bootRecovery'
+import type { BootExecutionRecoveryFactory } from '@/modules/task-execution/application/ports/bootExecutionRecovery'
+import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
 import type { Config } from '@agent-workflow/shared'
@@ -470,6 +472,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly verificationCommands?: VerificationCommandEffectsFactory
+  readonly bootExecutionRecovery?: BootExecutionRecoveryFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly actionWorkspaceEffects?: ActionWorkspaceEffects
   readonly conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
@@ -2441,6 +2444,7 @@ export async function composePostgresqlApplication(
   // 必须在 HTTP 与任何自动续跑之前；此前 PG daemon 从未跑过，重启一次就把上一代任务永久卡在 running。
   if (phase.kind === 'daemon') {
     await runTaskExecutionBootRecovery({
+      recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery),
       persistence: taskExecutionPersistence,
       runtimeSessionLeases: createRuntimeSessionLeaseOperations(input.db),
       lockProof:

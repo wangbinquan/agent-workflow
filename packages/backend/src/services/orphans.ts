@@ -17,6 +17,8 @@
 // flip-only path.
 
 import { DAEMON_RESTART_ERROR_SUMMARY } from '@agent-workflow/shared'
+import type { ReapResult } from '@/modules/task-execution/application/ports/bootExecutionRecovery'
+export type { ReapResult } from '@/modules/task-execution/application/ports/bootExecutionRecovery'
 import type { TaskRecoveryOperations } from '@/modules/task-execution/application/ports/taskRecoveryOperations'
 import { recordRecoveryEvent } from '@/services/recovery'
 import {
@@ -27,11 +29,6 @@ import {
 import { createLogger } from '@/util/log'
 
 const log = createLogger('orphans')
-
-export interface ReapResult {
-  tasks: number
-  runs: number
-}
 
 export interface ReapOrphanRunsDependencies {
   killStaleRunProcessTree?: (
