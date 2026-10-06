@@ -1,3 +1,11 @@
+## 2026-10-07 RFC-370 执行后台生命周期上库及一次增长回执退役
+
+25路径已上库 `5b20b51738c276c4272fc0466b4748d8a2abee2f`，共享main/origin精确0/0、索引空；下一批真实根选择设计独立保留。源码SOURCE6-R1与元数据META19-R3有效稳定PASS，源码23项保持；原metadata R1人口缺D1回执INVALID及R2两份provenance摘要FAIL均保留，R3只修2个摘要字段后107项完整绑定PASS。原私有publisher首次在staging前因两种EOF见证schema名不同退出，按实际source/meta完整EOF字段修正再发布，候选/门/原规则不变。
+
+普通紧随本commit的后继仅退役imports/exceptions/owners三条已消费allowGrowth，129有序账本/why/数值均保持、matching payload digest随原纯JSON语义更新。没有新增生产改动或census。前继3645主CI两个后端分片同为旧owner回执未退役失败，历史失败保留；新源码SHA的主CI37513421500与Windows37513420795已启动，实际新增18例及整仓结论待正式hosted终态。
+
+真实根选择、purpose九命令、完整H7/A-T7/A-G、各层CS adapter及M0～M4继续；AW尚未部署CS。详见[发布与退役记录](design/RFC-370-crewstation-hosted-deployment/execution-runtime-lifecycle-closeout.md)。以下旧STATE和所有并行内容逐字保留。
+
 ## 2026-10-07 RFC-370 独立执行后台生命周期
 
 system-operations-owned中立执行后台端口、exact composition及原session唯一queue/registry/start/stop/drain接线完成有限独立DESIGN与SOURCE6-R1 PASS。资源HTTP/WS在execution pause后继续读取编辑；provider切换和原完整暂停关闭语义保留。两根、六份原回归全文不变，新增18个双provider案例及Windows对称覆盖，实际新功能交本批hosted CI。

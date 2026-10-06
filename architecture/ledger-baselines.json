@@ -857,10 +857,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6722,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 Execution Runtime Lifecycle SOURCE6-R1: original measured counter 6720 -> 6722 for rfc294-cross-context-observed-imports, from the complete committed base plus three frozen production files. Add the neutral system-operations execution contract and its exact type-only bootstrap composition, while sharing the original single handle registry, lifecycle queue, start loop and stop/drain ACK progress. Both original roots and six regression files remain byte-identical; the old provider state/pause/close and default path are preserved. Keep all original rules/classifiers, 129 ordered inventories and why, guard criteria, 40 SPI/69 targets, nine Task effects and all SCCs. Record only the actual two type-only classifications and five owner rows. Full H7/real roots/A-G, CS adapters and deployment remain open. Retire this measured one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -881,10 +878,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5921,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 Execution Runtime Lifecycle SOURCE6-R1: original measured counter 5919 -> 5921 for rfc294-architecture-exceptions, from the complete committed base plus three frozen production files. Add the neutral system-operations execution contract and its exact type-only bootstrap composition, while sharing the original single handle registry, lifecycle queue, start loop and stop/drain ACK progress. Both original roots and six regression files remain byte-identical; the old provider state/pause/close and default path are preserved. Keep all original rules/classifiers, 129 ordered inventories and why, guard criteria, 40 SPI/69 targets, nine Task effects and all SCCs. Record only the actual two type-only classifications and five owner rows. Full H7/real roots/A-G, CS adapters and deployment remain open. Retire this measured one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -919,10 +913,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 27195,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 Execution Runtime Lifecycle SOURCE6-R1: original measured counter 27190 -> 27195 for rfc294-module-symbol-owners, from the complete committed base plus three frozen production files. Add the neutral system-operations execution contract and its exact type-only bootstrap composition, while sharing the original single handle registry, lifecycle queue, start loop and stop/drain ACK progress. Both original roots and six regression files remain byte-identical; the old provider state/pause/close and default path are preserved. Keep all original rules/classifiers, 129 ordered inventories and why, guard criteria, 40 SPI/69 targets, nine Task effects and all SCCs. Record only the actual two type-only classifications and five owner rows. Full H7/real roots/A-G, CS adapters and deployment remain open. Retire this measured one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -931,7 +922,7 @@
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
     "currentSnapshotSha": "3645f05a50e25ca248ebba71abd1205b93c1a1b6",
-    "contentDigest": "sha256:2f611f1ef5b3a292e5ab15a2f1e4324cce4a3963aeabb28be1bb13908b65225f",
+    "contentDigest": "sha256:cd85fd106eec8ad3d7702dfb6b60531e59eae1d52517a5a20e459f6de56d4e2e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
