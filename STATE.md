@@ -1,3 +1,13 @@
+## 2026-10-06 RFC-370 Runtime hosted CI 测试配套修复
+
+Runtime `2f3807d003c396b344ceddcb0c2278fe86ee90e0` 的主 CI 37420257477 终态 failure（33 success／17 failure），Windows 37420257425 终态 failure，不能冒称整体通过。直接 job 日志定位本批 getter 推断、invalid extraArgs 正向 fixture、Windows canonical fixture 和迁移后的 source reader。只修改三个测试：两个抛错 getter 显式标注 RuntimeRegistryOperations；正向 fixture 使用原 driver 支持的 Claude 及有效 flag／value；回滚路径复用原 canonicalBinaryPath；原 source reader 随实际 local owner。生产实现、原全部测试名／断言／错误与回滚判据／预算不变。
+
+有限 SOURCE4-R2 独立 PASS，27 项首末绑定稳定，指纹 9758b48d0a3ee7234263974ecdb3a9ba167485cf29df193cd4bef90f4bd80ea8；四 owned 含原 Runtime 文档末附 CI 记录。R1 的不足合同范围和纯工具打印呈现误判留证，补全必要原函数及 driver 映射后不重审旧 Runtime 正文。本机仅 owned format／lint、纯 AST／字节／JSON，没有 AW tests／typecheck／build／services。
+
+并行 `6e7601e76729478f77e805510f77d82ff6fb5146` 在生成前已发布，原准备因 HEAD 提前变动停止，未开始任何 census。随后一份原 scoped census 使用完整已提交6e及四冻结 owned（零 production），四原规则不变，sourceDigest sha256:261ca20a23bc3706ff827dbfca2425bc3b6c3c46c8a0a5e72218571d216393da；13 matching 保留345 authored债、129有序库存／why、所有原guards、40SPI／69targets、9Task effects和原SCC。所有实际计数不变，不加增长许可，只退役最新前批 owner 一项已消费许可；完整保留6e观测输出和共享STATE旧全文。有限元数据门与新 exact-SHA hosted CI 分别验收，不重复源码门或生成。
+
+原日志中的并行观测失败及 SC iso cleanup 的5000ms超时均留证；本次有限修复不将其记为已通过。MCP 在制正文完整保留且不随本批发布。仍在阶段A，MCP／doctor／command／脚本、H7／全根与A-T7／A-G继续，CS adapters及M0首次实际部署和M1～M4未完成；AW尚未部署到CS，RFC保持In Progress。以下所有共享旧正文完整保留。
+
 ## 2026-10-06 RFC-371 retained schema CI 修复
 
 1820be8c 的主 CI 37417648524 已正式 failure。原平台 retained revision 改为唯一完整合同操作，两个投影私有；全部18历史版本的原 SQL／digest／顺序逐字保持。当前222／216／6／241 census 配套、原生 DDL 故障 rollback、旧 building 质量 fixture 与原终态 seal 回归保持完整人口和预算。SOURCE15-R1 唯一 PromiseLike cleanup P2 FAIL 留证，R3 同化后有效有限 PASS；准备失败不算审查通过。

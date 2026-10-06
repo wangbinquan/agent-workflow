@@ -17,6 +17,7 @@ import { composeRuntimeRegistryOperations as composeRegistry } from '../src/modu
 import { composeRuntimeProfileParticipants } from '../src/modules/resource-catalog/composition/runtimeProfileParticipants'
 import { runtimes } from '../src/db/schema'
 import { describeEachProvider } from './helpers/eachProvider'
+import { canonicalBinaryPath } from './fixtures/platformPaths'
 
 const advisoryFailure: RuntimeSmokeResult = {
   outcome: 'model-call-failed',
@@ -205,7 +206,9 @@ describeEachProvider('RFC-360 runtime management application', (harness) => {
     await registry.createRuntime({ name: 'root-injection', protocol: 'opencode' })
     const before = await registry.getRuntime('root-injection')
     await expect(
-      registry.updateRuntime('root-injection', { binaryPath: '/changed/runtime' }),
+      registry.updateRuntime('root-injection', {
+        binaryPath: canonicalBinaryPath('changed-runtime'),
+      }),
     ).rejects.toThrow('root-injected-invalidation-failed')
     expect(calls).toBe(1)
     expect(await registry.getRuntime('root-injection')).toEqual(before)

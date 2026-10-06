@@ -39,3 +39,11 @@ TE local family 配对 RM target owner、native material／execution 与普通 R
 设计／实现门只审 owned 正文和必要的完整合同／actual dependency 片段。源码有效 PASS 后只做一次原 scoped census：四条原规则、旧作者账本／why／order、原 SCC 和实际 counter 保留，如实匹配新增地址与一次性许可；不以 inventory 数量给 A-G 完成信用。本机只做 owned format／lint 和纯 AST／字节证明，不运行 AW tests／typecheck／build／services；正式功能结果由发布后的精确 SHA GitHub CI 验收。
 
 本批发布后继续 MCP diagnostics、专用 Runtime command／doctor、脚本与 H7／全根／public 收口。只有完整 A-G 通过才开始 CS adapter；首个 M0 部署随后先行，M1～M4 按原批准策略增量接入。AW 尚未部署到 CS，RFC 保持 In Progress。
+
+## 6. 首次 hosted CI 的测试配套修复
+
+已发布 Runtime 候选 `2f3807d003c396b344ceddcb0c2278fe86ee90e0` 的主 CI 37420257477 检出功能失败；Windows 37420257425 已终态 failure，不能记整套通过。直接 job 日志定位到本批两个永远抛错 getter 的返回类型推断，以及三处测试配套：新正向 fixture 使用不接受 extraArgs 的协议和空 token；原 RFC-360 回滚 fixture 的 POSIX 路径在 Windows 提前被校验拒绝；原 RFC-135 源码锁仍读取迁移后的薄兼容出口。
+
+本次只显式标注两个 getter 的 RuntimeRegistryOperations 返回类型，将正向 fixture 改为原 driver 支持的 Claude 协议及有效 flag／value，回滚 fixture 复用既有 canonicalBinaryPath，源码 reader 跟随实际 local owner。所有原测试名、断言、失败／回滚判据和时间预算保留，不更改生产校验或执行代码。有限独立功能门和 matching 清单随后记录；新确切 SHA 的 hosted 结果才是功能验收。
+
+日志还存在并行 RFC-371 schema／retained-output 配套失败，以及原 SC iso cleanup 的 5000ms 超时；分别保持原日志，未纳入本次三个 Runtime 测试文件的修复，也不据此宣称整套 CI 通过。MCP 在制输出完整保留，本批不发布。完整阶段 A、A-G、CS adapters 和 M0～M4 继续，尚未部署 AW 到 CS。

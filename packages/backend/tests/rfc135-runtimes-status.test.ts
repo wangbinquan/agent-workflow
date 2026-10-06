@@ -359,6 +359,7 @@ describeEachProviderHttpApplication(
           'modules',
           'runtime-management',
           'infrastructure',
+          'local',
           'runtimeManagementEffects.ts',
         ),
       ).text()

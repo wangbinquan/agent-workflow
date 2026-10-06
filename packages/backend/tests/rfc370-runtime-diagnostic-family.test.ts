@@ -16,7 +16,10 @@ import type {
   RuntimeSmokeRequest,
   RuntimeTestManagementPort,
 } from '../src/modules/runtime-management/application/ports/runtimeManagement'
-import type { RuntimeRow } from '../src/modules/runtime-management/application/ports/runtimeRegistry'
+import type {
+  RuntimeRow,
+  RuntimeRegistryOperations,
+} from '../src/modules/runtime-management/application/ports/runtimeRegistry'
 import type {
   RuntimeKind,
   RuntimeSmokeResult,
@@ -219,10 +222,10 @@ describeEachProvider('RFC-370 complete selected Runtime diagnostic family', (har
 
   test('unsaved and registered diagnostics forward the actual owner target and retain authored fields', async () => {
     const h = await setup(),
-      extraArgs = ['custom-flag', '']
+      extraArgs = ['--custom-flag', 'selected']
     await h.management.runtimes.diagnostics.probe({
       kind: 'unsaved',
-      protocol: 'opencode',
+      protocol: 'claude-code',
       binaryPath: 'authored-only',
       model: 'test-model',
       isSandbox: true,
@@ -231,14 +234,14 @@ describeEachProvider('RFC-370 complete selected Runtime diagnostic family', (har
     expect(h.smoke[0]?.target).toBe(h.captured[0])
     expect(h.smoke[0]?.extraArgs).toBe(extraArgs)
     expect(h.smoke[0]).toMatchObject({
-      protocol: 'opencode',
+      protocol: 'claude-code',
       model: 'test-model',
       isSandbox: true,
       config: { opencodePath: 'revision-one' },
     })
     await h.registry.createRuntime({
       name: 'remote-profile',
-      protocol: 'opencode',
+      protocol: 'claude-code',
       binaryPath: 'authored-profile',
       model: 'test-model',
       extraArgs,
@@ -301,7 +304,7 @@ describeEachProvider('RFC-370 complete selected Runtime diagnostic family', (har
       failure = new Error('registry-selection-failed')
     expect(() =>
       composeRuntimeManagement({
-        get runtimeRegistry() {
+        get runtimeRegistry(): RuntimeRegistryOperations {
           calls.push('registry')
           throw failure
         },
@@ -315,7 +318,7 @@ describeEachProvider('RFC-370 complete selected Runtime diagnostic family', (har
     calls.length = 0
     expect(() =>
       composeLocalRuntimeManagement({
-        get runtimeRegistry() {
+        get runtimeRegistry(): RuntimeRegistryOperations {
           calls.push('registry')
           throw failure
         },
