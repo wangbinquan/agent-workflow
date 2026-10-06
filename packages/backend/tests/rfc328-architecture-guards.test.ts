@@ -117,7 +117,7 @@ const TASK_EFFECT_BOUNDARIES = new Map<string, readonly TaskEffectBoundaryContra
     ],
   ],
   [
-    'packages/backend/src/services/runner.ts',
+    'packages/backend/src/modules/task-execution/application/taskAgentRun.ts',
     [
       {
         callable: 'runNode',
@@ -656,12 +656,12 @@ describe('RFC-328 architecture guards', () => {
     expect(
       rfc328GuardViolations(
         fixture(
-          'packages/backend/src/services/runner.ts',
+          'packages/backend/src/modules/task-execution/application/taskAgentRun.ts',
           'async function runNode() { await localExecution.effect.submit({}) }',
         ),
       ),
     ).toContain(
-      'unregistered task effect boundary: packages/backend/src/services/runner.ts#runNode',
+      'unregistered task effect boundary: packages/backend/src/modules/task-execution/application/taskAgentRun.ts#runNode',
     )
     const preparationActs = ['prepareDurableRepositoryWorkspace', 'prepareLegacyDeferredWorkspace']
     const preparationPath = 'packages/backend/src/services/task.ts'
