@@ -1,3 +1,9 @@
+## 2026-10-07 RFC-370 Task 根选择提交及四条一次增长回执退役候选
+
+源码27路径已正常提交 `28ec76d71cf7e9812ae0ae99935045837d73e90f`，matching14路径已正常提交 `3f46813aab48650af730aa19eebf526b815a3842`；完整共享 STATE 已由并行 CI 修复 d400121b 提交，双方登记完整保留。本次仍未 push，下一普通后继先退役四条已消费声明，再统一发布。SOURCE27-R2有效稳定PASS；META15-R1有效稳定FAIL的唯一owner分配表述P2已由DOC1-D1闭合，之后增加的1095-byte并行STATE前缀由STATE1-D1有限PASS绑定，原105项及canonical doc保持。三份历史门结论不改写，未因HEAD变化重跑源码门或census。
+
+本后继只删imports/exceptions/public/owners四条allowGrowth，129个原有有序库存字段、why、实测baseline6736／5929／1190／27223及其他12matching全文保持，按原纯JSON排序语义更新ledger payload摘要。原四生成规则不变，唯一原scoped生成不重跑。purpose九操作及staging设计D1有效稳定PASS，尚待实现；完整H7／A-G、各层CS adapter、M0首次部署至M4继续开放。AW尚未部署CS。详见[Task发布与退役](design/RFC-370-crewstation-hosted-deployment/task-run-root-selection-publication.md)。以下旧STATE及全部并行输出逐字保留。
+
 ## 2026-10-07 RFC-371 当前 CI 定向修复候选
 
 717b8610e 的主 CI 终态 failure；后端仅原恢复集成链超出隐式 5 秒，文档仅七处 run URL 502（含一处中文标点污染）。本会话给该集成用例明确 30 秒时限、修一处实际链接，并让当前仓库标准 run 链接由对应官方 Actions API 核验；原断言、生产恢复、100K／10M 人口与性能门、其他链接和作业预算不改。六个原 run 资源/精确 headSha 已逐一只读确认，旧失败证据保留。详见 [CI 接续](design/RFC-371-run-observability/ci-recovery.md#2026-10-07-原历史恢复用例与-actions-运行链接)。没有本机 AW 测试/类型/构建/新服务；精确静态与新提交 CI 另验。CS N4/N5 与固定四桶原 TEMP 候选的原控制、真实 PG 分片/并发、严格分页报告及页面通过，有限功能门/完整门/远端/部署继续；producer OFF，两个 RFC 继续 In Progress。以下原正文与全部并行输出逐字保留；完整共享 STATE 同时含 RFC-370 会话的当前配套候选登记，无跨会话消息。
