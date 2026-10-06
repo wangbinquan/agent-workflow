@@ -248,6 +248,8 @@ import {
   createEventAutomationWorkIntentStore,
   runEventCenterCycle,
 } from '@/modules/event-center/composition'
+import type { CustomObserverProgramFactory } from '@/modules/event-center/composition/customObserverProgram'
+import { selectLocalCustomObserverProgramFactory } from '@/modules/event-center/composition/localCustomObserverProgram'
 import {
   composeDigitalEmployeeWriterCutoverFor,
   composeDigitalEmployeeAgentTemplateCatalogParticipant,
@@ -477,6 +479,7 @@ export interface StartOptions {
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   verificationCommands?: VerificationCommandEffectsFactory
+  customObserverPrograms?: CustomObserverProgramFactory
   bootExecutionRecovery?: BootExecutionRecoveryFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   actionWorkspaceEffects?: ActionWorkspaceEffects
@@ -675,6 +678,7 @@ async function composePostgresqlProviderSession(
     repositoryBaselines: input.repositoryBaselines,
     verificationCommands: input.verificationCommands,
     bootExecutionRecovery: input.bootExecutionRecovery,
+    customObserverPrograms: input.customObserverPrograms,
     evidenceRead: input.evidenceRead,
     evidenceDocumentCommands: input.evidenceDocumentCommands,
     attemptContext: input.attemptContext,
@@ -1227,6 +1231,7 @@ interface DaemonProviderSessionComposeInput {
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly verificationCommands?: VerificationCommandEffectsFactory
+  readonly customObserverPrograms?: CustomObserverProgramFactory
   readonly bootExecutionRecovery?: BootExecutionRecoveryFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly actionWorkspaceEffects?: ActionWorkspaceEffects
@@ -1706,6 +1711,7 @@ export async function startCommand(opts: StartOptions = {}): Promise<void> {
       repositoryBaselines: opts.repositoryBaselines,
       verificationCommands: opts.verificationCommands,
       bootExecutionRecovery: opts.bootExecutionRecovery,
+      customObserverPrograms: opts.customObserverPrograms,
       maintenanceEffectsBootstrap: opts.maintenanceEffectsBootstrap,
       evidenceRead: opts.evidenceRead,
       evidenceDocumentCommands: opts.evidenceDocumentCommands,
@@ -2895,6 +2901,7 @@ async function composeSqliteProviderSession(
   })
   const employeeHttpEventCenter = await composeEventCenter({
     db,
+    customObserverPrograms: selectLocalCustomObserverProgramFactory(input.customObserverPrograms),
     typePackageDescriptorJsons: [
       developmentEmployeeTypePackage.descriptorJson,
       codeHostEventCatalogJson,

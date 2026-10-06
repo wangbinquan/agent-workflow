@@ -16,7 +16,11 @@ import type {
   EventRoutingSubscriptionDirectoryPort,
   TaskAutomationWorkStartPort,
 } from './composition/required-ports'
-import { createCustomEventObserverProgram } from './infrastructure/customEventObserverProgram'
+import {
+  composeCustomEventObserverProgram,
+  type CustomObserverProgramFactory,
+} from './composition/customObserverProgram'
+import { selectLocalCustomObserverProgramFactory } from './composition/localCustomObserverProgram'
 import { createCustomEventSourceStore } from './infrastructure/customEventSourceStore'
 import { createEventStore } from './infrastructure/eventStore'
 import { createEventResponseRuleStore } from './infrastructure/eventResponseRuleStore'
@@ -247,6 +251,7 @@ export interface ComposeEventCenterOptions {
    */
   readonly targetLaunchPermissions?: TargetLaunchPermissions
   readonly observer?: EventObserverProgramPort
+  readonly customObserverPrograms?: CustomObserverProgramFactory
   readonly routingSubscriptions?: EventRoutingSubscriptionDirectoryPort
   readonly deliveryConsumers?: readonly EventDeliveryConsumerPort[]
   readonly deliveryRetryLimits?: EventDeliveryRetryLimitsPort
@@ -265,8 +270,12 @@ export interface EventCenterPersistence {
   readonly committedEvents: CommittedEventDeliveryPersistencePort
 }
 
-export type ComposeEventCenterWithPortsOptions = Omit<ComposeEventCenterOptions, 'db'> & {
+export type ComposeEventCenterWithPortsOptions = Omit<
+  ComposeEventCenterOptions,
+  'db' | 'customObserverPrograms'
+> & {
   readonly persistence: EventCenterPersistence
+  readonly customObserverPrograms: CustomObserverProgramFactory
 }
 
 export async function composeEventCenterWithPorts(
@@ -282,8 +291,9 @@ export async function composeEventCenterWithPorts(
     ...(options.now === undefined ? {} : { now: options.now }),
     ...(options.id === undefined ? {} : { id: options.id }),
   })
-  const customObserver = createCustomEventObserverProgram({
+  const customObserver = composeCustomEventObserverProgram({
     store: customSources,
+    programs: options.customObserverPrograms,
     ...(options.now === undefined ? {} : { now: options.now }),
   })
   const responseDirectory = createEventResponseRoutingDirectory(responseRuleStore)
@@ -510,6 +520,7 @@ export async function composeEventCenter(
   const { db, ...shared } = options
   return await composeEventCenterWithPorts({
     ...shared,
+    customObserverPrograms: selectLocalCustomObserverProgramFactory(options.customObserverPrograms),
     persistence: {
       events: createEventStore(db),
       customSources: createCustomEventSourceStore(db),

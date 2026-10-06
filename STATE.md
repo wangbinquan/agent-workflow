@@ -1,3 +1,11 @@
+## 2026-10-06 RFC-370 自定义观察程序完整效果切面
+
+DESIGN-D1与SOURCE16-R2有效有限PASS；首SOURCE16-R1的两项功能P2与FAIL完整留证，修正legacy getter时点／receiver及原publish再validate的四次调用预期，未变38项复用原功能分析。42项稳定指纹d622818729f87bf2b0bef30fbc46d9d5faea1193243282ebb6b19775a3323453。完整七成员selected factory与opaque配对由adapter解释，唯一共同execute／run／validate与原native机制、三纯helper／env、3root＋module AST逆向、旧reader／expect／预算及真实native／双provider回归保持。Windows对称11触发路径、4suite原完整workflow inverse通过，新功能测试交hostedCI，不记未跑的用例成功。
+
+一次原scoped census使用完整 committed 21bc9a630e928282f825a82da240444d76c07a1c加冻结11production，四原规则不变，sourceDigest sha256:1245f5a9250663c502f4a024ac8ec808d976ddf99775d56f97e582e506d039f8。129有序库存／why保持，原债359保留359，只退役0实际地址、新增0实际原分类，共359；全部guards／40SPI／69targets／9Task effects／原SCC保持，仅真实测量增长登记。私有文本准备assert的旧失败保留，未因此运行census／改共享产物；原生成只执行一次。有限元数据门、精确发布和新exact-SHA CI另验。本机只自有format／lint、纯AST字节JSON和原静态生成，无AW tests／typecheck／build／service。
+
+12ca Windows37479031030正式failure，MCP功能reader修复通过，五readonly断言类型错已由共享后继21bc补正；21bc Windows37480455083已正式success，主37480454971在冻结正式快照仍queued，各完整主CI仍需终态，不记全仓绿。完整H7／purpose callers／全根A-T7／A-G、CS adapters、M0首次实际部署和M1～M4未完成，AW尚未部署CS，不关闭RFC。详见[发布配套](design/RFC-370-crewstation-hosted-deployment/custom-observer-program-family-publication.md)。以下旧共享STATE及全部并行输出逐字保留。
+
 ## 2026-10-06 RFC-371 正式 CI 的只读断言类型更正
 
 观测 CI 7fb0bb9 的功能类型作业在已提交启动恢复用例的5个原expect报告TS2769；格式、lint和依赖分层通过，整仓不记绿。只补原readonly Member[]／string[]断言类型，62条原expect和全部用例、四成员／执行顺序保持；完整测试类型擦除后运行JavaScript逐字相同。没有修改生产源码、原四桶／价格／EOF或原100K／10M配置，没有本机AW测试／类型检查／构建／服务。自有format和lint通过。

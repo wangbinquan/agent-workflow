@@ -598,6 +598,65 @@ function oldMcpDiagnosticsFamilyBody(
   return restored
 }
 
+// RFC-370: remove only the exact custom-observer factory at each actual Event Center root.
+function oldCustomObserverProgramsBody(
+  source: ts.SourceFile,
+  name: string,
+  body: ts.Block,
+): ts.Block {
+  const variable =
+    source === pg && name === 'composePostgresqlApplication'
+      ? 'input'
+      : source === server && name === 'composeApplicationEventCenter'
+        ? 'deps'
+        : null
+  if (variable === null) return body
+  let selections = 0
+  const transformed = ts.transform(body, [
+    (context) => {
+      const inverse: ts.Visitor = (node) => {
+        const parent = node.parent ?? ts.getOriginalNode(node).parent
+        if (
+          ts.isObjectLiteralExpression(node) &&
+          parent !== undefined &&
+          ts.isCallExpression(parent) &&
+          parent.expression.getText(source) === 'composeEventCenter'
+        ) {
+          const entries = node.properties.filter(
+            (property) =>
+              ts.isPropertyAssignment(property) &&
+              property.name.getText(source) === 'customObserverPrograms',
+          ) as ts.PropertyAssignment[]
+          if (
+            entries.length !== 1 ||
+            compact(entries[0]!.initializer, source) !==
+              `selectLocalCustomObserverProgramFactory(${variable}.customObserverPrograms)`
+          )
+            throw new Error(
+              'the actual Event Center must select one complete custom observer family',
+            )
+          selections++
+          return ts.factory.updateObjectLiteralExpression(
+            node,
+            ts.factory.createNodeArray(
+              node.properties
+                .filter((property) => property !== entries[0])
+                .map((property) => ts.visitNode(property, inverse, ts.isObjectLiteralElementLike)!),
+              node.properties.hasTrailingComma,
+            ),
+          )
+        }
+        return ts.visitEachChild(node, inverse, context)
+      }
+      return (node) => ts.visitNode(node, inverse, ts.isBlock)!
+    },
+  ])
+  if (selections !== 1) throw new Error('missing actual custom observer family selection')
+  const restored = transformed.transformed[0]!
+  transformed.dispose()
+  return restored
+}
+
 // RFC-370: inverse only the selected boot recovery family at the actual daemon call.
 function oldBootExecutionRecoveryBody(
   source: ts.SourceFile,
@@ -715,7 +774,11 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
       oldVerificationCommandsBody(
         source,
         name,
-        oldBootExecutionRecoveryBody(source, name, functionBody(source, name)),
+        oldBootExecutionRecoveryBody(
+          source,
+          name,
+          oldCustomObserverProgramsBody(source, name, functionBody(source, name)),
+        ),
       ),
     ),
   )
@@ -875,7 +938,11 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
 }
 
 function oldEventCenterBody(): ts.Block {
-  const body = functionBody(server, 'composeApplicationEventCenter')
+  const body = oldCustomObserverProgramsBody(
+    server,
+    'composeApplicationEventCenter',
+    functionBody(server, 'composeApplicationEventCenter'),
+  )
   const initialization = body.statements.find(
     (node): node is ts.VariableStatement =>
       ts.isVariableStatement(node) &&

@@ -423,6 +423,8 @@ import {
   type EventCenterAutomationCapability,
   type EventCenterModule,
 } from '@/modules/event-center/composition'
+import type { CustomObserverProgramFactory } from '@/modules/event-center/composition/customObserverProgram'
+import { selectLocalCustomObserverProgramFactory } from '@/modules/event-center/composition/localCustomObserverProgram'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
   composeReactionExecutionProvider,
@@ -855,6 +857,7 @@ export interface AppDeps {
   employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   repositoryBaselines?: RepositoryBaselineEffectsFactory
   verificationCommands?: VerificationCommandEffectsFactory
+  customObserverPrograms?: CustomObserverProgramFactory
   automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   actionWorkspaceEffects?: ActionWorkspaceEffects
   conflictMergeWorkspaceEffects?: ConflictMergeWorkspaceEffects
@@ -1807,6 +1810,7 @@ function composeApplicationEventCenter(
       : null
   const initialization = composeEventCenter({
     db: deps.db,
+    customObserverPrograms: selectLocalCustomObserverProgramFactory(deps.customObserverPrograms),
     typePackageDescriptorJsons: [
       developmentEmployeeTypePackage.descriptorJson,
       codeHostEventCatalogJson,

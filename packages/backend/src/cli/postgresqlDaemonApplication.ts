@@ -334,6 +334,8 @@ import {
   composeEventCenter,
   createEventAutomationWorkIntentStore,
 } from '@/modules/event-center/composition'
+import type { CustomObserverProgramFactory } from '@/modules/event-center/composition/customObserverProgram'
+import { selectLocalCustomObserverProgramFactory } from '@/modules/event-center/composition/localCustomObserverProgram'
 import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import { createTaskAutomationWorkStartProvider } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'
@@ -472,6 +474,7 @@ export interface PostgresqlDaemonApplicationInput {
   readonly employeeCaseWorkspaceEffects?: EmployeeCaseWorkspaceEffectsFactory
   readonly repositoryBaselines?: RepositoryBaselineEffectsFactory
   readonly verificationCommands?: VerificationCommandEffectsFactory
+  readonly customObserverPrograms?: CustomObserverProgramFactory
   readonly bootExecutionRecovery?: BootExecutionRecoveryFactory
   readonly automationWorkspaceEffects?: AutomationWorkspaceEffectsFactory
   readonly actionWorkspaceEffects?: ActionWorkspaceEffects
@@ -1530,6 +1533,7 @@ export async function composePostgresqlApplication(
   const missionEventContinuation = createMissionCodeHostEventContinuation(input.db)
   const eventCenter = await composeEventCenter({
     db: input.db,
+    customObserverPrograms: selectLocalCustomObserverProgramFactory(input.customObserverPrograms),
     typePackageDescriptorJsons: [
       developmentEmployeeTypePackage.descriptorJson,
       codeHostEventCatalogJson,

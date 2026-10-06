@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1926,
+    "entries": 1929,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -9060,6 +9060,50 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/event-center/application/customObserverProgram.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/event-center/application/customObserverProgram.ts#createCustomEventObserverProgram",
+      "missingControls": [
+        "audit",
+        "authority",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/event-center/application/customObserverProgram.ts#createCustomEventObserverProgram",
+      "symbol": "createCustomEventObserverProgram",
+      "targetContext": "event-center",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/event-center/application/customObserverProgram.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/event-center/application/customObserverProgram.ts#executeCustomObserverProgram",
+      "missingControls": [
+        "audit",
+        "authority",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/event-center/application/customObserverProgram.ts#executeCustomObserverProgram",
+      "symbol": "executeCustomObserverProgram",
+      "targetContext": "event-center",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
         "authorization": false,
         "event": true,
         "fenceOrOcc": false,
@@ -9199,9 +9243,9 @@
       "controls": {
         "audit": false,
         "authority": "none-observed",
-        "authorization": true,
+        "authorization": false,
         "event": true,
-        "fenceOrOcc": true,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts",
@@ -9210,32 +9254,12 @@
       "missingControls": [
         "audit",
         "authority",
+        "authorization",
+        "fenceOrOcc",
         "transaction"
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#createCustomEventObserverProgram",
       "symbol": "createCustomEventObserverProgram",
-      "targetContext": "event-center",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "none-observed",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#execute",
-      "missingControls": [
-        "audit",
-        "authority",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#execute",
-      "symbol": "execute",
       "targetContext": "event-center",
       "targetLayer": "infrastructure"
     },
@@ -9319,6 +9343,55 @@
       "missingControls": [],
       "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/eventStore.ts#createEventStore",
       "symbol": "createEventStore",
+      "targetContext": "event-center",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": true,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts#createLocalCustomObserverProgram",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts#createLocalCustomObserverProgram",
+      "symbol": "createLocalCustomObserverProgram",
+      "targetContext": "event-center",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts#createLocalCustomObserverProgramFactory",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts#createLocalCustomObserverProgramFactory",
+      "symbol": "createLocalCustomObserverProgramFactory",
       "targetContext": "event-center",
       "targetLayer": "infrastructure"
     },
@@ -46096,7 +46169,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d05ef6a5d7e5bc34e3826afb624edc3390efa8fa11f79bd325b01261f4ba9a50",
+  "sourceDigest": "sha256:1245f5a9250663c502f4a024ac8ec808d976ddf99775d56f97e582e506d039f8",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:d05ef6a5d7e5bc34e3826afb624edc3390efa8fa11f79bd325b01261f4ba9a50`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:1245f5a9250663c502f4a024ac8ec808d976ddf99775d56f97e582e506d039f8`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2314 |
+| backend production TS 文件 | 2320 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1725 / 18 |
+| `modules/**` 文件 / 非空 context | 1731 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,13 +30,13 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5911 |
+| `architectureExceptions` | 5919 |
 | `backgroundJobs` | 365 |
-| `crossContextImports` | 6712 |
+| `crossContextImports` | 6720 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27169 |
-| `mutationEntrypoints` | 1926 |
+| `moduleSymbolOwners` | 27189 |
+| `mutationEntrypoints` | 1929 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1187 |
 | `transactionExternalEffects` | 267 |
@@ -90,10 +90,10 @@
 | resource-catalog / domain | 11 |
 | runtime-management / composition | 11 |
 | source-control / domain | 11 |
+| event-center / application | 10 |
 | intent / infrastructure | 10 |
 | memory / domain | 9 |
 | collaboration / composition | 8 |
-| event-center / application | 8 |
 | intent / composition | 8 |
 | knowledge-evolution / domain | 8 |
 | development-automation / engine | 7 |
@@ -102,12 +102,12 @@
 | task-execution / public | 7 |
 | digital-employee / composition | 6 |
 | digital-employee / domain | 6 |
+| event-center / infrastructure | 6 |
 | identity-access / composition | 6 |
 | identity-access / public | 6 |
 | memory / public | 6 |
 | collaboration / public | 5 |
 | digital-employee / public | 5 |
-| event-center / infrastructure | 5 |
 | event-center / public | 5 |
 | integration / public | 5 |
 | resource-catalog / public | 5 |
@@ -116,14 +116,14 @@
 | system-operations / public | 5 |
 | code-capability / composition | 4 |
 | development-automation / public | 4 |
+| event-center / composition | 4 |
+| event-center / domain | 4 |
 | integration / domain | 4 |
 | knowledge-evolution / application | 4 |
 | runtime-management / public | 4 |
-| event-center / domain | 3 |
 | execution-contract / application | 3 |
 | identity-access / domain | 3 |
 | knowledge-evolution / public | 3 |
-| event-center / composition | 2 |
 | execution-contract / composition | 2 |
 | execution-contract / public | 2 |
 | intent / ports | 2 |
@@ -208,8 +208,8 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3787 |
-| legacy-inbound | 1905 |
+| legacy-outbound | 3789 |
+| legacy-inbound | 1911 |
 | offered-consumption | 330 |
 | infrastructure-external | 324 |
 | temporary-internal-debt | 114 |
@@ -223,8 +223,8 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3787 |
-| legacy-inbound | 1905 |
+| legacy-outbound | 3789 |
+| legacy-inbound | 1911 |
 | temporary-internal-debt | 114 |
 | off-dag-offered | 93 |
 | no-circular | 6 |
@@ -235,14 +235,14 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3151 |
+| W9 | 3152 |
 | W9-D | 1079 |
-| W4-E1 | 809 |
+| W4-E1 | 810 |
 | W5 | 206 |
 | W4 | 201 |
 | W4-B | 187 |
 | W4-E8 | 163 |
-| W4-E9 | 77 |
+| W4-E9 | 83 |
 | RFC-371 | 12 |
 | W2-D/W3/W5 | 12 |
 | W9-E | 8 |

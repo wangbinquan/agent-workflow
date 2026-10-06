@@ -1599,23 +1599,6 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#$file",
-      "fromPath": "packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:040d19904b8836f0d68c",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "event-center",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
-      "toPath": "packages/backend/src/util/hash.ts",
-      "toSymbol": "sha256Hex",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/fusionEngineTaskOperations.ts#$file",
@@ -7126,6 +7109,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:11579936f25b143c3d6c",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/localCustomObserverProgram.ts#selectLocalCustomObserverProgramFactory",
+      "toPath": "packages/backend/src/modules/event-center/composition/localCustomObserverProgram.ts",
+      "toSymbol": "selectLocalCustomObserverProgramFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts#$file",
       "fromPath": "packages/backend/src/modules/task-execution/composition/actionExecutionRunners.ts",
       "fromSymbol": "$file",
@@ -9404,23 +9404,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#$file",
-      "fromPath": "packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:172bab911cae9acd8918",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "event-center",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/scriptRun.ts#$file",
-      "toPath": "packages/backend/src/services/scriptRun.ts",
-      "toSymbol": "INTERPRETER_SPEC",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file",
       "fromPath": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "fromSymbol": "$file",
@@ -11053,23 +11036,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#$file",
-      "fromPath": "packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:1b041f5b55bc114a9d11",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "event-center",
-      "removeAfterWave": "W4-E1",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/scriptRun.ts#$file",
-      "toPath": "packages/backend/src/services/scriptRun.ts",
-      "toSymbol": "resolveScriptInterpreter",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationArtifactReader.ts#$file",
       "fromPath": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationArtifactReader.ts",
       "fromSymbol": "$file",
@@ -11983,23 +11949,6 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#taskQuestions",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "taskQuestions",
-      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#$file",
-      "fromPath": "packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:1db8cdd216f61ab44733",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "event-center",
-      "removeAfterWave": "W9",
-      "rule": "legacy-outbound",
-      "toOwnerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file",
-      "toPath": "packages/backend/src/services/execution/managedProcess.ts",
-      "toSymbol": "runManagedProcess",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -42229,6 +42178,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:6b743588cf8d60cd4930",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/localCustomObserverProgram.ts#selectLocalCustomObserverProgramFactory",
+      "toPath": "packages/backend/src/modules/event-center/composition/localCustomObserverProgram.ts",
+      "toSymbol": "selectLocalCustomObserverProgramFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/restore.ts#$file",
@@ -62765,6 +62731,23 @@
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "fromPath": "packages/backend/src/server.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:a15c2d1a35492dcb1d7e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/customObserverProgram.ts#$file",
+      "toPath": "packages/backend/src/modules/event-center/composition/customObserverProgram.ts",
+      "toSymbol": "CustomObserverProgramFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts#$file",
@@ -65861,6 +65844,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/application/customObserverProgram.ts#$file",
+      "fromPath": "packages/backend/src/modules/event-center/application/customObserverProgram.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:aa2ef532858453f4cb9e",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "event-center",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/digitalEmployeeAgentTemplateCatalog.ts",
       "fromSymbol": "$file",
@@ -68224,6 +68224,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts#$file",
+      "fromPath": "packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b11ef0e91e69875edad1",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "event-center",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/scriptRun.ts#$file",
+      "toPath": "packages/backend/src/services/scriptRun.ts",
+      "toSymbol": "resolveScriptInterpreter",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillPackageContentReader.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillPackageContentReader.ts",
       "fromSymbol": "$file",
@@ -69256,6 +69273,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#agents",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "agents",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts#$file",
+      "fromPath": "packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:b37db59ee78482c36193",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "event-center",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/scriptRun.ts#$file",
+      "toPath": "packages/backend/src/services/scriptRun.ts",
+      "toSymbol": "INTERPRETER_SPEC",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -77897,6 +77931,23 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts#$file",
+      "fromPath": "packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:c8f9607089e5e84f30e4",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "event-center",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/execution/local/managedProcess.ts#runManagedProcess",
+      "toPath": "packages/backend/src/platform/execution/local/managedProcess.ts",
+      "toSymbol": "runManagedProcess",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/catalogOperationDescriptors.ts#$file",
       "fromPath": "packages/backend/src/modules/resource-catalog/composition/catalogOperationDescriptors.ts",
       "fromSymbol": "$file",
@@ -81071,6 +81122,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts#$file",
       "toPath": "packages/backend/src/modules/task-execution/composition/taskExecutionPersistence.ts",
       "toSymbol": "createRuntimeSessionLeaseOperations",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:d12d1e6b230863e002da",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/customObserverProgram.ts#$file",
+      "toPath": "packages/backend/src/modules/event-center/composition/customObserverProgram.ts",
+      "toSymbol": "CustomObserverProgramFactory",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
     },
     {
@@ -85868,6 +85936,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "fromPath": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:dbad10b386f5223177a8",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/localCustomObserverProgram.ts#selectLocalCustomObserverProgramFactory",
+      "toPath": "packages/backend/src/modules/event-center/composition/localCustomObserverProgram.ts",
+      "toSymbol": "selectLocalCustomObserverProgramFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts#$file",
@@ -86359,6 +86444,23 @@
       "toPath": "packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts",
       "toSymbol": "selectDaemonRuntimeQueries",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts#$file",
+      "fromPath": "packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:dccaf81611b07fafd065",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "event-center",
+      "removeAfterWave": "W4-E1",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/services/scriptRun.ts#$file",
+      "toPath": "packages/backend/src/services/scriptRun.ts",
+      "toSymbol": "ResolvedInterpreter",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
       "edgeKind": "value",
@@ -90251,6 +90353,23 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#repositoryEmployeeAssignments",
       "toPath": "packages/backend/src/db/schema.ts",
       "toSymbol": "repositoryEmployeeAssignments",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
+      "edgeKind": "value",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/domain/customObserverProgram.ts#$file",
+      "fromPath": "packages/backend/src/modules/event-center/domain/customObserverProgram.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:e69dc9f593b50eb19abf",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "event-center",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex",
+      "toPath": "packages/backend/src/util/hash.ts",
+      "toSymbol": "sha256Hex",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
@@ -99638,6 +99757,23 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "fromPath": "packages/backend/src/cli/start.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:fdce0e95c1411f3b5387",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "rule": "legacy-inbound",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/customObserverProgram.ts#$file",
+      "toPath": "packages/backend/src/modules/event-center/composition/customObserverProgram.ts",
+      "toSymbol": "CustomObserverProgramFactory",
+      "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/services/nodeRunPrompt.ts#$file",
@@ -100489,9 +100625,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5911,
+    "architectureExceptions": 5919,
     "implementationSccs": 0,
-    "observedEdges": 6712,
+    "observedEdges": 6720,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -101970,22 +102106,6 @@
       "toContext": "resource-catalog",
       "toFile": "packages/backend/src/modules/resource-catalog/public/operations.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/operations.ts#McpCatalogModule"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "event-center",
-      "fromFile": "packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#$file",
-      "id": "import:040d19904b8836f0d68c",
-      "owner": "event-center",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/util/hash",
-      "syntax": "static-import",
-      "targetSymbol": "sha256Hex",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/util/hash.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
       "edgeKind": "type",
@@ -107732,6 +107852,22 @@
       "toOwnerEntryId": "owner:external:drizzle-orm#$package"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:11579936f25b143c3d6c",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/event-center/composition/localCustomObserverProgram",
+      "syntax": "static-import",
+      "targetSymbol": "selectLocalCustomObserverProgramFactory",
+      "toContext": "event-center",
+      "toFile": "packages/backend/src/modules/event-center/composition/localCustomObserverProgram.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/localCustomObserverProgram.ts#selectLocalCustomObserverProgramFactory"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "digital-employee",
       "fromFile": "packages/backend/src/modules/digital-employee/application/ports/runtimeStore.ts",
@@ -110309,22 +110445,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "event-center",
-      "fromFile": "packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#$file",
-      "id": "import:172bab911cae9acd8918",
-      "owner": "event-center",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-outbound",
-      "specifier": "@/services/scriptRun",
-      "syntax": "static-import",
-      "targetSymbol": "INTERPRETER_SPEC",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/scriptRun.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/scriptRun.ts#$file"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/review.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/collaboration/infrastructure/review.ts#$file",
@@ -111989,22 +112109,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "event-center",
-      "fromFile": "packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#$file",
-      "id": "import:1b041f5b55bc114a9d11",
-      "owner": "event-center",
-      "removeAfterWave": "W4-E1",
-      "role": "legacy-outbound",
-      "specifier": "@/services/scriptRun",
-      "syntax": "static-import",
-      "targetSymbol": "resolveScriptInterpreter",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/scriptRun.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/scriptRun.ts#$file"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/infrastructure/databaseMigrationArtifactReader.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/system-operations/infrastructure/databaseMigrationArtifactReader.ts#$file",
@@ -113026,22 +113130,6 @@
       "toContext": "event-center",
       "toFile": "packages/backend/src/modules/event-center/composition/required-ports.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/required-ports.ts#EventAutomationDelegatedContext"
-    },
-    {
-      "edgeKind": "value",
-      "fromContext": "event-center",
-      "fromFile": "packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#$file",
-      "id": "import:1db8cdd216f61ab44733",
-      "owner": "event-center",
-      "removeAfterWave": "W9",
-      "role": "legacy-outbound",
-      "specifier": "@/services/execution/managedProcess",
-      "syntax": "static-import",
-      "targetSymbol": "runManagedProcess",
-      "toContext": "legacy",
-      "toFile": "packages/backend/src/services/execution/managedProcess.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/services/execution/managedProcess.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -145764,6 +145852,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#tasks"
     },
     {
+      "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:6b743588cf8d60cd4930",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/event-center/composition/localCustomObserverProgram",
+      "syntax": "static-import",
+      "targetSymbol": "selectLocalCustomObserverProgramFactory",
+      "toContext": "event-center",
+      "toFile": "packages/backend/src/modules/event-center/composition/localCustomObserverProgram.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/localCustomObserverProgram.ts#selectLocalCustomObserverProgramFactory"
+    },
+    {
       "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/restore.ts",
@@ -167636,6 +167740,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskRouteLaunch.ts#createTaskAutomationWorkStartProvider"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/server.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/server.ts#$file",
+      "id": "import:a15c2d1a35492dcb1d7e",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/event-center/composition/customObserverProgram",
+      "syntax": "static-import",
+      "targetSymbol": "CustomObserverProgramFactory",
+      "toContext": "event-center",
+      "toFile": "packages/backend/src/modules/event-center/composition/customObserverProgram.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/customObserverProgram.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "system-operations",
       "fromFile": "packages/backend/src/modules/system-operations/infrastructure/local/doctorDiagnostics.ts",
@@ -171333,6 +171453,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "event-center",
+      "fromFile": "packages/backend/src/modules/event-center/application/customObserverProgram.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/application/customObserverProgram.ts#$file",
+      "id": "import:aa2ef532858453f4cb9e",
+      "owner": "event-center",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/taskListPage/query.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/taskListPage/query.ts#$file",
@@ -173893,6 +174029,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "event-center",
+      "fromFile": "packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts#$file",
+      "id": "import:b11ef0e91e69875edad1",
+      "owner": "event-center",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/services/scriptRun",
+      "syntax": "static-import",
+      "targetSymbol": "resolveScriptInterpreter",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/scriptRun.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/scriptRun.ts#$file"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillPackageContentReader.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/fileSkillPackageContentReader.ts#$file",
@@ -174914,6 +175066,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#agents"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "event-center",
+      "fromFile": "packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts#$file",
+      "id": "import:b37db59ee78482c36193",
+      "owner": "event-center",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/services/scriptRun",
+      "syntax": "static-import",
+      "targetSymbol": "INTERPRETER_SPEC",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/scriptRun.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/scriptRun.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -183941,6 +184109,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "event-center",
+      "fromFile": "packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts#$file",
+      "id": "import:c8f9607089e5e84f30e4",
+      "owner": "event-center",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/platform/execution/local/managedProcess",
+      "syntax": "static-import",
+      "targetSymbol": "runManagedProcess",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/platform/execution/local/managedProcess.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/platform/execution/local/managedProcess.ts#runManagedProcess"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/composition/catalogOperationDescriptors.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/catalogOperationDescriptors.ts#$file",
@@ -187330,6 +187514,22 @@
       "toContext": "identity-access",
       "toFile": "packages/backend/src/modules/identity-access/public/participants.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/identity-access/public/participants.ts#DirectAuthorityBinding"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:d12d1e6b230863e002da",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/event-center/composition/customObserverProgram",
+      "syntax": "static-import",
+      "targetSymbol": "CustomObserverProgramFactory",
+      "toContext": "event-center",
+      "toFile": "packages/backend/src/modules/event-center/composition/customObserverProgram.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/customObserverProgram.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -192453,6 +192653,22 @@
     },
     {
       "edgeKind": "value",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/postgresqlDaemonApplication.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
+      "id": "import:dbad10b386f5223177a8",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/event-center/composition/localCustomObserverProgram",
+      "syntax": "static-import",
+      "targetSymbol": "selectLocalCustomObserverProgramFactory",
+      "toContext": "event-center",
+      "toFile": "packages/backend/src/modules/event-center/composition/localCustomObserverProgram.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/localCustomObserverProgram.ts#selectLocalCustomObserverProgramFactory"
+    },
+    {
+      "edgeKind": "value",
       "fromContext": "task-execution",
       "fromFile": "packages/backend/src/modules/task-execution/infrastructure/nativeUsageOwnerTransaction.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/task-execution/infrastructure/nativeUsageOwnerTransaction.ts#$file",
@@ -192994,6 +193210,22 @@
       "toContext": "system-operations",
       "toFile": "packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts",
       "toOwnerEntryId": "owner:packages/backend/src/modules/system-operations/composition/daemonHostLifecycle.ts#selectDaemonRuntimeQueries"
+    },
+    {
+      "edgeKind": "type",
+      "fromContext": "event-center",
+      "fromFile": "packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/infrastructure/local/customObserverProgram.ts#$file",
+      "id": "import:dccaf81611b07fafd065",
+      "owner": "event-center",
+      "removeAfterWave": "W4-E1",
+      "role": "legacy-outbound",
+      "specifier": "@/services/scriptRun",
+      "syntax": "static-import",
+      "targetSymbol": "ResolvedInterpreter",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/services/scriptRun.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/services/scriptRun.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -197154,6 +197386,22 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/db/schema.ts",
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#repositoryEmployeeAssignments"
+    },
+    {
+      "edgeKind": "value",
+      "fromContext": "event-center",
+      "fromFile": "packages/backend/src/modules/event-center/domain/customObserverProgram.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/event-center/domain/customObserverProgram.ts#$file",
+      "id": "import:e69dc9f593b50eb19abf",
+      "owner": "event-center",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/hash",
+      "syntax": "static-import",
+      "targetSymbol": "sha256Hex",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/hash.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/hash.ts#sha256Hex"
     },
     {
       "edgeKind": "type",
@@ -206996,6 +207244,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/db/schema.ts#skills"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "legacy",
+      "fromFile": "packages/backend/src/cli/start.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
+      "id": "import:fdce0e95c1411f3b5387",
+      "owner": "bootstrap",
+      "removeAfterWave": "W4-E9",
+      "role": "legacy-inbound",
+      "specifier": "@/modules/event-center/composition/customObserverProgram",
+      "syntax": "static-import",
+      "targetSymbol": "CustomObserverProgramFactory",
+      "toContext": "event-center",
+      "toFile": "packages/backend/src/modules/event-center/composition/customObserverProgram.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/event-center/composition/customObserverProgram.ts#$file"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/services/nodeRunPrompt.ts",
@@ -208165,6 +208429,7 @@
       "compositionFiles": [],
       "compositionOwnerEntryIds": [],
       "consumerOwnerEntryIds": [
+        "owner:packages/backend/src/modules/event-center/application/customObserverProgram.ts#$file",
         "owner:packages/backend/src/modules/event-center/application/eventCenterService.ts#$file",
         "owner:packages/backend/src/modules/event-center/infrastructure/customEventObserverProgram.ts#$file"
       ],
@@ -208782,7 +209047,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:d05ef6a5d7e5bc34e3826afb624edc3390efa8fa11f79bd325b01261f4ba9a50",
+  "sourceDigest": "sha256:1245f5a9250663c502f4a024ac8ec808d976ddf99775d56f97e582e506d039f8",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

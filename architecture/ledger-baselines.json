@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:d05ef6a5d7e5bc34e3826afb624edc3390efa8fa11f79bd325b01261f4ba9a50",
+    "sourceDigest": "sha256:1245f5a9250663c502f4a024ac8ec808d976ddf99775d56f97e582e506d039f8",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -821,8 +821,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1926,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1929,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 Custom Observer Program SOURCE16-R2: actual original counter 1926 -> 1929 for rfc294-mutation-entrypoints. The complete selected seven-member observer factory and opaque paired references add only measured native owner/address inventory. Preserve the original native mechanism bodies, one common execute/run/validate policy, exact compatibility signatures and getter/receiver timing, complete three-root and module AST inverses, every old assertion/budget/reader, and the actual dual-provider validation/publication/worker path. Keep all four original generation rules, authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed concurrent source, guards, SPI/targets/SCC. Only actual matching growth is permitted. Full H7 execution authority/background, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -856,8 +859,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6712,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6720,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 Custom Observer Program SOURCE16-R2: actual original counter 6712 -> 6720 for rfc294-cross-context-observed-imports. The complete selected seven-member observer factory and opaque paired references add only measured native owner/address inventory. Preserve the original native mechanism bodies, one common execute/run/validate policy, exact compatibility signatures and getter/receiver timing, complete three-root and module AST inverses, every old assertion/budget/reader, and the actual dual-provider validation/publication/worker path. Keep all four original generation rules, authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed concurrent source, guards, SPI/targets/SCC. Only actual matching growth is permitted. Full H7 execution authority/background, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -877,8 +883,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5911,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5919,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 Custom Observer Program SOURCE16-R2: actual original counter 5911 -> 5919 for rfc294-architecture-exceptions. The complete selected seven-member observer factory and opaque paired references add only measured native owner/address inventory. Preserve the original native mechanism bodies, one common execute/run/validate policy, exact compatibility signatures and getter/receiver timing, complete three-root and module AST inverses, every old assertion/budget/reader, and the actual dual-provider validation/publication/worker path. Keep all four original generation rules, authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed concurrent source, guards, SPI/targets/SCC. Only actual matching growth is permitted. Full H7 execution authority/background, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -912,8 +921,11 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 27169,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 27189,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 Custom Observer Program SOURCE16-R2: actual original counter 27169 -> 27189 for rfc294-module-symbol-owners. The complete selected seven-member observer factory and opaque paired references add only measured native owner/address inventory. Preserve the original native mechanism bodies, one common execute/run/validate policy, exact compatibility signatures and getter/receiver timing, complete three-root and module AST inverses, every old assertion/budget/reader, and the actual dual-provider validation/publication/worker path. Keep all four original generation rules, authored debt classification and final A-T7 cleanup. Preserve all 129 ordered inventories/why, surviving authored debts, complete committed concurrent source, guards, SPI/targets/SCC. Only actual matching growth is permitted. Full H7 execution authority/background, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
+      }
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -921,8 +933,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "a8ebb65189e3a1281bbd9af1bdd645abede80917",
-    "contentDigest": "sha256:a1793e048ad3154e57eecc2f70ef793a1bd9549803e68c9bd5913e57c670be45",
+    "currentSnapshotSha": "21bc9a630e928282f825a82da240444d76c07a1c",
+    "contentDigest": "sha256:d02fbf97dbc827393888e3d832b769890f5413cec81884c19b54225ff2582845",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }
