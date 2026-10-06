@@ -106,6 +106,28 @@ const ContractObjectSchema = z
       z
         .object({
           id: z.string(),
+          nativeProjection: z
+            .object({
+              kind: z.literal('retained-output-revision'),
+              reportIdColumn: z.literal('report_id'),
+              revisionColumn: z.literal('revision'),
+              parent: z
+                .object({
+                  table: z.literal('observation_reports'),
+                  idColumn: z.literal('id'),
+                  stateColumn: z.literal('state'),
+                  building: z.literal('building'),
+                })
+                .strict(),
+              sources: z.tuple([
+                z.literal('observation_report_pages'),
+                z.literal('observation_report_rows'),
+                z.literal('observation_report_counts'),
+                z.literal('observation_report_receipts'),
+              ]),
+            })
+            .strict()
+            .optional(),
           schemaSymbol: z.string(),
           ownerContext: OwnerSchema,
           disposition: z.enum(['KEEP', 'ARCHIVE_THEN_OMIT', 'DEFER']),
@@ -174,7 +196,7 @@ const ContractObjectSchema = z
 const ContractSchema: z.ZodType<LogicalSchemaContract> = ContractObjectSchema
 const StatementSchema = z
   .object({
-    kind: z.enum(['bootstrap', 'table', 'constraint', 'index', 'metadata']),
+    kind: z.enum(['bootstrap', 'table', 'constraint', 'index', 'function', 'trigger', 'metadata']),
     logicalId: z.string(),
     sql: z.string(),
   })

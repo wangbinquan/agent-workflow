@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:e86b4b3a4d1450b181eff9fec5facdcc93f9083065fdb6a7350c2e585c95ddf7",
+    "sourceDigest": "sha256:ce2f94f257c61b6aab8f16d98ce291179cc4f027ba847d97ad8e50c619f94667",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -856,8 +856,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6615,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6623,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-371 reviewed retained complete-report SOURCE23: eight actual imports connecting the existing report read qualification and finite retained revision schema projection. Actual original counter 6615 -> 6623. This matching declaration changes no original classifier, assertion, budget, authored debt or statistics population. Preserve all 129 ordered inventory ids/file/symbol/why,345 current authored debts,214 guards,SPI/targets/SCC and old migration bytes. Cold qualification and each-read Actor/Task/cost behavior remain; actual native mutation/rebuild and original 100K/10M/100-sample/500ms acceptance still require exact-SHA hosted CI. Producer OFF and both RFCs remain open. Retire this one-commit actual growth declaration in the next ordinary successor."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -877,8 +880,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5820,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5827,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-371 reviewed retained complete-report SOURCE23: seven actual matching platform/db infrastructure addresses classified by the unchanged original architecture matcher. Actual original counter 5820 -> 5827. This matching declaration changes no original classifier, assertion, budget, authored debt or statistics population. Preserve all 129 ordered inventory ids/file/symbol/why,345 current authored debts,214 guards,SPI/targets/SCC and old migration bytes. Cold qualification and each-read Actor/Task/cost behavior remain; actual native mutation/rebuild and original 100K/10M/100-sample/500ms acceptance still require exact-SHA hosted CI. Producer OFF and both RFCs remain open. Retire this one-commit actual growth declaration in the next ordinary successor."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -912,10 +918,10 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 27054,
+      "baseline": 27069,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-370 Intent purpose SOURCE20: actual original counter 27046 -> 27054 for rfc294-module-symbol-owners. The consumer-owned Intent demand and complete original shared classifier add only measured owner/address inventory; original complete family, calls and core otherwise remain unchanged. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. Diagnostics/smoke, purpose commands/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
+        "why": "RFC-371 reviewed retained complete-report SOURCE23: fifteen actual owner symbols for the qualified reader, revision declaration and original provider/schema/target wiring. Actual original counter 27054 -> 27069. This matching declaration changes no original classifier, assertion, budget, authored debt or statistics population. Preserve all 129 ordered inventory ids/file/symbol/why,345 current authored debts,214 guards,SPI/targets/SCC and old migration bytes. Cold qualification and each-read Actor/Task/cost behavior remain; actual native mutation/rebuild and original 100K/10M/100-sample/500ms acceptance still require exact-SHA hosted CI. Producer OFF and both RFCs remain open. Retire this one-commit actual growth declaration in the next ordinary successor."
       }
     }
   ],
@@ -924,8 +930,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "388b4d9230e67f2c2bdfea5d50e224c641d33484",
-    "contentDigest": "sha256:7139f862eb04d1b3f5136137ab9c72abc4aaf1994ff7fdd842cb4381b420e7a8",
+    "currentSnapshotSha": "2da744867c6391ea127b764c76987bdeeb23a75e",
+    "contentDigest": "sha256:fc6cb66a1b94a262c4be245d29a5a17e308b53fa06749ab84f8b3dcf814d13d8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -6,6 +6,7 @@ import {
   observationReportRows,
   observationReportCounts,
   observationReportReceipts,
+  observationReportRetainedRevisions,
 } from '@/db/schema'
 import { databaseSessionFor, affectedRows } from '@/platform/persistence/databaseTransaction'
 import { sha256Hex } from '@/util/hash'
@@ -338,6 +339,10 @@ export async function publishCompleteReport(
         counts: summaryCounts,
       }
     }
+    await tx
+      .delete(observationReportRetainedRevisions)
+      .where(eq(observationReportRetainedRevisions.reportId, id))
+      .run()
     if (
       affectedRows(
         await tx

@@ -1,3 +1,9 @@
+## 2026-10-06 RFC-371 完整报告暖读与原启动复验
+
+完整报告 SOURCE23／CONTROL7 的有限功能门 V2 PASS；保留 V1 首屏空游标 FAIL，仅补真实 after:null／parent:null 与 Task／total／EOF 断言。新增不透明 retained revision 派生关系、双 provider 原生触发器和当前父 snapshot 资格复用；冷态完整 COUNT 与每次 Actor／Task／费用可见性保持，显式刷新重建全部原来源，无统计人口上限。原 SQLite 0241／PostgreSQL V2 0017 追加与实际逻辑导入 finalize 接线保留旧关系／历史字节。仅定向 format／lint 与一次原 scoped AST，hosted 新确切 CI、原规模资格和两个 RFC 关闭继续。
+
+用户已明确批准原数据库／原7456启动复现。实际运行管理缺 effects 的热更新代次退出日志保留；并行接线补齐后原 bun dev 恢复，真实正式页显示8任务、123238四桶Token和¥0.16583已记录估值及原缺口标记。该本机服务含共享 WIP，不称干净SHA部署。详见 [完整报告读取与启动复验](design/RFC-371-run-observability/retained-report-read-progress.md)。CS原四小时双规模超时、默认producer OFF、native v2／CLI／自测／托管实际联动仍开放，RFC不记Done。以下全部共享正文与并行已提交输出完整保留。
+
 ## 2026-10-06 RFC-370 System CI 修复及 Intent 自有执行需求
 
 388b4d9230e67f2c2bdfea5d50e224c641d33484 主 CI 37410742559 已终态 failure（39 success、9 failure、2 cancelled）；Windows 37410742470 failure 单独留证。六文件 fixture/type/原 early-spawn-failed 诊断修复 SOURCE7-R1 已有限 PASS 并逐字复用；完整原断言和预算保留。Intent 三条未登记 offered public 出边由自有 run/workspace/retention/reference 需求合同实际消除，不改 DAG/debt 守卫。原完整 missing-envelope 分类器及五种理由移入 shared，兼容出口转发同一函数；dispatcher/aux/turn 全业务语句和 System core 其余全文逆向保持。两处 Memory 源码 oracle 随实际 RM 内容 owner 迁址，Windows 对称四路径和两用例登记。DESIGN-D1 与有限 SOURCE20-R1 均有效 PASS；37 项首末稳定，源码指纹 8a0cd0568b05bf5727c776e0dedef67aa3d4b81f0408cd1dc8800c41fe0b652e。新功能执行仍待后继精确 SHA CI。

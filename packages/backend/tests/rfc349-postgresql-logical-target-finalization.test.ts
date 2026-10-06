@@ -189,6 +189,42 @@ const EXPECTED = [
 ]
 
 describe('RFC-349 PostgreSQL logical target finalization', () => {
+  test('retained revision native functions and triggers install after copied rows and constraints, before verified receipt', async () => {
+    const copiedTables: string[] = []
+    const fake = fixture({ rowCount: 2, tableNames: copiedTables })
+    const native = buildPostgresqlSchemaPlan().statements.filter(
+      (statement) => statement.kind === 'function' || statement.kind === 'trigger',
+    )
+    expect(native.filter((statement) => statement.kind === 'function')).toHaveLength(3)
+    expect(native.filter((statement) => statement.kind === 'trigger')).toHaveLength(12)
+    const target = await openPostgresqlLogicalTarget({
+      runtime: fake.runtime,
+      operationId: 'dbm_target_0001',
+      sourceGenerationId: 'dbg_source_0001',
+      contract: CONTRACT,
+      plan: { ...PLAN, statements: [...PLAN.statements, ...native] },
+      verifyMigrationHistory: async () => undefined,
+    })
+    try {
+      await target.prepare(9)
+      expect(
+        fake.statements.some((statement) => native.some((item) => item.sql === statement)),
+      ).toBe(false)
+      copiedTables.push('fixture_rows_pg')
+      await target.finalizeSchema(10, EXPECTED)
+      const constraint = fake.statements.indexOf(PLAN.statements[0]!.sql)
+      const receipt = fake.statements.findIndex((statement) =>
+        statement.startsWith('INSERT INTO "agent_workflow_meta"."schema_migrations"'),
+      )
+      for (const statement of native) {
+        expect(fake.statements.indexOf(statement.sql)).toBeGreaterThan(constraint)
+        expect(fake.statements.indexOf(statement.sql)).toBeLessThan(receipt)
+      }
+    } finally {
+      await target.close()
+    }
+  })
+
   // 2026-09-02 —— 割接后头一分钟的 40001 风暴。逻辑拷贝是纯 INSERT，不给 PostgreSQL 留
   // 任何 planner 统计；autovacuum 补上之前，`WHERE task_id = $1` 被规划成顺序扫描，而
   // 顺序扫描在 SERIALIZABLE 下持整表 predicate lock，于是每一笔并发写都与它互为读写依赖。

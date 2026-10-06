@@ -15,7 +15,12 @@ import {
   type AnySQLiteColumn,
 } from 'drizzle-orm/sqlite-core'
 import * as sqliteSchema from '@/db/schema'
-import { concreteDatabaseTable, renderPostgresqlDatabaseDefault } from '@/db/providerSchema'
+import {
+  concreteDatabaseTable,
+  renderPostgresqlDatabaseDefault,
+  retainedOutputRevisionFor,
+} from '@/db/providerSchema'
+import type { RetainedOutputRevisionContract } from './retainedOutputRevisionSchema'
 
 export const RFC349_SCHEMA_CONTRACT_VERSION = 2
 
@@ -152,6 +157,7 @@ export const RFC349_SOURCE_TABLES = [
   'observation_report_counts',
   'observation_report_pages',
   'observation_report_receipts',
+  'observation_report_retained_revisions',
   'observation_report_rows',
   'observation_reports',
   'observation_usage_sources',
@@ -364,6 +370,7 @@ export interface ArchiveContract {
 }
 
 export interface LogicalTableContract {
+  readonly nativeProjection?: RetainedOutputRevisionContract
   readonly id: string
   readonly schemaSymbol: string
   readonly ownerContext: OwnerContext
@@ -706,6 +713,7 @@ export function buildLogicalSchemaContract(): LogicalSchemaContract {
     const entry = byName.get(name)
     if (!entry) throw new Error(`RFC-349 schema contract missing ${name}`)
     const { config } = entry
+    const nativeProjection = retainedOutputRevisionFor(entry.table)
     const ownerContext = ownerFor(name)
     const disposition = dispositionFor(name)
     const columnPrimary = config.columns
@@ -741,6 +749,7 @@ export function buildLogicalSchemaContract(): LogicalSchemaContract {
     ]
 
     const result: LogicalTableContract = {
+      ...(nativeProjection === undefined ? {} : { nativeProjection }),
       id: name,
       schemaSymbol: entry.symbol,
       ownerContext,

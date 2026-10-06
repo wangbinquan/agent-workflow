@@ -56,6 +56,7 @@ export {
   observationReportRows,
   observationReportCounts,
   observationReportReceipts,
+  observationReportRetainedRevisions,
 } from './observationReports'
 
 // RFC-371: platform snapshot generations and their cursor are swapped atomically.

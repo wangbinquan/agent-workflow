@@ -3,6 +3,7 @@
 // schema, with constraints/indexes applied after logical copy.
 
 import { sha256Hex } from '@/util/hash'
+import { retainedOutputRevisionPostgresqlStatements } from './retainedOutputRevisionSchema'
 import {
   buildLogicalSchemaContract,
   canonicalSchemaJson,
@@ -16,7 +17,14 @@ export const POSTGRESQL_METADATA_SCHEMA = 'agent_workflow_meta'
 export const POSTGRESQL_BASELINE_ID = '0000_rfc349_baseline_v1'
 
 export interface PostgresqlSchemaStatement {
-  readonly kind: 'bootstrap' | 'table' | 'constraint' | 'index' | 'metadata'
+  readonly kind:
+    | 'bootstrap'
+    | 'table'
+    | 'constraint'
+    | 'index'
+    | 'function'
+    | 'trigger'
+    | 'metadata'
   readonly logicalId: string
   readonly sql: string
 }
@@ -284,6 +292,7 @@ export function buildPostgresqlSchemaPlan(
     ...tableStatements(contract),
     ...indexStatements(contract),
     ...constraintStatements(contract),
+    ...retainedOutputRevisionPostgresqlStatements(contract),
     ...metadataStatements(contract),
   ]
   const withoutDigest = {

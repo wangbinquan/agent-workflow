@@ -8,7 +8,8 @@ import {
   text,
   uniqueIndex,
 } from 'drizzle-orm/sqlite-core'
-import { providerAwareSqliteTable } from './providerSchema'
+import { providerAwareSqliteTable, withRetainedOutputRevision } from './providerSchema'
+import { OBSERVATION_RETAINED_OUTPUT_REVISION } from '@/platform/persistence/retainedOutputRevisionSchema'
 const table = providerAwareSqliteTable(physicalTable)
 /** Rebuildable derived report cache; none of these relations is a usage, capture or price authority. */
 export const observationReports = table(
@@ -95,4 +96,13 @@ export const observationReportReceipts = table(
     document: text('document').notNull(),
   },
   (t) => [primaryKey({ columns: [t.reportId, t.key] })],
+)
+export const observationReportRetainedRevisions = withRetainedOutputRevision(
+  table('observation_report_retained_revisions', {
+    reportId: text('report_id')
+      .primaryKey()
+      .references(() => observationReports.id, { onDelete: 'cascade' }),
+    revision: text('revision').notNull(),
+  }),
+  OBSERVATION_RETAINED_OUTPUT_REVISION,
 )

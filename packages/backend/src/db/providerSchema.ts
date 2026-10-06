@@ -24,6 +24,7 @@ import {
   type SQLiteTableFn,
 } from 'drizzle-orm/sqlite-core'
 import type { DatabaseProvider } from '@/platform/persistence/schemaContract'
+import type { RetainedOutputRevisionContract } from '@/platform/persistence/retainedOutputRevisionSchema'
 
 const applicationSchema = pgSchema('agent_workflow')
 const pgBytea = customType<{ data: Uint8Array; driverData: Uint8Array }>({
@@ -41,6 +42,20 @@ interface TableProjection {
 
 const projectionByFacade = new WeakMap<object, TableProjection>()
 const facadeByConcrete = new WeakMap<object, object>()
+const nativeProjectionByTable = new WeakMap<object, RetainedOutputRevisionContract>()
+
+export function withRetainedOutputRevision<T extends object>(
+  table: T,
+  projection: RetainedOutputRevisionContract,
+): T {
+  nativeProjectionByTable.set(concreteDatabaseTable(table, 'sqlite'), projection)
+  return table
+}
+export function retainedOutputRevisionFor(
+  table: object,
+): RetainedOutputRevisionContract | undefined {
+  return nativeProjectionByTable.get(concreteDatabaseTable(table, 'sqlite'))
+}
 
 interface PgColumnBuilderFacade {
   notNull(): PgColumnBuilderFacade

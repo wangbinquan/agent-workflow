@@ -685,7 +685,11 @@ export async function openPostgresqlLogicalTarget(input: {
         // of being flattened into a provider constraint error.
         await assertTargetBusinessInvariants({ connection, contract: input.contract })
         for (const statement of input.plan.statements.filter(
-          (statement) => statement.kind === 'index' || statement.kind === 'constraint',
+          (statement) =>
+            statement.kind === 'index' ||
+            statement.kind === 'constraint' ||
+            statement.kind === 'function' ||
+            statement.kind === 'trigger',
         )) {
           await connection.unsafe(statement.sql)
         }

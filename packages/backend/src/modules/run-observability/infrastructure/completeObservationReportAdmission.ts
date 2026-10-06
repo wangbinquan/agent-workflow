@@ -149,6 +149,7 @@ export async function assertStoredCompleteReport(
   db: ProviderNeutralDatabase,
   actor: Actor,
   report: CompleteObservationStoredReport,
+  integrity: typeof assertCompleteReportIntegrity = assertCompleteReportIntegrity,
 ) {
   await assertCompleteReportActor(db, actor, report.request.taskId)
   const content =
@@ -158,7 +159,7 @@ export async function assertStoredCompleteReport(
         ? report.report.facts
         : undefined
   if (!content) return
-  await assertCompleteReportIntegrity(db, report)
+  await integrity(db, report)
   const count = await db
     .select({ total: observationReportCounts.total })
     .from(observationReportCounts)

@@ -7,6 +7,7 @@ import {
   observationReportRows,
   observationReportCounts,
   observationReportReceipts,
+  observationReportRetainedRevisions,
 } from '@/db/schema'
 import {
   databaseSessionFor,
@@ -28,11 +29,11 @@ import {
   completeReportEmptyProgress,
 } from './completeObservationReportDocuments'
 import {
-  assertStoredCompleteReport,
   assertCompleteReportActor,
   ownedCompleteReport,
 } from './completeObservationReportAdmission'
 import { stageCompleteReportPage, publishCompleteReport } from './completeObservationReportStage'
+import { completeReportQualifiedReader } from './completeObservationReportRead'
 
 export const completeReportLeaseKey = (id: string) => 'observation-report/' + id
 /** Older immutable reports must not fabricate an empty association index that was never sealed. */
@@ -93,6 +94,41 @@ export function completeObservationReportCache(
 ): CompleteObservationReportCache {
   if (!generation) throw new Error('Original report database generation missing')
   const session = databaseSessionFor(db)
+  const read = completeReportQualifiedReader(generation)
+  const dirty = async (tx: DatabaseTransaction, id: string) => {
+    const row = await tx
+      .select({ revision: observationReportRetainedRevisions.revision })
+      .from(observationReportRetainedRevisions)
+      .where(eq(observationReportRetainedRevisions.reportId, id))
+      .get()
+    return Boolean(row?.revision)
+  }
+  const rebuild = async (tx: DatabaseTransaction, id: string, owner: string) => {
+    await tx
+      .update(observationReports)
+      .set({
+        owner,
+        state: 'building',
+        report: JSON.stringify({ state: 'building', reportId: id, phase: 'queued' }),
+        manifest: null,
+        progress: JSON.stringify(completeReportEmptyProgress()),
+        leaseUntil: now() + 45_000,
+        updatedAt: now(),
+      })
+      .where(eq(observationReports.id, id))
+      .run()
+    await clearCompleteReportRows(tx, id)
+    await tx
+      .delete(observationReportRetainedRevisions)
+      .where(eq(observationReportRetainedRevisions.reportId, id))
+      .run()
+    const row = await tx
+      .select()
+      .from(observationReports)
+      .where(eq(observationReports.id, id))
+      .get()
+    return decodeCompleteReport(row!)
+  }
   const terminal = async (
     id: string,
     owner: string,
@@ -153,13 +189,22 @@ export function completeObservationReportCache(
           })
           .onConflictDoNothing({ target: observationReports.requestKey })
           .run()
-        const row = await tx
+        let row = await tx
           .select()
           .from(observationReports)
           .where(eq(observationReports.requestKey, requestKey))
           .get()
         if (!row || row.generation !== generation || row.actorScope !== actorScope)
           throw new Error('Complete original report request identity changed')
+        await engineOf(tx).lockAggregateRoot(tx, observationReports, observationReports.id, row.id)
+        row = await tx
+          .select()
+          .from(observationReports)
+          .where(eq(observationReports.id, row.id))
+          .get()
+        if (!row || row.generation !== generation || row.actorScope !== actorScope)
+          throw new Error('Complete original report request identity changed')
+        if (row.state !== 'building' && (await dirty(tx, row.id))) return rebuild(tx, row.id, owner)
         return decodeCompleteReport(row)
       })
     },
@@ -176,28 +221,11 @@ export function completeObservationReportCache(
           throw new Error('Original complete report recovery request missing')
         if (
           acquired &&
-          (row.state === 'failed' || (row.state === 'building' && row.leaseUntil <= now()))
+          (row.state === 'failed' ||
+            (row.state === 'building' && row.leaseUntil <= now()) ||
+            (row.state !== 'building' && (await dirty(tx, id))))
         ) {
-          await clearCompleteReportRows(tx, id)
-          await tx
-            .update(observationReports)
-            .set({
-              owner,
-              state: 'building',
-              report: JSON.stringify({ state: 'building', reportId: id, phase: 'queued' }),
-              manifest: null,
-              progress: JSON.stringify(completeReportEmptyProgress()),
-              leaseUntil: now() + 45_000,
-              updatedAt: now(),
-            })
-            .where(eq(observationReports.id, id))
-            .run()
-          const claimed = await tx
-            .select()
-            .from(observationReports)
-            .where(eq(observationReports.id, id))
-            .get()
-          return decodeCompleteReport(claimed!)
+          return rebuild(tx, id, owner)
         }
         return decodeCompleteReport(row)
       })
@@ -241,14 +269,13 @@ export function completeObservationReportCache(
       terminal(id, owner, { state: 'not-ready', reportId: id, gaps }),
     fail: (id, owner, error) =>
       terminal(id, owner, { state: 'failed', reportId: id, error, retryable: true }),
-    assertReadable: (actor, report) =>
-      session.snapshotRead((tx) => assertStoredCompleteReport(tx, actor, report)),
+    assertReadable: (actor, report) => session.snapshotRead((tx) => read(tx, actor, report)),
     async page<T>(
       report: Parameters<CompleteObservationReportCache['page']>[0],
       query: Parameters<CompleteObservationReportCache['page']>[1],
     ): Promise<CompleteObservationReportPage<T>> {
       return session.snapshotRead(async (tx) => {
-        await assertStoredCompleteReport(tx, report.request.actor, report)
+        await read(tx, report.request.actor, report)
         if (
           report.report.state === 'not-ready' &&
           !COMPLETE_OBSERVATION_FACT_SECTIONS.includes(query.section)

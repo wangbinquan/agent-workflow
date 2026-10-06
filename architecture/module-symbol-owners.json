@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2280,
+    "backendFiles": 2282,
     "frontendFiles": 654,
-    "legacyFiles": 588,
-    "moduleFiles": 1692,
-    "productionFiles": 3104,
+    "legacyFiles": 589,
+    "moduleFiles": 1693,
+    "productionFiles": 3106,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27054
+    "symbolsIncludingFileRoots": 27069
   },
   "entries": [
     {
@@ -5271,6 +5271,18 @@
       "currentLayer": "db",
       "exported": true,
       "file": "packages/backend/src/db/observationReports.ts",
+      "id": "owner:packages/backend/src/db/observationReports.ts#observationReportRetainedRevisions",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "observationReportRetainedRevisions",
+      "targetContext": "platform",
+      "targetLayer": "application"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/observationReports.ts",
       "id": "owner:packages/backend/src/db/observationReports.ts#observationReportRows",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -5403,6 +5415,18 @@
       "currentLayer": "db",
       "exported": false,
       "file": "packages/backend/src/db/providerSchema.ts",
+      "id": "owner:packages/backend/src/db/providerSchema.ts#nativeProjectionByTable",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "nativeProjectionByTable",
+      "targetContext": "platform",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": false,
+      "file": "packages/backend/src/db/providerSchema.ts",
       "id": "owner:packages/backend/src/db/providerSchema.ts#pgBuilder",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -5523,6 +5547,18 @@
       "currentLayer": "db",
       "exported": true,
       "file": "packages/backend/src/db/providerSchema.ts",
+      "id": "owner:packages/backend/src/db/providerSchema.ts#retainedOutputRevisionFor",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "retainedOutputRevisionFor",
+      "targetContext": "platform",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/providerSchema.ts",
       "id": "owner:packages/backend/src/db/providerSchema.ts#selectDatabaseSchemaProvider",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -5551,6 +5587,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "TableProjection",
+      "targetContext": "platform",
+      "targetLayer": "domain"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "db",
+      "exported": true,
+      "file": "packages/backend/src/db/providerSchema.ts",
+      "id": "owner:packages/backend/src/db/providerSchema.ts#withRetainedOutputRevision",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "withRetainedOutputRevision",
       "targetContext": "platform",
       "targetLayer": "domain"
     },
@@ -112351,6 +112399,42 @@
       "currentContext": "run-observability",
       "currentLayer": "infrastructure",
       "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportRead.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportRead.ts#$file",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "$file",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportRead.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportRead.ts#changed",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "changed",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": true,
+      "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportRead.ts",
+      "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportRead.ts#completeReportQualifiedReader",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "completeReportQualifiedReader",
+      "targetContext": "run-observability",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "run-observability",
+      "currentLayer": "infrastructure",
+      "exported": false,
       "file": "packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts",
       "id": "owner:packages/backend/src/modules/run-observability/infrastructure/completeObservationReportStage.ts#$file",
       "removeAfterWave": null,
@@ -176520,6 +176604,102 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "createResourcePackageApplyLock",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
+      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
+      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#events",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "events",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
+      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#OBSERVATION_RETAINED_OUTPUT_REVISION",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "OBSERVATION_RETAINED_OUTPUT_REVISION",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
+      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#quote",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "quote",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
+      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#RetainedOutputRevisionContract",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "RetainedOutputRevisionContract",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
+      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#retainedOutputRevisionPostgresqlStatements",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "retainedOutputRevisionPostgresqlStatements",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
+      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#retainedOutputRevisionSqliteStatements",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "retainedOutputRevisionSqliteStatements",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
+      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#REVISION_TABLE",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "REVISION_TABLE",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -325387,5 +325567,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e86b4b3a4d1450b181eff9fec5facdcc93f9083065fdb6a7350c2e585c95ddf7"
+  "sourceDigest": "sha256:ce2f94f257c61b6aab8f16d98ce291179cc4f027ba847d97ad8e50c619f94667"
 }
