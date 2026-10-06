@@ -32,10 +32,9 @@ export function completeReportQualifiedReader(generation: string) {
       .get()
     if (!row || row.generation !== generation) throw changed()
     const current = decodeCompleteReport(row)
-    const published = Boolean(
-      completeObservationReportContent(current.report) ||
-      completeObservationReportContent(supplied.report),
-    )
+    // A building status may finish between get() and this snapshot read. Only a
+    // supplied published seal is immutable; always qualify the current snapshot.
+    const published = Boolean(completeObservationReportContent(supplied.report))
     if (
       published
         ? !isDeepStrictEqual(current, supplied)

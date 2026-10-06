@@ -142,6 +142,31 @@ const tables = [
 ] as const
 
 describeEachProvider('RFC-371 native retained revision and complete warm reads', (harness) => {
+  // CI 37429382608: a normal publication between status reads must not become HTTP 425.
+  test('a real building status may finish before qualification without hiding changed retained output', async () => {
+    await seedCompleteTask(harness, 1, 1)
+    const cache = completeObservationReportCache(harness.db, generation)
+    const key = randomUUID()
+    const pending = await cache.ensure(
+      { actor, query, refreshKey: key },
+      key,
+      scope,
+      randomUUID(),
+      randomUUID(),
+    )
+    expect(pending.report.state).toBe('building')
+    await seal(harness, pending)
+    expect((await cache.get(pending.id))!.report.state).toBe('ready')
+    await expect(cache.assertReadable(actor, pending)).resolves.toBeUndefined()
+    await harness.db
+      .update(observationReportRows)
+      .set({ document: '{"changed":true}' })
+      .where(eq(observationReportRows.reportId, pending.id))
+      .run()
+    await expect(cache.assertReadable(actor, pending)).rejects.toThrow(changed)
+    expect((await cache.get(pending.id))!.report.state).toBe('ready')
+  })
+
   test('500 real building receipt writes keep no revision; the PostgreSQL statement trigger runs once per batch', async () => {
     await seedCompleteTask(harness, 1, 1)
     const { cache, report } = await fixture(harness)

@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:ebd3ffd52c2def9bcc0f5618298a01709d89201fc22b0a6b6148cf578d34647d",
+    "sourceDigest": "sha256:783ae02a0fd9d3ab72b2b2a869eeba9b42565880e6be202e8f8f603ae060472a",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -822,10 +822,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1915,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 MCP diagnostics SOURCE19: actual original counter 1914 -> 1915 for rfc294-mutation-entrypoints. The complete selected MCP effects family and opaque target/start references add only measured owner/address inventory. Native pairing retains original material, System core and receipt/reap behavior; original lifecycle statements, assertions/budgets and complete root bodies are retained through exact inverses. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. command/doctor/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -916,10 +913,7 @@
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
       "baseline": 27110,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
-      "allowGrowth": {
-        "why": "RFC-370 MCP diagnostics SOURCE19: actual original counter 27097 -> 27110 for rfc294-module-symbol-owners. The complete selected MCP effects family and opaque target/start references add only measured owner/address inventory. Native pairing retains original material, System core and receipt/reap behavior; original lifecycle statements, assertions/budgets and complete root bodies are retained through exact inverses. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. command/doctor/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
@@ -927,8 +921,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "45c9cb462b64edef611a2c20e3208e0f6db0fa62",
-    "contentDigest": "sha256:d68e56c717b24cd22037ae7b2669052423b98642868e62045a3f9f36f1a31984",
+    "currentSnapshotSha": "4a16c26f39e00b03715c0a191e191cec56e53ef9",
+    "contentDigest": "sha256:e90ed859e9a62c30758a561ba00fb5749b8d5ab61acd7c006090d97f292367be",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -21,3 +21,11 @@ SQLite 仅在原链尾追加 0241；PostgreSQL 由原 V2 helper 追加 0017 的�
 ## 尚未关闭
 
 本补充不代表同组 self-total 选择／工作区的原规模超时已修复。CS 的原 52c8eb74 两个规模作业均达到原四小时预算，其失败与资源原文保持。开发 native v2 消费者、默认 producer、CLI／算力自测归因和 CS→AW 实际托管联动仍须完成；既有正式页面矩阵、确切 CI 与本机部署分别验收，两个 RFC 保持 In Progress。
+
+## 2026-10-06 报告生成到完成的正常状态变化
+
+45c9cb462b64edef611a2c20e3208e0f6db0fa62 的正式 Playwright Ubuntu shard2在两条原页面用例准备数据时收到状态GET的HTTP425：原测试辅助函数严格检查response.ok，没有延长60s等待、改重试、跳过用例或将错误转成成功。独立类型修复5116ef20b14c501a10ea3385f302fa15fe3ca289已上库，其新CI单独验收。
+
+原qualified reader先收到store.get()的building值，再从一个新的原snapshot读取当前值。如果该报告在两次读取之间正常发布，之前的“current或supplied任一已发布”判断就会要求两份不同阶段的整对象相同，产生425。改为只有supplied已有已发布seal时才要求不可变对象一致。当前snapshot仍完整执行原物理qualification、原Task人口与费用可见性；building调用者也不能绕过当前输出的真实变化。这个修复不改变reportId/owner/requestKey/actorScope/request、四桶、CNY、EOF或统计人口。
+
+新增同一真实provider数据库的回归：先获得原building，正常落盘发布全部关系，再以该building调用原qualified reader；随后改写已发布派生行，仍须拒绝。两个provider执行由确切提交GitHub Actions负责。保留所有原用例与HTTP成功断言，不在测试helper吞掉425，不把所有425称作正常等待。本机仅自有format/lint、纯AST/字节/JSON及一次原静态清单生成，完整CI、原规模及两RFC残余资格继续。
