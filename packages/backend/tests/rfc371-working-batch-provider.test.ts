@@ -10,10 +10,11 @@ import { describeEachProvider } from './helpers/eachProvider'
 
 describeEachProvider('RFC-371 original native workspace batches', (harness) => {
   test('1201 exact keys cross all original packets, preserve namespaces and release the same Task scope', async () => {
-    const original = originalReportSnapshotSession({
-      ...harness.applicationBinding,
-      generationId: 'original-batch-key-proof',
-    })
+    const original = originalReportSnapshotSession(
+      harness.applicationBinding.provider === 'sqlite'
+        ? { ...harness.applicationBinding, generationId: 'original-batch-key-proof' }
+        : harness.applicationBinding,
+    )
     let retained: ReportWorkspace | undefined
     await original.run(async ({ workspace }) => {
       retained = workspace
@@ -93,10 +94,11 @@ describeEachProvider('RFC-371 original native workspace batches', (harness) => {
   }, 30000)
 
   test('cancellation keeps its original reason and cannot leak a partial native batch', async () => {
-    const original = originalReportSnapshotSession({
-      ...harness.applicationBinding,
-      generationId: 'original-batch-cancel',
-    })
+    const original = originalReportSnapshotSession(
+      harness.applicationBinding.provider === 'sqlite'
+        ? { ...harness.applicationBinding, generationId: 'original-batch-cancel' }
+        : harness.applicationBinding,
+    )
     const controller = new AbortController()
     const reason = new Error('original batch cancelled')
     await expect(

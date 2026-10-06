@@ -29,3 +29,13 @@ DESIGN20 与补充 DESIGN7 均为有效有限 PASS。SOURCE21 实现门为有效
 CS 对应修复 1399645122176afe7602481d303a8d1e3483e074 已提交并远端同步；正式 CI 37425270006 全部6项 success。CS 原完整本机 gate 6219 pass／157 原环境 skip／0 fail，6376 tests、1259 files、289050 expects，候选稳定；三个139镜像构建完成。本机部署单独保留原数据库／PVC／已有任务固定镜像／250迁移校验，更新默认新任务镜像和八个组件，部署结果以独立实况收据为准。CS 原规模 37425761713 正在按原100K／10M、240分钟、100样本与 P95<500ms 判据执行；52c8eb74 的两项四小时 timeout 保留，不因小回归或6项CI通过改记规模成功。
 
 原 full-report 100000 Task／10000000 usage，self-total 10000000 records、独立 identity bitmap／EOF、四桶 10M／30M／50M／70M 总160M与验收人民币500元、真实OS资源记录全部不变。默认 development producer OFF，CS native v2 数值消费者／before-final／seal、实际CLI／算力自测、CS托管AW真实联动和两个RFC退出条件仍开放。验收费率只属于明确标记配置，不代表供应商账单。工作继续，RFC不记 Done。
+
+## 45c9cb46 正式 CI 类型反馈修复（2026-10-06）
+
+[CI 37429382608](https://github.com/wangbinquan/agent-workflow/actions/runs/37429382608) 的真实 PostgreSQL 后端测试已 success；功能类型作业112156395606报三个TS2345，位于新增的 working-batch-provider 两处和 usage-batch-provider 一处。原 OriginalReportDatabaseBinding 要求 SQLite 携带 generationId，PostgreSQL 用真实 runtime，不接受额外 generationId。修复只按 applicationBinding.provider 判别：SQLite 保留原完整 db 与原固定 generation 字符串；PostgreSQL 原 runtime binding 直接传入。生产 snapshot、TEMP、Worker、选量算法不变，未删除或放宽任何测试断言、规模、EOF、错误与时间预算。
+
+本片只做两个自有测试文件的 format/lint、纯 AST/字节核对与有限功能复核，正式类型和双 provider 执行交新确切提交 hosted CI。本机不执行 AW tests、typecheck、build、E2E或压测。因为没有生产 source 变化，沿用原完成 census 与全部13份 canonical 内容，不重跑 census或改sourceDigest；129库存、所有baseline及原规则保持，只在普通后继提交退役 owners27087→27097那一项一次性allowGrowth。
+
+原 [AW 45规模37429500802](https://github.com/wangbinquan/agent-workflow/actions/runs/37429500802) 与 [CS139规模37425761713](https://github.com/wangbinquan/CrewStation/actions/runs/37425761713) 分别继续原 full-report/self-total，不因本片仅测试装配变化重复派发或修改原100K/10M、240分钟、100样本、500ms及identity bitmap/EOF。整体正式CI仍须等待终态，已知失败不记成功。
+
+CS139本机部署实况于2026-10-06 07:16:09.794Z完成，八组件Ready、250已安装迁移校验一致，原namespace/PV/PVC/项目Pod/数据库角色保留，既有执行固定镜像不变，spool uid/gid1000真实fsync读回通过。实际系统统计页在2026-09-29T01:25:00.000Z至2026-10-06T01:25:00.000Z读取8对象，已知24423=5917/17728/0/778、¥0.026922；r4下钻两个任务8275与16148，金额相加同总额。实际顺序任务16148=276/15488/0/384、¥0.011368，两条真实时间条28.0秒和29.4秒，单次8004=138/7744/0/122、¥0.005124。Enter打开共享Dialog、Escape回原泳道焦点；所有值均来自已有验收任务，没有新模型调用。这些页面证据不关闭开发producer、native v2数值消费者、CLI、自测及两个RFC全景退出。

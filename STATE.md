@@ -1,3 +1,9 @@
+## 2026-10-06 RFC-371 双 provider 回归的正式类型修复
+
+45c9cb462b64edef611a2c20e3208e0f6db0fa62 的正式 CI 37429382608 已执行真实 PostgreSQL 后端用例；类型作业112156395606在三个新测试装配点报TS2345。原snapshot合同的generationId仅属于SQLite，PostgreSQL须用实际runtime。只按真实provider判别传入原binding，SQLite原固定generation保留；全部原测试名、断言、人口、四桶、EOF、预算与生产代码保持。原100K/10M双规模仍独立执行，不重派或降规模。
+
+本片仅自有format/lint与纯AST/字节/JSON核对，本机不跑AW tests/typecheck/build/压测。不修改生产source，复用已完成的原静态census，不重复生成13份登记；原129库存/全部baseline保持，只退役45的实际owners一次性增长许可。CS139已实况完成八组件部署、250原迁移校验与原库/PVC保留；正式任务两条时间泳道及四桶CNY明细已实际查看，不能替代原规模或剩余开发采集资格。两RFC未完成，producer OFF。详见[实施记录](design/RFC-371-run-observability/batched-temp-lookup-progress.md)。以下旧共享正文完整保留。
+
 ## 2026-10-06 RFC-371 完整统计原 TEMP 批量读取
 
 原同一 snapshot 连接的必需 getMany 已穿过 Task scope 与正式 Worker RPC；ancestry／coverage 有界批读保持每一条原 identity、四桶、估值与 EOF。500 key／100 输入是 IO／内存包，绝非统计条数上限。DESIGN20、补充DESIGN7、SOURCE21 均有效有限 PASS；23原用例／128断言／全部原预算及规模 workflow 逐字保持。新增真实双provider、1201完整选择、522实际native link、cache写后读／淘汰／取消及原Worker Map 回归交新确切SHA hosted CI，本机不运行AW tests／typecheck／build／压测。

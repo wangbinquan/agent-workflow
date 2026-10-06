@@ -52,10 +52,11 @@ function measured(rows: CompleteWorkingRows) {
 
 describeEachProvider('RFC-371 complete native batch lookup', (harness) => {
   const snapshots = () =>
-    originalReportSnapshotSession({
-      ...harness.applicationBinding,
-      generationId: 'complete-native-batch',
-    })
+    originalReportSnapshotSession(
+      harness.applicationBinding.provider === 'sqlite'
+        ? { ...harness.applicationBinding, generationId: 'complete-native-batch' }
+        : harness.applicationBinding,
+    )
   test('1201 unique self-total sessions use real bulk reads and preserve every original allocation', async () => {
     await snapshots().run(async (snapshot) => {
       const observed = measured(snapshot.workspace)
