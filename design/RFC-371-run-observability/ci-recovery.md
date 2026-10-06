@@ -283,3 +283,11 @@ mixed report 原丢失根因仍未确证。复验已恢复最初的 reject POST 
 独立 DESIGN v1 的 P2／FAIL 保留：短窗口加原 650ms 等待会早于 1600ms marker 到期，只断言“文件没有出现”会使负例失去判别力。修订 v2 已独立 PASS；原用例增加实际 detached leader 的 PGID 日志、严格唯一解析与 safeInteger>0 断言，原 650ms 等待后以 `process.kill(-groupPid, 0)` 探测原整组。存活即失败，只有实际 Error.code===ESRCH 可判原组不存在，EPERM／其他异常继续抛出；原 marker 不存在和两项 <2s 断言全部保留，1600ms／650ms／10s timeout／50ms grace 不变。该观测不向后代发送额外终止信号，也不添加重试或 skip。
 
 四路径代码／测试／文档已落地，限定格式／lint、逐字逆变换证明、独立 SOURCE 与本提交精确 CI／原默认定时配置继续验证。本机没有执行 AW test／typecheck／build／E2E／服务。两个 RFC 仍 In Progress，其他产品和跨仓验收继续。
+
+## 2026-10-06 macOS 后端完整分片与页面回归
+
+`85cdf556e973e26890537035f24988075c190a51` 的主 CI 37439571232 两次 macOS 6/6 均触达原 15 分钟作业时限：首次停在 daemon-start 测试仍推进时，第二次推进到 rfc359-t19h-logical-backup-restore 后被取消。两次原取消与日志保留，不称为通过。Markdown 外部 GitHub 链接的 502 重跑后已通过；该 SHA 的十个 Ubuntu/macOS/Windows Playwright 分片、实际 PostgreSQL、其余功能测试、类型、格式、构建和性能门均已成功。扫描只读取元状态，本轮不检视其日志。
+
+按 CI 既有处置规则，macOS 由六片扩为十二个独立 runner，1/12 至 12/12 各一次；Ubuntu 16 片与实际双 provider 保留。所有原测试文件、discovery、命令、isolate/randomize/seed、作业与单测预算保持，不加过滤、skip 或重试。两份 matrix 精确登记同步为十二片。本机仅做 YAML / 字节保持核对和本次格式、lint；测试、类型与 E2E 等待此次新提交的精确 hosted CI。
+
+正式 AW 页面已复核：8 任务 / 14 次运行，已记录 123,238 Token（输入 96,095、缓存读 21,120、缓存写 0、输出 6,023）和人民币估值 ¥0.16583；保留 13/14 次用量与 8/13 已定价的缺口。真实柱状图可见，顶部汇总与用量质量仅在总览显示。此页面验收不代替原 100K/10M 规模、CS 原生消费者或两个 RFC 的剩余验收；两个 RFC 继续 In Progress。

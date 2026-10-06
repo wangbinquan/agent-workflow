@@ -171,7 +171,8 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     // （四片时最长的一片长期在 15 分钟预算的 75%~90%，实测有一次 15 分 16 秒被超时杀掉）；
     // RFC-359 W5（2026-09-13）再把 Ubuntu 从八片扩到**十二片**——AC-6 把大批用例迁成双引擎后
     // Ubuntu 侧每个文件跑两遍，连续两次 run 的 shard 1/8 撞上 15 分钟 job 预算。
-    // 9a591ff3a 再扩到十六片；保持精确登记，macOS 的六片和覆盖要求不变。
+    // 9a591ff3a 再扩到十六片；2026-10-06 macOS 六片两次仍触达原预算，扩到十二片。
+    // 精确登记完整矩阵；所有覆盖要求、provider、命令及原预算不变。
     // Parse the owning job: the shard text must not accept an unrelated matrix elsewhere
     // in this workflow or reject the stronger expanded leg.
     const matrix = parse(owners['ci.yml']).jobs['test-backend'].strategy.matrix
@@ -179,10 +180,10 @@ describe('RFC-349 hosted external PostgreSQL evidence contract', () => {
     expect(matrix.shard).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16])
     expect(matrix.shards).toEqual([16])
     expect(matrix.include).toEqual(
-      Array.from({ length: 6 }, (_, index) => ({
+      Array.from({ length: 12 }, (_, index) => ({
         os: 'macos-latest',
         shard: index + 1,
-        shards: 6,
+        shards: 12,
       })),
     )
     expect(matrix.exclude).toBeUndefined()
