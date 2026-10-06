@@ -524,6 +524,80 @@ function oldSystemFamilyBody(source: ts.SourceFile, name: string, body: ts.Block
   return restored
 }
 
+// RFC-370: validate the exact native import and complete original MCP input,
+// then inverse only its callee after W29's existing phase transformations.
+function oldMcpDiagnosticsFamilyBody(
+  source: ts.SourceFile,
+  name: string,
+  body: ts.Block,
+): ts.Block {
+  const expected =
+    source === server && name === 'composeSqliteApplicationDeps'
+      ? {
+          expression: '(unstarted?.createMcpRuntimeTests??composeLocalMcpDiagnostics)',
+          digest: '78bb7b9deea9d89cc1f40b14a1cef2584bb084a748a644969286b43371028e67',
+        }
+      : source === pg && name === 'composePostgresqlApplication'
+        ? {
+            expression:
+              "(phase.kind==='daemon'?composeLocalMcpDiagnostics:phase.scope.createMcpRuntimeTests)",
+            digest: '05502ca3b61c121c0f5406ae775d4b3d9ff5308656c8afbe75e4b311067d94ec',
+          }
+        : null
+  if (expected === null) return body
+  const imports = source.statements.filter(
+    (node): node is ts.ImportDeclaration =>
+      ts.isImportDeclaration(node) &&
+      ts.isStringLiteral(node.moduleSpecifier) &&
+      node.moduleSpecifier.text === '@/modules/resource-catalog/composition/localMcpDiagnostics',
+  )
+  const names = imports[0]?.importClause?.namedBindings
+  if (
+    imports.length !== 1 ||
+    names === undefined ||
+    !ts.isNamedImports(names) ||
+    names.elements.filter(
+      (node) =>
+        !node.isTypeOnly &&
+        node.name.text === 'composeLocalMcpDiagnostics' &&
+        node.propertyName === undefined,
+    ).length !== 1
+  )
+    throw new Error('MCP diagnostics must select its explicit native composition')
+  const rawCalls = descendants(
+    functionBody(source, name),
+    (node) => ts.isCallExpression(node) && compact(node.expression, source) === expected.expression,
+  ).filter(ts.isCallExpression)
+  const raw = rawCalls[0]
+  if (
+    rawCalls.length !== 1 ||
+    raw === undefined ||
+    raw.arguments.length !== 1 ||
+    !ts.isObjectLiteralExpression(raw.arguments[0]!) ||
+    createHash('sha256')
+      .update(printer.printNode(ts.EmitHint.Unspecified, raw.arguments[0]!, source))
+      .digest('hex') !== expected.digest
+  )
+    throw new Error('MCP diagnostics must retain every original input and fixture')
+  let restoredCount = 0
+  const transformed = ts.transform(body, [
+    (context) => {
+      const visit: ts.Visitor = (node) => {
+        if (ts.isIdentifier(node) && node.text === 'composeLocalMcpDiagnostics') {
+          restoredCount += 1
+          return ts.factory.createIdentifier('composeMcpDiagnostics')
+        }
+        return ts.visitEachChild(node, visit, context)
+      }
+      return (node) => ts.visitNode(node, visit, ts.isBlock)!
+    },
+  ])
+  const restored = transformed.transformed[0]!
+  transformed.dispose()
+  if (restoredCount !== 1) throw new Error('MCP must retain one exact native slot')
+  return restored
+}
+
 /** Only the approved composition seams are removed; every original subtree remains. */
 function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
   const body = oldSystemFamilyBody(
@@ -667,7 +741,7 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
   const result = transformed.transformed[0]
   if (result === undefined) throw new Error('missing normalized composition body')
   transformed.dispose()
-  return result
+  return oldMcpDiagnosticsFamilyBody(source, name, result)
 }
 
 function oldEventCenterBody(): ts.Block {
@@ -727,13 +801,13 @@ describe('RFC-359 W29 complete unstarted application composition', () => {
         pg,
         'composePostgresqlApplication',
         "input.applicationConfiguration??composeApplicationConfigurationBinding({kind:'file',configPath:input.configPath,...(input.configuration===undefined?{}:{queries:input.configuration}),})",
-        "(phase.kind==='daemon'?composeMcpDiagnostics:phase.scope.createMcpRuntimeTests)",
+        "(phase.kind==='daemon'?composeLocalMcpDiagnostics:phase.scope.createMcpRuntimeTests)",
       ],
       [
         server,
         'composeSqliteApplicationDeps',
         "deps.applicationConfiguration??composeApplicationConfigurationBinding({kind:'file',configPath:deps.configPath,...(deps.configuration===undefined?{}:{queries:deps.configuration}),})",
-        '(unstarted?.createMcpRuntimeTests??composeMcpDiagnostics)',
+        '(unstarted?.createMcpRuntimeTests??composeLocalMcpDiagnostics)',
       ],
     ] as const) {
       const body = functionBody(source, owner)
@@ -1506,7 +1580,7 @@ function actualLifetimeHelper(): ComposeControlledScope {
   }).outputText
   // Only this actual pure lifetime function is evaluated. The constructor is a
   // controlled lifecycle collaborator; no application, database, or rows are faked.
-  return new Function('composeMcpDiagnostics', `${code}\nreturn composeUnstartedApplication`)(
+  return new Function('composeLocalMcpDiagnostics', `${code}\nreturn composeUnstartedApplication`)(
     (input: ControlledMcpInput) => new ControlledMcpService(input),
   ) as ComposeControlledScope
 }

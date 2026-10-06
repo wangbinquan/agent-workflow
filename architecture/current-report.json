@@ -2,13 +2,13 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 504,
-    "architectureExceptions": 5836,
+    "architectureExceptions": 5834,
     "backgroundJobs": 361,
-    "crossContextImports": 6634,
+    "crossContextImports": 6632,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 27097,
-    "mutationEntrypoints": 1914,
+    "moduleSymbolOwners": 27110,
+    "mutationEntrypoints": 1915,
     "nodeRunInsertSites": 1,
     "publicSurfaces": 1187,
     "transactionExternalEffects": 267
@@ -16,7 +16,7 @@
   "metrics": {
     "ambientWiringEntries": 504,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2292,
+    "backendProductionFiles": 2294,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -32,7 +32,7 @@
       "packages/backend/src/modules/integration/application/mrTerminalControlWorker.ts",
       "packages/backend/src/modules/knowledge-evolution/application/fusionOrchestration.ts",
       "packages/backend/src/modules/memory/application/distill/schedule.ts",
-      "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts",
+      "packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts",
       "packages/backend/src/modules/task-execution/composition/nodeMechanics.ts",
       "packages/backend/src/modules/task-execution/infrastructure/taskDriverLifecycle.ts",
       "packages/backend/src/platform/background/maintenanceService.ts",
@@ -98,7 +98,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 262
+        "files": 264
       },
       {
         "context": "run-observability",
@@ -125,7 +125,7 @@
         "files": 435
       }
     ],
-    "moduleFiles": 1703,
+    "moduleFiles": 1705,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e690ef4dc6ee3ca4764d4d029496e31bfcbb1d6b5ec06f6da275231e6f60a697"
+  "sourceDigest": "sha256:ebd3ffd52c2def9bcc0f5618298a01709d89201fc22b0a6b6148cf578d34647d"
 }

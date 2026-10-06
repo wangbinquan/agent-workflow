@@ -7807,9 +7807,9 @@
       "dependencies": [
         "timer"
       ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#$setInterval:103",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#$setInterval:138",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -7821,18 +7821,18 @@
       },
       "lifetime": "daemon",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#$file",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#$file",
       "phase": "unknown",
-      "symbol": "$setInterval:103",
+      "symbol": "$setInterval:138",
       "targetContext": "resource-catalog"
     },
     {
       "dependencies": [
         "timer"
       ],
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts",
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts",
       "finalCriterion": "W9-B registry",
-      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#$setTimeout:99",
+      "id": "background:packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#$setTimeout:134",
       "kind": "periodic",
       "lifecycle": {
         "health": false,
@@ -7844,9 +7844,9 @@
       },
       "lifetime": "daemon",
       "managed": false,
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#$file",
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#$file",
       "phase": "unknown",
-      "symbol": "$setTimeout:99",
+      "symbol": "$setTimeout:134",
       "targetContext": "resource-catalog"
     },
     {
@@ -13504,5 +13504,5 @@
   "finalCriterion": "Periodic and long-running work is registered with phase/dependency/readiness/state/stop ownership; execution-local work follows its aggregate lifecycle.",
   "kind": "background-jobs",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e690ef4dc6ee3ca4764d4d029496e31bfcbb1d6b5ec06f6da275231e6f60a697"
+  "sourceDigest": "sha256:ebd3ffd52c2def9bcc0f5618298a01709d89201fc22b0a6b6148cf578d34647d"
 }

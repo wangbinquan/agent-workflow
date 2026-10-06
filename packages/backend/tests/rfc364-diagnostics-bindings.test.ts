@@ -44,7 +44,7 @@ describe('RFC-364 production bindings', () => {
           source,
           (node) =>
             ts.isCallExpression(node) &&
-            compact(node.expression, source).includes('composeMcpDiagnostics'),
+            compact(node.expression, source).includes('composeLocalMcpDiagnostics'),
         )
         expect(calls).toHaveLength(1)
         const call = calls[0]!
@@ -68,11 +68,11 @@ describe('RFC-364 production bindings', () => {
         expect(source.text).not.toContain('getMcpRuntimeTestService')
         if (path === 'server.ts')
           expect(compact(call, source)).toStartWith(
-            '(unstarted?.createMcpRuntimeTests??composeMcpDiagnostics)(',
+            '(unstarted?.createMcpRuntimeTests??composeLocalMcpDiagnostics)(',
           )
         if (path === 'cli/postgresqlDaemonApplication.ts')
           expect(compact(call, source)).toStartWith(
-            "(phase.kind==='daemon'?composeMcpDiagnostics:phase.scope.createMcpRuntimeTests)(",
+            "(phase.kind==='daemon'?composeLocalMcpDiagnostics:phase.scope.createMcpRuntimeTests)(",
           )
       },
     )

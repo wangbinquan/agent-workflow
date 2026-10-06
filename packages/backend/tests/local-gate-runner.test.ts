@@ -295,20 +295,20 @@ describe('local backend shard wall-clock timeout', () => {
     if (process.platform === 'win32') return
     const runRoot = mkdtempSync(join(tmpdir(), 'aw-local-shard-idle-'))
     const survivorMarker = join(runRoot, 'idle-process-survived')
+    // RFC-370 CI 37424916817: the 150ms activity clock must not race a new
+    // Bun VM startup. Keep the real TERM-resistant POSIX process and every
+    // deadline/assertion; the native shell prints ready before its silent wait.
     const script = `
-      process.on('SIGTERM', () => {})
-      console.log('idle-process-ready')
-      setTimeout(async () => {
-        await Bun.write(${JSON.stringify(survivorMarker)}, 'survived')
-        process.exit(0)
-      }, 1_800)
-      setInterval(() => {}, 1000)
+      trap '' TERM
+      printf '%s\\n' 'idle-process-ready'
+      sleep 1.8
+      printf '%s' 'survived' > "$1"
     `
     try {
       const result = await runBackendShard(
         repoRoot,
         runRoot,
-        runtimePlan(runRoot, [process.execPath, '-e', script]),
+        runtimePlan(runRoot, ['/bin/sh', '-c', script, 'aw-shard-idle-fixture', survivorMarker]),
         { timeoutMs: 10_000, idleTimeoutMs: 150, killGraceMs: 50 },
       )
 

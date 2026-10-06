@@ -19,7 +19,6 @@ import {
 import type { McpDiagnosticRunResult } from './runtimeDiagnosticsEffects'
 import { ConflictError, NotFoundError, ValidationError, staleConflictError } from '@/util/errors'
 import { createLogger } from '@/util/log'
-import type { StaleRunKillOutcome } from '@/util/process'
 import type {
   McpRuntimeTestLeaseOperations,
   McpRuntimeTestLeaseToken,
@@ -33,6 +32,7 @@ import type {
   McpDiagnosticsEffects,
   ResolvedTestRuntime,
   DiagnosticTimer,
+  McpDiagnosticReapOutcome,
 } from './runtimeDiagnosticsEffects'
 import { McpRuntimeTestEventSink } from './runtimeTestEventSink'
 import {
@@ -72,7 +72,7 @@ interface QueueItem {
 export class McpDiagnosticsApplication {
   private readonly now
   private readonly capacity
-  private readonly killStaleRunProcessTree
+  private readonly reapTurn
   private readonly log = createLogger('mcp-runtime-test')
   private readonly queue: QueueItem[] = []
   private readonly queued = new Set<string>()
@@ -91,9 +91,12 @@ export class McpDiagnosticsApplication {
   private shuttingDown = false
 
   constructor(private readonly deps: McpDiagnosticsDependencies) {
-    this.now = deps.effects.now
+    const effects = deps.effects
+    const now = effects.now
+    this.now = () => now.call(effects)
     this.capacity = Math.max(1, deps.capacity ?? DEFAULT_CAPACITY)
-    this.killStaleRunProcessTree = deps.effects.reap
+    const reapTurn = effects.reapTurn
+    this.reapTurn = (turn: TurnRow, readNow: () => number) => reapTurn.call(effects, turn, readNow)
   }
 
   start(): Promise<void> {
@@ -322,7 +325,7 @@ export class McpDiagnosticsApplication {
       runtimeName: runtime.row.name,
       runtimeProtocol: runtime.row.protocol,
       runtimeSnapshotJson: runtime.snapshotJson,
-      runtimeBinaryPath: runtime.binary,
+      runtimeBinaryPath: runtime.label,
       runtimeSessionId,
       scratchRoot,
       message: input.message,
@@ -653,21 +656,13 @@ export class McpDiagnosticsApplication {
   private async reconcileQuarantinedSessions(): Promise<void> {
     const candidates = await this.deps.persistence.listQuarantinedCandidates()
     for (const { session, turn } of candidates) {
-      if (turn === null || turn.pid === null) continue
-      const outcome = await this.killStaleRunProcessTree(
-        {
-          pid: turn.pid,
-          startedAt: turn.startedAt,
-          spawnBinaryPath: turn.spawnBinaryPath,
-        },
-        { now: this.now() },
-      )
+      if (turn === null || !this.deps.effects.hasExecution(turn)) continue
+      const outcome = await this.reapTurn(turn, () => this.now())
       if (!['not-alive', 'killed'].includes(outcome)) continue
-      const recovered = await this.deps.persistence.recoverQuarantined({
-        sessionId: session.id,
-        turnId: turn.id,
-        expectedPid: turn.pid,
-        now: this.now(),
+      const recovered = await this.deps.effects.recoverReapedTurn({
+        session,
+        turn,
+        readNow: () => this.now(),
       })
       if (!recovered) continue
       await this.deps.leaseOperations.repairAfterReap(session.id, turn.id, true)
@@ -765,21 +760,14 @@ export class McpDiagnosticsApplication {
         continue
       }
       const turn = await this.deps.persistence.loadTurn(session.inFlightTurnId)
-      let reapOutcome: StaleRunKillOutcome | 'missing-turn' = 'no-pid'
+      let reapOutcome: McpDiagnosticReapOutcome | 'missing-turn' = 'no-pid'
       if (turn === null) {
         reapOutcome = 'missing-turn'
-      } else if (turn.status === 'running' || turn.pid !== null) {
-        reapOutcome = await this.killStaleRunProcessTree(
-          {
-            pid: turn.pid,
-            startedAt: turn.startedAt,
-            spawnBinaryPath: turn.spawnBinaryPath,
-          },
-          { now: this.now() },
-        )
+      } else if (turn.status === 'running' || this.deps.effects.hasExecution(turn)) {
+        reapOutcome = await this.reapTurn(turn, () => this.now())
       }
       const childReapProven = ['not-alive', 'killed'].includes(reapOutcome)
-      const queuedWithoutChild = turn?.status === 'queued' && turn.pid === null
+      const queuedWithoutChild = turn?.status === 'queued' && !this.deps.effects.hasExecution(turn)
       const quarantine =
         reapOutcome === 'missing-turn' ||
         (reapOutcome === 'no-pid' && !queuedWithoutChild) ||
@@ -1041,18 +1029,11 @@ export class McpDiagnosticsApplication {
         sink,
         timeoutMs,
         assertSpawnAllowed,
-        onSpawned: async (receipt) => {
-          const spawnedFenceAt = this.now()
-          const admittedForPrompt = await this.deps.persistence.recordSpawn({
-            sessionId: session.id,
-            turnId: turn.id,
-            pid: receipt.pid,
-            spawnedAt: receipt.spawnedAt,
-            spawnBinaryPath: receipt.spawnBinaryPath,
-            fenceAt: spawnedFenceAt,
-          })
-          if (!admittedForPrompt) throw new Error('mcp-test-spawn-canceled-before-prompt')
-        },
+        turnStart: this.deps.effects.captureTurnStart({
+          session,
+          turn,
+          readNow: () => this.now(),
+        }),
       })
     } catch {
       result = this.deps.effects.failedResult(session, controller.signal.aborted, this.now() - now)

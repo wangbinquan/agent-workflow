@@ -192,7 +192,7 @@ import {
 import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { startBatchImportGc } from '@/services/repoBatchImport'
-import { composeMcpDiagnostics } from '@/modules/resource-catalog/composition/mcpDiagnostics'
+import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import { actorOfDirectAuthority, admitDaemonIdentity } from '@/auth/session'
 import {
   composeMcpRuntimeTestProvider,
@@ -2546,7 +2546,7 @@ async function composeSqliteProviderSession(
 
   // RFC-238 — complete boot recovery before accepting a playground request.
   // The routes receive this same explicit application-owned instance.
-  const mcpRuntimeTests = composeMcpDiagnostics({
+  const mcpRuntimeTests = composeLocalMcpDiagnostics({
     ...composeMcpRuntimeTestProvider(db),
     isRuntimeEligible: isRuntimeMcpTestEligible,
     coordinator: mcpOperationCoordinator,

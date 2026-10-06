@@ -32,9 +32,9 @@ import {
 } from '@/modules/resource-catalog/domain/mcps/runtimeDiagnostics'
 import { McpRuntimeTestEventSink } from '@/modules/resource-catalog/application/mcps/runtimeTestEventSink'
 import {
-  createMcpDiagnosticsApplication,
-  type McpDiagnosticsApplicationInput,
-} from '@/modules/resource-catalog/composition/mcpDiagnostics'
+  createLocalMcpDiagnosticsApplication as createMcpDiagnosticsApplication,
+  type LocalMcpDiagnosticsApplicationInput as McpDiagnosticsApplicationInput,
+} from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import { ResourceOperationCoordinator } from '../src/services/resourceOperationCoordinator'
 import { getRuntimeDriver } from '../src/services/runtime'
 import {

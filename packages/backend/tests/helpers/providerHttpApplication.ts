@@ -21,10 +21,8 @@ import {
   type AppDeps,
   type UnstartedApplicationScope,
 } from '@/server'
-import {
-  composeMcpDiagnostics,
-  type McpDiagnosticsRuntime,
-} from '@/modules/resource-catalog/composition/mcpDiagnostics'
+import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
+import type { McpDiagnosticsRuntime } from '@/modules/resource-catalog/composition/mcpDiagnostics'
 import type { ProviderDatabaseHarness } from './eachProvider'
 
 export type ProviderHttpApplicationInput = Pick<
@@ -169,7 +167,7 @@ export async function composeUnstartedApplication<T extends object>(
       return ready
     },
     createMcpRuntimeTests(deps) {
-      const service = composeMcpDiagnostics(deps)
+      const service = composeLocalMcpDiagnostics(deps)
       runtimeTests.push(service)
       return service
     },

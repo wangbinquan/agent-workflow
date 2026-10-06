@@ -29,12 +29,25 @@ function effects(
   configuration: McpDiagnosticsEffectDependencies['configuration'],
   loadRuntime: McpDiagnosticsEffectDependencies['loadRuntime'],
 ) {
-  return createMcpDiagnosticsEffects({
-    configuration,
-    loadRuntime,
-    appHome: '/unused/rfc370-mcp-configuration',
-    isRuntimeEligible: () => true,
-  })
+  return createMcpDiagnosticsEffects(
+    {
+      configuration,
+      loadRuntime,
+      appHome: '/unused/rfc370-mcp-configuration',
+      isRuntimeEligible: () => true,
+    },
+    {
+      persistence: {
+        recordSpawn: async () => {
+          throw new Error('configuration must not record a spawn')
+        },
+        recoverQuarantined: async () => {
+          throw new Error('configuration must not recover an execution')
+        },
+      },
+      applicationReceiver: () => undefined,
+    },
+  )
 }
 
 describe('RFC-370 MCP diagnostics configuration adapter', () => {

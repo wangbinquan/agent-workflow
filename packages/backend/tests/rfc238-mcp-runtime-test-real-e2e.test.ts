@@ -14,7 +14,7 @@ import {
   runtimes,
   tasks,
 } from '../src/db/schema'
-import { createMcpDiagnosticsApplication } from '@/modules/resource-catalog/composition/mcpDiagnostics'
+import { createLocalMcpDiagnosticsApplication as createMcpDiagnosticsApplication } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import { mcpOperationConfigHashOf } from '../src/services/mcpOperationRevision'
 import { composeMcpRuntimeTestProvider } from '../src/modules/resource-catalog/composition/mcpRuntimeTestPersistence'
 import { DrizzleRuntimeRegistryPersistence } from './helpers/runtimeRegistryPersistence'

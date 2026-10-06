@@ -4,19 +4,14 @@ import {
 } from '../application/mcps/runtimeDiagnostics'
 import { createMcpDiagnosticsOperations } from '../application/mcps/diagnosticsOperations'
 import type { McpOperationCoordinatorPort } from '../application/mcps/ports'
-import {
-  createMcpDiagnosticsEffects,
-  type McpDiagnosticsEffectDependencies,
-} from '../infrastructure/mcpDiagnosticsEffects'
 import { createMcpDiagnosticsContexts } from '../infrastructure/mcpDiagnosticsContexts'
 import type { McpRuntimeTestReconciliationParticipant } from '../public/participants'
 
-export interface McpDiagnosticsApplicationInput
-  extends McpDiagnosticsEffectDependencies, Omit<McpDiagnosticsDependencies, 'effects'> {}
+export type McpDiagnosticsApplicationInput = McpDiagnosticsDependencies
 
 /** Cold construction. Every owning root calls this once and explicitly shares the result. */
 export function createMcpDiagnosticsApplication(input: McpDiagnosticsApplicationInput) {
-  return new McpDiagnosticsApplication({ ...input, effects: createMcpDiagnosticsEffects(input) })
+  return new McpDiagnosticsApplication(input)
 }
 
 export interface McpDiagnosticsCompositionInput extends McpDiagnosticsApplicationInput {
@@ -26,7 +21,14 @@ export interface McpDiagnosticsCompositionInput extends McpDiagnosticsApplicatio
 export type McpDiagnosticsRuntime = ReturnType<typeof composeMcpDiagnostics>
 
 export function composeMcpDiagnostics(input: McpDiagnosticsCompositionInput) {
-  const application = createMcpDiagnosticsApplication(input)
+  return bindMcpDiagnosticsRuntime(createMcpDiagnosticsApplication(input), input)
+}
+
+/** The ordinary and explicit native roots share the same complete runtime graph. */
+export function bindMcpDiagnosticsRuntime(
+  application: McpDiagnosticsApplication,
+  input: Pick<McpDiagnosticsCompositionInput, 'requestBinding' | 'coordinator'>,
+) {
   const contexts = createMcpDiagnosticsContexts(input.requestBinding)
   const operations = createMcpDiagnosticsOperations({
     application,

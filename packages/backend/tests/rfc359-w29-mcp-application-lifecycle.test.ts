@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, spyOn, test } from 'bun:test'
 import type { McpRuntimeTestPersistence } from '@/modules/resource-catalog/application/mcps/runtimeTestPersistence'
 import {
-  createMcpDiagnosticsApplication,
-  type McpDiagnosticsApplicationInput,
-} from '@/modules/resource-catalog/composition/mcpDiagnostics'
+  createLocalMcpDiagnosticsApplication as createMcpDiagnosticsApplication,
+  type LocalMcpDiagnosticsApplicationInput as McpDiagnosticsApplicationInput,
+} from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { McpDiagnosticsApplication } from '@/modules/resource-catalog/application/mcps/runtimeDiagnostics'
 
 // Real service lifecycle with controlled persistence protocol replies. No database,

@@ -226,10 +226,10 @@ import type { IdentityUserOperations } from '@/modules/identity-access/public/op
 import { composeIdentityUserOperations } from '@/modules/identity-access/composition/userOperations'
 import { createOidcProvidersService } from '@/services/oidcProviders'
 import {
-  composeMcpDiagnostics,
-  type McpDiagnosticsRuntime,
-  type McpDiagnosticsCompositionInput,
-} from '@/modules/resource-catalog/composition/mcpDiagnostics'
+  composeLocalMcpDiagnostics,
+  type LocalMcpDiagnosticsCompositionInput as McpDiagnosticsCompositionInput,
+} from '@/modules/resource-catalog/composition/localMcpDiagnostics'
+import type { McpDiagnosticsRuntime } from '@/modules/resource-catalog/composition/mcpDiagnostics'
 import { getProbeByMcpId } from '@/services/mcpProbeStore'
 import {
   mcpOperationCoordinator,
@@ -2442,7 +2442,7 @@ export function composeSqliteApplicationDeps(
 
   const userRuntimeTests =
     effectiveDeps.mcpRuntimeTests ??
-    (unstarted?.createMcpRuntimeTests ?? composeMcpDiagnostics)({
+    (unstarted?.createMcpRuntimeTests ?? composeLocalMcpDiagnostics)({
       ...composeMcpRuntimeTestProvider(effectiveDeps.db),
       isRuntimeEligible: isRuntimeMcpTestEligible,
       coordinator: mcpOperationCoordinator,

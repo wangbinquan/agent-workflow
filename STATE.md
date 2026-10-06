@@ -1,3 +1,21 @@
+## 2026-10-06 RFC-370 MCP 完整效果家族与空闲夹具 CI 修复
+
+MCP 的普通 composition 现在必选完整 effects；opaque target/start identity 由选定实现解释，native 机制完整迁入 local infrastructure。唯一 MCP/System 业务核心、context/lease/lifecycle 图和三个真实 SQLite HTTP／SQLite CLI／PG 根的原参数及完整体保留。SOURCE19-R1A 有效有限 PASS（19 owned／25 control／25 evidence，共69）；原 R1 的67入口及其回执保留，新增两项只核对真实 schema 与 MCP config hash。完整 app/native/root、原 fixture、W29 三阶段和 Windows 逆向证明通过；原测试名、断言与预算不变。本机仅自有 format/lint 和纯 AST／字节／JSON，不运行 AW tests/typecheck/build/service。
+
+旧 META14-R1 正式 INVALID：门内共享 STATE／前像变化，且候选误写 Runtime CI 的22普通分片全成功；冻结点实际仅20/22成功，两个仍在运行。该旧候选、指纹、首末 witness、P2 和回执原样保留。13份 canonical 数量、债务、库存与规则对拍无其他功能 finding，可复用；源码69入口与完整证明也未变化，不重派源码检视。
+
+45c9cb462b64edef611a2c20e3208e0f6db0fa62 实际提交了13个非本片生产文件，必须纳入匹配人口；不是仅因 HEAD 移动重跑门。新人口以完整 committed45＋冻结 MCP SOURCE19 运行一次原 census（累计两个不同人口，旧098生成保留），sourceDigest 为 sha256:ebd3ffd52c2def9bcc0f5618298a01709d89201fc22b0a6b6148cf578d34647d。345条 authored debt 全部保留、无新增/移除，129库存原顺序和why、214 guards、40 SPI／69 targets、9 Task effects 与原 SCC 保留。实际 mutation1914→1915、import6634→6632、exception5836→5834、owners27097→27110；只声明两项实际增长。并行已退役45的旧 owners许可，保留该结果，新声明仅对应本片实际增长。META14-R2 使用完整私有前像做有限候选复核；发布临界区须再次逐字核对 live 前像，保留共享 STATE 全文及并行输出。候选与门本身不等于上库或正式 CI 通过。
+
+Runtime 修复098481069d318c4d08c7515cf612afe2c4f85f4f 的主 CI37424916817 已正式 failure：46 success／4 failure／0 pending，Ubuntu16/16成功、macOS5/6成功（合计21/22普通分片），真实PG及typecheck成功；Windows37424916827正式success。macOS shard5 job112142720264在既有 idle 用例中先触发150ms计时而新Bun VM尚未打印ready，独立 SOURCE2-R1有效有限PASS（2 owned／3 control／8 evidence，共13）：只换系统/bin/sh夹具，先忽略TERM，打印同一换行ready，静默1.8s后写同一marker argv$1；原6断言、150/10000/50/2500/1400预算、Windows早退及其他完整文件AST保持，无runner生产变化，不重复census。实际修复行为交新exact-SHA hosted CI。原主CI的RFC371报告HTTP425、Static scans及required failure均保留；不读取或分析Static scans，不把整套CI记绿。
+
+Task Script 完整家族设计DESIGN-D1已有限PASS（25入口）；后续继续解释器、依赖环境、run-content及opaque start/result，在唯一脚本业务规则上配对独立local与CS实现。Script源码、doctor/command、执行authority/recovery/background、A-T7全部真实根及A-G仍未完成，CS adapter尚未开始，aw尚未部署到CS；M0先部署再逐项M1–M4接入的顺序保持。详见[MCP设计与实现](design/RFC-370-crewstation-hosted-deployment/mcp-diagnostics-family-wiring.md)、[空闲夹具修复](design/RFC-370-crewstation-hosted-deployment/shard-idle-fixture-ci-repair.md)。以下所有旧共享正文逐字保留。
+
+## 2026-10-06 RFC-371 正式报告发布状态读取修复
+
+45c9cb46 的正式浏览器 CI 在报告状态 GET 返回425时失败；类型修复已独立提交5116ef20，其完整CI仍在执行。本片修正原读取路径的一处功能问题：get()取得building后，原报告可能在下一snapshot读取前正常完成。此前把“当前已完成”也当作“调用者已有不可变seal”，于是误报retained output changed。只有调用者已经取得的已发布seal作严格内容比较；building仍校验同一原报告身份，并完整检验当前snapshot的真实已发布输出。新增真实SQLite/PostgreSQL状态推进与派生内容改变回归，原所有用例、等待预算和E2E严格HTTP成功断言保持。
+
+本机仅自有format/lint、纯AST/字节/JSON核对和一次原静态生成，不运行AW tests/typecheck/build/E2E/压测。正式验收交后继确切SHA CI，不把这条修复或页面实况视作整个RFC完成。CS139已部署；两组原100K/10M验收保持原预算执行，开发producer OFF，全部剩余开发采集/托管联动继续。以下共享旧正文完整保留。
+
 ## 2026-10-06 RFC-371 双 provider 回归的正式类型修复
 
 45c9cb462b64edef611a2c20e3208e0f6db0fa62 的正式 CI 37429382608 已执行真实 PostgreSQL 后端用例；类型作业112156395606在三个新测试装配点报TS2345。原snapshot合同的generationId仅属于SQLite，PostgreSQL须用实际runtime。只按真实provider判别传入原binding，SQLite原固定generation保留；全部原测试名、断言、人口、四桶、EOF、预算与生产代码保持。原100K/10M双规模仍独立执行，不重派或降规模。

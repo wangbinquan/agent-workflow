@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1914,
+    "entries": 1915,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -15989,6 +15989,31 @@
         "fenceOrOcc": false,
         "transaction": false
       },
+      "file": "packages/backend/src/modules/resource-catalog/composition/localMcpDiagnostics.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/composition/localMcpDiagnostics.ts#createLocalMcpDiagnosticsApplication",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/localMcpDiagnostics.ts#createLocalMcpDiagnosticsApplication",
+      "symbol": "createLocalMcpDiagnosticsApplication",
+      "targetContext": "resource-catalog",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
       "file": "packages/backend/src/modules/resource-catalog/composition/mcpDiagnostics.ts",
       "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/modules/resource-catalog/composition/mcpDiagnostics.ts#createMcpDiagnosticsApplication",
@@ -18669,6 +18694,27 @@
     {
       "controls": {
         "audit": false,
+        "authority": "system",
+        "authorization": true,
+        "event": true,
+        "fenceOrOcc": true,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#createLocalMcpDiagnosticsEffects",
+      "missingControls": [
+        "audit",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts#createLocalMcpDiagnosticsEffects",
+      "symbol": "createLocalMcpDiagnosticsEffects",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
         "authority": "none-observed",
         "authorization": false,
         "event": false,
@@ -18711,27 +18757,6 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsContexts.ts#createMcpDiagnosticsContexts",
       "symbol": "createMcpDiagnosticsContexts",
-      "targetContext": "resource-catalog",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "controls": {
-        "audit": false,
-        "authority": "system",
-        "authorization": true,
-        "event": true,
-        "fenceOrOcc": true,
-        "transaction": false
-      },
-      "file": "packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts",
-      "finalCriterion": "W3/W4 owner cutover",
-      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#createMcpDiagnosticsEffects",
-      "missingControls": [
-        "audit",
-        "transaction"
-      ],
-      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/mcpDiagnosticsEffects.ts#createMcpDiagnosticsEffects",
-      "symbol": "createMcpDiagnosticsEffects",
       "targetContext": "resource-catalog",
       "targetLayer": "infrastructure"
     },
@@ -45801,7 +45826,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:e690ef4dc6ee3ca4764d4d029496e31bfcbb1d6b5ec06f6da275231e6f60a697",
+  "sourceDigest": "sha256:ebd3ffd52c2def9bcc0f5618298a01709d89201fc22b0a6b6148cf578d34647d",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

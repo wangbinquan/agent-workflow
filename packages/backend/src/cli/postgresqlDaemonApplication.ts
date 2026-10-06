@@ -368,7 +368,7 @@ import { TASK_CHANNEL, taskBroadcaster } from '@/ws/broadcaster'
 import type { DatabaseMigrationModule } from '@/modules/system-operations/composition/databaseMigration'
 import type { PostgresqlDatabaseClient } from '@/platform/persistence/postgresqlDatabaseClient'
 import type { ResolvedDatabaseProviderRuntime } from '@/platform/persistence/databaseProviderRuntime'
-import { composeMcpDiagnostics } from '@/modules/resource-catalog/composition/mcpDiagnostics'
+import { composeLocalMcpDiagnostics } from '@/modules/resource-catalog/composition/localMcpDiagnostics'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import { createOidcProvidersService } from '@/services/oidcProviders'
 import { createCodeHostConnectionsService } from '@/services/codeHost/connections'
@@ -517,7 +517,7 @@ export interface PostgresqlDaemonApplicationInput {
    * RFC-238 / RFC-359 —— MCP 运行时测试的测试接缝。生产两侧都省略（用真的 runner 与真时钟）。
    *
    * 与 `runtimeDiagnosticTestDependencies` 同类：SQLite 根一直把这三项条件展开进
-   * `composeMcpDiagnostics(...)`（`server.ts` 的 `runFn` / `now` / `capacity`），
+   * `composeLocalMcpDiagnostics(...)`（`server.ts` 的 `runFn` / `now` / `capacity`），
    * PG 根建的是**同一个**服务却没转发它们，于是同一批用例在 PG 上没法双跑。
    * `appHome` 不在这里——PG 根本来就从 `input.appHome` 取。
    */
@@ -585,7 +585,7 @@ export interface PostgresqlDaemonApplicationRuntime {
   readonly resourceLimits: ReturnType<typeof composePostgresqlResourceLimitOperations>
   /** RFC-350：不活跃超时收割（僵尸任务）的 provider-bound operations。 */
   readonly taskIdleTimeout: TaskIdleTimeoutOperations
-  readonly mcpRuntimeTests: ReturnType<typeof composeMcpDiagnostics>
+  readonly mcpRuntimeTests: ReturnType<typeof composeLocalMcpDiagnostics>
   readonly webhookTerminalControl: ReturnType<typeof composeMrTerminalControl>
   readonly workspaceMaintenance: ReturnType<typeof composeWorkspaceMaintenanceCommand>
   readonly intentMaintenance: ReturnType<typeof composeIntentMaintenanceSnapshotQueriesFor>
@@ -770,7 +770,7 @@ export async function composePostgresqlApplication(
   })
   const mcpProbeStore = composeMcpProbeStore(input.db)
   const mcpRuntimeTests = (
-    phase.kind === 'daemon' ? composeMcpDiagnostics : phase.scope.createMcpRuntimeTests
+    phase.kind === 'daemon' ? composeLocalMcpDiagnostics : phase.scope.createMcpRuntimeTests
   )({
     ...composeMcpRuntimeTestProvider(input.db),
     isRuntimeEligible: isRuntimeMcpTestEligible,

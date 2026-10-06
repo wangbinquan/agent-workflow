@@ -1,15 +1,31 @@
 import type { McpRuntimeTestCaptureIncompleteReason } from './runtimeTestPersistence'
 import type { Mcp, StartupVerificationResult } from '@agent-workflow/shared'
-import type { StaleRunKillOutcome } from '@/util/process'
 import type {
   McpRuntimeTestSessionRecord,
   McpRuntimeTestTurnRecord,
   McpRuntimeTestCleanupCandidate,
   McpRuntimeTestBroadcastSnapshot,
 } from './runtimeTestPersistence'
+/** Execution identity supplied by the selected complete diagnostic family. */
+export interface McpDiagnosticRuntimeTarget {
+  readonly kind: 'mcp-diagnostic-runtime-target'
+  readonly reference: object
+}
+export interface McpDiagnosticTurnStart {
+  readonly kind: 'mcp-diagnostic-turn-start'
+  readonly reference: object
+}
+export type McpDiagnosticReapOutcome =
+  | 'no-pid'
+  | 'not-alive'
+  | 'window-expired'
+  | 'command-mismatch'
+  | 'killed'
+  | 'kill-failed'
 export interface ResolvedTestRuntime {
   readonly row: McpDiagnosticRuntime
-  readonly binary: string
+  readonly target: McpDiagnosticRuntimeTarget
+  readonly label: string
   readonly snapshotJson: string
 }
 export interface DiagnosticTimer {
@@ -30,10 +46,20 @@ export interface McpDiagnosticsEffects {
   ): Pick<McpRuntimeTestCleanupCandidate, 'cleanupState' | 'cleanupErrorCode'>
   currentMcpHash(mcp: Mcp): Promise<string>
   broadcast(sessionId: string, snapshot: McpRuntimeTestBroadcastSnapshot): void
-  reap(
-    run: { pid: number | null; startedAt: number | null; spawnBinaryPath?: string | null },
-    opts?: { now?: number; termWaitMs?: number },
-  ): Promise<StaleRunKillOutcome>
+  hasExecution(turn: McpRuntimeTestTurnRecord): boolean
+  /** Read the clock only after the selected execution's original receipt fields. */
+  reapTurn(turn: McpRuntimeTestTurnRecord, readNow: () => number): Promise<McpDiagnosticReapOutcome>
+  recoverReapedTurn(input: {
+    readonly session: McpRuntimeTestSessionRecord
+    readonly turn: McpRuntimeTestTurnRecord
+    readonly readNow: () => number
+  }): Promise<boolean>
+  /** Pure capture; admission occurs at the original execution-start callback. */
+  captureTurnStart(input: {
+    readonly session: McpRuntimeTestSessionRecord
+    readonly turn: McpRuntimeTestTurnRecord
+    readonly readNow: () => number
+  }): McpDiagnosticTurnStart
   runTurn(input: {
     readonly session: McpRuntimeTestSessionRecord
     readonly turn: McpRuntimeTestTurnRecord
@@ -43,11 +69,7 @@ export interface McpDiagnosticsEffects {
     readonly sink: McpDiagnosticEventSink
     readonly timeoutMs: number
     readonly assertSpawnAllowed: () => Promise<void>
-    readonly onSpawned: (receipt: {
-      pid: number | null
-      spawnedAt: number
-      spawnBinaryPath: string
-    }) => void | Promise<void>
+    readonly turnStart: McpDiagnosticTurnStart
   }): Promise<McpDiagnosticRunResult>
   failedResult(
     session: McpRuntimeTestSessionRecord,
