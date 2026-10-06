@@ -84,7 +84,7 @@ describe('RFC-371 same-home daemon restart waits for close', () => {
     await harnessTestApi.signalChildAndWait(daemon, 'SIGKILL', 5000)
     await harnessTestApi.waitForChildExit(daemon, 5000)
     expect(child.signals).toEqual([])
-  })
+  }, 10_000)
 
   test('control shutdown deadline is a failure when no close arrives', async () => {
     const { child, daemon } = fixture()

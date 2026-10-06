@@ -314,3 +314,12 @@ Ubuntu改为完整1/32至32/32的独立runner，每一原Bun发现文件仍只�
 按 [Node ChildProcess close 契约](https://nodejs.org/api/child_process.html#event-close)，harness 在 spawn 后登记 close，停进程/控制关闭直到 close 后才允许调用方重启或移除其 home；已 exit 且管道未关仍等待。原 fallback/grace 预算不变，超时或 signal 错误明确失败，不当作已退出，不删除锁绕过真实重启。新增六条独立控制 exit/close 顺序的功能回归，锁住仅 exit、已经 exit、已经 close、控制超时、KILL fallback 及 signal 失败。该契约修正尚需原 Windows 真实进程用例核验，本文不把它当作 Windows 已通过。
 
 WF-03 保留私有/公开卡片的完整 chip 数组与原用户名期望，改为等待独立名称查询后的真实 UI；节点数、版本、可见集合及其余原断言不变。没有新增用例重试、skip、排除文件或降低人口。仅本批格式/lint和无断言 AST 在本机执行，全部测试与类型仍交精确 hosted SHA。两 RFC 及原生产/规模/真实用途验收保持 In Progress。
+
+
+### 2026-10-07 受控关闭用例的预算声明
+
+`15265ef2b1d435741e4e98e8c0b11c0ccf35d9e6` 的 Ubuntu 28/32 和 macOS 4/12 分片报出同一个实际功能错误：本会话新增的“已经 close 的 child 不需要额外 signal”用例调用 `waitForChildExit(..., 5000)`，却隐含使用 Bun 的 5000ms 用例预算。仓库要求用例预算严格大于内部等待上限。只为这一条新增的受控用例显式声明 10000ms，保留内部 5000ms、全部断言、其他五条受控用例，以及原有 E2E 和生产关闭等待常量。
+
+该 SHA 的 Windows 四个 E2E 分片均完成；原有单次和多次 SIGKILL 后同 home 恢复用例，以及 WF-03 全部芯片与独立归属查询，首次尝试通过。Windows 3/4 另有一条非本次关闭恢复用例被标记 flaky，因此不将整条流水线记为干净通过。8 个后端失败分片对应 4 个失败用例，其中另外三处旧架构调用关系已由独立提交 `865fc0458301a4532fb21f685f323eb9130ee069` 更新，本补丁保留该提交并继续等待最终候选的准确 SHA CI。
+
+本地仅做静态 AST、精确格式与 lint 检查；没有启动 AW 测试、构建、E2E 或新服务。正式后端仍由原 `bun dev` watcher 提供，统计页面的已记录 Token 与人民币估值保持可见，缺口继续明确标为不完整。
