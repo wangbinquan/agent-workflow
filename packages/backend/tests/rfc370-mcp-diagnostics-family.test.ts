@@ -654,6 +654,118 @@ describe('RFC-370 native MCP root completeness', () => {
     return { body: original, selections, forwards }
   }
 
+  // RFC-370 Task roots select a complete binding. Restore only these exact
+  // introduced statements and fields before applying the older MCP inverse.
+  function inverseTaskRunBindings(source: ts.SourceFile, body: ts.Block) {
+    const compact = (node: ts.Node) =>
+      ts
+        .createPrinter({ removeComments: true })
+        .printNode(ts.EmitHint.Unspecified, node, source)
+        .replace(/\s/g, '')
+    let selections = 0,
+      profiles = 0,
+      roots = 0,
+      contents = 0,
+      bindings = 0,
+      forwards = 0
+    const transformed = ts.transform(body, [
+      (context) => {
+        const inverse: ts.Visitor = (node) => {
+          if (ts.isVariableStatement(node) && node.declarationList.declarations.length === 1) {
+            const declaration = node.declarationList.declarations[0]!
+            if (ts.isIdentifier(declaration.name)) {
+              const name = declaration.name.text
+              if (name === 'selectedTaskRuns') {
+                expect(compact(declaration.initializer!)).toMatch(
+                  /^selectTaskRunRootSelection\((input|deps)\.taskRunSelection\)$/,
+                )
+                selections++
+                return undefined
+              }
+              if (name === 'workspaceExcludeProfilesFor') {
+                expect(compact(declaration.initializer!)).toMatch(
+                  /^composeTaskWorkspaceExcludeProfilesFor\((input|deps)\.workspaceExcludeProfiles,?\)$/,
+                )
+                profiles++
+                return undefined
+              }
+              if (name === 'taskRunRoot') {
+                expect(compact(declaration.initializer!)).toBe(
+                  'selectedTaskRuns===undefined?composeLocalTaskRunRootSelection({nodeRunPrompts,portArtifacts}):selectedTaskRuns',
+                )
+                roots++
+                return undefined
+              }
+            }
+          }
+          if (
+            ts.isConditionalExpression(node) &&
+            compact(node.condition) === 'selectedTaskRuns===undefined' &&
+            ['selectedTaskRuns.nodeRunPrompts', 'selectedTaskRuns.portArtifacts'].includes(
+              compact(node.whenFalse),
+            )
+          ) {
+            contents++
+            return ts.visitNode(node.whenTrue, inverse)
+          }
+          if (ts.isPropertyAssignment(node) && ts.isIdentifier(node.name)) {
+            if (['taskRunSelection', 'workspaceExcludeProfiles'].includes(node.name.text)) {
+              expect(compact(node.initializer)).toBe('input.' + node.name.text)
+              forwards++
+              return undefined
+            }
+            if (node.name.text === 'taskRunBinding') {
+              expect(compact(node.initializer)).toBe('taskRunRoot.drive')
+              bindings++
+              return [
+                ts.factory.createPropertyAssignment(
+                  'taskAgentRunsFor',
+                  ts.factory.createIdentifier('composeLocalTaskAgentRunFamilyFor'),
+                ),
+                ts.factory.createPropertyAssignment(
+                  'taskScriptRunsFor',
+                  ts.factory.createIdentifier('composeLocalTaskScriptRunFamily'),
+                ),
+                ts.factory.createPropertyAssignment(
+                  'nodeRunPromptsFor',
+                  ts.factory.createArrowFunction(
+                    undefined,
+                    undefined,
+                    [],
+                    undefined,
+                    ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                    ts.factory.createIdentifier('nodeRunPrompts'),
+                  ),
+                ),
+                ts.factory.createPropertyAssignment(
+                  'portArtifactsFor',
+                  ts.factory.createArrowFunction(
+                    undefined,
+                    undefined,
+                    [],
+                    undefined,
+                    ts.factory.createToken(ts.SyntaxKind.EqualsGreaterThanToken),
+                    ts.factory.createIdentifier('portArtifacts'),
+                  ),
+                ),
+              ]
+            }
+          }
+          if (
+            ts.isShorthandPropertyAssignment(node) &&
+            node.name.text === 'workspaceExcludeProfilesFor'
+          )
+            return undefined
+          return ts.visitEachChild(node, inverse, context)
+        }
+        return (node) => ts.visitNode(node, inverse, ts.isBlock)!
+      },
+    ])
+    const original = transformed.transformed[0]!
+    transformed.dispose()
+    return { body: original, selections, profiles, roots, contents, bindings, forwards }
+  }
+
   const root = resolve(import.meta.dir, '../src'),
     printer = ts.createPrinter({ removeComments: true })
   const hash = (node: ts.Node, source: ts.SourceFile) =>
@@ -709,16 +821,25 @@ describe('RFC-370 native MCP root completeness', () => {
       const customObservers = inverseCustomObserverBindings(source, fn.body)
       const bootRecovery = inverseBootRecoveryBindings(source, customObservers.body)
       const verification = inverseVerificationBindings(source, bootRecovery.body)
+      const taskRuns = inverseTaskRunBindings(source, verification.body)
+      expect(taskRuns.selections).toBe(1)
+      expect(taskRuns.profiles).toBe(1)
+      expect(taskRuns.roots).toBe(1)
+      expect(taskRuns.contents).toBe(2)
+      expect(taskRuns.bindings).toBe(1)
+      expect(taskRuns.forwards).toBe(name === 'composeSqliteProviderSession' ? 2 : 0)
       let scriptSelections = 0
-      const transformed = ts.transform(verification.body, [
+      const transformed = ts.transform(taskRuns.body, [
         (context) => {
           const inverse: ts.Visitor = (node) => {
             if (ts.isObjectLiteralExpression(node)) {
               const script = node.properties.filter(
                 (property) =>
                   ts.isPropertyAssignment(property) &&
-                  property.name.getText(source) === 'taskScriptRunsFor' &&
-                  property.initializer.getText(source) === 'composeLocalTaskScriptRunFamily',
+                  ts.isIdentifier(property.name) &&
+                  property.name.text === 'taskScriptRunsFor' &&
+                  ts.isIdentifier(property.initializer) &&
+                  property.initializer.text === 'composeLocalTaskScriptRunFamily',
               )
               if (script.length > 0) {
                 expect(script).toHaveLength(1)
@@ -726,8 +847,10 @@ describe('RFC-370 native MCP root completeness', () => {
                   node.properties.some(
                     (property) =>
                       ts.isPropertyAssignment(property) &&
-                      property.name.getText(source) === 'taskAgentRunsFor' &&
-                      property.initializer.getText(source) === 'composeLocalTaskAgentRunFamilyFor',
+                      ts.isIdentifier(property.name) &&
+                      property.name.text === 'taskAgentRunsFor' &&
+                      ts.isIdentifier(property.initializer) &&
+                      property.initializer.text === 'composeLocalTaskAgentRunFamilyFor',
                   ),
                 ).toBe(true)
                 scriptSelections++
