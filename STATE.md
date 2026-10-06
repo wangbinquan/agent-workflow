@@ -1,3 +1,13 @@
+## 2026-10-06 RFC-370 Task 完整执行族接线候选
+
+Stage A / A-T5 增量：正常六处 Task 调用（node 三处、wrapper 两处、scheduler 一处）选中同一完整 RC／RM／SC／TE family；SQLite／PG、CLI 初始／重装、HTTP 和 child 每次 drive 均显式绑定工厂。原唯一完整 Task core、native API、六调用有序业务字段、配置等待／读取时点、receiver 与错误边界保持。新12份 owner port／native composition 和14份生产调用／根接线合计26份生产候选；14个新 hosted 实例与机械 fixture／地址迁移保持原断言和预算。详细来源见 design/RFC-370-crewstation-hosted-deployment/task-agent-family-wiring-progress.md。
+
+SOURCE42-R1 因唯一非 owned 共同核心在并行检视期间漂移而 INVALID，原回执保留，42 owned 内容稳定且无确定功能 P1/P2。SOURCE42-R2 只将该 control 固定为 exact committed e24 静态证据并核对 unchanged runNode imports／signature，复用已完成的 owned 正文检视；有效独立 PASS，83项首末绑定稳定，指纹4bb9b4401676f403b5efc33eabcc2974575adaa0ff7bf9b1f44b0e8477cdd91a。没有读取或纳入并行观测 body；所有 peer WIP 原样保持。
+
+一次原 scoped census 读取完整 committed e24 及冻结42候选，四原规则均未变；sourceDigest sha256:fafc3e0ab975032a49770dce883aa49f74cf4f0ebe7e269c2ce503864ca6186b。350旧 authored debt、129有序库存／why、全部 guard、40SPI／69targets、原SCC和9个Task effects保持；只登记 scheduler 到正常 family composition 的一个真实入边，待 A-T7 收口。退役 e24 两项迁移地址许可，五项真实 matching counter 增量具名登记并在下一普通后继退役。本机仅自有 format／lint、纯 AST／字节／JSON及一次原静态生成，无 AW tests／typecheck／build／service。e24 的 Windows37390610195已success，主CI37390522481此前仍进行中；新候选正式功能结果由发布后的 exact-SHA hosted CI 验收。System／smoke／retention、RC-MCP、脚本、H7、A-T7及AC00／A-G仍开放，随后各层独立CS adapter、M0首次实际部署、M1～M4及完整RFC验收继续。尚无AW-in-CS部署。以下旧共享正文完整保留。
+
+R3 补验：META15-R1 的 matching 正文有效 PASS；随后未提交 R2 的额外 Markdown 格式投影虽保留语义，却违反原 §A2 对 status.md 与 renderArchitectureStatus 的逐字等式，独立门记录有效 P2／FAIL，原回执保留。已仅撤回本任务 R2 格式投影，恢复原生成器 status 字节及两份共享日志的全部 R1 原字节，再增加本段事实记录。这三份文档不在 package.json 的 CI format:check 范围；不改原断言、生成器或格式范围。e24 主 CI37390522481正式 failure，Ubuntu16／Mac4各一个测试引用旧 runner callable；Windows37390610195正式 success。后继9bf5b9c5仅修正三个实际 source-address literals 并增加其五行说明，完整逆映射和 guard 行数核对通过。42源候选、生产人口／依赖、四原规则及13 matching生成保持；复用 SOURCE42-R2、原一次 census 与 META15-R1正文，只补验这两段记录、原字节恢复和后继绑定。publication base为9bf5b9c51f8985ce7f5d32c4ee9b123255fc4ec4，新 exact-SHA hosted CI另验；A-G、CS adapters、M0部署、M1～M4及完整RFC仍开放。
+
 ## 2026-10-06 RFC-370 Task 迁移 CI 配套地址、类型与格式修复
 
 bbbe 的正式 CI 失败按日志补正四个实际 reader、三条 memory offered 地址与两个 native bridge 地址；原判据和预算保持。canonical collector 仅恢复完整 Task core 的原 process act-site，原 >8 门槛保留。三个已提交 RFC371 fixtures 九处只补类型，snapshot JSON仅格式化、解析内容不变；完整11文件逆向 AST/JSON等价。SOURCE12-R1 独立有限 PASS27，指纹 5c767604b52db228767d14d286ccceb4a146f73f18d980f3d8d2eb829e9f00a5。全部 Task family/root 与 peer native-root-set 在制输出保留并排除。

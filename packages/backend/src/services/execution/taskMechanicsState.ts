@@ -8,7 +8,7 @@ import type {
 import type { Logger } from '@/util/log'
 import type { Semaphore } from '@/util/semaphore'
 import type { BoundRunTaskOptions } from './taskEngineRuntimeOptions'
-import type { TaskExecutionResourceSession } from './taskExecutionResources'
+import type { TaskAgentResourceSession } from './taskExecutionResources'
 
 export interface TaskScopeArgs {
   /** Wrapper node that owns this scope; null for the workflow root. */
@@ -44,7 +44,7 @@ export interface TaskMechanicsState {
   readonly definition: WorkflowDefinition
   readonly opts: BoundRunTaskOptions
   /** One authority-bound, immutable resource snapshot cache for this task run. */
-  readonly taskExecutionResources: TaskExecutionResourceSession
+  readonly taskExecutionResources: TaskAgentResourceSession
   readonly collaboratorUserIds: readonly string[]
   readonly topology: SchedulerRuntimeTopology
   readonly log: Logger

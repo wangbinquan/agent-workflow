@@ -55,6 +55,7 @@ const DISPOSITION = {
   // RFC-370: the live content service is re-bound by every child drive.
   nodeRunPrompts: 'dropped-registered',
   portArtifacts: 'dropped-registered',
+  taskAgentRuns: 'dropped-registered',
   // The complete factory is re-supplied; a parent canonical scene is never inherited.
   isolationWorkspaces: 'dropped-registered',
   // Each child reuses its selected factory and binds its own repository workspaces.

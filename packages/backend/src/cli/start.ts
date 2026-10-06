@@ -1,3 +1,4 @@
+import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
@@ -2021,6 +2022,7 @@ async function composeSqliteProviderSession(
       archive: input.taskArchive,
       workspaceReads: input.workspaceReads,
       runtime: {
+        taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
         nodeRunPromptsFor: () => nodeRunPrompts,
         portArtifactsFor: () => portArtifacts,
         isolationWorkspaces: input.isolationWorkspaces,

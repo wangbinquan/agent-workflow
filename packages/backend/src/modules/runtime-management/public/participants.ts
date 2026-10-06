@@ -1,5 +1,10 @@
 // RFC-349 — provider-neutral realtime contracts owned by runtime-management.
 
+export type {
+  FrozenTaskAgentRuntime,
+  TaskAgentRuntimeBindings,
+} from '../application/ports/taskAgentRuntimeBindings'
+
 import type { TaskWsMessage } from '@agent-workflow/shared'
 
 import type { Actor, ActorSource } from '@/auth/actor'

@@ -44,12 +44,11 @@ import {
 } from '@/services/execution/closure'
 import { watchTaskTerminal } from '@/services/execution/executionWatch'
 import { getExecutionOutcome } from '@/services/execution/outcome'
-import { resolveSyntheticTaskExecutionInjection } from '@/services/execution/taskExecutionResources'
+import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
 import type {
   NodeMechanicsResult,
   TaskMechanicsState,
 } from '@/services/execution/taskMechanicsState'
-import { freezeBinaryConfig } from '@/services/execution/runtimeConfigFreeze'
 import { pickFrameSourceRun, pickFreshestRun } from '@/services/freshness'
 import { loadFrameChain } from '../application/frameChain'
 import { resolveSourceFrame, type FrameCoordinate } from '../domain/environmentChain'
@@ -75,15 +74,11 @@ import {
   type MergeBackConflict,
 } from '@/services/nodeIsolation'
 import { ORCHESTRATOR_AGENT_ID } from '@/services/orchestratorAgent'
-import {
-  continuesClarifyLineage,
-  frozenRuntimeOfSessionWith,
-  isClarifyRerunCause,
-  resolveFrozenRuntimeWith,
-} from '@/services/nodeRunMint'
+import { continuesClarifyLineage, isClarifyRerunCause } from '@/services/nodeRunMint'
 import { toContainerRelative } from '@/modules/task-execution/public/queries'
 import { agentRefOfNode } from '@/services/ref/runtimeRef'
-import { runNode, type RunResult } from '@/services/runner'
+import { runTaskAgentWithFamily as runNode } from './taskAgentRunFamily'
+import type { RunResult } from '../application/ports/taskAgentRun'
 import { getRuntimeDriver, runRootFor } from '@/services/runtime'
 import { runAssembly, type IsoLike } from '@/services/schedulerAssembly'
 import {
@@ -303,7 +298,7 @@ export async function executeWorkgroupHostMechanics(
   const { taskId, task, opts, log, definition } = state
   const injection =
     req.agent.id === ORCHESTRATOR_AGENT_ID
-      ? resolveSyntheticTaskExecutionInjection(req.agent)
+      ? resolveSyntheticTaskAgentInjection(req.agent, opts.taskAgentRuns.materialReferences)
       : await state.taskExecutionResources.injection(req.agent.id)
   if (injection.kind === 'failed') {
     await setRunStatus(state, {
@@ -363,13 +358,11 @@ export async function executeWorkgroupHostMechanics(
         return { status: 'failed', outputs: {}, errorMessage: `iso-setup-failed: ${message}` }
       },
       spawn: async (): Promise<HostSpawn> => {
-        const frozen = await resolveFrozenRuntimeWith(
-          opts.nodeRunRuntime,
+        const frozen = await opts.taskAgentRuns.runtimeBindings.resolve(
           req.nodeRunId,
           injection.spec.agent.runtime,
           opts.defaultRuntime,
           null,
-          await freezeBinaryConfig(opts.configPath, opts.operationConfiguration),
         )
         // Round-trip a human's answered clarify back to the workgroup LEADER.
         // When the leader host run is a `clarify-answer` rerun — it asked a human
@@ -422,104 +415,109 @@ export async function executeWorkgroupHostMechanics(
           req.hostOutputPorts !== undefined
             ? { ...injection.spec.agent, outputs: [...req.hostOutputPorts], outputKinds: undefined }
             : injection.spec.agent
-        const result = await runNode({
-          taskId,
-          nodeRunId: req.nodeRunId,
-          nodeId: req.nodeId,
-          agent: hostAgent,
-          triggerContext: null,
-          // RFC-184 §2.4: host runs never persist their protocol ports into
-          // node_run_outputs (they'd trip clarify-aging runIdsWithOutput).
-          ...(req.hostOutputPorts !== undefined
-            ? { persistDeclaredOutputs: false, warnMissingDeclaredPorts: false }
-            : {}),
-          runtime: frozen.protocol,
-          runtimeBinary: frozen.binary,
-          runtimeParams: frozen.params,
-          runtimeConfigDir: frozen.configDir,
-          runtimeObservationIdentity: frozen.observationIdentity,
-          observationInvocations: state.opts.observationInvocations,
-          inputs: {},
-          worktreePath: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
-          gitUserName: task.gitUserName,
-          gitUserEmail: task.gitUserEmail,
-          templateMeta: {
-            repoPath: iso.repos[0]?.isoWorktreePath ?? task.repoPath,
-            baseBranch: task.baseBranch,
+        const result = await runNode(
+          opts.taskAgentRuns,
+          {
             taskId,
+            nodeRunId: req.nodeRunId,
             nodeId: req.nodeId,
-            repos: iso.repos.map((r, i) => ({
-              repoPath: r.repoPath,
-              worktreePath: r.isoWorktreePath,
-              worktreeDirName: r.worktreeDirName,
-              // RFC-248: 同上——`{{__repo_names__}}` 要渲染挂载路径。
-              mountPath: state.repos[i]?.mountPath ?? r.worktreeDirName,
-              baseBranch: r.baseBranch,
-            })),
+            agent: hostAgent,
+            triggerContext: null,
+            // RFC-184 §2.4: host runs never persist their protocol ports into
+            // node_run_outputs (they'd trip clarify-aging runIdsWithOutput).
+            ...(req.hostOutputPorts !== undefined
+              ? { persistDeclaredOutputs: false, warnMissingDeclaredPorts: false }
+              : {}),
+            runtime: frozen.protocol,
+
+            runtimeParams: frozen.params,
+            runtimeConfigDir: frozen.configDir,
+            runtimeObservationIdentity: frozen.observationIdentity,
+            observationInvocations: state.opts.observationInvocations,
+            inputs: {},
+
+            gitUserName: task.gitUserName,
+            gitUserEmail: task.gitUserEmail,
+            templateMeta: {
+              repoPath: iso.repos[0]?.isoWorktreePath ?? task.repoPath,
+              baseBranch: task.baseBranch,
+              taskId,
+              nodeId: req.nodeId,
+              repos: iso.repos.map((r, i) => ({
+                repoPath: r.repoPath,
+                worktreePath: r.isoWorktreePath,
+                worktreeDirName: r.worktreeDirName,
+                // RFC-248: 同上——`{{__repo_names__}}` 要渲染挂载路径。
+                mountPath: state.repos[i]?.mountPath ?? r.worktreeDirName,
+                baseBranch: r.baseBranch,
+              })),
+            },
+            promptTemplate: req.promptTemplate,
+            // Workgroup turns and the dynamic-workflow orchestrator hand us a
+            // COMPLETE framework-composed prompt. Its fenced goal/charter/messages
+            // are data, not a second workflow template: preserving this boundary
+            // keeps literal `{{token}}` text byte-for-byte.
+            expandPromptTemplate: false,
+            ...(req.workgroupProtocolBlock !== undefined
+              ? { workgroupProtocolBlock: req.workgroupProtocolBlock }
+              : {}),
+            ...(opts.defaultPerNodeTimeoutMs !== undefined
+              ? { timeoutMs: opts.defaultPerNodeTimeoutMs }
+              : {}),
+            // Voluntary ask-back: the channel is wired (host snapshot) but never
+            // mandatory — workgroup members produce wg_result unless they choose
+            // to ask a human (design §5). RFC-183: directive 'delegated' — BOTH
+            // the invite (WG_CLARIFY_BLOCK inside the workgroup protocol block,
+            // only when the group is not autonomous) and the acceptance verdict
+            // live OUTSIDE the ADT, so the runner's directive-driven reject
+            // (which now fires on 'suppressed') must not apply here.
+            // RFC-181 C (impl-gate P1/P2): suppression is NOT a dispatch-frozen
+            // directive — the per-task PATCH can flip `autonomous` mid-run in
+            // EITHER direction, so runNode resolves the oracle below at ENVELOPE
+            // time (live both ways) and closes a suppressed run as
+            // failed:clarify-forbidden BEFORE terminal persistence.
+            clarifyChannel: { kind: 'self', directive: 'delegated', injectStopNotice: false },
+            ...(req.clarifyEnabled !== undefined
+              ? {
+                  clarifySuppressed: () =>
+                    // RFC-207 §3.4a — dispatch-time floor. This turn's prompt carried no
+                    // ask-back invite, so it must not be allowed to ask merely because the
+                    // roster gained a human while it was running; the new human takes
+                    // effect from the NEXT turn. The live read handles the other
+                    // direction (a human leaving mid-flight must silence it at once).
+                    req.clarifyEnabled === false
+                      ? Promise.resolve(true)
+                      : collaboration.isTaskClarifySuppressed({
+                          taskId,
+                          nodeId: req.nodeId,
+                          shardKey: runShardKey,
+                        }),
+                }
+              : {}),
+            ...(clarifyQueue !== undefined
+              ? { clarifyContext: { flatBlock: clarifyQueue.block } }
+              : {}),
+
+            dependents: injection.spec.dependents,
+            mcps: injection.spec.mcps,
+
+            memoryInjectionQueries: opts.memoryInjectionQueries,
+            runtimeSessionLeases: opts.runtimeSessionLeases,
+            runtimeRegistry: opts.runtimeRegistry,
+            persistence: opts.persistence,
+
+            log,
+            ...(opts.signal ? { signal: opts.signal } : {}),
+            ...(opts.subagentLiveCapture !== undefined
+              ? { subagentLiveCapture: opts.subagentLiveCapture }
+              : {}),
           },
-          promptTemplate: req.promptTemplate,
-          // Workgroup turns and the dynamic-workflow orchestrator hand us a
-          // COMPLETE framework-composed prompt. Its fenced goal/charter/messages
-          // are data, not a second workflow template: preserving this boundary
-          // keeps literal `{{token}}` text byte-for-byte.
-          expandPromptTemplate: false,
-          ...(req.workgroupProtocolBlock !== undefined
-            ? { workgroupProtocolBlock: req.workgroupProtocolBlock }
-            : {}),
-          ...(opts.defaultPerNodeTimeoutMs !== undefined
-            ? { timeoutMs: opts.defaultPerNodeTimeoutMs }
-            : {}),
-          // Voluntary ask-back: the channel is wired (host snapshot) but never
-          // mandatory — workgroup members produce wg_result unless they choose
-          // to ask a human (design §5). RFC-183: directive 'delegated' — BOTH
-          // the invite (WG_CLARIFY_BLOCK inside the workgroup protocol block,
-          // only when the group is not autonomous) and the acceptance verdict
-          // live OUTSIDE the ADT, so the runner's directive-driven reject
-          // (which now fires on 'suppressed') must not apply here.
-          // RFC-181 C (impl-gate P1/P2): suppression is NOT a dispatch-frozen
-          // directive — the per-task PATCH can flip `autonomous` mid-run in
-          // EITHER direction, so runNode resolves the oracle below at ENVELOPE
-          // time (live both ways) and closes a suppressed run as
-          // failed:clarify-forbidden BEFORE terminal persistence.
-          clarifyChannel: { kind: 'self', directive: 'delegated', injectStopNotice: false },
-          ...(req.clarifyEnabled !== undefined
-            ? {
-                clarifySuppressed: () =>
-                  // RFC-207 §3.4a — dispatch-time floor. This turn's prompt carried no
-                  // ask-back invite, so it must not be allowed to ask merely because the
-                  // roster gained a human while it was running; the new human takes
-                  // effect from the NEXT turn. The live read handles the other
-                  // direction (a human leaving mid-flight must silence it at once).
-                  req.clarifyEnabled === false
-                    ? Promise.resolve(true)
-                    : collaboration.isTaskClarifySuppressed({
-                        taskId,
-                        nodeId: req.nodeId,
-                        shardKey: runShardKey,
-                      }),
-              }
-            : {}),
-          ...(clarifyQueue !== undefined
-            ? { clarifyContext: { flatBlock: clarifyQueue.block } }
-            : {}),
-          skills: injection.spec.skills,
-          dependents: injection.spec.dependents,
-          mcps: injection.spec.mcps,
-          plugins: injection.spec.plugins,
-          appHome: opts.appHome,
-          nodeRunPrompts: opts.nodeRunPrompts,
-          portArtifacts: opts.portArtifacts,
-          memoryInjectionQueries: opts.memoryInjectionQueries,
-          runtimeSessionLeases: opts.runtimeSessionLeases,
-          runtimeRegistry: opts.runtimeRegistry,
-          persistence: opts.persistence,
-          ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
-          log,
-          ...(opts.signal ? { signal: opts.signal } : {}),
-          ...(opts.subagentLiveCapture !== undefined
-            ? { subagentLiveCapture: opts.subagentLiveCapture }
-            : {}),
-        })
+          {
+            workspaceRef: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
+            material: injection.spec.material,
+            runtimeBinding: frozen.runtimeBinding,
+          },
+        )
         const early = await (async (): Promise<WorkgroupTurnHostResult | null> => {
           if (result.processUnreaped === true) keepHookIso = true
           broadcastNodeStatus(taskId, req.nodeRunId, req.nodeId, result.status)
@@ -1103,7 +1101,7 @@ export async function resolveMergeConflicts(
   },
 ): Promise<{ allResolved: boolean; detail: string }> {
   const { task, log } = state
-  const rt = await state.opts.runtimeRegistry.resolveInternalAgentRuntime({
+  const rt = await state.opts.taskAgentRuns.runtimeBindings.internal({
     runtimeName: state.opts.mergeAgentRuntime,
     deprecatedModel: state.opts.mergeAgentModel,
     defaultRuntime: state.opts.defaultRuntime,
@@ -1122,88 +1120,81 @@ export async function resolveMergeConflicts(
       iteration: opts.iteration,
       overrides: { parentNodeRunId: opts.conflictNodeRunId },
     })
-    const frozen = await resolveFrozenRuntimeWith(
-      state.opts.nodeRunRuntime,
+    const frozen = await state.opts.taskAgentRuns.runtimeBindings.resolve(
       sessionRunId,
       null,
       null,
-      {
-        protocol: rt.protocol,
-        binary: rt.binaryPath,
-        params: {
-          model: rt.model,
-          variant: rt.variant,
-          temperature: rt.temperature,
-          steps: rt.steps,
-          maxSteps: rt.maxSteps,
-          isSandbox: rt.isSandbox,
-        },
-        configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
-        observationIdentity: rt.observationIdentity,
-      },
+      rt,
       // Codex impl-gate P1-2: same config-head fold as the commit-session site.
-      await freezeBinaryConfig(state.opts.configPath, state.opts.operationConfiguration),
     )
     const envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(sessionRunId)
     const mergeAgent = buildMergeAgent()
     // RFC-282 B2 — single-resolver derivation (writeSem held: signal threaded).
-    const mergeInjection = resolveSyntheticTaskExecutionInjection(mergeAgent)
+    const mergeInjection = resolveSyntheticTaskAgentInjection(
+      mergeAgent,
+      state.opts.taskAgentRuns.materialReferences,
+    )
     if (mergeInjection.kind === 'failed') {
       throw new Error(`merge injection resolve failed: ${mergeInjection.message}`)
     }
     // DIRECT runNode — bypasses the node pool on purpose (§7 deadlock avoidance).
-    const mergeAgentResult = await runNode({
-      taskId: task.id,
-      nodeRunId: sessionRunId,
-      nodeId: mergeNodeId,
-      agent: mergeAgent,
-      triggerContext: null,
-      expandPromptTemplate: false,
-      runtime: frozen.protocol,
-      runtimeBinary: frozen.binary,
-      runtimeParams: frozen.params,
-      runtimeConfigDir: frozen.configDir, // RFC-154: frozen config-dir profile
-      runtimeObservationIdentity: frozen.observationIdentity,
-      observationInvocations: state.opts.observationInvocations,
-      observationPurpose: 'system',
-      inputs: {},
-      worktreePath: cwd,
-      promptTemplate: buildMergeResolvePrompt({ manifest, envelopeNonce }),
-      templateMeta: {
-        repoPath: cwd,
-        baseBranch: task.baseBranch,
+    const mergeAgentResult = await runNode(
+      state.opts.taskAgentRuns,
+      {
         taskId: task.id,
+        nodeRunId: sessionRunId,
         nodeId: mergeNodeId,
-        iteration: opts.iteration,
-        repos: state.repos,
-        ...(state.repoGroupName !== null ? { repoGroupName: state.repoGroupName } : {}),
+        agent: mergeAgent,
+        triggerContext: null,
+        expandPromptTemplate: false,
+        runtime: frozen.protocol,
+
+        runtimeParams: frozen.params,
+        runtimeConfigDir: frozen.configDir, // RFC-154: frozen config-dir profile
+        runtimeObservationIdentity: frozen.observationIdentity,
+        observationInvocations: state.opts.observationInvocations,
+        observationPurpose: 'system',
+        inputs: {},
+
+        promptTemplate: buildMergeResolvePrompt({ manifest, envelopeNonce }),
+        templateMeta: {
+          repoPath: cwd,
+          baseBranch: task.baseBranch,
+          taskId: task.id,
+          nodeId: mergeNodeId,
+          iteration: opts.iteration,
+          repos: state.repos,
+          ...(state.repoGroupName !== null ? { repoGroupName: state.repoGroupName } : {}),
+        },
+        // RFC-282 B2 — same single-resolver derivation as commit-push above.
+
+        dependents: mergeInjection.spec.dependents,
+        mcps: mergeInjection.spec.mcps,
+
+        memoryInjectionQueries: state.opts.memoryInjectionQueries,
+        runtimeSessionLeases: state.opts.runtimeSessionLeases,
+        runtimeRegistry: state.opts.runtimeRegistry,
+        persistence: state.opts.persistence,
+        log: log.child('merge'),
+        gitUserName: task.gitUserName,
+        gitUserEmail: task.gitUserEmail,
+
+        ...(state.opts.signal ? { signal: state.opts.signal } : {}),
+        // RFC-208: this was the ONLY runNode call site without a timeout, and it
+        // runs inside the per-task writeSem — so a merge agent that hangs blocks
+        // every other writer for that task (review decisions, clarify dispatch)
+        // with no SIGTERM→SIGKILL escalation ever armed. Same budget as every
+        // other node.
+        ...(state.opts.defaultPerNodeTimeoutMs !== undefined
+          ? { timeoutMs: state.opts.defaultPerNodeTimeoutMs }
+          : {}),
       },
-      // RFC-282 B2 — same single-resolver derivation as commit-push above.
-      skills: mergeInjection.spec.skills,
-      dependents: mergeInjection.spec.dependents,
-      mcps: mergeInjection.spec.mcps,
-      plugins: mergeInjection.spec.plugins,
-      appHome: state.opts.appHome,
-      nodeRunPrompts: state.opts.nodeRunPrompts,
-      portArtifacts: state.opts.portArtifacts,
-      memoryInjectionQueries: state.opts.memoryInjectionQueries,
-      runtimeSessionLeases: state.opts.runtimeSessionLeases,
-      runtimeRegistry: state.opts.runtimeRegistry,
-      persistence: state.opts.persistence,
-      log: log.child('merge'),
-      gitUserName: task.gitUserName,
-      gitUserEmail: task.gitUserEmail,
-      ...(state.opts.binaryOverride ? { binaryOverride: state.opts.binaryOverride } : {}),
-      ...(state.opts.signal ? { signal: state.opts.signal } : {}),
-      // RFC-208: this was the ONLY runNode call site without a timeout, and it
-      // runs inside the per-task writeSem — so a merge agent that hangs blocks
-      // every other writer for that task (review decisions, clarify dispatch)
-      // with no SIGTERM→SIGKILL escalation ever armed. Same budget as every
-      // other node.
-      ...(state.opts.defaultPerNodeTimeoutMs !== undefined
-        ? { timeoutMs: state.opts.defaultPerNodeTimeoutMs }
-        : {}),
-    })
+      {
+        workspaceRef: cwd,
+        material: mergeInjection.spec.material,
+        runtimeBinding: frozen.runtimeBinding,
+      },
+    )
     if (mergeAgentResult.processUnreaped === true) {
       throw new MergeAgentChildUnreapedError()
     }
@@ -3794,7 +3785,7 @@ export async function runAgentSingleNode(
   // guard normally prevents it; hitting one at runtime implies an external
   // SQL edit or a race against another writer. Fail loudly instead of
   // silently spawning with a broken closure.
-  const { dependents, skills: resolvedSkills, mcps, plugins } = injection.spec
+  const { dependents, material: resourceMaterial, mcps } = injection.spec
   const promptTemplate = pickString(node, 'promptTemplate') ?? undefined
   const nodeTimeoutMs = opts.defaultPerNodeTimeoutMs
   // RFC-042: retries default to 3 so recoverable failure modes (in particular
@@ -4509,142 +4500,147 @@ export async function runAgentSingleNode(
       // binary) so the id + runtime stay a pair across the new row.
       const inheritedRuntime =
         effectiveResumeSessionId !== undefined
-          ? await frozenRuntimeOfSessionWith(state.opts.nodeRunRuntime, effectiveResumeSessionId)
+          ? await state.opts.taskAgentRuns.runtimeBindings.ofSession(effectiveResumeSessionId)
           : null
-      const frozenRuntime = await resolveFrozenRuntimeWith(
-        state.opts.nodeRunRuntime,
+      const frozenRuntime = await state.opts.taskAgentRuns.runtimeBindings.resolve(
         nodeRunId,
         agent.runtime,
         state.opts.defaultRuntime,
         inheritedRuntime,
-        await freezeBinaryConfig(state.opts.configPath, state.opts.operationConfiguration),
       )
-      lastResult = await runNode({
-        taskId,
-        nodeRunId,
-        nodeId: node.id,
-        agent,
-        triggerContext: state.triggerContext,
-        runtime: frozenRuntime.protocol,
-        runtimeBinary: frozenRuntime.binary,
-        runtimeParams: frozenRuntime.params,
-        runtimeConfigDir: frozenRuntime.configDir, // RFC-154: frozen config-dir profile
-        runtimeObservationIdentity: frozenRuntime.observationIdentity,
-        observationInvocations: state.opts.observationInvocations,
-        inputs: upstreamInputs,
-        // RFC-130 D16: the opencode cwd + ALL path-bearing template tokens point
-        // at the ISOLATED worktree, not the canonical one — otherwise the agent
-        // would be told (via {{__repo_path__}} / {{__repos__}}) to edit a path
-        // outside its isolation. repos[].repoPath stays the source repo (an origin
-        // reference, not a cwd); repos[].worktreePath becomes the per-repo iso.
-        worktreePath: isoHandle.repos[0]?.isoWorktreePath ?? task.worktreePath,
-        // Trusted platform-input mounts identify a digital-employee action.
-        // Its Agent may edit business files but Git lifecycle is platform-only.
-        ...(task.platformInputPathsJson !== null
-          ? { gitMutationPolicy: 'read-only' as const }
-          : {}),
-        // RFC-067: thread per-task Git commit identity through to the runner
-        // so `git commit` invocations inside the agent inherit the
-        // task-scoped author + committer. Both NULL → runner skips
-        // injection and falls back to daemon's default git config.
-        gitUserName: task.gitUserName,
-        gitUserEmail: task.gitUserEmail,
-        templateMeta: {
-          repoPath: isoHandle.repos[0]?.isoWorktreePath ?? task.repoPath,
-          baseBranch: task.baseBranch,
+      lastResult = await runNode(
+        opts.taskAgentRuns,
+        {
           taskId,
+          nodeRunId,
           nodeId: node.id,
-          iteration,
-          // RFC-066: per-repo metadata for the {{__repos__}} /
-          // {{__repo_names__}} / {{__repo_count__}} placeholders.
-          repos: isoHandle.repos.map((r) => ({
-            repoPath: r.repoPath,
-            worktreePath: r.isoWorktreePath,
-            worktreeDirName: r.worktreeDirName,
-            mountPath: r.worktreeDirName,
-            subdir: '',
-            readonly: false,
-            baseBranch: r.baseBranch,
-          })),
-        },
-        ...(promptTemplate !== undefined ? { promptTemplate } : {}),
-        ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
-        ...(reviewContext !== undefined ? { reviewContext } : {}),
-        // RFC-132 (PR-C): a single flat clarifyContext (self/questioner/designer merged, §5). No
-        // separate designer External-Feedback context — the designer's Q&A rides
-        // clarifyContext.flatBlock.
-        ...(clarifyContext !== undefined ? { clarifyContext } : {}),
-        ...(priorOutputUpdate !== undefined ? { priorOutputUpdate } : {}),
-        ...(effectiveResumeSessionId !== undefined
-          ? { resumeSessionId: effectiveResumeSessionId }
-          : {}),
-        // RFC-148: the followup quartet is ONE PromptMode value now. The
-        // followup arm carries the session id (unrepresentable without one
-        // — decideEnvelopeFollowup only fires when the prior attempt
-        // captured a session). RFC-122: a same-session follow-up is
-        // bypassed when the STOP toggle flipped this attempt's
-        // clarify-vs-output mode (clarifyModeFlip) — the resumed session
-        // never emitted the now-needed protocol, so the runner takes the
-        // FULL renderUserPrompt path instead.
-        ...(followupDecision.followup && !clarifyModeFlip && effectiveResumeSessionId !== undefined
-          ? {
-              promptMode: {
-                kind: 'followup' as const,
-                resumeSessionId: effectiveResumeSessionId,
-                reason: followupDecision.reason,
-                ...(followupClarifyDirective !== undefined
-                  ? { clarifyDirective: followupClarifyDirective }
-                  : {}),
-                // RFC-049: thread the structured failures through so the
-                // runner renders the per-kind repair block. Empty array
-                // (degraded mode) is fine — the followup still fires.
-                ...(followupDecision.reason === 'port-validation'
-                  ? { portValidations: followupDecision.failures }
-                  : {}),
+          agent,
+          triggerContext: state.triggerContext,
+          runtime: frozenRuntime.protocol,
+
+          runtimeParams: frozenRuntime.params,
+          runtimeConfigDir: frozenRuntime.configDir, // RFC-154: frozen config-dir profile
+          runtimeObservationIdentity: frozenRuntime.observationIdentity,
+          observationInvocations: state.opts.observationInvocations,
+          inputs: upstreamInputs,
+          // RFC-130 D16: the opencode cwd + ALL path-bearing template tokens point
+          // at the ISOLATED worktree, not the canonical one — otherwise the agent
+          // would be told (via {{__repo_path__}} / {{__repos__}}) to edit a path
+          // outside its isolation. repos[].repoPath stays the source repo (an origin
+          // reference, not a cwd); repos[].worktreePath becomes the per-repo iso.
+
+          // Trusted platform-input mounts identify a digital-employee action.
+          // Its Agent may edit business files but Git lifecycle is platform-only.
+          ...(task.platformInputPathsJson !== null
+            ? { gitMutationPolicy: 'read-only' as const }
+            : {}),
+          // RFC-067: thread per-task Git commit identity through to the runner
+          // so `git commit` invocations inside the agent inherit the
+          // task-scoped author + committer. Both NULL → runner skips
+          // injection and falls back to daemon's default git config.
+          gitUserName: task.gitUserName,
+          gitUserEmail: task.gitUserEmail,
+          templateMeta: {
+            repoPath: isoHandle.repos[0]?.isoWorktreePath ?? task.repoPath,
+            baseBranch: task.baseBranch,
+            taskId,
+            nodeId: node.id,
+            iteration,
+            // RFC-066: per-repo metadata for the {{__repos__}} /
+            // {{__repo_names__}} / {{__repo_count__}} placeholders.
+            repos: isoHandle.repos.map((r) => ({
+              repoPath: r.repoPath,
+              worktreePath: r.isoWorktreePath,
+              worktreeDirName: r.worktreeDirName,
+              mountPath: r.worktreeDirName,
+              subdir: '',
+              readonly: false,
+              baseBranch: r.baseBranch,
+            })),
+          },
+          ...(promptTemplate !== undefined ? { promptTemplate } : {}),
+          ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
+          ...(reviewContext !== undefined ? { reviewContext } : {}),
+          // RFC-132 (PR-C): a single flat clarifyContext (self/questioner/designer merged, §5). No
+          // separate designer External-Feedback context — the designer's Q&A rides
+          // clarifyContext.flatBlock.
+          ...(clarifyContext !== undefined ? { clarifyContext } : {}),
+          ...(priorOutputUpdate !== undefined ? { priorOutputUpdate } : {}),
+          ...(effectiveResumeSessionId !== undefined
+            ? { resumeSessionId: effectiveResumeSessionId }
+            : {}),
+          // RFC-148: the followup quartet is ONE PromptMode value now. The
+          // followup arm carries the session id (unrepresentable without one
+          // — decideEnvelopeFollowup only fires when the prior attempt
+          // captured a session). RFC-122: a same-session follow-up is
+          // bypassed when the STOP toggle flipped this attempt's
+          // clarify-vs-output mode (clarifyModeFlip) — the resumed session
+          // never emitted the now-needed protocol, so the runner takes the
+          // FULL renderUserPrompt path instead.
+          ...(followupDecision.followup &&
+          !clarifyModeFlip &&
+          effectiveResumeSessionId !== undefined
+            ? {
+                promptMode: {
+                  kind: 'followup' as const,
+                  resumeSessionId: effectiveResumeSessionId,
+                  reason: followupDecision.reason,
+                  ...(followupClarifyDirective !== undefined
+                    ? { clarifyDirective: followupClarifyDirective }
+                    : {}),
+                  // RFC-049: thread the structured failures through so the
+                  // runner renders the per-kind repair block. Empty array
+                  // (degraded mode) is fine — the followup still fires.
+                  ...(followupDecision.reason === 'port-validation'
+                    ? { portValidations: followupDecision.failures }
+                    : {}),
+                },
+              }
+            : {}),
+          // RFC-313: 本次 attempt 是主动会话升级后的第一次运行 ⇒ 让渲染器在完整
+          // prompt 的协议块之后追加一段简短告知。与 promptMode.followup 天然互斥
+          // （升级时 followupDecision 已被 decideFollowupForRetry 收回成 false），
+          // 所以短提示与告知永远不会同时出现。
+          ...(pendingRestartReason !== undefined
+            ? { priorSessionAbandonedReason: pendingRestartReason }
+            : {}),
+          // RFC-148: the clarify quartet is ONE ClarifyChannel value now —
+          // wiring family (parser cap) × this-run directive (enforcement)
+          // × stop-notice injection.
+          clarifyChannel: !hasClarifyChannel
+            ? { kind: 'none' as const }
+            : {
+                kind: channelKind,
+                directive: clarifyStopped
+                  ? ('stopped' as const)
+                  : clarifyOptional
+                    ? ('optional' as const)
+                    : effectiveHasClarifyChannel
+                      ? ('mandatory' as const)
+                      : ('suppressed' as const),
+                injectStopNotice: clarifyStopNotice,
               },
-            }
-          : {}),
-        // RFC-313: 本次 attempt 是主动会话升级后的第一次运行 ⇒ 让渲染器在完整
-        // prompt 的协议块之后追加一段简短告知。与 promptMode.followup 天然互斥
-        // （升级时 followupDecision 已被 decideFollowupForRetry 收回成 false），
-        // 所以短提示与告知永远不会同时出现。
-        ...(pendingRestartReason !== undefined
-          ? { priorSessionAbandonedReason: pendingRestartReason }
-          : {}),
-        // RFC-148: the clarify quartet is ONE ClarifyChannel value now —
-        // wiring family (parser cap) × this-run directive (enforcement)
-        // × stop-notice injection.
-        clarifyChannel: !hasClarifyChannel
-          ? { kind: 'none' as const }
-          : {
-              kind: channelKind,
-              directive: clarifyStopped
-                ? ('stopped' as const)
-                : clarifyOptional
-                  ? ('optional' as const)
-                  : effectiveHasClarifyChannel
-                    ? ('mandatory' as const)
-                    : ('suppressed' as const),
-              injectStopNotice: clarifyStopNotice,
-            },
-        skills: resolvedSkills,
-        dependents,
-        mcps,
-        plugins,
-        appHome: opts.appHome,
-        nodeRunPrompts: opts.nodeRunPrompts,
-        portArtifacts: opts.portArtifacts,
-        memoryInjectionQueries: opts.memoryInjectionQueries,
-        runtimeSessionLeases: opts.runtimeSessionLeases,
-        runtimeRegistry: opts.runtimeRegistry,
-        persistence: opts.persistence,
-        ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
-        log: log.child('run'),
-        ...(opts.signal ? { signal: opts.signal } : {}),
-        ...(opts.subagentLiveCapture !== undefined
-          ? { subagentLiveCapture: opts.subagentLiveCapture }
-          : {}),
-      })
+
+          dependents,
+          mcps,
+
+          memoryInjectionQueries: opts.memoryInjectionQueries,
+          runtimeSessionLeases: opts.runtimeSessionLeases,
+          runtimeRegistry: opts.runtimeRegistry,
+          persistence: opts.persistence,
+
+          log: log.child('run'),
+          ...(opts.signal ? { signal: opts.signal } : {}),
+          ...(opts.subagentLiveCapture !== undefined
+            ? { subagentLiveCapture: opts.subagentLiveCapture }
+            : {}),
+        },
+        {
+          workspaceRef: isoHandle.repos[0]?.isoWorktreePath ?? task.worktreePath,
+          material: resourceMaterial,
+          runtimeBinding: frozenRuntime.runtimeBinding,
+        },
+      )
 
       // RFC-026: persist opencode session id captured from the JSON event
       // stream so the NEXT clarify-driven rerun on this lineage can pass

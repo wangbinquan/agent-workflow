@@ -1159,6 +1159,7 @@
         "import:3dfc5d8044fabe57926e",
         "import:46f76cdc06775ed19dfa",
         "import:537871ccfb897af979ec",
+        "import:53a7eba16bfc8f4a9881",
         "import:5647ee99688ff730c2da",
         "import:5cde01eb6b7b59202904",
         "import:6672417c6cb20b8225c0",
@@ -1425,10 +1426,9 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:4e66dd18de4c624c19ee",
         "import:6875734b9d704176fa0a",
         "import:a4b9f375870533a8b70f",
-        "import:e8aa1e4bd3212a2bbe81",
+        "import:b423aa5dfd3972213ab0",
         "import:fd41e100119f2591fee8"
       ],
       "exportedSymbols": [
@@ -1536,29 +1536,37 @@
     {
       "boundaryEdgeIds": [
         "import:1493e4f3e6294d025210",
+        "import:19756eac937a2e4cbe05",
         "import:30e93cbef192db502883",
         "import:33556546fea52cf8243b",
-        "import:386f40988b7aa69baab2",
+        "import:397e92f3524c2614a6b5",
         "import:45116fbd9857c2298ea6",
         "import:4aa235ff209007de7fd5",
         "import:4ea5d4c6c34895182685",
-        "import:5c8d8df96c8bc7cdd1c9",
         "import:78dff9bee9c7a1a9b7e2",
         "import:7cffc9c74bf8270026c5",
         "import:991b5eb5694f9c7c71af",
         "import:b412df37bd3eb12c5b3b",
         "import:d9da9c702e7838715662",
+        "import:ebe9ecd5151426a20ccb",
         "import:ed78c98ff52250e0eda6",
         "import:f2ebb5f5a2d8b0e54751",
-        "import:f8f549a6355d854ddc9f"
+        "import:f8f549a6355d854ddc9f",
+        "import:fdfa9b288ee133a01fc2"
       ],
       "exportedSymbols": [
+        "TaskAgentInjectionResolution",
+        "TaskAgentResolvedInjectionSpec",
+        "TaskAgentResourceSession",
         "TaskExecutionInjectionResolution",
         "TaskExecutionResolvedInjectionSpec",
         "TaskExecutionResourceSession",
+        "createTaskAgentResourceSession",
         "createTaskExecutionResourceSession",
         "loadTaskExecutionResourceSnapshot",
+        "resolveSyntheticTaskAgentInjection",
         "resolveSyntheticTaskExecutionInjection",
+        "resolveTaskAgentInjection",
         "resolveTaskExecutionInjection"
       ],
       "file": "packages/backend/src/services/execution/taskExecutionResources.ts",
@@ -1650,6 +1658,7 @@
         "import:2f07ba4cf2c104a4e677",
         "import:44d998b728bbbc33bac2",
         "import:48b3c62a8ee9ac53661a",
+        "import:86e7235e1737b68216a0",
         "import:93dbc6c4691dd12d0281"
       ],
       "exportedSymbols": [
@@ -2368,7 +2377,6 @@
         "import:0286a8646b2f927c7d60",
         "import:03f904e33a25850bbfca",
         "import:0517477bb309799f3c94",
-        "import:058b994ce80ccee0a668",
         "import:1ecaa28b9d63c5049aea",
         "import:347be0261a5ef45eba81",
         "import:52ecdef3edb7fb4553b2",
@@ -2376,16 +2384,17 @@
         "import:59e4b5241b08b45205d9",
         "import:5ae6a1fbb370cc256f7e",
         "import:5bbfb6e4251b677e3b4e",
-        "import:86007ed50499ace8a726",
+        "import:6e109eef7566faf66cee",
+        "import:8b61da87262f48c14886",
         "import:9af46ae42a33dda547cf",
         "import:9e22458e484593ea92db",
         "import:a28f35b0356915075c36",
         "import:a5262c30ddde11b5716c",
         "import:a91c35e499c872aef8f7",
+        "import:acbd94bab72e4b4e2e41",
         "import:b7d3eebe685a3561fc45",
         "import:ca6046281bee8fcde23a",
         "import:d20a79fb6d290a383a6a",
-        "import:db7df63daa492bb50c75",
         "import:e917571bc230c6555d85"
       ],
       "exportedSymbols": [
@@ -3494,14 +3503,10 @@
         "import:55ed9421ce11cd3124c6",
         "import:62106c4b94ab47d09b1d",
         "import:6a895204248d6507f361",
-        "import:6c106e47305a3b3ebdc5",
         "import:87c673262e895a463947",
         "import:9469298f1d8c19e6862d",
         "import:a25045d4909b7552e5ac",
-        "import:a6fb16c2bb04fa5da12f",
         "import:b3687b266bacc4ea2e3a",
-        "import:c74b0ad40adb1d4f2de1",
-        "import:cb91aa44b71df5165d3c",
         "import:ee176df359198c8c415a",
         "import:fe03b21954ad00a6a922"
       ],
@@ -4214,6 +4219,7 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:00adcf54994c7ae00bd4",
         "import:016ed6b5e5ca69d3a96c",
         "import:05380b6b070bb45470b5",
         "import:056b40d2ef34c0fc41e5",
@@ -4535,6 +4541,7 @@
         "import:066c853fca987668f726",
         "import:0b11061a3f2229577cda",
         "import:1e1e92bf881073062336",
+        "import:29868ebcfced831af7a5",
         "import:7d98f8116ddfd3f54902",
         "import:8560dbf0705aecf7cb91",
         "import:97607e255c4e2f14a9dc",
@@ -6486,5 +6493,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:89265e267cc6ea6967895fda93c339a56a2c4ffe48d5ca86d7c6b9f42f903013"
+  "sourceDigest": "sha256:fafc3e0ab975032a49770dce883aa49f74cf4f0ebe7e269c2ce503864ca6186b"
 }

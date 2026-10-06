@@ -12,6 +12,10 @@ import type {
   TaskExecutionResourceRequest,
 } from '@/modules/resource-catalog/public/types'
 import type { ResolvedSkill } from '@/services/runtime/types'
+import type {
+  TaskAgentMaterialReferences,
+  TaskAgentResourceMaterial,
+} from '@/modules/resource-catalog/public/participants'
 import { DomainError } from '@/util/errors'
 import type {
   TaskExecutionResourceAuthority,
@@ -157,3 +161,98 @@ export function createTaskExecutionResourceSession(
 }
 
 export type TaskExecutionResourceSession = ReturnType<typeof createTaskExecutionResourceSession>
+
+/** Normal Task consumers retain declarations plus owner-bound content references. */
+export interface TaskAgentResolvedInjectionSpec {
+  readonly agent: TaskExecutionAgentSnapshot
+  readonly dependents: readonly TaskExecutionAgentSnapshot[]
+  readonly mcps: readonly TaskExecutionMcpSnapshot[]
+  readonly material: TaskAgentResourceMaterial
+}
+
+export type TaskAgentInjectionResolution =
+  | {
+      readonly kind: 'ok'
+      readonly spec: TaskAgentResolvedInjectionSpec
+      readonly notices: readonly []
+    }
+  | Extract<TaskExecutionInjectionResolution, { readonly kind: 'failed' }>
+
+export async function resolveTaskAgentInjection(
+  resourceAuthority: TaskExecutionResourceAuthority,
+  agentId: string,
+  materialReferences: TaskAgentMaterialReferences,
+): Promise<TaskAgentInjectionResolution> {
+  try {
+    const snapshot = await loadTaskExecutionResourceSnapshot(resourceAuthority, {
+      kind: 'agent-injection',
+      agentId,
+    })
+    const material = materialReferences.references(snapshot)
+    return {
+      kind: 'ok',
+      spec: Object.freeze({
+        agent: snapshot.root,
+        dependents: snapshot.dependents,
+        mcps: snapshot.mcps,
+        material,
+      }),
+      notices: [],
+    }
+  } catch (error) {
+    if (!(error instanceof DomainError)) throw error
+    const details = error.details as { readonly runtimeMessage?: unknown } | undefined
+    return {
+      kind: 'failed',
+      summary: error.message,
+      message: typeof details?.runtimeMessage === 'string' ? details.runtimeMessage : error.code,
+    }
+  }
+}
+
+/** Same first-snapshot cache, with an explicit selected content dialect. */
+export function createTaskAgentResourceSession(
+  resourceAuthority: TaskExecutionResourceAuthorityPair & {
+    readonly resources: TaskExecutionResourceBinding
+  },
+  materialReferences: TaskAgentMaterialReferences,
+) {
+  const injections = new Map<string, Promise<TaskAgentInjectionResolution>>()
+  const injection = (agentId: string): Promise<TaskAgentInjectionResolution> => {
+    let found = injections.get(agentId)
+    if (found === undefined) {
+      found = resolveTaskAgentInjection(resourceAuthority, agentId, materialReferences)
+      injections.set(agentId, found)
+    }
+    return found
+  }
+  return Object.freeze({ injection })
+}
+
+/** Synthetic declarations keep their original zero-resource check and failure. */
+export function resolveSyntheticTaskAgentInjection(
+  agent: TaskExecutionAgentSnapshot,
+  materialReferences: TaskAgentMaterialReferences,
+): TaskAgentInjectionResolution {
+  const resolved = resolveSyntheticTaskExecutionInjection(agent)
+  if (resolved.kind === 'failed') return resolved
+  return {
+    kind: 'ok',
+    spec: Object.freeze({
+      agent: resolved.spec.agent,
+      dependents: resolved.spec.dependents,
+      mcps: resolved.spec.mcps,
+      material: materialReferences.references({
+        kind: 'agent-injection',
+        root: resolved.spec.agent,
+        dependents: resolved.spec.dependents,
+        mcps: resolved.spec.mcps,
+        skills: [],
+        plugins: [],
+      }),
+    }),
+    notices: [],
+  }
+}
+
+export type TaskAgentResourceSession = ReturnType<typeof createTaskAgentResourceSession>

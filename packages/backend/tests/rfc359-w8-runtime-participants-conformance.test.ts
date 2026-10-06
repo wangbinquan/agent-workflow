@@ -1,3 +1,4 @@
+import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { composePortArtifactOperations } from '@/modules/task-execution/composition/portArtifacts'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
@@ -147,6 +148,7 @@ function sharedInput(
 > {
   return {
     db,
+    taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
     nodeRunPromptsFor: (appHome) =>
       composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
     portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),

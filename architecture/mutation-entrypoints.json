@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1897,
+    "entries": 1902,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -18643,6 +18643,31 @@
     },
     {
       "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts#createLocalTaskAgentMaterialReferences",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts#createLocalTaskAgentMaterialReferences",
+      "symbol": "createLocalTaskAgentMaterialReferences",
+      "targetContext": "resource-catalog",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
         "audit": true,
         "authority": "none-observed",
         "authorization": true,
@@ -22896,6 +22921,30 @@
         "authorization": false,
         "event": false,
         "fenceOrOcc": false,
+        "transaction": true
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/taskAgentRuntimeBindings.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/taskAgentRuntimeBindings.ts#createLocalTaskAgentRuntimeBindings",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/taskAgentRuntimeBindings.ts#createLocalTaskAgentRuntimeBindings",
+      "symbol": "createLocalTaskAgentRuntimeBindings",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
         "transaction": false
       },
       "file": "packages/backend/src/modules/runtime-management/infrastructure/opencodeNativeStoreGeneration.ts",
@@ -24545,6 +24594,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/localIsolationWorkspace.ts#createLocalIsolationWorkspaceFactory",
       "symbol": "createLocalIsolationWorkspaceFactory",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts#createLocalTaskAgentWorkspaceContents",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts#createLocalTaskAgentWorkspaceContents",
+      "symbol": "createLocalTaskAgentWorkspaceContents",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -29148,6 +29222,31 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskAgentRun.ts#runSelectedTaskAgent",
       "symbol": "runSelectedTaskAgent",
+      "targetContext": "task-execution",
+      "targetLayer": "engine"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/task-execution/composition/taskAgentRunFamily.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/task-execution/composition/taskAgentRunFamily.ts#runTaskAgentWithFamily",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskAgentRunFamily.ts#runTaskAgentWithFamily",
+      "symbol": "runTaskAgentWithFamily",
       "targetContext": "task-execution",
       "targetLayer": "engine"
     },
@@ -39955,6 +40054,31 @@
       },
       "file": "packages/backend/src/services/execution/taskExecutionResources.ts",
       "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/services/execution/taskExecutionResources.ts#createTaskAgentResourceSession",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResources.ts#createTaskAgentResourceSession",
+      "symbol": "createTaskAgentResourceSession",
+      "targetContext": "task-execution",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/services/execution/taskExecutionResources.ts",
+      "finalCriterion": "W3/W4 owner cutover",
       "id": "mutation:packages/backend/src/services/execution/taskExecutionResources.ts#createTaskExecutionResourceSession",
       "missingControls": [
         "audit",
@@ -45382,7 +45506,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:89265e267cc6ea6967895fda93c339a56a2c4ffe48d5ca86d7c6b9f42f903013",
+  "sourceDigest": "sha256:fafc3e0ab975032a49770dce883aa49f74cf4f0ebe7e269c2ce503864ca6186b",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

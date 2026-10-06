@@ -1,3 +1,4 @@
+import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { join } from 'node:path'
 import {
   composePortArtifactOperations,
@@ -141,6 +142,7 @@ export function composeTaskExecutionTestRuntime(
   return composeTaskExecutionRuntime({
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
+      taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
       nodeRunPromptsFor: (appHome) =>
         composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
       portArtifactsFor: (appHome) => composePortArtifactOperations(undefined, appHome),
@@ -282,6 +284,15 @@ export function runTaskWithRealTestTopology(
   const portArtifacts = selectPortArtifactOperations(options.portArtifacts, options.appHome)
   const nodeRunRuntime = options.nodeRunRuntime ?? composeNodeRunRuntimePersistence(options.db)
   const runtimeRegistry = options.runtimeRegistry ?? composeRuntimeRegistryOperations(options.db)
+  const taskAgentRuns =
+    options.taskAgentRuns ??
+    composeLocalTaskAgentRunFamilyFor({
+      request: options,
+      nodeRunRuntime,
+      runtimeRegistry,
+      nodeRunPrompts,
+      portArtifacts,
+    })
   const repositoryPublicationTransport =
     options.repositoryPublicationTransport ?? createTestRepositoryPublicationTransport()
   const isolationWorkspaces = selectIsolationWorkspaceFactory(options.isolationWorkspaces)
@@ -297,6 +308,8 @@ export function runTaskWithRealTestTopology(
   const runtime = composeTaskExecutionRuntime({
     readModels: persistence.reads,
     participants: createTaskExecutionRuntimeParticipants({
+      taskAgentRunsFor: (binding) =>
+        options.taskAgentRuns ?? composeLocalTaskAgentRunFamilyFor(binding),
       nodeRunPromptsFor: () => nodeRunPrompts,
       portArtifactsFor: () => portArtifacts,
       db: options.db,
@@ -330,6 +343,7 @@ export function runTaskWithRealTestTopology(
       ...options,
       nodeRunPrompts,
       portArtifacts,
+      taskAgentRuns,
       identityAccess,
       memoryInjectionQueries,
       observationInvocations,

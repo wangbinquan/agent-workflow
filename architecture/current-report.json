@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 504,
-    "architectureExceptions": 5777,
+    "architectureExceptions": 5791,
     "backgroundJobs": 361,
-    "crossContextImports": 6547,
+    "crossContextImports": 6567,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 26945,
-    "mutationEntrypoints": 1897,
+    "moduleSymbolOwners": 26983,
+    "mutationEntrypoints": 1902,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1169,
+    "publicSurfaces": 1173,
     "transactionExternalEffects": 267
   },
   "metrics": {
     "ambientWiringEntries": 504,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2254,
+    "backendProductionFiles": 2266,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -49,7 +49,7 @@
     ],
     "directNativeIntervals": 22,
     "directNativeTimers": 78,
-    "inboundBoundaryEdges": 298,
+    "inboundBoundaryEdges": 299,
     "knownViolations": 8,
     "moduleContexts": [
       {
@@ -98,7 +98,7 @@
       },
       {
         "context": "resource-catalog",
-        "files": 259
+        "files": 262
       },
       {
         "context": "run-observability",
@@ -106,11 +106,11 @@
       },
       {
         "context": "runtime-management",
-        "files": 63
+        "files": 67
       },
       {
         "context": "source-control",
-        "files": 95
+        "files": 97
       },
       {
         "context": "system-operations",
@@ -122,10 +122,10 @@
       },
       {
         "context": "task-execution",
-        "files": 420
+        "files": 423
       }
     ],
-    "moduleFiles": 1666,
+    "moduleFiles": 1678,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:89265e267cc6ea6967895fda93c339a56a2c4ffe48d5ca86d7c6b9f42f903013"
+  "sourceDigest": "sha256:fafc3e0ab975032a49770dce883aa49f74cf4f0ebe7e269c2ce503864ca6186b"
 }

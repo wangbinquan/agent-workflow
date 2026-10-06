@@ -71,6 +71,8 @@ import { awaitTaskDriverReleasedSettled } from './taskDriverLifecycle'
  * 那从来不是引擎差异，合并后一律由装配方交。
  */
 import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
+import type { TaskAgentRunFamily } from '../application/ports/taskAgentRunFamily'
+import type { LocalTaskAgentRunFamilyBinding } from '../composition/localTaskAgentRunFamily'
 
 export interface TaskExecutionRuntimeParticipantsInput {
   readonly workspacePresence: WorkspacePresenceQueries
@@ -84,6 +86,7 @@ export interface TaskExecutionRuntimeParticipantsInput {
   readonly nodeRunRuntime: NodeRunRuntimePersistence
   readonly nodeRunPromptsFor: (appHome: string) => NodeRunPromptOperations
   readonly portArtifactsFor: (appHome: string) => PortArtifactOperations
+  readonly taskAgentRunsFor: (binding: LocalTaskAgentRunFamilyBinding) => TaskAgentRunFamily
   readonly isolationWorkspaces?: IsolationWorkspaceFactory
   readonly repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
   readonly operationConfiguration?: TaskOperationConfigurationQueries
@@ -137,33 +140,47 @@ export function createTaskExecutionRuntimeParticipants(
       request: Parameters<TaskExecutionDriveParticipant['drive']>[0],
       topology: Parameters<TaskExecutionDriveParticipant['drive']>[1],
     ) {
+      const driveOptions = {
+        ...request,
+        observationInvocations: input.observationInvocations,
+        memoryInjectionQueries: input.memoryInjectionQueries,
+        persistence: input.persistence,
+        runtimeSessionLeases: input.runtimeSessionLeases,
+        runtimeRegistry: input.runtimeRegistry,
+        nodeRunRuntime: input.nodeRunRuntime,
+        nodeRunPrompts: input.nodeRunPromptsFor(request.appHome),
+        portArtifacts: input.portArtifactsFor(request.appHome),
+        isolationWorkspaces,
+        repositoryGitWorkspaces,
+        ...(input.operationConfiguration === undefined
+          ? {}
+          : { operationConfiguration: input.operationConfiguration }),
+        taskDagCollaboration: input.taskDagCollaboration,
+        collaborationRuntime: input.collaborationRuntime,
+        workgroupTurns: input.workgroupTurns,
+        childLaunch,
+        processConcurrencyScope: input.processConcurrencyScope,
+        identityAccess: input.identityAccess,
+        ...(input.codeHostConnections === undefined
+          ? {}
+          : { codeHostConnections: input.codeHostConnections }),
+        repositoryPublicationTransport: input.repositoryPublicationTransport,
+        dynamicWorkflow: input.dynamicWorkflow,
+      }
+      const taskAgentRuns = input.taskAgentRunsFor({
+        request,
+        nodeRunRuntime: driveOptions.nodeRunRuntime,
+        runtimeRegistry: driveOptions.runtimeRegistry,
+        nodeRunPrompts: driveOptions.nodeRunPrompts,
+        portArtifacts: driveOptions.portArtifacts,
+        ...(driveOptions.operationConfiguration === undefined
+          ? {}
+          : { operationConfiguration: driveOptions.operationConfiguration }),
+      })
       await driveTaskEngineApplication(
         {
-          ...request,
-          observationInvocations: input.observationInvocations,
-          memoryInjectionQueries: input.memoryInjectionQueries,
-          persistence: input.persistence,
-          runtimeSessionLeases: input.runtimeSessionLeases,
-          runtimeRegistry: input.runtimeRegistry,
-          nodeRunRuntime: input.nodeRunRuntime,
-          nodeRunPrompts: input.nodeRunPromptsFor(request.appHome),
-          portArtifacts: input.portArtifactsFor(request.appHome),
-          isolationWorkspaces,
-          repositoryGitWorkspaces,
-          ...(input.operationConfiguration === undefined
-            ? {}
-            : { operationConfiguration: input.operationConfiguration }),
-          taskDagCollaboration: input.taskDagCollaboration,
-          collaborationRuntime: input.collaborationRuntime,
-          workgroupTurns: input.workgroupTurns,
-          childLaunch,
-          processConcurrencyScope: input.processConcurrencyScope,
-          identityAccess: input.identityAccess,
-          ...(input.codeHostConnections === undefined
-            ? {}
-            : { codeHostConnections: input.codeHostConnections }),
-          repositoryPublicationTransport: input.repositoryPublicationTransport,
-          dynamicWorkflow: input.dynamicWorkflow,
+          ...driveOptions,
+          taskAgentRuns,
         },
         topology,
         runtimeComponents,

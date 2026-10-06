@@ -27,6 +27,11 @@ import type {
   TaskExecutionResourceRequest,
 } from './types'
 
+export type {
+  TaskAgentMaterialReferences,
+  TaskAgentResourceMaterial,
+} from '../application/ports/taskAgentMaterialReferences'
+
 // Content owners participate in Intent apply; their contracts are capabilities.
 export type {
   IntentPluginArtifactOwner,

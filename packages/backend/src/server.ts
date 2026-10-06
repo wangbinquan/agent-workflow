@@ -1,3 +1,4 @@
+import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
@@ -2182,6 +2183,7 @@ export function composeSqliteApplicationDeps(
       : composeTaskExecutionRuntime({
           participants: createTaskExecutionRuntimeParticipants({
             db: deps.db,
+            taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
             nodeRunPromptsFor: () => nodeRunPrompts,
             portArtifactsFor: () => portArtifacts,
             isolationWorkspaces,

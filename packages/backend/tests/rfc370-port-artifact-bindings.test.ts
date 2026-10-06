@@ -481,10 +481,10 @@ test('all three actual runNode launch sites bind the same artifact operations as
   const sf = source('modules/task-execution/composition/nodeMechanics.ts'),
     found = calls(sf, sf, 'runNode')
   expect(found).toHaveLength(3)
-  expect(found.map((call) => objectFields(call.arguments[0]!, sf).get('portArtifacts'))).toEqual([
-    'opts.portArtifacts',
-    'state.opts.portArtifacts',
-    'opts.portArtifacts',
+  expect(found.map((call) => call.arguments[0]!.getText(sf))).toEqual([
+    'opts.taskAgentRuns',
+    'state.opts.taskAgentRuns',
+    'opts.taskAgentRuns',
   ])
 })
 
@@ -492,14 +492,33 @@ test('both real fanout shard and aggregator runNode sites retain the same select
   const sf = source('modules/task-execution/composition/wrapperMechanics.ts'),
     found = calls(sf, sf, 'runNode')
   expect(found).toHaveLength(2)
-  expect(found.map((call) => objectFields(call.arguments[0]!, sf).get('nodeRunId'))).toEqual([
+  expect(found.map((call) => objectFields(call.arguments[1]!, sf).get('nodeRunId'))).toEqual([
     'shardRunId',
     'aggRunId',
   ])
-  expect(found.map((call) => objectFields(call.arguments[0]!, sf).get('portArtifacts'))).toEqual([
-    'opts.portArtifacts',
-    'opts.portArtifacts',
+  expect(found.map((call) => call.arguments[0]!.getText(sf))).toEqual([
+    'opts.taskAgentRuns',
+    'opts.taskAgentRuns',
   ])
+})
+
+// RFC-370 binds the original selected artifact receiver once into the complete
+// family; each launch above uses that family instead of a native options member.
+test('the real drive binds its exact selected artifact receiver into the family and preserves the native archive/read receiver', () => {
+  const drive = source('modules/task-execution/infrastructure/taskExecutionRuntimeParticipants.ts')
+  const selected = calls(drive, drive, 'input.taskAgentRunsFor')
+  expect(selected).toHaveLength(1)
+  expect(objectFields(selected[0]!.arguments[0]!, drive).get('portArtifacts')).toBe(
+    'driveOptions.portArtifacts',
+  )
+  expect(drive.text).toContain('portArtifacts: input.portArtifactsFor(request.appHome)')
+  const local = source('modules/task-execution/composition/localTaskAgentRunFamily.ts')
+  expect(calls(local, local, 'input.portArtifacts.archive')).toHaveLength(1)
+  expect(calls(local, local, 'input.portArtifacts.read')).toHaveLength(1)
+  expect(local.text).toContain(
+    'workspaceRef: workspaces.workingDirectory(item.source.workspaceRef)',
+  )
+  expect(local.text).toContain('workspaces.workingDirectory(request.fallbackWorkspaceRef)')
 })
 
 test('CLI initial and replacement sessions carry raw content selection into the real SQLite and PG composers', () => {

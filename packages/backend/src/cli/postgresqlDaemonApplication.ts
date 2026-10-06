@@ -1,3 +1,4 @@
+import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import type {
   WorkspaceUploadContentFactory,
   IsolationWorkspaceFactory,
@@ -1111,6 +1112,7 @@ export async function composePostgresqlApplication(
     archive: input.taskArchive,
     workspaceReads,
     runtime: {
+      taskAgentRunsFor: composeLocalTaskAgentRunFamilyFor,
       nodeRunPromptsFor: () => nodeRunPrompts,
       portArtifactsFor: () => portArtifacts,
       isolationWorkspaces,

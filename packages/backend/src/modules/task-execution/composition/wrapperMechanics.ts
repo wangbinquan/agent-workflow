@@ -17,7 +17,6 @@ import {
 } from '@agent-workflow/shared'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
-import { resolveFrozenRuntimeWith } from '@/services/nodeRunMint'
 import { fanoutInnerAgentRefKey } from '@/services/ref/runtimeRef'
 
 import {
@@ -28,7 +27,8 @@ import {
   pickReusableShardRun,
 } from '@/services/freshness'
 import { toContainerRelative } from '@/modules/task-execution/public/queries'
-import { runNode, type RunResult } from '@/services/runner'
+import { runTaskAgentWithFamily as runNode } from './taskAgentRunFamily'
+import type { RunResult } from '../application/ports/taskAgentRun'
 import { encodeWrapperProgress } from '@/modules/task-execution/domain/wrapperProgress'
 import type { Logger } from '@/util/log'
 // RFC-060 PR-E: splitDiff* imports removed — they were used only by the
@@ -80,7 +80,6 @@ import {
   type OneNodeResult,
   type SchedulerState,
 } from '@/modules/task-execution/composition/nodeMechanics'
-import { freezeBinaryConfig } from '@/services/execution/runtimeConfigFreeze'
 import { runAssembly, type IsoLike } from '@/services/schedulerAssembly'
 import { sha256Hex } from '@/util/hash'
 import type { WrapperDataPort } from '../application/ports/wrapperData'
@@ -805,73 +804,78 @@ async function dispatchFanoutShardAttempt(args: DispatchShardArgs): Promise<Disp
       spawn: async () => {
         // RFC-111 D15 (Codex impl-gate P2-1): freeze the runtime for the fanout shard
         // so a claude-selected agent-multi dispatches its shards on claude, not opencode.
-        const shardRuntime = await resolveFrozenRuntimeWith(
-          opts.nodeRunRuntime,
+        const shardRuntime = await opts.taskAgentRuns.runtimeBindings.resolve(
           shardRunId,
           injection.spec.agent.runtime,
           opts.defaultRuntime,
           null,
-          await freezeBinaryConfig(opts.configPath, opts.operationConfiguration),
         )
         const iso = shardIso as IsoHandle
-        const result = await runNode({
-          taskId,
-          nodeRunId: shardRunId,
-          nodeId: innerNode.id,
-          agent: injection.spec.agent,
-          triggerContext: state.triggerContext,
-          runtime: shardRuntime.protocol,
-          runtimeBinary: shardRuntime.binary,
-          runtimeParams: shardRuntime.params,
-          runtimeConfigDir: shardRuntime.configDir, // RFC-154: frozen config-dir profile
-          runtimeObservationIdentity: shardRuntime.observationIdentity,
-          observationInvocations: state.opts.observationInvocations,
-          inputs,
-          // RFC-130 D16: cwd + path tokens → the shard's isolated worktree.
-          worktreePath: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
-          // RFC-067: per-task Git identity threaded through fanout shard dispatch.
-          gitUserName: task.gitUserName,
-          gitUserEmail: task.gitUserEmail,
-          templateMeta: {
-            repoPath: iso.repos[0]?.isoWorktreePath ?? task.repoPath,
-            baseBranch: task.baseBranch,
+        const result = await runNode(
+          opts.taskAgentRuns,
+          {
             taskId,
+            nodeRunId: shardRunId,
             nodeId: innerNode.id,
-            iteration,
-            ...(shard !== null ? { shardKey } : {}),
-            // RFC-066: per-repo metadata for prompt placeholders.
-            repos: iso.repos.map((r) => ({
-              repoPath: r.repoPath,
-              worktreePath: r.isoWorktreePath,
-              worktreeDirName: r.worktreeDirName,
-              mountPath: r.worktreeDirName,
-              subdir: '',
-              readonly: false,
-              baseBranch: r.baseBranch,
-            })),
+            agent: injection.spec.agent,
+            triggerContext: state.triggerContext,
+            runtime: shardRuntime.protocol,
+
+            runtimeParams: shardRuntime.params,
+            runtimeConfigDir: shardRuntime.configDir, // RFC-154: frozen config-dir profile
+            runtimeObservationIdentity: shardRuntime.observationIdentity,
+            observationInvocations: state.opts.observationInvocations,
+            inputs,
+            // RFC-130 D16: cwd + path tokens → the shard's isolated worktree.
+
+            // RFC-067: per-task Git identity threaded through fanout shard dispatch.
+            gitUserName: task.gitUserName,
+            gitUserEmail: task.gitUserEmail,
+            templateMeta: {
+              repoPath: iso.repos[0]?.isoWorktreePath ?? task.repoPath,
+              baseBranch: task.baseBranch,
+              taskId,
+              nodeId: innerNode.id,
+              iteration,
+              ...(shard !== null ? { shardKey } : {}),
+              // RFC-066: per-repo metadata for prompt placeholders.
+              repos: iso.repos.map((r) => ({
+                repoPath: r.repoPath,
+                worktreePath: r.isoWorktreePath,
+                worktreeDirName: r.worktreeDirName,
+                mountPath: r.worktreeDirName,
+                subdir: '',
+                readonly: false,
+                baseBranch: r.baseBranch,
+              })),
+            },
+            ...(promptTemplate !== undefined ? { promptTemplate } : {}),
+            ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
+            // PR-D2: per-shard clarify stays off — RFC-148 ADT form.
+            clarifyChannel: { kind: 'none' as const },
+
+            dependents: injection.spec.dependents,
+            mcps: injection.spec.mcps,
+
+            memoryInjectionQueries: opts.memoryInjectionQueries,
+            runtimeSessionLeases: opts.runtimeSessionLeases,
+
+            runtimeRegistry: opts.runtimeRegistry,
+            persistence: opts.persistence,
+
+            ...(Object.keys(inputPortKinds).length > 0 ? { inputPortKinds } : {}),
+            log,
+            ...(opts.signal ? { signal: opts.signal } : {}),
+            ...(opts.subagentLiveCapture !== undefined
+              ? { subagentLiveCapture: opts.subagentLiveCapture }
+              : {}),
           },
-          ...(promptTemplate !== undefined ? { promptTemplate } : {}),
-          ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
-          // PR-D2: per-shard clarify stays off — RFC-148 ADT form.
-          clarifyChannel: { kind: 'none' as const },
-          skills: injection.spec.skills,
-          dependents: injection.spec.dependents,
-          mcps: injection.spec.mcps,
-          plugins: injection.spec.plugins,
-          appHome: opts.appHome,
-          memoryInjectionQueries: opts.memoryInjectionQueries,
-          runtimeSessionLeases: opts.runtimeSessionLeases,
-          portArtifacts: opts.portArtifacts,
-          runtimeRegistry: opts.runtimeRegistry,
-          persistence: opts.persistence,
-          ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
-          ...(Object.keys(inputPortKinds).length > 0 ? { inputPortKinds } : {}),
-          log,
-          ...(opts.signal ? { signal: opts.signal } : {}),
-          ...(opts.subagentLiveCapture !== undefined
-            ? { subagentLiveCapture: opts.subagentLiveCapture }
-            : {}),
-        })
+          {
+            workspaceRef: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
+            material: injection.spec.material,
+            runtimeBinding: shardRuntime.runtimeBinding,
+          },
+        )
         broadcastNodeStatus(taskId, shardRunId, innerNode.id, result.status)
         return result
       },
@@ -1305,73 +1309,78 @@ async function dispatchFanoutAggregatorAttempt(
       }),
       spawn: async () => {
         // RFC-111 D15 (Codex impl-gate P2-1): freeze the runtime for the aggregator.
-        const aggRuntime = await resolveFrozenRuntimeWith(
-          opts.nodeRunRuntime,
+        const aggRuntime = await opts.taskAgentRuns.runtimeBindings.resolve(
           aggRunId,
           injection.spec.agent.runtime,
           opts.defaultRuntime,
           null,
-          await freezeBinaryConfig(opts.configPath, opts.operationConfiguration),
         )
         const iso = aggIso as IsoHandle
-        const result = await runNode({
-          taskId,
-          nodeRunId: aggRunId,
-          nodeId: aggNode.id,
-          agent: injection.spec.agent,
-          triggerContext: state.triggerContext,
-          runtime: aggRuntime.protocol,
-          runtimeBinary: aggRuntime.binary,
-          runtimeParams: aggRuntime.params,
-          runtimeConfigDir: aggRuntime.configDir, // RFC-154: frozen config-dir profile
-          runtimeObservationIdentity: aggRuntime.observationIdentity,
-          observationInvocations: state.opts.observationInvocations,
-          inputs: aggInputs,
-          worktreePath: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
-          // RFC-067: per-task Git identity threaded through fanout aggregator dispatch.
-          gitUserName: task.gitUserName,
-          gitUserEmail: task.gitUserEmail,
-          templateMeta: {
-            repoPath: iso.repos[0]?.isoWorktreePath ?? task.repoPath,
-            baseBranch: task.baseBranch,
+        const result = await runNode(
+          opts.taskAgentRuns,
+          {
             taskId,
+            nodeRunId: aggRunId,
             nodeId: aggNode.id,
-            iteration,
-            // RFC-066: per-repo metadata for prompt placeholders.
-            repos: iso.repos.map((r) => ({
-              repoPath: r.repoPath,
-              worktreePath: r.isoWorktreePath,
-              worktreeDirName: r.worktreeDirName,
-              mountPath: r.worktreeDirName,
-              subdir: '',
-              readonly: false,
-              baseBranch: r.baseBranch,
-            })),
+            agent: injection.spec.agent,
+            triggerContext: state.triggerContext,
+            runtime: aggRuntime.protocol,
+
+            runtimeParams: aggRuntime.params,
+            runtimeConfigDir: aggRuntime.configDir, // RFC-154: frozen config-dir profile
+            runtimeObservationIdentity: aggRuntime.observationIdentity,
+            observationInvocations: state.opts.observationInvocations,
+            inputs: aggInputs,
+
+            // RFC-067: per-task Git identity threaded through fanout aggregator dispatch.
+            gitUserName: task.gitUserName,
+            gitUserEmail: task.gitUserEmail,
+            templateMeta: {
+              repoPath: iso.repos[0]?.isoWorktreePath ?? task.repoPath,
+              baseBranch: task.baseBranch,
+              taskId,
+              nodeId: aggNode.id,
+              iteration,
+              // RFC-066: per-repo metadata for prompt placeholders.
+              repos: iso.repos.map((r) => ({
+                repoPath: r.repoPath,
+                worktreePath: r.isoWorktreePath,
+                worktreeDirName: r.worktreeDirName,
+                mountPath: r.worktreeDirName,
+                subdir: '',
+                readonly: false,
+                baseBranch: r.baseBranch,
+              })),
+            },
+            ...(promptTemplate !== undefined ? { promptTemplate } : {}),
+            ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
+            // RFC-119 multi-process: prior aggregated output on re-run (see above).
+            ...(aggPriorOutputUpdate !== undefined
+              ? { priorOutputUpdate: aggPriorOutputUpdate }
+              : {}),
+            clarifyChannel: { kind: 'none' as const }, // PR-D2
+
+            dependents: injection.spec.dependents,
+            mcps: injection.spec.mcps,
+
+            memoryInjectionQueries: opts.memoryInjectionQueries,
+            runtimeSessionLeases: opts.runtimeSessionLeases,
+
+            runtimeRegistry: opts.runtimeRegistry,
+            persistence: opts.persistence,
+
+            log,
+            ...(opts.signal ? { signal: opts.signal } : {}),
+            ...(opts.subagentLiveCapture !== undefined
+              ? { subagentLiveCapture: opts.subagentLiveCapture }
+              : {}),
           },
-          ...(promptTemplate !== undefined ? { promptTemplate } : {}),
-          ...(nodeTimeoutMs !== undefined ? { timeoutMs: nodeTimeoutMs } : {}),
-          // RFC-119 multi-process: prior aggregated output on re-run (see above).
-          ...(aggPriorOutputUpdate !== undefined
-            ? { priorOutputUpdate: aggPriorOutputUpdate }
-            : {}),
-          clarifyChannel: { kind: 'none' as const }, // PR-D2
-          skills: injection.spec.skills,
-          dependents: injection.spec.dependents,
-          mcps: injection.spec.mcps,
-          plugins: injection.spec.plugins,
-          appHome: opts.appHome,
-          memoryInjectionQueries: opts.memoryInjectionQueries,
-          runtimeSessionLeases: opts.runtimeSessionLeases,
-          portArtifacts: opts.portArtifacts,
-          runtimeRegistry: opts.runtimeRegistry,
-          persistence: opts.persistence,
-          ...(opts.binaryOverride ? { binaryOverride: opts.binaryOverride } : {}),
-          log,
-          ...(opts.signal ? { signal: opts.signal } : {}),
-          ...(opts.subagentLiveCapture !== undefined
-            ? { subagentLiveCapture: opts.subagentLiveCapture }
-            : {}),
-        })
+          {
+            workspaceRef: iso.repos[0]?.isoWorktreePath ?? task.worktreePath,
+            material: injection.spec.material,
+            runtimeBinding: aggRuntime.runtimeBinding,
+          },
+        )
         broadcastNodeStatus(taskId, aggRunId, aggNode.id, result.status)
         return result
       },

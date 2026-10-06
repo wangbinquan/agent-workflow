@@ -16,8 +16,7 @@ import { readTaskCommitExcludePatterns } from '@/modules/task-execution/public/q
 import { createFileTaskOperationConfiguration } from '@/modules/task-execution/composition'
 // RFC-271 T6d — RuntimeRef 域的单一解析点（三处 agentId 裸读收口于此）。
 // `getAgentById` 的 import 随之删除：scheduler 不再自己查 agent 行。
-import { resolveSyntheticTaskExecutionInjection } from '@/services/execution/taskExecutionResources'
-import { resolveFrozenRuntimeWith } from '@/services/nodeRunMint'
+import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
 
 import type { TaskExecutionContextRef } from '@/modules/task-execution/public/commands'
 import type { SchedulerRuntimeTopology } from '@/modules/task-execution/public/participants'
@@ -32,7 +31,7 @@ import {
 import { runCommitPush } from '@/services/commitPushRunner'
 import { pickFreshestRun } from '@/services/freshness'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
-import { runNode } from '@/services/runner'
+import { runTaskAgentWithFamily as runNode } from '@/modules/task-execution/composition/taskAgentRunFamily'
 import { createLogger, type Logger } from '@/util/log'
 import {
   DEFAULT_COMMIT_PUSH_DIFF_MAX_BYTES,
@@ -50,7 +49,6 @@ import {
 // hand-copies in this file).
 // RFC-210 replay: submodule topology read-back + the fail-closed gate around it.
 import type { TaskMechanicsState as SchedulerState } from '@/services/execution/taskMechanicsState'
-import { freezeBinaryConfig } from '@/services/execution/runtimeConfigFreeze'
 import {
   INHERITABLE_RUN_CONFIG_KEYS,
   pickInheritableRunConfig,
@@ -160,7 +158,7 @@ export async function maybeRunCommitPush(
   const branch = task.branch
   // RFC-117: resolve the commit agent's runtime once for this task (profile name →
   // defaultRuntime → deprecated commitPushModel fallback); frozen per session below.
-  const rt = await state.opts.runtimeRegistry.resolveInternalAgentRuntime({
+  const rt = await state.opts.taskAgentRuns.runtimeBindings.internal({
     runtimeName: state.opts.commitPushRuntime,
     deprecatedModel: state.opts.commitPushModel,
     defaultRuntime: state.opts.defaultRuntime,
@@ -217,82 +215,77 @@ export async function maybeRunCommitPush(
         // inheritFrom — its source is config.commitPushRuntime / deprecated model
         // (not an agent.runtime row), so we pre-resolved `rt` above and freeze it
         // here, getting the same node_runs snapshot the other 3 dispatch points do.
-        const frozen = await resolveFrozenRuntimeWith(
-          state.opts.nodeRunRuntime,
+        const frozen = await state.opts.taskAgentRuns.runtimeBindings.resolve(
           sessionRunId,
           null,
           null,
-          {
-            protocol: rt.protocol,
-            binary: rt.binaryPath,
-            params: {
-              model: rt.model,
-              variant: rt.variant,
-              temperature: rt.temperature,
-              steps: rt.steps,
-              maxSteps: rt.maxSteps,
-              isSandbox: rt.isSandbox,
-            },
-            configDir: rt.configDir, // RFC-154: frozen with the rest of the snapshot
-            observationIdentity: rt.observationIdentity,
-          },
+          rt,
           // Codex impl-gate P1-2: profile binaryPath NULL + config head set used
           // to reach this spawn via opts.opencodeCmd; fold it into the freeze.
-          await freezeBinaryConfig(state.opts.configPath, state.opts.operationConfiguration),
         )
         const envelopeNonce = await state.opts.persistence.nodeRuns.loadEnvelopeNonce(sessionRunId)
         const commitAgent = buildCommitAgent()
         // RFC-282 B2 — the 6th/5th entries also go through the ONE resolver.
         // writeSem is held here: thread the scope signal (design §9-5).
-        const commitInjection = resolveSyntheticTaskExecutionInjection(commitAgent)
+        const commitInjection = resolveSyntheticTaskAgentInjection(
+          commitAgent,
+          state.opts.taskAgentRuns.materialReferences,
+        )
         if (commitInjection.kind === 'failed') {
           throw new Error(`commit-push injection resolve failed: ${commitInjection.message}`)
         }
-        const result = await runNode({
-          taskId: task.id,
-          nodeRunId: sessionRunId,
-          nodeId,
-          agent: commitAgent,
-          triggerContext: null,
-          expandPromptTemplate: false,
-          runtime: frozen.protocol,
-          runtimeBinary: frozen.binary,
-          runtimeParams: frozen.params,
-          runtimeConfigDir: frozen.configDir, // RFC-154: frozen config-dir profile
-          runtimeObservationIdentity: frozen.observationIdentity,
-          observationInvocations: state.opts.observationInvocations,
-          observationPurpose: 'system',
-          inputs: {},
-          worktreePath: repo.worktreePath,
-          promptTemplate: buildPrompt(envelopeNonce),
-          templateMeta: {
-            repoPath: repo.repoPath,
-            baseBranch: baseRef,
+        const result = await runNode(
+          state.opts.taskAgentRuns,
+          {
             taskId: task.id,
+            nodeRunId: sessionRunId,
             nodeId,
-            iteration,
-            repos: state.repos,
-            // RFC-248: `{{__repo_group__}}`；非组启动时不传 ⇒ 渲染空串。
-            ...(state.repoGroupName !== null ? { repoGroupName: state.repoGroupName } : {}),
+            agent: commitAgent,
+            triggerContext: null,
+            expandPromptTemplate: false,
+            runtime: frozen.protocol,
+
+            runtimeParams: frozen.params,
+            runtimeConfigDir: frozen.configDir, // RFC-154: frozen config-dir profile
+            runtimeObservationIdentity: frozen.observationIdentity,
+            observationInvocations: state.opts.observationInvocations,
+            observationPurpose: 'system',
+            inputs: {},
+
+            promptTemplate: buildPrompt(envelopeNonce),
+            templateMeta: {
+              repoPath: repo.repoPath,
+              baseBranch: baseRef,
+              taskId: task.id,
+              nodeId,
+              iteration,
+              repos: state.repos,
+              // RFC-248: `{{__repo_group__}}`；非组启动时不传 ⇒ 渲染空串。
+              ...(state.repoGroupName !== null ? { repoGroupName: state.repoGroupName } : {}),
+            },
+            // RFC-282 B2 / RFC-345 T4a — code-owned synthetic agents are resolved
+            // explicitly without a catalog read. Any future managed reference
+            // fails closed instead of being hidden behind hand-written empties.
+
+            dependents: commitInjection.spec.dependents,
+            mcps: commitInjection.spec.mcps,
+
+            memoryInjectionQueries: state.opts.memoryInjectionQueries,
+            runtimeSessionLeases: state.opts.runtimeSessionLeases,
+            runtimeRegistry: state.opts.runtimeRegistry,
+            persistence: state.opts.persistence,
+            log: log.child('commit'),
+            gitUserName: task.gitUserName,
+            gitUserEmail: task.gitUserEmail,
+
+            ...(state.opts.signal ? { signal: state.opts.signal } : {}),
           },
-          // RFC-282 B2 / RFC-345 T4a — code-owned synthetic agents are resolved
-          // explicitly without a catalog read. Any future managed reference
-          // fails closed instead of being hidden behind hand-written empties.
-          skills: commitInjection.spec.skills,
-          dependents: commitInjection.spec.dependents,
-          mcps: commitInjection.spec.mcps,
-          plugins: commitInjection.spec.plugins,
-          appHome: state.opts.appHome,
-          memoryInjectionQueries: state.opts.memoryInjectionQueries,
-          runtimeSessionLeases: state.opts.runtimeSessionLeases,
-          runtimeRegistry: state.opts.runtimeRegistry,
-          persistence: state.opts.persistence,
-          log: log.child('commit'),
-          gitUserName: task.gitUserName,
-          gitUserEmail: task.gitUserEmail,
-          ...(state.opts.binaryOverride ? { binaryOverride: state.opts.binaryOverride } : {}),
-          ...(state.opts.signal ? { signal: state.opts.signal } : {}),
-        })
+          {
+            workspaceRef: repo.worktreePath,
+            material: commitInjection.spec.material,
+            runtimeBinding: frozen.runtimeBinding,
+          },
+        )
         const msg = result.outputs[COMMIT_MESSAGE_PORT]
         return {
           message: msg !== undefined && msg.trim() !== '' ? msg : null,

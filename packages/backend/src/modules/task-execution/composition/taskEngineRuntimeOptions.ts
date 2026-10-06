@@ -28,6 +28,7 @@ import type { ChildExecutionLaunchOperations } from '../application/ports/childE
 import type { TaskOperationConfigurationQueries } from '../application/ports/taskOperationConfiguration'
 
 import type { NodeRunPromptOperations } from '../application/ports/nodeRunPromptContent'
+import type { TaskAgentRunFamily } from '../application/ports/taskAgentRunFamily'
 
 export interface RunTaskOptions {
   taskId: string
@@ -48,6 +49,8 @@ export interface RunTaskOptions {
   nodeRunPrompts?: NodeRunPromptOperations
   /** Selected again by each child drive; never serialized as inherited configuration. */
   portArtifacts?: PortArtifactOperations
+  /** Complete invocation family selected by bootstrap for this drive. */
+  taskAgentRuns?: TaskAgentRunFamily
   /** Bootstrap selects a complete factory; each effective canonical scene binds its own scope. */
   isolationWorkspaces?: IsolationWorkspaceFactory
   repositoryGitWorkspaces?: RepositoryGitWorkspaceFactory
@@ -223,6 +226,7 @@ export type BoundRunTaskOptions = RunTaskOptions & {
   readonly nodeRunRuntime: NodeRunRuntimePersistence
   readonly nodeRunPrompts: NodeRunPromptOperations
   readonly portArtifacts: PortArtifactOperations
+  readonly taskAgentRuns: TaskAgentRunFamily
   readonly isolationWorkspaces: IsolationWorkspaceFactory
   readonly repositoryGitWorkspaces: RepositoryGitWorkspaceFactory
   readonly taskDagCollaboration: TaskDagCollaborationOperations

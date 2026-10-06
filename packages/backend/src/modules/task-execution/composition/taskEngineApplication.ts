@@ -47,7 +47,7 @@ import { DW_ORCHESTRATOR_NODE_ID } from '@/services/orchestratorAgent'
 import { createLogger } from '@/util/log'
 import { Paths } from '@/util/paths'
 import type { SchedulerRuntimeTopology } from '../public/participants'
-import { createTaskExecutionResourceSession } from '@/services/execution/taskExecutionResources'
+import { createTaskAgentResourceSession } from '@/services/execution/taskExecutionResources'
 import { taskStopProjection, type TaskStopCause } from '../public/types'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
 
@@ -240,13 +240,13 @@ async function runTaskEngineOrchestratorInner(
     )
     return
   }
-  const taskExecutionResources = createTaskExecutionResourceSession(
+  const taskExecutionResources = createTaskAgentResourceSession(
     Object.freeze({
       authority: taskExecutionAdmission.authority,
       actor: taskExecutionAdmission.actor,
       resources: taskExecutionIdentity.taskExecutionResources,
     }),
-    opts.appHome,
+    opts.taskAgentRuns.materialReferences,
   )
 
   // RFC-066 PR-B T9: load per-repo metadata once at the top so every runner

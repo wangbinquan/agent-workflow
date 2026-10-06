@@ -1,5 +1,8 @@
 // RFC-370: actual SC and Task consumers must use the complete selected Git workspace.
 import { afterEach, describe, expect, test } from 'bun:test'
+import { DEFAULT_CONFIG_DIR_PROFILE } from '@agent-workflow/shared'
+import type { TaskAgentRunFamily } from '@/modules/task-execution/application/ports/taskAgentRunFamily'
+import { EMPTY_RUNTIME_PROFILE } from '@/services/execution/agentInjection'
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -24,6 +27,10 @@ import { runGit } from '@/util/git'
 import { GitWorkspaceStore, MappedGitWorkspaceFactory } from './helpers/repositoryGitWorkspace'
 import { createTestRepositoryPublicationTransport } from './helpers/taskExecutionTestTopology'
 import { held } from './helpers/portArtifactContent'
+
+function unselectedTaskOperation(): never {
+  throw new Error('clean repository fixture unexpectedly reached agent execution')
+}
 
 const roots: string[] = []
 function temp(): string {
@@ -488,11 +495,22 @@ describe('RFC-370 complete selected repository Git workspace', () => {
             },
           },
         },
-        runtimeRegistry: {
-          async resolveInternalAgentRuntime() {
-            return {}
+        taskAgentRuns: {
+          runtimeBindings: {
+            async internal() {
+              return {
+                protocol: 'opencode',
+                runtimeBinding: null,
+                params: EMPTY_RUNTIME_PROFILE,
+                configDir: DEFAULT_CONFIG_DIR_PROFILE.opencode,
+              }
+            },
+            resolve: unselectedTaskOperation,
+            ofSession: unselectedTaskOperation,
           },
-        },
+          materialReferences: { references: unselectedTaskOperation },
+          open: unselectedTaskOperation,
+        } satisfies TaskAgentRunFamily,
       },
     } as unknown as TaskMechanicsState
     expect(

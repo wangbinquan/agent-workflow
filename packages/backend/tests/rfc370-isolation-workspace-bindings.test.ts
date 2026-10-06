@@ -38,7 +38,9 @@ import {
   resolveIsolatedConflict,
 } from '@/modules/task-execution/infrastructure/isolationWorkspaceView'
 import { buildMergeAgent } from '@/services/mergeAgent'
-import { resolveSyntheticTaskExecutionInjection } from '@/services/execution/taskExecutionResources'
+import { resolveSyntheticTaskAgentInjection } from '@/services/execution/taskExecutionResources'
+import { composeLocalTaskAgentRunFamily } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
+import { composeRuntimeRegistryOperations } from './helpers/runtimeRegistryComposition'
 import type { CollaborationRuntimeMechanics } from '@/modules/collaboration/public/participants'
 import type { Logger } from '@/util/log'
 import { Semaphore } from '@/util/semaphore'
@@ -144,6 +146,42 @@ async function fixture(db: ProviderNeutralDatabase, mounts = ['']) {
   const store = new MemoryIsolationStore(),
     factory = Object.freeze(new MemoryIsolationFactory(store))
   const agent = { ...buildMergeAgent(), id: 'scope-worker' }
+  const runOptions = {
+    appHome: `memory:home:${taskId}`,
+    persistence,
+    executionContext: context,
+    isolationWorkspaces: factory,
+    nodeRunRuntime: new Proxy(composeNodeRunRuntimePersistence(db), {
+      get(target, key) {
+        if (key === 'withSelection')
+          return async () => {
+            throw new Error('fixture stopped before runtime execution')
+          }
+        const value = Reflect.get(target, key)
+        return typeof value === 'function' ? value.bind(target) : value
+      },
+    }),
+    defaultNodeRetries: 0,
+    operationConfiguration: {
+      readBinaryPaths() {
+        throw new Error('fixture stopped before runtime execution')
+      },
+      readCommitExcludePatterns() {
+        return []
+      },
+    },
+  }
+  const unselectedContent = (): never => {
+    throw new Error('isolation fixture unexpectedly reached agent content')
+  }
+  const taskAgentRuns = composeLocalTaskAgentRunFamily({
+    appHome: runOptions.appHome,
+    nodeRunRuntime: runOptions.nodeRunRuntime,
+    operationConfiguration: runOptions.operationConfiguration,
+    runtimeRegistry: composeRuntimeRegistryOperations(db),
+    nodeRunPrompts: { store: unselectedContent, read: unselectedContent },
+    portArtifacts: { archive: unselectedContent, read: unselectedContent },
+  })
   const state = {
     taskId,
     task: {
@@ -155,34 +193,10 @@ async function fixture(db: ProviderNeutralDatabase, mounts = ['']) {
     },
     definition: EMPTY,
     log,
-    opts: {
-      appHome: `memory:home:${taskId}`,
-      persistence,
-      executionContext: context,
-      isolationWorkspaces: factory,
-      nodeRunRuntime: new Proxy(composeNodeRunRuntimePersistence(db), {
-        get(target, key) {
-          if (key === 'withSelection')
-            return async () => {
-              throw new Error('fixture stopped before runtime execution')
-            }
-          const value = Reflect.get(target, key)
-          return typeof value === 'function' ? value.bind(target) : value
-        },
-      }),
-      defaultNodeRetries: 0,
-      operationConfiguration: {
-        readBinaryPaths() {
-          throw new Error('fixture stopped before runtime execution')
-        },
-        readCommitExcludePatterns() {
-          return []
-        },
-      },
-    },
+    opts: { ...runOptions, taskAgentRuns },
     taskExecutionResources: {
       async injection() {
-        return resolveSyntheticTaskExecutionInjection(agent)
+        return resolveSyntheticTaskAgentInjection(agent, taskAgentRuns.materialReferences)
       },
     },
     repos: mounts.map((mount, repoIndex) => ({

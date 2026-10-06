@@ -1,5 +1,7 @@
+import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import { createFileWorkspacePresenceQueries } from '@/modules/source-control/composition'
 import type { WorkspacePresenceQueries } from '@/modules/source-control/public/queries'
+import type { IsolationWorkspaceFactory } from '@/modules/source-control/public/types'
 import { composeObservationUsageSource } from '@/modules/task-execution/composition/observationUsageSource'
 import { composeLocalInvocationObservations } from '@/modules/run-observability/composition/localInvocations'
 import { composeRepositoryPreparation } from '@/modules/source-control/composition/repositoryPreparation'
@@ -115,6 +117,9 @@ export async function createEachProviderTaskExecution(
   options: {
     readonly completionMode?: TaskDriveCompletionMode
     readonly workspacePresence?: WorkspacePresenceQueries
+    /** Complete explicit family replacement exercised by actual provider drives. */
+    readonly taskAgentRunsFor?: typeof composeLocalTaskAgentRunFamilyFor
+    readonly isolationWorkspaces?: IsolationWorkspaceFactory
     /**
      * RFC-359 AC-1（第 9 刀第 1 步）：SQLite 的路由壳在调用 `retryNode` / `resumeTask`
      * **之前**就展开这个对象，所以缺省那个「一调用就炸」的桩会让 retry / resume 两个动词
@@ -218,6 +223,10 @@ export async function createEachProviderTaskExecution(
     const provider: SelectedSqliteTaskExecutionProviderRuntime =
       composeSqliteTaskExecutionProviderRuntime(sqlite, {
         runtime: {
+          taskAgentRunsFor: options.taskAgentRunsFor ?? composeLocalTaskAgentRunFamilyFor,
+          ...(options.isolationWorkspaces === undefined
+            ? {}
+            : { isolationWorkspaces: options.isolationWorkspaces }),
           workspacePresence,
           identityAccess: runtimeIdentity,
           memoryInjectionQueries: sqliteMemoryInjectionQueries(sqlite),
@@ -356,6 +365,10 @@ export async function createEachProviderTaskExecution(
   const provider: SelectedPostgresqlTaskExecutionProviderRuntime =
     composePostgresqlTaskExecutionProviderRuntime(postgresql, {
       runtime: {
+        taskAgentRunsFor: options.taskAgentRunsFor ?? composeLocalTaskAgentRunFamilyFor,
+        ...(options.isolationWorkspaces === undefined
+          ? {}
+          : { isolationWorkspaces: options.isolationWorkspaces }),
         workspacePresence,
         observationInvocations: composeLocalInvocationObservations(
           db,

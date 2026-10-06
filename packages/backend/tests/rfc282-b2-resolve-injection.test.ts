@@ -179,7 +179,7 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
     // RFC-354 (schema v6): the sixth read resolves a fan-out shard source's
     // declared output kind from its agent (`sourcePortKindOf`).
     expect(text.split('taskExecutionResources.injection(').length - 1).toBe(6)
-    expect(text.split('resolveSyntheticTaskExecutionInjection(').length - 1).toBe(3)
+    expect(text.split('resolveSyntheticTaskAgentInjection(').length - 1).toBe(3)
     // the commit-push / merge bypass shape (four hand-written empty arrays)
     expect(text).not.toContain('skills: [],\n          dependents: [],')
     expect(text).not.toContain('skills: [],\n      dependents: [],')

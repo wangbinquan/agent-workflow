@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:89265e267cc6ea6967895fda93c339a56a2c4ffe48d5ca86d7c6b9f42f903013",
+    "sourceDigest": "sha256:fafc3e0ab975032a49770dce883aa49f74cf4f0ebe7e269c2ce503864ca6186b",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -136,10 +136,7 @@
       "file": "packages/backend/tests/architecture/rfc294-review-offered-edge-dag.test.ts",
       "id": "rfc294-review-off-dag-offered-edges",
       "symbol": "OFF_DAG_OFFERED_EDGE_DEBT",
-      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。 （RFC-359 AC-1 第 13 刀收尾：`/api/tasks` 的两个 provider 绑定合成一个中立工厂 `createTaskRouteOperations`，两份 provider 命名文件退役，这一对随之销账。）基线 41 → 39。",
-      "allowGrowth": {
-        "why": "RFC-370 Task core CI address correction SOURCE12-R1: actual original counter 37 -> 40 for rfc294-review-off-dag-offered-edges. No production runtime source changes. Three actual moved memory offered addresses and two actual native compatibility bridge addresses are mechanically registered; all old rows, classifiers, assertions and budgets remain unchanged. The existing original effect collector only receives the exact moved Task production act-site again; effect classification and projection remain unchanged. Nine fixture type-only locations and JSON formatting retain original runtime inputs and assertions. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. The six real Task calls, all roots, A-G, CS adapters and deployment remain open and are excluded from this candidate. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 review 2026-08-30 §B1：design §3.1 DAG 之外的 observed offered-consumption 边（按 from 文件 × to context），逐条点名清偿波次；只许降。新增 DAG 外 public 导入要么补 DAG 要么入账，不得静默成为 offered-consumption。 RFC-359 W1-T7e：legacy SQLite 工作组引擎把「能否反问」转发到 collaboration 的一份实现（RC→COL，design §3.1 未画），精确登记一条，44 → 45；随 W4-E legacy 引擎退役销账。 RFC-359 W4-D25：human-gate 停靠原子合一退役了 sqliteTaskParkTransaction.ts 与 task-execution 侧的同步 HumanGateOpenParticipant 端口，两条 DAG 外 offered 边随源码消失，45 → 43。 RFC-359 W4-D19c-tail：legacy 工作组引擎岛整个退役，那条 W1-T7e 登记的 RC→COL 边按它自己写明的销账条件消失，43 → 42。 RFC-359 W4-D23c：技能目录合一退役了 postgresqlSkillRepository.ts（PG 那 3342 行原生实现的一部分），它登记的 RC→memory 边随源码消失——早于该条自己写明的 W4-E3 波次，42 → 41。RFC-359 AC-1（命名债收尾 §5hj）41 → 42：`/api/tasks` 的实现与 PG 绑定拆成两个文件，那条 `→ collaboration` 的 offered 边两边都有（实现里的投影用、绑定里的工厂装配也用）。逐文件精确锁定的口径不变，只是从一条变两条。 （RFC-359 AC-1 第 12 刀：运行时参与者两个引擎合成一份中立实现，两份 provider 前缀文件退役，这一对随之销账。）基线 42 → 41。 （RFC-359 AC-1 第 13 刀收尾：`/api/tasks` 的两个 provider 绑定合成一个中立工厂 `createTaskRouteOperations`，两份 provider 命名文件退役，这一对随之销账。）基线 41 → 39。"
     },
     {
       "baseline": 136,
@@ -307,10 +304,7 @@
       "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
       "id": "rfc328-cross-context-provider-bridge-debt",
       "symbol": "CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT",
-      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。",
-      "allowGrowth": {
-        "why": "RFC-370 Task core CI address correction SOURCE12-R1: actual original counter 19 -> 21 for rfc328-cross-context-provider-bridge-debt. No production runtime source changes. Three actual moved memory offered addresses and two actual native compatibility bridge addresses are mechanically registered; all old rows, classifiers, assertions and budgets remain unchanged. The existing original effect collector only receives the exact moved Task production act-site again; effect classification and projection remain unchanged. Nine fixture type-only locations and JSON formatting retain original runtime inputs and assertions. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. The six real Task calls, all roots, A-G, CS adapters and deployment remain open and are excluded from this candidate. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。"
     },
     {
       "baseline": 399,
@@ -827,8 +821,11 @@
       "id": "rfc294-mutation-entrypoints",
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
-      "baseline": 1897,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
+      "baseline": 1902,
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
+      "allowGrowth": {
+        "why": "RFC-370 Task whole-family wiring SOURCE42-R2: actual original counter 1897 -> 1902 for rfc294-mutation-entrypoints. The six actual production calls and every root/child drive consume the selected complete Task family. The previously approved complete Task core and native compatibility remain unchanged. Normal RC declarations, RM frozen/session/internal binding and SC working/mount content keep every original business field, read/error position, one compile/bind and selected receiver. Fourteen new hosted instances plus mechanical fixture/address changes retain all original assertions/budgets. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. System/smoke/retention, RC-MCP, scripts, H7, A-T7/A-G, CS adapters and deployment remain open. Retire this one-commit declaration in the next ordinary successor."
+      }
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -862,8 +859,11 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6547,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
+      "baseline": 6567,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
+      "allowGrowth": {
+        "why": "RFC-370 Task whole-family wiring SOURCE42-R2: actual original counter 6547 -> 6567 for rfc294-cross-context-observed-imports. The six actual production calls and every root/child drive consume the selected complete Task family. The previously approved complete Task core and native compatibility remain unchanged. Normal RC declarations, RM frozen/session/internal binding and SC working/mount content keep every original business field, read/error position, one compile/bind and selected receiver. Fourteen new hosted instances plus mechanical fixture/address changes retain all original assertions/budgets. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. System/smoke/retention, RC-MCP, scripts, H7, A-T7/A-G, CS adapters and deployment remain open. Retire this one-commit declaration in the next ordinary successor."
+      }
     },
     {
       "id": "rfc294-target-context-edges",
@@ -883,8 +883,11 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5777,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
+      "baseline": 5791,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
+      "allowGrowth": {
+        "why": "RFC-370 Task whole-family wiring SOURCE42-R2: actual original counter 5777 -> 5791 for rfc294-architecture-exceptions. The six actual production calls and every root/child drive consume the selected complete Task family. The previously approved complete Task core and native compatibility remain unchanged. Normal RC declarations, RM frozen/session/internal binding and SC working/mount content keep every original business field, read/error position, one compile/bind and selected receiver. Fourteen new hosted instances plus mechanical fixture/address changes retain all original assertions/budgets. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. System/smoke/retention, RC-MCP, scripts, H7, A-T7/A-G, CS adapters and deployment remain open. Retire this one-commit declaration in the next ordinary successor."
+      }
     },
     {
       "id": "rfc294-facades",
@@ -897,8 +900,11 @@
       "id": "rfc294-public-surfaces",
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
-      "baseline": 1169,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
+      "baseline": 1173,
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
+      "allowGrowth": {
+        "why": "RFC-370 Task whole-family wiring SOURCE42-R2: actual original counter 1169 -> 1173 for rfc294-public-surfaces. The six actual production calls and every root/child drive consume the selected complete Task family. The previously approved complete Task core and native compatibility remain unchanged. Normal RC declarations, RM frozen/session/internal binding and SC working/mount content keep every original business field, read/error position, one compile/bind and selected receiver. Fourteen new hosted instances plus mechanical fixture/address changes retain all original assertions/budgets. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. System/smoke/retention, RC-MCP, scripts, H7, A-T7/A-G, CS adapters and deployment remain open. Retire this one-commit declaration in the next ordinary successor."
+      }
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -918,16 +924,19 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 26945,
-      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。"
+      "baseline": 26983,
+      "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
+      "allowGrowth": {
+        "why": "RFC-370 Task whole-family wiring SOURCE42-R2: actual original counter 26945 -> 26983 for rfc294-module-symbol-owners. The six actual production calls and every root/child drive consume the selected complete Task family. The previously approved complete Task core and native compatibility remain unchanged. Normal RC declarations, RM frozen/session/internal binding and SC working/mount content keep every original business field, read/error position, one compile/bind and selected receiver. Fourteen new hosted instances plus mechanical fixture/address changes retain all original assertions/budgets. Preserve 129 ordered inventories/why, surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this actual matching growth is permitted, without altering classifiers or assertions. System/smoke/retention, RC-MCP, scripts, H7, A-T7/A-G, CS adapters and deployment remain open. Retire this one-commit declaration in the next ordinary successor."
+      }
     }
   ],
   "note": "RFC-317 T16/T17 —— 全仓「已知违规 / 豁免」账本的高水位。本仓的债务账本散在十二处，形态各异（数组 / 对象 / new Set / new Map / Record）。每一处都已有精确相等或 stale 检测，挡得住『悄悄加一条』；但**账本整体在长**这件事此前没有任何地方看得见——加一条只是 diff 里多两行，没有一个数字会变。这里给每份账本钉一个条目数：与源码逐字相等（增删都要改这里），且相对上一个 commit **只降不升**（升要显式声明 allowGrowth 并点名 RFC）。清点走 census.ts 的 ledgerEntryCount，与守卫同一份实现。 RFC-371 历史审计：b446e48f8db0c0fc5e2bfb7c22c8f5e5e010ab3d 相对父提交9887a0cd8af5e9dc7a94e2ea8ca6fe2f692b4c5f将rfc294-module-symbol-owners从25545调整为25547，遗漏当次allowGrowth声明；增加OBSERVATION_TOKEN_BUCKETS、formatObservationBucket、TokenBuckets并移除keys，净增2，属于已批准的分类Token展示。此处保留遗漏，不补造后继未增长提交的许可、不改写旧历史，也不把后继CI结果追记为旧提交准入通过；详见design/RFC-371-run-observability/token-classification.md。",
   "schemaVersion": 1,
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "b62b4c2a18f90863900273ed8eeb4d8e5b84fc73",
-    "contentDigest": "sha256:6c28b1cf8c0603302f3f5b8ccd5807a1655a01f47267ab21f64aa8f4d9aa1efe",
+    "currentSnapshotSha": "e24de73a3ab0b12c99998b70bd5e3904e5be003a",
+    "contentDigest": "sha256:86f666d38295373ce0c91f1bcd353c58ed30dc72d85d3950d98d48d4b32de3a2",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

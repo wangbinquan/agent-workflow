@@ -21,6 +21,9 @@ export function createLocalAgentInvocationPreparation(input: {
     'environment'
   >
   readonly taskSnapshot?: true
+  readonly onTaskSnapshot?: (
+    snapshot: NonNullable<Parameters<typeof bindNativeAgentInvocation>[0]['taskSnapshot']>,
+  ) => void
 }): AgentInvocationPreparation {
   const material = input.material
   const binding = input.binding
@@ -68,7 +71,13 @@ export function createLocalAgentInvocationPreparation(input: {
         // Task reads its execution cmd/env at the later original binding
         // point; evidence continues reading the same plan's live environment.
         ...(taskSnapshot === true
-          ? { taskSnapshot: { command: plan.cmd, environment: plan.env } }
+          ? {
+              taskSnapshot: (() => {
+                const snapshot = { command: plan.cmd, environment: plan.env }
+                input.onTaskSnapshot?.(snapshot)
+                return snapshot
+              })(),
+            }
           : {}),
         evidenceScope: {
           environment: () => plan.env,

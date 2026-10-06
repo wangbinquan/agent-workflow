@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:89265e267cc6ea6967895fda93c339a56a2c4ffe48d5ca86d7c6b9f42f903013`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:fafc3e0ab975032a49770dce883aa49f74cf4f0ebe7e269c2ce503864ca6186b`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2254 |
+| backend production TS 文件 | 2266 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1666 / 18 |
+| `modules/**` 文件 / 非空 context | 1678 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -21,7 +21,7 @@
 | background work entries | 361 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 298 / 52 |
+| RFC-317 boundary census（inbound / outbound） | 299 / 52 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -30,15 +30,15 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5777 |
+| `architectureExceptions` | 5791 |
 | `backgroundJobs` | 361 |
-| `crossContextImports` | 6547 |
+| `crossContextImports` | 6567 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 26945 |
-| `mutationEntrypoints` | 1897 |
+| `moduleSymbolOwners` | 26983 |
+| `mutationEntrypoints` | 1902 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1169 |
+| `publicSurfaces` | 1173 |
 | `transactionExternalEffects` | 267 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -48,27 +48,27 @@
 | context / layer | 数量 |
 | --- | --- |
 | task-execution / infrastructure | 147 |
-| task-execution / application | 132 |
-| resource-catalog / infrastructure | 129 |
-| task-execution / composition | 78 |
-| resource-catalog / application | 77 |
+| task-execution / application | 133 |
+| resource-catalog / infrastructure | 130 |
+| task-execution / composition | 80 |
+| resource-catalog / application | 78 |
 | development-automation / application | 61 |
 | collaboration / infrastructure | 47 |
 | development-automation / infrastructure | 44 |
-| resource-catalog / composition | 37 |
+| resource-catalog / composition | 38 |
 | collaboration / application | 36 |
-| source-control / infrastructure | 35 |
+| source-control / infrastructure | 36 |
 | task-execution / domain | 35 |
 | development-automation / domain | 34 |
 | run-observability / application | 34 |
 | source-control / application | 30 |
 | intent / application | 29 |
-| runtime-management / application | 28 |
+| runtime-management / application | 29 |
 | system-operations / infrastructure | 27 |
 | identity-access / application | 25 |
 | run-observability / domain | 25 |
+| runtime-management / infrastructure | 24 |
 | integration / application | 23 |
-| runtime-management / infrastructure | 23 |
 | system-operations / application | 23 |
 | integration / infrastructure | 22 |
 | run-observability / infrastructure | 21 |
@@ -81,8 +81,8 @@
 | development-automation / composition | 15 |
 | collaboration / domain | 14 |
 | digital-employee / application | 14 |
+| source-control / composition | 13 |
 | identity-access / infrastructure | 12 |
-| source-control / composition | 12 |
 | system-operations / composition | 12 |
 | code-capability / domain | 11 |
 | digital-employee / infrastructure | 11 |
@@ -91,6 +91,7 @@
 | source-control / domain | 11 |
 | intent / infrastructure | 10 |
 | memory / domain | 9 |
+| runtime-management / composition | 9 |
 | collaboration / composition | 8 |
 | event-center / application | 8 |
 | intent / composition | 8 |
@@ -98,7 +99,6 @@
 | development-automation / engine | 7 |
 | memory / infrastructure | 7 |
 | run-observability / composition | 7 |
-| runtime-management / composition | 7 |
 | task-execution / public | 7 |
 | digital-employee / composition | 6 |
 | digital-employee / domain | 6 |
@@ -208,12 +208,12 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3743 |
-| legacy-inbound | 1836 |
+| legacy-outbound | 3741 |
+| legacy-inbound | 1842 |
 | infrastructure-external | 317 |
-| offered-consumption | 309 |
-| temporary-internal-debt | 97 |
-| off-dag-offered | 89 |
+| offered-consumption | 315 |
+| temporary-internal-debt | 104 |
+| off-dag-offered | 92 |
 | authority-type-only | 78 |
 | required-implementation | 72 |
 | external-layer-debt | 4 |
@@ -223,10 +223,10 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3743 |
-| legacy-inbound | 1836 |
-| temporary-internal-debt | 97 |
-| off-dag-offered | 89 |
+| legacy-outbound | 3741 |
+| legacy-inbound | 1842 |
+| temporary-internal-debt | 104 |
+| off-dag-offered | 92 |
 | no-circular | 6 |
 | external-layer-debt | 4 |
 | no-util-to-upper | 2 |
@@ -235,9 +235,9 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3096 |
-| W9-D | 1053 |
-| W4-E1 | 767 |
+| W9 | 3092 |
+| W9-D | 1058 |
+| W4-E1 | 780 |
 | W5 | 203 |
 | W4 | 201 |
 | W4-B | 187 |
@@ -256,12 +256,12 @@
 | context | 数量 |
 | --- | --- |
 | task-execution | 279 |
-| resource-catalog | 240 |
+| resource-catalog | 242 |
 | collaboration | 122 |
 | source-control | 101 |
 | system-operations | 69 |
 | identity-access | 65 |
-| runtime-management | 57 |
+| runtime-management | 59 |
 | digital-employee | 51 |
 | development-automation | 39 |
 | knowledge-evolution | 25 |
@@ -274,7 +274,7 @@
 | intent | 10 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1169）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1173）
 
 | context | 数量 |
 | --- | --- |

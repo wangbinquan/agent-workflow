@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1211,
+    "consumers": 1221,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
-    "methods": 1503,
+    "methods": 1507,
     "opaqueTypeRefs": 15,
-    "recursiveFields": 26648,
-    "symbols": 1169
+    "recursiveFields": 26809,
+    "symbols": 1173
   },
   "entries": [
     {
@@ -102910,6 +102910,146 @@
         "maxUnionVariants": 12
       },
       "consumerEdgeIds": [
+        "import:635657ddc26562e86d09",
+        "import:ebe9ecd5151426a20ccb"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:references.$parameter:snapshot",
+          "type": "Extract<\n  FrozenTaskExecutionResourceSnapshot,\n  { readonly kind: 'agent-injection' }\n>"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ebe9ecd5151426a20ccb"
+          ],
+          "fieldPath": "$method:references.$return.plugins",
+          "type": "AgentMaterialIntent['injection']['plugins']"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:ebe9ecd5151426a20ccb"
+          ],
+          "fieldPath": "$method:references.$return.skills",
+          "type": "AgentMaterialIntent['injection']['skills']"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "id": "public:resource-catalog:participants:TaskAgentMaterialReferences",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [
+            "import:635657ddc26562e86d09",
+            "import:ebe9ecd5151426a20ccb"
+          ],
+          "name": "references",
+          "signatureDigest": "sha256:a2e7c25899584c2142e75b96d039602464dfd39e9444df492ce6fdc5e85371f1"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:635657ddc26562e86d09",
+          "file": "packages/backend/src/modules/task-execution/application/ports/taskAgentRunFamily.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRunFamily.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:ebe9ecd5151426a20ccb",
+          "file": "packages/backend/src/services/execution/taskExecutionResources.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResources.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:afc261a9a33360882ddd6ec088bd2bd9419b79de883974311ee02fec7bf40391",
+      "status": "target-context-current-surface",
+      "symbol": "TaskAgentMaterialReferences",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [
+        "Extract"
+      ],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:0e51d41de31d8a22c58e",
+        "import:19756eac937a2e4cbe05"
+      ],
+      "context": "resource-catalog",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [
+            "import:19756eac937a2e4cbe05"
+          ],
+          "fieldPath": "plugins",
+          "type": "AgentMaterialIntent['injection']['plugins']"
+        },
+        {
+          "consumerEdgeIds": [
+            "import:19756eac937a2e4cbe05"
+          ],
+          "fieldPath": "skills",
+          "type": "AgentMaterialIntent['injection']['skills']"
+        }
+      ],
+      "file": "packages/backend/src/modules/resource-catalog/public/participants.ts",
+      "id": "public:resource-catalog:participants:TaskAgentResourceMaterial",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:0e51d41de31d8a22c58e",
+          "file": "packages/backend/src/modules/task-execution/application/ports/taskAgentRunFamily.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRunFamily.ts#$file"
+        },
+        {
+          "context": "legacy",
+          "edgeId": "import:19756eac937a2e4cbe05",
+          "file": "packages/backend/src/services/execution/taskExecutionResources.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/execution/taskExecutionResources.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [
+        "public:resource-catalog:participants:TaskAgentMaterialReferences"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:8dc55200faec9c114a94f8d0a9aa25ec2d4ee5792b7aac57f118cca85ceb694a",
+      "status": "target-context-current-surface",
+      "symbol": "TaskAgentResourceMaterial",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
         "import:302471dfa46f55c523f8"
       ],
       "context": "resource-catalog",
@@ -134546,11 +134686,15 @@
         "maxUnionVariants": 44
       },
       "consumerEdgeIds": [
+        "import:0b0076388d633646159b",
+        "import:2fb06305f28e8ffa15cf",
         "import:5def1e5186b344765004",
         "import:5e0775217682517ba6b0",
         "import:600a8a2e72f85a1ce99d",
+        "import:6dee3c39d7e0d34aa82d",
         "import:a9ca4c36134369b5f3e5",
-        "import:c200f42f7cc3b4fe8362"
+        "import:c200f42f7cc3b4fe8362",
+        "import:d7a9ae661f6f7ab90cd7"
       ],
       "context": "runtime-management",
       "dataClass": "metadata",
@@ -134559,6 +134703,7 @@
       "fields": [
         {
           "consumerEdgeIds": [
+            "import:2fb06305f28e8ffa15cf",
             "import:a9ca4c36134369b5f3e5",
             "import:c200f42f7cc3b4fe8362"
           ],
@@ -134567,13 +134712,17 @@
         },
         {
           "consumerEdgeIds": [
+            "import:2fb06305f28e8ffa15cf",
             "import:a9ca4c36134369b5f3e5"
           ],
           "fieldPath": "configDir.env",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:2fb06305f28e8ffa15cf",
+            "import:6dee3c39d7e0d34aa82d"
+          ],
           "fieldPath": "configDir.name",
           "type": "string"
         },
@@ -134624,7 +134773,10 @@
         },
         {
           "consumerEdgeIds": [
+            "import:0b0076388d633646159b",
+            "import:2fb06305f28e8ffa15cf",
             "import:5def1e5186b344765004",
+            "import:6dee3c39d7e0d34aa82d",
             "import:a9ca4c36134369b5f3e5",
             "import:c200f42f7cc3b4fe8362"
           ],
@@ -134647,6 +134799,9 @@
         },
         {
           "consumerEdgeIds": [
+            "import:0b0076388d633646159b",
+            "import:2fb06305f28e8ffa15cf",
+            "import:6dee3c39d7e0d34aa82d",
             "import:a9ca4c36134369b5f3e5",
             "import:c200f42f7cc3b4fe8362"
           ],
@@ -134722,7 +134877,9 @@
         },
         {
           "consumerEdgeIds": [
+            "import:0b0076388d633646159b",
             "import:5def1e5186b344765004",
+            "import:6dee3c39d7e0d34aa82d",
             "import:a9ca4c36134369b5f3e5",
             "import:c200f42f7cc3b4fe8362"
           ],
@@ -134811,8 +134968,10 @@
         },
         {
           "consumerEdgeIds": [
+            "import:2fb06305f28e8ffa15cf",
             "import:a9ca4c36134369b5f3e5",
-            "import:c200f42f7cc3b4fe8362"
+            "import:c200f42f7cc3b4fe8362",
+            "import:d7a9ae661f6f7ab90cd7"
           ],
           "fieldPath": "nodeRunId",
           "type": "string"
@@ -134868,7 +135027,10 @@
           "type": "'runtime-management'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:2fb06305f28e8ffa15cf",
+            "import:6dee3c39d7e0d34aa82d"
+          ],
           "fieldPath": "runContent.reference",
           "type": "string"
         },
@@ -134903,7 +135065,10 @@
           "type": "'runtime-management'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:2fb06305f28e8ffa15cf",
+            "import:6dee3c39d7e0d34aa82d"
+          ],
           "fieldPath": "runtimeBinding.$variant:0.reference",
           "type": "string"
         },
@@ -134958,7 +135123,10 @@
           "type": "'runtime-management'"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:2fb06305f28e8ffa15cf",
+            "import:6dee3c39d7e0d34aa82d"
+          ],
           "fieldPath": "workspace.reference",
           "type": "string"
         },
@@ -135001,7 +135169,9 @@
           "signatureDigest": "sha256:8610745686a9cd96a1ccb76a9aa47e9ab44b312b4e14ccda72cb78fe19764d0c"
         },
         {
-          "consumerEdgeIds": [],
+          "consumerEdgeIds": [
+            "import:2fb06305f28e8ffa15cf"
+          ],
           "name": "info",
           "signatureDigest": "sha256:8b43a7a5a66e4db411b0c228f7556ec6c585330c68a3902c66cac1cbb819e323"
         },
@@ -135013,6 +135183,18 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
       "productionConsumers": [
+        {
+          "context": "resource-catalog",
+          "edgeId": "import:0b0076388d633646159b",
+          "file": "packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:2fb06305f28e8ffa15cf",
+          "file": "packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts#$file"
+        },
         {
           "context": "task-execution",
           "edgeId": "import:5def1e5186b344765004",
@@ -135032,6 +135214,12 @@
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/runtimeSmoke.ts#$file"
         },
         {
+          "context": "resource-catalog",
+          "edgeId": "import:6dee3c39d7e0d34aa82d",
+          "file": "packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts#$file"
+        },
+        {
           "context": "task-execution",
           "edgeId": "import:a9ca4c36134369b5f3e5",
           "file": "packages/backend/src/modules/task-execution/application/ports/taskAgentMaterial.ts",
@@ -135042,6 +135230,12 @@
           "edgeId": "import:c200f42f7cc3b4fe8362",
           "file": "packages/backend/src/modules/task-execution/composition/taskAgentMaterialPreparation.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/taskAgentMaterialPreparation.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:d7a9ae661f6f7ab90cd7",
+          "file": "packages/backend/src/modules/task-execution/application/ports/taskAgentRunFamily.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRunFamily.ts#$file"
         }
       ],
       "publicTypeConsumerIds": [
@@ -135366,6 +135560,179 @@
       "signatureDigest": "sha256:5cb89c49b734dde7356ec002fc513c2cca2e5a751eb60ba2f69567edc8b429f8",
       "status": "target-context-current-surface",
       "symbol": "FrozenRuntimeRef",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 28,
+        "maxUnionVariants": 22
+      },
+      "consumerEdgeIds": [],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDir.env",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "configDir.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "observationIdentity.acceptedName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "observationIdentity.configurationRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "observationIdentity.registrationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "params.variant.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "runtimeBinding.$variant:0.owner.$variant:0",
+          "type": "'source-control'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "runtimeBinding.$variant:0.owner.$variant:1",
+          "type": "'resource-catalog'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "runtimeBinding.$variant:0.owner.$variant:2",
+          "type": "'runtime-management'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "runtimeBinding.$variant:0.reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "runtimeBinding.$variant:0.version.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "runtimeBinding.$variant:0.version.$variant:1",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "runtimeBinding.$variant:0.version.$variant:2",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "runtimeBinding.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:FrozenTaskAgentRuntime",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "productionConsumers": [],
+      "publicTypeConsumerIds": [
+        "public:runtime-management:participants:TaskAgentRuntimeBindings"
+      ],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:c04cc938d1d8bc1cbb5c1d8349ed65f38bbfdec33947246a31b669b260553523",
+      "status": "target-context-current-surface",
+      "symbol": "FrozenTaskAgentRuntime",
       "transaction": "caller-tx",
       "unresolvedTypeRefs": [],
       "version": 1
@@ -141742,6 +142109,702 @@
       "budget": {
         "maxMethods": 5,
         "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 128,
+        "maxUnionVariants": 104
+      },
+      "consumerEdgeIds": [
+        "import:5bf2a4b716a836b756d8"
+      ],
+      "context": "runtime-management",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "participants",
+      "fields": [
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$parameter:input.defaultRuntime.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$parameter:input.defaultRuntime.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$parameter:input.deprecatedModel.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$parameter:input.deprecatedModel.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$parameter:input.runtimeName.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$parameter:input.runtimeName.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.configDir.env",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.configDir.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.observationIdentity.acceptedName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.observationIdentity.configurationRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.observationIdentity.registrationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.params.variant.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.runtimeBinding.$variant:0.owner.$variant:0",
+          "type": "'source-control'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.runtimeBinding.$variant:0.owner.$variant:1",
+          "type": "'resource-catalog'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.runtimeBinding.$variant:0.owner.$variant:2",
+          "type": "'runtime-management'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.runtimeBinding.$variant:0.reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.runtimeBinding.$variant:0.version.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.runtimeBinding.$variant:0.version.$variant:1",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.runtimeBinding.$variant:0.version.$variant:2",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:internal.$return.runtimeBinding.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$parameter:sessionId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.configDir.env",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.configDir.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.observationIdentity.acceptedName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.observationIdentity.configurationRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.observationIdentity.registrationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.params.variant.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.runtimeBinding.$variant:0.owner.$variant:0",
+          "type": "'source-control'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.runtimeBinding.$variant:0.owner.$variant:1",
+          "type": "'resource-catalog'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.runtimeBinding.$variant:0.owner.$variant:2",
+          "type": "'runtime-management'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.runtimeBinding.$variant:0.reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.runtimeBinding.$variant:0.version.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.runtimeBinding.$variant:0.version.$variant:1",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.runtimeBinding.$variant:0.version.$variant:2",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:0.runtimeBinding.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:ofSession.$return.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:agentRuntime.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:agentRuntime.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:agentRuntime.$variant:2",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:defaultRuntime.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:defaultRuntime.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:defaultRuntime.$variant:2",
+          "type": "undefined"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.configDir.env",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.configDir.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.observationIdentity.acceptedName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.observationIdentity.configurationRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.observationIdentity.registrationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.params.variant.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.runtimeBinding.$variant:0.owner.$variant:0",
+          "type": "'source-control'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.runtimeBinding.$variant:0.owner.$variant:1",
+          "type": "'resource-catalog'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.runtimeBinding.$variant:0.owner.$variant:2",
+          "type": "'runtime-management'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.runtimeBinding.$variant:0.reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.runtimeBinding.$variant:0.version.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.runtimeBinding.$variant:0.version.$variant:1",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.runtimeBinding.$variant:0.version.$variant:2",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:0.runtimeBinding.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:inheritFrom.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$parameter:nodeRunId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.configDir.env",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.configDir.name",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.observationIdentity.acceptedName",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.observationIdentity.configurationRevision",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.observationIdentity.registrationId",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.extraArgs.$variant:0",
+          "type": "readonly string[]"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.extraArgs.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.isSandbox",
+          "type": "boolean"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.maxSteps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.maxSteps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.model.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.model.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.steps.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.steps.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.temperature.$variant:0",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.temperature.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.variant.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.params.variant.$variant:1",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.protocol.$variant:0",
+          "type": "'opencode'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.protocol.$variant:1",
+          "type": "'claude-code'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.runtimeBinding.$variant:0.owner.$variant:0",
+          "type": "'source-control'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.runtimeBinding.$variant:0.owner.$variant:1",
+          "type": "'resource-catalog'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.runtimeBinding.$variant:0.owner.$variant:2",
+          "type": "'runtime-management'"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.runtimeBinding.$variant:0.reference",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.runtimeBinding.$variant:0.version.$variant:0",
+          "type": "string"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.runtimeBinding.$variant:0.version.$variant:1",
+          "type": "number"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.runtimeBinding.$variant:0.version.$variant:2",
+          "type": "null"
+        },
+        {
+          "consumerEdgeIds": [],
+          "fieldPath": "$method:resolve.$return.runtimeBinding.$variant:1",
+          "type": "null"
+        }
+      ],
+      "file": "packages/backend/src/modules/runtime-management/public/participants.ts",
+      "id": "public:runtime-management:participants:TaskAgentRuntimeBindings",
+      "members": [],
+      "methods": [
+        {
+          "consumerEdgeIds": [],
+          "name": "internal",
+          "signatureDigest": "sha256:9ba1b6e43671a16f430dcc488e52fbd3af7f3b7ad9c2954e865d2cefb605e3fe"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "ofSession",
+          "signatureDigest": "sha256:d7031319015bfd145f9f581d3ffea1a8cff3546e2540d0965191c1d6ab61baab"
+        },
+        {
+          "consumerEdgeIds": [],
+          "name": "resolve",
+          "signatureDigest": "sha256:20ff07e2857a7d917ff94193c3d507e6f9793b37a195346605ecaf51a29b617a"
+        }
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
+      "productionConsumers": [
+        {
+          "context": "task-execution",
+          "edgeId": "import:5bf2a4b716a836b756d8",
+          "file": "packages/backend/src/modules/task-execution/application/ports/taskAgentRunFamily.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRunFamily.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "ephemeral",
+      "signatureDigest": "sha256:1665c7e5dded137f72b34a6551f93c3b3b64c87afd309c3a7e6ddff180b9291d",
+      "status": "target-context-current-surface",
+      "symbol": "TaskAgentRuntimeBindings",
+      "transaction": "caller-tx",
+      "unresolvedTypeRefs": [],
+      "version": 1
+    },
+    {
+      "authority": "context-bound",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
         "maxTransitiveLeafFields": 24,
         "maxUnionVariants": 12
       },
@@ -141896,6 +142959,7 @@
       },
       "consumerEdgeIds": [
         "import:1728ba376dd956cca487",
+        "import:203bfee525aeadabe3f6",
         "import:408db528f9771d26aa95",
         "import:4c5eb96e7bb086b60701",
         "import:a98760213c9c85577b89"
@@ -141948,6 +143012,7 @@
         {
           "consumerEdgeIds": [
             "import:1728ba376dd956cca487",
+            "import:203bfee525aeadabe3f6",
             "import:4c5eb96e7bb086b60701"
           ],
           "fieldPath": "$method:resolveAgentRuntime.$return.configDir.env",
@@ -141956,6 +143021,7 @@
         {
           "consumerEdgeIds": [
             "import:1728ba376dd956cca487",
+            "import:203bfee525aeadabe3f6",
             "import:408db528f9771d26aa95",
             "import:4c5eb96e7bb086b60701",
             "import:a98760213c9c85577b89"
@@ -142001,6 +143067,7 @@
         {
           "consumerEdgeIds": [
             "import:1728ba376dd956cca487",
+            "import:203bfee525aeadabe3f6",
             "import:408db528f9771d26aa95",
             "import:4c5eb96e7bb086b60701",
             "import:a98760213c9c85577b89"
@@ -142106,6 +143173,7 @@
         {
           "consumerEdgeIds": [
             "import:1728ba376dd956cca487",
+            "import:203bfee525aeadabe3f6",
             "import:4c5eb96e7bb086b60701"
           ],
           "fieldPath": "$method:resolveInternalAgentRuntime.$return.configDir.env",
@@ -142114,6 +143182,7 @@
         {
           "consumerEdgeIds": [
             "import:1728ba376dd956cca487",
+            "import:203bfee525aeadabe3f6",
             "import:408db528f9771d26aa95",
             "import:4c5eb96e7bb086b60701",
             "import:a98760213c9c85577b89"
@@ -142159,6 +143228,7 @@
         {
           "consumerEdgeIds": [
             "import:1728ba376dd956cca487",
+            "import:203bfee525aeadabe3f6",
             "import:408db528f9771d26aa95",
             "import:4c5eb96e7bb086b60701",
             "import:a98760213c9c85577b89"
@@ -142249,6 +143319,7 @@
         {
           "consumerEdgeIds": [
             "import:1728ba376dd956cca487",
+            "import:203bfee525aeadabe3f6",
             "import:4c5eb96e7bb086b60701"
           ],
           "fieldPath": "$method:resolveRuntimeByName.$return.configDir.env",
@@ -142257,6 +143328,7 @@
         {
           "consumerEdgeIds": [
             "import:1728ba376dd956cca487",
+            "import:203bfee525aeadabe3f6",
             "import:408db528f9771d26aa95",
             "import:4c5eb96e7bb086b60701",
             "import:a98760213c9c85577b89"
@@ -142302,6 +143374,7 @@
         {
           "consumerEdgeIds": [
             "import:1728ba376dd956cca487",
+            "import:203bfee525aeadabe3f6",
             "import:408db528f9771d26aa95",
             "import:4c5eb96e7bb086b60701",
             "import:a98760213c9c85577b89"
@@ -142399,6 +143472,12 @@
           "edgeId": "import:1728ba376dd956cca487",
           "file": "packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/task-execution/application/ports/taskAgentRun.ts#$file"
+        },
+        {
+          "context": "task-execution",
+          "edgeId": "import:203bfee525aeadabe3f6",
+          "file": "packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts#$file"
         },
         {
           "context": "task-execution",
@@ -143290,6 +144369,8 @@
         "public:runtime-management:participants:AgentInvocationProtocol",
         "public:runtime-management:participants:AgentMaterialCompiler",
         "public:runtime-management:participants:AgentMaterialIntent",
+        "public:runtime-management:participants:FrozenTaskAgentRuntime",
+        "public:runtime-management:participants:TaskAgentRuntimeBindings",
         "public:runtime-management:queries:RuntimeExecutionQueries",
         "public:runtime-management:queries:isRuntimeMcpTestEligible",
         "public:runtime-management:types:ResolvedRuntimeProfile",
@@ -143440,6 +144521,8 @@
         }
       ],
       "publicTypeConsumerIds": [
+        "public:runtime-management:participants:FrozenTaskAgentRuntime",
+        "public:runtime-management:participants:TaskAgentRuntimeBindings",
         "public:runtime-management:queries:RuntimeExecutionQueries",
         "public:runtime-management:types:ResolvedRuntimeProfile"
       ],
@@ -143613,6 +144696,8 @@
         "public:runtime-management:commands:RuntimeProfileCommands",
         "public:runtime-management:participants:AgentMaterialCompiler",
         "public:runtime-management:participants:AgentMaterialIntent",
+        "public:runtime-management:participants:FrozenTaskAgentRuntime",
+        "public:runtime-management:participants:TaskAgentRuntimeBindings",
         "public:runtime-management:queries:RuntimeExecutionQueries",
         "public:runtime-management:types:ResolvedRuntimeProfile",
         "public:runtime-management:types:RuntimeView"
@@ -168431,16 +169516,12 @@
           "type": "T"
         },
         {
-          "consumerEdgeIds": [
-            "import:998fd65ab077856a1a2a"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$return.appHome",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:998fd65ab077856a1a2a"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "$call.$return.binaryOverride",
           "type": "readonly string[]"
         },
@@ -189094,16 +190175,12 @@
           "type": "void"
         },
         {
-          "consumerEdgeIds": [
-            "import:ae39b5aa97c0e6d132ec"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "schedulerDriver.$method:drive.$parameter:request.appHome",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:ae39b5aa97c0e6d132ec"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "schedulerDriver.$method:drive.$parameter:request.binaryOverride",
           "type": "readonly string[]"
         },
@@ -189420,16 +190497,12 @@
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:ae39b5aa97c0e6d132ec"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "schedulerDriver.$method:resumeChild.$parameter:input.runtime.runConfig.appHome",
           "type": "string"
         },
         {
-          "consumerEdgeIds": [
-            "import:ae39b5aa97c0e6d132ec"
-          ],
+          "consumerEdgeIds": [],
           "fieldPath": "schedulerDriver.$method:resumeChild.$parameter:input.runtime.runConfig.binaryOverride",
           "type": "readonly string[]"
         },
@@ -206582,7 +207655,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:89265e267cc6ea6967895fda93c339a56a2c4ffe48d5ca86d7c6b9f42f903013",
+  "sourceDigest": "sha256:fafc3e0ab975032a49770dce883aa49f74cf4f0ebe7e269c2ce503864ca6186b",
   "targetContexts": [
     "collaboration",
     "development-automation",
