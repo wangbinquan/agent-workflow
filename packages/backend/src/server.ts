@@ -422,9 +422,9 @@ import {
   deferEventCenterModule,
   type EventCenterAutomationCapability,
   type EventCenterModule,
+  selectLocalCustomObserverProgramFactory,
+  type CustomObserverProgramFactory,
 } from '@/modules/event-center/composition'
-import type { CustomObserverProgramFactory } from '@/modules/event-center/composition/customObserverProgram'
-import { selectLocalCustomObserverProgramFactory } from '@/modules/event-center/composition/localCustomObserverProgram'
 import {
   composeDatabaseDigitalEmployeeExecutionPorts,
   composeReactionExecutionProvider,

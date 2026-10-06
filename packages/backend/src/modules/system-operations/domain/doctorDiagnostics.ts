@@ -1,5 +1,9 @@
 // Sole original Doctor result and decision rules.
-import { capabilitiesFromVersion, MIN_GIT_VERSION, parseGitVersion } from '@/services/gitVersion'
+import {
+  capabilitiesFromVersion,
+  MIN_GIT_VERSION,
+  parseGitVersion,
+} from '@/platform/contracts/gitVersion'
 
 export interface CheckResult {
   name: string

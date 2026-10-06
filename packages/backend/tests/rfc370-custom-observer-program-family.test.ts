@@ -306,13 +306,13 @@ describe('RFC-370 complete selected custom observer program', () => {
         sourceEventRevision: 'revision-2',
       }),
     })
-    expect(selected.trace).toEqual(members)
+    expect<readonly string[]>(selected.trace).toEqual(members)
   })
   test('prototype methods retain receiver, opaque pairing, exact envelope and logical output', async () => {
     const selected = fixture(),
       value = input()
     const observed = await executeCustomObserverProgram(selected.factory, value)
-    expect(selected.trace).toEqual(members)
+    expect<readonly string[]>(selected.trace).toEqual(members)
     expect(selected.inputs).toEqual([value])
     expect(JSON.parse(selected.envelopes[0]!)).toEqual({
       protocol: CUSTOM_EVENT_OBSERVER_PROTOCOL,
@@ -354,7 +354,7 @@ describe('RFC-370 complete selected custom observer program', () => {
       expect(settled).toBe(false)
       selected.ack.resolve()
       await pending
-      expect(selected.trace).toEqual(members)
+      expect<readonly string[]>(selected.trace).toEqual(members)
     })
   for (const failed of members)
     test(`preserves ${failed} rejection and original cleanup boundary`, async () => {
@@ -420,7 +420,7 @@ describe('RFC-370 complete selected custom observer program', () => {
         settled: (value) => ({ ...result(value), rawStdout: '' }),
       })
     await expect(executeCustomObserverProgram(selected.factory, input())).rejects.toBe(error)
-    expect(selected.trace).toEqual(members)
+    expect<readonly string[]>(selected.trace).toEqual(members)
   })
   for (const outcome of [
     'exited',
@@ -616,7 +616,7 @@ describe('RFC-370 complete selected custom observer program', () => {
     const value = input()
     const program = {
       ...value.draft.program,
-      get language() {
+      get language(): never {
         reads++
         throw new Error('early language read')
       },

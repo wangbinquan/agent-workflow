@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "backendFiles": 2320,
+    "backendFiles": 2321,
     "frontendFiles": 654,
-    "legacyFiles": 589,
+    "legacyFiles": 590,
     "moduleFiles": 1731,
-    "productionFiles": 3144,
+    "productionFiles": 3145,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27189
+    "symbolsIncludingFileRoots": 27190
   },
   "entries": [
     {
@@ -168283,6 +168283,102 @@
       "currentContext": "legacy",
       "currentLayer": "platform",
       "exported": false,
+      "file": "packages/backend/src/platform/contracts/gitVersion.ts",
+      "id": "owner:packages/backend/src/platform/contracts/gitVersion.ts#$file",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "$file",
+      "targetContext": "platform",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/contracts/gitVersion.ts",
+      "id": "owner:packages/backend/src/platform/contracts/gitVersion.ts#capabilitiesFromVersion",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "capabilitiesFromVersion",
+      "targetContext": "platform",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/contracts/gitVersion.ts",
+      "id": "owner:packages/backend/src/platform/contracts/gitVersion.ts#GitCapabilities",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "GitCapabilities",
+      "targetContext": "platform",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/contracts/gitVersion.ts",
+      "id": "owner:packages/backend/src/platform/contracts/gitVersion.ts#GitSemver",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "GitSemver",
+      "targetContext": "platform",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/contracts/gitVersion.ts",
+      "id": "owner:packages/backend/src/platform/contracts/gitVersion.ts#gitVersionAtLeast",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "gitVersionAtLeast",
+      "targetContext": "platform",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/contracts/gitVersion.ts",
+      "id": "owner:packages/backend/src/platform/contracts/gitVersion.ts#mergeTreeGateError",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "mergeTreeGateError",
+      "targetContext": "platform",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/contracts/gitVersion.ts",
+      "id": "owner:packages/backend/src/platform/contracts/gitVersion.ts#MIN_GIT_VERSION",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "MIN_GIT_VERSION",
+      "targetContext": "platform",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": true,
+      "file": "packages/backend/src/platform/contracts/gitVersion.ts",
+      "id": "owner:packages/backend/src/platform/contracts/gitVersion.ts#parseGitVersion",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "parseGitVersion",
+      "targetContext": "platform",
+      "targetLayer": "contracts"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
       "file": "packages/backend/src/platform/contracts/retryAttemptCap.ts",
       "id": "owner:packages/backend/src/platform/contracts/retryAttemptCap.ts#$file",
       "removeAfterWave": "W9",
@@ -195644,18 +195740,6 @@
       "currentLayer": "services",
       "exported": true,
       "file": "packages/backend/src/services/gitVersion.ts",
-      "id": "owner:packages/backend/src/services/gitVersion.ts#capabilitiesFromVersion",
-      "removeAfterWave": "W5",
-      "status": "legacy-target",
-      "symbol": "capabilitiesFromVersion",
-      "targetContext": "source-control",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/gitVersion.ts",
       "id": "owner:packages/backend/src/services/gitVersion.ts#detectGitCapabilities",
       "removeAfterWave": "W5",
       "status": "legacy-target",
@@ -195684,78 +195768,6 @@
       "removeAfterWave": "W5",
       "status": "legacy-target",
       "symbol": "GIT_PROBE_TIMEOUT_MS",
-      "targetContext": "source-control",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/gitVersion.ts",
-      "id": "owner:packages/backend/src/services/gitVersion.ts#GitCapabilities",
-      "removeAfterWave": "W5",
-      "status": "legacy-target",
-      "symbol": "GitCapabilities",
-      "targetContext": "source-control",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/gitVersion.ts",
-      "id": "owner:packages/backend/src/services/gitVersion.ts#GitSemver",
-      "removeAfterWave": "W5",
-      "status": "legacy-target",
-      "symbol": "GitSemver",
-      "targetContext": "source-control",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/gitVersion.ts",
-      "id": "owner:packages/backend/src/services/gitVersion.ts#gitVersionAtLeast",
-      "removeAfterWave": "W5",
-      "status": "legacy-target",
-      "symbol": "gitVersionAtLeast",
-      "targetContext": "source-control",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/gitVersion.ts",
-      "id": "owner:packages/backend/src/services/gitVersion.ts#mergeTreeGateError",
-      "removeAfterWave": "W5",
-      "status": "legacy-target",
-      "symbol": "mergeTreeGateError",
-      "targetContext": "source-control",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/gitVersion.ts",
-      "id": "owner:packages/backend/src/services/gitVersion.ts#MIN_GIT_VERSION",
-      "removeAfterWave": "W5",
-      "status": "legacy-target",
-      "symbol": "MIN_GIT_VERSION",
-      "targetContext": "source-control",
-      "targetLayer": "infrastructure"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "services",
-      "exported": true,
-      "file": "packages/backend/src/services/gitVersion.ts",
-      "id": "owner:packages/backend/src/services/gitVersion.ts#parseGitVersion",
-      "removeAfterWave": "W5",
-      "status": "legacy-target",
-      "symbol": "parseGitVersion",
       "targetContext": "source-control",
       "targetLayer": "infrastructure"
     },
@@ -327007,5 +327019,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:1245f5a9250663c502f4a024ac8ec808d976ddf99775d56f97e582e506d039f8"
+  "sourceDigest": "sha256:9e433590b0da283221187980b65afce8fd6ef0a6588fee93ac5562c03f23043b"
 }

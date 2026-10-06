@@ -44,6 +44,8 @@ import type {
 
 export { runEventCenterCycle, startEventCenterWorker } from './application/eventCenterWorker'
 export { createEventAutomationWorkIntentStore } from './infrastructure/eventAutomationWorkIntentStore'
+export { selectLocalCustomObserverProgramFactory }
+export type { CustomObserverProgramFactory }
 
 export interface EventCenterModule {
   readonly commands: EventObservationCommandPort

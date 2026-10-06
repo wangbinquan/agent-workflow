@@ -89,8 +89,8 @@ import {
   createDaemonLockProof,
   createDaemonRecoveryAuthorityProof,
   runTaskExecutionBootRecovery,
+  type BootExecutionRecoveryFactory,
 } from '@/modules/task-execution/composition/bootRecovery'
-import type { BootExecutionRecoveryFactory } from '@/modules/task-execution/application/ports/bootExecutionRecovery'
 import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import { createRuntimeSessionLeaseOperations } from '@/modules/task-execution/composition/taskExecutionPersistence'
 import { probeCodeHostMutation } from '@/services/codeHost/recoveryProbe'
@@ -333,9 +333,9 @@ import { composeApprovalGatewayRunnerFor } from '@/modules/integration/compositi
 import {
   composeEventCenter,
   createEventAutomationWorkIntentStore,
+  selectLocalCustomObserverProgramFactory,
+  type CustomObserverProgramFactory,
 } from '@/modules/event-center/composition'
-import type { CustomObserverProgramFactory } from '@/modules/event-center/composition/customObserverProgram'
-import { selectLocalCustomObserverProgramFactory } from '@/modules/event-center/composition/localCustomObserverProgram'
 import { createEventAutomationDelegatedContextBinding } from '@/modules/identity-access/composition'
 import { createTaskAutomationWorkStartProvider } from '@/modules/task-execution/composition/taskRouteLaunch'
 import { codeHostEventCatalogJson } from '@/modules/integration/public/events'

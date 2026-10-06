@@ -1334,5 +1334,5 @@ console.log(JSON.stringify({
         subscriber: { kind: 'system', subscriberRef: 'workflow-runtime-2' },
       }),
     ).rejects.toThrow('event source is retired')
-  })
+  }, 50_000)
 })

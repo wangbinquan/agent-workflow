@@ -157,8 +157,8 @@ import { DAEMON_GENERATION } from '@/services/daemonGeneration'
 import {
   createDaemonRecoveryAuthorityProof,
   runTaskExecutionBootRecovery,
+  type BootExecutionRecoveryFactory,
 } from '@/modules/task-execution/composition/bootRecovery'
-import type { BootExecutionRecoveryFactory } from '@/modules/task-execution/application/ports/bootExecutionRecovery'
 import { selectLocalBootExecutionRecoveryFactory } from '@/modules/task-execution/composition/localBootExecutionRecovery'
 import type { DatabaseSourceWriteWindow } from '@/auth/application/authPersistence'
 import { registerConfigAppliedListener } from '@/services/configAppliedListeners'
@@ -247,9 +247,9 @@ import {
   composeEventCenter,
   createEventAutomationWorkIntentStore,
   runEventCenterCycle,
+  selectLocalCustomObserverProgramFactory,
+  type CustomObserverProgramFactory,
 } from '@/modules/event-center/composition'
-import type { CustomObserverProgramFactory } from '@/modules/event-center/composition/customObserverProgram'
-import { selectLocalCustomObserverProgramFactory } from '@/modules/event-center/composition/localCustomObserverProgram'
 import {
   composeDigitalEmployeeWriterCutoverFor,
   composeDigitalEmployeeAgentTemplateCatalogParticipant,

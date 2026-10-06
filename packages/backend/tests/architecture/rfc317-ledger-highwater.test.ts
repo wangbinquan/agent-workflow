@@ -250,6 +250,8 @@ const PREVIOUS = readPreviousBaselines()
  * 每一处要么在基线文件里有条目，要么进下面这张**具名豁免表**并写清为什么它不是账本。
  */
 const NOT_A_LEDGER: Readonly<Record<string, string>> = {
+  'packages/backend/tests/rfc370-doctor-diagnostic-family.test.ts|members':
+    'RFC-370 Doctor 完整十步协议的有序输入预言，用于调用顺序、ACK、缺成员和错误阶段回归；不是仓库扫描结果、存量债务或豁免清单',
   // 这张表自己：它是「哪些集合不算账本」的声明，不是债务。
   'packages/backend/tests/architecture/rfc317-ledger-highwater.test.ts|NOT_A_LEDGER':
     '本规则的豁免表本身；它的条目数由下面那条精确相等断言钉住',
@@ -391,6 +393,7 @@ describe('RFC-317 T72 —— 新账本必须入网（R10 的覆盖面）', () =>
       'packages/backend/tests/rfc359-w26-workgroup-member-values.test.ts|fields',
       'packages/backend/tests/rfc359-w43-alternates-hook-diagnostics.test.ts|stages',
       'packages/backend/tests/rfc359-w43-daemon-setup-diagnostic.test.ts|pendingStages',
+      'packages/backend/tests/rfc370-doctor-diagnostic-family.test.ts|members',
     ])
   })
 

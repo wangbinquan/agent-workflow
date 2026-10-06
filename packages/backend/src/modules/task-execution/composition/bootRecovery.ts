@@ -19,6 +19,7 @@ import type {
 import { selectLocalBootExecutionRecoveryFactory } from './localBootExecutionRecovery'
 
 export type {
+  BootExecutionRecoveryFactory,
   BootRecoveryLogger,
   TaskExecutionBootRecoveryInput,
   TaskExecutionBootRecoveryReport,

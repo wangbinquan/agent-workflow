@@ -1,6 +1,8 @@
 // RFC-034 T3 — git version probe + capability derivation.
 
 import { describe, expect, test } from 'bun:test'
+import * as pure from '../src/platform/contracts/gitVersion'
+import * as compatibility from '../src/services/gitVersion'
 import {
   capabilitiesFromVersion,
   gitVersionAtLeast,
@@ -79,4 +81,20 @@ describe('gitVersionAtLeast / capabilities', () => {
     expect(gitVersionAtLeast({ major: 2, minor: 13, patch: 0, raw: '' }, 2, 13)).toBe(true)
     expect(gitVersionAtLeast(null, 2, 0)).toBe(false)
   })
+})
+
+// RFC-370: extracting pure version values must keep the old facade identities.
+test('the native facade re-exports the one complete pure Git version contract', () => {
+  expect(compatibility.parseGitVersion).toBe(pure.parseGitVersion)
+  expect(compatibility.gitVersionAtLeast).toBe(pure.gitVersionAtLeast)
+  expect(compatibility.capabilitiesFromVersion).toBe(pure.capabilitiesFromVersion)
+  expect(compatibility.MIN_GIT_VERSION).toBe(pure.MIN_GIT_VERSION)
+  expect(compatibility.mergeTreeGateError).toBe(pure.mergeTreeGateError)
+  expect(Object.keys(pure).sort()).toEqual([
+    'MIN_GIT_VERSION',
+    'capabilitiesFromVersion',
+    'gitVersionAtLeast',
+    'mergeTreeGateError',
+    'parseGitVersion',
+  ])
 })
