@@ -35,28 +35,10 @@ const CHILD_TERM_GRACE_MS = 2_000
  * fork — and a forked copy of a classifier drifts. Behavior is byte-identical
  * to the intent original; its assertions moved with it.
  */
-export type MissingEnvelopeReason =
-  | 'output-cap-hit'
-  | 'no-assistant-text'
-  | 'terminal-without-envelope'
-  | 'assistant-stopped-without-envelope'
-  | 'runtime-shape-unknown'
-
-export function classifyMissingEnvelope(
-  evidence: SystemAgentOutputEvidence | undefined,
-): MissingEnvelopeReason {
-  if (evidence === undefined) return 'runtime-shape-unknown'
-  if (
-    evidence.eventTextCapHit ||
-    evidence.observedAssistantTextBytes > evidence.retainedAssistantTextBytes
-  ) {
-    return 'output-cap-hit'
-  }
-  if (!evidence.assistantTextSeen) return 'no-assistant-text'
-  if (evidence.terminalResult !== 'not-observed') return 'terminal-without-envelope'
-  if (evidence.assistantTextSeen) return 'assistant-stopped-without-envelope'
-  return 'runtime-shape-unknown'
-}
+// RFC-370: the same pure classifier is shared with consumer-owned demand ports;
+// retain the original compatibility exports without a cross-owner dependency.
+export { classifyMissingEnvelope } from '@agent-workflow/shared'
+export type { MissingEnvelopeReason } from '@agent-workflow/shared'
 
 export function emptySystemAgentOutputEvidence(): SystemAgentOutputEvidence {
   return {

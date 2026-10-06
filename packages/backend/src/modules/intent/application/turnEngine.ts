@@ -26,6 +26,7 @@ import {
   canonicalIntentJson,
   maskDiagnosticsText,
   parseIntentChangeset,
+  classifyMissingEnvelope,
   type IntentQuestion,
 } from '@agent-workflow/shared'
 import type { Actor } from '@/auth/actor'
@@ -33,11 +34,10 @@ import { createLogger, type Logger } from '@/util/log'
 import { Semaphore } from '@/util/semaphore'
 import { generateEnvelopeNonce } from '@/services/nodeRunMint'
 import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
-import {
-  classifyMissingEnvelope,
-  type SystemAgentRunFamily,
-  type PreparedSystemAgentRunResult as SystemAgentRunResult,
-} from '@/modules/task-execution/public/participants'
+import type {
+  IntentSystemAgentRunFamily as SystemAgentRunFamily,
+  IntentSystemAgentRunResult as SystemAgentRunResult,
+} from './ports/intentSystemAgent'
 import { IntentTurnSessionEventSink } from './turnSession'
 import { buildIntentDump } from './dumpBuilder'
 import { parseHandleWatermark } from './manifest'

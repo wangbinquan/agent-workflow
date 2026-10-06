@@ -130,7 +130,7 @@ describe('RFC-370 complete System family binding', () => {
     })
     expect(events).toEqual(['protocol', 'binary', 'model', 'home'])
     expect(received?.runtimeBinary).toBe('/fixture/custom-runtime')
-    expect(received?.scratchParent).toBe('/fixture/home/scratch')
+    expect(received?.scratchParent).toBe(join('/fixture/home', 'scratch'))
     expect(received?.scratchName).toBe('named')
     expect(received?.resumeSessionId).toBe('original-session')
     expect(completed.retainedRef).toStartWith('aw-system-fixture:')
@@ -226,7 +226,11 @@ describe('RFC-370 complete System family binding', () => {
           timeoutMs: 5000,
         })
         expect(completed.status).toBe('spawn-failed')
-        expect(completed.declared).toBeDefined()
+        // The unchanged core's early spawn-failed branch intentionally omits
+        // declared even after successful compilation; distinguish it from
+        // scratch/compile failure using the actual native launch diagnostic.
+        expect(completed.stderrTail).toStartWith('binary failed to start:')
+        expect(completed.declared).toBeUndefined()
         expect(completed.retainedRef).toBeString()
         expect(completed.scratchRetained).toBe(true)
         expect(readFileSync(join(home, 'scratch', 'native', 'worktree', 'SEED.md'), 'utf8')).toBe(

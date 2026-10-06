@@ -119,12 +119,26 @@ describe('opencode spawn sites set PWD = cwd in env', () => {
       resolve(import.meta.dir, '..', 'src/modules/memory/application/distill/memoryDistiller.ts'),
       'utf-8',
     )
-    expect(src).toContain('runSystemAgent')
+    expect(src).toContain('systemAgents.run({')
     // One scratch for the whole follow-up chain: the name is allocated here and
     // handed to every round, because claude resolves `--resume` against the
     // cwd-slugged project dir (RFC-367 design §3).
     expect(src).toContain('scratchName')
-    expect(src).toContain("join(Paths.root, 'scratch')")
+    expect(src).toContain('systemAgents.workspaces.withName(scratchParent, scratchName)')
+    const retainedContents = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src/modules/runtime-management/infrastructure/local/systemAgentRetainedContents.ts',
+      ),
+      'utf-8',
+    )
+    expect(retainedContents).toContain(
+      "const directoryName = namespace === 'intent' ? 'intent-scratch' : 'scratch'",
+    )
+    expect(retainedContents).toContain(
+      'parents.set(selected, join(input.appHome(), directoryName))',
+    )
     // Re-growing any of these here would re-open the PWD gap this file exists for.
     expect(src).not.toContain('buildSpawn(')
     expect(src).not.toContain('runAgentProcess(')

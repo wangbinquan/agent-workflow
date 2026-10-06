@@ -346,7 +346,7 @@ function oldSystemFamilyBody(source: ts.SourceFile, name: string, body: ts.Block
             routeObject,
             ts.factory.createNodeArray(
               [...inputsRestored.properties, replacement],
-              inputObject.properties.hasTrailingComma,
+              (inputObject as ts.ObjectLiteralExpression).properties.hasTrailingComma,
             ),
           )
           const argument = routeCall.arguments[0]!

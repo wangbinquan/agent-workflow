@@ -777,7 +777,7 @@ describeEachProvider('runDistill orchestration (mocked runFn)', (harness) => {
     // hand-off AND the stdout normalization. Locking the seam by name keeps a
     // future refactor from quietly reintroducing a second parser (the drift
     // that dropped every candidate for a month; see proposal §1).
-    expect(src).toContain('runSystemAgent')
+    expect(src).toContain('systemAgents.run({')
     expect(src).toContain('parseDistillerCandidates')
     // Import-level anchors, not prose: the file's own comments legitimately
     // mention the retired driver walk, and a bare substring check cannot tell
@@ -785,7 +785,22 @@ describeEachProvider('runDistill orchestration (mocked runFn)', (harness) => {
     expect(src).not.toContain("from '@/services/runtime'")
     expect(src).not.toContain("from '@/services/execution/agentProcess'")
     // RFC-280 T4（落差⑤）：throwaway cwd 由 appHome scratch 分配（原 mkdtemp/tmpdir）。
-    expect(src).toContain("join(Paths.root, 'scratch'")
+    expect(src).toContain("systemAgents.workspaces.capture({ namespace: 'shared' })")
+    expect(src).toContain('systemAgents.workspaces.withName(scratchParent, scratchName)')
+    const retainedContents = readFileSync(
+      resolve(
+        import.meta.dir,
+        '..',
+        'src/modules/runtime-management/infrastructure/local/systemAgentRetainedContents.ts',
+      ),
+      'utf8',
+    )
+    expect(retainedContents).toContain(
+      "const directoryName = namespace === 'intent' ? 'intent-scratch' : 'scratch'",
+    )
+    expect(retainedContents).toContain(
+      'parents.set(selected, join(input.appHome(), directoryName))',
+    )
     // RFC-352：agent 名字的字面量随 DISTILLER_AGENT_NAME 下沉到 memory domain，
     // 断言跟着字面量走——它仍然必须逐字存在，只是不再在编排文件里。
     expect(

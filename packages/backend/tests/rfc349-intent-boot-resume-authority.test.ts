@@ -38,7 +38,7 @@ import type {
 import { composeResourceCatalogFor } from '../src/modules/resource-catalog/composition/providerResourceCatalog'
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
 import { directOperationAuthority, directRequestAuthority } from '../src/routes/operationAuthority'
-import { resumeQueuedIntentWorkingSets } from '@/modules/intent/application/dispatcher'
+import { resumeQueuedIntentWorkingSetsForTest as resumeQueuedIntentWorkingSets } from './helpers/intentResourceCatalogBinding'
 import {
   composeIntentResourceCatalogFor,
   intentResourceVisibility,

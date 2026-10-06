@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:6da19cfc2241fe5d2d1622e9541771ae77b253e1e58c890048ba82bd5f3649c9",
+    "sourceDigest": "sha256:e86b4b3a4d1450b181eff9fec5facdcc93f9083065fdb6a7350c2e585c95ddf7",
     "ownerManifest": "architecture/module-symbol-owners.json"
   },
   "kernels": [
@@ -1401,8 +1401,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "b04cf0eb0012214466ee85a0777100b50eea1154",
-    "currentSnapshotSha": "1ab715e1f432186884266977c6edb4efb036286f",
-    "contentDigest": "sha256:d54d5fd6ad3f6d84a7a1d8b03dece0e277ca80385e365a32be66907b1d040f83",
+    "currentSnapshotSha": "388b4d9230e67f2c2bdfea5d50e224c641d33484",
+    "contentDigest": "sha256:1bf2c4cd225fc227954f4e2e44c4b0453a75df63e4c01bded4a70a656e606048",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -1,3 +1,11 @@
+## 2026-10-06 RFC-370 System CI 修复及 Intent 自有执行需求
+
+388b4d9230e67f2c2bdfea5d50e224c641d33484 主 CI 37410742559 已终态 failure（39 success、9 failure、2 cancelled）；Windows 37410742470 failure 单独留证。六文件 fixture/type/原 early-spawn-failed 诊断修复 SOURCE7-R1 已有限 PASS 并逐字复用；完整原断言和预算保留。Intent 三条未登记 offered public 出边由自有 run/workspace/retention/reference 需求合同实际消除，不改 DAG/debt 守卫。原完整 missing-envelope 分类器及五种理由移入 shared，兼容出口转发同一函数；dispatcher/aux/turn 全业务语句和 System core 其余全文逆向保持。两处 Memory 源码 oracle 随实际 RM 内容 owner 迁址，Windows 对称四路径和两用例登记。DESIGN-D1 与有限 SOURCE20-R1 均有效 PASS；37 项首末稳定，源码指纹 8a0cd0568b05bf5727c776e0dedef67aa3d4b81f0408cd1dc8800c41fe0b652e。新功能执行仍待后继精确 SHA CI。
+
+一份原 scoped census 使用完整已提交 388b4d9 与20冻结 owned内容（7 production），四条原规则/计数器/renderer 不变，sourceDigest sha256:e86b4b3a4d1450b181eff9fec5facdcc93f9083065fdb6a7350c2e585c95ddf7。13 matching 保留345原债、129有序库存/why、40SPI/69targets、9Task effects、原值级SCC与空implementation SCC。三条 actual offered 地址均已消失；原counter imports6619→6615、exceptions5824→5820、owners27046→27054，退役前批六许可，只为实际 owner +8 登记一次性 matching，下一普通后继退役。纯 projector PASS，不重跑源码门或 census。
+
+本机只做 owned format/lint、纯 AST/字节/JSON与一次静态生成，没有 AW tests/typecheck/build/service。完整共享 STATE 旧全文和并行 RFC371输出保留并排除本批；元数据有限门和发布精确 SHA CI 分别验收。Runtime诊断族 DESIGN-D1 已有效 PASS，其生产接线仍属下一批；MCP/doctor/脚本/H7/全根/A-T7/A-G继续，CS独立adapters、M0首次部署与M1～M4仍待实施。AW尚未部署到CS，RFC保持 In Progress。以下共享旧正文完整保留。
+
 ## 2026-10-06 RFC-370 System 完整执行族与真实调用者接线
 
 Intent、Memory Distill、Change Narrative 的正常入口接入同一个 RM/TE System family；runtime 和保留内容使用 owner 引用，原完整 System 核心/native compatibility 保持。SQLite/PG、HTTP 与 queued recovery 的真实根显式选择同族执行和释放；Memory 补问链复用同一 named scope，HTTP 读取完整 adapter 的 inherited family getter 并使用声明的 appHome。新非本机引用/真实持久化、双协议 native 材料和 getter/receiver 回归随本批交 hosted CI，原测试正文及预算保持。

@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:6da19cfc2241fe5d2d1622e9541771ae77b253e1e58c890048ba82bd5f3649c9",
+    "sourceDigest": "sha256:e86b4b3a4d1450b181eff9fec5facdcc93f9083065fdb6a7350c2e585c95ddf7",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -304,10 +304,7 @@
       "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
       "id": "rfc328-cross-context-provider-bridge-debt",
       "symbol": "CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT",
-      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。",
-      "allowGrowth": {
-        "why": "RFC-370 System family SOURCE49: actual original counter 26 -> 28 for rfc328-cross-context-provider-bridge-debt. The complete selected System family, real Intent/Memory/Narrative consumers, native retention/runtime material and explicit roots add only measured owner/address inventory. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. Diagnostics/smoke, purpose commands/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。"
     },
     {
       "baseline": 399,
@@ -825,10 +822,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1907,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 System family SOURCE49: actual original counter 1904 -> 1907 for rfc294-mutation-entrypoints. The complete selected System family, real Intent/Memory/Narrative consumers, native retention/runtime material and explicit roots add only measured owner/address inventory. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. Diagnostics/smoke, purpose commands/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -862,11 +856,8 @@
       "id": "rfc294-cross-context-observed-imports",
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
-      "baseline": 6619,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 System family SOURCE49: actual original counter 6603 -> 6619 for rfc294-cross-context-observed-imports. The complete selected System family, real Intent/Memory/Narrative consumers, native retention/runtime material and explicit roots add only measured owner/address inventory. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. Diagnostics/smoke, purpose commands/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "baseline": 6615,
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -886,11 +877,8 @@
       "id": "rfc294-architecture-exceptions",
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
-      "baseline": 5824,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 System family SOURCE49: actual original counter 5821 -> 5824 for rfc294-architecture-exceptions. The complete selected System family, real Intent/Memory/Narrative consumers, native retention/runtime material and explicit roots add only measured owner/address inventory. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. Diagnostics/smoke, purpose commands/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "baseline": 5820,
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -904,10 +892,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1183,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-370 System family SOURCE49: actual original counter 1174 -> 1183 for rfc294-public-surfaces. The complete selected System family, real Intent/Memory/Narrative consumers, native retention/runtime material and explicit roots add only measured owner/address inventory. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. Diagnostics/smoke, purpose commands/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -927,10 +912,10 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 27046,
+      "baseline": 27054,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-370 System family SOURCE49: actual original counter 27022 -> 27046 for rfc294-module-symbol-owners. The complete selected System family, real Intent/Memory/Narrative consumers, native retention/runtime material and explicit roots add only measured owner/address inventory. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. Diagnostics/smoke, purpose commands/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
+        "why": "RFC-370 Intent purpose SOURCE20: actual original counter 27046 -> 27054 for rfc294-module-symbol-owners. The consumer-owned Intent demand and complete original shared classifier add only measured owner/address inventory; original complete family, calls and core otherwise remain unchanged. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. Diagnostics/smoke, purpose commands/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
       }
     }
   ],
@@ -939,8 +924,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1ab715e1f432186884266977c6edb4efb036286f",
-    "contentDigest": "sha256:414e17b4ddf541d23f2fdd3fc6000643d3a5293c9a057ef630da6c7c930c75e0",
+    "currentSnapshotSha": "388b4d9230e67f2c2bdfea5d50e224c641d33484",
+    "contentDigest": "sha256:7139f862eb04d1b3f5136137ab9c72abc4aaf1994ff7fdd842cb4381b420e7a8",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

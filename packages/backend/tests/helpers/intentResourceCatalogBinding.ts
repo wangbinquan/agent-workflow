@@ -37,6 +37,7 @@ import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/compo
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import {
   dispatchIntentTurn,
+  resumeQueuedIntentWorkingSets,
   type IntentDispatchDeps,
 } from '@/modules/intent/application/dispatcher'
 import {
@@ -360,4 +361,30 @@ export function dispatchIntentTurnForTest(
     },
     ...args,
   )
+}
+
+/** Boot fixtures select the same complete native family as ordinary dispatch.
+ * The original queued recovery implementation and native resolver remain the
+ * authorities for DB queries, admission, events and fixture outcomes. */
+export function resumeQueuedIntentWorkingSetsForTest(
+  deps: Omit<IntentDispatchDeps, 'systemAgents' | 'runtimeResolver'> &
+    Readonly<{
+      runtimeResolver: ReturnType<typeof composeNativeIntentTurnRuntimeResolverForTest>
+      runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+    }>,
+): ReturnType<typeof resumeQueuedIntentWorkingSets> {
+  const native = { ...deps }
+  const binding = composeLocalSystemAgentRunFamily({ appHome: () => native.appHome })
+  return resumeQueuedIntentWorkingSets({
+    ...native,
+    runtimeResolver: {
+      async resolve(input) {
+        const result = await native.runtimeResolver.resolve(input)
+        return { ...result, runtime: binding.bindRuntime(result.runtime) }
+      },
+    },
+    get systemAgents() {
+      return native.runFn === undefined ? binding.family : binding.withFixture(native.runFn).family
+    },
+  })
 }

@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:6da19cfc2241fe5d2d1622e9541771ae77b253e1e58c890048ba82bd5f3649c9`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:e86b4b3a4d1450b181eff9fec5facdcc93f9083065fdb6a7350c2e585c95ddf7`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -10,9 +10,9 @@
 
 | 指标 | 当前值 |
 | --- | --- |
-| backend production TS 文件 | 2279 |
+| backend production TS 文件 | 2280 |
 | `services/` 文件 | 298 |
-| `modules/**` 文件 / 非空 context | 1691 / 18 |
+| `modules/**` 文件 / 非空 context | 1692 / 18 |
 | backend 值级 SCC / 全仓值级 SCC | 1 / 3 |
 | `KNOWN_VIOLATIONS` | 8 |
 | route→DB / transport→DB 值级边 | 0 / 0 |
@@ -30,12 +30,12 @@
 | 账本 | 条目数 |
 | --- | --- |
 | `ambientWiring` | 504 |
-| `architectureExceptions` | 5824 |
+| `architectureExceptions` | 5820 |
 | `backgroundJobs` | 361 |
-| `crossContextImports` | 6619 |
+| `crossContextImports` | 6615 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27046 |
+| `moduleSymbolOwners` | 27054 |
 | `mutationEntrypoints` | 1907 |
 | `nodeRunInsertSites` | 1 |
 | `publicSurfaces` | 1183 |
@@ -61,9 +61,9 @@
 | task-execution / domain | 35 |
 | development-automation / domain | 34 |
 | run-observability / application | 34 |
+| intent / application | 30 |
 | runtime-management / application | 30 |
 | source-control / application | 30 |
-| intent / application | 29 |
 | system-operations / infrastructure | 27 |
 | runtime-management / infrastructure | 26 |
 | identity-access / application | 25 |
@@ -208,12 +208,12 @@
 
 | role | 数量 |
 | --- | --- |
-| legacy-outbound | 3761 |
+| legacy-outbound | 3762 |
 | legacy-inbound | 1846 |
 | offered-consumption | 328 |
 | infrastructure-external | 323 |
 | temporary-internal-debt | 107 |
-| off-dag-offered | 98 |
+| off-dag-offered | 93 |
 | authority-type-only | 78 |
 | required-implementation | 72 |
 | external-layer-debt | 4 |
@@ -223,10 +223,10 @@
 
 | rule | 数量 |
 | --- | --- |
-| legacy-outbound | 3761 |
+| legacy-outbound | 3762 |
 | legacy-inbound | 1846 |
 | temporary-internal-debt | 107 |
-| off-dag-offered | 98 |
+| off-dag-offered | 93 |
 | no-circular | 6 |
 | external-layer-debt | 4 |
 | no-util-to-upper | 2 |
@@ -235,9 +235,9 @@
 
 | removeAfterWave | 数量 |
 | --- | --- |
-| W9 | 3122 |
-| W9-D | 1060 |
-| W4-E1 | 779 |
+| W9 | 3123 |
+| W9-D | 1059 |
+| W4-E1 | 775 |
 | W5 | 203 |
 | W4 | 201 |
 | W4-B | 187 |

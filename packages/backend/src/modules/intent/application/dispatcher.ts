@@ -1,6 +1,6 @@
 // RFC-293 — one dispatcher for HTTP-triggered turns and queued boot recovery.
 
-import type { SystemAgentRunFamily } from '@/modules/task-execution/public/participants'
+import type { IntentSystemAgentRunFamily as SystemAgentRunFamily } from './ports/intentSystemAgent'
 import type { Actor } from '@/auth/actor'
 import type {
   IntentDumpAuxiliaryQueries,

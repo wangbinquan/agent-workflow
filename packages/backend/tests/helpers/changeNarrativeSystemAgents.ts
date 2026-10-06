@@ -32,7 +32,7 @@ export function triggerChangeNarrative(
   for (const field of ['workspace', 'runtimeName', 'defaultRuntime', 'now', 'log'] as const) {
     descriptors[field] = { enumerable: true, get: () => deps[field] }
   }
-  const selected = Object.defineProperties(
+  const selected = Object.defineProperties<object>(
     {
       requireMember(member: Actor, taskId: string) {
         return deps.requireMember(member, taskId)

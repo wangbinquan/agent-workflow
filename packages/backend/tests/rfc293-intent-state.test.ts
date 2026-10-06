@@ -5,7 +5,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import { CreateAgentSchema, DEFAULT_CONFIG } from '@agent-workflow/shared'
 import { buildActor, type Actor } from '../src/auth/actor'
-import { resumeQueuedIntentWorkingSets } from '@/modules/intent/application/dispatcher'
+import { resumeQueuedIntentWorkingSetsForTest as resumeQueuedIntentWorkingSets } from './helpers/intentResourceCatalogBinding'
 import {
   intentDraftResolutions,
   intentDrafts,

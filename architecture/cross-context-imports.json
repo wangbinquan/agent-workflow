@@ -11852,23 +11852,6 @@
     {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/turnEngine.ts#$file",
-      "fromPath": "packages/backend/src/modules/intent/application/turnEngine.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:1dc87086d51b97d5e45d",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W4-E1",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toSymbol": "classifyMissingEnvelope",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
-    },
-    {
-      "edgeKind": "value",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/skillProvenanceRoutes.ts#$file",
       "fromPath": "packages/backend/src/modules/knowledge-evolution/inbound/skillProvenanceRoutes.ts",
       "fromSymbol": "$file",
@@ -11967,23 +11950,6 @@
       "toPath": "packages/backend/src/util/errors.ts",
       "toSymbol": "NotFoundError",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/turnEngine.ts#$file",
-      "fromPath": "packages/backend/src/modules/intent/application/turnEngine.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:1e04e124340b83b6a87f",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W4-E1",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toSymbol": "SystemAgentRunFamily",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
     },
     {
       "edgeKind": "value",
@@ -19823,6 +19789,23 @@
       "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
     },
     {
+      "edgeKind": "type",
+      "expiresOn": "2027-12-31",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentSystemAgent.ts#$file",
+      "fromPath": "packages/backend/src/modules/intent/application/ports/intentSystemAgent.ts",
+      "fromSymbol": "$file",
+      "id": "exception:import:311aa7b1bf272fd7eb4f",
+      "introducedByRFC": "pre-RFC-294-current-debt",
+      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
+      "owner": "intent",
+      "removeAfterWave": "W9",
+      "rule": "legacy-outbound",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#Logger",
+      "toPath": "packages/backend/src/util/log.ts",
+      "toSymbol": "Logger",
+      "why": "A module still reaches a legacy implementation before its owner adapter cutover."
+    },
+    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/postgresqlDaemonApplication.ts#$file",
@@ -22401,7 +22384,7 @@
       "owner": "task-execution",
       "removeAfterWave": "W4-E1",
       "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/systemAgentRun.ts#classifyMissingEnvelope",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/systemAgentRun.ts#$file",
       "toPath": "packages/backend/src/modules/task-execution/application/systemAgentRun.ts",
       "toSymbol": "classifyMissingEnvelope",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
@@ -28716,23 +28699,6 @@
     {
       "edgeKind": "type",
       "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/turnEngine.ts#$file",
-      "fromPath": "packages/backend/src/modules/intent/application/turnEngine.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:47d3201da167c8ea61fd",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W4-E1",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toSymbol": "PreparedSystemAgentRunResult",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
       "fromPath": "packages/backend/src/cli/start.ts",
       "fromSymbol": "$file",
@@ -32692,23 +32658,6 @@
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
     },
     {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/dispatcher.ts#$file",
-      "fromPath": "packages/backend/src/modules/intent/application/dispatcher.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:532d9801a056f7dda70b",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W4-E1",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file",
-      "toPath": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toSymbol": "SystemAgentRunFamily",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
-    },
-    {
       "edgeKind": "value",
       "expiresOn": "2027-12-31",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/development-automation/infrastructure/assignmentStore.ts#$file",
@@ -32860,23 +32809,6 @@
       "toPath": "packages/backend/src/services/runtime/claudeCode/sessionCapture.ts",
       "toSymbol": "captureClaudeSessions",
       "why": "A module still reaches a legacy implementation before its owner adapter cutover."
-    },
-    {
-      "edgeKind": "type",
-      "expiresOn": "2027-12-31",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentAuxiliaryQueries.ts#$file",
-      "fromPath": "packages/backend/src/modules/intent/application/ports/intentAuxiliaryQueries.ts",
-      "fromSymbol": "$file",
-      "id": "exception:import:53b7655a017f328bfba4",
-      "introducedByRFC": "pre-RFC-294-current-debt",
-      "mutationTest": "rfc294-canonical-manifests: exact exception stale/unknown mutation",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "rule": "off-dag-offered",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file",
-      "toPath": "packages/backend/src/modules/runtime-management/public/participants.ts",
-      "toSymbol": "AgentMaterialContentReference",
-      "why": "A module consumes an exact public surface outside the RFC-294 offered-edge DAG and must move behind its declared required port or owner cutover."
     },
     {
       "edgeKind": "value",
@@ -66958,7 +66890,7 @@
       "owner": "task-execution",
       "removeAfterWave": "W4-E1",
       "rule": "legacy-inbound",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/systemAgentRun.ts#MissingEnvelopeReason",
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/systemAgentRun.ts#$file",
       "toPath": "packages/backend/src/modules/task-execution/application/systemAgentRun.ts",
       "toSymbol": "MissingEnvelopeReason",
       "why": "Legacy inbound caller reaches a module boundary before its W4 public use-case cutover."
@@ -99010,9 +98942,9 @@
     }
   ],
   "denominator": {
-    "architectureExceptions": 5824,
+    "architectureExceptions": 5820,
     "implementationSccs": 0,
-    "observedEdges": 6619,
+    "observedEdges": 6615,
     "requiredPorts": 40,
     "targetEdges": 69
   },
@@ -111454,22 +111386,6 @@
     },
     {
       "edgeKind": "value",
-      "fromContext": "intent",
-      "fromFile": "packages/backend/src/modules/intent/application/turnEngine.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/turnEngine.ts#$file",
-      "id": "import:1dc87086d51b97d5e45d",
-      "owner": "intent",
-      "removeAfterWave": "W4-E1",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/task-execution/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "classifyMissingEnvelope",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
-    },
-    {
-      "edgeKind": "value",
       "fromContext": "knowledge-evolution",
       "fromFile": "packages/backend/src/modules/knowledge-evolution/inbound/skillProvenanceRoutes.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/knowledge-evolution/inbound/skillProvenanceRoutes.ts#$file",
@@ -111563,22 +111479,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/util/errors.ts",
       "toOwnerEntryId": "owner:packages/backend/src/util/errors.ts#NotFoundError"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "intent",
-      "fromFile": "packages/backend/src/modules/intent/application/turnEngine.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/turnEngine.ts#$file",
-      "id": "import:1e04e124340b83b6a87f",
-      "owner": "intent",
-      "removeAfterWave": "W4-E1",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/task-execution/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "SystemAgentRunFamily",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -119933,6 +119833,22 @@
       "toOwnerEntryId": "owner:packages/backend/src/modules/execution-contract/public/commands.ts#reconcileCreatedAgentExecutionContractPorts"
     },
     {
+      "edgeKind": "type",
+      "fromContext": "intent",
+      "fromFile": "packages/backend/src/modules/intent/application/ports/intentSystemAgent.ts",
+      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentSystemAgent.ts#$file",
+      "id": "import:311aa7b1bf272fd7eb4f",
+      "owner": "intent",
+      "removeAfterWave": "W9",
+      "role": "legacy-outbound",
+      "specifier": "@/util/log",
+      "syntax": "static-import",
+      "targetSymbol": "Logger",
+      "toContext": "legacy",
+      "toFile": "packages/backend/src/util/log.ts",
+      "toOwnerEntryId": "owner:packages/backend/src/util/log.ts#Logger"
+    },
+    {
       "edgeKind": "value",
       "fromContext": "collaboration",
       "fromFile": "packages/backend/src/modules/collaboration/infrastructure/taskQuestions.ts",
@@ -122714,7 +122630,7 @@
       "targetSymbol": "classifyMissingEnvelope",
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/application/systemAgentRun.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/systemAgentRun.ts#classifyMissingEnvelope"
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/systemAgentRun.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -129518,22 +129434,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "intent",
-      "fromFile": "packages/backend/src/modules/intent/application/turnEngine.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/turnEngine.ts#$file",
-      "id": "import:47d3201da167c8ea61fd",
-      "owner": "intent",
-      "removeAfterWave": "W4-E1",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/task-execution/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "PreparedSystemAgentRunResult",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "legacy",
       "fromFile": "packages/backend/src/cli/start.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/cli/start.ts#$file",
@@ -133806,22 +133706,6 @@
     },
     {
       "edgeKind": "type",
-      "fromContext": "intent",
-      "fromFile": "packages/backend/src/modules/intent/application/dispatcher.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/dispatcher.ts#$file",
-      "id": "import:532d9801a056f7dda70b",
-      "owner": "intent",
-      "removeAfterWave": "W4-E1",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/task-execution/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "SystemAgentRunFamily",
-      "toContext": "task-execution",
-      "toFile": "packages/backend/src/modules/task-execution/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/public/participants.ts#$file"
-    },
-    {
-      "edgeKind": "type",
       "fromContext": "resource-catalog",
       "fromFile": "packages/backend/src/modules/resource-catalog/composition/integrationTrigger.ts",
       "fromOwnerEntryId": "owner:packages/backend/src/modules/resource-catalog/composition/integrationTrigger.ts#$file",
@@ -133979,22 +133863,6 @@
       "toContext": "legacy",
       "toFile": "packages/backend/src/services/runtime/claudeCode/sessionCapture.ts",
       "toOwnerEntryId": "owner:packages/backend/src/services/runtime/claudeCode/sessionCapture.ts#captureClaudeSessions"
-    },
-    {
-      "edgeKind": "type",
-      "fromContext": "intent",
-      "fromFile": "packages/backend/src/modules/intent/application/ports/intentAuxiliaryQueries.ts",
-      "fromOwnerEntryId": "owner:packages/backend/src/modules/intent/application/ports/intentAuxiliaryQueries.ts#$file",
-      "id": "import:53b7655a017f328bfba4",
-      "owner": "intent",
-      "removeAfterWave": "W9-D",
-      "role": "off-dag-offered",
-      "specifier": "@/modules/runtime-management/public/participants",
-      "syntax": "static-import",
-      "targetSymbol": "AgentMaterialContentReference",
-      "toContext": "runtime-management",
-      "toFile": "packages/backend/src/modules/runtime-management/public/participants.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/runtime-management/public/participants.ts#$file"
     },
     {
       "edgeKind": "type",
@@ -171114,7 +170982,7 @@
       "targetSymbol": "MissingEnvelopeReason",
       "toContext": "task-execution",
       "toFile": "packages/backend/src/modules/task-execution/application/systemAgentRun.ts",
-      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/systemAgentRun.ts#MissingEnvelopeReason"
+      "toOwnerEntryId": "owner:packages/backend/src/modules/task-execution/application/systemAgentRun.ts#$file"
     },
     {
       "edgeKind": "value",
@@ -205815,7 +205683,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:6da19cfc2241fe5d2d1622e9541771ae77b253e1e58c890048ba82bd5f3649c9",
+  "sourceDigest": "sha256:e86b4b3a4d1450b181eff9fec5facdcc93f9083065fdb6a7350c2e585c95ddf7",
   "targetEdges": [
     {
       "contract": "identity-access/public/types:AuthorizationSubjectRef+opaque-authority",

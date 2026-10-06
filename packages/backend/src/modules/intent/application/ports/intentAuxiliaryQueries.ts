@@ -1,5 +1,5 @@
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
-import type { AgentMaterialContentReference } from '@/modules/runtime-management/public/participants'
+import type { IntentSystemRuntimeReference } from './intentSystemAgent'
 
 import type { Actor } from '@/auth/actor'
 import type { PlatformOnlyResourceType } from '../../domain/teaching/platformMap'
@@ -20,7 +20,7 @@ export interface IntentResolvedRuntime {
 
 /** Normal turns receive only the selected Runtime Management content identity. */
 export type IntentTurnResolvedRuntime = Omit<IntentResolvedRuntime, 'binaryPath'> & {
-  readonly runtimeBinding: AgentMaterialContentReference | null
+  readonly runtimeBinding: IntentSystemRuntimeReference | null
 }
 
 export interface IntentRuntimeInventoryRow {
