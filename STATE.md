@@ -1,3 +1,9 @@
+## 2026-10-06 RFC-370 MCP 正式 CI 配套修复
+
+4a16c26f 的 Windows 平台正式 CI failure，原 boot recovery fixture 的四字符 requestDigest 不符合原迁移0125的64字符 SHA256 合同；仅修该 fixture 的真实 digest。macOS shard5 正式 failure 的原 RFC364 source oracle 仍寻找搬迁前 writer；仅对准实际 local 的唯一 recordSpawn，追加 application 显式 captureTurnStart 断言。全部原测试名、断言、预算和生产算法保持。SOURCE3-R1 独立功能 PASS（3 owned／4 control／6 evidence，共13；a1dcbda680d9e70fe10aec27acee5c64d1655992115812a177834b648cf802ea），完整两文件 AST 逆向证明通过。候选 PASS 不代表正式 CI 成功，后继 exact-SHA 另验。
+
+本机仅自有 format/lint 和纯源码证明，不运行 AW tests/typecheck/build/service，不重复生产 census。Script 完整家族正在接线和回归；三个真实根、唯一策略及 native 完整算法逆向证明44组已通过，尚未上库或称正式验收。并行 RFC371 全部内容保留并排除。A-T7、doctor/command、authority/recovery/background 和完整 A-G 仍继续，CS adapter 尚未开始，AW 尚未部署到 CS；M0先实际部署再逐步M1–M4接入的顺序保持，RFC未完成。详见[MCP CI配套修复](design/RFC-370-crewstation-hosted-deployment/mcp-family-ci-repair.md)。以下共享原文逐字保留。
+
 ## 2026-10-06 RFC-370 MCP 完整效果家族与空闲夹具 CI 修复
 
 MCP 的普通 composition 现在必选完整 effects；opaque target/start identity 由选定实现解释，native 机制完整迁入 local infrastructure。唯一 MCP/System 业务核心、context/lease/lifecycle 图和三个真实 SQLite HTTP／SQLite CLI／PG 根的原参数及完整体保留。SOURCE19-R1A 有效有限 PASS（19 owned／25 control／25 evidence，共69）；原 R1 的67入口及其回执保留，新增两项只核对真实 schema 与 MCP config hash。完整 app/native/root、原 fixture、W29 三阶段和 Windows 逆向证明通过；原测试名、断言与预算不变。本机仅自有 format/lint 和纯 AST／字节／JSON，不运行 AW tests/typecheck/build/service。

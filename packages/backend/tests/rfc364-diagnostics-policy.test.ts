@@ -85,7 +85,15 @@ describe('RFC-364 MCP diagnostics policy', () => {
       .printFile(ts.createSourceFile('application.ts', source, ts.ScriptTarget.Latest, true))
     expect(code).not.toMatch(/from ['"](?:node:(?:fs|path|child_process)|@\/config|@\/db\/)/)
     expect(code).not.toMatch(/\b(?:Bun|appHome|configPath|runSystemAgent|SERVICE_INSTANCES)\b/)
-    expect(source).toContain('this.deps.persistence.recordSpawn(')
+    const native = readFileSync(
+      resolve(
+        import.meta.dir,
+        '../src/modules/resource-catalog/infrastructure/local/mcpDiagnosticsEffects.ts',
+      ),
+      'utf8',
+    )
+    expect(native).toContain('ownership.persistence.recordSpawn(')
+    expect(source).toContain('turnStart: this.deps.effects.captureTurnStart(')
     expect(source).toContain('this.deps.persistence.settleTurn(')
     expect(source.indexOf("await sink.markTerminal('complete')")).toBeLessThan(
       source.indexOf('await result.verifyAfterCapture('),

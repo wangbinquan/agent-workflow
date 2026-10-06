@@ -360,7 +360,7 @@ describeEachProvider('RFC-370 selected complete MCP diagnostics family', (harnes
         mcpId: h.mcp.id,
         ownerUserId: actor.user.id,
         clientCreateId: 'boot-create',
-        requestDigest: 'boot',
+        requestDigest: createHash('sha256').update('boot').digest('hex'),
         sessionId: 'portable-boot',
         turnId: 'portable-boot-turn',
         mcpConfigHash: mcpOperationConfigHashOf(h.mcp),
