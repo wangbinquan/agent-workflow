@@ -1,3 +1,9 @@
+## 2026-10-06 RFC-370 Script fixture 的确切 CI 类型补正
+
+464ae329 的 Windows37447284274 正式 failure，唯一类型错误 TS2345 是新增 fixture 将 required executionContext 推为 optional；15个SQLite场景及constructor identity已先实际通过，仍不代表整套成功。正常14场景改为显式 required context，唯一 ownerless 本机兼容场景保留原缺字段输入并仅作fixture类型投影；生产合同、原断言／名称／预算不变，完整测试逆向恢复旧全文。主37447284205正式cancelled：7 success／36 cancelled／2 failure，原 Static 和汇总状态保留；维护37447284199 success。新exact-SHA hosted CI另验，没有本机AW tests/typecheck/build/service。
+
+本片生产源码人口不变，复用原sourceDigest与matching，未重跑census；只正常退役上一发布已消费的四个增长许可，129原库存／why／counter及其余清单保持。独立有限功能门另验fixture／元数据／文档。验证命令设计稿与并行CI在制改动完整保留、排除本片提交；A-T7/A-G、CS独立adapter、M0首部署及M1～M4继续，AW未部署CS，RFC不记Done。详见design/RFC-370-crewstation-hosted-deployment/task-script-family-ci-repair.md。以下共享旧正文及并行输出全部字节保留。
+
 ## 2026-10-06 RFC-370 Task Script 完整效果家族候选收口
 
 Script 普通策略使用完整所选家族，解释器、依赖环境、run-content、启动及结果由 owner 引用承载，原生算法完整迁入 TE local。SQLite HTTP／SQLite CLI／PG三个根显式选择local；子任务在自己的drive重新绑定。原两native全文件与19／6个公开名、完整policy／wiring11文件45组、原oracle／Windows及MCP三根完整hash／语句保持。SOURCE26-R1的dropped集合漏键FAIL留证；R2修正后PASS，首轮原census因缺显式资源resolver失败留证；R3只补同一所选description.resourceKeys的resolver，59入口有效稳定PASS。新增31个预期双provider／constructor回归交GitHub，本机没有AW tests/typecheck/build/service。

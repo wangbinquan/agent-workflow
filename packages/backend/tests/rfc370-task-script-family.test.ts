@@ -419,16 +419,29 @@ describeEachProvider(
               persistence: execution.persistence,
             })
           }
-          await execution.provider.runtime.schedulerDriver.drive({
+          const driveRequest = {
             taskId,
             appHome,
             defaultNodeRetries: scenario === 'retry' ? 1 : 0,
             defaultPerNodeTimeoutMs: 4321,
             scriptDepsInstallTimeoutMs: 1234,
             scriptInterpreters: { [language]: 'selected:override' },
-            ...(executionContext === undefined ? {} : { executionContext }),
             signal: new AbortController().signal,
-          })
+          }
+          if (executionContext === undefined) {
+            // Only this retained native ownerless fixture omits the context.
+            // Ordinary provider drives keep the required production contract.
+            await execution.provider.runtime.schedulerDriver.drive(
+              driveRequest as Parameters<
+                typeof execution.provider.runtime.schedulerDriver.drive
+              >[0],
+            )
+          } else {
+            await execution.provider.runtime.schedulerDriver.drive({
+              ...driveRequest,
+              executionContext,
+            })
+          }
           expect(selections).toBe(1)
           const rows = (await db.select().from(nodeRuns).where(eq(nodeRuns.taskId, taskId))).sort(
             (a, b) => (a.retryIndex ?? 0) - (b.retryIndex ?? 0),
