@@ -1,3 +1,11 @@
+# RFC-370 hosted CI 功能失败修复候选
+
+67c1839d 的 Windows37516996277 正式 success；主37516880667尚无终态，已完成的Markdown112451991833与Ubuntu backend shard9 112451992504正式failure。前者是67个历史Actions引用502，后者RFC317 T23因把canonical platform type出边误归成legacy R2债务而逐条不等。仅退役本会话新增假legacy行：358→357／outbound48→47，按原稳定JSON修provenance；其余canonical／matching／129库存why和四原规则不变，无新census。27文档64行只转原显示文本或保留run编号，完整旧正文和RFC371并行内容逐行逆变换保持。
+
+真实Task根选择生产和回归为独立WIP，不随本片提交；独立功能门、精确上库与新exact-SHA CI另验，不能记整仓绿。Stage A尚未闭合，CS adapters及M0–M4继续，AW未部署CS。详见[修复依据](design/RFC-370-crewstation-hosted-deployment/ci-legacy-debt-and-links.md)。以下原STATE全文保留。
+
+---
+
 # RFC-370 后台生命周期 hosted CI fixture 兼容修正候选
 
 源码 `5b20b51738c276c4272fc0466b4748d8a2abee2f` 的 Windows run37513420795／job112440144316 已正式 failure：后台功能测试那一组706pass、3skip、0fail，包括新增18个双provider生命周期案例；整仓 typecheck 实际报 TS2345，旧 `rfc359-w12-daemon-bootstrap-composition.test.ts` 的 `TestSession` fixture 缺少新 required `execution` 成员。原精确终态与原始功能日志保留。该 job 的其它类别不分析、不形成结论。

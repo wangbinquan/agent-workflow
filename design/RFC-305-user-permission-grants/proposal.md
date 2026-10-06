@@ -253,7 +253,7 @@ binary 同时写同一用户访问快照，因为旧 binary 不推进 revision�
 （shared 2132、frontend 6474、backend 10931 pass / 35 skip / 0 fail）；RFC-305 架构锁 12/12；GitHub Actions
 CI [31886814586](https://github.com/wangbinquan/agent-workflow/actions/runs/31886814586) 36/36 jobs、视觉回归
 [31886814578](https://github.com/wangbinquan/agent-workflow/actions/runs/31886814578) 44/44、WebKit
-[31886829866](https://github.com/wangbinquan/agent-workflow/actions/runs/31886829866) 8/8 jobs 均为 `success`。
+31886829866 8/8 jobs 均为 `success`。
 
 ## 9. RFC-294 对齐边界
 

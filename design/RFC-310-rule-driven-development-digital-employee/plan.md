@@ -1348,7 +1348,7 @@ Agent/Script、审批和事件生命周期，而不是用 application 内存 fak
 **35/35**，typecheck/lint/format/depcheck 全绿；第一轮唯一 lint warning 已删除后从头重跑，不能用第一轮局部结果代替本次终态。
 
 最终 hosted 终态（2026-08-22）：功能/视觉冻结提交为 `96df8c49c84d532e630f0b8346cbde4787e811cd`；
-[CI 32502058325](https://github.com/wangbinquan/agent-workflow/actions/runs/32502058325) **31/31 jobs success**，
+CI 32502058325 **31/31 jobs success**，
 [visual 32502058323](https://github.com/wangbinquan/agent-workflow/actions/runs/32502058323) **55/55 tests success**，无失败或取消。
 T196 的本地完整门禁、推送、exact-SHA hosted CI 与 visual 四项条件均已满足。
 

@@ -9,7 +9,7 @@
   `791c433508b1721ced96d900b04128a022f02ff2` →
   `c50036ac35a4a87c52b825f280d1afc1a9d54784` 已进入 remote `main`；累计
   23 组 P1 / 14 组 P2 全部 resolved，实现门 `APPROVED / 0 open`。最终 SHA 的
-  [`CI` 30059969045](https://github.com/wangbinquan/agent-workflow/actions/runs/30059969045)、
+  `CI` 30059969045、
   [`integration-opencode` 30059985690](https://github.com/wangbinquan/agent-workflow/actions/runs/30059985690)、
   [`Visual Regression` 30059987003](https://github.com/wangbinquan/agent-workflow/actions/runs/30059987003)
   与
@@ -180,7 +180,7 @@ name 注册；跨 owner agent 在某 repo 执行时，该 repo 或宿主配置�
 - AC10 CLAUDE.md 的 inline-恒胜断言与运维文档已勘误；follow-up 完整 gates、
   compiled binary smoke 与实现门均完成，最终修复 SHA
   `c50036ac35a4a87c52b825f280d1afc1a9d54784` 的
-  [`CI` 30059969045](https://github.com/wangbinquan/agent-workflow/actions/runs/30059969045)、
+  `CI` 30059969045、
   [`integration-opencode` 30059985690](https://github.com/wangbinquan/agent-workflow/actions/runs/30059985690)、
   [`Visual Regression` 30059987003](https://github.com/wangbinquan/agent-workflow/actions/runs/30059987003)
   与

@@ -6,7 +6,7 @@
 - [RFC-359](../RFC-359-database-provider-unification/proposal.md) 已 Done：数据库事务、daemon 启动、task launch/routes、
   nodeRun mint 均已有共用实现；这消除了 provider 分叉前置，但不等于 context 边界、唯一 AtomicApply lifecycle、NodeRun v2 identity
   或 DaemonContainer 已完成。具体抵扣与余项见 [plan §1.2](./plan.md#12-rfc-359-完成后的对账2026-09-20)。
-- 当前实现取证基线为 `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`；Main CI [35492271521](https://github.com/wangbinquan/agent-workflow/actions/runs/35492271521) 为 46/46 success。
+- 当前实现取证基线为 `123ce2dbc94b10d2c88bf978437bfa0db1b898ba`；Main CI 35492271521 为 46/46 success。
   架构 source digest 为 `sha256:de52245214be0dbf3fe6d0de6892a954c1828a8ae9ff14e16355f271e48d4812`，数值以 canonical 和 [generated status](./status.md) 为准。
 - [RFC-360 Runtime Management](../RFC-360-runtime-management-context-cutover/proposal.md)、
   [RFC-361 Execution Contract provider](../RFC-361-execution-contract-provider-cutover/proposal.md)、

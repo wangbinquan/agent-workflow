@@ -58,7 +58,7 @@ SOURCE v2 的唯一 P2 已按实际事件顺序修正，完整 v3 独立功能�
 
 ## 2026-10-03：原 hosted CI 的观测回归修复
 
-`1538a38024cb7861f8761cc1806a62f8c7eabc2c` 的默认 Windows 作业 [37073283228](https://github.com/wangbinquan/agent-workflow/actions/runs/37073283228) 已成功；这只证明原受理 schema fixture 类型修复，main 作业 [37072798608](https://github.com/wangbinquan/agent-workflow/actions/runs/37072798608) 是 cancelled，不能代替整仓通过。此前默认夜间矩阵除 Windows 与 WebKit 外均成功；WebKit [37068435779](https://github.com/wangbinquan/agent-workflow/actions/runs/37068435779) 的原双轮澄清前置只出现 `clarify_a`，不是统计页面的交互失败，仍独立定位，不调大预算或减少原两轮断言。
+`1538a38024cb7861f8761cc1806a62f8c7eabc2c` 的默认 Windows 作业 [37073283228](https://github.com/wangbinquan/agent-workflow/actions/runs/37073283228) 已成功；这只证明原受理 schema fixture 类型修复，main 作业 37072798608 是 cancelled，不能代替整仓通过。此前默认夜间矩阵除 Windows 与 WebKit 外均成功；WebKit [37068435779](https://github.com/wangbinquan/agent-workflow/actions/runs/37068435779) 的原双轮澄清前置只出现 `clarify_a`，不是统计页面的交互失败，仍独立定位，不调大预算或减少原两轮断言。
 
 原失败日志定位到新增观测输出对既有 runner/界面/登记的影响。本批保留所有原断言，修复如下：
 

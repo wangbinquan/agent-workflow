@@ -150,7 +150,7 @@ Linux 平台矩阵仍是独立发布证据，不由本地裁决代替；最终 e
    均成功；[`CI` run 30059793066](https://github.com/wangbinquan/agent-workflow/actions/runs/30059793066)
    在 actionlint 报 SC1072/SC1073 后取消，因此仍不是绿色发布点。
 5. 最终 exact SHA `c50036ac35a4a87c52b825f280d1afc1a9d54784`
-   完成发布门：[`CI` run 30059969045](https://github.com/wangbinquan/agent-workflow/actions/runs/30059969045)
+   完成发布门：`CI` run 30059969045
    **28/28 jobs success**；[`integration-opencode` run 30059985690](https://github.com/wangbinquan/agent-workflow/actions/runs/30059985690)
    的 RFC-224 subset **3 pass / 15 assertions**，完整 workflow
    **5 pass / 5 skip / 0 fail、19 assertions**；

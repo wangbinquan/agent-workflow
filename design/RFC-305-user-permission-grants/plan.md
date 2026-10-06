@@ -159,4 +159,4 @@ PERMISSIONS
 实现复核，结论 CLEAN；另行调用 `codex-cli 0.147.0` 的外部模型审查在源码发出前被环境策略拒绝，未绕过且不计为
 通过证据。远端 CI [31886814586](https://github.com/wangbinquan/agent-workflow/actions/runs/31886814586) 36/36 jobs、
 视觉回归 [31886814578](https://github.com/wangbinquan/agent-workflow/actions/runs/31886814578) 44/44、WebKit
-[31886829866](https://github.com/wangbinquan/agent-workflow/actions/runs/31886829866) 8/8 jobs 均成功。
+31886829866 8/8 jobs 均成功。

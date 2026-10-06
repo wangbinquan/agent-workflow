@@ -4,7 +4,7 @@
 
 ## 2026-10-02 当前后继检查与固定源码链接修复
 
-观测文档提交 `e8c9d73b13bf467c2e56b9abe2d9baf2f4765797` 的[主 CI36977794334](https://github.com/wangbinquan/agent-workflow/actions/runs/36977794334) completed/failure，42 success/8 failure；其中并行已发布源码的类型和架构登记问题由原会话自行提交修复。其后继 `55b1104a812c247f692f5450b6738e299d437bc1` 的[主 CI36980700296](https://github.com/wangbinquan/agent-workflow/actions/runs/36980700296) completed/failure，48 success/2 failure：功能、类型、架构和浏览器作业通过，只有设计链接检查及 CI 汇总失败。两份原日志均保留，不能称这两个 SHA 全绿。
+观测文档提交 `e8c9d73b13bf467c2e56b9abe2d9baf2f4765797` 的主 CI36977794334 completed/failure，42 success/8 failure；其中并行已发布源码的类型和架构登记问题由原会话自行提交修复。其后继 `55b1104a812c247f692f5450b6738e299d437bc1` 的[主 CI36980700296](https://github.com/wangbinquan/agent-workflow/actions/runs/36980700296) completed/failure，48 success/2 failure：功能、类型、架构和浏览器作业通过，只有设计链接检查及 CI 汇总失败。两份原日志均保留，不能称这两个 SHA 全绿。
 
 剩余三条错误来自 RFC-370 的 CrewStation 固定提交 `35cf5a475979cbf74fb324230173f55b4e1a0a75` 源码链接，GitHub blob 页面返回 503。该相关共享文件已由并行输出改为同提交、同路径的官方 raw.githubusercontent.com 地址；本会话完整保留这些改动并逐条核对 HTTP 200、返回字节与该 Git 对象一致，再按标准格式整理。未改变检查规则或接受 503，修正版仍须自身 hosted CI 终态。公开源码校验回执在 `/private/tmp/observability-aw-ci-primary-sources-v1.json`。
 
@@ -192,8 +192,8 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 
 | 工作流                    | 实际触发          | 精确运行                                                                              | 成功作业 |
 | ------------------------- | ----------------- | ------------------------------------------------------------------------------------- | -------- |
-| CI                        | push              | [36862619605](https://github.com/wangbinquan/agent-workflow/actions/runs/36862619605) | 50 / 50  |
-| e2e-full-nightly          | workflow_dispatch | [36862922051](https://github.com/wangbinquan/agent-workflow/actions/runs/36862922051) | 5 / 5    |
+| CI                        | push              | 36862619605 | 50 / 50  |
+| e2e-full-nightly          | workflow_dispatch | 36862922051 | 5 / 5    |
 | e2e-webkit-nightly        | workflow_dispatch | [36862927689](https://github.com/wangbinquan/agent-workflow/actions/runs/36862927689) | 8 / 8    |
 | evidence-soak-nightly     | workflow_dispatch | [36862938467](https://github.com/wangbinquan/agent-workflow/actions/runs/36862938467) | 1 / 1    |
 | git-protocols-e2e         | workflow_dispatch | [36862932820](https://github.com/wangbinquan/agent-workflow/actions/runs/36862932820) | 1 / 1    |
@@ -209,9 +209,9 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 
 ## 文档后继与共享主干 CI 的实际终态（2026-10-01）
 
-观测回执两文档提交 `993ab7ce694988536ecf600d9e4a874901e5ea41` 的 [主 CI 36871878934](https://github.com/wangbinquan/agent-workflow/actions/runs/36871878934) 被后继 push 取消，作业为 35 success / 6 failure / 9 cancelled，不能写成绿色。可定位失败属于共享 RFC-370 配套：不存在的 `buildPackagePreview` 导出、两个类型文本改变后的 AST digest、旧 reader 三参数断言。原 owner 随 `13f5b8e3` 修正，其 [CI 36874167121](https://github.com/wangbinquan/agent-workflow/actions/runs/36874167121) 为 34 success / 4 failure / 12 cancelled，另暴露测试 opId 不符合 `op-<n>` 与崩溃夹具未等待实际派发边界；失败历史保留。
+观测回执两文档提交 `993ab7ce694988536ecf600d9e4a874901e5ea41` 的 [主 CI 36871878934](https://github.com/wangbinquan/agent-workflow/actions/runs/36871878934) 被后继 push 取消，作业为 35 success / 6 failure / 9 cancelled，不能写成绿色。可定位失败属于共享 RFC-370 配套：不存在的 `buildPackagePreview` 导出、两个类型文本改变后的 AST digest、旧 reader 三参数断言。原 owner 随 `13f5b8e3` 修正，其 CI 36874167121 为 34 success / 4 failure / 12 cancelled，另暴露测试 opId 不符合 `op-<n>` 与崩溃夹具未等待实际派发边界；失败历史保留。
 
-原 owner 继续提交 `ce8a6310adb9576559f4d5100d4916635a104720`，保留断言并改为合法 op-1 和实际 crashBoundary。该 SHA 的 [主 CI 36876744628](https://github.com/wangbinquan/agent-workflow/actions/runs/36876744628) 50 / 50 completed / success；[OpenCode 集成 36878130169](https://github.com/wangbinquan/agent-workflow/actions/runs/36878130169) 与 [Git 协议 36880609673](https://github.com/wangbinquan/agent-workflow/actions/runs/36880609673) 同 SHA 也 success。独立只读诊断保留五类具体根因，没有由观测会话改写并行源码或降低守卫。
+原 owner 继续提交 `ce8a6310adb9576559f4d5100d4916635a104720`，保留断言并改为合法 op-1 和实际 crashBoundary。该 SHA 的 主 CI 36876744628 50 / 50 completed / success；[OpenCode 集成 36878130169](https://github.com/wangbinquan/agent-workflow/actions/runs/36878130169) 与 [Git 协议 36880609673](https://github.com/wangbinquan/agent-workflow/actions/runs/36880609673) 同 SHA 也 success。独立只读诊断保留五类具体根因，没有由观测会话改写并行源码或降低守卫。
 
 分类 / 紧凑返回源码的十运行 / 75 作业成功证据仍绑定 `eef12e25`；这条 CE8 共享主干回执不冒充九种定时配置都在 CE8 重跑。两文档回执在 CE8 祖先中，原取消 / 失败、原默认调度和 EEF 矩阵保持。
 
@@ -233,10 +233,10 @@ WG-35人类owner在线点首轮计数0，重试success。该夹具默认真实se
 
 | 工作流                        | Run                                                                                   | 成功作业 |
 | ----------------------------- | ------------------------------------------------------------------------------------- | -------- |
-| CI                            | [36969850886](https://github.com/wangbinquan/agent-workflow/actions/runs/36969850886) | 50/50    |
+| CI                            | 36969850886 | 50/50    |
 | maintenance-soak-nightly.yml  | [36970414480](https://github.com/wangbinquan/agent-workflow/actions/runs/36970414480) | 1/1      |
 | e2e-full-nightly.yml          | [36970420107](https://github.com/wangbinquan/agent-workflow/actions/runs/36970420107) | 5/5      |
-| windows-platform.yml          | [36970559143](https://github.com/wangbinquan/agent-workflow/actions/runs/36970559143) | 1/1      |
+| windows-platform.yml          | 36970559143 | 1/1      |
 | e2e-webkit-nightly.yml        | [36970432899](https://github.com/wangbinquan/agent-workflow/actions/runs/36970432899) | 8/8      |
 | integration-opencode.yml      | [36970439090](https://github.com/wangbinquan/agent-workflow/actions/runs/36970439090) | 2/2      |
 | git-protocols-e2e.yml         | [36970445195](https://github.com/wangbinquan/agent-workflow/actions/runs/36970445195) | 1/1      |
@@ -254,7 +254,7 @@ mixed report 原丢失根因仍未确证。复验已恢复最初的 reject POST 
 
 ## 2026-10-02 OpenCode 固定来源链接接续
 
-`c843938ae1e1103d6d78ec2f4f9f2e1ec31c0560` 的 [CI36985769914](https://github.com/wangbinquan/agent-workflow/actions/runs/36985769914) 终态 failure，48 success / 2 failure。三条 CS 固定源码 raw 链接已通过；Markdown 作业 110770777970 的唯一报错为 RFC-371 分类文档中 OpenCode 固定提交的 GitHub blob 503，第二个失败为汇总作业。
+`c843938ae1e1103d6d78ec2f4f9f2e1ec31c0560` 的 CI36985769914 终态 failure，48 success / 2 failure。三条 CS 固定源码 raw 链接已通过；Markdown 作业 110770777970 的唯一报错为 RFC-371 分类文档中 OpenCode 固定提交的 GitHub blob 503，第二个失败为汇总作业。
 
 共享分类文档中并行会话保留的文件路径、行区间及固定 SHA 完整保留。官方同 SHA 的 raw 源码只读核验返回 HTTP 200，实际 getUsage 已核对；`81d6d54f` 曾追加可读链接，其限定文档复核没有覆盖仓库 `CLAUDE.md` 的强制引用规则。现仅将本会话追加段落改为纯文本 `packages/opencode/src/session/session.ts:321-379` 与同一固定 SHA；Token 口径和原断言不变。没有增加豁免、放宽 HTTP 接受状态或修改工作流配置。自身 hosted CI 仍需回执，AW-R01 当前接续未关闭。
 

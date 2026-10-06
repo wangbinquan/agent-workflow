@@ -318,7 +318,7 @@
     [`CI` 30059793066](https://github.com/wangbinquan/agent-workflow/actions/runs/30059793066)
     在 static actionlint 报 SC1072/SC1073 后被取消，因此仍不是发布点。
   - 最终 `c50036ac35a4a87c52b825f280d1afc1a9d54784`：
-    [`CI` 30059969045](https://github.com/wangbinquan/agent-workflow/actions/runs/30059969045)
+    `CI` 30059969045
     **28/28 jobs success**；
     [`integration-opencode` 30059985690](https://github.com/wangbinquan/agent-workflow/actions/runs/30059985690)
     **3 pass / 15 assertions**（whole workflow **5 pass / 5 skip / 0 fail /

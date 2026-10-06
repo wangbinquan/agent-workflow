@@ -887,7 +887,7 @@ subprocess **23 pass / 90 assertions**、FFF capability
   [`CI` 30059793066](https://github.com/wangbinquan/agent-workflow/actions/runs/30059793066)
   在 static actionlint 报 SC1072/SC1073 后被取消，仍不能作为绿色发布点。
 - 最终 `c50036ac35a4a87c52b825f280d1afc1a9d54784` 的
-  [`CI` 30059969045](https://github.com/wangbinquan/agent-workflow/actions/runs/30059969045)
+  `CI` 30059969045
   **28/28 jobs success**；
   [`integration-opencode` 30059985690](https://github.com/wangbinquan/agent-workflow/actions/runs/30059985690)
   中 RFC-224 official 子集 **3 pass / 15 assertions**，whole workflow
