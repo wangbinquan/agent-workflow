@@ -305,3 +305,12 @@ Ubuntu改为完整1/32至32/32的独立runner，每一原Bun发现文件仍只�
 文档作业剩七处失败均为 GitHub run URL 的 HTML 502；六个不同原 run ID 已通过官方 API逐一核对存在及原 headSha/终态，旧失败运行仍作为有效历史证据保留。RFC-348 一处裸链接吞入中文括号句号，改为显式 Markdown 链接。Lychee 只将当前仓库字节完整的 `/actions/runs/<decimal-id>` 映射到对应官方 REST 资源，以现有 workflow token 的 host 专用 Basic Auth核验；不跳过任何 URL、不接受 5xx，畸形路径与不存在的 ID 仍失败，其他链接、重试与原 15 分钟作业预算不变。配置依据 [Lychee remap](https://lychee.cli.rs/recipes/migration/) 与 [host 专用认证](https://lychee.cli.rs/guides/config/)。当前静态 scans 的失败仅保留状态，未读取或分析扫描日志。
 
 本片精确格式/lint/AST 与新 source SHA hosted CI继续核验，不把已有失败或本次 API读证据记为全仓通过。AW-R03～12、CS 生产采集/原规模和两个 RFC继续，全部共享现有正文及其他会话在制品保留，无跨会话消息。
+
+
+## 2026-10-07 Windows 重启与归属名称异步时序
+
+`d400121b052e59db6e72aba2aa25f99aa7d18f40` 的 [CI 37530803324](https://github.com/wangbinquan/agent-workflow/actions/runs/37530803324) 已终态。原 Markdown、历史恢复回归、SQLite/PostgreSQL、全部 Ubuntu/macOS/Windows 功能作业均 success；整体仍 failure，其他阻断只保留作业状态。Windows E2E 两条原用例首次失败而重试成功，不能据此把时序问题记为闭合：crash-recovery 同库重启看到了旧 daemon PID 锁，WF-03 在独立归属名称查询返回前取到了 UUID。
+
+按 [Node ChildProcess close 契约](https://nodejs.org/api/child_process.html#event-close)，harness 在 spawn 后登记 close，停进程/控制关闭直到 close 后才允许调用方重启或移除其 home；已 exit 且管道未关仍等待。原 fallback/grace 预算不变，超时或 signal 错误明确失败，不当作已退出，不删除锁绕过真实重启。新增六条独立控制 exit/close 顺序的功能回归，锁住仅 exit、已经 exit、已经 close、控制超时、KILL fallback 及 signal 失败。该契约修正尚需原 Windows 真实进程用例核验，本文不把它当作 Windows 已通过。
+
+WF-03 保留私有/公开卡片的完整 chip 数组与原用户名期望，改为等待独立名称查询后的真实 UI；节点数、版本、可见集合及其余原断言不变。没有新增用例重试、skip、排除文件或降低人口。仅本批格式/lint和无断言 AST 在本机执行，全部测试与类型仍交精确 hosted SHA。两 RFC 及原生产/规模/真实用途验收保持 In Progress。

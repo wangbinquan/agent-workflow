@@ -291,20 +291,30 @@ function isPortCollisionError(error: unknown): boolean {
  * reuse the same waiting discipline without also sending a signal — on Windows
  * a signal is exactly what must not be sent.
  */
+const closedDaemonChildren = new WeakSet<DaemonChild>()
+
+function trackChildClose(child: DaemonChild): void {
+  child.once('close', () => closedDaemonChildren.add(child))
+}
+
 async function waitForChildExit(child: DaemonChild, timeoutMs: number): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return
-  await new Promise<void>((resolveExit) => {
+  if (closedDaemonChildren.has(child)) return
+  await new Promise<void>((resolveExit, rejectExit) => {
     let settled = false
     const finish = (): void => {
       if (settled) return
       settled = true
       clearTimeout(timer)
-      child.off('exit', finish)
+      child.off('close', finish)
       resolveExit()
     }
-    const timer = setTimeout(finish, timeoutMs)
-    child.once('exit', finish)
-    if (child.exitCode !== null || child.signalCode !== null) finish()
+    const timer = setTimeout(() => {
+      settled = true
+      child.off('close', finish)
+      rejectExit(new Error(`e2e/harness: daemon ${child.pid} did not close within ${timeoutMs}ms`))
+    }, timeoutMs)
+    child.once('close', finish)
+    if (closedDaemonChildren.has(child)) finish()
   })
 }
 
@@ -325,9 +335,12 @@ async function signalChildAndWait(
   signal: NodeJS.Signals,
   fallbackTimeoutMs: number,
 ): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return
+  if (closedDaemonChildren.has(child)) return
+  if (child.exitCode !== null || child.signalCode !== null) {
+    return waitForChildExit(child, CHILD_EXIT_GRACE_MS)
+  }
 
-  await new Promise<void>((resolveExit) => {
+  await new Promise<void>((resolveExit, rejectExit) => {
     const timers: { fallback?: NodeJS.Timeout; hardStop?: NodeJS.Timeout } = {}
     let settled = false
 
@@ -336,20 +349,31 @@ async function signalChildAndWait(
       settled = true
       if (timers.fallback !== undefined) clearTimeout(timers.fallback)
       if (timers.hardStop !== undefined) clearTimeout(timers.hardStop)
-      child.off('exit', finish)
+      child.off('close', finish)
       resolveExit()
     }
 
-    child.once('exit', finish)
-    if (child.exitCode !== null || child.signalCode !== null) {
+    const fail = (error: Error): void => {
+      if (settled) return
+      settled = true
+      if (timers.fallback !== undefined) clearTimeout(timers.fallback)
+      if (timers.hardStop !== undefined) clearTimeout(timers.hardStop)
+      child.off('close', finish)
+      rejectExit(error)
+    }
+
+    // Node's exit event precedes stdio disposal. Restarting the same home
+    // must wait for close; a timeout is not evidence that the child exited.
+    child.once('close', finish)
+    if (closedDaemonChildren.has(child)) {
       finish()
       return
     }
 
     try {
       child.kill(signal)
-    } catch {
-      finish()
+    } catch (error) {
+      fail(error instanceof Error ? error : new Error(String(error)))
       return
     }
 
@@ -357,13 +381,14 @@ async function signalChildAndWait(
     timers.fallback = setTimeout(() => {
       try {
         child.kill('SIGKILL')
-      } catch {
-        finish()
+      } catch (error) {
+        fail(error instanceof Error ? error : new Error(String(error)))
         return
       }
-      // SIGKILL is asynchronous on Node's ChildProcess API. Wait briefly for
-      // the exit event before allowing the caller to remove the child's home.
-      timers.hardStop = setTimeout(finish, CHILD_EXIT_GRACE_MS)
+      if (settled) return
+      timers.hardStop = setTimeout(() => {
+        fail(new Error(`e2e/harness: daemon ${child.pid} did not close after SIGKILL`))
+      }, CHILD_EXIT_GRACE_MS)
     }, fallbackTimeoutMs)
   })
 }
@@ -709,6 +734,7 @@ async function startDaemonWithPortAllocator(
           stdio: ['ignore', 'pipe', 'pipe'],
         },
       )
+      trackChildClose(attemptChild)
       child = attemptChild
 
       try {
@@ -837,4 +863,7 @@ export const harnessTestApi = {
   e2eAdmin: E2E_ADMIN,
   startDaemonWithPortAllocator,
   createDaemonDiagnosticFilter,
+  trackChildClose,
+  waitForChildExit,
+  signalChildAndWait,
 }

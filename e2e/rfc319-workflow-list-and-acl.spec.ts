@@ -571,16 +571,24 @@ test('WF-03 工作流列表卡片：节点数 / 版本 / 私有徽章 / 归属�
     expect(await metaChips(page, charlie.name)).toEqual(['3 nodes', 'v1'])
 
     // (2) 归属 chip 逐格。
-    expect(
-      await badgeChips(page, alpha.name),
-      '私有徽章或归属人掉了 ⇒ 用户以为随手建的工作流对全平台可见（或反过来），' +
-        '多人实例里同名工作流也分不清是谁的',
-    ).toEqual(['Private', owner.username])
-    expect(
-      await badgeChips(page, charlie.name),
-      '公开工作流也挂着 Private 徽章 ⇒ 这个徽章是常量装饰，用户再也无法一眼分辨' +
-        '哪些工作流是共享出去的',
-    ).toEqual([owner.username])
+    // Owner names arrive in a separate lookup after the collection request.
+    // Keep the complete chip assertions, and wait for that actual UI result.
+    await expect
+      .poll(() => badgeChips(page, alpha.name), {
+        timeout: 30_000,
+        message:
+          '私有徽章或归属人掉了 ⇒ 用户以为随手建的工作流对全平台可见（或反过来），' +
+          '多人实例里同名工作流也分不清是谁的',
+      })
+      .toEqual(['Private', owner.username])
+    await expect
+      .poll(() => badgeChips(page, charlie.name), {
+        timeout: 30_000,
+        message:
+          '公开工作流也挂着 Private 徽章 ⇒ 这个徽章是常量装饰，用户再也无法一眼分辨' +
+          '哪些工作流是共享出去的',
+      })
+      .toEqual([owner.username])
 
     // (3) 描述与它的兜底。
     await expect(

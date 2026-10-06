@@ -1,3 +1,7 @@
+## 2026-10-07 RFC-371 Windows CI 时序修复候选
+
+原 d400121b 的 CI 37530803324：Markdown/恢复/双 provider/全部平台功能作业通过，整体仍 failure；扫描只记状态。Windows crash-recovery 和 WF-03 首次失败后重试成功保留，不计根因闭合。本批 harness 改为等待原 child close 并在未关闭/信号错误时失败，原 shutdown/fallback/grace 预算不改；新增六条 close 边界回归，WF-03 等名称查询而保留全部原 chip 期望。仅精确格式/lint/无断言 AST 本机核验，新精确 SHA 的 Windows/整仓 CI待验。AW-R03～12、CS N4/N5/真实 N6及原规模继续，两 RFC保持 In Progress。
+
 ## 2026-10-07 RFC-370 Task 根选择提交及四条一次增长回执退役候选
 
 源码27路径已正常提交 `28ec76d71cf7e9812ae0ae99935045837d73e90f`，matching14路径已正常提交 `3f46813aab48650af730aa19eebf526b815a3842`；完整共享 STATE 已由并行 CI 修复 d400121b 提交，双方登记完整保留。本次仍未 push，下一普通后继先退役四条已消费声明，再统一发布。SOURCE27-R2有效稳定PASS；META15-R1有效稳定FAIL的唯一owner分配表述P2已由DOC1-D1闭合，之后增加的1095-byte并行STATE前缀由STATE1-D1有限PASS绑定，原105项及canonical doc保持。三份历史门结论不改写，未因HEAD变化重跑源码门或census。
