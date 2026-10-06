@@ -1,3 +1,7 @@
+## 2026-10-06 RFC-370 Task Windows 源码守卫后继
+
+ffe96207 的 Windows37402951923正式failure（356pass／3skip／2fail）。本片仅机械登记两处已提交 native root protocol 地址并迁移一个原配置读取断言；双表／stale／classifier／全部预算及生产源码保持。Task核心内kind桥接在A-T7仍是未偿债，不因具名登记宣称能力化完成。详见 task-agent-family-ci-repair.md 的后继记录。独立有限功能门与新exact-SHA hosted CI分开验核；没有本机AW tests/typecheck/build/service，不重新census。System装配、A-G、CS独立adapter、M0首次部署及M1～M4继续，AW未部署CS，RFC未完成。以下共享旧正文逐字保留。
+
 ## 2026-10-06 RFC-370 Task family 确切 CI 修复续批
 
 1538a56d 主CI37395936688正式failure，Windows37395936423 cancelled，原失败不计通过。本片19文件修复实际public入口、contextual类型、fixture设置与断言地址，补三个offered及五个native bridge登记，原核心、规则、全部断言及预算保持。SOURCE19-R1 PASS后首个真正census因直接re-export递归opaque类型失败、零产物留证。两文件后继沿已有command原函数值alias保持完整参数类型/identity；A-T7最终窄合同开放。SOURCE19-R2有效PASS54，FP b1b16ebc554b596864e4488c6ffae2624ea7b55a862ca2af52caa150d6ca2a47。

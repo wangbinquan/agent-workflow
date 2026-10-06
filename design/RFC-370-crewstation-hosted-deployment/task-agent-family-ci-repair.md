@@ -19,3 +19,9 @@
 Windows 原 run 已正式 cancelled，未取得通过结论。主 CI 的 macOS shard 1 还记录了既有 SC conflict fixture 的 120000ms 超时；该项仍需确切 CI 证据与原因定位，本片不会增加预算或将其宣称已解决。
 
 本机只做自有文件格式、lint 和纯 AST/字节证明；不运行 AW 测试、typecheck、build 或服务。冻结源码经有限独立功能检视后，只按该候选执行一次原始 census，生成配套产物并检视。失败回执保留，不用在制 System 或其他会话的源码生成架构快照。
+
+## ffe96207 的 Windows 源码守卫后继
+
+确切 Windows run `37402951923` 已正式 failure：356 pass／3 skip／2 fail。原完整执行族用例通过；RFC-143 的两条静态地址／库存断言失败。既有 Task native root collection 桥接和 opencode v3 retained source 的两处真实 kind 判别分别在原两个有序表中具名登记，原 classifier、全树扫描、所有 stale／双表一致性／正向控制断言及预算不变。Task application 的判别仍是 A-T7 未偿债，登记不能解释为能力化已经完成；未修改或移除并行 RFC-371 的原算法。
+
+原 wrapper 的配置冻结读取已迁到 TE `localTaskAgentRunFamily` 的共同装配点，同一原断言改查这个实际读取表达式；原 native family 的冻结 import 断言保留，其余正文与全部生产源码保持。新确切 SHA CI 另验，本机不运行 AW tests/typecheck/build/service，不重扫未变生产 census。旧主 CI 和 SC 120000ms 超时仍开放。System、A-G、独立 CS adapters、M0首次部署及M1～M4继续，AW未部署CS。

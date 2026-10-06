@@ -271,6 +271,12 @@ describe('RFC-143 (D) PR-4 业务/smoke spawn 收口 + 旁路清零终锁', () =
       // 不成比例。收窄扫描面后它第一次可见，先如实入账。
       // removeWhen: 配置项改为按 runtime kind 索引的那次 RFC。
       'services/runtime/types.ts',
+      // RFC-371's retained native root collection still bridges the Task core
+      // to the original opencode lease protocol. A-T7 must move this exact
+      // discriminator into the selected native capability; this is open debt.
+      'modules/task-execution/application/taskAgentRun.ts',
+      // The retained source adapter validates the actual opencode v3 format.
+      'modules/task-execution/infrastructure/nativeUsageRootSource.ts',
     ])
     const walk = (dir: string): void => {
       for (const name of readdirSync(dir)) {
@@ -440,8 +446,8 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     expect(SRC('modules/task-execution/composition/localTaskAgentRunFamily.ts')).toContain(
       "from '@/services/execution/runtimeConfigFreeze'",
     )
-    expect(SRC('modules/task-execution/composition/wrapperMechanics.ts')).toContain(
-      "from '@/services/execution/runtimeConfigFreeze'",
+    expect(SRC('modules/task-execution/composition/localTaskAgentRunFamily.ts')).toContain(
+      'freezeBinaryConfig(input.configPath, input.operationConfiguration)',
     )
     expect(SRC('services/scheduler.ts')).not.toContain('function freezeBinaryConfig')
     expect(SRC('services/nodeRunMint.ts')).toContain('configBackedBinary')
@@ -497,7 +503,12 @@ describe('RFC-317 T19 —— kind 判别豁免表无死条目', () => {
   const SRC_ROOT = resolve(import.meta.dir, '..', 'src')
   // 与上面扫描用的是同一个集合语义；这里重新声明是因为原表声明在 it() 体内。
   // 两处一旦不一致，下面第一条断言会红。
-  const ALLOWLIST = ['cli/start.ts', 'services/runtime/types.ts'] as const
+  const ALLOWLIST = [
+    'cli/start.ts',
+    'services/runtime/types.ts',
+    'modules/task-execution/application/taskAgentRun.ts',
+    'modules/task-execution/infrastructure/nativeUsageRootSource.ts',
+  ] as const
 
   it('豁免表与扫描里用的那份一致（防两份各改各的）', () => {
     const source = readFileSync(
