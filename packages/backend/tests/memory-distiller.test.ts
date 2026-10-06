@@ -1,3 +1,4 @@
+import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 // RFC-041 — distiller unit tests (PR2 scope).
 //
 // All cases stub out the real `runFn` (RFC-367 seam) so no subprocess is
@@ -31,9 +32,7 @@ import {
   IndeterminateRuntimeProcessError,
   loadScopeContexts,
   loadSourceEvents,
-  runDistill,
   validateAndPersistCandidate,
-  type RunDistillOptions,
 } from '../src/modules/memory/application/distill/memoryDistiller'
 import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
 import { memoryCatalogOf } from './helpers/memoryCatalog'

@@ -1,3 +1,4 @@
+import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import type {
   WorkspaceUploadContentFactory,
@@ -357,7 +358,7 @@ import { mountWebhookDeliveryRoutes } from '@/routes/webhookDeliveries'
 import { mountWorkflowRoutes } from '@/routes/workflows'
 import { mountWorkgroupRoutes } from '@/routes/workgroups'
 import { registerResourcePackageRoutes } from '@/routes/resourcePackages'
-import { Paths } from '@/util/paths'
+import { Paths, appHome as systemAgentAppHome } from '@/util/paths'
 import { mountWorkgroupTaskRoutes } from '@/routes/workgroupTasks'
 import { mountWorktreeFilesRoutes, type WorktreeFilesRouteDeps } from '@/routes/worktree-files'
 import { mountAclEndpoints } from '@/routes/resourceAcl'
@@ -2268,9 +2269,11 @@ export function composeSqliteApplicationDeps(
     })
   const maintenanceDisk =
     deps.providerCore?.maintenanceDisk ?? composeSqliteMaintenanceDiskOperations(deps.db, appHome)
+  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({ appHome: systemAgentAppHome })
   const memoryOperations =
     deps.memoryOperations ??
     composeSqliteMemoryOperations({
+      systemAgentBinding: memorySystemAgentBinding,
       db: deps.db,
       nodeRunPrompts,
       injectionQueries: memoryInjectionQueries,
@@ -2865,6 +2868,9 @@ function composeSqliteApiRouteMounts(
   const repositoryPublicationTransport = deps.repositoryPublicationTransport
   const schedulerDriver = deps.schedulerDriver
   const codeWorkspace = composeLegacyCodeReadProviders(deps.db).workspace
+  const narrativeSystemAgentBinding = composeLocalSystemAgentRunFamily({
+    appHome: systemAgentAppHome,
+  })
   const taskRouteOperations = createTaskRouteOperations({
     workspaceReads: deps.workspaceReads,
     effects: deps.taskDeletionEffects,
@@ -3001,7 +3007,11 @@ function composeSqliteApiRouteMounts(
       }: {
         readonly runtimeName: string | null
         readonly defaultRuntime: string | null
-      }) => deps.runtimeRegistry.resolveRuntimeByName(runtimeName ?? defaultRuntime),
+      }) =>
+        deps.runtimeRegistry
+          .resolveRuntimeByName(runtimeName ?? defaultRuntime)
+          .then(narrativeSystemAgentBinding.bindRuntime),
+      systemAgents: narrativeSystemAgentBinding.family,
     },
     collaborationContext: deps.collaborationContext,
   }
@@ -3516,7 +3526,11 @@ function composeSqliteApiRouteMounts(
       },
     }),
   })
-  const intentSessionRoutes = Object.freeze({
+  const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({
+    appHome: () => intentSessionRouteInputs.appHome,
+  })
+  const intentSessionRouteInputs: IntentSessionRouteDependencies = {
+    appHome,
     configuration,
     events: createIntentSessionWsPublisher(),
     identityAccess,
@@ -3524,7 +3538,11 @@ function composeSqliteApiRouteMounts(
     intentApply,
     intentPersistence,
     intentTurnRuntime: Object.freeze({
-      runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
+      runtimeResolver: composeIntentTurnRuntimeResolver(
+        intentPersistence,
+        intentSystemAgentBinding.bindRuntime,
+      ),
+      systemAgents: intentSystemAgentBinding.family,
       dumpAuxiliary: intentDumpAuxiliary,
       // RFC-358: 图校验由 resource-catalog 提供，经它的 exact public 合同注入意图链路。
       graphValidation: composeIntentWorkflowGraphValidation({
@@ -3534,9 +3552,18 @@ function composeSqliteApiRouteMounts(
       }),
     }),
     resourceCatalogFor: intentResourceCatalogFor,
+  }
+  const intentSessionRoutes = Object.freeze({
+    ...intentSessionRouteInputs,
     ...(deps.intentTestDependencies?.runFn === undefined
       ? {}
-      : { runTurn: deps.intentTestDependencies.runFn }),
+      : {
+          intentTurnRuntime: Object.freeze({
+            ...intentSessionRouteInputs.intentTurnRuntime,
+            systemAgents: intentSystemAgentBinding.withFixture(deps.intentTestDependencies.runFn)
+              .family,
+          }),
+        }),
   } satisfies IntentSessionRouteDependencies)
   // RFC-359 W4-D6c：employee_* 的 ACL 走目录的中立 foreign-owner 路径（与 development_adapter 同一条），
   // identity 行由 digital-employee 在目录写事务里交出。

@@ -39,7 +39,6 @@ import { actorOf, type Actor } from '@/auth/actor'
 import { registerRoute } from '@/routes/registry'
 import type { Config } from '@agent-workflow/shared'
 import { NotFoundError, ValidationError } from '@/util/errors'
-import { Paths } from '@/util/paths'
 import type { IntentSessionEventPublisher } from '@/modules/intent/ports/intentSessionEvents'
 import type { IntentApplyOperations } from '@/modules/intent/application/ports/intentApplyOperations'
 import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
@@ -112,6 +111,7 @@ function encodeIntentListCursor(row: { updatedAt: number; id: string }): string 
 }
 
 export interface IntentSessionRouteDependencies {
+  readonly appHome: string
   readonly configuration: { read(): Config | Promise<Config> }
   readonly identityAccess: IntentDispatchDeps['identityAccess']
   readonly directAuthority: DirectAuthorityBinding
@@ -119,17 +119,25 @@ export interface IntentSessionRouteDependencies {
   readonly intentPersistence: IntentPersistence
   readonly intentTurnRuntime: Pick<
     IntentDispatchDeps,
-    'runtimeResolver' | 'dumpAuxiliary' | 'graphValidation'
+    'runtimeResolver' | 'dumpAuxiliary' | 'graphValidation' | 'systemAgents'
   >
   readonly resourceCatalogFor: (actor: Actor) => IntentResourceCatalogBinding
-  /** Exact test seam; production composition leaves it absent. */
-  readonly runTurn?: IntentDispatchDeps['runFn']
   /** RFC-355 T4b：会话动静的播报面由 bootstrap 注入，inbound 不认识传输层。 */
   readonly events: IntentSessionEventPublisher
 }
 
+// Keep the original own-property snapshot and read the new required family once,
+// including a class/prototype member supplied by the selected adapter.
+function selectedIntentTurnRuntime(
+  runtime: IntentSessionRouteDependencies['intentTurnRuntime'],
+): IntentSessionRouteDependencies['intentTurnRuntime'] {
+  const snapshot = { ...runtime }
+  if (!Object.hasOwn(snapshot, 'systemAgents')) snapshot.systemAgents = runtime.systemAgents
+  return snapshot
+}
+
 export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDependencies): void {
-  const appHome = Paths.root
+  const appHome = deps.appHome
 
   function fireTurn(
     sessionId: string,
@@ -143,10 +151,9 @@ export function mountIntentSessionRoutes(app: Hono, deps: IntentSessionRouteDepe
         identityAccess: deps.identityAccess,
         appHome,
         configSnapshot,
-        ...deps.intentTurnRuntime,
+        ...selectedIntentTurnRuntime(deps.intentTurnRuntime),
         events: deps.events,
         resourceCatalogFor: deps.resourceCatalogFor,
-        ...(deps.runTurn === undefined ? {} : { runFn: deps.runTurn }),
       },
       sessionId,
       actor,

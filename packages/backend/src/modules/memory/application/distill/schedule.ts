@@ -388,8 +388,7 @@ export interface DistillTickOptions {
   reviewedArtifacts: MemoryDistillReviewedArtifactReader
   nodeRunPrompts: NodeRunPromptReader
   runtimeResolver: MemoryDistillRuntimeResolver
-  /** RFC-367 test seam; production uses `runSystemAgent`. */
-  runFn?: RunDistillOptions['runFn']
+  readonly systemAgents: RunDistillOptions['systemAgents']
   /** RFC-117 — runtime profile NAME (config.memoryDistillRuntime); wins over `model`. */
   runtimeName?: string | null
   /** RFC-117 — global default runtime name (config.defaultRuntime) for inheritance. */
@@ -463,9 +462,9 @@ export async function distillTick(options: DistillTickOptions): Promise<{
         nodeRunPrompts: options.nodeRunPrompts,
         job: rowToDistillJob(head),
         siblings: siblings.map(rowToDistillJob),
-        runFn: options.runFn,
+        systemAgents: options.systemAgents,
         protocol: rt.protocol,
-        runtimeBinary: rt.binaryPath,
+        runtimeBinding: rt.runtimeBinding,
         model: rt.model,
         isSandbox: rt.isSandbox,
         sourceContextBudget: options.sourceContextBudget,
@@ -518,7 +517,7 @@ export interface StartLoopOptions {
   reviewedArtifacts: MemoryDistillReviewedArtifactReader
   nodeRunPrompts: NodeRunPromptReader
   runtimeResolver: MemoryDistillRuntimeResolver
-  runFn?: RunDistillOptions['runFn']
+  readonly systemAgents: RunDistillOptions['systemAgents']
   /** Settings.memoryDistillerEnabled — when false, ticker is a no-op shell. */
   enabled?: boolean
   /** Default 1000ms (1Hz). Tests can shorten / lengthen. */
@@ -576,7 +575,7 @@ export function startMemoryDistillLoop(options: StartLoopOptions): DistillLoopHa
       reviewedArtifacts: options.reviewedArtifacts,
       nodeRunPrompts: options.nodeRunPrompts,
       runtimeResolver: options.runtimeResolver,
-      runFn: options.runFn,
+      systemAgents: options.systemAgents,
       runtimeName: options.runtimeName,
       defaultRuntime: options.defaultRuntime,
       model: options.model,

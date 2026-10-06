@@ -1,3 +1,4 @@
+import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import type {
   WorkspaceUploadContentFactory,
@@ -222,7 +223,7 @@ import {
 import { triggerAuthorityRevalidation } from '@/ws/revalidationHook'
 import { configureLogger, createLogger, type LogLevel } from '@/util/log'
 import { getRuntimeDriver } from '@/services/runtime'
-import { Paths } from '@/util/paths'
+import { Paths, appHome as systemAgentAppHome } from '@/util/paths'
 import { buildWebSocketAdapter } from '@/ws/server'
 import { existsSync, readdirSync, statSync } from 'node:fs'
 import { join } from 'node:path'
@@ -1948,7 +1949,9 @@ async function composeSqliteProviderSession(
   const memoryInjectionQueries = composeSqliteMemoryInjectionQueries(db)
   const runtimeSessionLeases = createRuntimeSessionLeaseOperations(db)
   const runtimeRegistry = providerCore.runtimeRegistry
+  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({ appHome: systemAgentAppHome })
   const memoryOperations = composeSqliteMemoryOperations({
+    systemAgentBinding: memorySystemAgentBinding,
     db,
     nodeRunPrompts,
     injectionQueries: memoryInjectionQueries,
@@ -3703,12 +3706,19 @@ async function composeSqliteProviderSession(
       },
     }),
   })
+  const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({
+    appHome: () => intentDispatchDeps.appHome,
+  })
   const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
     persistence: intentPersistence,
     events: createIntentSessionWsPublisher(),
     identityAccess: Object.freeze({ directAuthority: identityAccess.directAuthority }),
     appHome: Paths.root,
-    runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
+    runtimeResolver: composeIntentTurnRuntimeResolver(
+      intentPersistence,
+      intentSystemAgentBinding.bindRuntime,
+    ),
+    systemAgents: intentSystemAgentBinding.family,
     dumpAuxiliary: intentDumpAuxiliary,
     // RFC-358: boot 恢复起的轮次与 HTTP 轮次走同一条图校验。
     graphValidation: composeIntentWorkflowGraphValidation({

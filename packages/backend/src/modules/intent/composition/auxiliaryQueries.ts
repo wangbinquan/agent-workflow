@@ -3,12 +3,23 @@ import type {
   IntentDumpAuxiliaryQueries,
   IntentPlatformInventoryParticipant,
   IntentTurnRuntimeResolver,
+  IntentResolvedRuntime,
+  IntentTurnResolvedRuntime,
 } from '../application/ports/intentAuxiliaryQueries'
 
-export function composeIntentTurnRuntimeResolver(
+type RuntimeSelectionResolver<Runtime> = {
+  resolve(input: Parameters<IntentTurnRuntimeResolver['resolve']>[0]): Promise<
+    Omit<Awaited<ReturnType<IntentTurnRuntimeResolver['resolve']>>, 'runtime'> & {
+      readonly runtime: Runtime
+    }
+  >
+}
+
+export function composeIntentTurnRuntimeResolver<Runtime = IntentTurnResolvedRuntime>(
   persistence: IntentPersistence,
-): IntentTurnRuntimeResolver {
-  const resolver: IntentTurnRuntimeResolver = {
+  selectRuntime: (runtime: IntentResolvedRuntime) => Runtime,
+): RuntimeSelectionResolver<Runtime> {
+  const resolver: RuntimeSelectionResolver<Runtime> = {
     async resolve(config) {
       const runtime = await persistence.resolveIntentRuntime(
         config.runtimeName ?? config.defaultRuntime ?? 'opencode',
@@ -17,7 +28,7 @@ export function composeIntentTurnRuntimeResolver(
         config.defaultRuntime ?? 'opencode',
       )
       return {
-        runtime,
+        runtime: selectRuntime(runtime),
         effectiveDefaultRuntime: {
           name: agentDefault.name,
           protocol: agentDefault.protocol,

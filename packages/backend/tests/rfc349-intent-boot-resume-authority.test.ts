@@ -29,10 +29,8 @@ import {
   composeIntentPersistence,
   createIntentPersistence,
 } from '../src/modules/intent/composition/persistence'
-import {
-  composeIntentDumpAuxiliaryQueries,
-  composeIntentTurnRuntimeResolver,
-} from '../src/modules/intent/composition/auxiliaryQueries'
+import { composeIntentDumpAuxiliaryQueries } from '../src/modules/intent/composition/auxiliaryQueries'
+import { composeNativeIntentTurnRuntimeResolverForTest as composeIntentTurnRuntimeResolver } from './helpers/intentResourceCatalogBinding'
 import type {
   IntentContextResourceAuthorization,
   IntentPersistence,

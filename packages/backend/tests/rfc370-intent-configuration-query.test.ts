@@ -14,6 +14,7 @@ import {
 } from '@/modules/intent/inbound/intentSessionRoutes'
 import { createUser } from '@/services/users'
 import { errorHandler } from '@/util/errors'
+import { appHome } from '@/util/paths'
 import { describeEachProvider } from './helpers/eachProvider'
 import {
   createIntentSessionForTest,
@@ -21,7 +22,7 @@ import {
   intentGraphValidationForTest,
   intentPersistenceForTest,
   intentResourceCatalogBinding,
-  intentTurnRuntimeResolverForTest,
+  intentSystemAgentBindingForTest,
 } from './helpers/intentResourceCatalogBinding'
 
 function barrier() {
@@ -51,6 +52,7 @@ describeEachProvider('RFC-370 Intent configuration query', (harness) => {
     http.use('*', injectActor)
     http.onError(errorHandler)
     mountIntentSessionRoutes(http, {
+      appHome: appHome(),
       configuration,
       identityAccess,
       directAuthority: identityAccess.directAuthority,
@@ -61,7 +63,7 @@ describeEachProvider('RFC-370 Intent configuration query', (harness) => {
         },
       },
       intentTurnRuntime: {
-        runtimeResolver: intentTurnRuntimeResolverForTest(db),
+        ...intentSystemAgentBindingForTest(intentPersistenceForTest(db)),
         dumpAuxiliary: intentDumpAuxiliaryForTest(db),
         graphValidation: intentGraphValidationForTest(db),
       },

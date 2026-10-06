@@ -1,3 +1,4 @@
+import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
 import { expect, test } from 'bun:test'
 import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -309,6 +310,7 @@ describeEachProvider('RFC-370 selected prompt consumer bindings', (harness) => {
       }
     }
     const memory = composeMemoryOperationsFor({
+      systemAgentBinding: memorySystemAgentBindingForTest(),
       db,
       reviewedArtifacts: noReviewedContent,
       nodeRunPrompts: Object.freeze(new Reader()),

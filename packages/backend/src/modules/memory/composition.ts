@@ -1,4 +1,5 @@
 import type { NodeRunPromptReader } from '@/modules/task-execution/public/queries'
+import type { SystemAgentRunFamily } from '@/modules/task-execution/public/participants'
 import type { ProviderNeutralDatabase } from '@/db/query'
 import type { DatabaseTransaction } from '@/platform/persistence/databaseTransaction'
 import { createMemoryDistillQueries } from './application/distillQueries'
@@ -9,6 +10,8 @@ import type {
   MemoryDistillReviewedArtifactReader,
   MemoryDistillRuntimeResolver,
   MemoryDistillWorkStore,
+  ResolvedMemoryDistillRuntime,
+  SelectedMemoryDistillRuntime,
 } from './application/ports/distillWorkStore'
 import {
   cancelPendingJob,
@@ -64,6 +67,7 @@ function composeMemoryOperations(input: {
   readonly readStore: MemoryDistillReadStore
   readonly workStore: MemoryDistillWorkStore
   readonly runtimeResolver: MemoryDistillRuntimeResolver
+  readonly systemAgents: SystemAgentRunFamily
   readonly reviewedArtifacts: MemoryDistillReviewedArtifactReader
   readonly nodeRunPrompts: NodeRunPromptReader
   readonly injectionQueries: MemoryInjectionQueries
@@ -88,6 +92,7 @@ function composeMemoryOperations(input: {
           reviewedArtifacts: input.reviewedArtifacts,
           nodeRunPrompts: input.nodeRunPrompts,
           runtimeResolver: input.runtimeResolver,
+          systemAgents: input.systemAgents,
         }),
       start: (options: MemoryDistillWorkerOptions = {}) =>
         startMemoryDistillLoop({
@@ -96,6 +101,7 @@ function composeMemoryOperations(input: {
           reviewedArtifacts: input.reviewedArtifacts,
           nodeRunPrompts: input.nodeRunPrompts,
           runtimeResolver: input.runtimeResolver,
+          systemAgents: input.systemAgents,
         }),
       recoverRunning: async () => await recoverRunning(input.workStore),
       listJobs: async (filter = {}) => await distillQueries.listJobs(filter),
@@ -134,6 +140,10 @@ export interface ComposeMemoryOperationsOptions {
   readonly db: ProviderNeutralDatabase
   readonly reviewedArtifacts: MemoryDistillReviewedArtifactReader
   readonly nodeRunPrompts: NodeRunPromptReader
+  readonly systemAgentBinding: {
+    readonly family: SystemAgentRunFamily
+    bindRuntime(runtime: ResolvedMemoryDistillRuntime): SelectedMemoryDistillRuntime
+  }
   readonly injectionQueries?: MemoryInjectionQueries
   readonly catalogBinding?: MemoryCatalogBinding
 }
@@ -150,10 +160,16 @@ export function composeMemoryOperationsFor(input: ComposeMemoryOperationsOptions
 export function composeMemoryOperationsFor(
   input: ComposeMemoryOperationsOptions,
 ): MemoryOperations {
+  const nativeRuntimeResolver = new DrizzleMemoryDistillRuntimeResolver(input.db)
   return composeMemoryOperations({
     readStore: new DrizzleMemoryDistillReadStore(input.db),
     workStore: new DrizzleMemoryDistillWorkStore(input.db),
-    runtimeResolver: new DrizzleMemoryDistillRuntimeResolver(input.db),
+    runtimeResolver: {
+      async resolve(request) {
+        return input.systemAgentBinding.bindRuntime(await nativeRuntimeResolver.resolve(request))
+      },
+    },
+    systemAgents: input.systemAgentBinding.family,
     reviewedArtifacts: input.reviewedArtifacts,
     nodeRunPrompts: input.nodeRunPrompts,
     injectionQueries: input.injectionQueries ?? composeMemoryInjectionQueriesFor(input.db),

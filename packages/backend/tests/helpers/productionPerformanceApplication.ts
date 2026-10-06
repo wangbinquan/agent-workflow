@@ -1,3 +1,4 @@
+import { memorySystemAgentBindingForTest } from './memoryDistill'
 import { join } from 'node:path'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
@@ -128,6 +129,7 @@ export async function createProductionPerformanceApplication(
     ],
   })
   const memoryOperations = composeMemoryOperationsFor({
+    systemAgentBinding: memorySystemAgentBindingForTest(),
     db,
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(appHome, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(

@@ -2,21 +2,21 @@
   "kind": "current-architecture-report",
   "manifestDenominators": {
     "ambientWiring": 504,
-    "architectureExceptions": 5821,
+    "architectureExceptions": 5824,
     "backgroundJobs": 361,
-    "crossContextImports": 6603,
+    "crossContextImports": 6619,
     "facades": 298,
     "governedFieldSurfaces": 5,
-    "moduleSymbolOwners": 27022,
-    "mutationEntrypoints": 1904,
+    "moduleSymbolOwners": 27046,
+    "mutationEntrypoints": 1907,
     "nodeRunInsertSites": 1,
-    "publicSurfaces": 1174,
+    "publicSurfaces": 1183,
     "transactionExternalEffects": 267
   },
   "metrics": {
     "ambientWiringEntries": 504,
     "appDepsConsumers": [],
-    "backendProductionFiles": 2272,
+    "backendProductionFiles": 2279,
     "backendValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -106,7 +106,7 @@
       },
       {
         "context": "runtime-management",
-        "files": 67
+        "files": 71
       },
       {
         "context": "source-control",
@@ -122,10 +122,10 @@
       },
       {
         "context": "task-execution",
-        "files": 429
+        "files": 432
       }
     ],
-    "moduleFiles": 1684,
+    "moduleFiles": 1691,
     "nodeRunInsertSites": [
       {
         "file": "packages/backend/src/modules/task-execution/infrastructure/nodeRunMintParticipant.ts",
@@ -138,7 +138,7 @@
         "symbol": "nodeRunMintProgram"
       }
     ],
-    "outboundBoundaryEdges": 52,
+    "outboundBoundaryEdges": 47,
     "repoValueSccs": [
       [
         "packages/backend/src/services/gitRepoCache.ts",
@@ -161,5 +161,5 @@
     "unresolvedFirstParty": []
   },
   "schemaVersion": 1,
-  "sourceDigest": "sha256:271006e5a8b1722570740b7aac24be16763d58fc6fb2a02fbec58000ae670cbb"
+  "sourceDigest": "sha256:6da19cfc2241fe5d2d1622e9541771ae77b253e1e58c890048ba82bd5f3649c9"
 }

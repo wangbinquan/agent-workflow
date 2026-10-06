@@ -1,3 +1,4 @@
+import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-367 closeout — the three acceptance items that had no named lock yet.
@@ -34,11 +35,7 @@ import {
   taskFeedback,
   tasks,
 } from '../src/db/schema'
-import {
-  runDistill,
-  rowToDistillJob,
-  type RunDistillOptions,
-} from '../src/modules/memory/application/distill/memoryDistiller'
+import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
 import { DistillerProtocolError } from '../src/modules/memory/application/distill/distillerOutput'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'
 import { composeMemoryDistillQueries } from '../src/modules/memory/composition'

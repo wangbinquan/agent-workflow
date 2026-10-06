@@ -14,7 +14,6 @@
 // + scratch GC live in ./maintenance.ts.
 
 import { z } from 'zod'
-import { join } from 'node:path'
 import { ulid } from 'ulid'
 import {
   privilegedNodeLensFor,
@@ -36,11 +35,9 @@ import { generateEnvelopeNonce } from '@/services/nodeRunMint'
 import { extractLastEnvelope, parseEnvelope } from '@/services/envelope'
 import {
   classifyMissingEnvelope,
-  releaseSystemAgentScratch,
-  runSystemAgent,
-  type SystemAgentRunOptions,
-  type SystemAgentRunResult,
-} from '@/services/systemAgentRun'
+  type SystemAgentRunFamily,
+  type PreparedSystemAgentRunResult as SystemAgentRunResult,
+} from '@/modules/task-execution/public/participants'
 import { IntentTurnSessionEventSink } from './turnSession'
 import { buildIntentDump } from './dumpBuilder'
 import { parseHandleWatermark } from './manifest'
@@ -56,6 +53,7 @@ import type { IntentResourceCatalogBinding } from './resourceCatalog'
 import type {
   IntentDumpAuxiliaryQueries,
   IntentResolvedRuntime,
+  IntentTurnResolvedRuntime,
   IntentTurnRuntimeResolver,
 } from '@/modules/intent/application/ports/intentAuxiliaryQueries'
 import type { IntentPersistence } from '@/modules/intent/application/ports/intentPersistence'
@@ -90,16 +88,19 @@ export interface IntentTurnConfig {
   effectiveDefaultRuntime?: { name: string; protocol: string }
 }
 
+export type SelectedIntentTurnConfig = Omit<IntentTurnConfig, 'runtime'> & {
+  readonly runtime: IntentTurnResolvedRuntime
+}
+
 export interface RunIntentTurnDeps {
   persistence: IntentPersistence
   appHome: string
-  config: IntentTurnConfig
+  config: SelectedIntentTurnConfig
   readonly resourceCatalog: IntentResourceCatalogBinding
   readonly dumpAuxiliary: IntentDumpAuxiliaryQueries
   /** RFC-358 —— 工作流图校验（resource-catalog 的 public 合同，由 bootstrap 装配）。 */
   readonly graphValidation: IntentWorkflowGraphValidationPort
-  /** Test seam — defaults to runSystemAgent. */
-  runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+  readonly systemAgents: SystemAgentRunFamily
   /** WS seam (T7 wires the broadcaster); default noop. */
   onSessionEvent?: (event: {
     type: string
@@ -225,7 +226,7 @@ export async function runIntentTurn(
   input: { sessionId: string; actor: Actor; reservation?: ReservedIntentTurn },
 ): Promise<IntentTurnOutcome> {
   const log = deps.log ?? createLogger('intentTurn')
-  const runFn = deps.runFn ?? runSystemAgent
+  const systemAgents = deps.systemAgents
   const now = Date.now()
   const turnId = input.reservation?.turnId ?? ulid()
   const envelopeNonce = input.reservation?.envelopeNonce ?? generateEnvelopeNonce()
@@ -443,13 +444,13 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
     const releaseSlot = await intentSem.acquire()
     let result: SystemAgentRunResult
     try {
-      result = await runFn({
+      result = await systemAgents.run({
         feature: 'intent-builder',
         agentName: INTENT_BUILDER_AGENT_NAME,
         systemPrompt,
         prompt,
         protocol: deps.config.runtime.protocol,
-        runtimeBinary: deps.config.runtime.binaryPath,
+        runtimeBinding: deps.config.runtime.runtimeBinding,
         // RFC-237 (P1-2): RFC-154 config-dir profile of the selected runtime
         // row (folded over the protocol default by resolveInternalAgentRuntime)
         // — a custom claude fork that changed its discovery surface still lands
@@ -459,8 +460,7 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         model: deps.config.runtime.model,
         isSandbox: deps.config.runtime.isSandbox,
         seedFiles: [{ path: 'INTENT.md', content: intentDoc }, ...dump.seedFiles],
-        scratchParent: join(deps.appHome, INTENT_SCRATCH_DIRNAME),
-        scratchName: turnId,
+        workspaceScope: systemAgents.workspaces.capture({ namespace: 'intent', name: turnId }),
         timeoutMs: deps.config.timeoutMs,
         maxEventTextBytes: deps.config.stdoutCapBytes,
         abortSignal: controller.signal,
@@ -497,12 +497,11 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
       ...(scratchReleaseFailed ? { scratchReleaseFailed: true } : {}),
     })
     let runMeta = buildRunMeta()
-    const releaseScratch = (): void => {
+    const releaseScratch = async (): Promise<void> => {
       if (!result.scratchRetained) return
-      const released = releaseSystemAgentScratch({
-        scratchDir: result.scratchDir,
-        expectedParent: join(deps.appHome, INTENT_SCRATCH_DIRNAME),
-        expectedName: turnId,
+      const released = await systemAgents.retainedContents.release({
+        retainedRef: result.retainedRef,
+        scope: systemAgents.workspaces.capture({ namespace: 'intent', name: turnId }),
       })
       if (released.removed) result = { ...result, scratchRetained: false }
       else {
@@ -594,7 +593,7 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
           { runMeta, scratchRetained: result.scratchRetained },
         )
       }
-      releaseScratch()
+      await releaseScratch()
       const budget = minted.budget
       if (budget.questionRounds >= deps.config.maxQuestionRounds) {
         return settle(
@@ -645,7 +644,7 @@ EXCLUSIVITY RULE — emit EXACTLY ONE of \`changeset\` or \`questions\`, never b
         { runMeta, scratchRetained: result.scratchRetained },
       )
     }
-    releaseScratch()
+    await releaseScratch()
     if (cs.jsonRepair !== undefined) {
       log.warn('intent-changeset-json-repaired', {
         sessionId: input.sessionId,
@@ -766,7 +765,7 @@ export async function resolveIntentTurnConfig(
     intentBuilderScratchRetentionHours?: number
     defaultRuntime?: string
   },
-): Promise<IntentTurnConfig> {
+): Promise<SelectedIntentTurnConfig> {
   const resolved = await runtimeResolver.resolve({
     runtimeName: cfg.intentBuilderRuntime ?? null,
     defaultRuntime: cfg.defaultRuntime ?? null,

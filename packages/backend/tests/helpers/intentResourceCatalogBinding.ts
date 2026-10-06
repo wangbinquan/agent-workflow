@@ -27,7 +27,14 @@ import type {
 } from '@/modules/intent/application/resourceCatalog'
 import { intentResourceVisibility } from '@/modules/intent/application/resourceCatalog'
 import { buildIntentDump, type IntentDumpInput } from '@/modules/intent/application/dumpBuilder'
-import { runIntentTurn, type RunIntentTurnDeps } from '@/modules/intent/application/turnEngine'
+import {
+  runIntentTurn,
+  type IntentTurnConfig,
+  type SelectedIntentTurnConfig,
+  type RunIntentTurnDeps,
+} from '@/modules/intent/application/turnEngine'
+import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
+import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
 import {
   dispatchIntentTurn,
   type IntentDispatchDeps,
@@ -203,20 +210,41 @@ export function buildIntentDumpForTest(
 }
 
 export function runIntentTurnForTest(
-  deps: Pick<RunIntentTurnDeps, 'appHome' | 'config'> &
-    Partial<Omit<RunIntentTurnDeps, 'appHome' | 'config' | 'resourceCatalog'>> &
+  deps: Pick<RunIntentTurnDeps, 'appHome'> &
+    Partial<Omit<RunIntentTurnDeps, 'appHome' | 'config' | 'resourceCatalog' | 'systemAgents'>> &
     Readonly<{
       db: ProviderNeutralDatabase
+      config: IntentTurnConfig
+      runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
       platformInventory?: IntentPlatformInventoryParticipant
     }>,
   input: Parameters<typeof runIntentTurn>[1],
 ): ReturnType<typeof runIntentTurn> {
   const persistence = deps.persistence ?? intentPersistenceForTest(deps.db)
+  let home: string
+  const binding = composeLocalSystemAgentRunFamily({ appHome: () => home })
+  function selectedConfig(config: IntentTurnConfig): SelectedIntentTurnConfig {
+    const descriptors: PropertyDescriptorMap = {}
+    for (const field of [
+      'lang',
+      'timeoutMs',
+      'stdoutCapBytes',
+      'maxGenerateRounds',
+      'maxQuestionRounds',
+      'extraInstructions',
+      'scratchRetentionHours',
+      'effectiveDefaultRuntime',
+    ] as const) {
+      descriptors[field] = { enumerable: true, get: () => config[field] }
+    }
+    descriptors.runtime = { enumerable: true, get: () => binding.bindRuntime(config.runtime) }
+    return Object.defineProperties({}, descriptors) as SelectedIntentTurnConfig
+  }
   return runIntentTurn(
     {
       persistence,
-      appHome: deps.appHome,
-      config: deps.config,
+      appHome: (home = deps.appHome),
+      config: selectedConfig(deps.config),
       dumpAuxiliary:
         deps.dumpAuxiliary ??
         composeIntentDumpAuxiliaryQueries({
@@ -225,7 +253,8 @@ export function runIntentTurnForTest(
         }),
       resourceCatalog: intentResourceCatalogBinding(deps.db, input.actor, deps.appHome),
       graphValidation: deps.graphValidation ?? intentGraphValidationForTest(deps.db),
-      ...(deps.runFn === undefined ? {} : { runFn: deps.runFn }),
+      systemAgents:
+        deps.runFn === undefined ? binding.family : binding.withFixture(deps.runFn).family,
       ...(deps.onSessionEvent === undefined ? {} : { onSessionEvent: deps.onSessionEvent }),
       ...(deps.log === undefined ? {} : { log: deps.log }),
     },
@@ -281,18 +310,52 @@ export function intentGraphValidationForTest(
 // RFC-359 AC-6：这个形参的 `ProviderNeutralDatabase` 纯属未收敛——它只把库转手给
 // `intentPersistenceForTest`，而那个早就是中立面了。收成中立面，调用方即可用 harness.db。
 export function intentTurnRuntimeResolverForTest(db: ProviderNeutralDatabase) {
-  return composeIntentTurnRuntimeResolver(intentPersistenceForTest(db))
+  return intentSystemAgentBindingForTest(intentPersistenceForTest(db)).runtimeResolver
+}
+
+/** Explicit legacy test input projection, reusing the original two-query resolver. */
+export function composeNativeIntentTurnRuntimeResolverForTest(persistence: IntentPersistence) {
+  return composeIntentTurnRuntimeResolver(persistence, (runtime) => runtime)
+}
+
+export function intentSystemAgentBindingForTest(
+  persistence: IntentPersistence,
+  appHome: string = Paths.root,
+) {
+  const binding = composeLocalSystemAgentRunFamily({ appHome: () => appHome })
+  return {
+    systemAgents: binding.family,
+    runtimeResolver: composeIntentTurnRuntimeResolver(persistence, binding.bindRuntime),
+  }
 }
 
 export function dispatchIntentTurnForTest(
-  deps: Omit<IntentDispatchDeps, 'resourceCatalogFor'> & Readonly<{ db: ProviderNeutralDatabase }>,
+  deps: Omit<IntentDispatchDeps, 'resourceCatalogFor' | 'systemAgents' | 'runtimeResolver'> &
+    Readonly<{
+      db: ProviderNeutralDatabase
+      runtimeResolver: ReturnType<typeof composeNativeIntentTurnRuntimeResolverForTest>
+      runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+    }>,
   ...args: Parameters<typeof dispatchIntentTurn> extends [IntentDispatchDeps, ...infer Rest]
     ? Rest
     : never
 ): ReturnType<typeof dispatchIntentTurn> {
+  const native = { ...deps }
+  const binding = composeLocalSystemAgentRunFamily({ appHome: () => native.appHome })
   return dispatchIntentTurn(
     {
-      ...deps,
+      ...native,
+      runtimeResolver: {
+        async resolve(input) {
+          const result = await native.runtimeResolver.resolve(input)
+          return { ...result, runtime: binding.bindRuntime(result.runtime) }
+        },
+      },
+      get systemAgents() {
+        return native.runFn === undefined
+          ? binding.family
+          : binding.withFixture(native.runFn).family
+      },
       resourceCatalogFor: (actor) => intentResourceCatalogBinding(deps.db, actor, deps.appHome),
     },
     ...args,

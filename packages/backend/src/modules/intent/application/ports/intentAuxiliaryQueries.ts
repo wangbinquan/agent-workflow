@@ -1,4 +1,5 @@
 import type { RuntimeConfigDirProfile } from '@agent-workflow/shared'
+import type { AgentMaterialContentReference } from '@/modules/runtime-management/public/participants'
 
 import type { Actor } from '@/auth/actor'
 import type { PlatformOnlyResourceType } from '../../domain/teaching/platformMap'
@@ -15,6 +16,11 @@ export interface IntentResolvedRuntime {
   readonly maxSteps: number | null
   readonly isSandbox: boolean
   readonly extraArgs: readonly string[] | null
+}
+
+/** Normal turns receive only the selected Runtime Management content identity. */
+export type IntentTurnResolvedRuntime = Omit<IntentResolvedRuntime, 'binaryPath'> & {
+  readonly runtimeBinding: AgentMaterialContentReference | null
 }
 
 export interface IntentRuntimeInventoryRow {
@@ -42,7 +48,7 @@ export interface IntentTurnRuntimeResolver {
     readonly runtimeName: string | null
     readonly defaultRuntime: string | null
   }): Promise<{
-    readonly runtime: IntentResolvedRuntime
+    readonly runtime: IntentTurnResolvedRuntime
     readonly effectiveDefaultRuntime: {
       readonly name: string
       readonly protocol: IntentResolvedRuntime['protocol']

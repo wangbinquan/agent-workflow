@@ -303,7 +303,8 @@
     },
     {
       "boundaryEdgeIds": [
-        "import:3d5071a4df1c8e3cb7e5"
+        "import:3d5071a4df1c8e3cb7e5",
+        "import:e10a2637980c47d77ad2"
       ],
       "exportedSymbols": [
         "ChangeNarrativeDeps",
@@ -5305,26 +5306,16 @@
     },
     {
       "boundaryEdgeIds": [
+        "import:0a46926dea263cfab8d8",
         "import:249d06f167e02a472939",
-        "import:24a9c3ea3be7f83239db",
-        "import:2711368a4665ccb332af",
-        "import:36fa4c83d3ffdf9f5e25",
         "import:37b233e9696dd3e72844",
-        "import:3abac1ba429377dd6f6e",
-        "import:48b3c18a0fdb0377aa32",
-        "import:53e55db700007e9b1478",
         "import:57da0f6bd2cd1ce77e1c",
         "import:5c2504b10485d92010d7",
-        "import:61d4096cb57acaadd536",
+        "import:775cd5d4b34123a6a946",
         "import:7cec6e21cb18ed78ac3f",
         "import:8d997d1153638cbf6d9e",
-        "import:9f9ee23d0b828aefa094",
-        "import:ab9070ad98812d5f5e5a",
         "import:b02bc1c18361900ae408",
-        "import:b46f36cab99cedaaf41c",
-        "import:b81010afdf9fa4d0e839",
         "import:c13c8d8f055c8f38b277",
-        "import:c35fd8f01b06d7380c8c",
         "import:c5a217a7da3a23f11087",
         "import:cab426d1510e3863950c",
         "import:d729fc6f9a345a2f20b5",
@@ -6493,5 +6484,5 @@
   "finalCriterion": "Every legacy service file is classified as a thin facade or legacy implementation with one target owner/layer and removal wave.",
   "kind": "facades",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:271006e5a8b1722570740b7aac24be16763d58fc6fb2a02fbec58000ae670cbb"
+  "sourceDigest": "sha256:6da19cfc2241fe5d2d1622e9541771ae77b253e1e58c890048ba82bd5f3649c9"
 }

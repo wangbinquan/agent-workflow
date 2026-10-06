@@ -1,3 +1,4 @@
+import { memorySystemAgentBindingForTest } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-359 W12 — exercise the two collaboration route composition roots.
@@ -65,6 +66,7 @@ const ACTOR: CollaborationRouteActor = Object.freeze({
 function operations(harness: ProviderHarness): CollaborationRouteOperations {
   const db = harness.db
   const memoryOperations = composeMemoryOperationsFor({
+    systemAgentBinding: memorySystemAgentBindingForTest(),
     db: db,
     nodeRunPrompts: composeNodeRunPromptOperations(undefined, join(APP_HOME, 'runs')),
     reviewedArtifacts: new DatabaseCommittedReviewArtifactReader(

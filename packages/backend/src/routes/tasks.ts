@@ -90,7 +90,7 @@ export interface TaskRouteDependencies {
   readonly repositoryWorkspace: Parameters<typeof getTaskFileContent>[0]
   readonly changeNarrative: Pick<
     Parameters<typeof triggerChangeNarrative>[0],
-    'requireMember' | 'resolveRuntime'
+    'requireMember' | 'resolveRuntime' | 'systemAgents'
   >
 }
 

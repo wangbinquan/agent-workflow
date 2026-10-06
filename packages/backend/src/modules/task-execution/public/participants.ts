@@ -376,3 +376,9 @@ export type {
 
 /** The execution demand owns the joint invocation consumed by system runs. */
 export type { AgentInvocationBinding } from '../application/ports/agentInvocation'
+export type {
+  SystemAgentRunFamily,
+  SystemAgentRunRequest,
+} from '../application/ports/systemAgentRunFamily'
+export type { PreparedSystemAgentRunResult } from '../application/ports/systemAgentRun'
+export { classifyMissingEnvelope } from '../application/systemAgentRun'

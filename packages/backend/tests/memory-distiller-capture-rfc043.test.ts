@@ -1,3 +1,4 @@
+import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-043 T3 — locks the new capture-side behaviour added to runDistill:
@@ -23,11 +24,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { memories, memoryDistillJobs } from '../src/db/schema'
-import {
-  clipAndRedactStderr,
-  runDistill,
-  type RunDistillOptions,
-} from '../src/modules/memory/application/distill/memoryDistiller'
+import { clipAndRedactStderr } from '../src/modules/memory/application/distill/memoryDistiller'
 import { DistillerProtocolError } from '../src/modules/memory/application/distill/distillerOutput'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'

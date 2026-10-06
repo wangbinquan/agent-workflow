@@ -1,3 +1,4 @@
+import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-367 T6 — runDistill's protocol follow-up loop.
@@ -21,10 +22,7 @@ import { eq } from 'drizzle-orm'
 import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { memories, memoryDistillJobs } from '../src/db/schema'
-import {
-  runDistill,
-  type RunDistillOptions,
-} from '../src/modules/memory/application/distill/memoryDistiller'
+
 import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
 import { DistillerProtocolError } from '../src/modules/memory/application/distill/distillerOutput'
 import { DrizzleMemoryDistillWorkStore } from '../src/modules/memory/infrastructure/memoryDistillWorkStore'

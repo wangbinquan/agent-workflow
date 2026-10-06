@@ -1,3 +1,4 @@
+import { runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-050 — locks the output-language directive plumbing in the distiller.
@@ -23,8 +24,6 @@ import {
   buildDistillerUserPrompt,
   DISTILLER_OUTPUT_LANG_DIRECTIVE,
   DISTILLER_SYSTEM_PROMPT,
-  runDistill,
-  type RunDistillOptions,
 } from '../src/modules/memory/application/distill/memoryDistiller'
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import type { SystemAgentRunOptions } from '../src/services/systemAgentRun'

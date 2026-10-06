@@ -1,3 +1,12 @@
+## 2026-10-06 RFC-370 System 完整执行族与真实调用者接线
+
+Intent、Memory Distill、Change Narrative 的正常入口接入同一个 RM/TE System family；runtime 和保留内容使用 owner 引用，原完整 System 核心/native compatibility 保持。SQLite/PG、HTTP 与 queued recovery 的真实根显式选择同族执行和释放；Memory 补问链复用同一 named scope，HTTP 读取完整 adapter 的 inherited family getter 并使用声明的 appHome。新非本机引用/真实持久化、双协议 native 材料和 getter/receiver 回归随本批交 hosted CI，原测试正文及预算保持。
+
+SYSTEM-SOURCE49-R1 的五项 P2 有效 FAIL、R2 的 HTTP persistence fixture 原型丢失 P2 有效 FAIL 均完整留证；R3 只闭合两份 delta、47 owned 复用原检查事实，有效有限 PASS101，首末指纹 755d8136db9be61c37c2b3b34d4b1ebd6caa002a0acfea8ba74906527ddb0d9d。只有自有 format/lint 与纯 AST/字节证明，没有本机 AW tests/typecheck/build/service。W29 完整逆向恢复三个原根体及原摘要；原 guard 判据和预算不变。
+
+一次原 scoped census 使用完整已提交 1ab715e1 人口与49冻结候选（24 production），四原规则逐字不变，未提交并行内容保留并排除。sourceDigest sha256:6da19cfc2241fe5d2d1622e9541771ae77b253e1e58c890048ba82bd5f3649c9；350原债保留345，只有五条真实已消失的 Intent/Memory legacy System 导入退役，零新增债。129有序库存和 why、40 SPI/69 targets、9 Task effects、原 SCC 及全部 guard 注册保持。原 counter 实测 native bridge26→28、mutation1904→1907、imports6603→6619、exceptions5821→5824、public1174→1183、owners27022→27046，六项实际匹配增长具名登记，由下一普通后继退役；status 保持原 renderer 字节。完整保留并行已提交 1ab715e1 观测源码及匹配内容，不重复 SOURCE 或 census。
+
+0348d707 的 Windows37404140132 已 success；原5f主CI的架构计数4vs2已由e884e930单独修正。e884主CI37407334758终态cancelled（18 success、31 cancelled、1聚合 failure）完整保留；包含修正的后继1ab715e1及新System确切SHA CI分别验收，不把取消/有限门算作全仓通过。MCP diagnostics、runtime smoke/专用命令与脚本、执行权和恢复、最终 A-T7/A-G、CS adapters、M0首次实际部署及M1～M4继续；当前AW未部署到CS，RFC不记Done。以下共享原正文与并行输出完整保留。
 ## 2026-10-06 RFC-370 Windows 库存计数 CI 补正
 
 0348d707d05c12ea60c240bcfe170e8c93b9b448 的 Windows37404140132已 completed/success；主CI37404140116 cancelled，原终态不改。包含它的5f767443主CI37404415211中，macOS shard2与Ubuntu shard6均只在RFC317原账本计数断言报同一差额：rfc143-kind-discrimination-allowlist源码4、基线2。保留完整原classifier、表项、断言和预算，使用原ledgerEntryCount只清点该一个已提交常量，机械同步实际4条及具名why；129条顺序、其他128条全文和sourceDigest不动，provenance用原withArtifactProvenance刷新。未跑完整census或本机AW tests/typecheck/build/service。Static scans另有正式failure，此片没有分析、修改或掩盖该作业；新exact-SHA CI继续，不能记整套通过。

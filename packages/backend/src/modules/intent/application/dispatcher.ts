@@ -1,6 +1,6 @@
 // RFC-293 — one dispatcher for HTTP-triggered turns and queued boot recovery.
 
-import type { SystemAgentRunOptions, SystemAgentRunResult } from '@/services/systemAgentRun'
+import type { SystemAgentRunFamily } from '@/modules/task-execution/public/participants'
 import type { Actor } from '@/auth/actor'
 import type {
   IntentDumpAuxiliaryQueries,
@@ -40,7 +40,7 @@ export interface IntentDispatchDeps {
   graphValidation: IntentWorkflowGraphValidationPort
   /** Bootstrap-selected Resource Catalog query/context for this exact actor. */
   resourceCatalogFor(actor: Actor): IntentResourceCatalogBinding
-  runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+  readonly systemAgents: SystemAgentRunFamily
   /** RFC-355 T4b：会话动静的播报面由 bootstrap 注入，intent 不认识传输层。 */
   readonly events: IntentSessionEventPublisher
 }
@@ -151,7 +151,7 @@ export async function dispatchIntentTurn(
               })
             }
           },
-          ...(deps.runFn === undefined ? {} : { runFn: deps.runFn }),
+          systemAgents: deps.systemAgents,
         },
         { sessionId, actor, reservation },
       )

@@ -38,10 +38,8 @@ import { seedBuiltinRuntimes } from './helpers/runtimeRegistryApplication'
 import { createIdentityAccessRuntime } from '../src/modules/identity-access/composition'
 import { composeIntentPersistence } from '../src/modules/intent/composition/persistence'
 import { composeIntentContextResourceAuthorizationFactory } from '../src/modules/resource-catalog/composition/intentContextAuthorization'
-import {
-  composeIntentDumpAuxiliaryQueries,
-  composeIntentTurnRuntimeResolver,
-} from '../src/modules/intent/composition/auxiliaryQueries'
+import { composeIntentDumpAuxiliaryQueries } from '../src/modules/intent/composition/auxiliaryQueries'
+import { composeNativeIntentTurnRuntimeResolverForTest as composeIntentTurnRuntimeResolver } from './helpers/intentResourceCatalogBinding'
 import type {
   IntentContextResourceAuthorization,
   IntentPersistence,

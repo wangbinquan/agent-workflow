@@ -27,7 +27,7 @@ import { gitChangedEntries, gitDiffNumstat } from '@/util/git'
 import type { Logger } from '@/util/log'
 import type { Actor } from '@/auth/actor'
 import { canonicalRepoKeys } from '@/services/repoLabels'
-import { runSystemAgent, type SystemAgentRunResult } from '@/services/systemAgentRun'
+import type { SystemAgentRunFamily } from '@/modules/task-execution/public/participants'
 import { getTaskStructuralDiff } from '@/services/structuralDiff/service'
 import { ecosystemForManifest } from '@/services/structuralDiff/deps/manifests'
 import type { CodeWorkspaceRead } from '@/modules/code-capability/application/ports/codeWorkspaceRead'
@@ -306,8 +306,8 @@ export interface ChangeNarrativeDeps {
     readonly runtimeName: string | null
     readonly defaultRuntime: string | null
   }): Promise<{
-    readonly protocol: Parameters<typeof runSystemAgent>[0]['protocol']
-    readonly binaryPath: string | null
+    readonly protocol: Parameters<SystemAgentRunFamily['run']>[0]['protocol']
+    readonly runtimeBinding: Parameters<SystemAgentRunFamily['run']>[0]['runtimeBinding']
     readonly configDir: { readonly env: string; readonly name: string }
     readonly model: string | null
     readonly isSandbox: boolean
@@ -316,8 +316,7 @@ export interface ChangeNarrativeDeps {
    *  unset falls through defaultRuntime → opencode (RFC-117 chain). */
   runtimeName?: string | null
   defaultRuntime?: string | null
-  /** Test seam — production omits it and gets the real runSystemAgent. */
-  runFn?: (opts: Parameters<typeof runSystemAgent>[0]) => Promise<SystemAgentRunResult>
+  readonly systemAgents: SystemAgentRunFamily
   now?: () => number
   log?: Logger
 }
@@ -390,19 +389,19 @@ async function runGeneration(
     runtimeName: deps.runtimeName ?? null,
     defaultRuntime: deps.defaultRuntime ?? null,
   })
-  const runFn = deps.runFn ?? runSystemAgent
-  const result = await runFn({
+  const systemAgents = deps.systemAgents
+  const result = await systemAgents.run({
     feature: 'change-narrative',
     agentName: NARRATIVE_AGENT_NAME,
     systemPrompt: NARRATIVE_SYSTEM_PROMPT,
     prompt: buildNarrativePrompt(task, input),
     protocol: runtime.protocol,
-    runtimeBinary: runtime.binaryPath,
+    runtimeBinding: runtime.runtimeBinding,
     configDirEnv: runtime.configDir.env,
     configDirName: runtime.configDir.name,
     model: runtime.model,
     isSandbox: runtime.isSandbox,
-    scratchParent: join(appHome(), 'scratch'),
+    workspaceScope: systemAgents.workspaces.capture({ namespace: 'shared' }),
     timeoutMs: NARRATIVE_TIMEOUT_MS,
     log: deps.log,
   })

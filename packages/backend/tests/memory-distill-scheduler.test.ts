@@ -1,3 +1,8 @@
+import {
+  distillTick,
+  startMemoryDistillLoop,
+  type RunDistillOptions,
+} from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // RFC-041 — distill scheduler tests (PR2 scope).
@@ -35,17 +40,15 @@ import {
   computeEligibleScopes,
   DISTILL_BACKOFF_BASE_MS,
   DISTILL_MAX_ATTEMPTS,
-  distillTick,
   enqueueDistillJob,
   extractAgentIdsFromSnapshot,
   extractAgentIdsFromWorkgroupConfig,
   listDistillJobs,
   recoverRunning,
   retryFailedJob,
-  startMemoryDistillLoop,
 } from '../src/modules/memory/application/distill/schedule'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'
-import type { RunDistillOptions } from '../src/modules/memory/application/distill/memoryDistiller'
+
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import type { SystemAgentRunOptions, SystemAgentRunResult } from '../src/services/systemAgentRun'
 import { DatabaseCommittedReviewArtifactReader } from '../src/modules/collaboration/infrastructure/committedReviewArtifactReader'

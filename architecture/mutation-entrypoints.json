@@ -1,6 +1,6 @@
 {
   "denominator": {
-    "entries": 1904,
+    "entries": 1907,
     "nodeRunInsertSites": 1,
     "unreviewedNodeRunInsertSites": 0
   },
@@ -12596,6 +12596,31 @@
         "audit": false,
         "authority": "none-observed",
         "authorization": false,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/intent/composition/auxiliaryQueries.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/intent/composition/auxiliaryQueries.ts#RuntimeSelectionResolver",
+      "missingControls": [
+        "audit",
+        "authority",
+        "authorization",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/intent/composition/auxiliaryQueries.ts#RuntimeSelectionResolver",
+      "symbol": "RuntimeSelectionResolver",
+      "targetContext": "intent",
+      "targetLayer": "application"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": false,
         "event": true,
         "fenceOrOcc": true,
         "transaction": false
@@ -22911,6 +22936,54 @@
       ],
       "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/opencodeAgentMaterial.ts#opencodeLocalAgentMaterial",
       "symbol": "opencodeLocalAgentMaterial",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/systemAgentRetainedContents.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/systemAgentRetainedContents.ts#createLocalSystemAgentRetainedContents",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/systemAgentRetainedContents.ts#createLocalSystemAgentRetainedContents",
+      "symbol": "createLocalSystemAgentRetainedContents",
+      "targetContext": "runtime-management",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "controls": {
+        "audit": false,
+        "authority": "none-observed",
+        "authorization": true,
+        "event": false,
+        "fenceOrOcc": false,
+        "transaction": false
+      },
+      "file": "packages/backend/src/modules/runtime-management/infrastructure/local/systemAgentRuntimeBindings.ts",
+      "finalCriterion": "W3/W4 owner cutover",
+      "id": "mutation:packages/backend/src/modules/runtime-management/infrastructure/local/systemAgentRuntimeBindings.ts#createLocalSystemAgentRuntimeBindings",
+      "missingControls": [
+        "audit",
+        "authority",
+        "event",
+        "fenceOrOcc",
+        "transaction"
+      ],
+      "ownerEntryId": "owner:packages/backend/src/modules/runtime-management/infrastructure/local/systemAgentRuntimeBindings.ts#createLocalSystemAgentRuntimeBindings",
+      "symbol": "createLocalSystemAgentRuntimeBindings",
       "targetContext": "runtime-management",
       "targetLayer": "infrastructure"
     },
@@ -45553,7 +45626,7 @@
     }
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:271006e5a8b1722570740b7aac24be16763d58fc6fb2a02fbec58000ae670cbb",
+  "sourceDigest": "sha256:6da19cfc2241fe5d2d1622e9541771ae77b253e1e58c890048ba82bd5f3649c9",
   "taskExecutionAuthorityLedger": {
     "controlGateways": [
       {

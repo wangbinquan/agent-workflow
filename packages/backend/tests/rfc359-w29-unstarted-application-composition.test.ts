@@ -228,9 +228,245 @@ function isRuntimeFactoryChoice(node: ts.Node, source: ts.SourceFile): node is t
   )
 }
 
+// RFC-370: reverse only the selected System roots, preserving all old body locks.
+function oldSystemFamilyBody(source: ts.SourceFile, name: string, body: ts.Block): ts.Block {
+  const sqliteCore = source === server && name === 'composeSqliteApplicationDeps'
+  const sqliteApi = source === server && name === 'composeSqliteApiRouteMounts'
+  const pgCore = source === pg && name === 'composePostgresqlApplication'
+  if (!sqliteCore && !sqliteApi && !pgCore) return body
+  const roots: Record<string, string> = sqliteCore
+    ? { memorySystemAgentBinding: 'systemAgentAppHome' }
+    : sqliteApi
+      ? {
+          narrativeSystemAgentBinding: 'systemAgentAppHome',
+          intentSystemAgentBinding: '()=>intentSessionRouteInputs.appHome',
+        }
+      : {
+          memorySystemAgentBinding: 'systemAgentAppHome',
+          narrativeSystemAgentBinding: 'systemAgentAppHome',
+          intentSystemAgentBinding: '()=>intentDispatchDeps.appHome',
+          intentHttpSystemAgentBinding: '()=>intentRouteInputs.appHome',
+        }
+  const declarations = descendants(body, ts.isVariableDeclaration) as ts.VariableDeclaration[]
+  for (const [root, home] of Object.entries(roots)) {
+    const matches = declarations.filter((node) => node.name.getText(source) === root)
+    if (
+      matches.length !== 1 ||
+      matches[0]?.initializer === undefined ||
+      (compact(matches[0].initializer, source) !==
+        `composeLocalSystemAgentRunFamily({appHome:${home},})`.replace(',}', '}') &&
+        compact(matches[0].initializer, source) !==
+          `composeLocalSystemAgentRunFamily({appHome:${home},})`)
+    )
+      throw new Error(`System root must select its exact complete family: ${root}`)
+  }
+  const inputsName = sqliteApi ? 'intentSessionRouteInputs' : pgCore ? 'intentRouteInputs' : null
+  const routeName = sqliteApi ? 'intentSessionRoutes' : 'intentRoutes'
+  const fixtureRoot = sqliteApi ? 'deps' : 'input'
+  const familyRoot = sqliteApi ? 'intentSystemAgentBinding' : 'intentHttpSystemAgentBinding'
+  const inputs =
+    inputsName === null
+      ? undefined
+      : declarations.find((node) => node.name.getText(source) === inputsName)
+  const inputObject = inputs?.initializer
+  const finalRoute =
+    inputsName === null
+      ? undefined
+      : declarations.find((node) => node.name.getText(source) === routeName)
+  const routeCall = finalRoute?.initializer
+  let routeObject: ts.ObjectLiteralExpression | undefined
+  if (inputsName !== null) {
+    if (
+      inputObject === undefined ||
+      !ts.isObjectLiteralExpression(inputObject) ||
+      routeCall === undefined ||
+      !ts.isCallExpression(routeCall) ||
+      routeCall.expression.getText(source) !== 'Object.freeze' ||
+      routeCall.arguments.length !== 1
+    )
+      throw new Error('Intent must retain one explicit frozen HTTP route selection')
+    const argument = routeCall.arguments[0]!
+    const value = ts.isSatisfiesExpression(argument) ? argument.expression : argument
+    if (!ts.isObjectLiteralExpression(value)) throw new Error('Intent HTTP route must be an object')
+    routeObject = value
+    const expected = `{...${inputsName},...(${fixtureRoot}.intentTestDependencies?.runFn===undefined?{}:{intentTurnRuntime:Object.freeze({...${inputsName}.intentTurnRuntime,systemAgents:${familyRoot}.withFixture(${fixtureRoot}.intentTestDependencies.runFn,).family,}),}),}`
+    if (
+      printer
+        .printNode(ts.EmitHint.Unspecified, value, source)
+        .replace(/\s/g, '')
+        .replace(/,([)}])/g, '$1') !== expected.replace(/,([)}])/g, '$1')
+    )
+      throw new Error('Intent fixture must replace only its selected whole HTTP family')
+  }
+  const transformed = ts.transform(body, [
+    (context) => {
+      const visit: ts.Visitor = (node) => {
+        if (
+          node === finalRoute &&
+          routeObject !== undefined &&
+          inputObject !== undefined &&
+          routeCall !== undefined &&
+          ts.isCallExpression(routeCall)
+        ) {
+          const inputsRestored = ts.visitNode(inputObject, visit, ts.isObjectLiteralExpression)!
+          const originalSpread = routeObject.properties[1]!
+          if (
+            !ts.isSpreadAssignment(originalSpread) ||
+            !ts.isParenthesizedExpression(originalSpread.expression) ||
+            !ts.isConditionalExpression(originalSpread.expression.expression)
+          )
+            throw new Error('Intent fixture condition must retain its original shape')
+          const conditional = originalSpread.expression.expression
+          const replacement = ts.factory.updateSpreadAssignment(
+            originalSpread,
+            ts.factory.updateParenthesizedExpression(
+              originalSpread.expression,
+              ts.factory.updateConditionalExpression(
+                conditional,
+                conditional.condition,
+                conditional.questionToken,
+                conditional.whenTrue,
+                conditional.colonToken,
+                ts.factory.createObjectLiteralExpression([
+                  ts.factory.createPropertyAssignment(
+                    'runTurn',
+                    ts.factory.createPropertyAccessExpression(
+                      ts.factory.createPropertyAccessExpression(
+                        ts.factory.createIdentifier(fixtureRoot),
+                        'intentTestDependencies',
+                      ),
+                      'runFn',
+                    ),
+                  ),
+                ]),
+              ),
+            ),
+          )
+          const restored = ts.factory.updateObjectLiteralExpression(
+            routeObject,
+            ts.factory.createNodeArray(
+              [...inputsRestored.properties, replacement],
+              inputObject.properties.hasTrailingComma,
+            ),
+          )
+          const argument = routeCall.arguments[0]!
+          const restoredArgument = ts.isSatisfiesExpression(argument)
+            ? ts.factory.updateSatisfiesExpression(argument, restored, argument.type)
+            : restored
+          return ts.factory.updateVariableDeclaration(
+            finalRoute,
+            finalRoute.name,
+            finalRoute.exclamationToken,
+            finalRoute.type,
+            ts.factory.updateCallExpression(
+              routeCall,
+              routeCall.expression,
+              routeCall.typeArguments,
+              [restoredArgument],
+            ),
+          )
+        }
+        if (ts.isBlock(node))
+          return ts.factory.updateBlock(
+            node,
+            node.statements
+              .filter((statement) => {
+                if (
+                  !ts.isVariableStatement(statement) ||
+                  statement.declarationList.declarations.length !== 1
+                )
+                  return true
+                const declaration = statement.declarationList.declarations[0]!
+                const bindingName = declaration.name.getText(source)
+                return !(bindingName in roots) && bindingName !== inputsName
+              })
+              .map((statement) => ts.visitNode(statement, visit, ts.isStatement)!),
+          )
+        if (ts.isObjectLiteralExpression(node))
+          return ts.factory.updateObjectLiteralExpression(
+            node,
+            ts.factory.createNodeArray(
+              node.properties
+                .filter((property) => {
+                  if (ts.isShorthandPropertyAssignment(property))
+                    return !(node === inputObject && property.name.text === 'appHome')
+                  if (!ts.isPropertyAssignment(property)) return true
+                  const field = property.name.getText(source)
+                  if (node === inputObject && field === 'appHome') {
+                    if (compact(property.initializer, source) !== 'input.appHome')
+                      throw new Error('PG Intent must use its explicit home')
+                    return false
+                  }
+                  if (field === 'systemAgentBinding' || field === 'systemAgents') {
+                    const expected =
+                      field === 'systemAgentBinding'
+                        ? 'memorySystemAgentBinding'
+                        : `${property.initializer.getText(source).split('.')[0]}.family`
+                    if (
+                      compact(property.initializer, source) !== expected ||
+                      !(expected.split('.')[0]! in roots)
+                    )
+                      throw new Error('System selection must use the same declared complete family')
+                    return false
+                  }
+                  return true
+                })
+                .map((property) => ts.visitNode(property, visit, ts.isObjectLiteralElementLike)!),
+              node.properties.hasTrailingComma,
+            ),
+          )
+        if (
+          ts.isCallExpression(node) &&
+          node.expression.getText(source) === 'composeIntentTurnRuntimeResolver'
+        ) {
+          if (
+            node.arguments.length !== 2 ||
+            !Object.keys(roots).some(
+              (root) => compact(node.arguments[1]!, source) === `${root}.bindRuntime`,
+            )
+          )
+            throw new Error('Intent resolver must use its same family runtime binder')
+          return ts.factory.updateCallExpression(node, node.expression, node.typeArguments, [
+            node.arguments[0]!,
+          ])
+        }
+        if (
+          ts.isCallExpression(node) &&
+          ts.isPropertyAccessExpression(node.expression) &&
+          node.expression.name.text === 'then' &&
+          node.arguments.length === 1 &&
+          compact(node.arguments[0]!, source) === 'narrativeSystemAgentBinding.bindRuntime'
+        ) {
+          const resolved = node.expression.expression
+          if (!ts.isCallExpression(resolved) || !ts.isPropertyAccessExpression(resolved.expression))
+            throw new Error('Narrative must preserve the original runtime query')
+          const expression = ts.setTextRange(
+            ts.factory.createPropertyAccessExpression(
+              resolved.expression.expression,
+              resolved.expression.name,
+            ),
+            resolved.expression,
+          )
+          return ts.factory.updateCallExpression(
+            resolved,
+            expression,
+            resolved.typeArguments,
+            resolved.arguments,
+          )
+        }
+        return ts.visitEachChild(node, visit, context)
+      }
+      return (node) => ts.visitNode(node, visit, ts.isBlock)!
+    },
+  ])
+  const restored = transformed.transformed[0]!
+  transformed.dispose()
+  return restored
+}
+
 /** Only the approved composition seams are removed; every original subtree remains. */
 function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
-  const body = functionBody(source, name)
+  const body = oldSystemFamilyBody(source, name, functionBody(source, name))
   if (
     (source === pg && name === 'composePostgresqlApplication') ||
     (source === server && name === 'composeSqliteApplicationDeps')
@@ -265,7 +501,9 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
           node.properties.some(
             (property) =>
               ts.isPropertyAssignment(property) &&
-              property.name.getText(source) === 'taskAgentRunsFor' &&
+              (ts.isIdentifier(property.name)
+                ? property.name.text
+                : property.name.getText(source)) === 'taskAgentRunsFor' &&
               property.initializer.getText(source) === 'composeLocalTaskAgentRunFamilyFor',
           )
         ) {
@@ -279,7 +517,9 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
                   (property) =>
                     !(
                       ts.isPropertyAssignment(property) &&
-                      property.name.getText(source) === 'taskAgentRunsFor' &&
+                      (ts.isIdentifier(property.name)
+                        ? property.name.text
+                        : property.name.getText(source)) === 'taskAgentRunsFor' &&
                       property.initializer.getText(source) === 'composeLocalTaskAgentRunFamilyFor'
                     ),
                 )
@@ -293,7 +533,9 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
           node.properties.some(
             (property) =>
               ts.isPropertyAssignment(property) &&
-              property.name.getText(source) === 'opencodeVersion' &&
+              (ts.isIdentifier(property.name)
+                ? property.name.text
+                : property.name.getText(source)) === 'opencodeVersion' &&
               isDaemonChoice(property.initializer, source),
           )
         ) {

@@ -1,3 +1,4 @@
+import { distillTick, runDistill, type RunDistillOptions } from './helpers/memoryDistill'
 import { composeNodeRunPromptOperations } from '@/modules/task-execution/composition/nodeRunPrompts'
 import { createFileReviewArtifactContent } from '@/modules/collaboration/infrastructure/local/fileReviewArtifactContent'
 // 记忆蒸馏超时：默认值 + 可配置 + 全链路接线。
@@ -24,11 +25,8 @@ import { ulid } from 'ulid'
 import type { ProviderNeutralDatabase } from '../src/db/query'
 import { describeEachProvider } from './helpers/eachProvider'
 import { tasks, workflows } from '../src/db/schema'
-import { distillTick, enqueueDistillJob } from '../src/modules/memory/application/distill/schedule'
-import {
-  runDistill,
-  type RunDistillOptions,
-} from '../src/modules/memory/application/distill/memoryDistiller'
+import { enqueueDistillJob } from '../src/modules/memory/application/distill/schedule'
+
 import { emptySystemAgentOutputEvidence } from '../src/services/systemAgentRun'
 import { rowToDistillJob } from '../src/modules/memory/application/distill/memoryDistiller'
 import { resetBroadcastersForTests } from '../src/ws/broadcaster'

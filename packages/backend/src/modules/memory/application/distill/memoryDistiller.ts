@@ -27,7 +27,6 @@
 // Tests inject `runFn` to skip the real subprocess.
 
 import { randomBytes } from 'node:crypto'
-import { join } from 'node:path'
 import { ulid } from 'ulid'
 import type {
   DistillSourceKind,
@@ -50,15 +49,12 @@ import {
   redactGitUrl,
 } from '@agent-workflow/shared'
 import type { NodeRunPromptReader } from '@/modules/task-execution/public/queries'
-import { Paths } from '@/util/paths'
 import type { RuntimeKind, SystemAgentOutputEvidence } from '@/services/runtime/types'
 import {
   classifyMissingEnvelope,
-  releaseSystemAgentScratch,
-  runSystemAgent,
-  type SystemAgentRunOptions,
-  type SystemAgentRunResult,
-} from '@/services/systemAgentRun'
+  type SystemAgentRunFamily,
+  type PreparedSystemAgentRunResult as SystemAgentRunResult,
+} from '@/modules/task-execution/public/participants'
 import {
   DistillerProtocolError,
   parseDistillerCandidates,
@@ -120,11 +116,7 @@ export interface RunDistillOptions {
    * lists all source events from these in one user prompt.
    */
   siblings: MemoryDistillJob[]
-  /**
-   * RFC-367 test seam — defaults to `runSystemAgent`. Same shape intent /
-   * change-narrative use, so a fake here is a fake everywhere.
-   */
-  runFn?: (opts: SystemAgentRunOptions) => Promise<SystemAgentRunResult>
+  readonly systemAgents: SystemAgentRunFamily
   /**
    * `config.memoryDistillTimeoutMs`, default `DEFAULT_TIMEOUT_MS` (1 hour).
    * RFC-367 §3.2: this is the budget for the WHOLE distill — the first round
@@ -140,7 +132,7 @@ export interface RunDistillOptions {
    * with the binary's own default model (legacy behavior).
    */
   protocol?: RuntimeKind
-  runtimeBinary?: string | null
+  runtimeBinding?: Parameters<SystemAgentRunFamily['run']>[0]['runtimeBinding']
   /** Model from the resolved runtime profile; null → the runtime's own default. */
   model?: string | null
   /** RFC-276: opt-in Claude CLI compatibility marker. */
@@ -1091,7 +1083,7 @@ export async function validateAndPersistCandidate(
 
 export async function runDistill(options: RunDistillOptions): Promise<DistillResult> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS
-  const runFn = options.runFn ?? runSystemAgent
+  const systemAgents = options.systemAgents
 
   const scope = options.job.scopeResolved
   const sourceContextBudget = options.sourceContextBudget ?? DEFAULT_SOURCE_CONTEXT_BUDGET
@@ -1145,8 +1137,9 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   // （`runScratchOrphanGc` 24h 兜底）。RFC-367：**整条补问链共用这一个** ——
   // claude 的 transcript 按 cwd-slug 归档，换 cwd 就等于换项目目录，`--resume`
   // 会落空（RFC-111 design §225/283/298 实测）。
-  const scratchParent = join(Paths.root, 'scratch')
+  const scratchParent = systemAgents.workspaces.capture({ namespace: 'shared' })
   const scratchName = `distiller-${randomBytes(8).toString('hex')}`
+  const workspaceScope = systemAgents.workspaces.withName(scratchParent, scratchName)
   // RFC-367: one sink for the whole attempt (all follow-up rounds share the
   // session, so they share the record). The store owns the DB, so it owns the
   // writer; `runDistill` only hands it to the runtime.
@@ -1164,16 +1157,15 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   let lastFailure: { code: DistillProtocolFailureCode; detail?: string } | undefined
 
   /** 链终止时释放一次。见 RFC-367 design §3.1 的状态表。 */
-  const releaseChainScratch = (result: SystemAgentRunResult | undefined): void => {
+  const releaseChainScratch = async (result: SystemAgentRunResult | undefined): Promise<void> => {
     if (result === undefined) return
     // `unreaped`：子进程未确认死亡，可能仍持有 scratch 下的文件。
     // `spawn-failed`：runSystemAgent 把「plan cleanup 抛错」也改写成这一档并刻意保留目录，
     // 从结果上与真正的启动失败不可区分 —— 宁可留给 24h orphan GC，也不在活进程脚下 rm -rf。
     if (result.status === 'unreaped' || result.status === 'spawn-failed') return
-    releaseSystemAgentScratch({
-      scratchDir: result.scratchDir,
-      expectedParent: scratchParent,
-      expectedName: scratchName,
+    await systemAgents.retainedContents.release({
+      retainedRef: result.retainedRef,
+      scope: workspaceScope,
     })
   }
 
@@ -1191,17 +1183,16 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
               envelopeNonce,
             })
 
-      const result = await runFn({
+      const result = await systemAgents.run({
         feature: 'memory-distiller',
         agentName: DISTILLER_AGENT_NAME,
         systemPrompt: DISTILLER_SYSTEM_PROMPT,
         prompt,
         protocol,
-        runtimeBinary: options.runtimeBinary ?? null,
+        runtimeBinding: options.runtimeBinding ?? null,
         model: options.model ?? null,
         isSandbox: options.isSandbox === true,
-        scratchParent,
-        scratchName,
+        workspaceScope,
         timeoutMs: remainingMs,
         // 链未结束前不许删 scratch（claude 的 --resume 依赖同一 cwd-slug）。
         retainScratchOnSuccess: true,
@@ -1279,7 +1270,7 @@ export async function runDistill(options: RunDistillOptions): Promise<DistillRes
   } finally {
     // RFC-367: nothing to capture after the fact any more — the sink recorded
     // every round live, from the same normalized stream the parser read.
-    releaseChainScratch(lastResult)
+    await releaseChainScratch(lastResult)
   }
 }
 

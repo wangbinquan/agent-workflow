@@ -4,7 +4,7 @@ import type { ProviderNeutralDatabase } from '@/db/query'
 import { runtimes } from '@/db/schema'
 import { RUNTIME_KINDS } from '@/services/runtime'
 import type {
-  MemoryDistillRuntimeResolver,
+  NativeMemoryDistillRuntimeResolver as MemoryDistillRuntimeResolver,
   ResolvedMemoryDistillRuntime,
 } from '../application/ports/distillWorkStore'
 

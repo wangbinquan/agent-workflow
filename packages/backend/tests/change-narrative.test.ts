@@ -1,3 +1,13 @@
+import { triggerChangeNarrative as triggerSelectedNarrative } from '@/services/changeNarrative'
+import type {
+  SystemAgentRunFamily,
+  SystemAgentRunRequest,
+} from '@/modules/task-execution/public/participants'
+import type { AgentMaterialContentReference } from '@/modules/runtime-management/public/participants'
+import {
+  triggerChangeNarrative,
+  type NativeChangeNarrativeDeps as ChangeNarrativeDeps,
+} from './helpers/changeNarrativeSystemAgents'
 // RFC-239 §3.2 — the change-narrative service. Locks:
 //  - member gate: owner / collaborator / non-member ADMIN may trigger; a plain
 //    non-member gets 403 (requireTaskMember's exact semantics, design P1-5)
@@ -30,8 +40,6 @@ import {
   extractJsonObject,
   getChangeNarrativeStatus,
   resetChangeNarrativeStateForTests,
-  triggerChangeNarrative,
-  type ChangeNarrativeDeps,
 } from '../src/services/changeNarrative'
 import { createCodeWorkspaceRead } from '../src/modules/code-capability/infrastructure/codeWorkspaceRead'
 import { requireTaskMember } from '../src/services/taskCollab'
@@ -281,6 +289,81 @@ describeEachProvider('triggerChangeNarrative', (harness) => {
     }
     return runFn === undefined ? base : { ...base, runFn }
   }
+
+  test('RFC-370: selected Narrative family receives opaque material and persists the actual parsed result', async () => {
+    const db = harness.db,
+      world = await seedWorld(db)
+    const original = deps(db, undefined)
+    const runtimeBinding: AgentMaterialContentReference = Object.freeze({
+      owner: 'runtime-management',
+      reference: 'remote-narrative-runtime:17',
+      version: '17',
+    })
+    const requests: SystemAgentRunRequest[] = []
+    const selected = Object.freeze<SystemAgentRunFamily>({
+      workspaces: {
+        capture(scope) {
+          return Object.freeze({ ...scope })
+        },
+        withName(scope, name) {
+          return Object.freeze({ ...scope, name })
+        },
+      },
+      async run(request) {
+        expect(this).toBe(selected)
+        expect(request.runtimeBinding).toBe(runtimeBinding)
+        expect(request.workspaceScope.namespace).toBe('shared')
+        for (const field of [
+          'runtimeBinary',
+          'binaryPath',
+          'scratchParent',
+          'scratchDir',
+          'cmd',
+          'env',
+        ])
+          expect(Object.hasOwn(request, field)).toBe(false)
+        requests.push(request)
+        const { scratchDir: _native, ...response } = okRun(GOOD_OUTPUT)
+        return { ...response, retainedRef: 'remote-narrative-result:17' }
+      },
+      retainedContents: {
+        release() {
+          throw new Error('Narrative does not separately release completed scratch')
+        },
+      },
+    })
+    await triggerSelectedNarrative(
+      {
+        workspace: original.workspace,
+        requireMember: original.requireMember,
+        async resolveRuntime(input) {
+          const profile = await original.resolveRuntime(input)
+          return {
+            protocol: profile.protocol,
+            runtimeBinding,
+            configDir: profile.configDir,
+            model: profile.model,
+            isSandbox: profile.isSandbox,
+          }
+        },
+        systemAgents: selected,
+      },
+      world.task,
+      world.owner,
+    )
+    await settleNarrative(world.task.id)
+    const ready = await getChangeNarrativeStatus(world.task.id)
+    if (ready?.status !== 'ready')
+      throw new Error(`expected selected narrative ready, got ${JSON.stringify(ready)}`)
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.feature).toBe('change-narrative')
+    expect(ready.narrative.overview).toBe(GOOD_OUTPUT.overview)
+    expect(ready.narrative.groups.map((group) => group.key).sort()).toEqual(['code', 'docs'])
+    expect(ready.narrative.inputDigest).toBe((await buildNarrativeInput(db, world.task)).digest)
+    expect(existsSync(join(home, 'structural-diffs', world.task.id, 'narrative-task.json'))).toBe(
+      true,
+    )
+  })
 
   test('member gate: owner/collaborator/non-member admin pass, outsider 403', async () => {
     const db = harness.db

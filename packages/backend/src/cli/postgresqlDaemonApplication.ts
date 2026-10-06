@@ -1,3 +1,4 @@
+import { composeLocalSystemAgentRunFamily } from '@/modules/task-execution/composition/localSystemAgentRunFamily'
 import { composeLocalTaskAgentRunFamilyFor } from '@/modules/task-execution/composition/localTaskAgentRunFamily'
 import type {
   WorkspaceUploadContentFactory,
@@ -346,7 +347,7 @@ import { registerTerminalWorkspacePrunePolicy } from '@/services/lifecycle'
 import { composeWebhookTerminalWorkspacePrunePolicy } from '@/modules/integration/composition/terminalWorkspaceCleanup'
 import { cleanupOrphanedGitCredentialLeases } from '@/util/gitCredentialLease'
 import { recoverInterruptedDeliveries } from '@/services/webhook/deliveryStore'
-import { Paths } from '@/util/paths'
+import { Paths, appHome as systemAgentAppHome } from '@/util/paths'
 import { composeDemoResourceCatalogSeedParticipant } from '@/modules/resource-catalog/composition/demoResourceCatalogSeed'
 import { composeCodeCapabilityDemoSeedParticipant } from '@/modules/code-capability/composition/demoSeed'
 import { resizeAllNodePools } from '@/services/processNodeConcurrency'
@@ -736,7 +737,9 @@ export async function composePostgresqlApplication(
     db: input.db,
     lifecycle: mcpAclRuntimeTestLifecycle(),
   })
+  const memorySystemAgentBinding = composeLocalSystemAgentRunFamily({ appHome: systemAgentAppHome })
   const memoryOperations = composePostgresqlMemoryOperations({
+    systemAgentBinding: memorySystemAgentBinding,
     db: input.db,
     nodeRunPrompts,
     reviewedArtifacts: {
@@ -1285,6 +1288,9 @@ export async function composePostgresqlApplication(
   })
 
   const codeWorkspace = composeLegacyCodeReadProviders(input.db).workspace
+  const narrativeSystemAgentBinding = composeLocalSystemAgentRunFamily({
+    appHome: systemAgentAppHome,
+  })
   const collaborationTaskAccess = createPostgresqlCollaborationTaskAccessPort(input.db)
   const taskRoutes = Object.freeze({
     configuration,
@@ -1322,7 +1328,11 @@ export async function composePostgresqlApplication(
       }: {
         readonly runtimeName: string | null
         readonly defaultRuntime: string | null
-      }) => core.runtimeRegistry.resolveRuntimeByName(runtimeName ?? defaultRuntime),
+      }) =>
+        core.runtimeRegistry
+          .resolveRuntimeByName(runtimeName ?? defaultRuntime)
+          .then(narrativeSystemAgentBinding.bindRuntime),
+      systemAgents: narrativeSystemAgentBinding.family,
     }),
   })
   const worktreeFiles = Object.freeze({
@@ -2024,12 +2034,19 @@ export async function composePostgresqlApplication(
     platformInventory: intentPlatformInventory,
   })
   const intentSessionEvents = createIntentSessionWsPublisher()
+  const intentSystemAgentBinding = composeLocalSystemAgentRunFamily({
+    appHome: () => intentDispatchDeps.appHome,
+  })
   const intentDispatchDeps: Omit<IntentDispatchDeps, 'configSnapshot'> = Object.freeze({
     persistence: intentPersistence,
     events: intentSessionEvents,
     identityAccess: Object.freeze({ directAuthority: identityAccess.directAuthority }),
     appHome: input.appHome,
-    runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
+    runtimeResolver: composeIntentTurnRuntimeResolver(
+      intentPersistence,
+      intentSystemAgentBinding.bindRuntime,
+    ),
+    systemAgents: intentSystemAgentBinding.family,
     dumpAuxiliary: intentDumpAuxiliary,
     // RFC-358: 两个 provider 的意图链路跑同一份图校验合同。
     graphValidation: composeIntentWorkflowGraphValidation({
@@ -2043,7 +2060,11 @@ export async function composePostgresqlApplication(
     db: input.db,
     activity: intentApplyOperations,
   })
-  const intentRoutes: PostgresqlAppCompositionInput['intent'] = Object.freeze({
+  const intentHttpSystemAgentBinding = composeLocalSystemAgentRunFamily({
+    appHome: () => intentRouteInputs.appHome,
+  })
+  const intentRouteInputs: PostgresqlAppCompositionInput['intent'] = {
+    appHome: input.appHome,
     configuration,
     events: intentSessionEvents,
     identityAccess,
@@ -2051,7 +2072,11 @@ export async function composePostgresqlApplication(
     intentApply,
     intentPersistence,
     intentTurnRuntime: Object.freeze({
-      runtimeResolver: composeIntentTurnRuntimeResolver(intentPersistence),
+      runtimeResolver: composeIntentTurnRuntimeResolver(
+        intentPersistence,
+        intentHttpSystemAgentBinding.bindRuntime,
+      ),
+      systemAgents: intentHttpSystemAgentBinding.family,
       dumpAuxiliary: intentDumpAuxiliary,
       graphValidation: composeIntentWorkflowGraphValidation({
         validationQueries: classicCatalogs.workflow.validationQueries,
@@ -2060,10 +2085,21 @@ export async function composePostgresqlApplication(
       }),
     }),
     resourceCatalogFor: intentResourceCatalogFor,
-    // RFC-359 AC-6：与 `server.ts` 同形的条件展开（生产不传 ⇒ 用真的 runner）。
+  }
+  const intentRoutes: PostgresqlAppCompositionInput['intent'] = Object.freeze({
+    ...intentRouteInputs,
+    // The explicit HTTP fixture replaces the whole family; queued recovery
+    // keeps the independently selected production family above.
     ...(input.intentTestDependencies?.runFn === undefined
       ? {}
-      : { runTurn: input.intentTestDependencies.runFn }),
+      : {
+          intentTurnRuntime: Object.freeze({
+            ...intentRouteInputs.intentTurnRuntime,
+            systemAgents: intentHttpSystemAgentBinding.withFixture(
+              input.intentTestDependencies.runFn,
+            ).family,
+          }),
+        }),
   })
   const taskCatalog = composeTaskCatalog({
     sources: [
