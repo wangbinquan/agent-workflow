@@ -76,11 +76,11 @@
       "why": "node_runs.status 的非内核直写站点（能力影响 C9 点名）。每一条都绕开 transitionNodeRunStatus 的 CAS 与转移表（RFC-317 T72 补入网：R10 此前只覆盖 8 处，仓内实测 27 处账本形状的豁免表） RFC-359 W1-T2c：node_run 状态 CAS 合成一份中立事务内内核 `nodeRunLifecycleTransition.ts`（两处直写），PG participant 委托过去（其账本 2 → 1），8 → 9；W4 删 SQLite 同步孪生后回落。 RFC-359 W4-B3a：终态清扫的两份 provider 文件合成一份中立实现（同一处 2 笔直写），9 → 8。"
     },
     {
-      "baseline": 2,
+      "baseline": 4,
       "file": "packages/backend/tests/rfc143-runtime-driver-capability.test.ts",
       "id": "rfc143-kind-discrimination-allowlist",
       "symbol": "ALLOWLIST",
-      "why": "driver 目录外允许出现 runtime kind 判别的文件。RFC-317 T19 清掉两条死条目后只剩 cli/start.ts；T33 把扫描面从「跳过整个 services/runtime」收窄成「只跳驱动实现目录」，公共层第一次进扫描，暴露出 services/runtime/types.ts 并如实入账。"
+      "why": "driver 目录外允许出现 runtime kind 判别的文件。RFC-317 T19 清掉两条死条目后只剩 cli/start.ts；T33 把扫描面从「跳过整个 services/runtime」收窄成「只跳驱动实现目录」，公共层第一次进扫描，暴露出 services/runtime/types.ts 并如实入账。 RFC-370 完整 Task 执行族迁移后补登 task-execution/application/taskAgentRun.ts 的现存 kind 分支（A-T7 仍开放），以及 infrastructure/nativeUsageRootSource.ts 中保留的 opencode 原生数据格式读取；是实际4条库存，不是扩大发布能力或清偿这两项债务。"
     },
     {
       "baseline": 19,
@@ -924,8 +924,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "ffe96207e6c55b905c6446084a71474ef63a5ed4",
-    "contentDigest": "sha256:295297c2952d048f95b63f9f3fd736c8490e5aa0c890ffb32bd58687ca44ba43",
+    "currentSnapshotSha": "5f7674433d0739e5e6646ddf63f80cc86e03dab4",
+    "contentDigest": "sha256:a027140b280cc2a8ecd841671ed3956bf16c2c95eb5df68b6a7d8780a1205ef4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

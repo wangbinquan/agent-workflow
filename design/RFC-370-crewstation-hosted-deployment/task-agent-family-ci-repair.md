@@ -25,3 +25,9 @@ Windows 原 run 已正式 cancelled，未取得通过结论。主 CI 的 macOS s
 确切 Windows run `37402951923` 已正式 failure：356 pass／3 skip／2 fail。原完整执行族用例通过；RFC-143 的两条静态地址／库存断言失败。既有 Task native root collection 桥接和 opencode v3 retained source 的两处真实 kind 判别分别在原两个有序表中具名登记，原 classifier、全树扫描、所有 stale／双表一致性／正向控制断言及预算不变。Task application 的判别仍是 A-T7 未偿债，登记不能解释为能力化已经完成；未修改或移除并行 RFC-371 的原算法。
 
 原 wrapper 的配置冻结读取已迁到 TE `localTaskAgentRunFamily` 的共同装配点，同一原断言改查这个实际读取表达式；原 native family 的冻结 import 断言保留，其余正文与全部生产源码保持。新确切 SHA CI 另验，本机不运行 AW tests/typecheck/build/service，不重扫未变生产 census。旧主 CI 和 SC 120000ms 超时仍开放。System、A-G、独立 CS adapters、M0首次部署及M1～M4继续，AW未部署CS。
+
+## 2026-10-06 RFC-370 Windows 库存计数 CI 补正
+
+0348d707d05c12ea60c240bcfe170e8c93b9b448 的 Windows37404140132已 completed/success；主CI37404140116 cancelled，原终态不改。包含它的5f767443主CI37404415211中，macOS shard2与Ubuntu shard6均只在RFC317原账本计数断言报同一差额：rfc143-kind-discrimination-allowlist源码4、基线2。保留完整原classifier、表项、断言和预算，使用原ledgerEntryCount只清点该一个已提交常量，机械同步实际4条及具名why；129条顺序、其他128条全文和sourceDigest不动，provenance用原withArtifactProvenance刷新。未跑完整census或本机AW tests/typecheck/build/service。Static scans另有正式failure，此片没有分析、修改或掩盖该作业；新exact-SHA CI继续，不能记整套通过。
+
+System普通三个调用方的整族接线在独立SOURCE49实现门，MCP/smoke/脚本/执行权恢复、完整A-G以及之后各层CS adapter与M0实际部署仍开放，RFC持续。当前没有AW-in-CS部署。

@@ -1,3 +1,9 @@
+## 2026-10-06 RFC-370 Windows 库存计数 CI 补正
+
+0348d707d05c12ea60c240bcfe170e8c93b9b448 的 Windows37404140132已 completed/success；主CI37404140116 cancelled，原终态不改。包含它的5f767443主CI37404415211中，macOS shard2与Ubuntu shard6均只在RFC317原账本计数断言报同一差额：rfc143-kind-discrimination-allowlist源码4、基线2。保留完整原classifier、表项、断言和预算，使用原ledgerEntryCount只清点该一个已提交常量，机械同步实际4条及具名why；129条顺序、其他128条全文和sourceDigest不动，provenance用原withArtifactProvenance刷新。未跑完整census或本机AW tests/typecheck/build/service。Static scans另有正式failure，此片没有分析、修改或掩盖该作业；新exact-SHA CI继续，不能记整套通过。
+
+System普通三个调用方的整族接线在独立SOURCE49实现门，MCP/smoke/脚本/执行权恢复、完整A-G以及之后各层CS adapter与M0实际部署仍开放，RFC持续。当前没有AW-in-CS部署。
+
 ## 2026-10-06 RFC-370 Task Windows 源码守卫后继
 
 ffe96207 的 Windows37402951923正式failure（356pass／3skip／2fail）。本片仅机械登记两处已提交 native root protocol 地址并迁移一个原配置读取断言；双表／stale／classifier／全部预算及生产源码保持。Task核心内kind桥接在A-T7仍是未偿债，不因具名登记宣称能力化完成。详见 task-agent-family-ci-repair.md 的后继记录。独立有限功能门与新exact-SHA hosted CI分开验核；没有本机AW tests/typecheck/build/service，不重新census。System装配、A-G、CS独立adapter、M0首次部署及M1～M4继续，AW未部署CS，RFC未完成。以下共享旧正文逐字保留。
