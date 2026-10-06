@@ -1,5 +1,6 @@
 export { archivePortArtifacts } from '../composition/portArtifacts'
 export { nodeRunPromptRelPath, storeNodeRunPrompt } from '../composition/nodeRunPrompts'
+import { runTaskAgentWithFamily as runTaskAgentWithFamilyInternal } from '../composition/taskAgentRunFamily'
 import type {
   Agent,
   ClarifyDirective,
@@ -68,6 +69,10 @@ export {
 // RFC-333 temporary legacy-facing command seam. The service bridge supplies
 // the required participant; consumers never reach task-execution internals.
 export const parkPreparedHumanGate = parkPreparedHumanGateInternal
+
+// RFC-370 temporary legacy-facing command seam. Preserve the complete selected
+// family call and its function identity; A-T7 owns the final command contract.
+export const runTaskAgentWithFamily = runTaskAgentWithFamilyInternal
 
 /**
  * Closed logging values accepted by the workgroup-turn command.  Keeping this

@@ -90,8 +90,8 @@ test('Resource Catalog preserves ordered project/managed declarations and native
     name: 'project',
     sourceKind: 'project',
   })
-  expect(selected.contents.plugin(material.plugins[0]!)).toBe(snapshot.plugins[0])
-  expect(selected.contents.plugin(material.plugins[1]!)).toBe(snapshot.plugins[1])
+  expect(selected.contents.plugin(material.plugins[0]!)).toBe(snapshot.plugins[0]!)
+  expect(selected.contents.plugin(material.plugins[1]!)).toBe(snapshot.plugins[1]!)
   expect('sourcePath' in material.skills[0]!).toBe(false)
   expect('runtimeSpecifier' in material.plugins[0]!.declaration).toBe(false)
 })

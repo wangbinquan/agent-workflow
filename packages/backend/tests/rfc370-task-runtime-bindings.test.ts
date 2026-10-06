@@ -62,7 +62,7 @@ describeEachProvider('RFC-370 selected Task runtime bindings', (harness) => {
     const first = await seed(harness),
       registry = runtimeRegistryPersistence(harness.db)
     await seedBuiltinRuntimes(registry)
-    const name = 'family-' + ulid(),
+    const name = 'family-' + ulid().slice(-20).toLowerCase(),
       originalBinary = canonicalBinaryPath('family-v1')
     await createRuntime(registry, { name, protocol: 'claude-code', binaryPath: originalBinary })
     let configReads = 0
@@ -122,9 +122,14 @@ describeEachProvider('RFC-370 selected Task runtime bindings', (harness) => {
     expect(await columns(harness, row.id)).toEqual({ protocol: null, binary: null })
     expect(settled).toBe(false)
     const original = new Error('selected binary configuration unavailable')
-    const result = expect(pending).rejects.toBe(original)
+    const result = pending.then(
+      () => {
+        throw new Error('configuration rejection unexpectedly resolved')
+      },
+      (reason: unknown) => reason,
+    )
     reject(original)
-    await result
+    expect(await result).toBe(original)
     expect(settled).toBe(true)
     expect(await columns(harness, row.id)).toEqual({ protocol: null, binary: null })
   })

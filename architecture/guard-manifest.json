@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:dfaa067c4c9a6628990563179438b4ec0c3d62ee8db29fdd765621ee95ee9988",
+    "sourceDigest": "sha256:184c893f7c2fdb39fcc3634ca42f3041b9c8be09a40eae1d7a5144513bfdba4c",
     "role": "supplementary-guard-registry",
     "canonicalGuard": "packages/backend/tests/architecture/rfc294-canonical-manifests.test.ts"
   },
@@ -2577,10 +2577,11 @@
   ],
   "note": "RFC-317 守卫清单。三向钉死：①两向枚举（删守卫 / 改守卫名 / 加守卫不登记 ⇒ 红）；②扫语料型守卫（corpusScanner）的语料下限 minCorpusFiles——扫描根失效时「零违规」与「合规」同形，语料下限是唯一能把二者分开的断言；③断言「不存在」的守卫（assertsAbsence）必须有负 fixture（negativeFixture）——语料还在但 matcher 不咬了，违规集合同样回到空。只断言存在的守卫自带证明，不在 ③ 的管辖内。全部判据走 census.ts 单一实现，与生成本账本的实现逐字相同。",
   "schemaVersion": 1,
+  "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "0d4010e53cc2e0b50ea8b59fe598db0ca6cee492",
-    "currentSnapshotSha": "bc7832985e194c321d5409ed5354ad0eea09ce9c",
-    "contentDigest": "sha256:6ed36bcf1356017d96d8b87b1c360d91a0028348c53a66a3168536c288fc29ac",
+    "currentSnapshotSha": "f8b4e6fd8fd2bd2a6e3a98c91e93b4de377ec4c6",
+    "contentDigest": "sha256:75429303e1e8169a3282e84fdfe19ff8b1f1c2c247e6b97186db2464b0a277e4",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

@@ -6,7 +6,7 @@
     "moduleFiles": 1684,
     "productionFiles": 3095,
     "sharedFiles": 169,
-    "symbolsIncludingFileRoots": 27020
+    "symbolsIncludingFileRoots": 27022
   },
   "entries": [
     {
@@ -122156,6 +122156,18 @@
     {
       "currentContext": "source-control",
       "currentLayer": "infrastructure",
+      "exported": false,
+      "file": "packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts",
+      "id": "owner:packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts#AgentMaterialContentReference",
+      "removeAfterWave": null,
+      "status": "current-module",
+      "symbol": "AgentMaterialContentReference",
+      "targetContext": "source-control",
+      "targetLayer": "infrastructure"
+    },
+    {
+      "currentContext": "source-control",
+      "currentLayer": "infrastructure",
       "exported": true,
       "file": "packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts",
       "id": "owner:packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts#createLocalTaskAgentWorkspaceContents",
@@ -160429,6 +160441,19 @@
       "signatureDigest": "sha256:8622a376a4eca19216f68edbc7232db0d4bf83d0e959384710fa55666f8667a0",
       "status": "current-module",
       "symbol": "requireSchedulerDriver",
+      "targetContext": "task-execution",
+      "targetLayer": "public"
+    },
+    {
+      "currentContext": "task-execution",
+      "currentLayer": "public",
+      "exported": true,
+      "file": "packages/backend/src/modules/task-execution/public/commands.ts",
+      "id": "owner:packages/backend/src/modules/task-execution/public/commands.ts#runTaskAgentWithFamily",
+      "removeAfterWave": null,
+      "signatureDigest": "sha256:d92526a16b2be47c5769671528d56a92447be6be5aac5588dac7e128a1089a75",
+      "status": "current-module",
+      "symbol": "runTaskAgentWithFamily",
       "targetContext": "task-execution",
       "targetLayer": "public"
     },
@@ -324978,5 +325003,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:dfaa067c4c9a6628990563179438b4ec0c3d62ee8db29fdd765621ee95ee9988"
+  "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e"
 }

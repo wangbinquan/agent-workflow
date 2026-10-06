@@ -231,6 +231,20 @@ function isRuntimeFactoryChoice(node: ts.Node, source: ts.SourceFile): node is t
 /** Only the approved composition seams are removed; every original subtree remains. */
 function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
   const body = functionBody(source, name)
+  if (
+    (source === pg && name === 'composePostgresqlApplication') ||
+    (source === server && name === 'composeSqliteApplicationDeps')
+  ) {
+    const selections = descendants(
+      body,
+      (node) => ts.isPropertyAssignment(node) && node.name.getText(source) === 'taskAgentRunsFor',
+    ) as ts.PropertyAssignment[]
+    if (
+      selections.length !== 1 ||
+      selections[0]!.initializer.getText(source) !== 'composeLocalTaskAgentRunFamilyFor'
+    )
+      throw new Error('the actual root must select exactly one complete local Task family')
+  }
   const original =
     source === server && name === 'composeSqliteApplicationDeps'
       ? oldRuntimeRegistryFactory(source, oldSqliteStoreReturn(source, body))
@@ -246,6 +260,34 @@ function oldPhaseBody(source: ts.SourceFile, name: string): ts.Block {
           return ts.visitNode(node.expression, visit)
         }
         if (isDaemonChoice(node, source)) return ts.visitNode(node.whenTrue, visit)
+        if (
+          ts.isObjectLiteralExpression(node) &&
+          node.properties.some(
+            (property) =>
+              ts.isPropertyAssignment(property) &&
+              property.name.getText(source) === 'taskAgentRunsFor' &&
+              property.initializer.getText(source) === 'composeLocalTaskAgentRunFamilyFor',
+          )
+        ) {
+          // RFC-370: inverse only the explicit complete-family root selection.
+          // The original whole-body hashes, phase counts and ordered effects remain.
+          return ts.factory.updateObjectLiteralExpression(
+            node,
+            ts.factory.createNodeArray(
+              node.properties
+                .filter(
+                  (property) =>
+                    !(
+                      ts.isPropertyAssignment(property) &&
+                      property.name.getText(source) === 'taskAgentRunsFor' &&
+                      property.initializer.getText(source) === 'composeLocalTaskAgentRunFamilyFor'
+                    ),
+                )
+                .map((property) => ts.visitNode(property, visit, ts.isObjectLiteralElementLike)!),
+              node.properties.hasTrailingComma,
+            ),
+          )
+        }
         if (
           ts.isObjectLiteralExpression(node) &&
           node.properties.some(

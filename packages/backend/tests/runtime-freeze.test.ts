@@ -466,26 +466,43 @@ test('RFC-371 internal commit and merge launches carry the selected runtime attr
       ts.ScriptTarget.Latest,
       true,
     )
-    const inherited: ts.ObjectLiteralExpression[] = []
+    const inherited: ts.Identifier[] = []
     const visit = (node: ts.Node) => {
       if (
         ts.isCallExpression(node) &&
-        node.expression.getText(source) === 'resolveFrozenRuntimeWith'
+        node.expression.getText(source) === 'state.opts.taskAgentRuns.runtimeBindings.resolve'
       ) {
-        const value = node.arguments[4]
-        if (value && ts.isObjectLiteralExpression(value)) inherited.push(value)
+        const value = node.arguments[3]
+        if (value && ts.isIdentifier(value) && value.text === 'rt') inherited.push(value)
       }
       ts.forEachChild(node, visit)
     }
     visit(source)
     expect(inherited.length).toBeGreaterThan(0)
-    for (const object of inherited) {
-      const property = object.properties.find(
-        (p) => p.name?.getText(source) === 'observationIdentity',
-      )
-      expect(
-        property && ts.isPropertyAssignment(property) && property.initializer.getText(source),
-      ).toBe('rt.observationIdentity')
-    }
+    for (const profile of inherited) expect(profile.getText(source)).toBe('rt')
   }
+  const native = ts.createSourceFile(
+    'taskAgentRuntimeBindings.ts',
+    readFileSync(
+      new URL(
+        '../src/modules/runtime-management/infrastructure/local/taskAgentRuntimeBindings.ts',
+        import.meta.url,
+      ),
+      'utf8',
+    ),
+    ts.ScriptTarget.Latest,
+    true,
+  )
+  const identities: ts.GetAccessorDeclaration[] = []
+  const visit = (node: ts.Node) => {
+    if (ts.isGetAccessor(node) && node.name.getText(native) === 'observationIdentity')
+      identities.push(node)
+    ts.forEachChild(node, visit)
+  }
+  visit(native)
+  expect(identities).toHaveLength(1)
+  const forwarding = identities[0]!.body?.statements[0]
+  expect(
+    forwarding && ts.isReturnStatement(forwarding) && forwarding.expression?.getText(native),
+  ).toBe('resolved.observationIdentity')
 })

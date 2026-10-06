@@ -2,7 +2,7 @@
 
 # RFC-294 架构现状（生成）
 
-- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:dfaa067c4c9a6628990563179438b4ec0c3d62ee8db29fdd765621ee95ee9988`）
+- 数据来源：`architecture/current-report.json` 及同批 canonical manifests（sourceDigest `sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e`）
 - 用途：RFC-294 三件套不再手抄指标；散文引用本文件。同一组数字只在这里出现一次。
 - 判读规则：`plan.md` §1 的 architecture-significance filter 与各波退出门不变；本文件只回答“现在是什么”，不给 wave credit。
 
@@ -21,7 +21,7 @@
 | background work entries | 361 |
 | direct native `setInterval`（call / files） | 22 / 19 |
 | direct native timers（全部） | 78 |
-| RFC-317 boundary census（inbound / outbound） | 299 / 52 |
+| RFC-317 boundary census（inbound / outbound） | 298 / 52 |
 | `node_runs INSERT` 站点 | 1 |
 | first-party unresolved import | 0 |
 
@@ -35,10 +35,10 @@
 | `crossContextImports` | 6603 |
 | `facades` | 298 |
 | `governedFieldSurfaces` | 5 |
-| `moduleSymbolOwners` | 27020 |
-| `mutationEntrypoints` | 1903 |
+| `moduleSymbolOwners` | 27022 |
+| `mutationEntrypoints` | 1904 |
 | `nodeRunInsertSites` | 1 |
-| `publicSurfaces` | 1173 |
+| `publicSurfaces` | 1174 |
 | `transactionExternalEffects` | 267 |
 
 ## 3. 模块物理形状（`module-symbol-owners.json`，按文件去重）
@@ -237,14 +237,14 @@
 | --- | --- |
 | W9 | 3122 |
 | W9-D | 1058 |
-| W4-E1 | 780 |
+| W4-E1 | 779 |
 | W5 | 203 |
 | W4 | 201 |
 | W4-B | 187 |
 | W4-E8 | 157 |
 | W4-E9 | 77 |
 | RFC-371 | 12 |
-| W2-D/W3/W5 | 11 |
+| W2-D/W3/W5 | 12 |
 | W9-E | 8 |
 | W4-E10 | 3 |
 | W4-E5 | 2 |
@@ -255,7 +255,7 @@
 
 | context | 数量 |
 | --- | --- |
-| task-execution | 279 |
+| task-execution | 280 |
 | resource-catalog | 242 |
 | collaboration | 122 |
 | source-control | 101 |
@@ -274,7 +274,7 @@
 | intent | 10 |
 | task-catalog | 1 |
 
-### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1173）
+### 6.2 零生产 consumer 的 public symbol 按 context（合计 136 / 1174）
 
 | context | 数量 |
 | --- | --- |

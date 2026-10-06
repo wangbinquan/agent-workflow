@@ -952,7 +952,7 @@ META16-R1 有效有限 FAIL97（指纹78b5ab3805ef86785ba946a42ad32c2dfce5b2f6a9
 
 ## 2026-10-06 Task selected 成功用例分支声明修复
 
-Windows 37380867203 在 a69d71bea1e7cce219295e7700846c5e9e33f18c 上两个正常执行用例失败。fixture 的 closed inactive 输出未配原必需 branchPorts；仅增加声明一行，完整逆向证明其余测试、原断言和预算未变，生产算法不变。CI-FIX-BRANCH-DECLARATION-R1 是有限功能修复门，候选/证据在 /tmp/aw-rfc370-task-agent-ci-branch-declaration-*，不重启完整 Task 核心门或 census。a69 主 CI cancelled、integration-opencode success；修复提交 CI 另验。六个实际生产调用点与根接线、A-G、CS 部署和完整 RFC 继续。
+Windows 37380867203 在 a69d71bea1e7cce219295e7700846c5e9e33f18c 上两个正常执行用例失败。fixture 的 closed inactive 输出未配原必需 branchPorts；仅增加声明一行，完整逆向证明其余测试、原断言和预算未变，生产算法不变。CI-FIX-BRANCH-DECLARATION-R1 是有限功能修复门，候选/证据在 /tmp/aw-rfc370-task-agent-ci-branch-declaration-\*，不重启完整 Task 核心门或 census。a69 主 CI cancelled、integration-opencode success；修复提交 CI 另验。六个实际生产调用点与根接线、A-G、CS 部署和完整 RFC 继续。
 
 ## 2026-10-06 Task 核心 CI 类型修复及匹配
 
@@ -969,3 +969,13 @@ SOURCE42-R1 因非 owned application/taskAgentRun.ts 的并行字节漂移 INVAL
 一次原 scoped census 只取完整 committed e24 加冻结42候选，四原 committed rules/classifiers不变，peer观测在制输出保留且排除；sourceDigest sha256:fafc3e0ab975032a49770dce883aa49f74cf4f0ebe7e269c2ce503864ca6186b。350旧authored debt、129库存顺序／why、全部guard、40SPI／69targets／原SCC及9个Taskeffects保持，单一scheduler实际family入边具名登记待A-T7。原counter只匹配mutation1897→1902、observed imports6547→6567、exceptions5777→5791、public1169→1173、owners26945→26983；五个许可下一普通后继退役，本批先退役e24 offered37→40／bridge19→21两项旧许可。META15只检视matching及共享正文增量，复用SOURCE正文和原一次生成，不重扫、不运行脚本或本机AW运行检查。新exact-SHA CI、完整A-T5/A-T7/AC00/A-G、System/smoke/retention/RC-MCP/脚本/H7、各层CS adapter、M0部署、M1～M4和RFC继续。
 
 R3 原字节／后继补验：未提交 META15-R2 因 status.md 格式投影破坏原 §A2 逐字等式，独立功能门有效 P2／FAIL留证；只撤回本任务额外格式投影，13 matching恢复原META15-R1字节，两份旧共享日志及R1增量完整字节保持，仅追加本段及STATE事实记录。三文档不属于CI format:check范围，原断言／renderer／格式范围不变。e24主CI37390522481 completed/failure（Ubuntu16／Mac4同一旧runner callable地址），Windows37390610195 completed/success；9bf5b9c51f8985ce7f5d32c4ee9b123255fc4ec4仅三个source-address literals及五行说明，完整逆映射／guard行数、生产人口／依赖、四原规则、13 matching和42源候选保持。复用有效SOURCE42-R2、一次原census和META15-R1正文；R3仅补验原字节恢复、新两段和后继绑定，新exact-SHA CI、A-G、各层CS adapter、首次M0部署、M1～M4与完整RFC继续。
+
+## Task family CI repair：SOURCE19 与 matching
+
+- 原1538a56d的主CI37395936688正式failure；Windows37395936423 cancelled。旧结果及完整日志保留，不计A-G通过；SC macOS120000ms fixture超时仍开放。
+- SOURCE19-R1：47绑定有效PASS，无P1/P2，FP `30907ed1f5c6ec83537ecc914739343533cf3a0fd7550eaa5807bc2322ac5dc3`。首次真正census opaque validation FAIL、零产物保留；此前缺metadata-before的PREFLIGHT失败为零generator执行，明确分列。
+- SOURCE19-R2：54首末绑定有效PASS，无P1/P2，FP `b1b16ebc554b596864e4488c6ffae2624ea7b55a862ca2af52caa150d6ca2a47`。两delta（command原函数值alias与文档）复核，17owned逐字复用；完整原commands AST inverse PASS。原参数/identity/行为、opaque清单及四规则不变，A-T7最终command合同开放。
+- 冻结R2与committed bc7832985一次有效原census，13 private outputs，原digest `sha256:184c893f7c2fdb39fcc3634ca42f3041b9c8be09a40eae1d7a5144513bfdba4c`。350原债/129有序库存及why/40SPI/69targets/9Task effects和原SCC保持，scheduler内部composition一债退役。
+- 实测counter：offered40→43、native bridge21→26、mutation1903→1904、public1173→1174、owner27020→27022；只声明五项实际增长，下个普通后继退役。并行f8b4e6fd已正常退役bc的mutation/imports/exceptions/owner四许可；f8全部canonical有效正文与bc相同，只有digest/provenance/许可退役。
+- 无owned源码交叠，保留原源码PASS与一次census。原纯byte digest分别重现bc、bc+候选、f8三个原摘要，再组成最终 `sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e`；不再跑AST扫描，原四规则和所有peer committed内容保持。status使用原renderer结果，不做额外格式投影。
+- matching15先在私有完整候选检视，publication锁内核对live15精确f8前镜像后应用原字节；失败则停止写入。源码门、matching门、发布及新exact-SHA hosted CI独立；System及peer WIP不收编，无本机AW tests/typecheck/build/services，不记RFC/A-G/CS完成。

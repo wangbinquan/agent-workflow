@@ -526,15 +526,23 @@ function fields(call: ts.CallExpression, sf: ts.SourceFile) {
   )
 }
 
-test('all three actual runner launch sites bind the prompt operations next to their appHome', () => {
+test('all three actual runner launch sites consume the family whose native root binds prompt operations next to appHome', () => {
   const sf = source('modules/task-execution/composition/nodeMechanics.ts'),
     found = calls(sf, sf, 'runNode')
   expect(found).toHaveLength(3)
   for (const call of found) {
-    const values = fields(call, sf),
-      receiver = values.get('appHome')!.replace(/\.appHome$/, '')
-    expect(values.get('nodeRunPrompts')).toBe(receiver + '.nodeRunPrompts')
+    expect(call.arguments).toHaveLength(3)
+    expect(['opts.taskAgentRuns', 'state.opts.taskAgentRuns']).toContain(
+      call.arguments[0]!.getText(sf),
+    )
   }
+  const native = source('modules/task-execution/composition/localTaskAgentRunFamily.ts'),
+    familyCall = onlyCall(native, native, 'composeLocalTaskAgentRunFamily'),
+    values = fields(familyCall, native),
+    receiver = values.get('appHome')!.replace(/\.request\.appHome$/, '')
+  expect(values.get('nodeRunPrompts')).toBe(receiver + '.nodeRunPrompts')
+  const purpose = properties(binding(native, native, 'purpose'), native)
+  expect(purpose.get('nodeRunPrompts')?.getText(native)).toBe('input.nodeRunPrompts')
 })
 
 test('both real memory source branches and both read sites use the required public reader', () => {

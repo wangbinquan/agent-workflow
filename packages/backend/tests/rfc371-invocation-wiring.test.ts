@@ -27,7 +27,7 @@ test('six scheduler invocation entries forward the frozen identity and selected 
   ]) {
     const walk = (node: ts.Node) => {
       if (ts.isCallExpression(node) && node.expression.getText() === 'runNode') {
-        const input = node.arguments[0]!
+        const input = node.arguments[1]!
         expect(ts.isObjectLiteralExpression(input)).toBe(true)
         if (ts.isObjectLiteralExpression(input)) entries.push({ path, fields: properties(input) })
       }

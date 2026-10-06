@@ -136,6 +136,7 @@ describe('RFC-284 T20 — 子任务继承面双向锁', () => {
         'runtimeRegistry',
         'nodeRunRuntime',
         'nodeRunPrompts',
+        'taskAgentRuns',
         'portArtifacts',
         'isolationWorkspaces',
         'repositoryGitWorkspaces',

@@ -157,7 +157,7 @@ describe('RFC-130 T14 — undoPriorShardDeltaInIso (iso pre-agent undo, §8.3 D9
     expect(src).toMatch(/doneMergedCandidates\.length === 1/)
     // The shard's runNode dispatch must come AFTER the undo call (pre-agent undo).
     const undoIdx = src.indexOf('workspaceRecord(iso).scope.undoShard(')
-    const runIdxAfterUndo = src.indexOf('const result = await runNode({', undoIdx)
+    const runIdxAfterUndo = src.indexOf('const result = await runNode(', undoIdx)
     expect(undoIdx).toBeGreaterThan(0)
     expect(runIdxAfterUndo).toBeGreaterThan(undoIdx)
   })

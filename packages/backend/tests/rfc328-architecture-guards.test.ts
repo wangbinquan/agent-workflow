@@ -259,6 +259,12 @@ const CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT = new Set([
   'runtime-management/infrastructure/local/agentMaterialCompiler: packages/backend/src/modules/task-execution/composition/agentInvocation.ts',
   'runtime-management/infrastructure/local/agentMaterialEvidence: packages/backend/src/modules/task-execution/composition/agentInvocation.ts',
   'runtime-management/infrastructure/local/agentProtocol: packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
+  // RFC-370: exact native complete-family root addresses; retire in A-T7.
+  'resource-catalog/composition/taskAgentMaterialReferences: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
+  'runtime-management/composition/localAgentMaterial: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
+  'runtime-management/composition/taskAgentRuntimeBindings: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
+  'source-control/composition/agentWorkspaceGitControl: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
+  'source-control/composition/taskAgentWorkspaceContents: packages/backend/src/modules/task-execution/composition/localTaskAgentRunFamily.ts',
   'source-control/composition/agentWorkspaceGitControl: packages/backend/src/modules/task-execution/infrastructure/local/nativeTaskAgentRun.ts',
   // RFC-357：两个 provider 的目录源适配收成一份，这条债随之只剩一条（两个装配文件不再
   // 各自 import task-catalog 的 required-ports）。

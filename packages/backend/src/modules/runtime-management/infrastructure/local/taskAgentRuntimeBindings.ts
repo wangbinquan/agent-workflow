@@ -56,7 +56,7 @@ export function createLocalTaskAgentRuntimeBindings(input: {
       observationIdentity: snapshot.observationIdentity,
     }
   }
-  const bindings: TaskAgentRuntimeBindings = Object.freeze({
+  const bindings: TaskAgentRuntimeBindings = Object.freeze<TaskAgentRuntimeBindings>({
     async resolve(nodeRunId, agentRuntime, defaultRuntime, inheritFrom) {
       // Keep the original configuration await outside the freeze transaction.
       // Its failure, fallback and current-config compatibility are unchanged.

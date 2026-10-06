@@ -31,7 +31,7 @@ import {
 import { runCommitPush } from '@/services/commitPushRunner'
 import { pickFreshestRun } from '@/services/freshness'
 import { withTaskReviewMutationLock } from '@/services/reviewMutationCoordinator'
-import { runTaskAgentWithFamily as runNode } from '@/modules/task-execution/composition/taskAgentRunFamily'
+import { runTaskAgentWithFamily as runNode } from '@/modules/task-execution/public/commands'
 import { createLogger, type Logger } from '@/util/log'
 import {
   DEFAULT_COMMIT_PUSH_DIFF_MAX_BYTES,

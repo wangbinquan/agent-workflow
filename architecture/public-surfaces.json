@@ -1,12 +1,12 @@
 {
   "denominator": {
-    "consumers": 1221,
+    "consumers": 1223,
     "exactEntrypointFiles": 70,
     "governedFieldSurfaces": 5,
     "methods": 1513,
     "opaqueTypeRefs": 15,
     "recursiveFields": 26824,
-    "symbols": 1173
+    "symbols": 1174
   },
   "entries": [
     {
@@ -134722,6 +134722,7 @@
       },
       "consumerEdgeIds": [
         "import:0b0076388d633646159b",
+        "import:2438e0c8625cef08c082",
         "import:2fb06305f28e8ffa15cf",
         "import:5def1e5186b344765004",
         "import:5e0775217682517ba6b0",
@@ -134809,6 +134810,7 @@
         {
           "consumerEdgeIds": [
             "import:0b0076388d633646159b",
+            "import:2438e0c8625cef08c082",
             "import:2fb06305f28e8ffa15cf",
             "import:5def1e5186b344765004",
             "import:6dee3c39d7e0d34aa82d",
@@ -135063,6 +135065,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:2438e0c8625cef08c082",
             "import:2fb06305f28e8ffa15cf",
             "import:6dee3c39d7e0d34aa82d"
           ],
@@ -135101,6 +135104,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:2438e0c8625cef08c082",
             "import:2fb06305f28e8ffa15cf",
             "import:6dee3c39d7e0d34aa82d"
           ],
@@ -135159,6 +135163,7 @@
         },
         {
           "consumerEdgeIds": [
+            "import:2438e0c8625cef08c082",
             "import:2fb06305f28e8ffa15cf",
             "import:6dee3c39d7e0d34aa82d"
           ],
@@ -135223,6 +135228,12 @@
           "edgeId": "import:0b0076388d633646159b",
           "file": "packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts",
           "ownerEntryId": "owner:packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts#$file"
+        },
+        {
+          "context": "source-control",
+          "edgeId": "import:2438e0c8625cef08c082",
+          "file": "packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts",
+          "ownerEntryId": "owner:packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts#$file"
         },
         {
           "context": "task-execution",
@@ -170973,6 +170984,45 @@
         "Record",
         "z.infer"
       ],
+      "version": 1
+    },
+    {
+      "authority": "request-authority",
+      "budget": {
+        "maxMethods": 5,
+        "maxTopLevelFields": 12,
+        "maxTransitiveLeafFields": 24,
+        "maxUnionVariants": 12
+      },
+      "consumerEdgeIds": [
+        "import:8f266a34d1ce2834ecf1"
+      ],
+      "context": "task-execution",
+      "dataClass": "metadata",
+      "direction": "offered",
+      "entrypoint": "commands",
+      "fields": [],
+      "file": "packages/backend/src/modules/task-execution/public/commands.ts",
+      "id": "public:task-execution:commands:runTaskAgentWithFamily",
+      "members": [],
+      "methods": [],
+      "ownerEntryId": "owner:packages/backend/src/modules/task-execution/public/commands.ts#runTaskAgentWithFamily",
+      "productionConsumers": [
+        {
+          "context": "legacy",
+          "edgeId": "import:8f266a34d1ce2834ecf1",
+          "file": "packages/backend/src/services/scheduler.ts",
+          "ownerEntryId": "owner:packages/backend/src/services/scheduler.ts#$file"
+        }
+      ],
+      "publicTypeConsumerIds": [],
+      "removeAfterWave": null,
+      "serialization": "wire",
+      "signatureDigest": "sha256:d92526a16b2be47c5769671528d56a92447be6be5aac5588dac7e128a1089a75",
+      "status": "target-context-current-surface",
+      "symbol": "runTaskAgentWithFamily",
+      "transaction": "own-tx",
+      "unresolvedTypeRefs": [],
       "version": 1
     },
     {
@@ -207762,7 +207812,7 @@
     "z.infer"
   ],
   "schemaVersion": 1,
-  "sourceDigest": "sha256:dfaa067c4c9a6628990563179438b4ec0c3d62ee8db29fdd765621ee95ee9988",
+  "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "targetContexts": [
     "collaboration",
     "development-automation",

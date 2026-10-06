@@ -346,6 +346,24 @@ export function offDagOfferedEdges(
  */
 export const OFF_DAG_OFFERED_EDGE_DEBT: readonly OfferedEdgeDebt[] = [
   {
+    from: 'packages/backend/src/modules/resource-catalog/application/ports/taskAgentMaterialReferences.ts',
+    to: 'runtime-management',
+    why: 'RFC-370 Task family 的资源材料合同使用 runtime-management public 的逻辑内容引用；该实际 offered 边尚未进入目标 DAG，精确登记并在 A-T7 收敛归属，不改变原分类器或集合断言。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
+  {
+    from: 'packages/backend/src/modules/resource-catalog/infrastructure/local/taskAgentMaterialReferences.ts',
+    to: 'runtime-management',
+    why: 'RFC-370 Task family 的 native 资源适配从 runtime-management public 读取逻辑内容引用；该实际 offered 边尚未进入目标 DAG，精确登记并在 A-T7 收敛归属，不改变原分类器或集合断言。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
+  {
+    from: 'packages/backend/src/modules/source-control/infrastructure/local/taskAgentWorkspaceContents.ts',
+    to: 'runtime-management',
+    why: 'RFC-370 Task family 的 native 工作内容适配使用 runtime-management public 的逻辑运行内容引用；该实际 offered 边尚未进入目标 DAG，精确登记并在 A-T7 收敛归属，不改变原分类器或集合断言。',
+    removeAfterWave: 'W4-E（RFC-370 A-T7 public/composition 收敛）',
+  },
+  {
     from: 'packages/backend/src/modules/memory/infrastructure/memoryDistillSessionEventSink.ts',
     to: 'runtime-management',
     why: 'RFC-367 把蒸馏会话记录从「事后按 protocol 取 driver 走查 opencode SQLite」改成「实时事件 sink」，于是 memory 不再需要 runtime driver，只剩下一个常量依赖：capture-failed marker 行的 kind（`DISTILL_CAPTURE_FAILED_KIND`）。该常量的中立定义点在 runtime-management 的 public types，会话页投影 `distillQueries.ts` 一直从那里取，本文件写 marker 行时取同一个值以免两处字面量漂移。memory→runtime-management 不在 design §3.1 的 offered DAG 上，但这是一条纯常量的 public 依赖，比退回自带字面量更不容易坏。',

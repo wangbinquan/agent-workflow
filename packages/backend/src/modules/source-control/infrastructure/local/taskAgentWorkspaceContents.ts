@@ -1,6 +1,8 @@
 import { ulid } from 'ulid'
-import type { AgentMaterialContentReference } from '@/modules/runtime-management/public/participants'
+import type { AgentMaterialIntent } from '@/modules/runtime-management/public/participants'
 import { resolveBoundaryMounts } from '@/services/execution/workspaceBoundary'
+
+type AgentMaterialContentReference = AgentMaterialIntent['workspace']
 
 /** Local Source Control interprets its stored working/mount dialect. Only
  * owner-issued references leave this receiver for material compilation. */

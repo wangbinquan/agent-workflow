@@ -98,7 +98,7 @@ export function composeLocalTaskAgentRunFamily(input: {
           return localOutput.readUtf8(targetRef)
         },
       })
-      const portArtifacts: PortArtifactOperations = Object.freeze({
+      const portArtifacts: PortArtifactOperations = Object.freeze<PortArtifactOperations>({
         archive(request) {
           return input.portArtifacts.archive({
             ...request,

@@ -437,7 +437,7 @@ describe('RFC-143 (E) PR-5 dedup 收尾（resolveOpencodeCmd 零份 + semver 单
     expect(SRC('services/execution/runtimeConfigFreeze.ts')).toContain(
       'export function freezeBinaryConfig',
     )
-    expect(SRC('modules/task-execution/composition/nodeMechanics.ts')).toContain(
+    expect(SRC('modules/task-execution/composition/localTaskAgentRunFamily.ts')).toContain(
       "from '@/services/execution/runtimeConfigFreeze'",
     )
     expect(SRC('modules/task-execution/composition/wrapperMechanics.ts')).toContain(

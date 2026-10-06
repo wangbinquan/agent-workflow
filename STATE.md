@@ -1,3 +1,9 @@
+## 2026-10-06 RFC-370 Task family 确切 CI 修复续批
+
+1538a56d 主CI37395936688正式failure，Windows37395936423 cancelled，原失败不计通过。本片19文件修复实际public入口、contextual类型、fixture设置与断言地址，补三个offered及五个native bridge登记，原核心、规则、全部断言及预算保持。SOURCE19-R1 PASS后首个真正census因直接re-export递归opaque类型失败、零产物留证。两文件后继沿已有command原函数值alias保持完整参数类型/identity；A-T7最终窄合同开放。SOURCE19-R2有效PASS54，FP b1b16ebc554b596864e4488c6ffae2624ea7b55a862ca2af52caa150d6ca2a47。
+
+更改候选一次有效原census使用bc7832985完整committed人口与19冻结内容，原digest sha256:184c893f7c2fdb39fcc3634ca42f3041b9c8be09a40eae1d7a5144513bfdba4c。并行f8b4e6fd只修类型/fixture，全部canonical正文除digest/provenance及旧许可退役逐项相同；无交叠源码、无第二次AST扫描，用原纯byte digest复核三原摘要后合并为sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e。13 matching保留350原债、129有序库存/why、40SPI/69targets、9Task effects及原SCC，退役scheduler内部composition一条债；五actual counter增长具名登记，f8已退役bc四旧许可，完整保留。status保持原renderer字节。System和并行未发布WIP完整保留且排除；仅自有format/lint及纯AST/字节，无本机AW tests/typecheck/build/services。macOS SC原120000ms fixture超时仍开放，新exact-SHA hosted CI单独验收。A-T5/A-T7/A-G、CS adapters、M0首次部署及M1～M4继续，AW尚未部署到CS，RFC不记Done。以下共享正文完整保留。
+
 ## 2026-10-06 RFC-370 Task 完整执行族接线候选
 
 Stage A / A-T5 增量：正常六处 Task 调用（node 三处、wrapper 两处、scheduler 一处）选中同一完整 RC／RM／SC／TE family；SQLite／PG、CLI 初始／重装、HTTP 和 child 每次 drive 均显式绑定工厂。原唯一完整 Task core、native API、六调用有序业务字段、配置等待／读取时点、receiver 与错误边界保持。新12份 owner port／native composition 和14份生产调用／根接线合计26份生产候选；14个新 hosted 实例与机械 fixture／地址迁移保持原断言和预算。详细来源见 design/RFC-370-crewstation-hosted-deployment/task-agent-family-wiring-progress.md。
@@ -91,6 +97,7 @@ e3e3bb51 的Windows37331383474 failure、主CI37331383416 cancelled分别保留�
 本机只做自有format/lint、纯AST/byte/JSON与一次原scoped生成，没有AW本机tests/typecheck/build/service。sourceDigest sha256:2e04978b5cbd31ea4b1eddb81de8e1cb9432418a6f252df9869f9f988a5d5309；非自有6475源码取c835052b完整committed blob，所有并行原页producer/baseline/runner/取证在制品排除保留。13 matching保留129有序库存/why、40SPI/69targets、原值级SCC与空implementation SCC；清偿一个真正移走的旧入边并登记六个实际新组，329债维持原规则。实际六项计数增长按原counter登记：bridge地址17→19、entry1881→1885、imports6402→6434、exceptions5675→5691、public1156→1163、owners26833→26855，matching发布后普通后继退役。
 
 c835主CI37313859339正式failure保留；五功能作业的缺源文件/旧Windows四地址及实际native pairing两地址inventory后继修复。c835定时full E2E37318548076、WebKit37320628193、visual37320636702 success分别保留，不能代替新源码或主CI。源码门、matching metadata门、精确发布及新exact-SHA CI各自留证。完整A-T5/真根/retention reader、Task/smoke、脚本/执行权/恢复与A-G继续；随后独立CS adapters，M0先实际部署，再逐项M1～M4。尚无AW-in-CS部署，不关闭RFC。下方原共享正文与所有并行输出逐字保持。
+
 ## 2026-10-05 RFC-371 原MCP清理时序后继
 
 自有19路径已推送62c00f516，Windows37306478427成功；主CI37306478315实际47success／Mac4 failure／Mac6 cancelled／required failure，终态cancelled不当绿。唯一Mac4原unreaped-child用例5秒超时，后继以同一原persistence真实finishCleanup／settleTurn返回通知替代DB轮询，两个原2秒检查点、5秒预算和全部原断言保持；finally关闭本用例应用timer，不修改生产逻辑。当前共享main自然推进9d74a1e1，原测试与必要控制未改；既有精确format／lint复用，有限功能检视和新确切CI另验核。没有本机AW测试／类型／构建／新服务，没有跨会话消息；当前13 matching和并行登记完整保留，不重扫census。

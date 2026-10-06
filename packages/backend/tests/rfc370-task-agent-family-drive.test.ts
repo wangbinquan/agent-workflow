@@ -97,7 +97,7 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
         })
         execution = await createEachProviderTaskExecution(
           harness,
-          { appHome, defaultRuntime: protocol, defaultNodeRetries: 0 },
+          { appHome, defaultRuntime: protocol, defaultNodeRetries: 0, sessionRestartBudget: 0 },
           userId,
           {
             workspacePresence: { exists: () => true },
@@ -182,6 +182,8 @@ describeEachProvider('RFC-370 complete Task family in real provider drives', (ha
         await execution.provider.runtime.schedulerDriver.drive({
           taskId,
           appHome,
+          defaultNodeRetries: 0,
+          sessionRestartBudget: 0,
           executionContext,
           signal: new AbortController().signal,
         })

@@ -211,7 +211,7 @@ describe('RFC-282 B2 / RFC-345 T4a — all six TaskExecution entries use one res
       const calls: ts.CallExpression[] = []
       const walk = (node: ts.Node) => {
         if (ts.isCallExpression(node) && node.expression.getText(source) === 'runNode') {
-          const input = node.arguments[0]
+          const input = node.arguments[1]
           if (
             input &&
             ts.isObjectLiteralExpression(input) &&
