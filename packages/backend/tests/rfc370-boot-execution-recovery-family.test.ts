@@ -239,8 +239,8 @@ describe('RFC-370 selected boot recovery family', () => {
     const second = await runBootExecutionRecovery(factory, input)
     expect(families).toHaveLength(2)
     expect(first.reap).not.toBe(second.reap)
-    expect(families[0]!.calls).toEqual(members)
-    expect(families[1]!.calls).toEqual(members)
+    expect<readonly Member[]>(families[0]!.calls).toEqual(members)
+    expect<readonly Member[]>(families[1]!.calls).toEqual(members)
   })
   test('a complete synchronous family keeps the same sequence and result identities', async () => {
     const { log } = logger()
@@ -271,7 +271,7 @@ describe('RFC-370 selected boot recovery family', () => {
       },
     }
     const report = await runBootExecutionRecovery(new SelectedFactory(input, family), input)
-    expect(calls).toEqual(members)
+    expect<readonly Member[]>(calls).toEqual(members)
     expect(report.reap).toBe(counts)
     expect(report.finalization).toBe(finalization)
   })
@@ -302,7 +302,7 @@ describe('RFC-370 selected boot recovery family', () => {
     family.leases = 0
     Object.assign(family.finalization, emptyFinalization())
     await runBootExecutionRecovery(new SelectedFactory(input, family), input)
-    expect(family.calls).toEqual(members)
+    expect<readonly Member[]>(family.calls).toEqual(members)
     expect(entries).toEqual([])
   })
   test('runs and unknown outcomes alone preserve original log conditions', async () => {
@@ -473,7 +473,9 @@ describe('RFC-370 original local boot pairing', () => {
     const report = await runBootExecutionRecovery(createLocalBootExecutionRecoveryFactory(), input)
     expect(report.finalization).toBe(finalization)
     expect(order.filter((entry) => entry === 'probe')).toHaveLength(1)
-    expect(order.filter((entry) => members.includes(entry as Member))).toEqual(members)
+    expect<readonly string[]>(order.filter((entry) => members.includes(entry as Member))).toEqual(
+      members,
+    )
   })
   test('references from another create report a pairing error before reading later inputs', async () => {
     const { input, order } = nativeInput()

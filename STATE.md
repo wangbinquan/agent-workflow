@@ -1,3 +1,9 @@
+## 2026-10-06 RFC-371 正式 CI 的只读断言类型更正
+
+观测 CI 7fb0bb9 的功能类型作业在已提交启动恢复用例的5个原expect报告TS2769；格式、lint和依赖分层通过，整仓不记绿。只补原readonly Member[]／string[]断言类型，62条原expect和全部用例、四成员／执行顺序保持；完整测试类型擦除后运行JavaScript逐字相同。没有修改生产源码、原四桶／价格／EOF或原100K／10M配置，没有本机AW测试／类型检查／构建／服务。自有format和lint通过。
+
+独立有限实现功能门及新确切SHA CI继续，原失败保留。详见 [只读断言CI修复](design/RFC-371-run-observability/boot-fixture-readonly-ci-recovery.md)。RFC370其它reader和自定义观察器在制品由原作者负责，全部共享STATE旧正文及并行输出逐字保留，没有跨会话消息。两个RFC仍进行，producer状态保持。
+
 ## 2026-10-06 RFC-370 同因 W29 reader 有限补正
 
 初轮CI修复SOURCE4-R1已有效稳定PASS，19入口完整6257717 bytes；MCP与ledger候选不变，复用该功能结论。私有纯AST读取实际PG完整根后发现W29同一连续变换也会抛原TypeError。本片只给另两W29 helper相同parent fallback，新增一条实际根连续变换回归；旧80 expect全部保持，新增5 expect，四原完整摘要／语句／预算和全文逆向保持。零production、零census。发布候选因此扩为五个明确路径；后继有限门只复核W29、本文档和STATE的必要差额，不重审原MCP／ledger或H7源。以下初轮候选记录、共享旧正文及并行输出完整保留；新exact-SHA CI另验，RFC／A-G和CS部署仍未完成。
