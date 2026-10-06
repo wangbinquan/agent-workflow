@@ -1,3 +1,15 @@
+## 2026-10-07 RFC-371 当前 CI 定向修复候选
+
+717b8610e 的主 CI 终态 failure；后端仅原恢复集成链超出隐式 5 秒，文档仅七处 run URL 502（含一处中文标点污染）。本会话给该集成用例明确 30 秒时限、修一处实际链接，并让当前仓库标准 run 链接由对应官方 Actions API 核验；原断言、生产恢复、100K／10M 人口与性能门、其他链接和作业预算不改。六个原 run 资源/精确 headSha 已逐一只读确认，旧失败证据保留。详见 [CI 接续](design/RFC-371-run-observability/ci-recovery.md#2026-10-07-原历史恢复用例与-actions-运行链接)。没有本机 AW 测试/类型/构建/新服务；精确静态与新提交 CI 另验。CS N4/N5 与固定四桶原 TEMP 候选的原控制、真实 PG 分片/并发、严格分页报告及页面通过，有限功能门/完整门/远端/部署继续；producer OFF，两个 RFC 继续 In Progress。以下原正文与全部并行输出逐字保留；完整共享 STATE 同时含 RFC-370 会话的当前配套候选登记，无跨会话消息。
+
+## 2026-10-07 RFC-370 Task 真实根选择 SOURCE27-R2 与配套候选
+
+Task／Source Control 自有切面完成有限实现门：SOURCE27-R1 有效稳定 FAIL 的 legacy receiver P2 和冻结正文保留；SOURCE27-R2 有效稳定 PASS，61项／6584608 bytes，FP 2b43389d314b6f84f0d5e6422a96e79aeed71726c80d903f4a79ae3db8861a4a。三真实根同一内容实例、每次 drive 完整所选 Agent／script、异步 ACK、完整旧工厂 receiver及原 workspace profile 次序／持久化事实已接线；播种 child 回归不冒充 call-workflow 端到端验收。
+
+一次原 scoped census 输入为已提交717b8610加冻结24 TS（12生产／12测试），四原规则不改；sourceDigest sha256:a6d33f68fe842a206b5bea46c558d90c42fb18d3594e95cb0e6a82b1bd4caec2。四项实际增长：imports6722→6736、exceptions5921→5929、public1187→1190、owners27195→27223，具名登记后须在 matching canonical 的正常后继立即退役。原 classic 对相同12生产输入的35 inbound／0 outbound 完整前后相等；全部357旧债及why／条款、129有序库存／why、214 guards、40 SPI／69 targets、Task authority/effects 与 SCC 保持，不把 canonical role误记为 classic 债务。14 ambient只移动实际行号。
+
+原67c1839d主CI37516880667已completed/failure：67 success／5 failure；同SHA Windows37516996277已success，分别记账。CI债务及67个Actions文字引用修复已独立PASS并发布717b8610，发布后main／origin 0／0、index为空；发布回执当时未记录新主CI37523493598终态，新批仍交自身exact-SHA CI。本片仍须配套元数据独立门及精确发布／hosted exact-SHA CI；没有本机AW tests／typecheck／build／service，没有CS adapter或AW-in-CS部署。完整Stage A／A-G、purpose9操作、执行权／早期恢复及B/M0～M4持续，RFC不关闭。所有旧正文、并行输出、失败及门回执保留。
+
 # RFC-370 hosted CI 功能失败修复候选
 
 67c1839d 的 Windows37516996277 正式 success；主37516880667尚无终态，已完成的Markdown112451991833与Ubuntu backend shard9 112451992504正式failure。前者是67个历史Actions引用502，后者RFC317 T23因把canonical platform type出边误归成legacy R2债务而逐条不等。仅退役本会话新增假legacy行：358→357／outbound48→47，按原稳定JSON修provenance；其余canonical／matching／129库存why和四原规则不变，无新census。27文档64行只转原显示文本或保留run编号，完整旧正文和RFC371并行内容逐行逆变换保持。

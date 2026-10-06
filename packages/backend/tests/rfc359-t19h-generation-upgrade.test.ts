@@ -530,6 +530,8 @@ describe('RFC-359 T19h actual SQLite generation preparation', () => {
     expect(existsSync(paths.lockPath)).toBe(false)
   })
 
+  // This actual export/stage/restore/migration chain exceeded Bun's implicit 5s
+  // on CI 37523493598; its assertions and the production restore path are unchanged.
   test('a historical raw-plus-logical backup stages and restores before forward migration and pointer advancement', async () => {
     const { root, paths, options } = fixture()
     const backupApp = join(root, 'old-backup-app')
@@ -627,7 +629,7 @@ describe('RFC-359 T19h actual SQLite generation preparation', () => {
       }).payload.schemaDigest,
     ).toBe(history.head.contract.digest)
     expect(readFileSync(archive.path)).toEqual(originalArchive)
-  })
+  }, 30_000)
 
   test.each(['failed', 'cancelled', 'cancel-requested'] as const)(
     '%s historical copy requires explicit resume before any source or target migration',

@@ -297,3 +297,11 @@ mixed report 原丢失根因仍未确证。复验已恢复最初的 reject POST 
 原 source `8182aeaa4223a5c5d2cd31d232c61684824b39f0` 的[精确 CI](https://github.com/wangbinquan/agent-workflow/actions/runs/37453467967)终态51 success、4 failure、1 cancelled；Windows平台workflow同SHA success。两个失败功能分片均为原canonical投影缺少已提交的scriptDepsEnv/scriptRun登记，须通过原官方AST产物更新，不删除或放松原断言。Ubuntu13/16持续推进实际双provider测试，但原15分钟job预算耗尽；取消保留，不能算覆盖通过。
 
 Ubuntu改为完整1/32至32/32的独立runner，每一原Bun发现文件仍只执行一次。macOS12、Windows与全部其它jobs不变，原--isolate/--randomize/seed/coverage、实际SQLite+PostgreSQL、PG17服务、所有原测试断言及各自预算、原15minjob预算保持。仅两个精确矩阵守卫同步完整分母/成员要求，无exclude、skip、过滤或--parallel。私有纯YAML与TS AST比对已证明除了此矩阵及其两个期望外结构一致；独立设计门VALID/PASS、0 findings。新源码实现门与精确SHA的真实CI终态仍须留证。
+
+## 2026-10-07 原历史恢复用例与 Actions 运行链接
+
+当前共享源码 `717b8610e0b3c2d0920b34cd7b4bdb8d75718918` 的 [CI 37523493598](https://github.com/wangbinquan/agent-workflow/actions/runs/37523493598) 已终态 failure。后端 Ubuntu 27/32 仅历史 raw-plus-logical export/stage/restore 用例在 5684.55ms 超出 Bun 隐式 5000ms，随后旧 afterEach 清理又使仍在执行的恢复读取不到迁移身份；该尾随异常不作为生产恢复损坏的证据。本片仅给这条实际集成链声明 30 秒用例时限，原所有断言、生产路径、规模人口和性能门不改；没有本机 AW 测试、类型、构建或新服务。
+
+文档作业剩七处失败均为 GitHub run URL 的 HTML 502；六个不同原 run ID 已通过官方 API逐一核对存在及原 headSha/终态，旧失败运行仍作为有效历史证据保留。RFC-348 一处裸链接吞入中文括号句号，改为显式 Markdown 链接。Lychee 只将当前仓库字节完整的 `/actions/runs/<decimal-id>` 映射到对应官方 REST 资源，以现有 workflow token 的 host 专用 Basic Auth核验；不跳过任何 URL、不接受 5xx，畸形路径与不存在的 ID 仍失败，其他链接、重试与原 15 分钟作业预算不变。配置依据 [Lychee remap](https://lychee.cli.rs/recipes/migration/) 与 [host 专用认证](https://lychee.cli.rs/guides/config/)。当前静态 scans 的失败仅保留状态，未读取或分析扫描日志。
+
+本片精确格式/lint/AST 与新 source SHA hosted CI继续核验，不把已有失败或本次 API读证据记为全仓通过。AW-R03～12、CS 生产采集/原规模和两个 RFC继续，全部共享现有正文及其他会话在制品保留，无跨会话消息。

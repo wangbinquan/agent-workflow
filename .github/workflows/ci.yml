@@ -617,6 +617,9 @@ jobs:
     # integrations on purpose).
     name: Markdown link check (design/)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -635,6 +638,10 @@ jobs:
           # (`os error 104`) and reddened a run whose only change was two i18n
           # files; the URL returned 200 on every manual retry. Being explicit
           # here also beats inheriting lychee's defaults silently.
+          # Run evidence is checked by its exact Actions API resource. GitHub's
+          # historical run HTML pages intermittently return 502 for valid IDs.
+          # The anchored remap keeps malformed paths, missing IDs and all other
+          # links subject to normal failure; it never accepts 5xx or skips URLs.
           args: >-
             --no-progress
             --max-concurrency 4
@@ -642,6 +649,8 @@ jobs:
             --max-retries 5
             --retry-wait-time 5
             --timeout 30
+            --remap '^https://github\.com/${{ github.repository }}/actions/runs/([0-9]+)$ https://api.github.com/repos/${{ github.repository }}/actions/runs/$1'
+            --basic-auth '^https://api\.github\.com/ x-access-token:${{ secrets.GITHUB_TOKEN }}'
             'design/**/*.md'
           fail: true
           jobSummary: true
