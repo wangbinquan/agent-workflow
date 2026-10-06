@@ -1,6 +1,6 @@
 {
   "canonicalProjection": {
-    "sourceDigest": "sha256:5ec6a9605d8d674ba0dec37bb01b33e48ad709f4cc87fac5955f5f66e2c6a85f",
+    "sourceDigest": "sha256:261ca20a23bc3706ff827dbfca2425bc3b6c3c46c8a0a5e72218571d216393da",
     "manifests": [
       "architecture/mutation-entrypoints.json",
       "architecture/transaction-external-effects.json",
@@ -304,10 +304,7 @@
       "file": "packages/backend/tests/rfc328-architecture-guards.test.ts",
       "id": "rfc328-cross-context-provider-bridge-debt",
       "symbol": "CROSS_CONTEXT_PROVIDER_BRIDGE_DEBT",
-      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。",
-      "allowGrowth": {
-        "why": "RFC-370 Runtime diagnostics SOURCE23: actual original counter 28 -> 34 for rfc328-cross-context-provider-bridge-debt. The selected ordinary Runtime family and opaque targets add only measured owner/address inventory. Native pairing uses the original material and sole smoke core; original management statements, receipt semantics, assertions/budgets and root bodies are retained through exact inverses. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. MCP/command/doctor/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-328/RFC-349 provider cutover 中仍由 TaskExecution infrastructure 直接绑定其他 context implementation 的精确桥接边；每条只许随 owner public participant 接线下降。 RFC-359 W4-B1 批 2a：dynamicWorkflowPersistence 两份合一，legacy/agent 的跨 context 桥从两条并成一条，15 → 14。 RFC-359 W4-D25：停靠原子从两份 provider 实现并成一份，三条桥（sqlite/postgresql 参与者 + SqliteHumanGateOperationStore）并成两条（中立参与者 + 中立 journal），14 → 13。"
     },
     {
       "baseline": 399,
@@ -825,10 +822,7 @@
       "file": "architecture/mutation-entrypoints.json",
       "symbol": "entries",
       "baseline": 1914,
-      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。",
-      "allowGrowth": {
-        "why": "RFC-370 Runtime diagnostics SOURCE23: actual original counter 1907 -> 1914 for rfc294-mutation-entrypoints. The selected ordinary Runtime family and opaque targets add only measured owner/address inventory. Native pairing uses the original material and sole smoke core; original management statements, receipt semantics, assertions/budgets and root bodies are retained through exact inverses. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. MCP/command/doctor/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 N1：全部命令与写 transport 的 authority/authorization/transaction/fence/audit/event 控制分母；新增或漏枚举必须与 owner 账本同批解释。"
     },
     {
       "id": "rfc294-node-run-insert-sites",
@@ -863,10 +857,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "observedEdges",
       "baseline": 6634,
-      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。",
-      "allowGrowth": {
-        "why": "RFC-370 Runtime diagnostics SOURCE23: actual original counter 6623 -> 6634 for rfc294-cross-context-observed-imports. The selected ordinary Runtime family and opaque targets add only measured owner/address inventory. Native pairing uses the original material and sole smoke core; original management statements, receipt semantics, assertions/budgets and root bodies are retained through exact inverses. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. MCP/command/doctor/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 N1：backend module↔module 与 module↔legacy 的 symbol-level observed edge 分母；kind/syntax/role 与两端 owner 外键必须闭合。"
     },
     {
       "id": "rfc294-target-context-edges",
@@ -887,10 +878,7 @@
       "file": "architecture/cross-context-imports.json",
       "symbol": "architectureExceptions",
       "baseline": 5836,
-      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。",
-      "allowGrowth": {
-        "why": "RFC-370 Runtime diagnostics SOURCE23: actual original counter 5827 -> 5836 for rfc294-architecture-exceptions. The selected ordinary Runtime family and opaque targets add only measured owner/address inventory. Native pairing uses the original material and sole smoke core; original management statements, receipt semantics, assertions/budgets and root bodies are retained through exact inverses. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. MCP/command/doctor/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 N1：唯一 exact exception schema；每条具名两端 path+symbol、edge kind、owner、到期波次和变异证据，禁止 glob。"
     },
     {
       "id": "rfc294-facades",
@@ -904,10 +892,7 @@
       "file": "architecture/public-surfaces.json",
       "symbol": "entries",
       "baseline": 1187,
-      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。",
-      "allowGrowth": {
-        "why": "RFC-370 Runtime diagnostics SOURCE23: actual original counter 1183 -> 1187 for rfc294-public-surfaces. The selected ordinary Runtime family and opaque targets add only measured owner/address inventory. Native pairing uses the original material and sole smoke core; original management statements, receipt semantics, assertions/budgets and root bodies are retained through exact inverses. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. MCP/command/doctor/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
-      }
+      "why": "RFC-294 N1：exact public entrypoint 的 symbol/API digest/method/recursive-field/consumer/authority/tx/data-class matrix。"
     },
     {
       "id": "rfc294-public-surface-opaque-type-allowlist",
@@ -927,10 +912,10 @@
       "id": "rfc294-module-symbol-owners",
       "file": "architecture/module-symbol-owners.json",
       "symbol": "entries",
-      "baseline": 27086,
+      "baseline": 27087,
       "why": "RFC-294 N1：backend/frontend/shared 每个 production file 与 top-level symbol 的唯一 current/target owner root。",
       "allowGrowth": {
-        "why": "RFC-370 Runtime diagnostics SOURCE23: actual original counter 27069 -> 27086 for rfc294-module-symbol-owners. The selected ordinary Runtime family and opaque targets add only measured owner/address inventory. Native pairing uses the original material and sole smoke core; original management statements, receipt semantics, assertions/budgets and root bodies are retained through exact inverses. Original algorithms, assertions/budgets and all four committed generation rules remain unchanged; public/native composition debts retain their actual rows and A-T7 retirement. Preserve all 129 ordered inventories/why, every surviving authored debt, complete committed source and concurrent output/guard registration, SPI/targets/SCC. Only this measured matching growth is permitted. MCP/command/doctor/scripts, execution authority/recovery, final A-T7/A-G, CS adapters, first deployment and M1-M4 remain open. Retire this one-commit declaration in the next ordinary successor."
+        "why": "RFC-371 reviewed common native schema operation SOURCE15: one actual common native descriptor operation, with two retained private engine SQL renderers. Actual original counter 27086 -> 27087. This matching declaration changes no original classifier, assertion, budget, authored debt or statistics population. Preserve all 129 ordered inventory ids/file/symbol/why,345 current authored debts,214 guards,SPI/targets/SCC and old migration bytes. Cold qualification and each-read Actor/Task/cost behavior remain; actual native mutation/rebuild and original 100K/10M/100-sample/500ms acceptance still require exact-SHA hosted CI. Producer OFF and both RFCs remain open. Retire this one-commit actual growth declaration in the next ordinary successor."
       }
     }
   ],
@@ -939,8 +924,8 @@
   "sourceDigest": "sha256:5401451988e6c23ea7b092fc4b982468a7f19ec796263dde6ae37ef85376a16e",
   "provenance": {
     "originSha": "13a9cc0357e8d0cfb28a422e4564ee6d6ea15e0f",
-    "currentSnapshotSha": "1820be8c2e59daedaeb076eda76f44403e673eff",
-    "contentDigest": "sha256:7b668c18b9d3a9f52ac0bbc841b6c9d8e270e117b516492ec11c9174a57a7256",
+    "currentSnapshotSha": "2f3807d003c396b344ceddcb0c2278fe86ee90e0",
+    "contentDigest": "sha256:070c2a3f86185ccdce78452283f659b92e89349f4a76f5bcc6db003354b0077e",
     "digestAlgorithm": "sha256",
     "digestScope": "canonical-json-without-provenance"
   }

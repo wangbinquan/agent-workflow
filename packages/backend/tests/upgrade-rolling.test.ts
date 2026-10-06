@@ -282,7 +282,7 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
   // `node_run_outputs.active` 是「端口被显式关闭」与「端口输出了空值」的唯一区分点——
   // 没有这一列，两者在库里同形，条件分支就没有可判定的信号；`node_runs.force_activated`
   // 承载「对被跳过的节点点仍然执行」这一次性覆盖。两列都带默认值，旧代码读新库照常。
-  test('HEAD journal has 240 entries (sanity — records the reviewed migration head)', () => {
+  test('HEAD journal has 241 entries (sanity — records the reviewed migration head)', () => {
     // Historical FREEZE_TARGETS intentionally stay fixed; this exact count
     // forces each new migration head to be acknowledged here. RFC-058 PR-B T11
     // bumped to 31 with migration 0031_rfc058_clarify_rounds_unify; RFC-059 T2
@@ -563,7 +563,8 @@ describe('RFC-054 W1-6 — rolling upgrade from old home reaches HEAD + runs toy
     // RFC-371: 0238 adds eight durable original native page and source-ACK relations.
     // RFC-371: 0239 adds the original first-store generation binding.
     // RFC-371: 0240 adds four original root transition/freeze/result relations, without numeric totals.
-    expect(HEAD_TOTAL_MIGRATIONS).toBe(240)
+    // RFC-371: 0241 adds the opaque retained-output revision and its native projection.
+    expect(HEAD_TOTAL_MIGRATIONS).toBe(241)
   })
 
   test('journal `when` timestamps are strictly increasing', () => {

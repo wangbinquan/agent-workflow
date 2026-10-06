@@ -12,6 +12,7 @@ import {
   observationUsageCaptures,
   observationUsageCurrent,
   observationReportRows,
+  observationReports,
 } from '@/db/schema'
 import { sha256Hex } from '@/util/hash'
 import { originalReportSnapshotSession } from '@/platform/persistence/reportSnapshot'
@@ -204,6 +205,18 @@ describeEachProvider('RFC-371 original gap Task index', (harness) => {
       // Preserve an original pre-index quality row; direct callers cannot receive a fabricated zero.
       const reason = quality.items.find((row) => row.key === 'invocation-unobserved')!
       const { taskIndexVersion: _index, ...legacyQuality } = reason
+      // Construct the original pre-index shape during building, then publish its unchanged legacy row.
+      const originalState = await harness.db
+        .select()
+        .from(observationReports)
+        .where(eq(observationReports.id, id))
+        .get()
+      if (!originalState) throw new Error('Original report state missing')
+      await harness.db
+        .update(observationReports)
+        .set({ state: 'building' })
+        .where(eq(observationReports.id, id))
+        .run()
       await harness.db
         .update(observationReportRows)
         .set({ document: JSON.stringify(legacyQuality) })
@@ -214,6 +227,11 @@ describeEachProvider('RFC-371 original gap Task index', (harness) => {
             eq(observationReportRows.key, reason.key),
           ),
         )
+        .run()
+      await harness.db
+        .update(observationReports)
+        .set({ state: originalState.state })
+        .where(eq(observationReports.id, id))
         .run()
       await expect(
         service.page(actor, id, { section: 'quality-tasks', parent: reason.key, limit: 37 }),
@@ -227,6 +245,20 @@ describeEachProvider('RFC-371 original gap Task index', (harness) => {
       })
       expect(retainedQuality.items.find((row) => row.key === reason.key)).toEqual(legacyQuality)
       expect(legacyQuality.taskCount).toBe('201')
+      await harness.db
+        .update(observationReportRows)
+        .set({ document: JSON.stringify(reason) })
+        .where(
+          and(
+            eq(observationReportRows.reportId, id),
+            eq(observationReportRows.section, 'quality'),
+            eq(observationReportRows.key, reason.key),
+          ),
+        )
+        .run()
+      await expect(service.page(actor, id, { section: 'quality', limit: 37 })).rejects.toThrow(
+        'retained output differs',
+      )
     } finally {
       await service.worker.stop()
       rmSync(root, { recursive: true, force: true })

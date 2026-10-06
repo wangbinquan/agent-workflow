@@ -3,7 +3,7 @@
 // schema, with constraints/indexes applied after logical copy.
 
 import { sha256Hex } from '@/util/hash'
-import { retainedOutputRevisionPostgresqlStatements } from './retainedOutputRevisionSchema'
+import { retainedOutputRevisionStatements } from './retainedOutputRevisionSchema'
 import {
   buildLogicalSchemaContract,
   canonicalSchemaJson,
@@ -292,7 +292,7 @@ export function buildPostgresqlSchemaPlan(
     ...tableStatements(contract),
     ...indexStatements(contract),
     ...constraintStatements(contract),
-    ...retainedOutputRevisionPostgresqlStatements(contract),
+    ...retainedOutputRevisionStatements(contract).postgresql,
     ...metadataStatements(contract),
   ]
   const withoutDigest = {

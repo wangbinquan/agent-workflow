@@ -6,7 +6,7 @@
     "moduleFiles": 1699,
     "productionFiles": 3112,
     "sharedFiles": 170,
-    "symbolsIncludingFileRoots": 27086
+    "symbolsIncludingFileRoots": 27087
   },
   "entries": [
     {
@@ -176852,6 +176852,18 @@
       "currentLayer": "platform",
       "exported": false,
       "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
+      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#postgresqlStatements",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "postgresqlStatements",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
       "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#quote",
       "removeAfterWave": "W9",
       "status": "legacy-target",
@@ -176876,22 +176888,10 @@
       "currentLayer": "platform",
       "exported": true,
       "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
-      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#retainedOutputRevisionPostgresqlStatements",
+      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#retainedOutputRevisionStatements",
       "removeAfterWave": "W9",
       "status": "legacy-target",
-      "symbol": "retainedOutputRevisionPostgresqlStatements",
-      "targetContext": "platform",
-      "targetLayer": "persistence"
-    },
-    {
-      "currentContext": "legacy",
-      "currentLayer": "platform",
-      "exported": true,
-      "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
-      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#retainedOutputRevisionSqliteStatements",
-      "removeAfterWave": "W9",
-      "status": "legacy-target",
-      "symbol": "retainedOutputRevisionSqliteStatements",
+      "symbol": "retainedOutputRevisionStatements",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -176904,6 +176904,18 @@
       "removeAfterWave": "W9",
       "status": "legacy-target",
       "symbol": "REVISION_TABLE",
+      "targetContext": "platform",
+      "targetLayer": "persistence"
+    },
+    {
+      "currentContext": "legacy",
+      "currentLayer": "platform",
+      "exported": false,
+      "file": "packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts",
+      "id": "owner:packages/backend/src/platform/persistence/retainedOutputRevisionSchema.ts#sqliteStatements",
+      "removeAfterWave": "W9",
+      "status": "legacy-target",
+      "symbol": "sqliteStatements",
       "targetContext": "platform",
       "targetLayer": "persistence"
     },
@@ -325771,5 +325783,5 @@
   "finalCriterion": "Every production file and top-level symbol has exactly one current and target context/layer owner; no unassigned bucket exists.",
   "kind": "module-symbol-owners",
   "schemaVersion": 1,
-  "sourceDigest": "sha256:5ec6a9605d8d674ba0dec37bb01b33e48ad709f4cc87fac5955f5f66e2c6a85f"
+  "sourceDigest": "sha256:261ca20a23bc3706ff827dbfca2425bc3b6c3c46c8a0a5e72218571d216393da"
 }

@@ -71,6 +71,7 @@ import { resolve } from 'node:path'
 
 import { migrateSqlite } from '@/platform/persistence/sqliteMigrator'
 import { buildLogicalSchemaContract } from '@/platform/persistence/schemaContract'
+import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
 
 const MIGRATIONS_FOLDER = resolve(import.meta.dir, '..', '..', 'db', 'migrations')
 
@@ -245,7 +246,8 @@ export function migratedProtections(
 /** 逻辑契约声明的保护面——也就是 PostgreSQL 侧**将会**生成的那些约束与索引。 */
 export function contractProtections(): SchemaProtection[] {
   const out: SchemaProtection[] = []
-  for (const table of buildLogicalSchemaContract().tables) {
+  const contract = buildLogicalSchemaContract()
+  for (const table of contract.tables) {
     const indexNames = new Set(table.indexes.map((index) => index.name))
     for (const index of table.indexes) {
       const columns = normalizeSqlText(index.columns.join(','), table.id)
@@ -280,6 +282,18 @@ export function contractProtections(): SchemaProtection[] {
         def: `CHECK(${normalizeSqlText(check.expression ?? '', table.id)})`,
       })
     }
+  }
+  // Native triggers come from the same actual provider plan; no SQLite-only allowance is added.
+  for (const statement of buildPostgresqlSchemaPlan(contract).statements.filter(
+    (statement) => statement.kind === 'trigger',
+  )) {
+    const declared =
+      /^CREATE TRIGGER "([^"]+)" AFTER (?:INSERT|UPDATE|DELETE) ON "agent_workflow"\."([^"]+)" REFERENCING /.exec(
+        statement.sql,
+      )
+    if (declared === null)
+      throw new Error('RFC-359 T19g: unsupported native trigger declaration: ' + statement.sql)
+    out.push({ table: declared[2]!, name: declared[1]!, def: 'TRIGGER ' + declared[1]! })
   }
   return out
 }

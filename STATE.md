@@ -1,3 +1,11 @@
+## 2026-10-06 RFC-371 retained schema CI 修复
+
+1820be8c 的主 CI 37417648524 已正式 failure。原平台 retained revision 改为唯一完整合同操作，两个投影私有；全部18历史版本的原 SQL／digest／顺序逐字保持。当前222／216／6／241 census 配套、原生 DDL 故障 rollback、旧 building 质量 fixture 与原终态 seal 回归保持完整人口和预算。SOURCE15-R1 唯一 PromiseLike cleanup P2 FAIL 留证，R3 同化后有效有限 PASS；准备失败不算审查通过。
+
+一次完整原 scoped census 使用全部 committed 2f3807d0 与冻结 owned 内容；初次 report-only 非完整输出保留。13 matching 保留129有序库存与 why、345债、214 guards、40 SPI／69 targets及原SCC／Task effects，只登记 owners27086→27087，正常退役前批六项已消费许可。sourceDigest sha256:261ca20a23bc3706ff827dbfca2425bc3b6c3c46c8a0a5e72218571d216393da；唯一后置差额为一行测试 cleanup，生产与原人口不变，不重复 census。
+
+原 bun dev 按用户授权用原数据库／原7456复现，日志库版本241与 listening；共享 WIP 热更新退出原日志保留，不称干净SHA部署或收编并行装配。已查看正式总览8任务、123238四桶Token、已记录估值¥0.16583与原缺口标记。详见 [schema CI 修复记录](design/RFC-371-run-observability/retained-schema-ci-progress.md)。仅自有 format／lint 与纯构造／AST；本机无AW tests／typecheck／build／压测。新 exact-SHA CI、原 root/refreshed-link timeout、双规模、默认producer OFF、CS v2／CLI／自测／托管实际联动及两RFC退出仍开放。独立批量TEMP设计不混入此片。以下全部共享旧正文与并行已提交输出完整保留。
+
 ## 2026-10-06 RFC-370 Runtime 完整诊断族与本机装配
 
 普通 Runtime 管理显式接收完整 status／smoke／models effects，使用 owner 所选目标和 runtime material 引用；只有两处原生 HTTP 根选择 local pairing，继续复用唯一 smoke core 与原 native 材料。原管理业务语句、await／错误边界、receiptKey 的缓存及视图匹配、显示 label 语义保持。RFC360 全部原断言与预算、W29 完整原根逆向摘要、Windows 对称路径及原完整用例保留，新增双 provider 真库／class receiver／opaque target／getter 顺序回归。

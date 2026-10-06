@@ -73,6 +73,7 @@ function fixture(
       },
     ],
     installed: [] as string[],
+    nativeInstalled: [] as string[],
   }
   if (input.missingBaseline) initial.migrations = []
   let committed = structuredClone(initial)
@@ -160,6 +161,10 @@ function fixture(
         return rows([])
       }
       if (matched?.statement.kind === 'constraint') return rows([])
+      if (matched?.statement.kind === 'function' || matched?.statement.kind === 'trigger') {
+        pending.nativeInstalled.push(sql)
+        return rows([])
+      }
       if (matched?.statement.kind === 'index') {
         pending.installed.push(sql)
         return rows([])
@@ -220,6 +225,14 @@ function indexStatements(): readonly PostgresqlSchemaStatement[] {
   )
 }
 
+function nativeStatements(): readonly PostgresqlSchemaStatement[] {
+  return history.steps.flatMap((step) =>
+    step.executableStatements.filter(
+      (statement) => statement.kind === 'function' || statement.kind === 'trigger',
+    ),
+  )
+}
+
 describe('RFC-359 T19h schema transaction and pointer continuation', () => {
   test('advances the schema and active generation together while preserving the original receipt', async () => {
     const db = fixture()
@@ -242,6 +255,9 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
     expect(db.committed().migrations[0]).toEqual(original.migrations[0])
     expect(db.committed().migrations).toHaveLength(1 + history.steps.length)
     expect(db.committed().installed).toEqual(indexStatements().map((statement) => statement.sql))
+    expect(db.committed().nativeInstalled).toEqual(
+      nativeStatements().map((statement) => statement.sql),
+    )
     expect(db.committed().generations[0]).toEqual({
       ...original.generations[0]!,
       contract_digest: history.head.contract.digest,
@@ -250,6 +266,29 @@ describe('RFC-359 T19h schema transaction and pointer continuation', () => {
     expect(callbacks).toBe(1)
     expect(db.releases()).toBe(1)
   })
+
+  for (const kind of ['function', 'trigger'] as const) {
+    test(`a native ${kind} failure rolls back the original transaction and every metadata change`, async () => {
+      const statement = nativeStatements().find((statement) => statement.kind === kind)
+      expect(statement).toBeDefined()
+      const db = fixture({ failSql: statement!.sql })
+      let callbacks = 0
+      await expect(
+        migratePostgresqlSchema({
+          runtime: db.runtime,
+          history,
+          afterCommitted: () => {
+            callbacks += 1
+          },
+        }),
+      ).rejects.toMatchObject({ code: 'postgresql-schema-prepare-failed' })
+      expect(db.calls.some((call) => call.sql === statement!.sql)).toBe(true)
+      expect(db.calls.some((call) => call.sql === 'ROLLBACK')).toBe(true)
+      expect(db.committed()).toEqual(db.initial)
+      expect(callbacks).toBe(0)
+      expect(db.releases()).toBe(1)
+    })
+  }
 
   test('a second index failure rolls back the first index and every metadata change', async () => {
     expect(indexStatements().length).toBeGreaterThanOrEqual(2)

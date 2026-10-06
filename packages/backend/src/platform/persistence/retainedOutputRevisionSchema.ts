@@ -24,7 +24,23 @@ const REVISION_TABLE = 'observation_report_retained_revisions'
 const quote = (value: string) => `"${value.replaceAll('"', '""')}"`
 const events = ['insert', 'update', 'delete'] as const
 
-export function retainedOutputRevisionSqliteStatements(): readonly string[] {
+export function retainedOutputRevisionStatements(contract: LogicalSchemaContract): {
+  readonly sqlite: readonly string[]
+  readonly postgresql: readonly PostgresqlSchemaStatement[]
+} {
+  const revisions = contract.tables.filter((table) => table.nativeProjection !== undefined)
+  if (revisions.length === 0) return { sqlite: [], postgresql: [] }
+  if (
+    revisions.length !== 1 ||
+    revisions[0]!.id !== REVISION_TABLE ||
+    JSON.stringify(revisions[0]!.nativeProjection) !==
+      JSON.stringify(OBSERVATION_RETAINED_OUTPUT_REVISION)
+  )
+    throw new Error('Unsupported retained-output-revision schema projection')
+  return { sqlite: sqliteStatements(), postgresql: postgresqlStatements(contract) }
+}
+
+function sqliteStatements(): readonly string[] {
   const descriptor = OBSERVATION_RETAINED_OUTPUT_REVISION
   const mark = (reference: 'OLD' | 'NEW', extra = '') =>
     `INSERT INTO ${quote(REVISION_TABLE)} ("report_id", "revision") SELECT "id", lower(hex(randomblob(16))) FROM "observation_reports" WHERE "id" = ${reference}."report_id" AND "state" <> 'building'${extra} ON CONFLICT ("report_id") DO UPDATE SET "revision" = excluded."revision";`
@@ -39,18 +55,9 @@ export function retainedOutputRevisionSqliteStatements(): readonly string[] {
   )
 }
 
-export function retainedOutputRevisionPostgresqlStatements(
+function postgresqlStatements(
   contract: LogicalSchemaContract,
 ): readonly PostgresqlSchemaStatement[] {
-  const revisions = contract.tables.filter((table) => table.nativeProjection !== undefined)
-  if (revisions.length === 0) return []
-  if (
-    revisions.length !== 1 ||
-    revisions[0]!.id !== REVISION_TABLE ||
-    JSON.stringify(revisions[0]!.nativeProjection) !==
-      JSON.stringify(OBSERVATION_RETAINED_OUTPUT_REVISION)
-  )
-    throw new Error('Unsupported retained-output-revision schema projection')
   const physical = (id: string) => {
     const table = contract.tables.find((table) => table.id === id)
     if (!table || table.disposition !== 'KEEP' || !table.providerTables.postgresql)

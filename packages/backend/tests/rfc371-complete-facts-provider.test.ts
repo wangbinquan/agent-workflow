@@ -382,7 +382,7 @@ describeEachProvider('RFC-371 complete execution facts without numeric subtotals
         )
         .run()
       await expect(service.page(actor, id, { section: 'tasks' })).rejects.toThrow(
-        'metrics are not qualified',
+        'retained output differs',
       )
       await harness.db
         .update(observationReportRows)

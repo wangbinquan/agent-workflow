@@ -209,7 +209,7 @@ describeEachProvider('RFC-371 native retained revision and complete warm reads',
     const pool = binding.runtime.providerPool()
     const publisher = await pool.reserve(),
       writer = await pool.reserve()
-    let mutation: Promise<unknown> | undefined
+    let mutation: PromiseLike<unknown> | undefined
     try {
       const pid = (await writer.unsafe('SELECT pg_backend_pid() AS pid'))[0]?.pid
       await publisher.unsafe('BEGIN')
@@ -243,7 +243,7 @@ describeEachProvider('RFC-371 native retained revision and complete warm reads',
       await expect(cache.assertReadable(actor, report)).rejects.toThrow(changed)
     } finally {
       await publisher.unsafe('ROLLBACK')
-      await mutation?.catch(() => undefined)
+      await Promise.resolve(mutation).catch(() => undefined)
       writer.release()
       publisher.release()
     }

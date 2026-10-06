@@ -5,8 +5,12 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { loadPostgresqlMigrationHistory } from '@/platform/persistence/postgresqlMigrationHistory'
 import { buildPostgresqlSchemaPlan } from '@/platform/persistence/postgresqlSchema'
-import { canonicalSchemaJson } from '@/platform/persistence/schemaContract'
-import { retainedOutputRevisionSqliteStatements } from '@/platform/persistence/retainedOutputRevisionSchema'
+import {
+  buildLogicalSchemaContract,
+  canonicalSchemaJson,
+  type LogicalSchemaContract,
+} from '@/platform/persistence/schemaContract'
+import { retainedOutputRevisionStatements } from '@/platform/persistence/retainedOutputRevisionSchema'
 
 test('the original V2 whole KEEP addition replays native objects without modifying any historical table or statement', async () => {
   const history = await loadPostgresqlMigrationHistory()
@@ -55,7 +59,7 @@ test('the original V2 whole KEEP addition replays native objects without modifyi
 }, 60_000)
 
 test('the SQLite appended migration contains precisely the generated twelve row triggers and same-parent UPDATE marks once', () => {
-  const statements = retainedOutputRevisionSqliteStatements()
+  const statements = retainedOutputRevisionStatements(buildLogicalSchemaContract()).sqlite
   expect(statements).toHaveLength(12)
   const migration = readFileSync(
     resolve(import.meta.dir, '../db/migrations/0241_rfc371_retained_output_revision.sql'),
@@ -68,4 +72,34 @@ test('the SQLite appended migration contains precisely the generated twelve row 
     expect(statement).toContain('NEW."report_id" <> OLD."report_id"')
     expect(statement).toContain('lower(hex(randomblob(16)))')
   }
+})
+
+test('the one common operation keeps every historical descriptor-free contract empty', async () => {
+  const history = await loadPostgresqlMigrationHistory()
+  for (const version of history.versions.filter((version) =>
+    version.contract.tables.every((table) => table.nativeProjection === undefined),
+  ))
+    expect(retainedOutputRevisionStatements(version.contract)).toEqual({
+      sqlite: [],
+      postgresql: [],
+    })
+}, 60_000)
+
+test('the common operation rejects an unsupported or duplicated native descriptor', () => {
+  const contract = buildLogicalSchemaContract()
+  const invalid: LogicalSchemaContract = JSON.parse(canonicalSchemaJson(contract))
+  const revision = invalid.tables.find((table) => table.nativeProjection !== undefined)!
+  Reflect.set(revision.nativeProjection!, 'revisionColumn', 'unsupported-column')
+  expect(() => retainedOutputRevisionStatements(invalid)).toThrow(
+    'Unsupported retained-output-revision schema projection',
+  )
+  expect(() =>
+    retainedOutputRevisionStatements({
+      ...contract,
+      tables: [
+        ...contract.tables,
+        ...contract.tables.filter((table) => table.nativeProjection !== undefined),
+      ],
+    }),
+  ).toThrow('Unsupported retained-output-revision schema projection')
 })
