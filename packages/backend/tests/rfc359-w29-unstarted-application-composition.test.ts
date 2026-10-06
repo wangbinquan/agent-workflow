@@ -609,10 +609,12 @@ function oldBootExecutionRecoveryBody(
   const transformed = ts.transform(body, [
     (context) => {
       const inverse: ts.Visitor = (node) => {
+        const parent = node.parent ?? ts.getOriginalNode(node).parent
         if (
           ts.isObjectLiteralExpression(node) &&
-          ts.isCallExpression(node.parent) &&
-          node.parent.expression.getText(source) === 'runTaskExecutionBootRecovery'
+          parent !== undefined &&
+          ts.isCallExpression(parent) &&
+          parent.expression.getText(source) === 'runTaskExecutionBootRecovery'
         ) {
           const entries = node.properties.filter(
             (property) =>
@@ -660,10 +662,12 @@ function oldVerificationCommandsBody(
   const transformed = ts.transform(body, [
     (context) => {
       const inverse: ts.Visitor = (node) => {
+        const parent = node.parent ?? ts.getOriginalNode(node).parent
         if (
           ts.isObjectLiteralExpression(node) &&
-          ts.isCallExpression(node.parent) &&
-          node.parent.expression.getText(source) === 'composeDevelopmentAutomation'
+          parent !== undefined &&
+          ts.isCallExpression(parent) &&
+          parent.expression.getText(source) === 'composeDevelopmentAutomation'
         ) {
           const entries = node.properties.filter(
             (property) =>
@@ -918,6 +922,27 @@ function namedCalls(node: ts.Node, source: ts.SourceFile, name: string): ts.Call
 }
 
 describe('RFC-359 W29 complete unstarted application composition', () => {
+  test('RFC-370 preserves original parent metadata between real recovery and verification inverses', () => {
+    const name = 'composePostgresqlApplication'
+    const boot = oldBootExecutionRecoveryBody(pg, name, functionBody(pg, name))
+    const calls = namedCalls(boot, pg, 'runTaskExecutionBootRecovery')
+    expect(calls).toHaveLength(1)
+    const synthetic = calls[0]!.arguments[0]!
+    expect(synthetic.parent).toBeUndefined()
+    expect(ts.getOriginalNode(synthetic).parent).toBeDefined()
+    const restored = oldVerificationCommandsBody(pg, name, boot)
+    const development = namedCalls(restored, pg, 'composeDevelopmentAutomation')
+    expect(development).toHaveLength(1)
+    const options = development[0]!.arguments[0]!
+    if (!ts.isObjectLiteralExpression(options)) throw new Error('missing original DA options')
+    expect(
+      options.properties.filter(
+        (property) =>
+          ts.isPropertyAssignment(property) && property.name.getText(pg) === 'verificationCommands',
+      ),
+    ).toHaveLength(0)
+  })
+
   // RFC-370: the four body digests below follow only selected query binding,
   // receiver-preserving async reads and moving the lazy query factory earlier.
   // Their original statement counts and every lifetime rule remain unchanged.

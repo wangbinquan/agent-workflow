@@ -516,10 +516,12 @@ describe('RFC-370 native MCP root completeness', () => {
     const transformed = ts.transform(body, [
       (context) => {
         const inverse: ts.Visitor = (node) => {
+          const parent = node.parent ?? ts.getOriginalNode(node).parent
           if (
             ts.isObjectLiteralExpression(node) &&
-            ts.isCallExpression(node.parent) &&
-            node.parent.expression.getText(source) === 'runTaskExecutionBootRecovery'
+            parent !== undefined &&
+            ts.isCallExpression(parent) &&
+            parent.expression.getText(source) === 'runTaskExecutionBootRecovery'
           ) {
             const entries = node.properties.filter(
               (property) =>
@@ -560,7 +562,12 @@ describe('RFC-370 native MCP root completeness', () => {
     const transformed = ts.transform(body, [
       (context) => {
         const inverse: ts.Visitor = (node) => {
-          if (ts.isObjectLiteralExpression(node) && ts.isCallExpression(node.parent)) {
+          const parent = node.parent ?? ts.getOriginalNode(node).parent
+          if (
+            ts.isObjectLiteralExpression(node) &&
+            parent !== undefined &&
+            ts.isCallExpression(parent)
+          ) {
             const entries = node.properties.filter(
               (property) =>
                 ts.isPropertyAssignment(property) &&
@@ -568,7 +575,7 @@ describe('RFC-370 native MCP root completeness', () => {
             ) as ts.PropertyAssignment[]
             if (entries.length > 0) {
               expect(entries).toHaveLength(1)
-              const callee = node.parent.expression.getText(source)
+              const callee = parent.expression.getText(source)
               const value = entries[0]!.initializer.getText(source).replace(/\s/g, '')
               if (callee === 'composeDevelopmentAutomation') {
                 expect(value).toBe(
@@ -711,5 +718,37 @@ describe('RFC-370 native MCP root completeness', () => {
         "from '@/modules/resource-catalog/composition/localMcpDiagnostics'",
       )
     }
+  })
+
+  // 42458d52 Windows112299909896: the first inverse makes synthetic nodes
+  // whose parent is absent. Later passes retain the original callee contract.
+  test('sequential complete-root inverses keep original parent metadata', () => {
+    const source = ts.createSourceFile(
+      'fixture.ts',
+      `function fixture() {
+        runTaskExecutionBootRecovery({ recoveryEffects: selectLocalBootExecutionRecoveryFactory(input.bootExecutionRecovery) });
+        composeDevelopmentAutomation({ verificationCommands: input.verificationCommands === undefined ? createLocalVerificationCommandEffectsFactory() : input.verificationCommands });
+      }`,
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const fn = source.statements.find(ts.isFunctionDeclaration)!
+    const boot = inverseBootRecoveryBindings(source, fn.body!)
+    const changed = boot.body.statements[0] as ts.ExpressionStatement
+    const changedCall = changed.expression as ts.CallExpression
+    expect(changedCall.arguments[0]!.parent).toBeUndefined()
+    expect(ts.getOriginalNode(changedCall.arguments[0]!).parent).toBeDefined()
+    const verification = inverseVerificationBindings(source, boot.body)
+    expect(boot.selections).toBe(1)
+    expect(verification.selections).toBe(1)
+    expect(verification.forwards).toBe(0)
+    const expected = ts.createSourceFile(
+      'expected.ts',
+      'function fixture() { runTaskExecutionBootRecovery({}); composeDevelopmentAutomation({}); }',
+      ts.ScriptTarget.Latest,
+      true,
+    )
+    const expectedBody = expected.statements.find(ts.isFunctionDeclaration)!.body!
+    expect(hash(verification.body, source)).toBe(hash(expectedBody, expected))
   })
 })

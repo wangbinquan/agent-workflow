@@ -1,3 +1,13 @@
+## 2026-10-06 RFC-370 同因 W29 reader 有限补正
+
+初轮CI修复SOURCE4-R1已有效稳定PASS，19入口完整6257717 bytes；MCP与ledger候选不变，复用该功能结论。私有纯AST读取实际PG完整根后发现W29同一连续变换也会抛原TypeError。本片只给另两W29 helper相同parent fallback，新增一条实际根连续变换回归；旧80 expect全部保持，新增5 expect，四原完整摘要／语句／预算和全文逆向保持。零production、零census。发布候选因此扩为五个明确路径；后继有限门只复核W29、本文档和STATE的必要差额，不重审原MCP／ledger或H7源。以下初轮候选记录、共享旧正文及并行输出完整保留；新exact-SHA CI另验，RFC／A-G和CS部署仍未完成。
+
+## 2026-10-06 RFC-370 启动恢复完整根 reader 的正式 CI 修复
+
+42458d52 Windows37472664591正式failure，唯一功能失败是MCP完整根reader连续AST变换后的synthetic parent缺失。两helper使用原节点parent元数据并显式判空，三实际根完整原摘要／语句／参数判据保持；新增一条真实连续变换回归和6 expect，旧51 expect／名字／预算及全文逆向保持。纯AST／字节JSON与owned format/lint通过；没有本机AW tests/typecheck/build/service。
+
+正常退役H7五项已消费增长许可，129有序ledger与全部原字段／计数保持；424到并行7fb的十项production／生成输入OID完全相同，复用原13 matching，不重复census。独立有限功能门、精确四路径发布与新exact-SHA CI另留证；旧Windows失败和主37472664663 queued冻结快照不记全仓绿。完整共享旧正文和并行输出逐字保留，自定义观察器设计不随本片提交。仍在阶段A，完整H7／purpose callers／A-T7／A-G、CS adapters、M0部署和M1～M4未完成。详见[CI修复记录](design/RFC-370-crewstation-hosted-deployment/boot-recovery-reader-ci-repair.md)。以下全部旧共享正文原样保留。
+
 ## 2026-10-06 RFC-371 保留逐提交 CI 终态
 
 原9fa主CI37465298886与类型补正a1主CI37468182178均被后继普通main push取消，原终态保持。a1的Format/Lint/Typecheck作业112284607088全部成功，但不计为完整CI通过。本片仅把主CI调度分组加上原github.sha并关闭同源运行中取消，保留原14jobs、32Ubuntu/12macOS native分片、双provider、所有命令／断言／环境／预算以及原规模工作流逐字内容。不同原提交不再经同一ref分组相互替换或取消；不重复调度旧整仓或规模检查，也不改变测试范围。
